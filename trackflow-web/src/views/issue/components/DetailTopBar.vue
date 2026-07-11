@@ -66,7 +66,7 @@ defineEmits<{
 .icon-btn {
   background: none;
   border: none;
-  color: var(--tf-text-tertiary);
+  color: var(--tf-text-secondary);
   cursor: pointer;
   padding: 4px;
   border-radius: 3px;
