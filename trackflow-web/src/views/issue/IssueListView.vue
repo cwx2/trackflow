@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="issue-page">
     <!-- Left query panel (YouTrack style) -->
-    <aside class="query-panel">
+    <aside class="query-panel" :style="{ width: panelWidth + 'px' }">
       <div class="panel-top">
         <div class="panel-top-title">
           <span class="panel-label">查询</span>
@@ -57,6 +57,14 @@
       </div>
     </aside>
 
+    <!-- Resizable divider -->
+    <div
+      class="panel-resizer"
+      title="拖动以调整宽度，双击以展开/折叠"
+      @mousedown="startPanelResize"
+      @dblclick="togglePanelCollapse"
+    ></div>
+
     <!-- Right issue list area -->
     <section class="issue-list-area">
       <!-- Batch action toolbar (replaces filter bar when selected) -->
@@ -81,9 +89,17 @@
           <a-select v-model="filterProject" placeholder="所有项目" size="small" style="width: 120px" allow-clear @change="onFilterChange">
             <a-option v-for="p in projectList" :key="p.id" :value="p.id">{{ p.key }}</a-option>
           </a-select>
-          <a-button type="primary" size="small" @click="toggleInlineCreate">
-            {{ showInlineCreate ? '取消' : '创建工单' }}
+          <a-button size="small" @click="toggleInlineCreate">
+            {{ showInlineCreate ? '取消' : '快速创建' }}
           </a-button>
+          <a-button type="primary" size="small" @click="showCreatePanel = true">创建工单</a-button>
+          <ColumnConfigPopover
+            :standard-columns="standardColumns"
+            :custom-field-columns="customFieldColumns"
+            :is-visible="isColumnVisible"
+            @toggle="toggleColumn"
+            @reset="resetColumns"
+          />
         </div>
       </div>
 
@@ -118,204 +134,162 @@
       </div>
 
       <!-- Issue table -->
-      <div class="issue-table">
-        <div class="table-header">
-          <div class="col-checkbox">
-            <a-checkbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAll" />
-          </div>
-          <template v-for="col in visibleColumns.filter(c => c.key !== 'checkbox')" :key="col.key">
-            <div
-              :class="['col-' + col.key, { sortable: col.sortable }]"
-              :style="{ flex: col.key === 'title' ? '1' : undefined, minWidth: col.key === 'title' ? '0' : undefined }"
-              @click="col.sortable ? toggleSort(col.key) : undefined"
-            >
-              {{ col.label }}
-              <SortIcon v-if="col.sortable" :state="getSortState(col.key)" />
-            </div>
-          </template>
-          <div class="col-config">
-            <ColumnConfigPopover
-              :standard-columns="standardColumns"
-              :custom-field-columns="customFieldColumns"
-              :is-visible="isColumnVisible"
-              @toggle="toggleColumn"
-              @reset="resetColumns"
-            />
-          </div>
-        </div>
+      <a-table
+        class="issue-table"
+        :data="issues"
+        :columns="tableColumns"
+        :loading="loading"
+        :pagination="false"
+        :row-selection="rowSelection"
+        :selected-keys="selectedKeysArray"
+        row-key="id"
+        :bordered="false"
+        :stripe="false"
+        column-resizable
+        size="medium"
+        :scroll="{ x: tableMinWidth }"
+        @row-click="onRowClick"
+        @selection-change="onSelectionChange"
+        @column-resize="onColumnResize"
+      >
+        <!-- Custom column header (shared slot for all columns) -->
+        <template #column-header="{ column }">
+          <DraggableColumnHeader
+            :column-key="column.dataIndex"
+            :label="column.title"
+            :sortable="isColumnSortable(column.dataIndex)"
+            :sort-dir="getColumnSortDir(column.dataIndex)"
+            :fixed="isColumnFixed(column.dataIndex)"
+            @sort="onHeaderSort"
+            @remove="onHeaderRemove"
+            @drag-drop="onHeaderDragDrop"
+          />
+        </template>
 
-        <div class="table-body">
-          <div
-            v-for="issue in issues"
-            :key="issue.id"
-            class="table-row"
-            :class="{ 'row-selected': selectedIds.has(issue.id) }"
-            @click="openIssue(issue)"
-          >
-            <div class="col-checkbox" @click.stop>
-              <a-checkbox v-if="canEditIssue(issue)" :model-value="selectedIds.has(issue.id)" @change="toggle(issue.id)" />
-            </div>
-
-            <div class="col-issueKey"><span class="issue-key">{{ issue.issueKey }}</span></div>
-            <div class="col-title"><span class="issue-title-text">{{ issue.title }}</span></div>
-
-            <!-- Assignee inline edit -->
-            <div v-if="isColumnVisible('assignee')" class="col-assignee" @click.stop>
-              <a-trigger
-                v-if="canEditIssue(issue)"
-                v-model:popup-visible="assigneeDropdowns[issue.id]"
-                trigger="click"
-                position="bl"
-                :popup-offset="4"
-              >
-                <span class="editable-cell" @click="openAssigneeEdit(issue)">
-                  {{ issue.assigneeName || '\u2014' }}
-                  <icon-loading v-if="isCellEditing(issue.id, 'assigneeId')" class="cell-spinner" />
-                </span>
-                <template #content>
-                  <div class="inline-dropdown member-dropdown">
-                    <div class="dropdown-search">
-                      <a-input v-model="assigneeSearch" placeholder="搜索成员..." size="mini" allow-clear @keydown.stop>
-                        <template #prefix><icon-search /></template>
-                      </a-input>
-                    </div>
-                    <div v-if="assigneeOptionsLoading" class="dropdown-loading"><a-spin :size="16" /></div>
-                    <template v-else>
-                      <div class="dropdown-item" @click="selectAssignee(issue, null)">
-                        <span class="unassigned-icon">&mdash;</span><span>未分配</span>
-                      </div>
-                      <div v-for="m in filteredAssigneeOptions" :key="m.userId" class="dropdown-item" @click="selectAssignee(issue, m)">
-                        <span class="member-avatar">{{ m.displayName?.charAt(0) }}</span>
-                        <span>{{ m.displayName }}</span>
-                      </div>
-                    </template>
-                  </div>
-                </template>
-              </a-trigger>
-              <span v-else class="readonly-cell">{{ issue.assigneeName || '\u2014' }}</span>
-            </div>
-
-            <!-- Status inline edit -->
-            <div v-if="isColumnVisible('status')" class="col-status" @click.stop>
-              <a-trigger
-                v-if="canEditIssue(issue)"
-                v-model:popup-visible="statusDropdowns[issue.id]"
-                trigger="click"
-                position="bl"
-                :popup-offset="4"
-              >
-                <span class="editable-cell status-badge" :style="{ background: getStatusColor(issue.statusId) }" @click="openStatusEdit(issue)">
-                  {{ getStatusName(issue.statusId) }}
-                  <icon-loading v-if="isCellEditing(issue.id, 'statusId')" class="cell-spinner" />
-                </span>
-                <template #content>
-                  <div class="inline-dropdown">
-                    <div v-if="transitionsLoading[issue.id]" class="dropdown-loading"><a-spin :size="16" /></div>
-                    <template v-else>
-                      <div v-for="status in availableTransitions[issue.id]" :key="status.id" class="dropdown-item" @click="selectStatus(issue, status)">
-                        <span class="status-dot" :style="{ background: status.color }"></span>
-                        <span>{{ status.name }}</span>
-                      </div>
-                      <div v-if="(availableTransitions[issue.id] || []).length === 0" class="dropdown-empty">无可用转换</div>
-                    </template>
-                  </div>
-                </template>
-              </a-trigger>
-              <span v-else class="readonly-cell status-badge" :style="{ background: getStatusColor(issue.statusId) }">{{ getStatusName(issue.statusId) }}</span>
-            </div>
-
-            <!-- Sprint inline edit -->
-            <div v-if="isColumnVisible('sprint')" class="col-sprint" @click.stop>
-              <a-trigger
-                v-if="canEditIssue(issue)"
-                v-model:popup-visible="sprintDropdowns[issue.id]"
-                trigger="click"
-                position="bl"
-                :popup-offset="4"
-              >
-                <span class="editable-cell" @click="openSprintEdit(issue)">
-                  {{ getSprintName(issue.sprintId) || '\u2014' }}
-                  <icon-loading v-if="isCellEditing(issue.id, 'sprintId')" class="cell-spinner" />
-                </span>
-                <template #content>
-                  <div class="inline-dropdown">
-                    <div v-if="sprintOptionsLoading[issue.id]" class="dropdown-loading"><a-spin :size="16" /></div>
-                    <template v-else>
-                      <div class="dropdown-item" @click="selectSprint(issue, null)"><span>无 Sprint</span></div>
-                      <template v-for="group in getSprintGroups(issue.projectId)" :key="group.label">
-                        <div class="dropdown-group-label">{{ group.label }}</div>
-                        <div v-for="s in group.items" :key="s.id" class="dropdown-item" @click="selectSprint(issue, s)">
-                          <span>{{ s.name }}</span>
-                        </div>
-                      </template>
-                    </template>
-                  </div>
-                </template>
-              </a-trigger>
-              <span v-else class="readonly-cell">{{ getSprintName(issue.sprintId) || '\u2014' }}</span>
-            </div>
-
-            <!-- Priority inline edit -->
-            <div v-if="isColumnVisible('priority')" class="col-priority" @click.stop>
-              <a-trigger
-                v-if="canEditIssue(issue)"
-                v-model:popup-visible="priorityDropdowns[issue.id]"
-                trigger="click"
-                position="bl"
-                :popup-offset="4"
-              >
-                <span class="editable-cell" @click="priorityDropdowns[issue.id] = true">
-                  <span class="priority-dot" :class="'priority-' + (issue.priority || 'normal').toLowerCase()"></span>
-                  {{ issue.priority || 'Normal' }}
-                  <icon-loading v-if="isCellEditing(issue.id, 'priority')" class="cell-spinner" />
-                </span>
-                <template #content>
-                  <div class="inline-dropdown">
-                    <div v-for="p in priorityOptions" :key="p.value" class="dropdown-item" @click="selectPriority(issue, p.value)">
-                      <span class="priority-dot" :class="'priority-' + p.value.toLowerCase()"></span>
-                      <span>{{ p.label }}</span>
-                    </div>
-                  </div>
-                </template>
-              </a-trigger>
-              <span v-else class="readonly-cell">
-                <span class="priority-dot" :class="'priority-' + (issue.priority || 'normal').toLowerCase()"></span>
-                {{ issue.priority || 'Normal' }}
+        <!-- Cell slots -->
+        <template #issueKey="{ record }">
+          <span class="issue-key">{{ record.issueKey }}</span>
+        </template>
+        <template #title-cell="{ record }">
+          <span class="issue-title-text">{{ record.title }}</span>
+        </template>
+        <template #assignee="{ record }">
+          <div @click.stop>
+            <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="assigneeDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
+              <span class="editable-cell" @click="openAssigneeEdit(record)">
+                {{ record.assigneeName || '\u2014' }}
+                <icon-loading v-if="isCellEditing(record.id, 'assigneeId')" class="cell-spinner" />
               </span>
-            </div>
-
-            <div v-if="isColumnVisible('updatedAt')" class="col-updated"><span class="time-ago">{{ formatTime(issue.updatedAt) }}</span></div>
-
-            <!-- 额外可选列 -->
-            <div v-if="isColumnVisible('issueType')" class="col-issueType">
-              <span class="type-label">{{ issue.issueType }}</span>
-            </div>
-            <div v-if="isColumnVisible('reporter')" class="col-reporter">
-              <span class="reporter-name">{{ issue.reporterId || '\u2014' }}</span>
-            </div>
-            <div v-if="isColumnVisible('createdAt')" class="col-createdAt">
-              <span class="time-ago">{{ formatTime(issue.createdAt) }}</span>
-            </div>
-            <div v-if="isColumnVisible('dueDate')" class="col-dueDate">
-              <span class="time-ago">{{ issue.dueDate || '\u2014' }}</span>
-            </div>
+              <template #content>
+                <div class="inline-dropdown member-dropdown">
+                  <div class="dropdown-search">
+                    <a-input v-model="assigneeSearch" placeholder="搜索成员..." size="mini" allow-clear @keydown.stop><template #prefix><icon-search /></template></a-input>
+                  </div>
+                  <div v-if="assigneeOptionsLoading" class="dropdown-loading"><a-spin :size="16" /></div>
+                  <template v-else>
+                    <div class="dropdown-item" @click="selectAssignee(record, null)"><span class="unassigned-icon">&mdash;</span><span>未分配</span></div>
+                    <div v-for="m in filteredAssigneeOptions" :key="m.userId" class="dropdown-item" @click="selectAssignee(record, m)">
+                      <span class="member-avatar">{{ m.displayName?.charAt(0) }}</span><span>{{ m.displayName }}</span>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </a-trigger>
+            <span v-else class="readonly-cell">{{ record.assigneeName || '\u2014' }}</span>
           </div>
+        </template>
+        <template #status="{ record }">
+          <div @click.stop>
+            <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="statusDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
+              <span class="editable-cell status-badge" :style="{ background: getStatusColor(record.statusId) }" @click="openStatusEdit(record)">
+                {{ getStatusName(record.statusId) }}
+                <icon-loading v-if="isCellEditing(record.id, 'statusId')" class="cell-spinner" />
+              </span>
+              <template #content>
+                <div class="inline-dropdown">
+                  <div v-if="transitionsLoading[record.id]" class="dropdown-loading"><a-spin :size="16" /></div>
+                  <template v-else>
+                    <div v-for="st in availableTransitions[record.id]" :key="st.id" class="dropdown-item" @click="selectStatus(record, st)">
+                      <span class="status-dot" :style="{ background: st.color }"></span><span>{{ st.name }}</span>
+                    </div>
+                    <div v-if="(availableTransitions[record.id] || []).length === 0" class="dropdown-empty">无可用转换</div>
+                  </template>
+                </div>
+              </template>
+            </a-trigger>
+            <span v-else class="readonly-cell status-badge" :style="{ background: getStatusColor(record.statusId) }">{{ getStatusName(record.statusId) }}</span>
+          </div>
+        </template>
+        <template #sprint="{ record }">
+          <div @click.stop>
+            <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="sprintDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
+              <span class="editable-cell" @click="openSprintEdit(record)">
+                {{ getSprintName(record.sprintId) || '\u2014' }}
+                <icon-loading v-if="isCellEditing(record.id, 'sprintId')" class="cell-spinner" />
+              </span>
+              <template #content>
+                <div class="inline-dropdown">
+                  <div v-if="sprintOptionsLoading[record.id]" class="dropdown-loading"><a-spin :size="16" /></div>
+                  <template v-else>
+                    <div class="dropdown-item" @click="selectSprint(record, null)"><span>无 Sprint</span></div>
+                    <template v-for="group in getSprintGroups(record.projectId)" :key="group.label">
+                      <div class="dropdown-group-label">{{ group.label }}</div>
+                      <div v-for="s in group.items" :key="s.id" class="dropdown-item" @click="selectSprint(record, s)"><span>{{ s.name }}</span></div>
+                    </template>
+                  </template>
+                </div>
+              </template>
+            </a-trigger>
+            <span v-else class="readonly-cell">{{ getSprintName(record.sprintId) || '\u2014' }}</span>
+          </div>
+        </template>
+        <template #priority="{ record }">
+          <div @click.stop>
+            <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="priorityDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
+              <span class="editable-cell" @click="priorityDropdowns[record.id] = true">
+                <span class="priority-dot" :class="'priority-' + (record.priority || 'normal').toLowerCase()"></span>
+                {{ record.priority || 'Normal' }}
+                <icon-loading v-if="isCellEditing(record.id, 'priority')" class="cell-spinner" />
+              </span>
+              <template #content>
+                <div class="inline-dropdown">
+                  <div v-for="p in priorityOptions" :key="p.value" class="dropdown-item" @click="selectPriority(record, p.value)">
+                    <span class="priority-dot" :class="'priority-' + p.value.toLowerCase()"></span><span>{{ p.label }}</span>
+                  </div>
+                </div>
+              </template>
+            </a-trigger>
+            <span v-else class="readonly-cell">
+              <span class="priority-dot" :class="'priority-' + (record.priority || 'normal').toLowerCase()"></span>
+              {{ record.priority || 'Normal' }}
+            </span>
+          </div>
+        </template>
+        <template #updatedAt="{ record }"><span class="time-ago">{{ formatTime(record.updatedAt) }}</span></template>
+        <template #issueType="{ record }"><span class="type-label">{{ record.issueType }}</span></template>
+        <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterId || '\u2014' }}</span></template>
+        <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
+        <template #dueDate="{ record }"><span class="time-ago">{{ record.dueDate || '\u2014' }}</span></template>
 
-          <!-- Empty state -->
-          <div v-if="issues.length === 0 && !loading" class="empty-state">
+        <!-- empty -->
+        <template #empty>
+          <div class="empty-state">
             <icon-search class="empty-icon" />
             <p class="empty-title">暂无工单</p>
             <p class="empty-desc">尝试调整筛选条件或创建新的工单</p>
             <a-button type="primary" size="small" @click="toggleInlineCreate">创建工单</a-button>
           </div>
-        </div>
-      </div>
+        </template>
+      </a-table>
 
       <!-- Pagination -->
       <div class="pagination-bar" v-if="totalIssues > 0">
         <a-pagination v-model:current="currentPage" :total="totalIssues" :page-size="pageSize" size="small" show-total @change="goPage" />
       </div>
     </section>
+
+    <!-- Create issue panel -->
+    <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" @created="refreshList" />
   </div>
 </template>
 
@@ -326,9 +300,11 @@ import { IconPlus, IconSearch, IconLoading } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
+import type { TableData } from '@arco-design/web-vue'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
-import SortIcon from './components/SortIcon.vue'
+import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
+import IssueCreatePanel from './IssueCreatePanel.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 
 const router = useRouter()
@@ -337,12 +313,12 @@ const route = useRoute()
 // Composables
 const {
   issues, totalIssues, currentPage, pageSize, loading,
-  sortState, toggleSort, loadIssues, goPage, updateLocalIssue
+  sortState, loadIssues, goPage, updateLocalIssue
 } = useIssueList()
 
 const {
-  selectedIds, isAllSelected, isIndeterminate, selectedCount, selectedIssues,
-  toggle, toggleAll, clearSelection
+  selectedIds, selectedCount, selectedIssues,
+  clearSelection
 } = useSelection(issues)
 
 const { isCellEditing, executeEdit } = useInlineEdit(issues)
@@ -353,8 +329,8 @@ const { loadPermissions, canEditIssue } = usePermission(issues)
 const activeProjectId = ref<string | null>(null)
 
 const {
-  visibleColumns, standardColumns, customFieldColumns,
-  isVisible: isColumnVisible, toggleColumn, resetToDefault: resetColumns
+  visibleColumns, toggleColumn, reorderColumn,
+  standardColumns, customFieldColumns, isVisible: isColumnVisible, resetToDefault: resetColumns
 } = useColumnConfig(activeProjectId as any)
 
 // Panel state
@@ -365,11 +341,60 @@ const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
 const expandedGroups = reactive(new Set<string>(['saved', 'projects']))
 const panelSearch = ref('')
 
+// Panel resize
+const PANEL_WIDTH_KEY = 'trackflow:panel-width'
+const panelWidth = ref(loadPanelWidth())
+
+function loadPanelWidth(): number {
+  try {
+    const stored = localStorage.getItem(PANEL_WIDTH_KEY)
+    if (stored) return Math.max(200, Math.min(500, Number(stored)))
+  } catch { /* ignore */ }
+  return 280
+}
+
+function startPanelResize(e: MouseEvent) {
+  e.preventDefault()
+  const startX = e.clientX
+  const startWidth = panelWidth.value
+
+  function onMove(ev: MouseEvent) {
+    const delta = ev.clientX - startX
+    panelWidth.value = Math.max(200, Math.min(500, startWidth + delta))
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth.value))
+  }
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+const panelWidthBeforeCollapse = ref(280)
+
+function togglePanelCollapse() {
+  if (panelWidth.value <= 200) {
+    // 当前已是最小宽度，恢复到之前记录的宽度
+    panelWidth.value = panelWidthBeforeCollapse.value
+  } else {
+    // 记录当前宽度，然后缩到最小
+    panelWidthBeforeCollapse.value = panelWidth.value
+    panelWidth.value = 200
+  }
+  localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth.value))
+}
+
 // Filters
 const filterProject = ref<string | undefined>(undefined)
 
 // Quick create
 const showInlineCreate = ref(false)
+const showCreatePanel = ref(false)
 const quickCreating = ref(false)
 const quickForm = reactive({
   projectId: undefined as string | undefined,
@@ -401,10 +426,109 @@ const priorityOptions = [
   { value: 'Low', label: '\u4F4E' }
 ]
 
-// Sort helper
-function getSortState(field: string): 'asc' | 'desc' | null {
-  if (sortState.value.field === field) return sortState.value.direction
+// Column widths — default values, user can resize via drag
+const COLUMN_WIDTH_STORAGE_KEY = 'trackflow:issue-column-widths'
+const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
+  issueKey: 130,
+  title: 300, // min width for title
+  assignee: 110,
+  status: 120,
+  sprint: 160,
+  priority: 100,
+  updatedAt: 100,
+  issueType: 80,
+  reporter: 110,
+  createdAt: 110,
+  dueDate: 100
+}
+
+const columnWidths = reactive<Record<string, number>>(loadColumnWidths())
+
+function loadColumnWidths(): Record<string, number> {
+  try {
+    const stored = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
+    if (stored) return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(stored) }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_COLUMN_WIDTHS }
+}
+
+/**
+ * 表格最小总宽度 = 各可见列宽度之和 + checkbox列(60px)
+ */
+const tableMinWidth = computed(() => {
+  const sum = visibleColumns.value
+    .filter(c => c.key !== 'checkbox')
+    .reduce((acc, col) => {
+      return acc + (columnWidths[col.key] || DEFAULT_COLUMN_WIDTHS[col.key] || 100)
+    }, 0)
+  return sum + 60
+})
+
+/**
+ * 动态生成 a-table columns 配置
+ */
+const tableColumns = computed(() => {
+  return visibleColumns.value
+    .filter(c => c.key !== 'checkbox')
+    .map(col => ({
+      title: col.label,
+      dataIndex: col.key,
+      slotName: col.key === 'title' ? 'title-cell' : col.key,
+      titleSlotName: 'column-header',
+      width: columnWidths[col.key] || DEFAULT_COLUMN_WIDTHS[col.key] || 100,
+      ellipsis: true,
+      tooltip: col.key === 'title'
+    }))
+})
+
+// Row selection config for a-table
+const rowSelection = reactive({
+  type: 'checkbox' as const,
+  showCheckedAll: true
+})
+
+// a-table event handlers
+const selectedKeysArray = computed(() => [...selectedIds.value])
+
+function onRowClick(record: TableData) {
+  router.push(`/issues/${record.id}`)
+}
+function onSelectionChange(rowKeys: (string | number)[]) {
+  selectedIds.value = new Set(rowKeys.map(String))
+}
+function onColumnResize(dataIndex: string, width: number) {
+  columnWidths[dataIndex] = width
+  localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(columnWidths))
+}
+
+// Column header interactions
+function onHeaderSort(key: string) {
+  // 三态切换: null → asc → desc → null
+  if (sortState.value.field !== key) {
+    sortState.value = { field: key, direction: 'asc' }
+  } else if (sortState.value.direction === 'asc') {
+    sortState.value = { field: key, direction: 'desc' }
+  } else {
+    sortState.value = { field: null, direction: null }
+  }
+}
+function onHeaderRemove(key: string) {
+  toggleColumn(key)
+}
+function onHeaderDragDrop(fromKey: string, toKey: string) {
+  reorderColumn(fromKey, toKey)
+}
+function getColumnSortDir(key: string): 'asc' | 'desc' | null {
+  if (sortState.value.field === key) return sortState.value.direction
   return null
+}
+function isColumnFixed(key: string): boolean {
+  const col = visibleColumns.value.find(c => c.key === key)
+  return col?.fixed === true
+}
+function isColumnSortable(key: string): boolean {
+  const col = visibleColumns.value.find(c => c.key === key)
+  return col?.sortable === true
 }
 
 // Status helpers
@@ -609,7 +733,21 @@ function buildFilters() {
   if (activeQueryId.value) filters.queryId = activeQueryId.value
   return filters
 }
-function refreshList() { loadIssues(buildFilters()).then(() => loadPermissions()) }
+function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames() }) }
+
+/** 预加载当前列表中涉及到的 sprint 名称 */
+async function preloadSprintNames() {
+  const projectIds = [...new Set(issues.value.map(i => i.projectId).filter(Boolean))]
+  const toLoad = projectIds.filter(pid => !sprintOptionsCache[pid])
+  await Promise.all(toLoad.map(async (pid) => {
+    try {
+      const res = await sprintApi.listByProject(pid)
+      sprintOptionsCache[pid] = res.data || []
+    } catch {
+      sprintOptionsCache[pid] = []
+    }
+  }))
+}
 function onFilterChange() { currentPage.value = 1; refreshList() }
 function selectQuery(q: any) {
   activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; currentPage.value = 1; refreshList()
@@ -617,7 +755,6 @@ function selectQuery(q: any) {
 function selectProject(p: any) {
   activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; currentPage.value = 1; refreshList()
 }
-function openIssue(issue: IssueVO) { router.push(`/issues/${issue.id}`) }
 
 watch(currentPage, () => refreshList())
 watch(sortState, () => refreshList(), { deep: true })
@@ -655,7 +792,10 @@ onMounted(() => {
 .issue-page { display: flex; height: 100%; }
 
 /* Left panel */
-.query-panel { width: 280px; background: var(--tf-bg-surface); border-right: 1px solid var(--tf-border); overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column; }
+.query-panel { background: var(--tf-bg-surface); overflow-y: auto; overflow-x: hidden; flex-shrink: 0; display: flex; flex-direction: column; transition: width 0.2s ease; }
+.panel-resizer { width: 4px; flex-shrink: 0; cursor: col-resize; background: transparent; position: relative; z-index: 2; transition: background 0.15s; }
+.panel-resizer:hover, .panel-resizer:active { background: var(--tf-accent, #58a6ff); }
+.panel-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: -2px; right: -2px; }
 .panel-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
 .panel-top-title { display: flex; align-items: center; gap: 8px; }
 .panel-label { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
@@ -689,29 +829,15 @@ onMounted(() => {
 .inline-title-input { flex: 1; }
 
 /* Table */
-.issue-table { flex: 1; overflow-y: auto; }
-.table-header { display: flex; align-items: center; height: 36px; padding: 0 16px; background: var(--tf-bg-surface); border-bottom: 1px solid var(--tf-border); font-size: 11px; color: var(--tf-text-tertiary); text-transform: uppercase; letter-spacing: 0.6px; position: sticky; top: 0; z-index: 1; }
-.table-header .sortable { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 2px; transition: color 0.15s; }
-.table-header .sortable:hover { color: var(--tf-text-primary); }
-.table-row { display: flex; align-items: center; height: 40px; padding: 0 16px; border-bottom: 1px solid var(--tf-border-light); cursor: pointer; transition: background 0.15s; font-size: 13px; }
-.table-row:hover { background: var(--tf-bg-hover); }
-.table-row.row-selected { background: var(--tf-accent-bg); }
-
-/* Columns */
-.col-checkbox { width: 32px; flex-shrink: 0; display: flex; align-items: center; }
-.col-issueKey { width: 90px; flex-shrink: 0; }
-.col-title { flex: 1; min-width: 0; }
-.col-assignee { width: 100px; flex-shrink: 0; }
-.col-status { width: 100px; flex-shrink: 0; }
-.col-sprint { width: 90px; flex-shrink: 0; }
-.col-priority { width: 80px; flex-shrink: 0; }
-.col-updated { width: 90px; flex-shrink: 0; text-align: right; }
-.col-updatedAt { width: 90px; flex-shrink: 0; text-align: right; }
-.col-issueType { width: 70px; flex-shrink: 0; }
-.col-reporter { width: 100px; flex-shrink: 0; }
-.col-createdAt { width: 90px; flex-shrink: 0; }
-.col-dueDate { width: 90px; flex-shrink: 0; }
-.col-config { width: 32px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.issue-table { flex: 1; overflow: auto; }
+.issue-table :deep(.arco-table) { font-size: 13px; }
+.issue-table :deep(.arco-table-th) { font-size: 11px; color: var(--tf-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; background: var(--tf-bg-surface); }
+.issue-table :deep(.arco-table-tr) { cursor: pointer; transition: background 0.15s; }
+.issue-table :deep(.arco-table-tr:hover .arco-table-td) { background: var(--tf-bg-hover); }
+.issue-table :deep(.arco-table-td) { padding: 8px 12px; }
+.issue-table :deep(.arco-table-col-resize-handle) { width: 3px; background: transparent; transition: background 0.15s; }
+.issue-table :deep(.arco-table-col-resize-handle:hover),
+.issue-table :deep(.arco-table-col-resize-handle.active) { background: var(--tf-accent); }
 
 .issue-key { color: var(--tf-accent); font-weight: 500; font-size: 12px; }
 .issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }

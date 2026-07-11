@@ -24,11 +24,6 @@ const routes = [
         component: () => import('@/views/issue/IssueListView.vue')
       },
       {
-        path: 'issues/create',
-        name: 'IssueCreate',
-        component: () => import('@/views/issue/IssueCreateView.vue')
-      },
-      {
         path: 'issues/:id',
         name: 'IssueDetail',
         component: () => import('@/views/issue/IssueDetailView.vue')

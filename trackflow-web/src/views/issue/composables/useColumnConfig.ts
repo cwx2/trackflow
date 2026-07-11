@@ -114,6 +114,19 @@ export function useColumnConfig(projectId?: Ref<string | undefined>) {
   }
 
   /**
+   * 拖拽调整列顺序：将 fromKey 移动到 toKey 的位置
+   */
+  function reorderColumn(fromKey: string, toKey: string) {
+    const keys = [...visibleKeys.value]
+    const fromIdx = keys.indexOf(fromKey)
+    const toIdx = keys.indexOf(toKey)
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return
+    keys.splice(fromIdx, 1)
+    keys.splice(toIdx, 0, fromKey)
+    visibleKeys.value = keys
+  }
+
+  /**
    * 从 savedQuery 的 columns 数组设置可见列
    */
   function setFromQuery(columns: string[] | null) {
@@ -157,6 +170,7 @@ export function useColumnConfig(projectId?: Ref<string | undefined>) {
     columnsLoading,
     isVisible,
     toggleColumn,
+    reorderColumn,
     resetToDefault,
     setFromQuery,
     getColumnsForSave,
