@@ -57,7 +57,7 @@ defineEmits<{
   padding: 0 16px;
   border-bottom: 1px solid var(--tf-border);
   flex-shrink: 0;
-  background: var(--tf-bg-surface);
+  background: var(--tf-bg-elevated);
 }
 
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 8px; }
@@ -66,15 +66,16 @@ defineEmits<{
 .icon-btn {
   background: none;
   border: none;
-  color: var(--tf-text-secondary);
+  color: var(--tf-text-primary);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 3px;
+  padding: 6px;
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
-  transition: color 150ms, background 150ms;
+  opacity: 0.7;
+  transition: opacity 150ms, background 150ms;
 }
-.icon-btn:hover:not(:disabled) { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
+.icon-btn:hover:not(:disabled) { background: var(--tf-bg-hover); opacity: 1; }
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 
 .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 13px; }
