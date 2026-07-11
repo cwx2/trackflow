@@ -816,7 +816,7 @@ onMounted(() => {
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
 
 /* Right area */
-.issue-list-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--tf-border); flex-shrink: 0; }
 .filter-left { display: flex; align-items: center; gap: 12px; }
 .current-query-name { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
@@ -829,8 +829,9 @@ onMounted(() => {
 .inline-title-input { flex: 1; }
 
 /* Table */
-.issue-table { flex: 1; overflow: auto; }
+.issue-table { flex: 1; min-height: 0; overflow: hidden; }
 .issue-table :deep(.arco-table) { font-size: 13px; }
+.issue-table :deep(.arco-scrollbar-container.arco-table-content) { overflow-y: auto !important; }
 .issue-table :deep(.arco-table-th) { font-size: 11px; color: var(--tf-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; background: var(--tf-bg-surface); }
 .issue-table :deep(.arco-table-tr) { cursor: pointer; transition: background 0.15s; }
 .issue-table :deep(.arco-table-tr:hover .arco-table-td) { background: var(--tf-bg-hover); }

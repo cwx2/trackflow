@@ -29,6 +29,8 @@
 </template>
 
 <script setup lang="ts">
+import { IconLeft, IconRight, IconCopy, IconPlus, IconMenu } from '@arco-design/web-vue/es/icon'
+
 defineProps<{
   projectName: string
   issueKey: string
@@ -61,7 +63,8 @@ defineEmits<{
 }
 
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 8px; }
-.topbar-right { gap: 4px; }
+.topbar-left { min-width: 0; overflow: hidden; }
+.topbar-right { gap: 4px; flex-shrink: 0; }
 
 .icon-btn {
   background: none;
@@ -87,7 +90,7 @@ defineEmits<{
 .sep { color: var(--tf-text-muted); font-size: 12px; }
 .crumb-current { color: var(--tf-text-primary); font-weight: 500; }
 
-.meta { font-size: 11px; color: var(--tf-text-muted); margin-left: 8px; }
+.meta { font-size: 11px; color: var(--tf-text-muted); margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meta b { color: var(--tf-text-secondary); font-weight: 500; }
 
 .nav-group { display: flex; align-items: center; gap: 4px; margin-right: 8px; }

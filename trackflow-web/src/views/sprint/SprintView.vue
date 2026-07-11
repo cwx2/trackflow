@@ -16,11 +16,11 @@
       <div v-for="sprint in activeSprints" :key="sprint.id" class="sprint-card active">
         <div class="sprint-header">
           <div class="sprint-info">
-            <span class="sprint-status-badge active">进行�?/span>
+            <span class="sprint-status-badge active">进行中</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
           </div>
           <div class="sprint-dates">
-            {{ sprint.startDate }} �?{{ sprint.endDate }}
+            {{ sprint.startDate }} — {{ sprint.endDate }}
           </div>
         </div>
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
@@ -33,16 +33,16 @@
       <div v-for="sprint in plannedSprints" :key="sprint.id" class="sprint-card planned">
         <div class="sprint-header">
           <div class="sprint-info">
-            <span class="sprint-status-badge planned">计划�?/span>
+            <span class="sprint-status-badge planned">计划中</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
           </div>
           <div class="sprint-dates" v-if="sprint.startDate">
-            {{ sprint.startDate }} �?{{ sprint.endDate }}
+            {{ sprint.startDate }} — {{ sprint.endDate }}
           </div>
         </div>
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
-          <button class="btn-sm primary" @click="activateSprint(sprint.id)">开始迭�?/button>
+          <button class="btn-sm primary" @click="activateSprint(sprint.id)">开始迭代</button>
           <button class="btn-sm" @click="deleteSprint(sprint.id)">删除</button>
         </div>
       </div>
@@ -51,17 +51,17 @@
       <div v-for="sprint in completedSprints" :key="sprint.id" class="sprint-card completed">
         <div class="sprint-header">
           <div class="sprint-info">
-            <span class="sprint-status-badge completed">已完�?/span>
+            <span class="sprint-status-badge completed">已完成</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
           </div>
           <div class="sprint-dates">
-            {{ sprint.startDate }} �?{{ sprint.endDate }}
+            {{ sprint.startDate }} — {{ sprint.endDate }}
           </div>
         </div>
       </div>
 
       <div v-if="sprints.length === 0" class="empty-state">
-        暂无迭代，请先选择项目并创建第一个迭代�?
+        暂无迭代，请先选择项目并创建第一个迭代。
       </div>
     </div>
   </div>

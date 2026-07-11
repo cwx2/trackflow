@@ -52,9 +52,32 @@
           <router-link to="/admin/organizations" class="submenu-item" @click="showAdminMenu = false">组织管理</router-link>
         </div>
 
-        <div class="sidebar-user" @click="handleLogout">
+        <div class="sidebar-user" @click="showUserMenu = !showUserMenu">
           <div class="user-avatar-sm">{{ userInitial }}</div>
           <span class="user-name">{{ userName }}</span>
+        </div>
+        <div v-if="showUserMenu" class="user-menu">
+          <div class="user-menu-header">
+            <div class="user-avatar-lg">{{ userInitial }}</div>
+            <div class="user-menu-info">
+              <span class="user-menu-name">{{ userName }}</span>
+              <span class="user-menu-email">{{ userEmail }}</span>
+            </div>
+          </div>
+          <div class="user-menu-divider"></div>
+          <div class="user-menu-item" @click="goProfile">
+            <span class="menu-item-icon">👤</span>
+            <span>个人设置</span>
+          </div>
+          <div class="user-menu-item" @click="goNotifications">
+            <span class="menu-item-icon">🔔</span>
+            <span>通知偏好</span>
+          </div>
+          <div class="user-menu-divider"></div>
+          <div class="user-menu-item danger" @click="handleLogout">
+            <span class="menu-item-icon">🚪</span>
+            <span>退出登录</span>
+          </div>
         </div>
       </div>
     </aside>
@@ -70,14 +93,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import TabBar from './TabBar.vue'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const { theme, cycleTheme } = useTheme()
 const showAdminMenu = ref(false)
+const showUserMenu = ref(false)
 
 const themeIcon = computed(() => {
   return theme.value === 'dark' ? '🌙' : theme.value === 'light' ? '☀️' : '🌿'
@@ -95,9 +121,38 @@ const userName = computed(() => {
   return authStore.user?.displayName || authStore.user?.username || '用户'
 })
 
+const userEmail = computed(() => {
+  return authStore.user?.email || ''
+})
+
+function goProfile() {
+  showUserMenu.value = false
+  router.push('/settings/profile')
+}
+
+function goNotifications() {
+  showUserMenu.value = false
+  router.push('/settings/notifications')
+}
+
 function handleLogout() {
+  showUserMenu.value = false
   authStore.logout()
 }
+
+// 点击外部关闭菜单
+function handleClickOutside(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.sidebar-user') && !target.closest('.user-menu')) {
+    showUserMenu.value = false
+  }
+  if (!target.closest('.footer-item') && !target.closest('.admin-submenu')) {
+    showAdminMenu.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
 
 <style scoped>
@@ -198,6 +253,7 @@ function handleLogout() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative;
 }
 
 .footer-item {
@@ -277,6 +333,97 @@ function handleLogout() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 用户菜单 */
+.user-menu {
+  position: absolute;
+  bottom: 56px;
+  left: 8px;
+  right: 8px;
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border);
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+}
+
+.user-avatar-lg {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--tf-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.user-menu-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.user-menu-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-email {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: var(--tf-border-light);
+  margin: 4px 0;
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.user-menu-item:hover {
+  background: var(--tf-sidebar-hover);
+  color: var(--tf-text-primary);
+}
+.user-menu-item.danger:hover {
+  background: rgba(248, 81, 73, 0.1);
+  color: var(--tf-danger);
+}
+
+.menu-item-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
 }
 
 /* ===== 右侧主内容区 ===== */

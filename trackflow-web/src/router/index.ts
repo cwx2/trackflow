@@ -72,6 +72,16 @@ const routes = [
         path: 'admin/custom-fields',
         name: 'CustomFieldManagement',
         component: () => import('@/views/admin/CustomFieldManage.vue')
+      },
+      {
+        path: 'settings/profile',
+        name: 'Profile',
+        component: () => import('@/views/settings/ProfileView.vue')
+      },
+      {
+        path: 'settings/notifications',
+        name: 'NotificationSettings',
+        component: () => import('@/views/settings/ProfileView.vue') // 暂时复用，后续独立
       }
     ]
   }

@@ -73,6 +73,9 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = data.access_token
     refreshToken.value = data.refresh_token
 
+    // 解析 JWT payload 获取用户信息
+    user.value = parseJwtPayload(data.access_token)
+
     // 清理
     sessionStorage.removeItem('pkce_code_verifier')
     sessionStorage.removeItem('oauth_state')
@@ -105,6 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await response.json()
       accessToken.value = data.access_token
       refreshToken.value = data.refresh_token
+      user.value = parseJwtPayload(data.access_token)
       return true
     } catch {
       return false
@@ -152,4 +156,25 @@ function generateRandomString(length: number): string {
     result += chars[array[i] % chars.length]
   }
   return result
+}
+
+/**
+ * 解析 JWT payload，提取用户信息
+ * Keycloak JWT payload 包含: preferred_username, name, email, sub 等字段
+ */
+function parseJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return {
+      id: payload.sub,
+      username: payload.preferred_username,
+      displayName: payload.name || payload.preferred_username,
+      email: payload.email || '',
+      roles: payload.realm_access?.roles || []
+    }
+  } catch {
+    return null
+  }
 }
