@@ -1,18 +1,23 @@
 package com.trackflow.auth.controller;
 
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
 public class AuthController {
+
+    private final PermissionService permissionService;
 
     @GetMapping("/me")
     public R<Map<String, Object>> getCurrentUser() {
@@ -26,5 +31,17 @@ public class AuthController {
         userInfo.put("displayName", jwt.getClaimAsString("name"));
         userInfo.put("email", jwt.getClaimAsString("email"));
         return R.ok(userInfo);
+    }
+
+    /**
+     * 获取当前用户在指定项目中的权限列表
+     */
+    @GetMapping("/my-permissions")
+    public R<Set<String>> getMyPermissions(@RequestParam Long projectId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Set<String> permissions = new HashSet<>(permissionService.getProjectPermissions(userId, projectId));
+        // 合并全局权限
+        permissions.addAll(permissionService.getPermissions(userId));
+        return R.ok(permissions);
     }
 }

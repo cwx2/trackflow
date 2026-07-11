@@ -13,6 +13,8 @@ import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.vo.*;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.service.WorkflowService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/issues")
@@ -32,6 +37,7 @@ public class IssueController {
     private final WorkflowService workflowService;
     private final IssueLinkService linkService;
     private final IssueTagService tagService;
+    private final SysUserMapper sysUserMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -46,6 +52,24 @@ public class IssueController {
                 query.getPriority(), query.getAssigneeId(), query.getReporterId(),
                 query.getSprintId(), query.getIssueType(), query.getKeyword());
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
+
+        // 批量填充 assigneeName
+        List<Long> assigneeIds = result.getRecords().stream()
+                .map(Issue::getAssigneeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!assigneeIds.isEmpty()) {
+            Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
+                    .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            for (int i = 0; i < result.getRecords().size(); i++) {
+                Issue issue = result.getRecords().get(i);
+                if (issue.getAssigneeId() != null) {
+                    voList.get(i).setAssigneeName(userNameMap.get(issue.getAssigneeId()));
+                }
+            }
+        }
+
         PageResult<IssueVO> pageResult = new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);

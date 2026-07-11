@@ -1,8 +1,8 @@
 <template>
   <div class="app-layout">
-    <!-- 左侧导航栏 -->
+    <!-- 左侧导航栏（全高） -->
     <aside class="sidebar">
-      <div class="sidebar-logo">
+      <div class="sidebar-logo" @click="$router.push('/')">
         <span class="logo-icon">T</span>
         <span class="logo-text">TrackFlow</span>
       </div>
@@ -59,9 +59,12 @@
       </div>
     </aside>
 
-    <!-- 右侧主内容区 -->
+    <!-- 右侧（标签栏 + 内容区） -->
     <div class="main-area">
-      <router-view />
+      <TabBar />
+      <div class="main-content">
+        <router-view />
+      </div>
     </div>
   </div>
 </template>
@@ -70,6 +73,7 @@
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
+import TabBar from './TabBar.vue'
 
 const authStore = useAuthStore()
 const { theme, cycleTheme } = useTheme()
@@ -115,28 +119,29 @@ function handleLogout() {
 }
 
 .sidebar-logo {
-  padding: 16px 14px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid var(--tf-border-light);
+  cursor: pointer;
 }
 
 .logo-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   background: linear-gradient(135deg, var(--tf-accent), var(--tf-purple));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
 }
 
 .logo-text {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--tf-text-primary);
   letter-spacing: -0.3px;
@@ -280,5 +285,12 @@ function handleLogout() {
   overflow: hidden;
   background: var(--tf-bg-body);
   transition: background-color 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  overflow: hidden;
 }
 </style>

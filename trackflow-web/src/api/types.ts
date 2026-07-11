@@ -196,3 +196,47 @@ export interface SavedQueryVO {
   sortOrder: number
   createdAt: string
 }
+
+// ========== 自定义字段 ==========
+export interface CustomFieldDefinitionVO {
+  id: string
+  name: string
+  fieldFormat: 'string' | 'int' | 'float' | 'date' | 'bool' | 'list' | 'user'
+  isRequired: boolean
+  isForAll: boolean
+  defaultValue?: string
+  minLength: number
+  maxLength: number
+  regexp?: string
+  position: number
+  options?: CustomFieldOptionVO[]
+  projectIds?: string[]
+  issueTypes?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CustomFieldOptionVO {
+  id: string
+  customFieldId: string
+  value: string
+  position: number
+  isDefault: boolean
+}
+
+export interface CustomFieldValueVO {
+  customFieldId: string
+  fieldName: string
+  fieldFormat: string
+  value?: string
+  displayValue?: string
+}
+
+export interface AvailableColumnVO {
+  key: string
+  label: string
+  group: 'standard' | 'custom'
+  fieldFormat?: string
+  sortable: boolean
+  removable: boolean
+}

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useTabStore } from '@/stores/tabs'
 
 const routes = [
   {
@@ -71,6 +72,11 @@ const routes = [
         path: 'admin/organizations',
         name: 'OrgManagement',
         component: () => import('@/views/admin/OrgManagement.vue')
+      },
+      {
+        path: 'admin/custom-fields',
+        name: 'CustomFieldManagement',
+        component: () => import('@/views/admin/CustomFieldManage.vue')
       }
     ]
   }
@@ -81,15 +87,28 @@ const router = createRouter({
   routes
 })
 
-// 导航守卫：未认证跳转登录
+// 导航守卫：未认证跳转登录 + 标签管理
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'Login' })
-  } else {
-    next()
+    return
   }
+
+  // 标签管理：打开 Issue 详情时自动创建标签
+  const tabStore = useTabStore()
+  if (to.name === 'IssueDetail' && to.params.id) {
+    tabStore.openTab({
+      id: `issue-${to.params.id}`,
+      title: `Issue #${to.params.id}`,
+      path: to.fullPath,
+      closable: true,
+      issueId: String(to.params.id)
+    })
+  }
+
+  next()
 })
 
 export default router

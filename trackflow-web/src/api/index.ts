@@ -11,6 +11,8 @@ export { userApi } from './user'
 export { sprintApi } from './sprint'
 export { queryApi } from './query'
 export { tagApi } from './tag'
+export { authApi } from './auth'
+export { customFieldApi } from './customField'
 
 // 类型导出
 export type * from './types'
