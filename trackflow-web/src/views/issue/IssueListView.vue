@@ -72,6 +72,7 @@
         :project-id="activeProjectId"
         :status-list="statusCache"
         :project-list="projectList"
+        :initial-filters="initialFilterChips"
         @search="onGlobalSearch"
         @filter="onGlobalFilter"
       />
@@ -403,6 +404,7 @@ function togglePanelCollapse() {
 const filterProject = ref<string | undefined>(undefined)
 const searchKeyword = ref('')
 const globalFilterParams = ref<Record<string, any>>({})
+const initialFilterChips = ref<any[]>([])
 
 function onGlobalSearch(keyword: string) {
   searchKeyword.value = keyword
@@ -811,10 +813,60 @@ async function loadStatuses() {
   catch { statusCache.value = [] }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (route.query.project) activeProjectId.value = String(route.query.project)
-  loadPanel(); loadProjects(); loadStatuses(); refreshList()
+
+  await loadPanel()
+  loadProjects()
+  await loadStatuses()
+
+  // Handle dashboard filter params (statusId, label, etc.)
+  if (route.query.statusId || route.query.overdue || route.query.dueSoon) {
+    applyDashboardFilter()
+  } else {
+    refreshList()
+  }
 })
+
+function applyDashboardFilter() {
+  const filters: Record<string, any> = {}
+  const chips: any[] = []
+
+  if (route.query.statusId) {
+    const statusIds = String(route.query.statusId).split(',')
+    filters.statusId = String(route.query.statusId)
+
+    // Build chip with status names
+    const statusNames = statusIds.map(id => {
+      const s = statusCache.value.find(st => st.id === id)
+      return s?.name || id
+    })
+    chips.push({
+      fieldKey: 'status',
+      operator: 'any_of',
+      values: statusIds,
+      valueLabels: statusNames
+    })
+  }
+
+  if (route.query.overdue) {
+    filters.overdue = 'true'
+    // No chip needed — displayed in label
+  }
+
+  if (route.query.dueSoon) {
+    filters.dueSoon = 'true'
+  }
+
+  // Set display label
+  if (route.query.label) {
+    activeQueryName.value = String(route.query.label)
+  }
+
+  initialFilterChips.value = chips
+  globalFilterParams.value = filters
+  refreshList()
+}
 </script>
 
 <style scoped>

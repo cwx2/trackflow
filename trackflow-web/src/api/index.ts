@@ -13,6 +13,7 @@ export { queryApi } from './query'
 export { tagApi } from './tag'
 export { authApi } from './auth'
 export { customFieldApi } from './customField'
+export { dashboardApi } from './dashboard'
 
 // 类型导出
 export type * from './types'

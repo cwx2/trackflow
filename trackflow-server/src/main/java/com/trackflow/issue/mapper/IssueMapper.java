@@ -26,4 +26,9 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * 活动列表 JOIN 用户表（一次查询）
      */
     List<Map<String, Object>> selectActivitiesWithUser(@Param("issueId") Long issueId);
+
+    /**
+     * Dashboard 活动流：查询指定 issue 列表的最近活动记录，JOIN 用户表和 Issue 表
+     */
+    List<Map<String, Object>> selectDashboardActivities(@Param("issueIds") List<Long> issueIds, @Param("limit") int limit);
 }

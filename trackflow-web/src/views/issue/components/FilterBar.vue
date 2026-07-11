@@ -187,10 +187,18 @@ interface FilterChip {
 
 // ==================== Props & Emits ====================
 
+export interface InitialFilter {
+  fieldKey: string
+  operator: string
+  values: string[]
+  valueLabels?: string[]
+}
+
 const props = defineProps<{
   projectId?: string | null
   statusList: IssueStatusVO[]
   projectList: ProjectVO[]
+  initialFilters?: InitialFilter[]
 }>()
 
 const emit = defineEmits<{
@@ -673,6 +681,29 @@ function handleClickOutside(e: MouseEvent) {
 
 onMounted(() => document.addEventListener('mousedown', handleClickOutside))
 onUnmounted(() => document.removeEventListener('mousedown', handleClickOutside))
+
+// Initialize with external filters (from dashboard cards, etc.)
+watch(() => props.initialFilters, (filters) => {
+  if (filters && filters.length > 0) {
+    applyInitialFilters(filters)
+  }
+}, { immediate: true })
+
+function applyInitialFilters(filters: InitialFilter[]) {
+  mode.value = 'filter'
+  activeFilters.value = filters.map(f => {
+    const field = FILTER_FIELDS.find(ff => ff.key === f.fieldKey)
+    const op = field?.operators.find(o => o.key === f.operator)
+    return {
+      fieldKey: f.fieldKey,
+      fieldLabel: field?.label || f.fieldKey,
+      operator: f.operator,
+      operatorLabel: op?.label || f.operator,
+      values: f.values,
+      valueLabel: f.valueLabels?.join(', ') || f.values.join(', ')
+    }
+  })
+}
 </script>
 
 <style scoped>

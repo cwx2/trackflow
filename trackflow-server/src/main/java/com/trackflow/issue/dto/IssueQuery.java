@@ -22,4 +22,8 @@ public class IssueQuery extends PageQuery {
     private String assigneeIdNot;
     private String sprintIdNot;
     private String issueTypeNot;
+
+    // Special filters
+    private String overdue;   // "true" = due_date < today AND status not done
+    private String dueSoon;   // "true" = due_date <= today+7 AND status not done
 }

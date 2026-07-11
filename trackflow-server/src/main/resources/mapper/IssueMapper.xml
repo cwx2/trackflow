@@ -50,4 +50,22 @@
         ORDER BY a.created_at ASC
     </select>
 
+    <!-- Dashboard 活动流：指定 issue 列表的最近活动，JOIN 用户表和 Issue 表 -->
+    <select id="selectDashboardActivities" resultType="map">
+        SELECT
+            a.id, a.issue_id, a.user_id, a.action, a.field_name,
+            a.old_value, a.new_value, a.created_at,
+            u.display_name AS user_name,
+            i.issue_key, i.title AS issue_title
+        FROM issue_activity a
+        LEFT JOIN sys_user u ON u.id = a.user_id
+        LEFT JOIN issue i ON i.id = a.issue_id
+        WHERE a.issue_id IN
+        <foreach collection="issueIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY a.created_at DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

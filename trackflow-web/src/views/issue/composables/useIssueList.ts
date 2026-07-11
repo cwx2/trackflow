@@ -24,6 +24,9 @@ export interface IssueListFilters {
   assigneeIdNot?: string
   sprintIdNot?: string
   issueTypeNot?: string
+  // Special filters
+  overdue?: string
+  dueSoon?: string
 }
 
 export function useIssueList() {
@@ -88,6 +91,9 @@ export function useIssueList() {
       if (filters.assigneeIdNot) params.assigneeIdNot = filters.assigneeIdNot
       if (filters.sprintIdNot) params.sprintIdNot = filters.sprintIdNot
       if (filters.issueTypeNot) params.issueTypeNot = filters.issueTypeNot
+      // Special filters
+      if (filters.overdue) params.overdue = filters.overdue
+      if (filters.dueSoon) params.dueSoon = filters.dueSoon
 
       let res
       if (filters.queryId) {

@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -129,6 +130,25 @@ public class IssueService {
         applyNegativeFilter(wrapper, "assignee_id", query.getAssigneeIdNot(), true);
         applyNegativeFilter(wrapper, "sprint_id", query.getSprintIdNot(), true);
         applyNegativeFilter(wrapper, "issue_type", query.getIssueTypeNot(), false);
+
+        // Special filters: overdue and dueSoon (auto-exclude done/cancelled statuses)
+        if ("true".equals(query.getOverdue()) || "true".equals(query.getDueSoon())) {
+            // Get done/cancelled status IDs to exclude
+            List<IssueStatus> allStatuses = statusMapper.selectList(null);
+            List<Long> closedIds = allStatuses.stream()
+                    .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
+                    .map(IssueStatus::getId).toList();
+            if (!closedIds.isEmpty()) {
+                wrapper.notIn("status_id", closedIds);
+            }
+            wrapper.isNotNull("due_date");
+            if ("true".equals(query.getOverdue())) {
+                wrapper.lt("due_date", LocalDate.now());
+            }
+            if ("true".equals(query.getDueSoon())) {
+                wrapper.le("due_date", LocalDate.now().plusDays(7));
+            }
+        }
 
         String keyword = query.getKeyword();
         if (keyword != null && !keyword.isBlank()) {
