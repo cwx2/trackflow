@@ -21,9 +21,9 @@
         <span class="nav-pos">{{ index }} / {{ total }}</span>
         <button class="icon-btn" :disabled="(index ?? 0) >= (total ?? 0)" @click="$emit('next')"><icon-right :size="12" /></button>
       </div>
-      <button class="icon-btn" @click="$emit('copy')" title="复制"><icon-copy :size="14" /></button>
-      <button class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="14" /></button>
-      <button class="icon-btn" @click="$emit('toggle-sidebar')" title="面板"><icon-menu :size="14" /></button>
+      <button class="icon-btn" @click="$emit('copy')" title="复制"><icon-copy :size="16" /></button>
+      <button class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="16" /></button>
+      <button class="icon-btn" @click="$emit('toggle-sidebar')" title="面板"><icon-menu :size="16" /></button>
     </div>
   </header>
 </template>
@@ -66,16 +66,15 @@ defineEmits<{
 .icon-btn {
   background: none;
   border: none;
-  color: var(--tf-text-primary);
+  color: var(--tf-text-secondary);
   cursor: pointer;
   padding: 6px;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
-  opacity: 0.7;
-  transition: opacity 150ms, background 150ms;
+  transition: color 150ms, background 150ms;
 }
-.icon-btn:hover:not(:disabled) { background: var(--tf-bg-hover); opacity: 1; }
+.icon-btn:hover:not(:disabled) { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 
 .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 13px; }
