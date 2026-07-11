@@ -48,9 +48,7 @@ public class IssueController {
 
     @GetMapping
     public R<PageResult<IssueVO>> list(IssueQuery query) {
-        Page<Issue> result = issueService.list(query.toPage(), query.getProjectId(), query.getStatusId(),
-                query.getPriority(), query.getAssigneeId(), query.getReporterId(),
-                query.getSprintId(), query.getIssueType(), query.getKeyword());
+        Page<Issue> result = issueService.listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
 
         // 批量填充 assigneeName

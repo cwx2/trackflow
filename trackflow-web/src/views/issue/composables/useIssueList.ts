@@ -18,6 +18,12 @@ export interface IssueListFilters {
   issueType?: string
   keyword?: string
   queryId?: string | number
+  // Negative filters
+  statusIdNot?: string
+  priorityNot?: string
+  assigneeIdNot?: string
+  sprintIdNot?: string
+  issueTypeNot?: string
 }
 
 export function useIssueList() {
@@ -76,6 +82,12 @@ export function useIssueList() {
       if (filters.sprintId) params.sprintId = filters.sprintId
       if (filters.issueType) params.issueType = filters.issueType
       if (filters.keyword) params.keyword = filters.keyword
+      // Negative filters
+      if (filters.statusIdNot) params.statusIdNot = filters.statusIdNot
+      if (filters.priorityNot) params.priorityNot = filters.priorityNot
+      if (filters.assigneeIdNot) params.assigneeIdNot = filters.assigneeIdNot
+      if (filters.sprintIdNot) params.sprintIdNot = filters.sprintIdNot
+      if (filters.issueTypeNot) params.issueTypeNot = filters.issueTypeNot
 
       let res
       if (filters.queryId) {

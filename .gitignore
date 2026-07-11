@@ -1,9 +1,12 @@
 # === 忽略参考源码 ===
-openproject/
+openproject
 
 # === Kiro / 文档 ===
 .kiro/
 docs/
+.playwright-mcp
+test
+tools
 
 # === Java / Maven ===
 trackflow-server/target/

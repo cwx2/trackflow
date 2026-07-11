@@ -67,6 +67,15 @@
 
     <!-- Right issue list area -->
     <section class="issue-list-area">
+      <!-- Search/Filter bar (YouTrack style with mode toggle) -->
+      <FilterBar
+        :project-id="activeProjectId"
+        :status-list="statusCache"
+        :project-list="projectList"
+        @search="onGlobalSearch"
+        @filter="onGlobalFilter"
+      />
+
       <!-- Batch action toolbar (replaces filter bar when selected) -->
       <BatchActionToolbar
         v-if="selectedCount > 0"
@@ -306,6 +315,7 @@ import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
+import FilterBar from './components/FilterBar.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -391,6 +401,22 @@ function togglePanelCollapse() {
 
 // Filters
 const filterProject = ref<string | undefined>(undefined)
+const searchKeyword = ref('')
+const globalFilterParams = ref<Record<string, any>>({})
+
+function onGlobalSearch(keyword: string) {
+  searchKeyword.value = keyword
+  globalFilterParams.value = {}
+  currentPage.value = 1
+  refreshList()
+}
+
+function onGlobalFilter(filters: Record<string, any>) {
+  searchKeyword.value = ''
+  globalFilterParams.value = filters
+  currentPage.value = 1
+  refreshList()
+}
 
 // Quick create
 const showInlineCreate = ref(false)
@@ -731,6 +757,9 @@ function buildFilters() {
   if (activeProjectId.value) filters.projectId = activeProjectId.value
   if (filterProject.value) filters.projectId = filterProject.value
   if (activeQueryId.value) filters.queryId = activeQueryId.value
+  if (searchKeyword.value.trim()) filters.keyword = searchKeyword.value.trim()
+  // Merge global filter params (from FilterBar's filter mode)
+  Object.assign(filters, globalFilterParams.value)
   return filters
 }
 function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames() }) }
@@ -817,6 +846,7 @@ onMounted(() => {
 
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
 .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--tf-border); flex-shrink: 0; }
 .filter-left { display: flex; align-items: center; gap: 12px; }
 .current-query-name { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }

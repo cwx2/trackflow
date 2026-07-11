@@ -10,6 +10,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.service.MinioService;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.CreateIssueDTO;
+import com.trackflow.issue.dto.IssueQuery;
 import com.trackflow.issue.dto.UpdateIssueDTO;
 import com.trackflow.issue.entity.*;
 import com.trackflow.issue.mapper.*;
@@ -97,16 +98,134 @@ public class IssueService {
     public Page<Issue> list(Page<Issue> page, Long projectId, Long statusId, String priority,
                             Long assigneeId, Long reporterId, Long sprintId, String issueType,
                             String keyword) {
+        return list(page, projectId, statusId, priority, assigneeId, reporterId, sprintId, issueType, keyword,
+                null, null, null, null, null);
+    }
+
+    /**
+     * Issue 列表（接受 IssueQuery，完整筛选支持）
+     */
+    public Page<Issue> listByQuery(IssueQuery query) {
+        QueryWrapper<Issue> wrapper = new QueryWrapper<>();
+        wrapper.isNull("deleted_at");
+
+        if (query.getProjectId() != null) wrapper.eq("project_id", query.getProjectId());
+
+        // statusId: supports single or comma-separated
+        applyFilter(wrapper, "status_id", query.getStatusId(), true);
+        // priority: supports single or comma-separated
+        applyFilter(wrapper, "priority", query.getPriority(), false);
+        // assigneeId: supports single or comma-separated
+        applyFilter(wrapper, "assignee_id", query.getAssigneeId(), true);
+        if (query.getReporterId() != null) wrapper.eq("reporter_id", query.getReporterId());
+        // sprintId: supports single or comma-separated
+        applyFilter(wrapper, "sprint_id", query.getSprintId(), true);
+        // issueType: supports single or comma-separated
+        applyFilter(wrapper, "issue_type", query.getIssueType(), false);
+
+        // Negative filters
+        applyNegativeFilter(wrapper, "status_id", query.getStatusIdNot(), true);
+        applyNegativeFilter(wrapper, "priority", query.getPriorityNot(), false);
+        applyNegativeFilter(wrapper, "assignee_id", query.getAssigneeIdNot(), true);
+        applyNegativeFilter(wrapper, "sprint_id", query.getSprintIdNot(), true);
+        applyNegativeFilter(wrapper, "issue_type", query.getIssueTypeNot(), false);
+
+        String keyword = query.getKeyword();
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.and(w -> w
+                    .like("title", keyword)
+                    .or()
+                    .like("description", keyword)
+                    .or()
+                    .like("issue_key", keyword)
+            );
+        }
+
+        wrapper.orderByDesc("updated_at");
+        return issueMapper.selectPage(query.toPage(), wrapper);
+    }
+
+    private void applyFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
+        if (value == null || value.isBlank()) return;
+        if (value.contains(",")) {
+            List<?> values = isNumeric
+                    ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
+                    : java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+            wrapper.in(column, values);
+        } else {
+            if (isNumeric) {
+                wrapper.eq(column, Long.parseLong(value.trim()));
+            } else {
+                wrapper.eq(column, value.trim());
+            }
+        }
+    }
+
+    private void applyNegativeFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
+        if (value == null || value.isBlank()) return;
+        List<?> values = isNumeric
+                ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
+                : java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        wrapper.notIn(column, values);
+    }
+
+    /**
+     * Issue 列表（支持正向+否定筛选，支持逗号分隔多值）
+     */
+    public Page<Issue> list(Page<Issue> page, Long projectId, Long statusId, String priority,
+                            Long assigneeId, Long reporterId, Long sprintId, String issueType,
+                            String keyword,
+                            String statusIdNot, String priorityNot, String assigneeIdNot,
+                            String sprintIdNot, String issueTypeNot) {
         QueryWrapper<Issue> wrapper = new QueryWrapper<>();
         wrapper.isNull("deleted_at");
 
         if (projectId != null) wrapper.eq("project_id", projectId);
         if (statusId != null) wrapper.eq("status_id", statusId);
-        if (priority != null) wrapper.eq("priority", priority);
+        if (priority != null) {
+            // Support comma-separated values (any_of)
+            if (priority.contains(",")) {
+                wrapper.in("priority", java.util.Arrays.asList(priority.split(",")));
+            } else {
+                wrapper.eq("priority", priority);
+            }
+        }
         if (assigneeId != null) wrapper.eq("assignee_id", assigneeId);
         if (reporterId != null) wrapper.eq("reporter_id", reporterId);
         if (sprintId != null) wrapper.eq("sprint_id", sprintId);
-        if (issueType != null) wrapper.eq("issue_type", issueType);
+        if (issueType != null) {
+            if (issueType.contains(",")) {
+                wrapper.in("issue_type", java.util.Arrays.asList(issueType.split(",")));
+            } else {
+                wrapper.eq("issue_type", issueType);
+            }
+        }
+
+        // Negative filters
+        if (statusIdNot != null && !statusIdNot.isBlank()) {
+            List<Long> notIds = java.util.Arrays.stream(statusIdNot.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty())
+                    .map(Long::parseLong).toList();
+            wrapper.notIn("status_id", notIds);
+        }
+        if (priorityNot != null && !priorityNot.isBlank()) {
+            wrapper.notIn("priority", java.util.Arrays.asList(priorityNot.split(",")));
+        }
+        if (assigneeIdNot != null && !assigneeIdNot.isBlank()) {
+            List<Long> notIds = java.util.Arrays.stream(assigneeIdNot.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty())
+                    .map(Long::parseLong).toList();
+            wrapper.notIn("assignee_id", notIds);
+        }
+        if (sprintIdNot != null && !sprintIdNot.isBlank()) {
+            List<Long> notIds = java.util.Arrays.stream(sprintIdNot.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty())
+                    .map(Long::parseLong).toList();
+            wrapper.notIn("sprint_id", notIds);
+        }
+        if (issueTypeNot != null && !issueTypeNot.isBlank()) {
+            wrapper.notIn("issue_type", java.util.Arrays.asList(issueTypeNot.split(",")));
+        }
 
         if (keyword != null && !keyword.isBlank()) {
             wrapper.and(w -> w
