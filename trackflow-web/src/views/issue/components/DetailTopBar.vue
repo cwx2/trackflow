@@ -22,6 +22,7 @@
         <button class="icon-btn" :disabled="(index ?? 0) >= (total ?? 0)" @click="$emit('next')"><icon-right :size="12" /></button>
       </div>
       <button class="icon-btn" @click="$emit('copy')" title="复制"><icon-copy :size="14" /></button>
+      <button class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="14" /></button>
       <button class="icon-btn" @click="$emit('toggle-sidebar')" title="面板"><icon-menu :size="14" /></button>
     </div>
   </header>
@@ -42,6 +43,7 @@ defineEmits<{
   prev: []
   next: []
   copy: []
+  create: []
   'toggle-sidebar': []
 }>()
 </script>

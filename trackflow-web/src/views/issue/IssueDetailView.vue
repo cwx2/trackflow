@@ -7,6 +7,7 @@
       :created-ago="timeAgo(issue.createdAt)"
       :updated-ago="timeAgo(issue.updatedAt)"
       @copy="copyIssue"
+      @create="showCreatePanel = true"
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
     />
 
@@ -48,6 +49,8 @@
   <div v-else-if="loading" class="loading-page">
     <a-spin :size="28" tip="加载中..." />
   </div>
+
+  <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="issue?.projectId" />
 </template>
 
 <script setup lang="ts">
@@ -62,6 +65,7 @@ import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
 import ActivityStream from './components/ActivityStream.vue'
 import CommentInput from './components/CommentInput.vue'
+import IssueCreatePanel from './IssueCreatePanel.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 
@@ -76,6 +80,7 @@ import {
 
 const route = useRoute()
 const sidebarVisible = ref(true)
+const showCreatePanel = ref(false)
 const loading = ref(false)
 const useMock = ref(true) // 默认用 mock，API 可用时自动切换
 
