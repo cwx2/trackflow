@@ -14,11 +14,6 @@ import com.trackflow.issue.dto.UpdateIssueDTO;
 import com.trackflow.issue.entity.*;
 import com.trackflow.issue.mapper.*;
 import com.trackflow.project.service.ProjectService;
-import com.trackflow.system.entity.SysUser;
-import com.trackflow.system.mapper.SysUserMapper;
-import com.trackflow.sprint.entity.Sprint;
-import com.trackflow.sprint.mapper.SprintMapper;
-import com.trackflow.project.entity.Project;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.vo.*;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -43,10 +39,8 @@ public class IssueService {
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final MinioService minioService;
-    private final SysUserMapper userMapper;
     private final IssueConverter issueConverter;
     private final IssueTagService tagService;
-    private final SprintMapper sprintMapper;
 
     /**
      * 创建 Issue
@@ -301,99 +295,114 @@ public class IssueService {
         );
     }
 
-    // ========== 增强详情 ==========
+    // ========== 增强详情（性能优化：单次 JOIN 查询） ==========
 
     /**
-     * 获取增强版 Issue 详情（含关联信息）
+     * 获取增强版 Issue 详情 —— 单次 SQL JOIN 替代 N+1 查询
      */
     public IssueDetailVO getDetail(Long id) {
-        Issue issue = getById(id);
-        IssueDetailVO vo = issueConverter.toDetailVO(issue);
-
-        // 补充项目名称
-        Project project = projectService.getById(issue.getProjectId());
-        if (project != null) {
-            vo.setProjectName(project.getName());
+        Map<String, Object> row = issueMapper.selectDetailById(id);
+        if (row == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
 
-        // 补充状态对象
-        IssueStatus status = statusMapper.selectById(issue.getStatusId());
-        if (status != null) {
-            vo.setStatus(issueConverter.toStatusVO(status));
+        IssueDetailVO vo = new IssueDetailVO();
+        vo.setId(String.valueOf(row.get("id")));
+        vo.setProjectId(String.valueOf(row.get("project_id")));
+        vo.setProjectName((String) row.get("project_name"));
+        vo.setIssueKey((String) row.get("issue_key"));
+        vo.setTitle((String) row.get("title"));
+        vo.setDescription((String) row.get("description"));
+        vo.setIssueType((String) row.get("issue_type"));
+        vo.setStatusId(String.valueOf(row.get("status_id")));
+        vo.setPriority((String) row.get("priority"));
+        vo.setAssigneeId(row.get("assignee_id") != null ? String.valueOf(row.get("assignee_id")) : null);
+        vo.setAssigneeName((String) row.get("assignee_name"));
+        vo.setReporterId(String.valueOf(row.get("reporter_id")));
+        vo.setReporterName((String) row.get("reporter_name"));
+        vo.setSprintId(row.get("sprint_id") != null ? String.valueOf(row.get("sprint_id")) : null);
+        vo.setSprintName((String) row.get("sprint_name"));
+        vo.setParentId(row.get("parent_id") != null ? String.valueOf(row.get("parent_id")) : null);
+        vo.setParentKey((String) row.get("parent_key"));
+        vo.setCustomFields((String) row.get("custom_fields"));
+
+        if (row.get("due_date") != null) {
+            vo.setDueDate(((java.sql.Date) row.get("due_date")).toLocalDate());
+        }
+        if (row.get("estimated_hours") != null) {
+            vo.setEstimatedHours((java.math.BigDecimal) row.get("estimated_hours"));
+        }
+        if (row.get("spent_hours") != null) {
+            vo.setSpentHours((java.math.BigDecimal) row.get("spent_hours"));
+        }
+        if (row.get("resolved_at") != null) {
+            vo.setResolvedAt(((java.sql.Timestamp) row.get("resolved_at")).toLocalDateTime());
+        }
+        if (row.get("created_at") != null) {
+            vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
+        }
+        if (row.get("updated_at") != null) {
+            vo.setUpdatedAt(((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime());
         }
 
-        // 补充负责人名称
-        if (issue.getAssigneeId() != null) {
-            SysUser assignee = userMapper.selectById(issue.getAssigneeId());
-            if (assignee != null) {
-                vo.setAssigneeName(assignee.getDisplayName());
-            }
+        // 状态对象
+        if (row.get("status_name") != null) {
+            IssueStatusVO statusVO = new IssueStatusVO();
+            statusVO.setId(String.valueOf(row.get("status_id")));
+            statusVO.setName((String) row.get("status_name"));
+            statusVO.setCode((String) row.get("status_code"));
+            statusVO.setColor((String) row.get("status_color"));
+            statusVO.setCategory((String) row.get("status_category"));
+            statusVO.setIsDefault((Boolean) row.get("status_is_default"));
+            statusVO.setIsClosed((Boolean) row.get("status_is_closed"));
+            vo.setStatus(statusVO);
         }
 
-        // 补充报告人名称
-        if (issue.getReporterId() != null) {
-            SysUser reporter = userMapper.selectById(issue.getReporterId());
-            if (reporter != null) {
-                vo.setReporterName(reporter.getDisplayName());
-            }
-        }
-
-        // 补充 Sprint 名称
-        if (issue.getSprintId() != null) {
-            Sprint sprint = sprintMapper.selectById(issue.getSprintId());
-            if (sprint != null) {
-                vo.setSprintName(sprint.getName());
-            }
-        }
-
-        // 补充父 Issue Key
-        if (issue.getParentId() != null) {
-            Issue parent = issueMapper.selectById(issue.getParentId());
-            if (parent != null) {
-                vo.setParentKey(parent.getIssueKey());
-            }
-        }
-
-        // 补充标签
-        List<IssueTag> tags = tagService.listIssueTags(issue.getId());
+        // 标签（单独查询，因为是多对多关系）
+        List<IssueTag> tags = tagService.listIssueTags(id);
         vo.setTags(issueConverter.toTagVOList(tags));
 
         return vo;
     }
 
     /**
-     * 获取带用户名的评论列表
+     * 获取评论列表 —— 单次 JOIN 查询（消除 N+1）
      */
     public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
-        List<IssueComment> comments = listComments(issueId);
-        List<IssueCommentVO> voList = issueConverter.toCommentVOList(comments);
-        for (IssueCommentVO vo : voList) {
-            if (vo.getUserId() != null) {
-                SysUser user = userMapper.selectById(Long.valueOf(vo.getUserId()));
-                if (user != null) {
-                    vo.setUserName(user.getDisplayName());
-                    vo.setUserAvatar(user.getAvatarUrl());
-                }
-            }
-        }
-        return voList;
+        List<Map<String, Object>> rows = issueMapper.selectCommentsWithUser(issueId);
+        return rows.stream().map(row -> {
+            IssueCommentVO vo = new IssueCommentVO();
+            vo.setId(String.valueOf(row.get("id")));
+            vo.setIssueId(String.valueOf(row.get("issue_id")));
+            vo.setUserId(String.valueOf(row.get("user_id")));
+            vo.setUserName((String) row.get("user_name"));
+            vo.setUserAvatar((String) row.get("user_avatar"));
+            vo.setContent((String) row.get("content"));
+            vo.setSource((String) row.get("source"));
+            if (row.get("created_at") != null) vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
+            if (row.get("updated_at") != null) vo.setUpdatedAt(((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime());
+            return vo;
+        }).toList();
     }
 
     /**
-     * 获取带用户名的活动列表
+     * 获取活动列表 —— 单次 JOIN 查询（消除 N+1）
      */
     public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
-        List<IssueActivity> activities = listActivities(issueId);
-        List<IssueActivityVO> voList = issueConverter.toActivityVOList(activities);
-        for (IssueActivityVO vo : voList) {
-            if (vo.getUserId() != null) {
-                SysUser user = userMapper.selectById(Long.valueOf(vo.getUserId()));
-                if (user != null) {
-                    vo.setUserName(user.getDisplayName());
-                }
-            }
-        }
-        return voList;
+        List<Map<String, Object>> rows = issueMapper.selectActivitiesWithUser(issueId);
+        return rows.stream().map(row -> {
+            IssueActivityVO vo = new IssueActivityVO();
+            vo.setId(String.valueOf(row.get("id")));
+            vo.setIssueId(String.valueOf(row.get("issue_id")));
+            vo.setUserId(String.valueOf(row.get("user_id")));
+            vo.setUserName((String) row.get("user_name"));
+            vo.setAction((String) row.get("action"));
+            vo.setFieldName((String) row.get("field_name"));
+            vo.setOldValue((String) row.get("old_value"));
+            vo.setNewValue((String) row.get("new_value"));
+            if (row.get("created_at") != null) vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
+            return vo;
+        }).toList();
     }
 
     // ========== 附件上传 ==========

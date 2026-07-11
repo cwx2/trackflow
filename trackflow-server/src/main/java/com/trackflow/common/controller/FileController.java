@@ -1,0 +1,75 @@
+package com.trackflow.common.controller;
+
+import com.trackflow.common.service.MinioService;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/v1/files")
+@RequiredArgsConstructor
+public class FileController {
+
+    private final MinioService minioService;
+
+    /**
+     * 文件下载/预览（支持任意深度路径）
+     * GET /api/v1/files/issues/123/attachments/uuid.png
+     */
+    @GetMapping("/**")
+    public void download(HttpServletResponse response,
+                         jakarta.servlet.http.HttpServletRequest request) {
+        // 提取完整路径（去掉 /api/v1/files/ 前缀）
+        String fullPath = request.getRequestURI();
+        String objectName = fullPath.substring("/api/v1/files/".length());
+
+        try (InputStream is = minioService.getObject(objectName)) {
+            // 根据文件扩展名设置 Content-Type
+            String contentType = guessContentType(objectName);
+            response.setContentType(contentType);
+
+            // 如果是图片/PDF，直接在浏览器预览；否则下载
+            if (contentType.startsWith("image/") || contentType.equals("application/pdf")) {
+                response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline");
+            } else {
+                String fileName = objectName.substring(objectName.lastIndexOf('/') + 1);
+                response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
+            }
+
+            OutputStream os = response.getOutputStream();
+            is.transferTo(os);
+            os.flush();
+        } catch (Exception e) {
+            log.error("File download failed: {}", objectName, e);
+            response.setStatus(404);
+        }
+    }
+
+    private String guessContentType(String filename) {
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".png")) return MediaType.IMAGE_PNG_VALUE;
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return MediaType.IMAGE_JPEG_VALUE;
+        if (lower.endsWith(".gif")) return MediaType.IMAGE_GIF_VALUE;
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".pdf")) return MediaType.APPLICATION_PDF_VALUE;
+        if (lower.endsWith(".json")) return MediaType.APPLICATION_JSON_VALUE;
+        if (lower.endsWith(".html") || lower.endsWith(".htm")) return MediaType.TEXT_HTML_VALUE;
+        if (lower.endsWith(".css")) return "text/css";
+        if (lower.endsWith(".js")) return "application/javascript";
+        if (lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".patch")) return MediaType.TEXT_PLAIN_VALUE;
+        if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        if (lower.endsWith(".zip")) return "application/zip";
+        return MediaType.APPLICATION_OCTET_STREAM_VALUE;
+    }
+}

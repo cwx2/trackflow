@@ -1,69 +1,70 @@
 <template>
   <main class="detail-main">
     <!-- Issue Key + Type -->
-    <div class="identity-row">
-      <span class="iss-key">{{ issueKey }}</span>
-      <span class="type-badge" :class="'t-' + issueType.toLowerCase()">{{ issueType }}</span>
-    </div>
-
-    <!-- Title + Action Icons -->
-    <div class="title-row">
-      <h1 v-if="!editingTitle" class="iss-title" @dblclick="startEditTitle">{{ title }}</h1>
-      <input
-        v-else
-        ref="titleInput"
-        v-model="localTitle"
-        class="title-edit-input"
-        @keyup.enter="commitTitle"
-        @keyup.escape="editingTitle = false"
-        @blur="commitTitle"
-      />
-      <div class="title-actions" v-if="!editingTitle && !editingDesc">
-        <button class="action-icon" title="编辑" @click="startEditDesc">&#9998;</button>
-        <button class="action-icon" title="附件" @click="$emit('upload')">&#128206;</button>
-        <button class="action-icon" title="链接" @click="$emit('add-link')">&#128279;</button>
-        <button class="action-icon" title="更多">&#8943;</button>
+    <div class="sticky-header">
+      <div class="identity-row">
+        <span class="iss-key">{{ issueKey }}</span>
+        <span class="type-badge" :class="'t-' + issueType.toLowerCase()">{{ issueType }}</span>
       </div>
-    </div>
 
-    <!-- Tags -->
-    <div class="tag-row" v-if="tags.length > 0 || true">
-      <span
-        v-for="tag in tags"
-        :key="tag.id"
-        class="tag-chip"
-        :style="{ background: tag.color + '20', color: tag.color, borderColor: tag.color + '55' }"
-      >
-        {{ tag.name }}
-        <span class="tag-x" @click="$emit('remove-tag', tag.id)">&times;</span>
-      </span>
-      <!-- 添加标签下拉 -->
-      <div class="tag-add-wrap">
-        <button class="add-tag" @click="showTagPicker = !showTagPicker">+ 标签</button>
-        <div class="tag-picker" v-if="showTagPicker">
-          <input
-            ref="tagSearchRef"
-            v-model="tagSearch"
-            class="tag-search-input"
-            placeholder="搜索或创建标签..."
-            @keyup.enter="createNewTag"
-            @keyup.escape="showTagPicker = false"
-          />
-          <div class="tag-picker-list">
-            <div
-              v-for="t in filteredAvailableTags"
-              :key="t.id"
-              class="tag-picker-item"
-              @click="selectTag(t)"
-            >
-              <span class="tag-picker-dot" :style="{ background: t.color }"></span>
-              {{ t.name }}
-            </div>
-            <div v-if="filteredAvailableTags.length === 0 && tagSearch" class="tag-picker-item create" @click="createNewTag">
-              + 创建 "{{ tagSearch }}"
-            </div>
-            <div v-if="filteredAvailableTags.length === 0 && !tagSearch" class="tag-picker-empty">
-              暂无可用标签
+      <!-- Title + Action Icons -->
+      <div class="title-row">
+        <h1 v-if="!editingTitle" class="iss-title" @dblclick="startEditTitle">{{ title }}</h1>
+        <input
+          v-else
+          ref="titleInput"
+          v-model="localTitle"
+          class="title-edit-input"
+          @keyup.enter="commitTitle"
+          @keyup.escape="editingTitle = false"
+          @blur="commitTitle"
+        />
+        <div class="title-actions" v-if="!editingTitle && !editingDesc">
+          <button class="action-icon" title="编辑" @click="startEditDesc">&#9998;</button>
+          <button class="action-icon" title="附件" @click="$emit('upload')">&#128206;</button>
+          <button class="action-icon" title="链接" @click="$emit('add-link')">&#128279;</button>
+          <button class="action-icon" title="更多">&#8943;</button>
+        </div>
+      </div>
+
+      <!-- Tags -->
+      <div class="tag-row" v-if="tags.length > 0 || true">
+        <span
+          v-for="tag in tags"
+          :key="tag.id"
+          class="tag-chip"
+          :style="{ background: tag.color + '20', color: tag.color, borderColor: tag.color + '55' }"
+        >
+          {{ tag.name }}
+          <span class="tag-x" @click="$emit('remove-tag', tag.id)">&times;</span>
+        </span>
+        <div class="tag-add-wrap">
+          <button class="add-tag" @click="showTagPicker = !showTagPicker">+ 标签</button>
+          <div class="tag-picker" v-if="showTagPicker">
+            <input
+              ref="tagSearchRef"
+              v-model="tagSearch"
+              class="tag-search-input"
+              placeholder="搜索或创建标签..."
+              @keyup.enter="createNewTag"
+              @keyup.escape="showTagPicker = false"
+            />
+            <div class="tag-picker-list">
+              <div
+                v-for="t in filteredAvailableTags"
+                :key="t.id"
+                class="tag-picker-item"
+                @click="selectTag(t)"
+              >
+                <span class="tag-picker-dot" :style="{ background: t.color }"></span>
+                {{ t.name }}
+              </div>
+              <div v-if="filteredAvailableTags.length === 0 && tagSearch" class="tag-picker-item create" @click="createNewTag">
+                + 创建 "{{ tagSearch }}"
+              </div>
+              <div v-if="filteredAvailableTags.length === 0 && !tagSearch" class="tag-picker-empty">
+                暂无可用标签
+              </div>
             </div>
           </div>
         </div>
@@ -100,7 +101,7 @@
           </div>
           <div v-if="group.expanded" class="link-group-items">
             <div v-for="link in group.items" :key="link.id" class="link-item">
-              <span class="link-key-ref">{{ link.issueKey }}</span>
+              <router-link :to="`/issues/${link.issueId}`" class="link-key-ref">{{ link.issueKey }}</router-link>
               <span class="link-title-text">{{ link.issueTitle }}</span>
               <span class="link-status" :style="{ color: link.statusColor }">{{ link.statusName }}</span>
             </div>
@@ -135,7 +136,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
 
 export interface TagItem { id: string; name: string; color: string }
-export interface LinkItem { id: string; typeLabel: string; issueKey: string; issueTitle: string; statusName: string; statusColor: string }
+export interface LinkItem { id: string; typeLabel: string; issueId: string; issueKey: string; issueTitle: string; statusName: string; statusColor: string }
 export interface AttachItem { id: string; fileName: string; sizeText: string }
 
 const props = defineProps<{
@@ -229,8 +230,18 @@ function commitDesc(content: string) {
 .detail-main {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 24px 48px;
+  padding: 0 24px 48px;
   min-width: 0;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--tf-bg-body);
+  padding: 16px 0 8px;
+  border-bottom: 1px solid var(--tf-border-light);
+  margin-bottom: 16px;
 }
 
 .identity-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -354,9 +365,10 @@ function commitDesc(content: string) {
   transition: background 150ms;
 }
 .link-item:hover { background: var(--tf-bg-hover); }
-.link-key-ref { color: var(--tf-accent); font-weight: 500; }
+.link-key-ref { color: var(--tf-accent); font-weight: 500; text-decoration: none; flex-shrink: 0; }
+.link-key-ref:hover { text-decoration: underline; }
 .link-title-text { color: var(--tf-text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-status { font-size: 11px; font-weight: 500; }
+.link-status { font-size: 11px; font-weight: 500; flex-shrink: 0; margin-left: auto; }
 
 /* Attachments */
 .att-grid { display: flex; flex-wrap: wrap; gap: 8px; }

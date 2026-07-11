@@ -88,6 +88,12 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions")
     public R<Void> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
+        // 校验工作流规则
+        Issue issue = issueService.getById(id);
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
+            return R.fail(40300, "当前角色不允许执行此状态转换");
+        }
         issueService.transitStatus(id, dto.getStatusId(), dto.getComment());
         return R.ok();
     }

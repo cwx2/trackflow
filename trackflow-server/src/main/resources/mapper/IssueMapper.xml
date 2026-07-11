@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trackflow.issue.mapper.IssueMapper">
+
+    <!-- Issue 详情：一次 JOIN 查出所有关联名称 -->
+    <select id="selectDetailById" resultType="map">
+        SELECT
+            i.id, i.project_id, i.issue_key, i.title, i.description,
+            i.issue_type, i.status_id, i.priority, i.assignee_id, i.reporter_id,
+            i.sprint_id, i.parent_id, i.due_date, i.estimated_hours, i.spent_hours,
+            i.custom_fields, i.resolved_at, i.created_at, i.updated_at,
+            p.name AS project_name,
+            s.name AS status_name, s.code AS status_code, s.color AS status_color,
+            s.category AS status_category, s.is_default AS status_is_default, s.is_closed AS status_is_closed,
+            a.display_name AS assignee_name,
+            r.display_name AS reporter_name,
+            sp.name AS sprint_name,
+            pi.issue_key AS parent_key
+        FROM issue i
+        LEFT JOIN project p ON p.id = i.project_id
+        LEFT JOIN issue_status s ON s.id = i.status_id
+        LEFT JOIN sys_user a ON a.id = i.assignee_id
+        LEFT JOIN sys_user r ON r.id = i.reporter_id
+        LEFT JOIN sprint sp ON sp.id = i.sprint_id
+        LEFT JOIN issue pi ON pi.id = i.parent_id
+        WHERE i.id = #{id} AND i.deleted_at IS NULL
+    </select>
+
+    <!-- 评论列表：JOIN 用户表一次查出 -->
+    <select id="selectCommentsWithUser" resultType="map">
+        SELECT
+            c.id, c.issue_id, c.user_id, c.content, c.source,
+            c.created_at, c.updated_at,
+            u.display_name AS user_name, u.avatar_url AS user_avatar
+        FROM issue_comment c
+        LEFT JOIN sys_user u ON u.id = c.user_id
+        WHERE c.issue_id = #{issueId} AND c.deleted_at IS NULL
+        ORDER BY c.created_at ASC
+    </select>
+
+    <!-- 活动列表：JOIN 用户表一次查出 -->
+    <select id="selectActivitiesWithUser" resultType="map">
+        SELECT
+            a.id, a.issue_id, a.user_id, a.action, a.field_name,
+            a.old_value, a.new_value, a.detail, a.created_at,
+            u.display_name AS user_name
+        FROM issue_activity a
+        LEFT JOIN sys_user u ON u.id = a.user_id
+        WHERE a.issue_id = #{issueId}
+        ORDER BY a.created_at ASC
+    </select>
+
+</mapper>

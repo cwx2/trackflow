@@ -44,6 +44,18 @@ export const mockStatuses = reactive([
   { id: '4', name: 'Testing', code: 'testing', color: '#ff9800', category: 'in_progress', isDefault: false, isClosed: false },
   { id: '5', name: 'Done', code: 'done', color: '#607d8b', category: 'done', isDefault: false, isClosed: true },
   { id: '6', name: 'Cancelled', code: 'cancelled', color: '#9e9e9e', category: 'cancelled', isDefault: false, isClosed: true },
+  { id: '7', name: 'Reopened', code: 'reopened', color: '#f44336', category: 'open', isDefault: false, isClosed: false },
+  { id: '8', name: 'Todo', code: 'todo', color: '#42a5f5', category: 'open', isDefault: false, isClosed: false },
+  { id: '9', name: 'UI Todo', code: 'ui_todo', color: '#ab47bc', category: 'open', isDefault: false, isClosed: false },
+  { id: '10', name: 'Done (Local Env)', code: 'done_local', color: '#66bb6a', category: 'in_progress', isDefault: false, isClosed: false },
+  { id: '11', name: 'No Test', code: 'no_test', color: '#78909c', category: 'in_progress', isDefault: false, isClosed: false },
+  { id: '12', name: 'Pending Code Review', code: 'pending_code_review', color: '#7e57c2', category: 'in_progress', isDefault: false, isClosed: false },
+  { id: '13', name: 'Pending Publish', code: 'pending_publish', color: '#ffa726', category: 'in_progress', isDefault: false, isClosed: false },
+  { id: '14', name: 'Online', code: 'online', color: '#26a69a', category: 'done', isDefault: false, isClosed: true },
+  { id: '15', name: 'Solved', code: 'solved', color: '#43a047', category: 'done', isDefault: false, isClosed: true },
+  { id: '16', name: 'Closed', code: 'closed', color: '#546e7a', category: 'done', isDefault: false, isClosed: true },
+  { id: '17', name: 'Pending Cancel', code: 'pending_cancel', color: '#ef5350', category: 'open', isDefault: false, isClosed: false },
+  { id: '18', name: 'Pending Extension', code: 'pending_extension', color: '#ffca28', category: 'open', isDefault: false, isClosed: false },
 ])
 
 // ========== Sprint ==========
@@ -264,6 +276,36 @@ export function transitStatus(issueId: string, newStatusId: string) {
       createdAt: new Date().toISOString(),
     })
   }
+}
+
+/**
+ * 获取可用状态转换（模拟后端 WorkflowService.getAvailableTransitions）
+ * 实际后端逻辑：查 workflow_transition 表 WHERE old_status_id AND issue_type AND role_id IN (用户角色)
+ */
+export function getAvailableTransitions(currentStatusId: string, _issueType: string) {
+  // 工作流转换矩阵（模拟数据库 workflow_transition 表内容）
+  const rules: Record<string, string[]> = {
+    '1': ['2', '8', '9', '6'],                    // Open → In Progress, Todo, UI Todo, Cancelled
+    '2': ['3', '4', '10', '11', '6'],             // In Progress → Code Review, Testing, Done(Local), No Test, Cancelled
+    '3': ['2', '4', '10'],                         // Code Review → In Progress(退回), Testing, Done(Local)
+    '4': ['5', '2', '13'],                         // Testing → Done, In Progress(退回), Pending Publish
+    '5': ['7', '14'],                              // Done → Reopened, Online
+    '6': ['7'],                                    // Cancelled → Reopened
+    '7': ['2', '8'],                               // Reopened → In Progress, Todo
+    '8': ['2', '9', '6'],                          // Todo → In Progress, UI Todo, Cancelled
+    '9': ['2', '8'],                               // UI Todo → In Progress, Todo
+    '10': ['12', '4', '11'],                       // Done(Local) → Pending Code Review, Testing, No Test
+    '11': ['13', '5'],                             // No Test → Pending Publish, Done
+    '12': ['2', '4', '10'],                        // Pending Code Review → In Progress(退回), Testing, Done(Local)
+    '13': ['14', '2'],                             // Pending Publish → Online, In Progress(退回)
+    '14': ['16'],                                  // Online → Closed
+    '15': ['7', '16'],                             // Solved → Reopened, Closed
+    '16': ['7'],                                   // Closed → Reopened
+    '17': ['6', '2'],                              // Pending Cancel → Cancelled, In Progress
+    '18': ['2', '8'],                              // Pending Extension → In Progress, Todo
+  }
+  const allowedIds = rules[currentStatusId] || []
+  return mockStatuses.filter(s => allowedIds.includes(s.id))
 }
 
 export function nextIssueId(projectId: string) {
