@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/trackflow
+    username: trackflow
+    password: trackflow123
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      database: 0
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/trackflow
+          jwk-set-uri: http://localhost:8080/realms/trackflow/protocol/openid-connect/certs
+
+  devtools:
+    restart:
+      enabled: true
+      additional-paths: src/main/java
+    livereload:
+      enabled: false
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: trackflow
+  secret-key: trackflow123
+  bucket: trackflow
+
+knife4j:
+  enable: true
+
+logging:
+  level:
+    com.trackflow: DEBUG
+    org.springframework.security: DEBUG

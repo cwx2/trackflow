@@ -1,0 +1,42 @@
+server:
+  port: 8090
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: trackflow-server
+  profiles:
+    active: dev
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.trackflow.**.entity
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deletedAt
+      logic-delete-value: "NOW()"
+      logic-not-delete-value: "NULL"
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+logging:
+  level:
+    com.trackflow: INFO
+    org.springframework.security: INFO

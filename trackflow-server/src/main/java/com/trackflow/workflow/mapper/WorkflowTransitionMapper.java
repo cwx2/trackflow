@@ -1,0 +1,31 @@
+package com.trackflow.workflow.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.trackflow.workflow.entity.WorkflowTransition;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+@Mapper
+public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition> {
+
+    /**
+     * 查找允许的状态转换
+     * 优先查项目级，如无则 fallback 到全局（project_id IS NULL）
+     * 支持精确 issue_type 匹配或通配符 '*'
+     */
+    @Select("""
+            SELECT DISTINCT new_status_id FROM workflow_transition
+            WHERE (project_id = #{projectId} OR project_id IS NULL)
+              AND (issue_type = #{issueType} OR issue_type = '*')
+              AND role_id IN (${roleIds})
+              AND old_status_id = #{oldStatusId}
+            ORDER BY new_status_id
+            """)
+    List<Long> findAllowedNewStatusIds(@Param("projectId") Long projectId,
+                                       @Param("issueType") String issueType,
+                                       @Param("roleIds") String roleIds,
+                                       @Param("oldStatusId") Long oldStatusId);
+}

@@ -1,0 +1,29 @@
+# === 忽略参考源码 ===
+openproject/
+
+# === Kiro / 文档 ===
+.kiro/
+docs/
+
+# === Java / Maven ===
+trackflow-server/target/
+trackflow-server/.idea/
+trackflow-server/*.iml
+
+# === Node / Vue ===
+trackflow-web/node_modules/
+trackflow-web/dist/
+
+# === IDE ===
+.idea/
+*.iml
+.vscode/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Env ===
+.env
+.env.local
+*.log
