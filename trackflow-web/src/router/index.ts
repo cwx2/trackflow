@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { Message } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTabStore } from '@/stores/tabs'
 
@@ -130,6 +131,7 @@ router.beforeEach(async (to, _from, next) => {
   // 管理路由权限检查
   if (to.meta.requiresAdmin) {
     if (!authStore.hasGlobalPermission('system:admin')) {
+      Message.warning({ content: '无权限访问管理页面', id: 'admin-access-denied', duration: 3000 })
       next({ name: 'Issues' })
       return
     }
