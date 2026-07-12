@@ -46,6 +46,12 @@
           <div v-if="item.type === 'comment'" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
           <div v-else class="change-text">
             <template v-if="item.action === 'created'">创建了该 Issue</template>
+            <template v-else-if="item.action === 'time_logged'">
+              <span class="time-badge">⏱</span> 记录了工时: <span class="val-new">{{ item.to }}</span>
+            </template>
+            <template v-else-if="item.action === 'time_removed'">
+              <span class="time-badge">⏱</span> 删除了工时: <span class="val-old">{{ item.from }}</span>
+            </template>
             <template v-else-if="item.field">
               {{ item.field }}:
               <span class="val-old">{{ item.from || '空' }}</span>
@@ -84,6 +90,7 @@ const props = defineProps<{
 const filters = [
   { key: 'all', label: '全部' },
   { key: 'comments', label: '评论' },
+  { key: 'time', label: '花费时间' },
   { key: 'changes', label: '变更' }
 ]
 const current = ref('all')
@@ -93,7 +100,8 @@ const expandComments = ref(true)
 
 const filtered = computed(() => {
   if (current.value === 'comments') return props.items.filter(i => i.type === 'comment')
-  if (current.value === 'changes') return props.items.filter(i => i.type === 'change')
+  if (current.value === 'time') return props.items.filter(i => i.action === 'time_logged' || i.action === 'time_removed')
+  if (current.value === 'changes') return props.items.filter(i => i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed')
   return props.items
 })
 
@@ -181,6 +189,7 @@ function avatarBg(name: string) {
 .change-text { font-size: 12px; color: var(--tf-text-tertiary); margin-top: 4px; }
 .val-old { text-decoration: line-through; color: var(--tf-text-muted); }
 .val-new { color: var(--tf-accent); font-weight: 500; }
+.time-badge { font-size: 13px; }
 
 .empty { color: var(--tf-text-muted); font-size: 12px; text-align: center; padding: 24px 0; }
 </style>

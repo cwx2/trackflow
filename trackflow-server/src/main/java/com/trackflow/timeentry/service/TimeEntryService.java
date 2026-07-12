@@ -3,6 +3,8 @@ package com.trackflow.timeentry.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
@@ -21,6 +23,7 @@ import java.util.Map;
 public class TimeEntryService {
 
     private final TimeEntryMapper timeEntryMapper;
+    private final IssueActivityMapper activityMapper;
 
     /**
      * 创建工时记录
@@ -38,6 +41,15 @@ public class TimeEntryService {
         entry.setUpdatedAt(LocalDateTime.now());
 
         timeEntryMapper.insert(entry);
+
+        // 记录活动：花费了 X 时间
+        String durationStr = formatDuration(dto.getDuration());
+        String detail = dto.getWorkType() != null ? durationStr + " | " + dto.getWorkType() : durationStr;
+        if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
+            detail += " | " + dto.getDescription();
+        }
+        recordActivity(dto.getIssueId(), userId, "time_logged", "spent_time", null, detail);
+
         return entry;
     }
 
@@ -76,6 +88,11 @@ public class TimeEntryService {
         if (!entry.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
         }
+
+        // 记录活动：删除了工时
+        String durationStr = formatDuration(entry.getDuration());
+        recordActivity(entry.getIssueId(), userId, "time_removed", "spent_time", durationStr, null);
+
         timeEntryMapper.deleteById(id);
     }
 
@@ -136,5 +153,27 @@ public class TimeEntryService {
                 .le("work_date", endDate);
         List<TimeEntry> entries = timeEntryMapper.selectList(wrapper.select("duration"));
         return entries.stream().mapToInt(TimeEntry::getDuration).sum();
+    }
+
+    // ========== 内部方法 ==========
+
+    private void recordActivity(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
+        IssueActivity activity = new IssueActivity();
+        activity.setIssueId(issueId);
+        activity.setUserId(userId);
+        activity.setAction(action);
+        activity.setFieldName(fieldName);
+        activity.setOldValue(oldValue);
+        activity.setNewValue(newValue);
+        activity.setCreatedAt(LocalDateTime.now());
+        activityMapper.insert(activity);
+    }
+
+    private String formatDuration(int minutes) {
+        int h = minutes / 60;
+        int m = minutes % 60;
+        if (h == 0) return m + "m";
+        if (m == 0) return h + "h";
+        return h + "h" + m + "m";
     }
 }
