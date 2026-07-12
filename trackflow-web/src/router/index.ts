@@ -59,29 +59,40 @@ const routes = [
         component: () => import('@/views/timesheet/TimesheetView.vue')
       },
       {
+        path: 'admin',
+        name: 'Admin',
+        component: () => import('@/views/admin/AdminView.vue'),
+        meta: { requiresAdmin: true }
+      },
+      {
         path: 'admin/workflow',
         name: 'WorkflowEditor',
-        component: () => import('@/views/admin/WorkflowEditor.vue')
+        component: () => import('@/views/admin/WorkflowEditor.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'admin/users',
         name: 'UserManagement',
-        component: () => import('@/views/admin/UserManagement.vue')
+        component: () => import('@/views/admin/UserManagement.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'admin/roles',
         name: 'RoleManagement',
-        component: () => import('@/views/admin/RoleManagement.vue')
+        component: () => import('@/views/admin/RoleManagement.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'admin/organizations',
         name: 'OrgManagement',
-        component: () => import('@/views/admin/OrgManagement.vue')
+        component: () => import('@/views/admin/OrgManagement.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'admin/custom-fields',
         name: 'CustomFieldManagement',
-        component: () => import('@/views/admin/CustomFieldManage.vue')
+        component: () => import('@/views/admin/CustomFieldManage.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'settings/profile',
@@ -102,7 +113,7 @@ const router = createRouter({
   routes
 })
 
-// 导航守卫：未认证跳转登录 + 全局权限加载 + 标签管理
+// 导航守卫：未认证跳转登录 + 全局权限加载 + 管理路由权限 + 标签管理
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
@@ -114,6 +125,14 @@ router.beforeEach((to, _from, next) => {
   // 已认证用户：首次加载全局权限（仅触发一次，后续由 store 内部缓存）
   if (authStore.isAuthenticated && authStore.globalPermissions.size === 0) {
     authStore.loadGlobalPermissions()
+  }
+
+  // 管理路由权限检查（权限已加载时才拦截，未加载时放行让页面自行处理）
+  if (to.meta.requiresAdmin && authStore.globalPermissions.size > 0) {
+    if (!authStore.hasGlobalPermission('system:admin')) {
+      next({ name: 'Issues' })
+      return
+    }
   }
 
   // 标签管理：打开 Issue 详情时自动创建标签

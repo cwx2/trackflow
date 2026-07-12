@@ -32,9 +32,9 @@
           <span class="nav-icon">⏱</span>
           <span class="nav-label">时间表</span>
         </router-link>
-        <router-link to="/admin/workflow" class="nav-item" :class="{ active: $route.name === 'WorkflowEditor' }">
+        <router-link v-if="isAdmin" to="/admin" class="nav-item" :class="{ active: isAdminRoute }">
           <span class="nav-icon">⚙️</span>
-          <span class="nav-label">工作流</span>
+          <span class="nav-label">管理</span>
         </router-link>
       </nav>
 
@@ -48,16 +48,6 @@
         <div class="footer-item theme-switcher" @click="cycleTheme">
           <span class="nav-icon">{{ themeIcon }}</span>
           <span class="nav-label">{{ themeLabel }}</span>
-        </div>
-
-        <div class="footer-item" @click="showAdminMenu = !showAdminMenu">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-label">管理</span>
-        </div>
-        <div v-if="showAdminMenu" class="admin-submenu">
-          <router-link to="/admin/users" class="submenu-item" @click="showAdminMenu = false">用户管理</router-link>
-          <router-link to="/admin/roles" class="submenu-item" @click="showAdminMenu = false">角色管理</router-link>
-          <router-link to="/admin/organizations" class="submenu-item" @click="showAdminMenu = false">组织管理</router-link>
         </div>
 
         <div class="sidebar-user" @click="showUserMenu = !showUserMenu">
@@ -117,8 +107,10 @@ const showTabBar = computed(() => {
   return name === 'Issues' || name === 'IssueDetail'
 })
 const { theme, cycleTheme } = useTheme()
-const showAdminMenu = ref(false)
 const showUserMenu = ref(false)
+
+const isAdmin = computed(() => authStore.hasGlobalPermission('system:admin'))
+const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 
 const themeIcon = computed(() => {
   return theme.value === 'dark' ? '🌙' : theme.value === 'light' ? '☀️' : '🌿'
@@ -160,9 +152,6 @@ function handleClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.sidebar-user') && !target.closest('.user-menu')) {
     showUserMenu.value = false
-  }
-  if (!target.closest('.footer-item') && !target.closest('.admin-submenu')) {
-    showAdminMenu.value = false
   }
 }
 
@@ -293,28 +282,6 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .theme-switcher {
   border: 1px dashed var(--tf-border);
   margin: 2px 0;
-}
-
-.admin-submenu {
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.submenu-item {
-  display: block;
-  padding: 6px 12px;
-  color: var(--tf-text-secondary);
-  text-decoration: none;
-  font-size: 12px;
-  border-radius: 4px;
-  transition: background 0.15s, color 0.15s;
-}
-.submenu-item:hover {
-  background: var(--tf-sidebar-hover);
-  color: var(--tf-text-primary);
-  text-decoration: none;
 }
 
 .sidebar-user {
