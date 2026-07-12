@@ -9,7 +9,7 @@
 
       <!-- Title + Action Icons -->
       <div class="title-row">
-        <h1 v-if="!editingTitle" class="iss-title" @dblclick="startEditTitle">{{ title }}</h1>
+        <h1 v-if="!editingTitle" class="iss-title" :class="{ editable: !readonly }" @dblclick="!readonly && startEditTitle()">{{ title }}</h1>
         <input
           v-else
           ref="titleInput"
@@ -19,7 +19,7 @@
           @keyup.escape="editingTitle = false"
           @blur="commitTitle"
         />
-        <div class="title-actions" v-if="!editingTitle && !editingDesc">
+        <div class="title-actions" v-if="!editingTitle && !editingDesc && !readonly">
           <button class="action-icon" title="编辑" @click="startEditDesc">&#9998;</button>
           <button class="action-icon" title="附件" @click="$emit('upload')">&#128206;</button>
           <button class="action-icon" title="链接" @click="$emit('add-link')">&#128279;</button>
@@ -28,7 +28,7 @@
       </div>
 
       <!-- Tags -->
-      <div class="tag-row" v-if="tags.length > 0 || true">
+      <div class="tag-row" v-if="tags.length > 0 || !readonly">
         <span
           v-for="tag in tags"
           :key="tag.id"
@@ -36,9 +36,9 @@
           :style="{ background: tag.color + '20', color: tag.color, borderColor: tag.color + '55' }"
         >
           {{ tag.name }}
-          <span class="tag-x" @click="$emit('remove-tag', tag.id)">&times;</span>
+          <span v-if="!readonly" class="tag-x" @click="$emit('remove-tag', tag.id)">&times;</span>
         </span>
-        <div class="tag-add-wrap">
+        <div v-if="!readonly" class="tag-add-wrap">
           <button class="add-tag" @click="showTagPicker = !showTagPicker">+ 标签</button>
           <div class="tag-picker" v-if="showTagPicker">
             <input
@@ -72,9 +72,9 @@
     </div>
 
     <!-- Description -->
-    <div v-if="!editingDesc" class="description">
+    <div v-if="!editingDesc" class="description" :class="{ editable: !readonly }" @click="!readonly && startEditDesc()">
       <div v-if="description" v-html="descHtml" class="desc-rendered"></div>
-      <p v-else class="desc-empty">暂无描述</p>
+      <p v-else class="desc-empty">{{ readonly ? '暂无描述' : '点击添加描述...' }}</p>
     </div>
     <RichEditor
       v-else
@@ -89,7 +89,7 @@
     <section class="section" v-if="links.length > 0">
       <div class="section-head">
         <h3>关联 ISSUE</h3>
-        <button class="section-link" @click="$emit('add-link')">添加</button>
+        <button v-if="!readonly" class="section-link" @click="$emit('add-link')">添加</button>
       </div>
       <!-- 按类型分组显示 -->
       <div class="link-groups">
@@ -114,7 +114,7 @@
     <section class="section">
       <div class="section-head">
         <h3>附件</h3>
-        <button class="section-link" @click="$emit('upload')">上传</button>
+        <button v-if="!readonly" class="section-link" @click="$emit('upload')">上传</button>
       </div>
       <div v-if="attachments.length > 0" class="att-grid">
         <div v-for="att in attachments" :key="att.id" class="att-chip">
@@ -148,6 +148,7 @@ const props = defineProps<{
   availableTags?: TagItem[]
   links: LinkItem[]
   attachments: AttachItem[]
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -262,6 +263,14 @@ function commitDesc(content: string) {
   margin: 0; padding: 0; line-height: 1.3; flex: 1;
   letter-spacing: -0.3px;
 }
+.iss-title.editable {
+  cursor: text;
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 150ms;
+}
+.iss-title.editable:hover { background: var(--tf-bg-hover); }
 .title-edit-input {
   font-size: 20px; font-weight: 600; width: 100%; flex: 1;
   background: var(--tf-bg-elevated); border: 1px solid var(--tf-accent);
@@ -321,6 +330,15 @@ function commitDesc(content: string) {
 
 /* Description */
 .description { min-height: 32px; margin-bottom: 24px; padding: 0; }
+.description.editable {
+  cursor: text;
+  border-radius: 4px;
+  padding: 8px;
+  margin: -8px;
+  margin-bottom: 16px;
+  transition: background 150ms;
+}
+.description.editable:hover { background: var(--tf-bg-hover); }
 .desc-rendered { font-size: 13px; line-height: 1.6; color: var(--tf-text-secondary); }
 .desc-rendered :deep(h1), .desc-rendered :deep(h2), .desc-rendered :deep(h3) { color: var(--tf-text-primary); margin-top: 16px; margin-bottom: 8px; }
 .desc-rendered :deep(h1) { font-size: 1.3em; }

@@ -21,6 +21,7 @@
         :available-tags="projectTags"
         :links="issueLinks"
         :attachments="issueAttachments"
+        :readonly="!canEditIssue"
         @update-title="onUpdateTitle"
         @update-desc="onUpdateDesc"
         @remove-tag="onRemoveTag"
@@ -31,7 +32,7 @@
       >
         <template #activity>
           <ActivityStream :items="activityItems" />
-          <CommentInput @submit="onAddComment" @add-time="openTimeDialog" />
+          <CommentInput v-if="canComment" @submit="onAddComment" @add-time="openTimeDialog" />
         </template>
       </DetailMainContent>
 
@@ -97,6 +98,7 @@ import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
+import { usePermission } from '@/composables/usePermission'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -121,6 +123,7 @@ const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
 const showTimeDialog = ref(false)
 const timeSaving = ref(false)
+
 const timeForm = ref({
   workDate: new Date().toISOString().slice(0, 10),
   durationText: '',
@@ -132,6 +135,11 @@ const useMock = ref(true) // 默认用 mock，API 可用时自动切换
 
 // ============ 数据 ============
 const issue = ref<IssueDetailVO | null>(null)
+
+// 权限控制（必须在 issue ref 声明之后）
+const { canEditIssue, canChangeStatus, canComment, canAssignIssue } = usePermission(
+  () => issue.value?.projectId
+)
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
 const activities = ref<IssueActivityVO[]>([])
@@ -215,8 +223,8 @@ async function loadRelatedData() {
       issueApi.listActivities(id),
       issueApi.listAttachments(id),
       issueApi.listLinks(id),
-      projectApi.listMembers(pid),
-      sprintApi.listByProject(pid),
+      projectApi.listMembers(pid).catch(() => ({ data: [] })),
+      sprintApi.listByProject(pid).catch(() => ({ data: [] })),
       tagApi.listProjectTags(pid),
     ])
     if (transRes.status === 'fulfilled') transitions.value = transRes.value.data || []
@@ -278,6 +286,11 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ? mockSprints.find(s => s.id === i.sprintId)
     : sprints.value.find(s => s.id === i.sprintId)
 
+  // 权限判断：是否可以编辑此工单
+  const canEdit = canEditIssue.value
+  const canTransition = canChangeStatus.value
+  const canAssign = canAssignIssue.value
+
   // 状态选项
   const statusOptions = [
     { value: currentStatus.value.id, label: `● ${currentStatus.value.name}（当前）` },
@@ -297,20 +310,20 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true },
-    { key: 'priority', label: '优先级', value: i.priority, dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, options: [
+    { key: 'priority', label: '优先级', value: i.priority, dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: [
       { value: 'Critical', label: 'Critical' }, { value: 'High', label: 'High' },
       { value: 'Normal', label: 'Normal' }, { value: 'Low', label: 'Low' },
     ]},
-    { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, options: statusOptions },
-    { key: 'issueType', label: '类型', value: i.issueType, editType: 'select' as const, rawValue: i.issueType, options: [
+    { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition, options: statusOptions },
+    { key: 'issueType', label: '类型', value: i.issueType, editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: [
       { value: 'Bug', label: 'Bug' }, { value: 'Task', label: 'Task' },
       { value: 'Feature', label: 'Feature' }, { value: 'Epic', label: 'Epic' }, { value: 'Story', label: 'Story' },
     ]},
-    { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', options: userOptions },
+    { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
-    { key: 'sprint', label: '迭代', value: sprint?.name || 'Unscheduled', editType: 'select' as const, rawValue: i.sprintId || '', options: sprintOptions },
-    { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '' },
-    { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '' },
+    { key: 'sprint', label: '迭代', value: sprint?.name || 'Unscheduled', editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canEdit, options: sprintOptions },
+    { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit },
+    { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit },
     { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
     { key: '_sep', label: '', value: '', readonly: true },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(i.createdAt), readonly: true },

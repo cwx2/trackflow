@@ -15,7 +15,7 @@
             {{ p.key }} - {{ p.name }}
           </a-option>
         </a-select>
-        <a-button type="primary" size="small" :disabled="!selectedProject" @click="showCreate = true">
+        <a-button v-if="canCreateSprint" type="primary" size="small" :disabled="!selectedProject" @click="showCreate = true">
           + 新建迭代
         </a-button>
       </div>
@@ -94,7 +94,7 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
-          <a-popconfirm content="确定完成此迭代？未完成的工单将留在待办中。" @ok="completeSprint(sprint.id)">
+          <a-popconfirm v-if="canEditSprint" content="确定完成此迭代？未完成的工单将留在待办中。" @ok="completeSprint(sprint.id)">
             <a-button size="mini">完成迭代</a-button>
           </a-popconfirm>
         </div>
@@ -156,8 +156,8 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
-          <a-button type="primary" size="mini" @click="activateSprint(sprint.id)">开始迭代</a-button>
-          <a-popconfirm content="确定删除此迭代？" @ok="deleteSprint(sprint.id)">
+          <a-button v-if="canEditSprint" type="primary" size="mini" @click="activateSprint(sprint.id)">开始迭代</a-button>
+          <a-popconfirm v-if="canDeleteSprint" content="确定删除此迭代？" @ok="deleteSprint(sprint.id)">
             <a-button size="mini" status="danger">删除</a-button>
           </a-popconfirm>
         </div>
@@ -226,7 +226,7 @@
       <p class="empty-desc">
         {{ selectedProject ? '点击"+ 新建迭代"创建第一个 Sprint' : '从上方下拉框选择项目查看迭代' }}
       </p>
-      <a-button v-if="selectedProject" type="primary" size="small" @click="showCreate = true">
+      <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="showCreate = true">
         + 新建迭代
       </a-button>
     </div>
@@ -257,6 +257,7 @@ import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { projectApi, sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
+import { usePermission } from '@/composables/usePermission'
 import type { SprintVO } from '@/api/types'
 
 const router = useRouter()
@@ -266,6 +267,9 @@ const selectedProject = computed({
   get: () => projectStore.selectedProjectId,
   set: (val) => projectStore.selectProject(val)
 })
+
+// 权限控制（必须在 selectedProject 定义之后）
+const { canCreateSprint, canEditSprint, canDeleteSprint } = usePermission(() => selectedProject.value)
 const projects = ref<any[]>([])
 const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
