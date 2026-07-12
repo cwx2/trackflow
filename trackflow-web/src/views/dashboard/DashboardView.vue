@@ -171,6 +171,7 @@ import { Message } from '@arco-design/web-vue'
 import { dashboardApi } from '@/api'
 import type { DashboardSummaryVO, DashboardActivityVO } from '@/api/dashboard'
 import type { IssueVO } from '@/api/types'
+import { fieldLabelMap } from '@/utils/fieldLabels'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -316,29 +317,7 @@ function formatAction(activity: DashboardActivityVO): string {
   }
   let text = actionMap[activity.action] || activity.action
   if (activity.fieldName && (activity.action === 'update' || activity.action === 'updated')) {
-    const fieldMap: Record<string, string> = {
-      'status_id': '状态',
-      'status': '状态',
-      'priority': '优先级',
-      'assignee_id': '负责人',
-      'assignee': '负责人',
-      'sprint_id': '迭代',
-      'sprint': '迭代',
-      'title': '标题',
-      'description': '描述',
-      'due_date': '截止日期',
-      'issue_type': '类型',
-      'estimated_hours': '预估工时',
-      'spent_time': '花费时间',
-      'spent_hours': '已花时间',
-      'attachment': '附件',
-      'parent_id': '父工单',
-      'parent': '父工单',
-      'tags': '标签',
-      'reporter': '报告人',
-      'reporter_id': '报告人',
-    }
-    text = `更新了 ${fieldMap[activity.fieldName] || activity.fieldName}`
+    text = `更新了 ${fieldLabelMap[activity.fieldName] || activity.fieldName}`
   }
   return text
 }

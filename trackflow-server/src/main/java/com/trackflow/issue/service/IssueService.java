@@ -39,6 +39,7 @@ public class IssueService {
     private final IssueAttachmentMapper attachmentMapper;
     private final IssueActivityMapper activityMapper;
     private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
+    private final com.trackflow.sprint.mapper.SprintMapper sprintMapper;
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final MinioService minioService;
@@ -298,8 +299,16 @@ public class IssueService {
             recordActivity(id, currentUserId, "updated", "title", issue.getTitle(), dto.getTitle());
             issue.setTitle(dto.getTitle());
         }
-        if (dto.getDescription() != null) issue.setDescription(dto.getDescription());
-        if (dto.getIssueType() != null) issue.setIssueType(dto.getIssueType());
+        if (dto.getDescription() != null) {
+            recordActivity(id, currentUserId, "updated", "description",
+                    issue.getDescription() != null ? "（已有内容）" : null,
+                    dto.getDescription() != null ? "（已更新）" : null);
+            issue.setDescription(dto.getDescription());
+        }
+        if (dto.getIssueType() != null) {
+            recordActivity(id, currentUserId, "updated", "issue_type", issue.getIssueType(), dto.getIssueType());
+            issue.setIssueType(dto.getIssueType());
+        }
         if (dto.getPriority() != null) {
             recordActivity(id, currentUserId, "updated", "priority", issue.getPriority(), dto.getPriority());
             issue.setPriority(dto.getPriority());
@@ -310,10 +319,46 @@ public class IssueService {
                     String.valueOf(dto.getAssigneeId()));
             issue.setAssigneeId(dto.getAssigneeId());
         }
-        if (dto.getSprintId() != null) issue.setSprintId(dto.getSprintId());
-        if (dto.getParentId() != null) issue.setParentId(dto.getParentId());
-        if (dto.getDueDate() != null) issue.setDueDate(dto.getDueDate());
-        if (dto.getEstimatedHours() != null) issue.setEstimatedHours(dto.getEstimatedHours());
+        if (dto.getSprintId() != null) {
+            String oldSprintName = null;
+            if (issue.getSprintId() != null) {
+                var oldSprint = sprintMapper.selectById(issue.getSprintId());
+                oldSprintName = oldSprint != null ? oldSprint.getName() : null;
+            }
+            String newSprintName = null;
+            if (dto.getSprintId() != 0) {
+                var newSprint = sprintMapper.selectById(dto.getSprintId());
+                newSprintName = newSprint != null ? newSprint.getName() : null;
+            }
+            recordActivity(id, currentUserId, "updated", "sprint", oldSprintName, newSprintName);
+            issue.setSprintId(dto.getSprintId());
+        }
+        if (dto.getParentId() != null) {
+            String oldParentKey = null;
+            if (issue.getParentId() != null) {
+                var oldParent = issueMapper.selectById(issue.getParentId());
+                oldParentKey = oldParent != null ? oldParent.getIssueKey() : null;
+            }
+            String newParentKey = null;
+            if (dto.getParentId() != 0) {
+                var newParent = issueMapper.selectById(dto.getParentId());
+                newParentKey = newParent != null ? newParent.getIssueKey() : null;
+            }
+            recordActivity(id, currentUserId, "updated", "parent", oldParentKey, newParentKey);
+            issue.setParentId(dto.getParentId());
+        }
+        if (dto.getDueDate() != null) {
+            recordActivity(id, currentUserId, "updated", "due_date",
+                    issue.getDueDate() != null ? issue.getDueDate().toString() : null,
+                    dto.getDueDate().toString());
+            issue.setDueDate(dto.getDueDate());
+        }
+        if (dto.getEstimatedHours() != null) {
+            recordActivity(id, currentUserId, "updated", "estimated_hours",
+                    issue.getEstimatedHours() != null ? issue.getEstimatedHours() + "h" : null,
+                    dto.getEstimatedHours() + "h");
+            issue.setEstimatedHours(dto.getEstimatedHours());
+        }
         if (dto.getCustomFields() != null) {
             try {
                 issue.setCustomFields(objectMapper.writeValueAsString(dto.getCustomFields()));
