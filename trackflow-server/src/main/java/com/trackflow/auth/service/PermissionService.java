@@ -93,12 +93,23 @@ public class PermissionService {
     }
 
     /**
-     * 失效指定用户的权限缓存
+     * 失效指定用户的所有权限缓存（全局 + 所有项目级）
      */
     public void invalidateCache(Long userId) {
-        String cacheKey = CACHE_KEY_PREFIX + userId;
-        redisTemplate.delete(cacheKey);
-        log.debug("Permission cache invalidated for user {}", userId);
+        // 1. 删除全局权限缓存
+        String globalKey = CACHE_KEY_PREFIX + userId;
+        redisTemplate.delete(globalKey);
+
+        // 2. 删除该用户所有项目级权限缓存
+        // TODO: 数据量大时改用 SCAN 命令替代 KEYS（当前用户数可控，KEYS 性能可接受）
+        String projectPattern = PROJECT_CACHE_KEY_PREFIX + userId + ":*";
+        Set<String> projectKeys = redisTemplate.keys(projectPattern);
+        if (projectKeys != null && !projectKeys.isEmpty()) {
+            redisTemplate.delete(projectKeys);
+            log.debug("Permission cache invalidated for user {}: global + {} project keys", userId, projectKeys.size());
+        } else {
+            log.debug("Permission cache invalidated for user {}: global only", userId);
+        }
     }
 
     /**

@@ -110,7 +110,7 @@ request.interceptors.response.use(
     const authStore = useAuthStore()
     const originalRequest = error.config
 
-    // 403 权限不足：统一提示（避免重复弹窗）
+    // 403 权限不足：刷新本地权限缓存并提示
     if (error.response?.status === 403) {
       if (!originalRequest._silent403) {
         const message = error.response?.data?.message || '权限不足，无法执行此操作'
@@ -119,6 +119,18 @@ request.interceptors.response.use(
           Message.warning({ content: message, id: 'permission-denied', duration: 3000 })
         })
       }
+
+      // 403 表示权限已变更，自动刷新本地权限缓存
+      if (!originalRequest._permissionRefreshed) {
+        originalRequest._permissionRefreshed = true
+        // 刷新全局权限
+        authStore.refreshGlobalPermissions()
+        // 清除项目级权限缓存
+        import('@/composables/usePermission').then(({ invalidateProjectPermissions }) => {
+          invalidateProjectPermissions()
+        }).catch(() => { /* ignore */ })
+      }
+
       return Promise.reject(error)
     }
 

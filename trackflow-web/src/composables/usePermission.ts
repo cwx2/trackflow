@@ -70,6 +70,18 @@ export function invalidateProjectPermissions(projectId?: string) {
 }
 
 /**
+ * 强制重新加载指定项目的权限（忽略 TTL 缓存）
+ * 用于 403 响应后触发、或外部组件需要确保获取最新权限时调用
+ * @since REQ-18
+ */
+export async function forceRefreshProjectPermissions(projectId: string): Promise<Set<string>> {
+  // 先清除缓存
+  projectPermissionsCache.delete(projectId)
+  // 再重新加载
+  return loadProjectPermissions(projectId)
+}
+
+/**
  * 项目级权限 composable
  * 
  * 用法:

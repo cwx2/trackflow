@@ -285,6 +285,78 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * 强制刷新全局权限（忽略 permissionsLoaded 标志）
+   * 用于：403 响应触发、定期轮询、页面可见性恢复
+   */
+  async function refreshGlobalPermissions(): Promise<void> {
+    if (!isAuthenticated.value) return
+
+    // 去重：复用正在进行的请求
+    if (_permissionLoadPromise) return _permissionLoadPromise
+
+    _permissionLoadPromise = (async () => {
+      try {
+        const res = await authApi.getMyGlobalPermissions()
+        globalPermissions.value = new Set(res.data || [])
+      } catch (e) {
+        console.warn('[auth] Failed to refresh global permissions', e)
+      } finally {
+        permissionsLoaded.value = true
+        _permissionLoadPromise = null
+      }
+    })()
+
+    return _permissionLoadPromise
+  }
+
+  // ===== 定期轮询刷新全局权限（每 5 分钟） =====
+  const PERMISSION_REFRESH_INTERVAL = 5 * 60 * 1000 // 5 分钟
+  let permissionRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+  function startPermissionRefresh() {
+    stopPermissionRefresh()
+    permissionRefreshTimer = setInterval(() => {
+      if (isAuthenticated.value && permissionsLoaded.value) {
+        refreshGlobalPermissions()
+      }
+    }, PERMISSION_REFRESH_INTERVAL)
+  }
+
+  function stopPermissionRefresh() {
+    if (permissionRefreshTimer !== null) {
+      clearInterval(permissionRefreshTimer)
+      permissionRefreshTimer = null
+    }
+  }
+
+  // 页面可见性变化时刷新权限（用户从后台切回前台）
+  // 节流：距上次刷新 < 30s 则跳过，避免频繁 alt-tab 产生不必要的请求
+  let lastVisibilityRefresh = 0
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isAuthenticated.value && permissionsLoaded.value) {
+        const now = Date.now()
+        if (now - lastVisibilityRefresh < 30000) return
+        lastVisibilityRefresh = now
+        refreshGlobalPermissions()
+        // 同时清除项目级权限缓存，下次访问时重新加载
+        import('@/composables/usePermission').then(({ invalidateProjectPermissions }) => {
+          invalidateProjectPermissions()
+        }).catch(() => { /* ignore */ })
+      }
+    })
+  }
+
+  // 认证成功后启动定期刷新
+  watch(isAuthenticated, (authenticated) => {
+    if (authenticated) {
+      startPermissionRefresh()
+    } else {
+      stopPermissionRefresh()
+    }
+  }, { immediate: true })
+
+  /**
    * 检查用户是否拥有指定的全局权限
    */
   function hasGlobalPermission(permission: string): boolean {
@@ -304,6 +376,7 @@ export const useAuthStore = defineStore('auth', () => {
     refresh,
     logout,
     loadGlobalPermissions,
+    refreshGlobalPermissions,
     hasGlobalPermission
   }
 })
