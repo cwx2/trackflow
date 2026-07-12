@@ -15,6 +15,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +33,13 @@ import java.util.Map;
 public class ProjectService {
 
     private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
+    private static final String ACCESSIBLE_PROJECTS_CACHE_PREFIX = "accessible_projects:";
 
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper memberMapper;
     private final SysUserMapper userMapper;
     private final PermissionService permissionService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 创建项目
@@ -205,6 +208,8 @@ public class ProjectService {
 
         // 失效权限缓存
         permissionService.invalidateCache(dto.getUserId());
+        // 失效项目列表缓存
+        redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + dto.getUserId());
     }
 
     /**
@@ -246,6 +251,8 @@ public class ProjectService {
                         .eq(ProjectMember::getUserId, userId)
         );
         permissionService.invalidateCache(userId);
+        // 失效项目列表缓存
+        redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + userId);
     }
 
     // ========== 项目成员校验（数据隔离核心方法） ==========
@@ -296,6 +303,7 @@ public class ProjectService {
 
     /**
      * 获取用户所属的所有项目 ID 列表。系统管理员返回 null（表示不限制）。
+     * 结果缓存在 Redis 中（TTL 30s），避免同一请求内多次查库。
      */
     public List<Long> getAccessibleProjectIds(Long userId) {
         if (userId == null) {
@@ -304,7 +312,24 @@ public class ProjectService {
         if (permissionService.isSystemAdmin(userId)) {
             return null; // null 表示无限制
         }
-        return memberMapper.selectProjectIdsByUserId(userId);
+
+        // 短 TTL Redis 缓存（30s），减少同一用户短时间内重复查库
+        String cacheKey = ACCESSIBLE_PROJECTS_CACHE_PREFIX + userId;
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            if ("[]".equals(cached)) {
+                return List.of();
+            }
+            return java.util.Arrays.stream(cached.split(",")).map(Long::parseLong).toList();
+        }
+
+        List<Long> projectIds = memberMapper.selectProjectIdsByUserId(userId);
+
+        // 原子写入（set 自带 TTL，即使并发重复写入也只是覆盖相同值）
+        String value = projectIds.isEmpty() ? "[]" : projectIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        redisTemplate.opsForValue().set(cacheKey, value, java.time.Duration.ofSeconds(30));
+
+        return projectIds;
     }
 
     /**

@@ -4,9 +4,10 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.converter.ReportConverter;
-import com.trackflow.report.entity.ReportDefinition;
+import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.service.ReportService;
 import com.trackflow.report.vo.ReportDefinitionVO;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -32,11 +33,10 @@ public class ReportController {
         return R.ok(reportConverter.toVOList(reportService.list(projectId, userId)));
     }
 
-    // TODO: 历史债务 — 应创建 CreateReportDTO 替代 Entity 入参，避免持久化注解暴露到 Controller 层
     @PostMapping
-    @PreAuthorize("@perm.check(#report.projectId, 'project:edit')")
-    public R<ReportDefinitionVO> create(@RequestBody ReportDefinition report) {
-        return R.ok(reportConverter.toVO(reportService.create(report)));
+    @PreAuthorize("@perm.check(#dto.projectId, 'project:edit')")
+    public R<ReportDefinitionVO> create(@Valid @RequestBody CreateReportDTO dto) {
+        return R.ok(reportConverter.toVO(reportService.create(dto)));
     }
 
     @DeleteMapping("/{id}")

@@ -9,6 +9,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
 import lombok.RequiredArgsConstructor;
@@ -54,7 +55,13 @@ public class ReportService {
     }
 
     @Transactional
-    public ReportDefinition create(ReportDefinition report) {
+    public ReportDefinition create(CreateReportDTO dto) {
+        ReportDefinition report = new ReportDefinition();
+        report.setName(dto.getName());
+        report.setProjectId(dto.getProjectId());
+        report.setType(dto.getType());
+        report.setConfig(dto.getConfig());
+        report.setShared(dto.getShared() != null ? dto.getShared() : false);
         reportMapper.insert(report);
         return report;
     }
