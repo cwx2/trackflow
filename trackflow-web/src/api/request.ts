@@ -36,6 +36,7 @@ request.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${authStore.accessToken}`
         return request(originalRequest)
       } else {
+        // Token 过期且无法刷新 — 清除存储并跳转登录
         authStore.logout()
         return Promise.reject(error)
       }
