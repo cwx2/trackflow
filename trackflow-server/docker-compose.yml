@@ -54,13 +54,15 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: trackflow-keycloak
-    command: start-dev
+    command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB: dev-file
     ports:
       - "8080:8080"
+    volumes:
+      - ./keycloak/trackflow-realm.json:/opt/keycloak/data/import/trackflow-realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy

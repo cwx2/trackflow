@@ -1,0 +1,82 @@
+{
+  "realm": "trackflow",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "sslRequired": "none",
+  "clients": [
+    {
+      "clientId": "trackflow-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:3000",
+      "baseUrl": "http://localhost:3000",
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "testuser",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test@trackflow.dev",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow"]
+    },
+    {
+      "username": "zhangwei",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "伟",
+      "lastName": "张",
+      "email": "zhangwei@trackflow.local",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow"]
+    },
+    {
+      "username": "zhaojing",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "静",
+      "lastName": "赵",
+      "email": "zhaojing@trackflow.local",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow"]
+    },
+    {
+      "username": "lina",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "娜",
+      "lastName": "李",
+      "email": "lina@trackflow.local",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow"]
+    },
+    {
+      "username": "wangqiang",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "强",
+      "lastName": "王",
+      "email": "wangqiang@trackflow.local",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow"]
+    }
+  ]
+}
