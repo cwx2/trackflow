@@ -7,6 +7,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import lombok.RequiredArgsConstructor;
@@ -117,5 +118,23 @@ public class WorkflowService {
             t.setRoleId(roleId);
             transitionMapper.insert(t);
         }
+    }
+
+    /**
+     * 从 DTO 批量更新工作流转换矩阵
+     */
+    @Transactional
+    public void updateTransitionMatrix(Long projectId, UpdateWorkflowDTO dto) {
+        List<WorkflowTransition> transitions = dto.getTransitions().stream()
+                .filter(t -> Boolean.TRUE.equals(t.getAllowed()))
+                .map(t -> {
+                    WorkflowTransition wt = new WorkflowTransition();
+                    wt.setOldStatusId(t.getFrom());
+                    wt.setNewStatusId(t.getTo());
+                    return wt;
+                })
+                .toList();
+
+        updateTransitionMatrix(projectId, dto.getIssueType(), dto.getRoleId(), transitions);
     }
 }
