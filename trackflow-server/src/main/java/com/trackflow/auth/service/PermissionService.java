@@ -4,6 +4,8 @@ import com.trackflow.system.mapper.RolePermissionMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -94,22 +96,37 @@ public class PermissionService {
 
     /**
      * 失效指定用户的所有权限缓存（全局 + 所有项目级）
+     * 使用 SCAN 迭代匹配项目级 key，避免 KEYS 命令阻塞 Redis
      */
     public void invalidateCache(Long userId) {
         // 1. 删除全局权限缓存
         String globalKey = CACHE_KEY_PREFIX + userId;
         redisTemplate.delete(globalKey);
 
-        // 2. 删除该用户所有项目级权限缓存
-        // TODO: 数据量大时改用 SCAN 命令替代 KEYS（当前用户数可控，KEYS 性能可接受）
+        // 2. 使用 SCAN 迭代删除该用户所有项目级权限缓存
         String projectPattern = PROJECT_CACHE_KEY_PREFIX + userId + ":*";
-        Set<String> projectKeys = redisTemplate.keys(projectPattern);
-        if (projectKeys != null && !projectKeys.isEmpty()) {
+        Set<String> projectKeys = scanKeys(projectPattern);
+        if (!projectKeys.isEmpty()) {
             redisTemplate.delete(projectKeys);
             log.debug("Permission cache invalidated for user {}: global + {} project keys", userId, projectKeys.size());
         } else {
             log.debug("Permission cache invalidated for user {}: global only", userId);
         }
+    }
+
+    /**
+     * 使用 SCAN 命令迭代匹配 Redis key（非阻塞，生产安全）
+     * 每次迭代扫描 100 个 key，避免长时间阻塞 Redis
+     */
+    private Set<String> scanKeys(String pattern) {
+        Set<String> keys = new HashSet<>();
+        ScanOptions options = ScanOptions.scanOptions().match(pattern).count(100).build();
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+        }
+        return keys;
     }
 
     /**
