@@ -186,7 +186,8 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await authApi.getMyGlobalPermissions()
       globalPermissions.value = new Set(res.data || [])
-    } catch {
+    } catch (e) {
+      console.warn('[auth] Failed to load global permissions', e)
       globalPermissions.value = new Set()
     }
   }

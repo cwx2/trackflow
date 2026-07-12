@@ -4,6 +4,7 @@ import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,7 @@ public class AuthController {
     private final PermissionService permissionService;
 
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> getCurrentUser() {
         Jwt jwt = SecurityUtils.getCurrentJwt();
         if (jwt == null) {
@@ -37,6 +39,7 @@ public class AuthController {
      * 获取当前用户在指定项目中的权限列表
      */
     @GetMapping("/my-permissions")
+    @PreAuthorize("isAuthenticated()")
     public R<Set<String>> getMyPermissions(@RequestParam Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         Set<String> permissions = new HashSet<>(permissionService.getProjectPermissions(userId, projectId));
@@ -49,8 +52,12 @@ public class AuthController {
      * 获取当前用户的全局权限列表（不含项目级权限）
      */
     @GetMapping("/my-global-permissions")
+    @PreAuthorize("isAuthenticated()")
     public R<Set<String>> getMyGlobalPermissions() {
         Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            return R.fail(40100, "未认证");
+        }
         Set<String> permissions = permissionService.getPermissions(userId);
         return R.ok(permissions);
     }
