@@ -55,6 +55,11 @@ export const issueApi = {
     return request.post<any, R<void>>(`/issues/${id}/transitions`, { statusId, comment })
   },
 
+  /** 撤销状态流转（绕过工作流校验） */
+  undoTransitStatus(id: string, statusId: string) {
+    return request.post<any, R<void>>(`/issues/${id}/transitions/undo`, { statusId })
+  },
+
   /** 获取可用状态转换 */
   getAvailableTransitions(id: string) {
     return request.get<any, R<IssueStatusVO[]>>(`/issues/${id}/available-transitions`)

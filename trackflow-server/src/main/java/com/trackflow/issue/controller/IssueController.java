@@ -120,6 +120,14 @@ public class IssueController {
         return R.ok();
     }
 
+    @PostMapping("/{id}/transitions/undo")
+    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:edit')")
+    public R<Void> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
+        // 撤销操作：绕过工作流校验，但仍需验证用户有该项目的 issue:edit 权限
+        issueService.transitStatus(id, dto.getStatusId(), "撤销状态变更");
+        return R.ok();
+    }
+
     @PutMapping("/{id}/assign")
     public R<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignIssueDTO dto) {
         issueService.assign(id, dto.getAssigneeId());
