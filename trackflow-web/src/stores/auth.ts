@@ -116,11 +116,11 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 发起 Keycloak PKCE 登录
    */
-  function login() {
+  async function login() {
     const codeVerifier = generateCodeVerifier()
     sessionStorage.setItem('pkce_code_verifier', codeVerifier)
 
-    const codeChallenge = codeVerifier // 简化：实际应做 SHA256 + base64url
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
     const state = generateRandomString(16)
     sessionStorage.setItem('oauth_state', state)
 
@@ -131,7 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
       scope: 'openid profile email',
       state,
       code_challenge: codeChallenge,
-      code_challenge_method: 'plain' // 简化，生产环境用 S256
+      code_challenge_method: 'S256'
     })
 
     window.location.href = `${KEYCLOAK_CONFIG.authority}/protocol/openid-connect/auth?${params}`
@@ -212,8 +212,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 登出 — 清除本地存储并跳转 Keycloak 登出
-   * @param reason 登出原因提示信息（可选）
+   * 登出 — 清除本地存储并跳转
+   * @param reason 登出原因提示信息（可选，存在时说明是被动登出如 token 过期）
    */
   function logout(reason?: string) {
     clearRefreshTimer()
@@ -225,10 +225,14 @@ export const useAuthStore = defineStore('auth', () => {
     permissionsLoaded.value = false
 
     if (reason) {
-      // 将提示信息存入 sessionStorage，登录页显示
+      // 被动登出（token 过期）：直接跳本地登录页，不走 Keycloak logout
+      // 因为 token 已过期，Keycloak session 大概率也已失效，走 logout 会显示多余的确认页
       sessionStorage.setItem('tf_logout_reason', reason)
+      window.location.href = KEYCLOAK_CONFIG.logoutUri
+      return
     }
 
+    // 主动登出：走 Keycloak logout 端点，销毁 SSO session
     const params = new URLSearchParams({
       client_id: KEYCLOAK_CONFIG.clientId,
       post_logout_redirect_uri: KEYCLOAK_CONFIG.logoutUri
@@ -314,6 +318,20 @@ function restoreUser(): Record<string, any> | null {
 
 function generateCodeVerifier(): string {
   return generateRandomString(43)
+}
+
+/**
+ * PKCE S256: code_challenge = BASE64URL(SHA256(code_verifier))
+ */
+async function generateCodeChallenge(codeVerifier: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(codeVerifier)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  // base64url 编码（无 padding）
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
 }
 
 function generateRandomString(length: number): string {
