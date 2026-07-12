@@ -250,3 +250,19 @@ export interface AvailableColumnVO {
   sortable: boolean
   removable: boolean
 }
+
+// ========== 工作流 ==========
+export interface WorkflowTransitionVO {
+  id: string
+  projectId: string
+  issueType: string
+  roleId: string
+  oldStatusId: string
+  newStatusId: string
+}
+
+export interface UpdateWorkflowDTO {
+  issueType: string
+  roleId: number
+  transitions: { from: number; to: number; allowed: boolean }[]
+}

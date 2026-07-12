@@ -1,20 +1,5 @@
 import request from './request'
-import type { R } from './types'
-
-export interface WorkflowTransitionVO {
-  id: string
-  projectId: string
-  issueType: string
-  roleId: string
-  oldStatusId: string
-  newStatusId: string
-}
-
-export interface UpdateWorkflowDTO {
-  issueType: string
-  roleId: number
-  transitions: { from: number; to: number; allowed: boolean }[]
-}
+import type { R, RoleVO, WorkflowTransitionVO, UpdateWorkflowDTO } from './types'
 
 /**
  * 工作流模块 API
@@ -28,5 +13,15 @@ export const workflowApi = {
   /** 更新工作流转换矩阵 */
   updateTransitionMatrix(projectId: string, data: UpdateWorkflowDTO) {
     return request.put<any, R<void>>(`/projects/${projectId}/workflows`, data)
+  },
+
+  /** 获取项目级角色列表（用于工作流编辑器筛选） */
+  listProjectRoles() {
+    return request.get<any, R<RoleVO[]>>('/workflows/project-roles')
+  },
+
+  /** 获取系统中已使用的工单类型列表 */
+  listIssueTypes() {
+    return request.get<any, R<string[]>>('/workflows/issue-types')
   }
 }

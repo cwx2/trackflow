@@ -24,21 +24,24 @@
           @change="onFilterChange"
         >
           <a-option value="*">所有类型</a-option>
-          <a-option value="Bug">缺陷</a-option>
-          <a-option value="Task">任务</a-option>
-          <a-option value="Feature">需求</a-option>
+          <a-option
+            v-for="t in issueTypes"
+            :key="t"
+            :value="t"
+          >{{ t }}</a-option>
         </a-select>
 
         <a-select
           v-model="selectedRole"
           placeholder="角色"
-          style="width: 140px"
+          style="width: 160px"
           @change="onFilterChange"
         >
-          <a-option value="2">项目管理员</a-option>
-          <a-option value="3">开发人员</a-option>
-          <a-option value="4">测试人员</a-option>
-          <a-option value="5">观察者</a-option>
+          <a-option
+            v-for="role in roles"
+            :key="role.id"
+            :value="role.id"
+          >{{ role.name }}</a-option>
         </a-select>
 
         <a-button type="primary" :loading="saving" @click="saveMatrix">
@@ -104,17 +107,20 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { IconSettings, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi } from '@/api'
-import type { IssueStatusVO, ProjectVO } from '@/api/types'
+import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 
 const selectedProject = ref('0')
 const selectedType = ref('*')
-const selectedRole = ref('3')
+const selectedRole = ref('')
 const loading = ref(false)
 const saving = ref(false)
 
 const statuses = ref<IssueStatusVO[]>([])
 const projects = ref<ProjectVO[]>([])
+const roles = ref<RoleVO[]>([])
+const issueTypes = ref<string[]>([])
 
 // 转换矩阵 Set: "fromId-toId"
 const allowedTransitions = reactive(new Set<string>())
@@ -156,7 +162,31 @@ async function loadProjects() {
   }
 }
 
+async function loadRoles() {
+  try {
+    const res = await workflowApi.listProjectRoles()
+    roles.value = res.data || []
+    // 默认选中第一个角色
+    if (roles.value.length > 0 && !selectedRole.value) {
+      selectedRole.value = roles.value[0].id
+    }
+  } catch {
+    roles.value = []
+    Message.error('加载角色列表失败')
+  }
+}
+
+async function loadIssueTypes() {
+  try {
+    const res = await workflowApi.listIssueTypes()
+    issueTypes.value = res.data || []
+  } catch {
+    issueTypes.value = ['Bug', 'Task', 'Feature']
+  }
+}
+
 async function loadMatrix() {
+  if (!selectedRole.value) return
   loading.value = true
   try {
     const params: Record<string, string> = { roleId: selectedRole.value }
@@ -209,7 +239,7 @@ async function saveMatrix() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadStatuses(), loadProjects()])
+  await Promise.all([loadStatuses(), loadProjects(), loadRoles(), loadIssueTypes()])
   await loadMatrix()
 })
 </script>

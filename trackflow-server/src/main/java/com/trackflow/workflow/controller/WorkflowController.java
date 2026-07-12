@@ -1,6 +1,7 @@
 package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
+import com.trackflow.system.vo.RoleVO;
 import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.entity.WorkflowTransition;
@@ -52,5 +53,25 @@ public class WorkflowController {
         Long effectiveProjectId = (projectId == 0L) ? null : projectId;
         workflowService.updateTransitionMatrix(effectiveProjectId, dto);
         return R.ok();
+    }
+
+    /**
+     * 获取项目级角色列表（用于工作流编辑器筛选下拉）
+     * 只返回 roleType=project 的角色，任何已登录用户可访问
+     */
+    @GetMapping("/workflows/project-roles")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<RoleVO>> listProjectRoles() {
+        return R.ok(workflowService.listProjectRoles());
+    }
+
+    /**
+     * 获取系统中已使用的工单类型列表
+     * 返回所有已在工单中使用过的 issueType 值
+     */
+    @GetMapping("/workflows/issue-types")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<String>> listIssueTypes() {
+        return R.ok(workflowService.listIssueTypes());
     }
 }
