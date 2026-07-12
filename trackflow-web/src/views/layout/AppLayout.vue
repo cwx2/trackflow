@@ -92,7 +92,7 @@
 
     <!-- 右侧（标签栏 + 内容区） -->
     <div class="main-area">
-      <TabBar />
+      <TabBar v-if="showTabBar" />
       <div class="main-content">
         <router-view />
       </div>
@@ -102,13 +102,20 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import TabBar from './TabBar.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+
+// TabBar 仅在 Issue 相关路由显示（Issue 列表、Issue 详情）
+const showTabBar = computed(() => {
+  const name = route.name
+  return name === 'Issues' || name === 'IssueDetail'
+})
 const { theme, cycleTheme } = useTheme()
 const showAdminMenu = ref(false)
 const showUserMenu = ref(false)
