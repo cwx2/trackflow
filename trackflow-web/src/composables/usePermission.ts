@@ -3,18 +3,36 @@ import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 /**
- * 项目级权限缓存
- * key: projectId, value: Set<permission>
+ * 缓存 TTL（毫秒）：与后端 Redis 权限缓存 TTL 对齐
  */
-const projectPermissionsCache = new Map<string, Set<string>>()
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
+
+/**
+ * 项目级权限缓存
+ * key: projectId, value: { permissions, cachedAt }
+ */
+interface CacheEntry {
+  permissions: Set<string>
+  cachedAt: number
+}
+const projectPermissionsCache = new Map<string, CacheEntry>()
 const loadingProjects = new Map<string, Promise<Set<string>>>()
 
 /**
- * 加载指定项目的权限（带去重和缓存）
+ * 检查缓存是否有效（未过期）
  */
-async function loadProjectPermissions(projectId: string): Promise<Set<string>> {
-  if (projectPermissionsCache.has(projectId)) {
-    return projectPermissionsCache.get(projectId)!
+function isCacheValid(entry: CacheEntry): boolean {
+  return Date.now() - entry.cachedAt < CACHE_TTL_MS
+}
+
+/**
+ * 加载指定项目的权限（带去重和缓存 + TTL）
+ * 也供 Issue 列表版 composable 复用
+ */
+export async function loadProjectPermissions(projectId: string): Promise<Set<string>> {
+  const cached = projectPermissionsCache.get(projectId)
+  if (cached && isCacheValid(cached)) {
+    return cached.permissions
   }
 
   // 去重：如果已有正在进行的请求，复用
@@ -26,7 +44,7 @@ async function loadProjectPermissions(projectId: string): Promise<Set<string>> {
     try {
       const res = await authApi.getMyPermissions(projectId)
       const perms = new Set<string>(res.data || [])
-      projectPermissionsCache.set(projectId, perms)
+      projectPermissionsCache.set(projectId, { permissions: perms, cachedAt: Date.now() })
       return perms
     } catch (e) {
       console.warn('[usePermission] Failed to load permissions for project', projectId, e)
