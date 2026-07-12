@@ -61,12 +61,24 @@
       </div>
 
       <!-- 空状态 -->
-      <a-empty v-if="filteredProjects.length === 0 && !loading" description="暂无项目">
-        <template #image>
-          <icon-folder style="font-size: 48px; color: var(--tf-text-tertiary)" />
+      <div v-if="filteredProjects.length === 0 && !loading" class="empty-state">
+        <div class="empty-icon">
+          <icon-folder />
+        </div>
+        <template v-if="searchKeyword">
+          <h3 class="empty-title">未找到匹配的项目</h3>
+          <p class="empty-desc">尝试更换搜索关键词</p>
         </template>
-        <a-button v-if="canCreateProject" type="primary" @click="showCreateDialog = true">创建第一个项目</a-button>
-      </a-empty>
+        <template v-else-if="canCreateProject">
+          <h3 class="empty-title">还没有项目</h3>
+          <p class="empty-desc">创建您的第一个项目，开始管理团队工作</p>
+          <a-button type="primary" @click="showCreateDialog = true">创建第一个项目</a-button>
+        </template>
+        <template v-else>
+          <h3 class="empty-title">您还未被分配到任何项目</h3>
+          <p class="empty-desc">请联系项目管理员将您添加到相关项目中，或联系系统管理员分配权限</p>
+        </template>
+      </div>
 
       <!-- 加载更多 -->
       <div v-if="hasMore" class="load-more" @click="loadMore">
@@ -630,5 +642,37 @@ onMounted(() => {
 /* Arco Design 暗色主题适配 */
 :deep(.arco-dropdown-option.danger-option) {
   color: var(--tf-danger);
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0 0 8px;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+  margin: 0 0 24px;
+  max-width: 360px;
+  line-height: 1.5;
 }
 </style>
