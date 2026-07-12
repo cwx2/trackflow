@@ -1,12 +1,16 @@
 import request from './request'
 import type { R, SprintVO } from './types'
+import type { AxiosRequestConfig } from 'axios'
+
+/** 可选请求配置（支持 _silent403 静默 403） */
+type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
 
 /**
  * Sprint 模块 API
  */
 export const sprintApi = {
   /** 项目的 Sprint 列表 */
-  listByProject(projectId: string, config?: Record<string, any>) {
+  listByProject(projectId: string, config?: RequestOptions) {
     return request.get<any, R<SprintVO[]>>(`/projects/${projectId}/sprints`, config)
   },
 

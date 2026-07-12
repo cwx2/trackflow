@@ -1,5 +1,9 @@
 import request from './request'
 import type { R, PageResult, ProjectVO, ProjectMemberVO } from './types'
+import type { AxiosRequestConfig } from 'axios'
+
+/** 可选请求配置（支持 _silent403 静默 403） */
+type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
 
 /**
  * 项目模块 API
@@ -36,7 +40,7 @@ export const projectApi = {
   },
 
   /** 获取项目成员列表 */
-  listMembers(projectId: string, config?: Record<string, any>) {
+  listMembers(projectId: string, config?: RequestOptions) {
     return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`, config)
   },
 

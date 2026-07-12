@@ -37,6 +37,10 @@ public class WebhookService {
         );
     }
 
+    public Webhook getById(Long id) {
+        return webhookMapper.selectById(id);
+    }
+
     @Transactional
     public Webhook create(Webhook webhook) {
         webhookMapper.insert(webhook);
