@@ -184,7 +184,7 @@ const selectedProject = computed({
 })
 
 // 权限控制
-const { canChangeStatus, canEditIssue } = usePermission(() => selectedProject.value)
+const { canChangeStatus } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)

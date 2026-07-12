@@ -47,6 +47,8 @@
               {{ member.charAt(0) }}
             </a-avatar>
           </a-avatar-group>
+          <!-- 项目操作菜单（粗粒度控制：有 project:create 全局权限才显示）
+               TODO: 理想方案是按 project:edit 做项目级权限检查，但列表页多项目场景需逐行查询，暂用全局权限兜底 -->
           <span v-permission="'project:create'" class="dropdown-wrapper">
             <a-dropdown trigger="click" @click.stop>
               <a-button type="text" size="small" class="btn-more">
