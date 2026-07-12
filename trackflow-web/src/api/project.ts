@@ -36,8 +36,8 @@ export const projectApi = {
   },
 
   /** 获取项目成员列表 */
-  listMembers(projectId: string) {
-    return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`)
+  listMembers(projectId: string, config?: Record<string, any>) {
+    return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`, config)
   },
 
   /** 添加项目成员 */

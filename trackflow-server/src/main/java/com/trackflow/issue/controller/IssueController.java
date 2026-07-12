@@ -48,6 +48,7 @@ public class IssueController {
 
     @GetMapping
     public R<PageResult<IssueVO>> list(IssueQuery query) {
+        // listByQuery 内部已做项目成员校验
         Page<Issue> result = issueService.listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
 
@@ -75,12 +76,14 @@ public class IssueController {
 
     @GetMapping("/{id}")
     public R<IssueDetailVO> getById(@PathVariable Long id) {
-        return R.ok(issueService.getDetail(id));
+        // 校验项目成员权限并获取详情
+        return R.ok(issueService.getDetailWithAccessCheck(id));
     }
 
     @GetMapping("/key/{issueKey}")
     public R<IssueDetailVO> getByKey(@PathVariable String issueKey) {
-        Issue issue = issueService.getByKey(issueKey);
+        // 先校验项目成员权限
+        Issue issue = issueService.getByKeyWithAccessCheck(issueKey);
         return R.ok(issueService.getDetail(issue.getId()));
     }
 
@@ -102,7 +105,7 @@ public class IssueController {
 
     @GetMapping("/{id}/available-transitions")
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable Long id) {
-        Issue issue = issueService.getById(id);
+        Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         List<IssueStatus> statuses = workflowService.getAvailableTransitions(issue, userId);
         return R.ok(issueConverter.toStatusVOList(statuses));
@@ -110,8 +113,8 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions")
     public R<Void> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
-        // 校验工作流规则
-        Issue issue = issueService.getById(id);
+        // 校验项目成员权限 + 工作流规则
+        Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
             return R.fail(40300, "当前角色不允许执行此状态转换");
@@ -130,6 +133,7 @@ public class IssueController {
 
     @PutMapping("/{id}/assign")
     public R<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignIssueDTO dto) {
+        issueService.getByIdWithAccessCheck(id);
         issueService.assign(id, dto.getAssigneeId());
         return R.ok();
     }
@@ -138,11 +142,13 @@ public class IssueController {
 
     @GetMapping("/{id}/comments")
     public R<List<IssueCommentVO>> listComments(@PathVariable Long id) {
+        issueService.getByIdWithAccessCheck(id);
         return R.ok(issueService.listCommentsWithUser(id));
     }
 
     @PostMapping("/{id}/comments")
     public R<IssueCommentVO> addComment(@PathVariable Long id, @Valid @RequestBody AddCommentDTO dto) {
+        issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
     }
 
@@ -150,18 +156,21 @@ public class IssueController {
 
     @GetMapping("/{id}/attachments")
     public R<List<IssueAttachmentVO>> listAttachments(@PathVariable Long id) {
+        issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toAttachmentVOList(issueService.listAttachments(id)));
     }
 
     @PostMapping("/{id}/attachments")
     public R<IssueAttachmentVO> uploadAttachment(@PathVariable Long id,
                                                   @RequestParam("file") MultipartFile file) {
+        issueService.getByIdWithAccessCheck(id);
         IssueAttachment attachment = issueService.uploadAttachment(id, file);
         return R.ok(issueConverter.toAttachmentVO(attachment));
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     public R<Void> deleteAttachment(@PathVariable Long id, @PathVariable Long attachmentId) {
+        issueService.getByIdWithAccessCheck(id);
         issueService.deleteAttachment(id, attachmentId);
         return R.ok();
     }
@@ -170,6 +179,7 @@ public class IssueController {
 
     @GetMapping("/{id}/activities")
     public R<List<IssueActivityVO>> listActivities(@PathVariable Long id) {
+        issueService.getByIdWithAccessCheck(id);
         return R.ok(issueService.listActivitiesWithUser(id));
     }
 
@@ -177,17 +187,20 @@ public class IssueController {
 
     @GetMapping("/{id}/tags")
     public R<List<IssueTagVO>> listIssueTags(@PathVariable Long id) {
+        issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toTagVOList(tagService.listIssueTags(id)));
     }
 
     @PostMapping("/{id}/tags")
     public R<Void> addTag(@PathVariable Long id, @Valid @RequestBody AddTagDTO dto) {
+        issueService.getByIdWithAccessCheck(id);
         tagService.addTagToIssue(id, dto.getTagId());
         return R.ok();
     }
 
     @DeleteMapping("/{id}/tags/{tagId}")
     public R<Void> removeTag(@PathVariable Long id, @PathVariable Long tagId) {
+        issueService.getByIdWithAccessCheck(id);
         tagService.removeTagFromIssue(id, tagId);
         return R.ok();
     }
@@ -196,17 +209,20 @@ public class IssueController {
 
     @GetMapping("/{id}/links")
     public R<List<IssueLinkVO>> listLinks(@PathVariable Long id) {
+        issueService.getByIdWithAccessCheck(id);
         return R.ok(linkService.listIssueLinks(id));
     }
 
     @PostMapping("/{id}/links")
     public R<Void> createLink(@PathVariable Long id, @Valid @RequestBody CreateIssueLinkDTO dto) {
+        issueService.getByIdWithAccessCheck(id);
         linkService.createIssueLink(id, dto);
         return R.ok();
     }
 
     @DeleteMapping("/{id}/links/{linkId}")
     public R<Void> deleteLink(@PathVariable Long id, @PathVariable Long linkId) {
+        issueService.getByIdWithAccessCheck(id);
         linkService.deleteIssueLink(linkId);
         return R.ok();
     }

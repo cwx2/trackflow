@@ -77,6 +77,16 @@
       "email": "wangqiang@trackflow.local",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow"]
+    },
+    {
+      "username": "huanglei",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "磊",
+      "lastName": "黄",
+      "email": "huanglei@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow"]
     }
   ]
 }

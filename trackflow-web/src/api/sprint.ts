@@ -6,8 +6,8 @@ import type { R, SprintVO } from './types'
  */
 export const sprintApi = {
   /** 项目的 Sprint 列表 */
-  listByProject(projectId: string) {
-    return request.get<any, R<SprintVO[]>>(`/projects/${projectId}/sprints`)
+  listByProject(projectId: string, config?: Record<string, any>) {
+    return request.get<any, R<SprintVO[]>>(`/projects/${projectId}/sprints`, config)
   },
 
   /** 创建 Sprint */

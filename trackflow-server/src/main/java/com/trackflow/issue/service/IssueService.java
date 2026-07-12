@@ -107,12 +107,29 @@ public class IssueService {
 
     /**
      * Issue 列表（接受 IssueQuery，完整筛选支持）
+     * 强制按用户所属项目过滤：如果指定了 projectId，校验成员关系；如果未指定，自动限定为所属项目。
      */
     public Page<Issue> listByQuery(IssueQuery query) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
         QueryWrapper<Issue> wrapper = new QueryWrapper<>();
         wrapper.isNull("deleted_at");
 
-        if (query.getProjectId() != null) wrapper.eq("project_id", query.getProjectId());
+        if (query.getProjectId() != null) {
+            // 指定了 projectId，校验成员关系
+            projectService.assertProjectMember(currentUserId, query.getProjectId());
+            wrapper.eq("project_id", query.getProjectId());
+        } else {
+            // 未指定 projectId，自动限定为用户所属项目
+            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
+            if (accessibleProjectIds != null) {
+                // 非系统管理员：限定项目范围
+                if (accessibleProjectIds.isEmpty()) {
+                    return new Page<>();
+                }
+                wrapper.in("project_id", accessibleProjectIds);
+            }
+            // accessibleProjectIds == null 表示系统管理员，不加限制
+        }
 
         // statusId: supports single or comma-separated
         applyFilter(wrapper, "status_id", query.getStatusId(), true);
@@ -271,6 +288,27 @@ public class IssueService {
         if (issue == null || issue.getDeletedAt() != null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
+        return issue;
+    }
+
+    /**
+     * 获取 Issue 详情（带项目成员校验）
+     * 校验当前用户是否有权访问该工单所属的项目
+     */
+    public Issue getByIdWithAccessCheck(Long id) {
+        Issue issue = getById(id);
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        projectService.assertProjectMember(currentUserId, issue.getProjectId());
+        return issue;
+    }
+
+    /**
+     * 通过 issueKey 获取（带项目成员校验）
+     */
+    public Issue getByKeyWithAccessCheck(String issueKey) {
+        Issue issue = getByKey(issueKey);
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        projectService.assertProjectMember(currentUserId, issue.getProjectId());
         return issue;
     }
 
@@ -483,6 +521,16 @@ public class IssueService {
     }
 
     // ========== 增强详情（性能优化：单次 JOIN 查询） ==========
+
+    /**
+     * 获取 Issue 详情（带项目成员校验）—— 避免先查 Issue 再查详情导致两次 DB 查询
+     */
+    public IssueDetailVO getDetailWithAccessCheck(Long id) {
+        IssueDetailVO detail = getDetail(id);
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        projectService.assertProjectMember(currentUserId, Long.parseLong(detail.getProjectId()));
+        return detail;
+    }
 
     /**
      * 获取增强版 Issue 详情 —— 单次 SQL JOIN 替代 N+1 查询

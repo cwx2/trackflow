@@ -224,6 +224,11 @@ export const useAuthStore = defineStore('auth', () => {
     globalPermissions.value = new Set()
     permissionsLoaded.value = false
 
+    // 清除项目权限缓存（避免用户切换时残留旧权限）
+    import('@/composables/usePermission').then(({ invalidateProjectPermissions }) => {
+      invalidateProjectPermissions()
+    }).catch(() => { /* ignore if module not loaded */ })
+
     if (reason) {
       // 被动登出（token 过期）：直接跳本地登录页，不走 Keycloak logout
       // 因为 token 已过期，Keycloak session 大概率也已失效，走 logout 会显示多余的确认页

@@ -223,8 +223,8 @@ async function loadRelatedData() {
       issueApi.listActivities(id),
       issueApi.listAttachments(id),
       issueApi.listLinks(id),
-      projectApi.listMembers(pid).catch(() => ({ data: [] })),
-      sprintApi.listByProject(pid).catch(() => ({ data: [] })),
+      projectApi.listMembers(pid, { _silent403: true }).catch(() => ({ data: [] })),
+      sprintApi.listByProject(pid, { _silent403: true }).catch(() => ({ data: [] })),
       tagApi.listProjectTags(pid),
     ])
     if (transRes.status === 'fulfilled') transitions.value = transRes.value.data || []
