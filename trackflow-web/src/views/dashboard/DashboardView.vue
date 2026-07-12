@@ -118,7 +118,9 @@
             <div class="activity-content">
               <div class="activity-text">
                 <span class="activity-user">{{ activity.userName }}</span>
+                {{ ' ' }}
                 <span class="activity-action">{{ formatAction(activity) }}</span>
+                {{ ' ' }}
                 <span class="activity-issue-link">{{ activity.issueKey }}</span>
               </div>
               <div class="activity-meta">
@@ -303,18 +305,27 @@ function formatAction(activity: DashboardActivityVO): string {
     'comment': '评论了',
     'commented': '评论了',
     'attach': '添加了附件',
-    'attached': '添加了附件'
+    'attached': '添加了附件',
+    'time_logged': '记录了工时',
+    'deleted': '删除了',
+    'reopened': '重新打开了',
+    'resolved': '解决了'
   }
   let text = actionMap[activity.action] || activity.action
   if (activity.fieldName && (activity.action === 'update' || activity.action === 'updated')) {
     const fieldMap: Record<string, string> = {
       'status_id': '状态',
+      'status': '状态',
       'priority': '优先级',
       'assignee_id': '负责人',
+      'assignee': '负责人',
       'sprint_id': 'Sprint',
+      'sprint': 'Sprint',
       'title': '标题',
       'description': '描述',
-      'due_date': '截止日期'
+      'due_date': '截止日期',
+      'issue_type': '类型',
+      'estimated_hours': '预估工时'
     }
     text = `更新了 ${fieldMap[activity.fieldName] || activity.fieldName}`
   }

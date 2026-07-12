@@ -13,12 +13,16 @@ import com.trackflow.query.dto.ExecuteQueryDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.service.SavedQueryService;
 import com.trackflow.query.vo.SavedQueryVO;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * 保存查询接口 — 对应 YouTrack 左侧面板
@@ -31,6 +35,7 @@ public class SavedQueryController {
     private final SavedQueryService savedQueryService;
     private final SavedQueryConverter savedQueryConverter;
     private final IssueConverter issueConverter;
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 获取查询面板（左侧面板数据 + 实时计数）
@@ -78,8 +83,10 @@ public class SavedQueryController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
         Page<Issue> result = savedQueryService.executeById(id, page, pageSize);
+        List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
+        fillAssigneeNames(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
-                issueConverter.toVOList(result.getRecords()), result.getTotal(),
+                voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
     }
@@ -90,10 +97,33 @@ public class SavedQueryController {
     @PostMapping("/execute")
     public R<PageResult<IssueVO>> executeAdhoc(@RequestBody ExecuteQueryDTO dto) {
         Page<Issue> result = savedQueryService.executeAdhoc(dto);
+        List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
+        fillAssigneeNames(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
-                issueConverter.toVOList(result.getRecords()), result.getTotal(),
+                voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
+    }
+
+    /**
+     * 批量填充 assigneeName（复用逻辑）
+     */
+    private void fillAssigneeNames(List<Issue> records, List<IssueVO> voList) {
+        List<Long> assigneeIds = records.stream()
+                .map(Issue::getAssigneeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!assigneeIds.isEmpty()) {
+            Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
+                    .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            for (int i = 0; i < records.size(); i++) {
+                Issue issue = records.get(i);
+                if (issue.getAssigneeId() != null) {
+                    voList.get(i).setAssigneeName(userNameMap.get(issue.getAssigneeId()));
+                }
+            }
+        }
     }
 
     /**

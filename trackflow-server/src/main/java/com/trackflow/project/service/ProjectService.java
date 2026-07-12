@@ -249,12 +249,31 @@ public class ProjectService {
     }
 
     /**
-     * 递增 Issue 序号并返回新序号
+     * 递增 Issue 序号并返回新序号。
+     * 使用 FOR UPDATE 锁防止并发冲突。
+     * 如果发现实际 max 序号高于项目记录的 sequence（数据不一致），自动校正。
      */
     @Transactional
     public int nextIssueSequence(Long projectId) {
-        Project project = getById(projectId);
-        int next = project.getIssueSequence() + 1;
+        // 使用 FOR UPDATE 悲观锁锁定项目行，防止并发生成重复序号
+        Project project = projectMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>()
+                        .eq(Project::getId, projectId)
+                        .last("FOR UPDATE")
+        );
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+        }
+
+        int currentSeq = project.getIssueSequence();
+
+        // 查询数据库中该项目实际的最大序号，防止 sequence 落后导致唯一约束冲突
+        Integer actualMax = projectMapper.selectMaxIssueSequence(projectId);
+        if (actualMax != null && actualMax > currentSeq) {
+            currentSeq = actualMax;
+        }
+
+        int next = currentSeq + 1;
         project.setIssueSequence(next);
         projectMapper.updateById(project);
         return next;
