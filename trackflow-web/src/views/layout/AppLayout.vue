@@ -28,6 +28,10 @@
           <span class="nav-icon">🏃</span>
           <span class="nav-label">迭代</span>
         </router-link>
+        <router-link to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
+          <span class="nav-icon">⏱</span>
+          <span class="nav-label">时间表</span>
+        </router-link>
         <router-link to="/admin/workflow" class="nav-item" :class="{ active: $route.name === 'WorkflowEditor' }">
           <span class="nav-icon">⚙️</span>
           <span class="nav-label">工作流</span>

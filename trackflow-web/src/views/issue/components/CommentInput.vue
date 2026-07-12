@@ -13,6 +13,7 @@
       <EditorContent :editor="editor" />
     </div>
     <div class="editor-footer">
+      <button class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
       <button class="btn-submit" :disabled="isEmpty" @click="submit">提交评论</button>
     </div>
   </div>
@@ -27,6 +28,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 
 const emit = defineEmits<{
   submit: [content: string]
+  addTime: []
 }>()
 
 const focused = ref(false)
@@ -110,10 +112,16 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 }
 
 .editor-footer {
-  display: flex; justify-content: flex-end; align-items: center;
+  display: flex; justify-content: space-between; align-items: center;
   height: 40px; padding: 0 8px;
   border-top: 1px solid var(--tf-border); background: var(--tf-bg-elevated);
 }
+.btn-add-time {
+  font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
+  background: none; color: var(--tf-text-tertiary); cursor: pointer;
+  transition: color 150ms, background 150ms;
+}
+.btn-add-time:hover { color: var(--tf-accent); background: var(--tf-bg-hover); }
 .btn-submit {
   font-size: 12px; padding: 4px 16px; border-radius: 3px; border: none;
   background: var(--tf-accent); color: #fff; font-weight: 500; cursor: pointer;

@@ -49,6 +49,11 @@ const routes = [
         component: () => import('@/views/sprint/SprintView.vue')
       },
       {
+        path: 'timesheets',
+        name: 'Timesheets',
+        component: () => import('@/views/timesheet/TimesheetView.vue')
+      },
+      {
         path: 'admin/workflow',
         name: 'WorkflowEditor',
         component: () => import('@/views/admin/WorkflowEditor.vue')

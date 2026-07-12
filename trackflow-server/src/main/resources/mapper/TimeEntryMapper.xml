@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trackflow.timeentry.mapper.TimeEntryMapper">
+
+    <select id="selectEntriesWithIssueKey" resultType="map">
+        SELECT
+            t.id, t.issue_id, t.user_id, t.work_date, t.duration,
+            t.start_time, t.work_type, t.description,
+            t.created_at, t.updated_at,
+            i.issue_key, i.title AS issue_title
+        FROM time_entry t
+        LEFT JOIN issue i ON i.id = t.issue_id
+        WHERE t.user_id = #{userId}
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+        ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
+    </select>
+
+</mapper>

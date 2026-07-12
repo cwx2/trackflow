@@ -31,7 +31,7 @@
       >
         <template #activity>
           <ActivityStream :items="activityItems" />
-          <CommentInput @submit="onAddComment" />
+          <CommentInput @submit="onAddComment" @add-time="openTimeDialog" />
         </template>
       </DetailMainContent>
 
@@ -51,6 +51,44 @@
   </div>
 
   <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="issue?.projectId" />
+
+  <!-- Add Time Entry Dialog -->
+  <a-modal
+    v-model:visible="showTimeDialog"
+    title="添加花费的时间"
+    :width="480"
+    :footer="false"
+    @cancel="showTimeDialog = false"
+  >
+    <a-form :model="timeForm" layout="vertical">
+      <a-form-item label="日期" required>
+        <a-date-picker v-model="timeForm.workDate" style="width: 100%" />
+      </a-form-item>
+      <a-form-item label="实际用时" required>
+        <a-input v-model="timeForm.durationText" placeholder="例如: 2h30m, 1h, 45m">
+          <template #prefix>⏱</template>
+        </a-input>
+      </a-form-item>
+      <a-form-item label="工作类型">
+        <a-select v-model="timeForm.workType" placeholder="选择工作类型" allow-clear>
+          <a-option value="Development">开发</a-option>
+          <a-option value="Testing">测试</a-option>
+          <a-option value="Documentation">文档</a-option>
+          <a-option value="Design">设计</a-option>
+          <a-option value="Review">代码审查</a-option>
+          <a-option value="Meeting">会议</a-option>
+          <a-option value="Other">其他</a-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="描述">
+        <a-textarea v-model="timeForm.description" placeholder="描述这段时间您做了什么" :auto-size="{ minRows: 2 }" />
+      </a-form-item>
+    </a-form>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid var(--tf-border-light)">
+      <a-button @click="showTimeDialog = false">取消</a-button>
+      <a-button type="primary" :loading="timeSaving" @click="submitTimeEntry">保存</a-button>
+    </div>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -58,7 +96,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { renderMarkdown } from '@/utils/markdown'
-import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
+import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -81,6 +119,14 @@ import {
 const route = useRoute()
 const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
+const showTimeDialog = ref(false)
+const timeSaving = ref(false)
+const timeForm = ref({
+  workDate: new Date().toISOString().slice(0, 10),
+  durationText: '',
+  workType: undefined as string | undefined,
+  description: ''
+})
 const loading = ref(false)
 const useMock = ref(true) // 默认用 mock，API 可用时自动切换
 
@@ -342,6 +388,64 @@ async function onAddComment(content: string) {
 async function onTransition(target: StatusInfo) {
   if (useMock.value) { mockTransitStatus(issue.value!.id, target.id); loadFromMock(); Message.success(`状态已变更为 ${target.name}`); return }
   try { await issueApi.transitStatus(issue.value!.id, target.id); await loadAll(); Message.success(`状态已变更为 ${target.name}`) } catch (e: any) { Message.error(e.response?.data?.message || '变更失败') }
+}
+
+function openTimeDialog() {
+  timeForm.value = {
+    workDate: new Date().toISOString().slice(0, 10),
+    durationText: '',
+    workType: undefined,
+    description: ''
+  }
+  showTimeDialog.value = true
+}
+
+async function submitTimeEntry() {
+  if (!timeForm.value.durationText) {
+    Message.warning('请输入时长')
+    return
+  }
+  const duration = parseDurationText(timeForm.value.durationText)
+  if (!duration || duration <= 0) {
+    Message.warning('时长格式无效，请使用如 2h30m, 1h, 45m')
+    return
+  }
+
+  timeSaving.value = true
+  try {
+    await timeEntryApi.create({
+      issueId: issue.value!.id,
+      workDate: timeForm.value.workDate,
+      duration,
+      workType: timeForm.value.workType || undefined,
+      description: timeForm.value.description || undefined
+    })
+    Message.success('工时已记录')
+    showTimeDialog.value = false
+    await loadAll() // Refresh to update spentHours
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '记录失败')
+  } finally {
+    timeSaving.value = false
+  }
+}
+
+function parseDurationText(text: string): number | null {
+  const cleaned = text.trim().toLowerCase()
+  let total = 0
+  const weekMatch = cleaned.match(/(\d+)\s*w/)
+  const dayMatch = cleaned.match(/(\d+)\s*d/)
+  const hourMatch = cleaned.match(/(\d+)\s*h/)
+  const minMatch = cleaned.match(/(\d+)\s*m/)
+  if (weekMatch) total += parseInt(weekMatch[1]) * 5 * 8 * 60
+  if (dayMatch) total += parseInt(dayMatch[1]) * 8 * 60
+  if (hourMatch) total += parseInt(hourMatch[1]) * 60
+  if (minMatch) total += parseInt(minMatch[1])
+  if (!weekMatch && !dayMatch && !hourMatch && !minMatch) {
+    const num = parseFloat(cleaned)
+    if (!isNaN(num)) total = Math.round(num * 60)
+  }
+  return total > 0 ? total : null
 }
 
 async function onEditField(key: string, newValue: string) {

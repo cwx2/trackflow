@@ -38,6 +38,7 @@ public class IssueService {
     private final IssueCommentMapper commentMapper;
     private final IssueAttachmentMapper attachmentMapper;
     private final IssueActivityMapper activityMapper;
+    private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final MinioService minioService;
@@ -473,6 +474,17 @@ public class IssueService {
         }
         if (row.get("spent_hours") != null) {
             vo.setSpentHours((java.math.BigDecimal) row.get("spent_hours"));
+        }
+
+        // Calculate actual spent time from time_entry table
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.trackflow.timeentry.entity.TimeEntry> teWrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+        teWrapper.eq("issue_id", id).select("duration");
+        List<com.trackflow.timeentry.entity.TimeEntry> timeEntries = timeEntryMapper.selectList(teWrapper);
+        if (!timeEntries.isEmpty()) {
+            int totalMinutes = timeEntries.stream().mapToInt(com.trackflow.timeentry.entity.TimeEntry::getDuration).sum();
+            // Convert minutes to hours as BigDecimal
+            vo.setSpentHours(java.math.BigDecimal.valueOf(totalMinutes).divide(java.math.BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP));
         }
         if (row.get("resolved_at") != null) {
             vo.setResolvedAt(((java.sql.Timestamp) row.get("resolved_at")).toLocalDateTime());

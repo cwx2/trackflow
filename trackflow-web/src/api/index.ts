@@ -14,6 +14,7 @@ export { tagApi } from './tag'
 export { authApi } from './auth'
 export { customFieldApi } from './customField'
 export { dashboardApi } from './dashboard'
+export { timeEntryApi } from './timeEntry'
 
 // 类型导出
 export type * from './types'
