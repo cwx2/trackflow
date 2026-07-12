@@ -32,21 +32,25 @@ public class SprintController {
     }
 
     @GetMapping("/api/v1/sprints/{id}")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
     public R<SprintVO> getById(@PathVariable Long id) {
         return R.ok(sprintConverter.toVO(sprintService.getById(id)));
     }
 
     @PutMapping("/api/v1/sprints/{id}/activate")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
     public R<SprintVO> activate(@PathVariable Long id) {
         return R.ok(sprintConverter.toVO(sprintService.activate(id)));
     }
 
     @PutMapping("/api/v1/sprints/{id}/complete")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
     public R<SprintVO> complete(@PathVariable Long id) {
         return R.ok(sprintConverter.toVO(sprintService.complete(id)));
     }
 
     @DeleteMapping("/api/v1/sprints/{id}")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:delete')")
     public R<Void> delete(@PathVariable Long id) {
         sprintService.delete(id);
         return R.ok();

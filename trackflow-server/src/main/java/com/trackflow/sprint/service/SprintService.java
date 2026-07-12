@@ -11,11 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -24,44 +20,11 @@ public class SprintService {
     private final SprintMapper sprintMapper;
 
     /**
-     * 查询项目的 Sprint 列表（带工单统计）
+     * 查询项目的 Sprint 列表（带工单统计）。
+     * MyBatis resultMap 直接映射为 SprintVO，无需手动转换。
      */
     public List<SprintVO> listByProjectWithStats(Long projectId) {
-        List<Map<String, Object>> rows = sprintMapper.selectSprintsWithStats(projectId);
-        List<SprintVO> result = new ArrayList<>(rows.size());
-        for (Map<String, Object> row : rows) {
-            SprintVO vo = new SprintVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setProjectId(String.valueOf(row.get("project_id")));
-            vo.setName((String) row.get("name"));
-            vo.setGoal((String) row.get("goal"));
-            vo.setStatus((String) row.get("status"));
-            Object startDate = row.get("start_date");
-            if (startDate instanceof LocalDate ld) {
-                vo.setStartDate(ld);
-            } else if (startDate instanceof java.sql.Date sd) {
-                vo.setStartDate(sd.toLocalDate());
-            }
-            Object endDate = row.get("end_date");
-            if (endDate instanceof LocalDate ld) {
-                vo.setEndDate(ld);
-            } else if (endDate instanceof java.sql.Date sd) {
-                vo.setEndDate(sd.toLocalDate());
-            }
-            Object createdAt = row.get("created_at");
-            if (createdAt instanceof LocalDateTime ldt) {
-                vo.setCreatedAt(ldt);
-            } else if (createdAt instanceof java.sql.Timestamp ts) {
-                vo.setCreatedAt(ts.toLocalDateTime());
-            }
-            vo.setTotalIssues(((Number) row.get("total_issues")).intValue());
-            vo.setDoneIssues(((Number) row.get("done_issues")).intValue());
-            vo.setInProgressIssues(((Number) row.get("in_progress_issues")).intValue());
-            vo.setTodoIssues(((Number) row.get("todo_issues")).intValue());
-            vo.setOverdueIssues(((Number) row.get("overdue_issues")).intValue());
-            result.add(vo);
-        }
-        return result;
+        return sprintMapper.selectSprintsWithStats(projectId);
     }
 
     public List<Sprint> listByProject(Long projectId) {

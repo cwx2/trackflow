@@ -2,8 +2,25 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.sprint.mapper.SprintMapper">
 
+    <!-- SprintVO 的 resultMap：处理 Long→String 的 ID 转换 + 统计字段 -->
+    <resultMap id="sprintWithStatsMap" type="com.trackflow.sprint.vo.SprintVO">
+        <id property="id" column="id" javaType="java.lang.String"/>
+        <result property="projectId" column="project_id" javaType="java.lang.String"/>
+        <result property="name" column="name"/>
+        <result property="goal" column="goal"/>
+        <result property="status" column="status"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="totalIssues" column="total_issues"/>
+        <result property="doneIssues" column="done_issues"/>
+        <result property="inProgressIssues" column="in_progress_issues"/>
+        <result property="todoIssues" column="todo_issues"/>
+        <result property="overdueIssues" column="overdue_issues"/>
+    </resultMap>
+
     <!-- 带工单统计的 Sprint 列表查询 -->
-    <select id="selectSprintsWithStats" resultType="map">
+    <select id="selectSprintsWithStats" resultMap="sprintWithStatsMap">
         SELECT
             s.id,
             s.project_id,
@@ -30,6 +47,7 @@
             FROM issue i
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
+              AND i.sprint_id IN (SELECT sp.id FROM sprint sp WHERE sp.project_id = #{projectId})
             GROUP BY i.sprint_id
         ) stats ON stats.sprint_id = s.id
         WHERE s.project_id = #{projectId}
