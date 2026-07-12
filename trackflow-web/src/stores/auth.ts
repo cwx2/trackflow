@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { authApi } from '@/api'
 
 /**
  * Keycloak OIDC 配置
@@ -11,12 +12,48 @@ const KEYCLOAK_CONFIG = {
   logoutUri: window.location.origin + '/login'
 }
 
+/**
+ * localStorage keys
+ */
+const STORAGE_KEYS = {
+  accessToken: 'tf_access_token',
+  refreshToken: 'tf_refresh_token',
+  user: 'tf_user'
+} as const
+
 export const useAuthStore = defineStore('auth', () => {
-  const accessToken = ref<string | null>(null)
-  const refreshToken = ref<string | null>(null)
-  const user = ref<any>(null)
+  // 从 localStorage 恢复状态
+  const accessToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.accessToken))
+  const refreshToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.refreshToken))
+  const user = ref<any>(restoreUser())
+  const globalPermissions = ref<Set<string>>(new Set())
 
   const isAuthenticated = computed(() => !!accessToken.value)
+
+  // 监听 token 变化，同步到 localStorage
+  watch(accessToken, (val) => {
+    if (val) {
+      localStorage.setItem(STORAGE_KEYS.accessToken, val)
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.accessToken)
+    }
+  })
+
+  watch(refreshToken, (val) => {
+    if (val) {
+      localStorage.setItem(STORAGE_KEYS.refreshToken, val)
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.refreshToken)
+    }
+  })
+
+  watch(user, (val) => {
+    if (val) {
+      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(val))
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.user)
+    }
+  }, { deep: true })
 
   /**
    * 发起 Keycloak PKCE 登录
@@ -116,9 +153,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 登出
+   * 登出 — 清除本地存储并跳转 Keycloak 登出
    */
   function logout() {
+    clearStorage()
     accessToken.value = null
     refreshToken.value = null
     user.value = null
@@ -131,17 +169,63 @@ export const useAuthStore = defineStore('auth', () => {
     window.location.href = `${KEYCLOAK_CONFIG.authority}/protocol/openid-connect/logout?${params}`
   }
 
+  /**
+   * 清除所有持久化的认证数据
+   */
+  function clearStorage() {
+    localStorage.removeItem(STORAGE_KEYS.accessToken)
+    localStorage.removeItem(STORAGE_KEYS.refreshToken)
+    localStorage.removeItem(STORAGE_KEYS.user)
+  }
+
+  /**
+   * 加载当前用户的全局权限
+   */
+  async function loadGlobalPermissions() {
+    if (!isAuthenticated.value) return
+    try {
+      const res = await authApi.getMyGlobalPermissions()
+      globalPermissions.value = new Set(res.data || [])
+    } catch {
+      globalPermissions.value = new Set()
+    }
+  }
+
+  /**
+   * 检查用户是否拥有指定的全局权限
+   */
+  function hasGlobalPermission(permission: string): boolean {
+    if (globalPermissions.value.has('system:admin')) return true
+    return globalPermissions.value.has(permission)
+  }
+
   return {
     accessToken,
     refreshToken,
     user,
+    globalPermissions,
     isAuthenticated,
     login,
     handleCallback,
     refresh,
-    logout
+    logout,
+    loadGlobalPermissions,
+    hasGlobalPermission
   }
 })
+
+/**
+ * 从 localStorage 恢复 user 对象
+ */
+function restoreUser(): Record<string, any> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.user)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    localStorage.removeItem(STORAGE_KEYS.user)
+    return null
+  }
+}
 
 function generateCodeVerifier(): string {
   return generateRandomString(43)

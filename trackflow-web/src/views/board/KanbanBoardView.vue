@@ -166,15 +166,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
 import { projectApi, issueApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
+import { useProjectStore } from '@/stores/project'
 
 const router = useRouter()
+const projectStore = useProjectStore()
 
-const selectedProject = ref<string | undefined>(undefined)
+const selectedProject = computed({
+  get: () => projectStore.selectedProjectId,
+  set: (val) => projectStore.selectProject(val)
+})
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
@@ -457,6 +462,15 @@ async function loadBoard() {
 onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
   document.addEventListener('keydown', handleKeydown)
+
+  // 自动选择：仅一个项目时自动选中
+  const projectIds = projects.value.map(p => p.id)
+  projectStore.autoSelectIfNeeded(projectIds)
+
+  // 如果已有选中的项目（从 Store 恢复），自动加载看板
+  if (selectedProject.value) {
+    loadBoard()
+  }
 })
 
 onUnmounted(() => {

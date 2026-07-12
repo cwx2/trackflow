@@ -44,4 +44,14 @@ public class AuthController {
         permissions.addAll(permissionService.getPermissions(userId));
         return R.ok(permissions);
     }
+
+    /**
+     * 获取当前用户的全局权限列表（不含项目级权限）
+     */
+    @GetMapping("/my-global-permissions")
+    public R<Set<String>> getMyGlobalPermissions() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Set<String> permissions = permissionService.getPermissions(userId);
+        return R.ok(permissions);
+    }
 }

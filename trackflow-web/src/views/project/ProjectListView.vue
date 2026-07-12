@@ -10,7 +10,7 @@
           style="width: 200px"
           allow-clear
         />
-        <a-button type="primary" @click="showCreateDialog = true">
+        <a-button v-if="canCreateProject" type="primary" @click="showCreateDialog = true">
           <template #icon><icon-plus /></template>
           新建项目
         </a-button>
@@ -65,7 +65,7 @@
         <template #image>
           <icon-folder style="font-size: 48px; color: var(--tf-text-tertiary)" />
         </template>
-        <a-button type="primary" @click="showCreateDialog = true">创建第一个项目</a-button>
+        <a-button v-if="canCreateProject" type="primary" @click="showCreateDialog = true">创建第一个项目</a-button>
       </a-empty>
 
       <!-- 加载更多 -->
@@ -240,8 +240,12 @@ import {
   IconFolder
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
+
+const canCreateProject = computed(() => authStore.hasGlobalPermission('project:create'))
 
 const projects = ref<any[]>([])
 const loading = ref(false)
@@ -477,7 +481,10 @@ async function changeMemberRole(userId: string, roleId: string) {
   }
 }
 
-onMounted(loadProjects)
+onMounted(() => {
+  authStore.loadGlobalPermissions()
+  loadProjects()
+})
 </script>
 
 <style scoped>
