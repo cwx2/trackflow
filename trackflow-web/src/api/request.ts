@@ -112,11 +112,13 @@ request.interceptors.response.use(
 
     // 403 权限不足：统一提示（避免重复弹窗）
     if (error.response?.status === 403) {
-      const message = error.response?.data?.message || '权限不足，无法执行此操作'
-      // 使用动态导入避免循环依赖
-      import('@arco-design/web-vue').then(({ Message }) => {
-        Message.warning({ content: message, id: 'permission-denied', duration: 3000 })
-      })
+      if (!originalRequest._silent403) {
+        const message = error.response?.data?.message || '权限不足，无法执行此操作'
+        // 使用动态导入避免循环依赖
+        import('@arco-design/web-vue').then(({ Message }) => {
+          Message.warning({ content: message, id: 'permission-denied', duration: 3000 })
+        })
+      }
       return Promise.reject(error)
     }
 
