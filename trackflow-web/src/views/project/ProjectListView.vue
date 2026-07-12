@@ -47,9 +47,8 @@
               {{ member.charAt(0) }}
             </a-avatar>
           </a-avatar-group>
-          <!-- 项目操作菜单（粗粒度控制：有 project:create 全局权限才显示）
-               TODO: 理想方案是按 project:edit 做项目级权限检查，但列表页多项目场景需逐行查询，暂用全局权限兜底 -->
-          <span v-permission="'project:create'" class="dropdown-wrapper">
+          <!-- 项目操作菜单（按项目级权限 project:edit / project:manage_members 控制显隐） -->
+          <span v-if="canManageProject(project)" class="dropdown-wrapper">
             <a-dropdown trigger="click" @click.stop>
               <a-button type="text" size="small" class="btn-more">
                 <icon-more />
@@ -247,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import {
@@ -257,11 +256,44 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { loadProjectPermissions } from '@/composables/usePermission'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const canCreateProject = computed(() => authStore.hasGlobalPermission('project:create'))
+
+// ========== 项目级权限（逐项目判断） ==========
+const projectPermCache = ref<Record<string, Set<string>>>({})
+
+/**
+ * 批量加载所有已显示项目的权限
+ * system:admin 跳过（自动有所有权限）
+ */
+async function loadProjectPermissionsForList() {
+  if (authStore.hasGlobalPermission('system:admin')) return
+
+  const projectIds = [...new Set(projects.value.map((p: any) => p.id as string))]
+  const uncached = projectIds.filter(pid => !projectPermCache.value[pid])
+  if (uncached.length === 0) return
+
+  await Promise.all(uncached.map(async (pid) => {
+    const perms = await loadProjectPermissions(pid)
+    projectPermCache.value[pid] = perms
+  }))
+}
+
+/**
+ * 判断当前用户是否能管理指定项目（编辑/成员管理/归档）
+ * system:admin 直接返回 true
+ * 未加载权限时返回 true（乐观策略，后端兜底）
+ */
+function canManageProject(project: any): boolean {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  const perms = projectPermCache.value[project.id]
+  if (!perms) return true // 未加载时默认允许，后端兜底
+  return perms.has('project:edit') || perms.has('project:manage_members')
+}
 
 const projects = ref<any[]>([])
 const loading = ref(false)
@@ -500,6 +532,11 @@ async function changeMemberRole(userId: string, roleId: string) {
 onMounted(() => {
   loadProjects()
 })
+
+// 项目列表变化时，加载对应项目的权限
+watch(projects, () => {
+  loadProjectPermissionsForList()
+}, { flush: 'post' })
 </script>
 
 <style scoped>

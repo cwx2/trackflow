@@ -14,7 +14,15 @@ TrackFlow 前端权限分两级：
 | `v-permission="'perm'"` 指令 | 简单全局权限控制、不依赖动态 projectId | display: none |
 
 **项目标准：优先使用 `v-if` + computed**，因为它不渲染 DOM（安全性更好）且支持项目级权限。
-`v-permission` 指令仅用于简单的全局权限场景（如隐藏管理操作按钮）。
+
+### 关于 `v-permission` 指令的决定
+
+`v-permission` 指令保留在项目中作为可选工具，但**不作为主要权限控制方式**：
+- ✅ 适合：仅需全局权限、且不涉及动态 projectId 的简单场景
+- ❌ 不适合：Arco Design 组件（需包裹 `<span>` 才生效）、项目级权限
+- **实际使用建议**：全部使用 `v-if` + computed 方式，一致性优先
+
+如果团队决定彻底移除指令，删除 `src/directives/permission.ts` 和 `main.ts` 中的注册即可。
 
 ## 统一 Composable：`usePermission`
 
@@ -40,6 +48,31 @@ const {
 - 请求去重：同一 projectId 只发一次请求
 - 乐观策略：权限加载中返回 `true`（后端兜底），避免 UI 闪烁
 - `system:admin` 自动拥有所有权限
+
+### 多项目列表场景
+
+当页面展示多个项目的数据时（如项目列表、跨项目 Issue 列表），使用 `loadProjectPermissions` 批量加载：
+
+```typescript
+import { loadProjectPermissions } from '@/composables/usePermission'
+
+const projectPermCache = ref<Record<string, Set<string>>>({})
+
+async function loadPermissionsForList() {
+  if (authStore.hasGlobalPermission('system:admin')) return
+  const projectIds = [...new Set(items.value.map(i => i.projectId))]
+  await Promise.all(projectIds.map(async (pid) => {
+    projectPermCache.value[pid] = await loadProjectPermissions(pid)
+  }))
+}
+
+function canManageProject(project: any): boolean {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  const perms = projectPermCache.value[project.id]
+  if (!perms) return true // 乐观策略
+  return perms.has('project:edit') || perms.has('project:manage_members')
+}
+```
 
 ## 路由权限守卫
 
