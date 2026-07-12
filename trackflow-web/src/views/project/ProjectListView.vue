@@ -47,16 +47,18 @@
               {{ member.charAt(0) }}
             </a-avatar>
           </a-avatar-group>
-          <a-dropdown trigger="click" @click.stop>
-            <a-button type="text" size="small" class="btn-more">
-              <icon-more />
-            </a-button>
-            <template #content>
-              <a-doption @click="editProject(project)">编辑</a-doption>
-              <a-doption @click="manageMembers(project)">成员管理</a-doption>
-              <a-doption class="danger-option" @click="archiveProject(project)">归档</a-doption>
-            </template>
-          </a-dropdown>
+          <span v-permission="'project:create'" class="dropdown-wrapper">
+            <a-dropdown trigger="click" @click.stop>
+              <a-button type="text" size="small" class="btn-more">
+                <icon-more />
+              </a-button>
+              <template #content>
+                <a-doption @click="editProject(project)">编辑</a-doption>
+                <a-doption @click="manageMembers(project)">成员管理</a-doption>
+                <a-doption class="danger-option" @click="archiveProject(project)">归档</a-doption>
+              </template>
+            </a-dropdown>
+          </span>
         </div>
       </div>
 
@@ -601,6 +603,10 @@ onMounted(() => {
 }
 .btn-more:hover {
   color: var(--tf-text-primary);
+}
+
+.dropdown-wrapper {
+  display: inline-flex;
 }
 
 .load-more {

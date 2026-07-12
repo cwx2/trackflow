@@ -21,7 +21,7 @@ public enum ErrorCode {
 
     // Authorization
     ACCESS_DENIED(40300, 403, "Insufficient permissions"),
-    PROJECT_ACCESS_DENIED(40303, 403, "无权访问该项目"),
+    PROJECT_ACCESS_DENIED(40300, 403, "无权访问该项目"),
     USER_DISABLED(40301, 403, "User account is disabled"),
     BUILTIN_ROLE_PROTECTED(40302, 403, "Built-in roles cannot be modified"),
 

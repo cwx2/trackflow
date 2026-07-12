@@ -38,6 +38,60 @@ public class QueryExecutor {
         QueryWrapper<Issue> wrapper = buildWrapper(filters);
 
         // 排序
+        applySortCriteria(wrapper, sortCriteria);
+
+        return issueMapper.selectPage(pageObj, wrapper);
+    }
+
+    /**
+     * 计数查询（不分页，只返回匹配数量）
+     */
+    public long count(List<Map<String, Object>> filters) {
+        QueryWrapper<Issue> wrapper = buildWrapper(filters);
+        return issueMapper.selectCount(wrapper);
+    }
+
+    /**
+     * 计数查询（带项目成员过滤）
+     */
+    public long countWithProjectFilter(List<Map<String, Object>> filters, List<Long> accessibleProjectIds) {
+        QueryWrapper<Issue> wrapper = buildWrapper(filters);
+        if (accessibleProjectIds != null) {
+            if (accessibleProjectIds.isEmpty()) {
+                return 0;
+            }
+            wrapper.in("project_id", accessibleProjectIds);
+        }
+        return issueMapper.selectCount(wrapper);
+    }
+
+    /**
+     * 执行筛选查询（带项目成员过滤）
+     * accessibleProjectIds 为 null 表示系统管理员，不限制；为空列表表示无可访问项目。
+     */
+    public Page<Issue> executeWithProjectFilter(List<Map<String, Object>> filters, int page, int pageSize,
+                                                 List<Map<String, String>> sortCriteria, List<Long> accessibleProjectIds) {
+        Page<Issue> pageObj = new Page<>(page, pageSize);
+        QueryWrapper<Issue> wrapper = buildWrapper(filters);
+
+        // 注入项目成员过滤
+        if (accessibleProjectIds != null) {
+            if (accessibleProjectIds.isEmpty()) {
+                return new Page<>(); // 没有可访问的项目，返回空
+            }
+            wrapper.in("project_id", accessibleProjectIds);
+        }
+
+        // 排序
+        applySortCriteria(wrapper, sortCriteria);
+
+        return issueMapper.selectPage(pageObj, wrapper);
+    }
+
+    /**
+     * 应用排序条件
+     */
+    private void applySortCriteria(QueryWrapper<Issue> wrapper, List<Map<String, String>> sortCriteria) {
         if (sortCriteria != null && !sortCriteria.isEmpty()) {
             for (Map<String, String> sort : sortCriteria) {
                 String field = camelToSnake(sort.get("field"));
@@ -51,16 +105,6 @@ public class QueryExecutor {
         } else {
             wrapper.orderByDesc("updated_at");
         }
-
-        return issueMapper.selectPage(pageObj, wrapper);
-    }
-
-    /**
-     * 计数查询（不分页，只返回匹配数量）
-     */
-    public long count(List<Map<String, Object>> filters) {
-        QueryWrapper<Issue> wrapper = buildWrapper(filters);
-        return issueMapper.selectCount(wrapper);
     }
 
     /**

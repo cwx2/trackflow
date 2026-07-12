@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.project.service.ProjectService;
 import com.trackflow.query.dto.CreateQueryDTO;
 import com.trackflow.query.dto.ExecuteQueryDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
@@ -30,6 +31,7 @@ public class SavedQueryService {
     private final SavedQueryMapper queryMapper;
     private final QueryExecutor queryExecutor;
     private final ObjectMapper objectMapper;
+    private final ProjectService projectService;
 
     /**
      * 获取用户的查询面板（左侧面板数据）
@@ -54,6 +56,9 @@ public class SavedQueryService {
 
         List<SavedQuery> queries = queryMapper.selectList(wrapper);
 
+        // 获取用户可访问项目列表（用于计数过滤）
+        List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+
         // 分为 pinned 和普通
         List<Map<String, Object>> pinned = new ArrayList<>();
         List<Map<String, Object>> normal = new ArrayList<>();
@@ -66,8 +71,8 @@ public class SavedQueryService {
             item.put("pinned", q.getPinned());
             item.put("shared", q.getShared());
 
-            // 实时计数
-            long count = countForQuery(q);
+            // 实时计数（带项目成员过滤）
+            long count = countForQueryWithProjectFilter(q, accessibleProjectIds);
             item.put("count", count);
 
             if (Boolean.TRUE.equals(q.getPinned())) {
@@ -161,6 +166,50 @@ public class SavedQueryService {
     }
 
     /**
+     * 执行保存查询（带项目成员过滤）
+     * 查询结果自动限定在用户所属项目范围内
+     */
+    public Page<Issue> executeByIdWithAccessCheck(Long id, int page, int pageSize, Long userId) {
+        SavedQuery query = queryMapper.selectById(id);
+        if (query == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
+        }
+
+        List<Map<String, Object>> filters = parseFilters(query.getFilters());
+        List<Map<String, String>> sortCriteria = parseSortCriteria(query.getSortCriteria());
+
+        // 注入项目成员过滤条件
+        List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+        return queryExecutor.executeWithProjectFilter(filters, page, pageSize, sortCriteria, accessibleProjectIds);
+    }
+
+    /**
+     * 即时执行查询（带项目成员过滤）
+     */
+    public Page<Issue> executeAdhocWithAccessCheck(ExecuteQueryDTO dto, Long userId) {
+        int page = dto.getPage() != null ? dto.getPage() : 1;
+        int pageSize = dto.getPageSize() != null ? dto.getPageSize() : 20;
+
+        List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+        return queryExecutor.executeWithProjectFilter(dto.getFilters(), page, pageSize, dto.getSortCriteria(), accessibleProjectIds);
+    }
+
+    /**
+     * 批量获取查询计数（带项目成员过滤）
+     */
+    public Map<Long, Long> batchCountWithAccessCheck(List<Long> queryIds, Long userId) {
+        List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+        Map<Long, Long> result = new LinkedHashMap<>();
+        for (Long queryId : queryIds) {
+            SavedQuery query = queryMapper.selectById(queryId);
+            if (query != null) {
+                result.put(queryId, countForQueryWithProjectFilter(query, accessibleProjectIds));
+            }
+        }
+        return result;
+    }
+
+    /**
      * 批量获取查询计数
      */
     public Map<Long, Long> batchCount(List<Long> queryIds) {
@@ -211,6 +260,16 @@ public class SavedQueryService {
         try {
             List<Map<String, Object>> filters = parseFilters(query.getFilters());
             return queryExecutor.count(filters);
+        } catch (Exception e) {
+            log.warn("Failed to count for query {}: {}", query.getId(), e.getMessage());
+            return 0;
+        }
+    }
+
+    private long countForQueryWithProjectFilter(SavedQuery query, List<Long> accessibleProjectIds) {
+        try {
+            List<Map<String, Object>> filters = parseFilters(query.getFilters());
+            return queryExecutor.countWithProjectFilter(filters, accessibleProjectIds);
         } catch (Exception e) {
             log.warn("Failed to count for query {}: {}", query.getId(), e.getMessage());
             return 0;

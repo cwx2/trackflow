@@ -79,11 +79,12 @@
                 class="kanban-card"
                 :class="{
                   'kanban-card--dragging': draggingIssue?.id === issue.id,
-                  'kanban-card--transitioning': transitioningIssueIds.has(issue.id)
+                  'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
+                  'kanban-card--no-drag': !canChangeStatus
                 }"
                 role="button"
                 tabindex="0"
-                draggable="true"
+                :draggable="canChangeStatus"
                 @dragstart="onDragStart($event, issue)"
                 @dragend="onDragEnd"
                 @click="openIssue(issue)"
@@ -172,6 +173,7 @@ import { Message, Notification } from '@arco-design/web-vue'
 import { projectApi, issueApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
+import { usePermission } from '@/composables/usePermission'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -180,6 +182,9 @@ const selectedProject = computed({
   get: () => projectStore.selectedProjectId,
   set: (val) => projectStore.selectProject(val)
 })
+
+// 权限控制
+const { canChangeStatus, canEditIssue } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
@@ -242,6 +247,13 @@ function openIssue(issue: IssueVO) {
 
 /** 开始拖拽：获取可用目标状态 */
 async function onDragStart(event: DragEvent, issue: IssueVO) {
+  // 权限检查：没有变更状态权限则禁止拖拽
+  if (!canChangeStatus.value) {
+    event.preventDefault()
+    Message.warning('您没有变更工单状态的权限')
+    return
+  }
+
   draggingIssue.value = issue
 
   // 设置拖拽数据和效果
@@ -700,6 +712,14 @@ onUnmounted(() => {
 .kanban-card:focus-visible {
   outline: 2px solid rgb(var(--primary-6));
   outline-offset: 1px;
+}
+
+/* 无拖拽权限的卡片 */
+.kanban-card--no-drag {
+  cursor: pointer;
+}
+.kanban-card--no-drag:active {
+  cursor: pointer;
 }
 
 /* 正在被拖拽的卡片 */

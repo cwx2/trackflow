@@ -7,6 +7,7 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.vo.IssueVO;
+import com.trackflow.project.service.ProjectService;
 import com.trackflow.query.converter.SavedQueryConverter;
 import com.trackflow.query.dto.CreateQueryDTO;
 import com.trackflow.query.dto.ExecuteQueryDTO;
@@ -36,6 +37,7 @@ public class SavedQueryController {
     private final SavedQueryConverter savedQueryConverter;
     private final IssueConverter issueConverter;
     private final SysUserMapper sysUserMapper;
+    private final ProjectService projectService;
 
     /**
      * 获取查询面板（左侧面板数据 + 实时计数）
@@ -43,6 +45,9 @@ public class SavedQueryController {
     @GetMapping("/panel")
     public R<Map<String, Object>> getPanel(@RequestParam(required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
+        if (projectId != null) {
+            projectService.assertProjectMember(userId, projectId);
+        }
         return R.ok(savedQueryService.getPanel(userId, projectId));
     }
 
@@ -52,6 +57,9 @@ public class SavedQueryController {
     @PostMapping
     public R<SavedQueryVO> create(@Valid @RequestBody CreateQueryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
+        if (dto.getProjectId() != null) {
+            projectService.assertProjectMember(userId, dto.getProjectId());
+        }
         return R.ok(savedQueryConverter.toVO(savedQueryService.create(userId, dto)));
     }
 
@@ -76,13 +84,15 @@ public class SavedQueryController {
 
     /**
      * 执行保存查询（返回匹配的 Issue 列表）
+     * 查询结果会自动按用户所属项目过滤
      */
     @GetMapping("/{id}/results")
     public R<PageResult<IssueVO>> executeById(
             @PathVariable Long id,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
-        Page<Issue> result = savedQueryService.executeById(id, page, pageSize);
+        Long userId = SecurityUtils.getCurrentUserId();
+        Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(id, page, pageSize, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
         fillAssigneeNames(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
@@ -93,10 +103,12 @@ public class SavedQueryController {
 
     /**
      * 即时执行查询（不保存）
+     * 查询结果会自动按用户所属项目过滤
      */
     @PostMapping("/execute")
     public R<PageResult<IssueVO>> executeAdhoc(@RequestBody ExecuteQueryDTO dto) {
-        Page<Issue> result = savedQueryService.executeAdhoc(dto);
+        Long userId = SecurityUtils.getCurrentUserId();
+        Page<Issue> result = savedQueryService.executeAdhocWithAccessCheck(dto, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
         fillAssigneeNames(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
@@ -127,12 +139,13 @@ public class SavedQueryController {
     }
 
     /**
-     * 批量获取查询计数
+     * 批量获取查询计数（带项目成员过滤）
      */
     @PostMapping("/counts")
     public R<Map<Long, Long>> batchCount(@RequestBody Map<String, List<Long>> body) {
+        Long userId = SecurityUtils.getCurrentUserId();
         List<Long> queryIds = body.get("queryIds");
-        return R.ok(savedQueryService.batchCount(queryIds));
+        return R.ok(savedQueryService.batchCountWithAccessCheck(queryIds, userId));
     }
 
     /**

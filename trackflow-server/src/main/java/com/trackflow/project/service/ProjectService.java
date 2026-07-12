@@ -248,6 +248,65 @@ public class ProjectService {
         permissionService.invalidateCache(userId);
     }
 
+    // ========== 项目成员校验（数据隔离核心方法） ==========
+
+    /**
+     * 校验用户是否为项目成员。系统管理员不受限制。
+     * 如果不是成员且不是系统管理员，抛出 403 异常。
+     *
+     * @param userId    当前用户 ID
+     * @param projectId 目标项目 ID
+     */
+    public void assertProjectMember(Long userId, Long projectId) {
+        if (userId == null || projectId == null) {
+            throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
+        }
+        // 系统管理员跳过校验
+        if (permissionService.isSystemAdmin(userId)) {
+            return;
+        }
+        // 检查是否为项目成员
+        Long count = memberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .eq(ProjectMember::getUserId, userId)
+        );
+        if (count == 0) {
+            throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
+        }
+    }
+
+    /**
+     * 判断用户是否为项目成员（不抛异常版本）。系统管理员返回 true。
+     */
+    public boolean isProjectMember(Long userId, Long projectId) {
+        if (userId == null || projectId == null) {
+            return false;
+        }
+        if (permissionService.isSystemAdmin(userId)) {
+            return true;
+        }
+        Long count = memberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .eq(ProjectMember::getUserId, userId)
+        );
+        return count > 0;
+    }
+
+    /**
+     * 获取用户所属的所有项目 ID 列表。系统管理员返回 null（表示不限制）。
+     */
+    public List<Long> getAccessibleProjectIds(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        if (permissionService.isSystemAdmin(userId)) {
+            return null; // null 表示无限制
+        }
+        return memberMapper.selectProjectIdsByUserId(userId);
+    }
+
     /**
      * 递增 Issue 序号并返回新序号。
      * 使用 FOR UPDATE 锁防止并发冲突。

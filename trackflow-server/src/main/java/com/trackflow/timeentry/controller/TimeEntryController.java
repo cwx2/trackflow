@@ -2,6 +2,7 @@ package com.trackflow.timeentry.controller;
 
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.issue.service.IssueService;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
@@ -20,6 +21,7 @@ import java.util.List;
 public class TimeEntryController {
 
     private final TimeEntryService timeEntryService;
+    private final IssueService issueService;
 
     /**
      * 创建工时记录
@@ -93,11 +95,13 @@ public class TimeEntryController {
     }
 
     /**
-     * 查询某 Issue 的工时记录
+     * 查询某 Issue 的工时记录（校验项目成员权限）
      */
     @GetMapping("/issue/{issueId}")
     @PreAuthorize("isAuthenticated()")
     public R<List<TimeEntryVO>> listByIssue(@PathVariable Long issueId) {
+        // 校验当前用户是否有权访问该工单所属的项目
+        issueService.getByIdWithAccessCheck(issueId);
         return R.ok(timeEntryService.listByIssue(issueId));
     }
 

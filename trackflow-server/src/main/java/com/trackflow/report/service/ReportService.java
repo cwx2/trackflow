@@ -8,6 +8,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,12 +25,29 @@ public class ReportService {
     private final ReportDefinitionMapper reportMapper;
     private final IssueMapper issueMapper;
     private final ObjectMapper objectMapper;
+    private final ProjectService projectService;
 
-    public List<ReportDefinition> list(Long projectId) {
+    /**
+     * 报表列表（带项目成员过滤）
+     */
+    public List<ReportDefinition> list(Long projectId, Long userId) {
         LambdaQueryWrapper<ReportDefinition> wrapper = new LambdaQueryWrapper<>();
         if (projectId != null) {
             wrapper.and(w -> w.eq(ReportDefinition::getProjectId, projectId)
                     .or().isNull(ReportDefinition::getProjectId));
+        } else {
+            // 未指定项目时，只返回用户所属项目的报表 + 全局报表
+            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+            if (accessibleProjectIds != null) {
+                // 非系统管理员
+                if (accessibleProjectIds.isEmpty()) {
+                    wrapper.isNull(ReportDefinition::getProjectId);
+                } else {
+                    wrapper.and(w -> w.in(ReportDefinition::getProjectId, accessibleProjectIds)
+                            .or().isNull(ReportDefinition::getProjectId));
+                }
+            }
+            // 系统管理员不加限制
         }
         wrapper.orderByAsc(ReportDefinition::getName);
         return reportMapper.selectList(wrapper);
@@ -47,12 +65,40 @@ public class ReportService {
     }
 
     /**
+     * 删除报表（带权限校验）
+     */
+    @Transactional
+    public void deleteWithAccessCheck(Long id, Long userId) {
+        ReportDefinition report = reportMapper.selectById(id);
+        if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+        if (report.getProjectId() != null) {
+            projectService.assertProjectMember(userId, report.getProjectId());
+        }
+        reportMapper.deleteById(id);
+    }
+
+    /**
+     * 执行报表（带权限校验）
+     */
+    public Map<String, Object> executeWithAccessCheck(Long id, Long userId) {
+        ReportDefinition report = reportMapper.selectById(id);
+        if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+        if (report.getProjectId() != null) {
+            projectService.assertProjectMember(userId, report.getProjectId());
+        }
+        return executeInternal(report);
+    }
+
+    /**
      * 执行报表：根据报表配置生成数据
      */
     public Map<String, Object> execute(Long id) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+        return executeInternal(report);
+    }
 
+    private Map<String, Object> executeInternal(ReportDefinition report) {
         Map<String, Object> config = parseConfig(report.getConfig());
         String groupBy = (String) config.getOrDefault("groupBy", "status");
 
