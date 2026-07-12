@@ -482,7 +482,6 @@ async function changeMemberRole(userId: string, roleId: string) {
 }
 
 onMounted(() => {
-  authStore.loadGlobalPermissions()
   loadProjects()
 })
 </script>

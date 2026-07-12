@@ -102,13 +102,18 @@ const router = createRouter({
   routes
 })
 
-// 导航守卫：未认证跳转登录 + 标签管理
+// 导航守卫：未认证跳转登录 + 全局权限加载 + 标签管理
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'Login' })
     return
+  }
+
+  // 已认证用户：首次加载全局权限（仅触发一次，后续由 store 内部缓存）
+  if (authStore.isAuthenticated && authStore.globalPermissions.size === 0) {
+    authStore.loadGlobalPermissions()
   }
 
   // 标签管理：打开 Issue 详情时自动创建标签
