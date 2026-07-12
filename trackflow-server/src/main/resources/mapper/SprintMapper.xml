@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trackflow.sprint.mapper.SprintMapper">
+
+    <!-- 带工单统计的 Sprint 列表查询 -->
+    <select id="selectSprintsWithStats" resultType="map">
+        SELECT
+            s.id,
+            s.project_id,
+            s.name,
+            s.goal,
+            s.status,
+            s.start_date,
+            s.end_date,
+            s.created_at,
+            COALESCE(stats.total_issues, 0) AS total_issues,
+            COALESCE(stats.done_issues, 0) AS done_issues,
+            COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
+            COALESCE(stats.todo_issues, 0) AS todo_issues,
+            COALESCE(stats.overdue_issues, 0) AS overdue_issues
+        FROM sprint s
+        LEFT JOIN (
+            SELECT
+                i.sprint_id,
+                COUNT(*) AS total_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues
+            FROM issue i
+            LEFT JOIN issue_status ist ON ist.id = i.status_id
+            WHERE i.deleted_at IS NULL
+            GROUP BY i.sprint_id
+        ) stats ON stats.sprint_id = s.id
+        WHERE s.project_id = #{projectId}
+        ORDER BY
+            CASE s.status
+                WHEN 'active' THEN 1
+                WHEN 'planned' THEN 2
+                WHEN 'completed' THEN 3
+            END,
+            s.created_at DESC
+    </select>
+
+</mapper>

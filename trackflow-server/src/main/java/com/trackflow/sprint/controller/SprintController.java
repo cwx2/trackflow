@@ -22,7 +22,7 @@ public class SprintController {
     @GetMapping("/api/v1/projects/{projectId}/sprints")
     @PreAuthorize("@perm.check(#projectId, 'sprint:view')")
     public R<List<SprintVO>> list(@PathVariable Long projectId) {
-        return R.ok(sprintConverter.toVOList(sprintService.listByProject(projectId)));
+        return R.ok(sprintService.listByProjectWithStats(projectId));
     }
 
     @PostMapping("/api/v1/projects/{projectId}/sprints")

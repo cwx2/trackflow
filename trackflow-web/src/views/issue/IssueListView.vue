@@ -820,8 +820,8 @@ onMounted(async () => {
   loadProjects()
   await loadStatuses()
 
-  // Handle dashboard filter params (statusId, label, etc.)
-  if (route.query.statusId || route.query.overdue || route.query.dueSoon) {
+  // Handle dashboard filter params (statusId, label, sprint, etc.)
+  if (route.query.statusId || route.query.overdue || route.query.dueSoon || route.query.sprint) {
     applyDashboardFilter()
   } else {
     refreshList()
@@ -856,6 +856,16 @@ function applyDashboardFilter() {
 
   if (route.query.dueSoon) {
     filters.dueSoon = 'true'
+  }
+
+  if (route.query.sprint) {
+    filters.sprintId = String(route.query.sprint)
+    chips.push({
+      fieldKey: 'sprint',
+      operator: 'equals',
+      values: [String(route.query.sprint)],
+      valueLabels: ['Sprint']
+    })
   }
 
   // Set display label

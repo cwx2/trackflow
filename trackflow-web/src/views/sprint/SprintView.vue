@@ -30,14 +30,14 @@
             <span class="sprint-status-badge active">进行中</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
             <span class="sprint-remaining" v-if="getRemainingDays(sprint) !== null">
-              <template v-if="getRemainingDays(sprint)! > 0">
+              <template v-if="(getRemainingDays(sprint) ?? 0) > 0">
                 <span class="remaining-icon">⏳</span> 还剩 {{ getRemainingDays(sprint) }} 天
               </template>
               <template v-else-if="getRemainingDays(sprint) === 0">
                 <span class="remaining-icon warning">⚠️</span> 今天截止
               </template>
               <template v-else>
-                <span class="remaining-icon overdue">🚨</span> 已超期 {{ Math.abs(getRemainingDays(sprint)!) }} 天
+                <span class="remaining-icon overdue">🚨</span> 已超期 {{ Math.abs(getRemainingDays(sprint) ?? 0) }} 天
               </template>
             </span>
           </div>
@@ -94,7 +94,9 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
-          <a-button size="mini" @click="completeSprint(sprint.id)">完成迭代</a-button>
+          <a-popconfirm content="确定完成此迭代？未完成的工单将留在待办中。" @ok="completeSprint(sprint.id)">
+            <a-button size="mini">完成迭代</a-button>
+          </a-popconfirm>
         </div>
       </div>
 
@@ -314,7 +316,7 @@ function getCompletionPercent(sprint: SprintVO): number {
 
 function viewSprintIssues(sprint: SprintVO) {
   // 跳转到 Issue 列表，按 Sprint 筛选
-  router.push({ path: '/', query: { sprint: sprint.id } })
+  router.push({ path: '/', query: { sprint: sprint.id, label: sprint.name } })
 }
 
 // ===== API 调用 =====

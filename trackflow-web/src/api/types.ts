@@ -160,6 +160,16 @@ export interface SprintVO {
   startDate?: string
   endDate?: string
   createdAt: string
+  /** 工单总数 */
+  totalIssues: number
+  /** 已完成工单数 */
+  doneIssues: number
+  /** 进行中工单数 */
+  inProgressIssues: number
+  /** 待办工单数 */
+  todoIssues: number
+  /** 逾期工单数 */
+  overdueIssues: number
 }
 
 // ========== 用户/角色/组织 ==========
