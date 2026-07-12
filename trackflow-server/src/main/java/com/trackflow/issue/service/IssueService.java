@@ -306,7 +306,8 @@ public class IssueService {
         }
         if (dto.getAssigneeId() != null) {
             recordActivity(id, currentUserId, "assigned", "assignee",
-                    String.valueOf(issue.getAssigneeId()), String.valueOf(dto.getAssigneeId()));
+                    issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
+                    String.valueOf(dto.getAssigneeId()));
             issue.setAssigneeId(dto.getAssigneeId());
         }
         if (dto.getSprintId() != null) issue.setSprintId(dto.getSprintId());
@@ -377,7 +378,8 @@ public class IssueService {
         Issue issue = getById(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
         recordActivity(id, currentUserId, "assigned", "assignee",
-                String.valueOf(issue.getAssigneeId()), String.valueOf(assigneeId));
+                issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
+                String.valueOf(assigneeId));
         issue.setAssigneeId(assigneeId);
         issueMapper.updateById(issue);
     }
@@ -538,6 +540,7 @@ public class IssueService {
 
     /**
      * 获取活动列表 —— 单次 JOIN 查询（消除 N+1）
+     * assignee 字段的 old/new value 在 SQL 层自动解析为用户显示名
      */
     public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
         List<Map<String, Object>> rows = issueMapper.selectActivitiesWithUser(issueId);

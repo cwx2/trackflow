@@ -177,7 +177,7 @@ public class DashboardService {
             return List.of();
         }
 
-        // 查询这些 issue 的活动记录
+        // 查询这些 issue 的活动记录（SQL 层已自动解析 assignee 字段为用户名）
         List<Map<String, Object>> rows = issueMapper.selectDashboardActivities(relatedIssueIds, limit);
 
         return rows.stream().map(row -> {
