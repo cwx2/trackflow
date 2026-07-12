@@ -2,6 +2,34 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.issue.mapper.IssueMapper">
 
+    <!-- ========== 可复用 SQL 片段 ========== -->
+
+    <!-- assignee 字段 old/new value 解析为用户显示名（SELECT 列） -->
+    <sql id="assignee_resolve_columns">
+        CASE
+            WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
+            THEN COALESCE(old_user.display_name, a.old_value)
+            ELSE a.old_value
+        END AS old_value,
+        CASE
+            WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
+            THEN COALESCE(new_user.display_name, a.new_value)
+            ELSE a.new_value
+        END AS new_value
+    </sql>
+
+    <!-- assignee 字段解析所需的 LEFT JOIN -->
+    <sql id="assignee_resolve_joins">
+        LEFT JOIN sys_user old_user ON old_user.id = CASE
+            WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
+            THEN CAST(a.old_value AS BIGINT) ELSE NULL END
+        LEFT JOIN sys_user new_user ON new_user.id = CASE
+            WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
+            THEN CAST(a.new_value AS BIGINT) ELSE NULL END
+    </sql>
+
+    <!-- ========== 查询 ========== -->
+
     <!-- Issue 详情：一次 JOIN 查出所有关联名称 -->
     <select id="selectDetailById" resultType="map">
         SELECT
@@ -38,60 +66,32 @@
         ORDER BY c.created_at ASC
     </select>
 
-    <!-- 活动列表：JOIN 用户表一次查出，assignee 字段的 old/new value 自动解析为用户显示名 -->
+    <!-- 活动列表：JOIN 用户表，assignee 字段自动解析为用户显示名 -->
     <select id="selectActivitiesWithUser" resultType="map">
         SELECT
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
-            CASE
-                WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
-                THEN COALESCE(old_user.display_name, a.old_value)
-                ELSE a.old_value
-            END AS old_value,
-            CASE
-                WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
-                THEN COALESCE(new_user.display_name, a.new_value)
-                ELSE a.new_value
-            END AS new_value,
+            <include refid="assignee_resolve_columns"/>,
             a.detail, a.created_at,
             u.display_name AS user_name
         FROM issue_activity a
         LEFT JOIN sys_user u ON u.id = a.user_id
-        LEFT JOIN sys_user old_user ON old_user.id = CASE
-            WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
-            THEN CAST(a.old_value AS BIGINT) ELSE NULL END
-        LEFT JOIN sys_user new_user ON new_user.id = CASE
-            WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
-            THEN CAST(a.new_value AS BIGINT) ELSE NULL END
+        <include refid="assignee_resolve_joins"/>
         WHERE a.issue_id = #{issueId}
         ORDER BY a.created_at ASC
     </select>
 
-    <!-- Dashboard 活动流：指定 issue 列表的最近活动，JOIN 用户表和 Issue 表 -->
+    <!-- Dashboard 活动流：指定 issue 列表的最近活动 -->
     <select id="selectDashboardActivities" resultType="map">
         SELECT
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
-            CASE
-                WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
-                THEN COALESCE(old_user.display_name, a.old_value)
-                ELSE a.old_value
-            END AS old_value,
-            CASE
-                WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
-                THEN COALESCE(new_user.display_name, a.new_value)
-                ELSE a.new_value
-            END AS new_value,
+            <include refid="assignee_resolve_columns"/>,
             a.created_at,
             u.display_name AS user_name,
             i.issue_key, i.title AS issue_title
         FROM issue_activity a
         LEFT JOIN sys_user u ON u.id = a.user_id
         LEFT JOIN issue i ON i.id = a.issue_id
-        LEFT JOIN sys_user old_user ON old_user.id = CASE
-            WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
-            THEN CAST(a.old_value AS BIGINT) ELSE NULL END
-        LEFT JOIN sys_user new_user ON new_user.id = CASE
-            WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
-            THEN CAST(a.new_value AS BIGINT) ELSE NULL END
+        <include refid="assignee_resolve_joins"/>
         WHERE a.issue_id IN
         <foreach collection="issueIds" item="id" open="(" separator="," close=")">
             #{id}
