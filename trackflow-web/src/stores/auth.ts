@@ -21,12 +21,22 @@ const STORAGE_KEYS = {
   user: 'tf_user'
 } as const
 
+/**
+ * Token 主动刷新缓冲时间（秒）
+ * 在 token 过期前这么多秒时主动刷新
+ */
+const TOKEN_REFRESH_BUFFER = 60
+
 export const useAuthStore = defineStore('auth', () => {
   // 从 localStorage 恢复状态
   const accessToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.accessToken))
   const refreshToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.refreshToken))
   const user = ref<any>(restoreUser())
   const globalPermissions = ref<Set<string>>(new Set())
+  const permissionsLoaded = ref(false)
+
+  // Token 刷新定时器
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
   const isAuthenticated = computed(() => !!accessToken.value)
 
@@ -34,8 +44,11 @@ export const useAuthStore = defineStore('auth', () => {
   watch(accessToken, (val) => {
     if (val) {
       localStorage.setItem(STORAGE_KEYS.accessToken, val)
+      // Token 更新后重新设置刷新定时器
+      scheduleTokenRefresh(val)
     } else {
       localStorage.removeItem(STORAGE_KEYS.accessToken)
+      clearRefreshTimer()
     }
   })
 
@@ -54,6 +67,51 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.removeItem(STORAGE_KEYS.user)
     }
   }, { deep: true })
+
+  // 初始化时，如果有 token 则启动定时刷新
+  if (accessToken.value) {
+    scheduleTokenRefresh(accessToken.value)
+  }
+
+  /**
+   * 计划在 token 即将过期前主动刷新
+   */
+  function scheduleTokenRefresh(token: string) {
+    clearRefreshTimer()
+    try {
+      const parts = token.split('.')
+      if (parts.length !== 3) return
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+      const exp = payload.exp
+      if (!exp) return
+
+      const now = Math.floor(Date.now() / 1000)
+      // 在过期前 TOKEN_REFRESH_BUFFER 秒刷新
+      const refreshAt = (exp - TOKEN_REFRESH_BUFFER) - now
+      if (refreshAt <= 0) {
+        // Token 已经即将过期或已过期，立即刷新
+        refresh()
+        return
+      }
+
+      refreshTimer = setTimeout(async () => {
+        const success = await refresh()
+        if (!success) {
+          // 刷新失败，但不强制登出——让请求拦截器处理
+          console.warn('[auth] Proactive token refresh failed')
+        }
+      }, refreshAt * 1000)
+    } catch {
+      // 解析失败，不设置定时器
+    }
+  }
+
+  function clearRefreshTimer() {
+    if (refreshTimer !== null) {
+      clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
+  }
 
   /**
    * 发起 Keycloak PKCE 登录
@@ -120,6 +178,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 刷新 token
+   * 使用 refresh_token 向 Keycloak 获取新的 access_token
    */
   async function refresh(): Promise<boolean> {
     if (!refreshToken.value) return false
@@ -154,12 +213,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 登出 — 清除本地存储并跳转 Keycloak 登出
+   * @param reason 登出原因提示信息（可选）
    */
-  function logout() {
+  function logout(reason?: string) {
+    clearRefreshTimer()
     clearStorage()
     accessToken.value = null
     refreshToken.value = null
     user.value = null
+    globalPermissions.value = new Set()
+    permissionsLoaded.value = false
+
+    if (reason) {
+      // 将提示信息存入 sessionStorage，登录页显示
+      sessionStorage.setItem('tf_logout_reason', reason)
+    }
 
     const params = new URLSearchParams({
       client_id: KEYCLOAK_CONFIG.clientId,
@@ -180,16 +248,31 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 加载当前用户的全局权限
+   * 支持并发调用去重：多次调用只发起一次请求
    */
-  async function loadGlobalPermissions() {
+  let _permissionLoadPromise: Promise<void> | null = null
+
+  async function loadGlobalPermissions(): Promise<void> {
     if (!isAuthenticated.value) return
-    try {
-      const res = await authApi.getMyGlobalPermissions()
-      globalPermissions.value = new Set(res.data || [])
-    } catch (e) {
-      console.warn('[auth] Failed to load global permissions', e)
-      globalPermissions.value = new Set()
-    }
+    if (permissionsLoaded.value) return
+
+    // 去重：如果已有正在进行的请求，复用同一个 Promise
+    if (_permissionLoadPromise) return _permissionLoadPromise
+
+    _permissionLoadPromise = (async () => {
+      try {
+        const res = await authApi.getMyGlobalPermissions()
+        globalPermissions.value = new Set(res.data || [])
+      } catch (e) {
+        console.warn('[auth] Failed to load global permissions', e)
+        globalPermissions.value = new Set()
+      } finally {
+        permissionsLoaded.value = true
+        _permissionLoadPromise = null
+      }
+    })()
+
+    return _permissionLoadPromise
   }
 
   /**
@@ -205,6 +288,7 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken,
     user,
     globalPermissions,
+    permissionsLoaded,
     isAuthenticated,
     login,
     handleCallback,

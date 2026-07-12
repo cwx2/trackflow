@@ -114,7 +114,7 @@ const router = createRouter({
 })
 
 // 导航守卫：未认证跳转登录 + 全局权限加载 + 管理路由权限 + 标签管理
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
@@ -122,13 +122,13 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
-  // 已认证用户：首次加载全局权限（仅触发一次，后续由 store 内部缓存）
-  if (authStore.isAuthenticated && authStore.globalPermissions.size === 0) {
-    authStore.loadGlobalPermissions()
+  // 已认证用户：确保全局权限已加载
+  if (authStore.isAuthenticated && !authStore.permissionsLoaded) {
+    await authStore.loadGlobalPermissions()
   }
 
-  // 管理路由权限检查（权限已加载时才拦截，未加载时放行让页面自行处理）
-  if (to.meta.requiresAdmin && authStore.globalPermissions.size > 0) {
+  // 管理路由权限检查
+  if (to.meta.requiresAdmin) {
     if (!authStore.hasGlobalPermission('system:admin')) {
       next({ name: 'Issues' })
       return

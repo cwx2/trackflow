@@ -49,8 +49,8 @@ const loading = ref(true)
 const isAdmin = computed(() => authStore.hasGlobalPermission('system:admin'))
 
 onMounted(async () => {
-  // 等待权限加载完毕
-  if (authStore.globalPermissions.size === 0 && authStore.isAuthenticated) {
+  // 等待权限加载完毕（正常情况下路由守卫已 await，这里做兜底）
+  if (!authStore.permissionsLoaded && authStore.isAuthenticated) {
     await authStore.loadGlobalPermissions()
   }
   loading.value = false
