@@ -318,6 +318,42 @@ const sidebarFields = computed<SidebarField[]>(() => {
   ]
 })
 
+// 字段英文标识 → 中文显示名映射
+const fieldLabelMap: Record<string, string> = {
+  status: '状态',
+  status_id: '状态',
+  assignee: '负责人',
+  assignee_id: '负责人',
+  priority: '优先级',
+  title: '标题',
+  description: '描述',
+  issueType: '类型',
+  issue_type: '类型',
+  sprint: '迭代',
+  sprintId: '迭代',
+  sprint_id: '迭代',
+  dueDate: '截止日期',
+  due_date: '截止日期',
+  estimatedHours: '预估工时',
+  estimated_hours: '预估工时',
+  spentHours: '已花时间',
+  spent_hours: '已花时间',
+  spent_time: '花费时间',
+  attachment: '附件',
+  parent: '父工单',
+  parentId: '父工单',
+  parent_id: '父工单',
+  tags: '标签',
+  reporter: '报告人',
+  reporterId: '报告人',
+  reporter_id: '报告人',
+}
+
+function localizeFieldName(name?: string | null): string | undefined {
+  if (!name) return undefined
+  return fieldLabelMap[name] || name
+}
+
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
 
@@ -330,7 +366,7 @@ const activityItems = computed<ActivityItem[]>(() => {
     }
     for (const a of mockActivities) {
       if (a.action === 'commented') continue
-      items.push({ id: 'a_' + a.id, type: 'change', user: a.userName, action: a.action, field: a.fieldName || undefined, from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
+      items.push({ id: 'a_' + a.id, type: 'change', user: a.userName, action: a.action, field: localizeFieldName(a.fieldName) || undefined, from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
     }
   } else {
     for (const c of comments.value) {
@@ -339,7 +375,7 @@ const activityItems = computed<ActivityItem[]>(() => {
     }
     for (const a of activities.value) {
       if (a.action === 'commented') continue
-      items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: a.fieldName || undefined, from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
+      items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: localizeFieldName(a.fieldName), from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
     }
   }
   return items

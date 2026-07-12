@@ -52,6 +52,12 @@
             <template v-else-if="item.action === 'time_removed'">
               <span class="time-badge">⏱</span> 删除了工时: <span class="val-old">{{ item.from }}</span>
             </template>
+            <template v-else-if="item.action === 'attachment_added'">
+              添加了附件: <span class="val-new">{{ item.to }}</span>
+            </template>
+            <template v-else-if="item.action === 'attachment_removed'">
+              删除了附件: <span class="val-old">{{ item.from }}</span>
+            </template>
             <template v-else-if="item.field">
               {{ item.field }}:
               <span class="val-old">{{ item.from || '空' }}</span>

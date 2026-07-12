@@ -306,7 +306,10 @@ function formatAction(activity: DashboardActivityVO): string {
     'commented': '评论了',
     'attach': '添加了附件',
     'attached': '添加了附件',
+    'attachment_added': '添加了附件',
+    'attachment_removed': '删除了附件',
     'time_logged': '记录了工时',
+    'time_removed': '删除了工时',
     'deleted': '删除了',
     'reopened': '重新打开了',
     'resolved': '解决了'
@@ -319,13 +322,21 @@ function formatAction(activity: DashboardActivityVO): string {
       'priority': '优先级',
       'assignee_id': '负责人',
       'assignee': '负责人',
-      'sprint_id': 'Sprint',
-      'sprint': 'Sprint',
+      'sprint_id': '迭代',
+      'sprint': '迭代',
       'title': '标题',
       'description': '描述',
       'due_date': '截止日期',
       'issue_type': '类型',
-      'estimated_hours': '预估工时'
+      'estimated_hours': '预估工时',
+      'spent_time': '花费时间',
+      'spent_hours': '已花时间',
+      'attachment': '附件',
+      'parent_id': '父工单',
+      'parent': '父工单',
+      'tags': '标签',
+      'reporter': '报告人',
+      'reporter_id': '报告人',
     }
     text = `更新了 ${fieldMap[activity.fieldName] || activity.fieldName}`
   }
