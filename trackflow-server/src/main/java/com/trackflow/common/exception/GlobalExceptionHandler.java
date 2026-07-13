@@ -10,6 +10,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -49,7 +50,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<R<Void>> handleAccessDeniedException(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(R.fail(ErrorCode.ACCESS_DENIED.getCode(), "权限不足"));
+                .body(R.fail(ErrorCode.ACCESS_DENIED.getCode(), "权限不足，您没有执行此操作的权限"));
     }
 
     /**
@@ -59,6 +60,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<R<Void>> handleAuthenticationException(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(R.fail(ErrorCode.AUTH_MISSING.getCode(), "未认证"));
+    }
+
+    /**
+     * 资源不存在（404）
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<R<Void>> handleNoResourceFoundException(NoResourceFoundException ex,
+                                                                   HttpServletRequest request) {
+        log.warn("Resource not found: {} {}", request.getMethod(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(R.fail(ErrorCode.RESOURCE_NOT_FOUND.getCode(), "请求的资源不存在"));
     }
 
     /**
