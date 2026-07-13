@@ -45,6 +45,7 @@ public class IssueService {
     private final MinioService minioService;
     private final IssueConverter issueConverter;
     private final IssueTagService tagService;
+    private final com.trackflow.auth.service.PermissionService permissionService;
 
     /**
      * 创建 Issue
@@ -372,6 +373,10 @@ public class IssueService {
             issue.setAssigneeId(dto.getAssigneeId());
         }
         if (dto.getSprintId() != null) {
+            // Sprint 修改需要 sprint:edit 权限（仅 project_admin 具有）
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "修改迭代需要 sprint:edit 权限");
+            }
             String oldSprintName = null;
             if (issue.getSprintId() != null) {
                 var oldSprint = sprintMapper.selectById(issue.getSprintId());

@@ -137,7 +137,7 @@ const useMock = ref(true) // 默认用 mock，API 可用时自动切换
 const issue = ref<IssueDetailVO | null>(null)
 
 // 权限控制（必须在 issue ref 声明之后）
-const { canEditIssue, canChangeStatus, canComment, canAssignIssue } = usePermission(
+const { canEditIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
   () => issue.value?.projectId
 )
 const transitions = ref<IssueStatusVO[]>([])
@@ -290,6 +290,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
   const canEdit = canEditIssue.value
   const canTransition = canChangeStatus.value
   const canAssign = canAssignIssue.value
+  const canSprint = canEditSprint.value
 
   // 状态选项
   const statusOptions = [
@@ -321,7 +322,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ]},
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
-    { key: 'sprint', label: '迭代', value: sprint?.name || 'Unscheduled', editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canEdit, options: sprintOptions },
+    { key: 'sprint', label: '迭代', value: sprint?.name || 'Unscheduled', editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
     { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit },
     { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit },
     { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },

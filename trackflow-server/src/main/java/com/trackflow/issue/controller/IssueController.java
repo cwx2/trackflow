@@ -132,6 +132,7 @@ public class IssueController {
     }
 
     @PutMapping("/{id}/assign")
+    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:assign')")
     public R<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignIssueDTO dto) {
         issueService.getByIdWithAccessCheck(id);
         issueService.assign(id, dto.getAssigneeId());
@@ -147,6 +148,7 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/comments")
+    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:comment')")
     public R<IssueCommentVO> addComment(@PathVariable Long id, @Valid @RequestBody AddCommentDTO dto) {
         issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
