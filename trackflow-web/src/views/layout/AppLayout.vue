@@ -32,6 +32,10 @@
           <span class="nav-icon">⏱</span>
           <span class="nav-label">时间表</span>
         </router-link>
+        <router-link v-if="canManageWorkflow" to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
+          <span class="nav-icon">🔄</span>
+          <span class="nav-label">工作流</span>
+        </router-link>
         <router-link v-if="isAdmin" to="/admin" class="nav-item" :class="{ active: isAdminRoute }">
           <span class="nav-icon">⚙️</span>
           <span class="nav-label">管理</span>
@@ -118,6 +122,17 @@ const isAdmin = computed(() => {
   const roles: string[] = authStore.user?.roles || []
   return roles.includes('tf_admin')
 })
+
+const canManageWorkflow = computed(() => {
+  // system:admin 自动拥有所有权限
+  if (isAdmin.value) return true
+  // 后端在 my-global-permissions 中返回 nav:workflow 表示用户在任意项目中有 project:manage_workflow
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:workflow')
+  }
+  return false
+})
+
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 
 const themeIcon = computed(() => {

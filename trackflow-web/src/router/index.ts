@@ -59,6 +59,12 @@ const routes = [
         component: () => import('@/views/sprint/SprintView.vue')
       },
       {
+        path: 'workflow',
+        name: 'Workflow',
+        component: () => import('@/views/admin/WorkflowEditor.vue'),
+        meta: { requiresWorkflow: true }
+      },
+      {
         path: 'timesheets',
         name: 'Timesheets',
         component: () => import('@/views/timesheet/TimesheetView.vue')
@@ -135,6 +141,15 @@ router.beforeEach(async (to, _from, next) => {
   // 管理路由权限检查
   if (to.meta.requiresAdmin) {
     if (!authStore.hasGlobalPermission('system:admin')) {
+      next({ name: 'Forbidden' })
+      return
+    }
+  }
+
+  // 工作流路由权限检查：system:admin 或在任意项目中有 project:manage_workflow
+  if (to.meta.requiresWorkflow) {
+    const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:workflow')
+    if (!canAccess) {
       next({ name: 'Forbidden' })
       return
     }

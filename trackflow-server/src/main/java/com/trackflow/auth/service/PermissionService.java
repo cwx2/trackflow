@@ -177,4 +177,15 @@ public class PermissionService {
         List<String> permissions = rolePermissionMapper.selectPermissionsByUserAndProject(userId, projectId);
         return new HashSet<>(permissions);
     }
+
+    /**
+     * 检查用户是否在任何项目中拥有指定权限
+     * 用于导航级别的权限判断（如：用户在任何项目中是否可以管理工作流）
+     */
+    public boolean hasPermissionInAnyProject(Long userId, String permission) {
+        if (userId == null) return false;
+        // system:admin 拥有所有权限
+        if (isSystemAdmin(userId)) return true;
+        return rolePermissionMapper.hasPermissionInAnyProject(userId, permission);
+    }
 }

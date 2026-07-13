@@ -51,6 +51,14 @@
     <a-spin :size="28" tip="加载中..." />
   </div>
 
+  <!-- 加载失败状态 -->
+  <div v-else-if="loadError" class="error-page">
+    <div class="error-icon">⚠️</div>
+    <h3 class="error-title">无法加载工单</h3>
+    <p class="error-desc">{{ loadError }}</p>
+    <a-button type="primary" size="small" @click="loadAll">重试</a-button>
+  </div>
+
   <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="issue?.projectId" />
 
   <!-- Add Time Entry Dialog -->
@@ -108,15 +116,7 @@ import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-
-// ============ 尝试真实 API，失败时 fallback 到 mock ============
-import {
-  mockProjects, mockTags, mockSprints, mockIssues, mockUsers,
-  getIssue as mockGetIssue, getUser, getStatus, getIssueTags, getIssueLinks,
-  getIssueComments, getIssueActivities, getIssueAttachments as mockGetAttachments,
-  addComment as mockAddComment, addIssueTag, removeIssueTag, createTag as mockCreateTag,
-  updateIssueField, transitStatus as mockTransitStatus, getAvailableTransitions
-} from '@/mock/data'
+import { localizeFieldName } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const sidebarVisible = ref(true)
@@ -131,7 +131,7 @@ const timeForm = ref({
   description: ''
 })
 const loading = ref(false)
-const useMock = ref(true) // 默认用 mock，API 可用时自动切换
+const loadError = ref<string | null>(null)
 
 // ============ 数据 ============
 const issue = ref<IssueDetailVO | null>(null)
@@ -149,70 +149,45 @@ const projectTagList = ref<IssueTagVO[]>([])
 const members = ref<ProjectMemberVO[]>([])
 const sprints = ref<SprintVO[]>([])
 
-const issueId = computed(() => route.params.id as string || '1389')
+const issueId = computed(() => route.params.id as string || '')
 
 // ============ 加载数据 ============
 onMounted(() => loadAll())
 watch(() => route.params.id, () => loadAll())
 
 async function loadAll() {
+  const id = issueId.value
+  if (!id) {
+    loadError.value = '缺少工单 ID'
+    return
+  }
+
   loading.value = true
+  loadError.value = null
+
   try {
-    // 尝试真实 API：判断 ID 格式决定调用方式
-    const id = issueId.value
+    // 判断 ID 格式：包含连字符且非纯数字 → issue key，否则 → numeric ID
     const isKey = id.includes('-') && !/^\d+$/.test(id)
     const res = isKey ? await issueApi.getByKey(id) : await issueApi.getById(id)
     if (res.code === 0 && res.data) {
-      useMock.value = false
       issue.value = res.data
       await loadRelatedData()
-      loading.value = false
-      return
+    } else {
+      loadError.value = res.message || '加载工单失败'
     }
-  } catch (e) {
-    // API 不可用，fallback 到 mock
-    console.warn('[IssueDetail] API failed, fallback to mock', e)
+  } catch (e: any) {
+    const status = e.response?.status
+    if (status === 404) {
+      loadError.value = `工单 ${id} 不存在`
+    } else if (status === 403) {
+      loadError.value = '无权访问此工单'
+    } else {
+      loadError.value = e.response?.data?.message || '网络错误，请稍后重试'
+    }
+    console.warn('[IssueDetail] Failed to load issue:', e)
+  } finally {
+    loading.value = false
   }
-
-  // Mock fallback
-  useMock.value = true
-  loadFromMock()
-  loading.value = false
-}
-
-function loadFromMock() {
-  const id = issueId.value
-  const mockIssue = mockGetIssue(id) || mockIssues.find(i => i.issueKey === id) || mockIssues[0]
-  if (!mockIssue) return
-
-  const status = getStatus(mockIssue.statusId)
-  issue.value = {
-    id: mockIssue.id,
-    projectId: mockIssue.projectId,
-    projectName: mockProjects.find(p => p.id === mockIssue.projectId)?.name,
-    issueKey: mockIssue.issueKey,
-    title: mockIssue.title,
-    description: mockIssue.description,
-    issueType: mockIssue.issueType,
-    statusId: mockIssue.statusId,
-    status: status ? { id: status.id, name: status.name, code: status.code, color: status.color, category: status.category, isDefault: status.isDefault, isClosed: status.isClosed, sortOrder: 0 } : undefined,
-    priority: mockIssue.priority,
-    assigneeId: mockIssue.assigneeId,
-    assigneeName: getUser(mockIssue.assigneeId)?.displayName,
-    reporterId: mockIssue.reporterId,
-    reporterName: getUser(mockIssue.reporterId)?.displayName,
-    sprintId: mockIssue.sprintId,
-    sprintName: mockSprints.find(s => s.id === mockIssue.sprintId)?.name,
-    parentId: mockIssue.parentId,
-    dueDate: mockIssue.dueDate,
-    estimatedHours: mockIssue.estimatedHours,
-    spentHours: mockIssue.spentHours,
-    tags: getIssueTags(mockIssue.id),
-    createdAt: mockIssue.createdAt,
-    updatedAt: mockIssue.updatedAt,
-  } as any
-
-  projectTagList.value = mockTags.filter(t => t.projectId === mockIssue.projectId)
 }
 
 async function loadRelatedData() {
@@ -245,24 +220,14 @@ async function loadRelatedData() {
 const projectName = computed(() => issue.value?.projectName || '')
 const reporterName = computed(() => issue.value?.reporterName || '未知')
 
-const issueTags = computed(() => {
-  if (useMock.value) return getIssueTags(issue.value?.id || '')
-  return issue.value?.tags || []
-})
-
+const issueTags = computed(() => issue.value?.tags || [])
 const projectTags = computed(() => projectTagList.value)
 
 const issueLinks = computed(() => {
-  if (useMock.value) {
-    return getIssueLinks(issue.value?.id || '').map(l => ({ ...l, typeLabel: l.linkType }))
-  }
   return links.value.map(l => ({ ...l, typeLabel: l.linkType, statusName: l.issueStatus?.name || '', statusColor: l.issueStatus?.color || '' }))
 })
 
 const issueAttachments = computed(() => {
-  if (useMock.value) {
-    return mockGetAttachments(issue.value?.id || '').map(a => ({ id: a.id, fileName: a.fileName, sizeText: formatSize(a.fileSize) }))
-  }
   return attachments.value.map(a => ({ id: a.id, fileName: a.fileName, sizeText: formatSize(a.fileSize) }))
 })
 
@@ -270,26 +235,19 @@ const currentStatus = computed<StatusInfo>(() => {
   if (issue.value?.status) {
     return { id: issue.value.status.id, name: issue.value.status.name, color: issue.value.status.color }
   }
-  const s = getStatus(issue.value?.statusId || '1')
-  return { id: s?.id || '1', name: s?.name || '未知', color: s?.color || '#666' }
+  return { id: '', name: '未知', color: '#666' }
 })
 
 const availableTransitions = computed<StatusInfo[]>(() => {
-  if (!useMock.value) {
-    return transitions.value.map(s => ({ id: s.id, name: s.name, color: s.color }))
-  }
-  const allowed = getAvailableTransitions(issue.value?.statusId || '1', issue.value?.issueType || 'Task')
-  return allowed.map(s => ({ id: s.id, name: s.name, color: s.color }))
+  return transitions.value.map(s => ({ id: s.id, name: s.name, color: s.color }))
 })
 
 const sidebarFields = computed<SidebarField[]>(() => {
   const i = issue.value
   if (!i) return []
-  const sprint = useMock.value
-    ? mockSprints.find(s => s.id === i.sprintId)
-    : sprints.value.find(s => s.id === i.sprintId)
+  const sprint = sprints.value.find(s => s.id === i.sprintId)
 
-  // 权限判断：是否可以编辑此工单
+  // 权限判断
   const canEdit = canEditIssue.value
   const canTransition = canChangeStatus.value
   const canAssign = canAssignIssue.value
@@ -302,14 +260,12 @@ const sidebarFields = computed<SidebarField[]>(() => {
   ]
 
   // 人员选项
-  const userOptions = useMock.value
-    ? mockUsers.map(u => ({ value: u.id, label: u.displayName }))
-    : members.value.map(m => ({ value: m.userId, label: m.displayName }))
+  const userOptions = members.value.map(m => ({ value: m.userId, label: m.displayName }))
 
   // Sprint 选项
   const sprintOptions = [
     { value: '', label: 'Unscheduled' },
-    ...(useMock.value ? mockSprints : sprints.value).filter((s: any) => s.projectId === i.projectId).map((s: any) => ({ value: s.id, label: s.name }))
+    ...sprints.value.filter(s => s.projectId === i.projectId).map(s => ({ value: s.id, label: s.name }))
   ]
 
   return [
@@ -335,31 +291,15 @@ const sidebarFields = computed<SidebarField[]>(() => {
   ]
 })
 
-import { localizeFieldName } from '@/utils/fieldLabels'
-
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
-
-  if (useMock.value) {
-    const mockComments = getIssueComments(issue.value?.id || '')
-    const mockActivities = getIssueActivities(issue.value?.id || '')
-    for (const c of mockComments) {
-      const isHtml = c.content.trim().startsWith('<')
-      items.push({ id: 'c_' + c.id, type: 'comment', user: c.userName, html: isHtml ? c.content : renderMarkdown(c.content), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime() })
-    }
-    for (const a of mockActivities) {
-      if (a.action === 'commented') continue
-      items.push({ id: 'a_' + a.id, type: 'change', user: a.userName, action: a.action, field: localizeFieldName(a.fieldName) || undefined, from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
-    }
-  } else {
-    for (const c of comments.value) {
-      const isHtml = c.content.trim().startsWith('<')
-      items.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', html: isHtml ? c.content : renderMarkdown(c.content), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime() })
-    }
-    for (const a of activities.value) {
-      if (a.action === 'commented') continue
-      items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: localizeFieldName(a.fieldName), from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
-    }
+  for (const c of comments.value) {
+    const isHtml = c.content.trim().startsWith('<')
+    items.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', html: isHtml ? c.content : renderMarkdown(c.content), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime() })
+  }
+  for (const a of activities.value) {
+    if (a.action === 'commented') continue
+    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: localizeFieldName(a.fieldName), from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
   }
   return items
 })
@@ -371,27 +311,22 @@ function copyIssue() {
 }
 
 async function onUpdateTitle(val: string) {
-  if (useMock.value) { updateIssueField(issue.value!.id, 'title', val); loadFromMock(); return }
   try { await issueApi.update(issue.value!.id, { title: val }); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '更新失败') }
 }
 
 async function onUpdateDesc(val: string) {
-  if (useMock.value) { updateIssueField(issue.value!.id, 'description', val); loadFromMock(); return }
   try { await issueApi.update(issue.value!.id, { description: val }); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '更新失败') }
 }
 
 async function onRemoveTag(tagId: string) {
-  if (useMock.value) { removeIssueTag(issue.value!.id, tagId); loadFromMock(); return }
   try { await issueApi.removeTag(issue.value!.id, tagId); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
 }
 
 async function onAddTag(tag: { id: string }) {
-  if (useMock.value) { addIssueTag(issue.value!.id, tag.id); loadFromMock(); return }
   try { await issueApi.addTag(issue.value!.id, tag.id); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
 }
 
 async function onCreateTag(name: string) {
-  if (useMock.value) { const t = mockCreateTag(issue.value!.projectId, name); addIssueTag(issue.value!.id, t.id); loadFromMock(); return }
   try {
     const res = await tagApi.createProjectTag(issue.value!.projectId, { name })
     if (res.data) await issueApi.addTag(issue.value!.id, res.data.id)
@@ -400,12 +335,10 @@ async function onCreateTag(name: string) {
 }
 
 async function onAddComment(content: string) {
-  if (useMock.value) { mockAddComment(issue.value!.id, '2', content); loadFromMock(); return }
   try { await issueApi.addComment(issue.value!.id, content); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '评论失败') }
 }
 
 async function onTransition(target: StatusInfo) {
-  if (useMock.value) { mockTransitStatus(issue.value!.id, target.id); loadFromMock(); Message.success(`状态已变更为 ${target.name}`); return }
   try { await issueApi.transitStatus(issue.value!.id, target.id); await loadAll(); Message.success(`状态已变更为 ${target.name}`) } catch (e: any) { Message.error(e.response?.data?.message || '变更失败') }
 }
 
@@ -441,7 +374,7 @@ async function submitTimeEntry() {
     })
     Message.success('工时已记录')
     showTimeDialog.value = false
-    await loadAll() // Refresh to update spentHours
+    await loadAll()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '记录失败')
   } finally {
@@ -474,7 +407,6 @@ async function onEditField(key: string, newValue: string) {
 
   const val = prop === 'estimatedHours' ? (newValue ? Number(newValue) : null) : (newValue || null)
 
-  if (useMock.value) { updateIssueField(issue.value!.id, prop, val); loadFromMock(); Message.success('已更新'); return }
   try {
     if (key === 'assignee' && newValue) { await issueApi.assign(issue.value!.id, newValue) }
     else { await issueApi.update(issue.value!.id, { [prop]: val }) }
@@ -533,5 +465,33 @@ function priorityDot(p: string) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.error-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.error-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  margin-bottom: 8px;
+}
+
+.error-desc {
+  font-size: 13px;
+  color: var(--color-text-3);
+  margin-bottom: 16px;
 }
 </style>
