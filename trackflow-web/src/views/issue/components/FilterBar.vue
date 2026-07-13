@@ -504,7 +504,7 @@ async function loadValueOptions(fieldKey: string) {
         const projectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
         const pid = projectFilter?.values[0] || props.projectId
         if (pid) {
-          const res = await sprintApi.listByProject(pid)
+          const res = await sprintApi.listByProject(pid, { _silent403: true })
           const sprints = res.data || []
           valueOptions.value = sprints.map((s: SprintVO) => ({
             id: s.id,
@@ -515,7 +515,7 @@ async function loadValueOptions(fieldKey: string) {
           const allSprints: ValueOption[] = []
           for (const p of props.projectList.slice(0, 5)) {
             try {
-              const res = await sprintApi.listByProject(p.id)
+              const res = await sprintApi.listByProject(p.id, { _silent403: true })
               const sprints = res.data || []
               sprints.forEach((s: SprintVO) => {
                 allSprints.push({ id: s.id, label: `${p.key} / ${s.name}` })

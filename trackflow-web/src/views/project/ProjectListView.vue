@@ -392,7 +392,7 @@ function loadMore() {
 }
 
 function goToProject(project: any) {
-  router.push({ path: '/', query: { project: project.id } })
+  router.push({ path: `/projects/${project.id}` })
 }
 
 function editProject(project: any) {

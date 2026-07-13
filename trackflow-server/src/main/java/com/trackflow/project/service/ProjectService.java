@@ -6,6 +6,7 @@ import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.AddMemberDTO;
 import com.trackflow.project.dto.CreateProjectDTO;
 import com.trackflow.project.dto.UpdateProjectDTO;
@@ -13,12 +14,16 @@ import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.system.entity.SysRole;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 
 import java.time.LocalDateTime;
@@ -38,6 +43,8 @@ public class ProjectService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper memberMapper;
     private final SysUserMapper userMapper;
+    private final SysRoleMapper roleMapper;
+    private final ProjectConverter projectConverter;
     private final PermissionService permissionService;
     private final StringRedisTemplate redisTemplate;
 
@@ -116,6 +123,49 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
         }
         return project;
+    }
+
+    /**
+     * 获取项目详情（含当前用户角色和成员统计）
+     */
+    public ProjectDetailVO getProjectDetail(Long projectId, Long currentUserId) {
+        Project project = getById(projectId);
+
+        // 使用 Converter 映射基础字段
+        ProjectDetailVO vo = projectConverter.toDetailVO(project);
+
+        // 查询成员总数
+        Long memberCount = memberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
+        );
+        vo.setMemberCount(memberCount.intValue());
+
+        // 查询当前用户在项目中的角色（当前模型：一个用户在一个项目中只有唯一角色）
+        if (currentUserId != null) {
+            if (permissionService.isSystemAdmin(currentUserId)) {
+                vo.setMyRoleName("系统管理员");
+                vo.setMyRoleCode("system_admin");
+            } else {
+                List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(currentUserId, projectId);
+                if (!roleIds.isEmpty()) {
+                    SysRole role = roleMapper.selectById(roleIds.get(0));
+                    if (role != null) {
+                        vo.setMyRoleName(role.getName());
+                        vo.setMyRoleCode(role.getCode());
+                    }
+                }
+            }
+        }
+
+        // 查询负责人名称
+        if (project.getLeadId() != null) {
+            SysUser lead = userMapper.selectById(project.getLeadId());
+            if (lead != null) {
+                vo.setLeadName(lead.getDisplayName());
+            }
+        }
+
+        return vo;
     }
 
     /**

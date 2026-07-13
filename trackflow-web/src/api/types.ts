@@ -77,6 +77,17 @@ export interface ProjectVO {
   updatedAt: string
 }
 
+export interface ProjectDetailVO extends ProjectVO {
+  /** 当前登录用户在该项目中的角色名称 */
+  myRoleName?: string
+  /** 当前登录用户在该项目中的角色代码 */
+  myRoleCode?: string
+  /** 项目成员总数 */
+  memberCount?: number
+  /** 项目负责人显示名称 */
+  leadName?: string
+}
+
 export interface ProjectMemberVO {
   id: string
   projectId: string

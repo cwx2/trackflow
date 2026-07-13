@@ -634,7 +634,7 @@ async function openSprintEdit(issue: IssueVO) {
   if (!sprintOptionsCache[issue.projectId]) {
     sprintOptionsLoading[issue.id] = true
     try {
-      const res = await sprintApi.listByProject(issue.projectId)
+      const res = await sprintApi.listByProject(issue.projectId, { _silent403: true })
       sprintOptionsCache[issue.projectId] = res.data || []
     } catch {
       sprintOptionsCache[issue.projectId] = []
@@ -772,7 +772,7 @@ async function preloadSprintNames() {
   const toLoad = projectIds.filter(pid => !sprintOptionsCache[pid])
   await Promise.all(toLoad.map(async (pid) => {
     try {
-      const res = await sprintApi.listByProject(pid)
+      const res = await sprintApi.listByProject(pid, { _silent403: true })
       sprintOptionsCache[pid] = res.data || []
     } catch {
       sprintOptionsCache[pid] = []

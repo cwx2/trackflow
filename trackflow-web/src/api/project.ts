@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, ProjectVO, ProjectMemberVO } from './types'
+import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -17,6 +17,11 @@ export const projectApi = {
   /** 项目详情 */
   getById(id: string) {
     return request.get<any, R<ProjectVO>>(`/projects/${id}`)
+  },
+
+  /** 项目详情（含当前用户角色和成员统计） */
+  getDetail(id: string) {
+    return request.get<any, R<ProjectDetailVO>>(`/projects/${id}/detail`)
   },
 
   /** 创建项目 */

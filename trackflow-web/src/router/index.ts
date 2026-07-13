@@ -44,6 +44,11 @@ const routes = [
         component: () => import('@/views/project/ProjectListView.vue')
       },
       {
+        path: 'projects/:id',
+        name: 'ProjectDetail',
+        component: () => import('@/views/project/ProjectDetailView.vue')
+      },
+      {
         path: 'boards',
         name: 'Boards',
         component: () => import('@/views/board/KanbanBoardView.vue')

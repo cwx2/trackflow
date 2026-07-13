@@ -13,6 +13,7 @@ import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.*;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectVO;
 import jakarta.validation.Valid;
@@ -52,6 +53,13 @@ public class ProjectController {
     @PreAuthorize("@perm.check(#id, 'project:view')")
     public R<ProjectVO> getById(@PathVariable Long id) {
         return R.ok(projectConverter.toVO(projectService.getById(id)));
+    }
+
+    @GetMapping("/{id}/detail")
+    @PreAuthorize("@perm.check(#id, 'project:view')")
+    public R<ProjectDetailVO> getDetail(@PathVariable Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(projectService.getProjectDetail(id, userId));
     }
 
     @PutMapping("/{id}")
