@@ -1,6 +1,7 @@
 package com.trackflow.auth.controller;
 
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.auth.service.UserSyncService;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +28,15 @@ public class AuthController {
         if (jwt == null) {
             return R.fail(40100, "未认证");
         }
+        String givenName = jwt.getClaimAsString("given_name");
+        String familyName = jwt.getClaimAsString("family_name");
+        String nameClaim = jwt.getClaimAsString("name");
+        String username = jwt.getClaimAsString("preferred_username");
+
         Map<String, Object> userInfo = new HashMap<>();
         userInfo.put("keycloakId", jwt.getSubject());
-        userInfo.put("username", jwt.getClaimAsString("preferred_username"));
-        userInfo.put("displayName", jwt.getClaimAsString("name"));
+        userInfo.put("username", username);
+        userInfo.put("displayName", UserSyncService.buildDisplayName(givenName, familyName, nameClaim, username));
         userInfo.put("email", jwt.getClaimAsString("email"));
         return R.ok(userInfo);
     }
