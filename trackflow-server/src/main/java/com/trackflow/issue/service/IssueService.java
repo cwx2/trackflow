@@ -210,16 +210,30 @@ public class IssueService {
 
     /**
      * Issue 列表（支持正向+否定筛选，支持逗号分隔多值）
+     * 强制数据隔离：指定 projectId 时校验成员关系，未指定时限定为用户所属项目。
      */
     public Page<Issue> list(Page<Issue> page, Long projectId, Long statusId, String priority,
                             Long assigneeId, Long reporterId, Long sprintId, String issueType,
                             String keyword,
                             String statusIdNot, String priorityNot, String assigneeIdNot,
                             String sprintIdNot, String issueTypeNot) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
         QueryWrapper<Issue> wrapper = new QueryWrapper<>();
         wrapper.isNull("deleted_at");
 
-        if (projectId != null) wrapper.eq("project_id", projectId);
+        // 数据隔离：与 listByQuery 保持一致
+        if (projectId != null) {
+            projectService.assertProjectMember(currentUserId, projectId);
+            wrapper.eq("project_id", projectId);
+        } else {
+            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
+            if (accessibleProjectIds != null) {
+                if (accessibleProjectIds.isEmpty()) {
+                    return new Page<>();
+                }
+                wrapper.in("project_id", accessibleProjectIds);
+            }
+        }
         if (statusId != null) wrapper.eq("status_id", statusId);
         if (priority != null) {
             // Support comma-separated values (any_of)
