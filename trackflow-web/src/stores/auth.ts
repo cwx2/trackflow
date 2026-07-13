@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { authApi } from '@/api'
 import type { AuthUser } from '@/api/types'
+import { decodeBase64Url, buildDisplayName } from '@/utils/jwt'
 
 /**
  * Keycloak OIDC 配置
@@ -422,48 +423,6 @@ function generateRandomString(length: number): string {
     result += chars[array[i] % chars.length]
   }
   return result
-}
-
-/**
- * 解码 Base64url 编码的字符串，正确处理 UTF-8 多字节字符（如中文）
- * atob() 只支持 Latin-1，直接用于包含 UTF-8 的 JWT payload 会产生乱码
- */
-function decodeBase64Url(base64url: string): string {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  const binaryStr = atob(base64)
-  const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0))
-  return new TextDecoder('utf-8').decode(bytes)
-}
-
-/**
- * 判断字符串是否包含 CJK（中日韩）字符
- */
-function containsCjk(text: string): boolean {
-  return /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(text)
-}
-
-/**
- * 从 JWT 中的 given_name / family_name 构建正确格式的显示名称
- * CJK 姓名：姓+名（无空格）；西方姓名：名+空格+姓
- * 与后端 UserSyncService.buildDisplayName 逻辑保持一致
- */
-function buildDisplayName(payload: Record<string, any>): string {
-  const givenName = payload.given_name as string | undefined
-  const familyName = payload.family_name as string | undefined
-
-  if (givenName && familyName) {
-    if (containsCjk(givenName) || containsCjk(familyName)) {
-      // CJK 姓名：姓 + 名（无空格）
-      return familyName + givenName
-    } else {
-      // 西方姓名：名 + 空格 + 姓
-      return givenName + ' ' + familyName
-    }
-  }
-  if (givenName) return givenName
-  if (familyName) return familyName
-  // 回退到 name claim 或 username
-  return payload.name || payload.preferred_username || ''
 }
 
 /**

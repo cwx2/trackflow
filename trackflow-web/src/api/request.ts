@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { decodeBase64Url } from '@/utils/jwt'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -28,16 +29,6 @@ function onTokenRefreshed(newToken: string) {
 
 function onRefreshFailed() {
   refreshSubscribers = []
-}
-
-/**
- * 解码 Base64url 编码的字符串，正确处理 UTF-8 多字节字符
- */
-function decodeBase64Url(base64url: string): string {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  const binaryStr = atob(base64)
-  const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0))
-  return new TextDecoder('utf-8').decode(bytes)
 }
 
 /**
