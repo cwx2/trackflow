@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.service.MinioService;
@@ -45,7 +46,7 @@ public class IssueService {
     private final MinioService minioService;
     private final IssueConverter issueConverter;
     private final IssueTagService tagService;
-    private final com.trackflow.auth.service.PermissionService permissionService;
+    private final PermissionService permissionService;
 
     /**
      * 创建 Issue
@@ -304,6 +305,23 @@ public class IssueService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
         return issue;
+    }
+
+    /**
+     * 仅获取 Issue 所属的 projectId（轻量查询，供 @PreAuthorize SpEL 使用）
+     * 只查 project_id 单列，避免在 SpEL 中全量加载 Issue 对象
+     */
+    public Long getProjectId(Long issueId) {
+        Issue issue = issueMapper.selectOne(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getProjectId)
+                        .eq(Issue::getId, issueId)
+                        .isNull(Issue::getDeletedAt)
+        );
+        if (issue == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+        }
+        return issue.getProjectId();
     }
 
     /**

@@ -88,14 +88,14 @@ public class IssueController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:edit')")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:edit')")
     public R<IssueDetailVO> update(@PathVariable Long id, @Valid @RequestBody UpdateIssueDTO dto) {
         issueService.update(id, dto);
         return R.ok(issueService.getDetail(id));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:delete')")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:delete')")
     public R<Void> delete(@PathVariable Long id) {
         issueService.delete(id);
         return R.ok();
@@ -124,7 +124,7 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/transitions/undo")
-    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:edit')")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:edit')")
     public R<Void> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 撤销操作：绕过工作流校验，但仍需验证用户有该项目的 issue:edit 权限
         issueService.transitStatus(id, dto.getStatusId(), "撤销状态变更");
@@ -132,9 +132,8 @@ public class IssueController {
     }
 
     @PutMapping("/{id}/assign")
-    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:assign')")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:assign')")
     public R<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignIssueDTO dto) {
-        issueService.getByIdWithAccessCheck(id);
         issueService.assign(id, dto.getAssigneeId());
         return R.ok();
     }
@@ -148,9 +147,8 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/comments")
-    @PreAuthorize("@perm.check(@issueService.getById(#id).projectId, 'issue:comment')")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
     public R<IssueCommentVO> addComment(@PathVariable Long id, @Valid @RequestBody AddCommentDTO dto) {
-        issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
     }
 
