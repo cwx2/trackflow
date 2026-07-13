@@ -78,7 +78,7 @@ const routes = [
       {
         path: 'admin/workflow',
         name: 'WorkflowEditor',
-        component: () => import('@/views/admin/WorkflowEditor.vue'),
+        redirect: '/workflow',
         meta: { requiresAdmin: true }
       },
       {

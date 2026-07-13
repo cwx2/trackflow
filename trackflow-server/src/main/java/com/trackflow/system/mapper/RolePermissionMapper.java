@@ -38,11 +38,13 @@ public interface RolePermissionMapper extends BaseMapper<RolePermission> {
      * 用于导航级别的权限判断（如：是否在任意项目中拥有 project:manage_workflow）
      */
     @Select("""
-            SELECT COUNT(1) > 0
-            FROM role_permission rp
-            INNER JOIN project_member pm ON pm.role_id = rp.role_id
-            WHERE pm.user_id = #{userId} AND rp.permission = #{permission}
-            LIMIT 1
+            SELECT EXISTS(
+                SELECT 1
+                FROM role_permission rp
+                INNER JOIN project_member pm ON pm.role_id = rp.role_id
+                WHERE pm.user_id = #{userId} AND rp.permission = #{permission}
+                LIMIT 1
+            )
             """)
     boolean hasPermissionInAnyProject(@Param("userId") Long userId, @Param("permission") String permission);
 }
