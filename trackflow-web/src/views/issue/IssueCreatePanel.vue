@@ -47,7 +47,13 @@
         <div class="props-panel">
           <div class="prop-row">
             <span class="prop-label">项目</span>
-            <a-select v-model="form.projectId" placeholder="选择项目" allow-search size="small" @change="onProjectChange">
+            <a-select v-model="form.projectId" placeholder="选择项目" allow-search size="small" :loading="projectLoadState === 'loading'" @change="onProjectChange">
+              <template v-if="projectLoadState === 'error'" #empty>
+                <div class="select-error-state">
+                  <span>加载失败</span>
+                  <a-link @click.stop="loadProjects">重试</a-link>
+                </div>
+              </template>
               <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.key }} - {{ p.name }}</a-option>
             </a-select>
           </div>
@@ -119,6 +125,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDown, IconAttachment } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi } from '@/api'
+import { useProjectList } from '@/composables/useProjectList'
 import RichEditor from './components/RichEditor.vue'
 
 const props = defineProps<{
@@ -133,7 +140,7 @@ const emit = defineEmits<{
 
 const submitting = ref(false)
 
-const projects = ref<any[]>([])
+const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
 const sprints = ref<any[]>([])
 
@@ -162,13 +169,6 @@ watch(() => props.projectId, (val) => {
 watch(() => props.visible, (val) => {
   if (val) loadProjects()
 })
-
-async function loadProjects() {
-  try {
-    const res = await projectApi.list({ pageSize: 100 })
-    projects.value = res.data?.list || []
-  } catch { projects.value = [] }
-}
 
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
@@ -244,6 +244,8 @@ onMounted(() => {
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
 .priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+.select-error-state { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; font-size: 12px; color: var(--color-text-3); }
 .priority-dot.critical { background: #ef4444; }
 .priority-dot.high { background: #f59e0b; }
 .priority-dot.normal { background: #6366f1; }

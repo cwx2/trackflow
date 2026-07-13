@@ -9,8 +9,15 @@
           style="width: 200px"
           size="small"
           allow-search
+          :loading="projectLoadState === 'loading'"
           @change="loadSprints"
         >
+          <template v-if="projectLoadState === 'error'" #empty>
+            <div class="select-error-state">
+              <span>加载失败</span>
+              <a-link @click.stop="loadProjects">重试</a-link>
+            </div>
+          </template>
           <a-option v-for="p in projects" :key="p.id" :value="p.id">
             {{ p.key }} - {{ p.name }}
           </a-option>
@@ -240,6 +247,21 @@
       <p class="empty-desc">当前项目尚未创建迭代，或您没有查看权限。请联系项目管理员。</p>
     </div>
 
+    <!-- 项目加载失败 -->
+    <div v-else-if="!selectedProject && projectLoadState === 'error'" class="empty-state">
+      <div class="empty-icon">⚠️</div>
+      <h3 class="empty-title">项目列表加载失败</h3>
+      <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
+      <a-button type="primary" size="small" @click="loadProjects">重试</a-button>
+    </div>
+
+    <!-- 无可访问项目 -->
+    <div v-else-if="!selectedProject && projectLoadState === 'success' && projects.length === 0" class="empty-state">
+      <div class="empty-icon">📁</div>
+      <h3 class="empty-title">暂无可访问的项目</h3>
+      <p class="empty-desc">您尚未加入任何项目，请联系管理员添加为项目成员</p>
+    </div>
+
     <!-- 正常空状态 -->
     <div v-else class="empty-state">
       <div class="empty-icon">🏃</div>
@@ -278,9 +300,10 @@
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { projectApi, sprintApi } from '@/api'
+import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
+import { useProjectList } from '@/composables/useProjectList'
 import type { SprintVO } from '@/api/types'
 
 const router = useRouter()
@@ -293,7 +316,7 @@ const selectedProject = computed({
 
 // 权限控制（必须在 selectedProject 定义之后）
 const { canCreateSprint, canEditSprint, canDeleteSprint } = usePermission(() => selectedProject.value)
-const projects = ref<any[]>([])
+const { projects, projectLoadState, loadProjects } = useProjectList()
 const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
 const creating = ref(false)
@@ -358,15 +381,6 @@ function viewSprintIssues(sprint: SprintVO) {
 }
 
 // ===== API 调用 =====
-
-async function loadProjects() {
-  try {
-    const res = await projectApi.list({ pageSize: 100 })
-    projects.value = res.data?.list || []
-  } catch {
-    projects.value = []
-  }
-}
 
 async function loadSprints() {
   if (!selectedProject.value) { sprints.value = []; loadingState.value = 'idle'; return }
@@ -445,11 +459,7 @@ async function handleCreate() {
 onMounted(async () => {
   await loadProjects()
 
-  // 自动选择：仅一个项目时自动选中
-  const projectIds = projects.value.map((p: any) => p.id)
-  projectStore.autoSelectIfNeeded(projectIds)
-
-  // 如果已有选中的项目（从 Store 恢复），自动加载迭代
+  // 如果已有选中的项目（从 Store 恢复或自动选择），自动加载迭代
   if (selectedProject.value) {
     loadSprints()
   }
@@ -683,5 +693,15 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-text-3);
   margin-bottom: 16px;
+}
+
+.select-error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 </style>

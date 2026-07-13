@@ -10,8 +10,15 @@
           style="width: 200px"
           size="small"
           allow-search
+          :loading="projectLoadState === 'loading'"
           @change="loadBoard"
         >
+          <template v-if="projectLoadState === 'error'" #empty>
+            <div class="select-error-state">
+              <span>加载失败</span>
+              <a-link @click.stop="loadProjects">重试</a-link>
+            </div>
+          </template>
           <a-option v-for="p in projects" :key="p.id" :value="p.id">
             {{ p.key }} - {{ p.name }}
           </a-option>
@@ -166,6 +173,17 @@
       </div>
 
       <!-- 空状态：未选择项目 -->
+      <div v-else-if="!selectedProject && projectLoadState === 'error'" class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3 class="empty-title">项目列表加载失败</h3>
+        <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
+        <a-button type="primary" size="small" @click="loadProjects">重试</a-button>
+      </div>
+      <div v-else-if="!selectedProject && projectLoadState === 'success' && projects.length === 0" class="empty-state">
+        <div class="empty-icon">📁</div>
+        <h3 class="empty-title">暂无可访问的项目</h3>
+        <p class="empty-desc">您尚未加入任何项目，请联系管理员添加为项目成员</p>
+      </div>
       <div v-else-if="!selectedProject" class="empty-state">
         <div class="empty-icon">📊</div>
         <h3 class="empty-title">请选择项目</h3>
@@ -187,10 +205,11 @@
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
-import { projectApi, issueApi, sprintApi, boardApi } from '@/api'
-import type { IssueVO, IssueStatusVO, ProjectVO, SprintVO, BoardColumnVO } from '@/api/types'
+import { issueApi, sprintApi, boardApi } from '@/api'
+import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
+import { useProjectList } from '@/composables/useProjectList'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import { IconSettings } from '@arco-design/web-vue/es/icon'
 
@@ -207,7 +226,7 @@ const { canChangeStatus } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
-const projects = ref<ProjectVO[]>([])
+const { projects, projectLoadState, loadProjects } = useProjectList()
 const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const issues = ref<IssueVO[]>([])
@@ -461,16 +480,6 @@ function handleKeydown(e: KeyboardEvent) {
 
 // ===== 数据加载 =====
 
-async function loadProjects() {
-  try {
-    const res = await projectApi.list({ pageSize: 100 })
-    projects.value = res.data?.list || []
-  } catch {
-    projects.value = []
-    Message.error('加载项目列表失败')
-  }
-}
-
 async function loadStatuses() {
   try {
     const res = await issueApi.listStatuses()
@@ -536,11 +545,7 @@ onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
   document.addEventListener('keydown', handleKeydown)
 
-  // 自动选择：仅一个项目时自动选中
-  const projectIds = projects.value.map(p => p.id)
-  projectStore.autoSelectIfNeeded(projectIds)
-
-  // 如果已有选中的项目（从 Store 恢复），自动加载看板
+  // 如果已有选中的项目（从 Store 恢复或自动选择），自动加载看板
   if (selectedProject.value) {
     loadBoard()
   }
@@ -903,6 +908,16 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   text-align: center;
+}
+
+.select-error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 
 .empty-icon {

@@ -1,0 +1,51 @@
+import { ref } from 'vue'
+import { projectApi } from '@/api'
+import type { ProjectVO } from '@/api/types'
+import { useProjectStore } from '@/stores/project'
+
+/**
+ * 项目列表加载 composable
+ *
+ * 统一管理项目列表加载的状态（加载中 / 成功 / 失败），
+ * 提供自动选择逻辑和重试能力。
+ *
+ * 使用场景：看板、迭代、创建工单等需要项目选择器的页面。
+ */
+export type ProjectLoadState = 'idle' | 'loading' | 'success' | 'error'
+
+export function useProjectList() {
+  const projects = ref<ProjectVO[]>([])
+  const projectLoadState = ref<ProjectLoadState>('idle')
+  const projectStore = useProjectStore()
+
+  /**
+   * 加载当前用户可见的项目列表。
+   * 成功后自动调用 projectStore.autoSelectIfNeeded() 尝试自动选中。
+   *
+   * @returns 加载后的项目列表
+   */
+  async function loadProjects(): Promise<ProjectVO[]> {
+    projectLoadState.value = 'loading'
+    try {
+      const res = await projectApi.list({ pageSize: 100 })
+      projects.value = res.data?.list || []
+      projectLoadState.value = 'success'
+
+      // 自动选择逻辑
+      const projectIds = projects.value.map(p => p.id)
+      projectStore.autoSelectIfNeeded(projectIds)
+
+      return projects.value
+    } catch {
+      projects.value = []
+      projectLoadState.value = 'error'
+      return []
+    }
+  }
+
+  return {
+    projects,
+    projectLoadState,
+    loadProjects
+  }
+}
