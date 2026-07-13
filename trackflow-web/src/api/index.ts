@@ -16,6 +16,7 @@ export { customFieldApi } from './customField'
 export { dashboardApi } from './dashboard'
 export { timeEntryApi } from './timeEntry'
 export { workflowApi } from './workflow'
+export { boardApi } from './board'
 
 // 类型导出
 export type * from './types'

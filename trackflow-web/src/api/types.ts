@@ -298,3 +298,22 @@ export interface UpdateWorkflowDTO {
   roleId: number
   transitions: { from: number; to: number; allowed: boolean }[]
 }
+
+// ========== 看板 ==========
+export interface BoardColumnVO {
+  statusId: string
+  statusName: string
+  statusCode: string
+  statusColor: string
+  statusCategory: string
+  visible: boolean
+  sortOrder: number
+  collapsed: boolean
+}
+
+export interface BoardColumnItem {
+  statusId: number
+  visible: boolean
+  sortOrder: number
+  collapsed?: boolean
+}

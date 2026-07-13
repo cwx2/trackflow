@@ -39,14 +39,23 @@
           @search="loadBoard"
           @press-enter="loadBoard"
         />
+        <a-tooltip content="看板列设置">
+          <a-button
+            size="small"
+            :disabled="!selectedProject"
+            @click="showSettings = true"
+          >
+            <template #icon><icon-settings /></template>
+          </a-button>
+        </a-tooltip>
       </div>
     </div>
 
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
       <!-- 看板主体 -->
-      <div class="board-container" v-if="selectedProject && statuses.length > 0">
-        <template v-for="status in statuses" :key="status.id">
+      <div class="board-container" v-if="selectedProject && visibleStatuses.length > 0">
+        <template v-for="status in visibleStatuses" :key="status.id">
           <!-- 有工单的列 或 手动展开的空列：正常展示 -->
           <div
             v-if="getColumnIssues(status.id).length > 0 || expandedEmptyColumns.has(status.id)"
@@ -163,6 +172,14 @@
         <p class="empty-desc">从上方下拉框选择项目查看看板视图</p>
       </div>
     </a-spin>
+
+    <!-- 看板列设置 Drawer -->
+    <BoardSettingsDrawer
+      v-model:visible="showSettings"
+      :project-id="selectedProject || ''"
+      :columns="allColumnConfigs"
+      @saved="onSettingsSaved"
+    />
   </div>
 </template>
 
@@ -170,10 +187,12 @@
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
-import { projectApi, issueApi, sprintApi } from '@/api'
-import type { IssueVO, IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
+import { projectApi, issueApi, sprintApi, boardApi } from '@/api'
+import type { IssueVO, IssueStatusVO, ProjectVO, SprintVO, BoardColumnVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
+import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
+import { IconSettings } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -193,6 +212,30 @@ const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const issues = ref<IssueVO[]>([])
 
+// 看板列配置
+const allColumnConfigs = ref<BoardColumnVO[]>([])
+const showSettings = ref(false)
+
+// 根据列配置过滤出可见的状态（供模板遍历）
+const visibleStatuses = computed(() => {
+  if (allColumnConfigs.value.length === 0) {
+    // 未加载配置时使用原始状态
+    return statuses.value
+  }
+  // 过滤出 visible=true 的列，映射回 IssueStatusVO 格式
+  return allColumnConfigs.value
+    .filter(c => c.visible)
+    .map(c => ({
+      id: c.statusId,
+      name: c.statusName,
+      code: c.statusCode,
+      color: c.statusColor,
+      category: c.statusCategory,
+      isDefault: false,
+      isClosed: c.statusCategory === 'done' || c.statusCategory === 'cancelled',
+      sortOrder: c.sortOrder
+    } as IssueStatusVO))
+})
 // 被手动展开的空列集合
 const expandedEmptyColumns = ref<Set<string>>(new Set())
 
@@ -438,6 +481,24 @@ async function loadStatuses() {
   }
 }
 
+async function loadBoardColumns() {
+  if (!selectedProject.value) {
+    allColumnConfigs.value = []
+    return
+  }
+  try {
+    const res = await boardApi.getColumns(selectedProject.value)
+    allColumnConfigs.value = res.data || []
+  } catch {
+    // 如果加载列配置失败，回退到显示所有状态
+    allColumnConfigs.value = []
+  }
+}
+
+function onSettingsSaved() {
+  loadBoardColumns()
+}
+
 async function loadSprints() {
   if (!selectedProject.value) { sprints.value = []; return }
   try {
@@ -455,7 +516,7 @@ async function loadBoard() {
   expandedEmptyColumns.value.clear()
   loading.value = true
   try {
-    await loadSprints()
+    await Promise.all([loadSprints(), loadBoardColumns()])
     const res = await issueApi.list({
       projectId: selectedProject.value,
       sprintId: selectedSprint.value || undefined,
@@ -544,9 +605,9 @@ onUnmounted(() => {
 
 /* ===== 正常列 ===== */
 .board-column {
-  min-width: 280px;
-  max-width: 340px;
-  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 320px;
+  flex: 1 1 220px;
   display: flex;
   flex-direction: column;
   background: var(--color-fill-1);
