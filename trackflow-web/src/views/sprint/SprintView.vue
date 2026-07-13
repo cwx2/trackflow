@@ -224,7 +224,9 @@
       <div class="empty-icon">🏃</div>
       <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '请选择项目' }}</h3>
       <p class="empty-desc">
-        {{ selectedProject ? '点击"+ 新建迭代"创建第一个 Sprint' : '从上方下拉框选择项目查看迭代' }}
+        <template v-if="!selectedProject">从上方下拉框选择项目查看迭代</template>
+        <template v-else-if="canCreateSprint">点击下方按钮创建第一个 Sprint</template>
+        <template v-else>当前项目尚未创建迭代，请联系项目管理员</template>
       </p>
       <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="showCreate = true">
         + 新建迭代

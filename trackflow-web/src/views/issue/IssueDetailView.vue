@@ -158,8 +158,10 @@ watch(() => route.params.id, () => loadAll())
 async function loadAll() {
   loading.value = true
   try {
-    // 尝试真实 API
-    const res = await issueApi.getById(issueId.value)
+    // 尝试真实 API：判断 ID 格式决定调用方式
+    const id = issueId.value
+    const isKey = id.includes('-') && !/^\d+$/.test(id)
+    const res = isKey ? await issueApi.getByKey(id) : await issueApi.getById(id)
     if (res.code === 0 && res.data) {
       useMock.value = false
       issue.value = res.data
@@ -167,8 +169,9 @@ async function loadAll() {
       loading.value = false
       return
     }
-  } catch {
+  } catch (e) {
     // API 不可用，fallback 到 mock
+    console.warn('[IssueDetail] API failed, fallback to mock', e)
   }
 
   // Mock fallback
