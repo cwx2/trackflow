@@ -1,5 +1,5 @@
 import request from './request'
-import type { R } from './types'
+import type { R, UserInfoVO } from './types'
 
 /**
  * Auth 模块 API
@@ -7,7 +7,7 @@ import type { R } from './types'
 export const authApi = {
   /** 获取当前用户信息 */
   me() {
-    return request.get<any, R<Record<string, any>>>('/auth/me')
+    return request.get<any, R<UserInfoVO>>('/auth/me')
   },
 
   /** 获取当前用户在指定项目中的权限列表 */

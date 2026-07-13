@@ -10,6 +10,21 @@ export interface R<T = any> {
 }
 
 /**
+ * /api/v1/auth/me 返回的当前用户信息 VO
+ * 对应后端 UserInfoVO，字段来自 Keycloak JWT
+ */
+export interface UserInfoVO {
+  /** Keycloak subject ID */
+  keycloakId: string
+  /** 登录用户名 */
+  username: string
+  /** 显示名称 */
+  displayName: string
+  /** 邮箱 */
+  email: string
+}
+
+/**
  * 从 JWT Token 解析出的当前认证用户信息
  * 存储在 auth store 的 user 字段中，持久化到 localStorage
  */
