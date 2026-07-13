@@ -60,7 +60,7 @@
       "emailVerified": true,
       "firstName": "伟",
       "lastName": "张",
-      "email": "zhangwei@trackflow.local",
+      "email": "zhangwei@company.com",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow", "tf_user"]
     },
@@ -70,7 +70,7 @@
       "emailVerified": true,
       "firstName": "静",
       "lastName": "赵",
-      "email": "zhaojing@trackflow.local",
+      "email": "zhaojing@company.com",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow", "tf_user"]
     },
@@ -80,7 +80,7 @@
       "emailVerified": true,
       "firstName": "娜",
       "lastName": "李",
-      "email": "lina@trackflow.local",
+      "email": "lina@company.com",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow", "tf_admin", "tf_user"]
     },
@@ -90,7 +90,37 @@
       "emailVerified": true,
       "firstName": "强",
       "lastName": "王",
-      "email": "wangqiang@trackflow.local",
+      "email": "wangqiang@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
+    },
+    {
+      "username": "liuyang",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "洋",
+      "lastName": "刘",
+      "email": "liuyang@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
+    },
+    {
+      "username": "chenfei",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "飞",
+      "lastName": "陈",
+      "email": "chenfei@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
+    },
+    {
+      "username": "yangmin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "敏",
+      "lastName": "杨",
+      "email": "yangmin@company.com",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow", "tf_user"]
     },
@@ -101,6 +131,36 @@
       "firstName": "磊",
       "lastName": "黄",
       "email": "huanglei@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
+    },
+    {
+      "username": "sunlei",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "磊",
+      "lastName": "孙",
+      "email": "sunlei@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
+    },
+    {
+      "username": "zhoujie",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "杰",
+      "lastName": "周",
+      "email": "zhoujie@company.com",
+      "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
+    },
+    {
+      "username": "wumin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "敏",
+      "lastName": "吴",
+      "email": "wumin@company.com",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow", "tf_user"]
     }
