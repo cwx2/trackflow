@@ -191,7 +191,7 @@ public class UserSyncService {
      * @param username   用户名（最后兜底）
      * @return 正确格式的显示名称
      */
-    static String buildDisplayName(String givenName, String familyName, String nameClaim, String username) {
+    public static String buildDisplayName(String givenName, String familyName, String nameClaim, String username) {
         if (givenName != null && !givenName.isBlank() && familyName != null && !familyName.isBlank()) {
             if (containsCjk(givenName) || containsCjk(familyName)) {
                 // CJK 姓名：姓 + 名（无空格）

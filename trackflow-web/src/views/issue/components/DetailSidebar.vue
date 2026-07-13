@@ -4,7 +4,7 @@
       v-for="field in fields"
       :key="field.key"
       class="sb-field"
-      :class="{ readonly: field.readonly, separator: field.key === '_sep' }"
+      :class="{ readonly: field.readonly, separator: field.key === '_sep', 'permission-locked': field.readonly && field.editType }"
     >
       <template v-if="field.key !== '_sep'">
         <div class="sb-label">{{ field.label }}</div>
@@ -71,6 +71,7 @@
         <div v-else class="sb-value">
           <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
           <span class="val-text">{{ field.value }}</span>
+          <span v-if="field.readonly && field.editType" class="val-lock" title="权限不足，此字段为只读">🔒</span>
         </div>
       </template>
       <div v-else class="sep-line"></div>
@@ -180,6 +181,8 @@ function commitInput(field: SidebarField) {
 }
 .sb-field:not(.readonly):not(.separator):hover { background: var(--tf-bg-hover); }
 .sb-field.readonly { cursor: default; }
+.sb-field.permission-locked { opacity: 0.7; }
+.sb-field.permission-locked:hover { opacity: 0.85; }
 .sb-field.separator { padding: 0; margin: 8px 0; }
 
 .sb-label { font-size: 11px; color: var(--tf-text-muted); margin-bottom: 2px; }
@@ -192,6 +195,9 @@ function commitInput(field: SidebarField) {
 .val-badge {
   font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px;
   border-radius: 3px; flex-shrink: 0;
+}
+.val-lock {
+  font-size: 9px; flex-shrink: 0; opacity: 0.5; margin-left: 2px;
 }
 .sep-line { height: 1px; background: var(--tf-border-light); }
 
