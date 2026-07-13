@@ -22,7 +22,7 @@
     </div>
 
     <!-- Sprint 列表 -->
-    <div class="sprint-list" v-if="sprints.length > 0">
+    <div class="sprint-list" v-if="loadingState === 'success' && sprints.length > 0">
       <!-- Active Sprints -->
       <div v-for="sprint in activeSprints" :key="sprint.id" class="sprint-card active">
         <div class="sprint-header">
@@ -219,14 +219,35 @@
       </div>
     </div>
 
-    <!-- 空状态 -->
+    <!-- 加载状态 -->
+    <div v-else-if="loadingState === 'loading'" class="empty-state">
+      <a-spin :size="32" />
+      <p class="empty-desc" style="margin-top: 16px;">正在加载迭代列表…</p>
+    </div>
+
+    <!-- 错误状态：API 错误 / 网络异常 -->
+    <div v-else-if="loadingState === 'error'" class="empty-state">
+      <div class="empty-icon">⚠️</div>
+      <h3 class="empty-title">加载失败</h3>
+      <p class="empty-desc">无法获取迭代列表，请稍后重试</p>
+      <a-button type="primary" size="small" @click="loadSprints">重试</a-button>
+    </div>
+
+    <!-- 权限不足状态 -->
+    <div v-else-if="loadingState === 'forbidden'" class="empty-state">
+      <div class="empty-icon">🔒</div>
+      <h3 class="empty-title">暂无可查看的迭代</h3>
+      <p class="empty-desc">当前项目尚未创建迭代，或您没有查看权限。请联系项目管理员。</p>
+    </div>
+
+    <!-- 正常空状态 -->
     <div v-else class="empty-state">
       <div class="empty-icon">🏃</div>
       <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '请选择项目' }}</h3>
       <p class="empty-desc">
         <template v-if="!selectedProject">从上方下拉框选择项目查看迭代</template>
-        <template v-else-if="canCreateSprint">点击下方按钮创建第一个 Sprint</template>
-        <template v-else>当前项目尚未创建迭代，请联系项目管理员</template>
+        <template v-else-if="canCreateSprint">创建第一个 Sprint 来规划团队工作</template>
+        <template v-else>当前项目尚未创建迭代，请联系项目管理员。</template>
       </p>
       <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="showCreate = true">
         + 新建迭代
@@ -276,6 +297,17 @@ const projects = ref<any[]>([])
 const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
 const creating = ref(false)
+
+/**
+ * 加载状态机：
+ * - idle: 未加载（未选择项目）
+ * - loading: 加载中
+ * - success: 加载成功（可能数据为空）
+ * - error: 网络/服务端错误
+ * - forbidden: 权限不足（403）
+ */
+type LoadingState = 'idle' | 'loading' | 'success' | 'error' | 'forbidden'
+const loadingState = ref<LoadingState>('idle')
 
 const createForm = reactive({
   name: '',
@@ -337,12 +369,19 @@ async function loadProjects() {
 }
 
 async function loadSprints() {
-  if (!selectedProject.value) { sprints.value = []; return }
+  if (!selectedProject.value) { sprints.value = []; loadingState.value = 'idle'; return }
+  loadingState.value = 'loading'
   try {
-    const res = await sprintApi.listByProject(selectedProject.value)
+    const res = await sprintApi.listByProject(selectedProject.value, { _silent403: true })
     sprints.value = res.data || []
-  } catch {
+    loadingState.value = 'success'
+  } catch (e: any) {
     sprints.value = []
+    if (e?.response?.status === 403) {
+      loadingState.value = 'forbidden'
+    } else {
+      loadingState.value = 'error'
+    }
   }
 }
 
