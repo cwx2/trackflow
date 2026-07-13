@@ -109,7 +109,15 @@ const showTabBar = computed(() => {
 const { theme, cycleTheme } = useTheme()
 const showUserMenu = ref(false)
 
-const isAdmin = computed(() => authStore.hasGlobalPermission('system:admin'))
+const isAdmin = computed(() => {
+  // 主判断：后端 API 返回的全局权限（精确）
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('system:admin')
+  }
+  // 辅助判断：权限未加载时用 Keycloak Token 中的 realm role 做快速前置判断
+  const roles: string[] = authStore.user?.roles || []
+  return roles.includes('tf_admin')
+})
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 
 const themeIcon = computed(() => {

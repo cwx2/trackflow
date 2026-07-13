@@ -8,6 +8,22 @@
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
   "sslRequired": "none",
+  "roles": {
+    "realm": [
+      {
+        "name": "tf_admin",
+        "description": "TrackFlow System Administrator",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "tf_user",
+        "description": "TrackFlow Regular User",
+        "composite": false,
+        "clientRole": false
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "trackflow-frontend",
@@ -36,7 +52,7 @@
       "lastName": "User",
       "email": "test@trackflow.dev",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
-      "realmRoles": ["default-roles-trackflow"]
+      "realmRoles": ["default-roles-trackflow", "tf_admin", "tf_user"]
     },
     {
       "username": "zhangwei",
@@ -46,7 +62,7 @@
       "lastName": "张",
       "email": "zhangwei@trackflow.local",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
-      "realmRoles": ["default-roles-trackflow"]
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
     },
     {
       "username": "zhaojing",
@@ -56,7 +72,7 @@
       "lastName": "赵",
       "email": "zhaojing@trackflow.local",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
-      "realmRoles": ["default-roles-trackflow"]
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
     },
     {
       "username": "lina",
@@ -66,7 +82,7 @@
       "lastName": "李",
       "email": "lina@trackflow.local",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
-      "realmRoles": ["default-roles-trackflow"]
+      "realmRoles": ["default-roles-trackflow", "tf_admin", "tf_user"]
     },
     {
       "username": "wangqiang",
@@ -76,7 +92,7 @@
       "lastName": "王",
       "email": "wangqiang@trackflow.local",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
-      "realmRoles": ["default-roles-trackflow"]
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
     },
     {
       "username": "huanglei",
@@ -86,7 +102,7 @@
       "lastName": "黄",
       "email": "huanglei@company.com",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
-      "realmRoles": ["default-roles-trackflow"]
+      "realmRoles": ["default-roles-trackflow", "tf_user"]
     }
   ]
 }
