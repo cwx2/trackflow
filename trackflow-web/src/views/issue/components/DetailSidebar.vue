@@ -4,7 +4,11 @@
       v-for="field in fields"
       :key="field.key"
       class="sb-field"
-      :class="{ readonly: field.readonly, separator: field.key === '_sep', 'permission-locked': field.readonly && field.editType }"
+      :class="{
+        readonly: field.readonly || !field.editType,
+        separator: field.key === '_sep',
+        editable: !field.readonly && field.editType
+      }"
     >
       <template v-if="field.key !== '_sep'">
         <div class="sb-label">{{ field.label }}</div>
@@ -20,7 +24,7 @@
           <div class="sb-value clickable">
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
             <span class="val-text editable">{{ field.value }}</span>
-            <span v-if="field.badge" class="val-badge" :style="{ background: field.badgeColor || 'var(--tf-accent)' }">{{ field.badge }}</span>
+            <span class="val-chevron" aria-hidden="true">‹</span>
           </div>
           <template #content>
             <div class="dropdown-panel">
@@ -67,11 +71,10 @@
           </template>
         </a-trigger>
 
-        <!-- 只读字段 -->
-        <div v-else class="sb-value">
+        <!-- 只读字段（无 editType 或被权限限制） -->
+        <div v-else class="sb-value readonly-value">
           <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
           <span class="val-text">{{ field.value }}</span>
-          <span v-if="field.readonly && field.editType" class="val-lock" title="权限不足，此字段为只读">🔒</span>
         </div>
       </template>
       <div v-else class="sep-line"></div>
@@ -174,34 +177,112 @@ function commitInput(field: SidebarField) {
   background: var(--tf-bg-surface);
 }
 
+/* ========== 字段容器 ========== */
 .sb-field {
   padding: 6px 6px;
   border-radius: 3px;
   transition: background 150ms;
 }
-.sb-field:not(.readonly):not(.separator):hover { background: var(--tf-bg-hover); }
-.sb-field.readonly { cursor: default; }
-.sb-field.permission-locked { opacity: 0.7; }
-.sb-field.permission-locked:hover { opacity: 0.85; }
-.sb-field.separator { padding: 0; margin: 8px 0; }
 
-.sb-label { font-size: 11px; color: var(--tf-text-muted); margin-bottom: 2px; }
+/* 可编辑字段 hover 效果 */
+.sb-field.editable:hover {
+  background: var(--tf-bg-hover);
+}
 
-.sb-value { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--tf-text-primary); }
-.sb-value.clickable { cursor: pointer; }
-.val-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.val-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.val-text.editable { color: var(--tf-accent); }
+/* 只读字段：无 hover 效果，cursor 保持默认 */
+.sb-field.readonly {
+  cursor: default;
+}
+
+.sb-field.separator {
+  padding: 0;
+  margin: 8px 0;
+}
+
+/* ========== Label ========== */
+.sb-label {
+  font-size: 11px;
+  color: var(--tf-text-muted);
+  margin-bottom: 2px;
+}
+
+/* ========== Value 通用 ========== */
+.sb-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--tf-text-primary);
+  min-height: 20px;
+}
+
+/* 可编辑字段值 */
+.sb-value.clickable {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin: -2px -4px;
+  transition: background 120ms;
+}
+.sb-value.clickable:hover {
+  background: var(--tf-bg-active, rgba(255, 255, 255, 0.06));
+}
+
+/* 只读字段值 */
+.sb-value.readonly-value {
+  cursor: default;
+  color: var(--tf-text-secondary, var(--tf-text-primary));
+}
+
+/* ========== 值文本 ========== */
+.val-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.val-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* 可编辑文本用强调色标识 */
+.val-text.editable {
+  color: var(--tf-accent);
+}
+
+/* 下拉箭头指示器（仅可编辑字段） */
+.val-chevron {
+  font-size: 11px;
+  color: var(--tf-text-muted);
+  transform: rotate(-90deg);
+  opacity: 0;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+.sb-field.editable:hover .val-chevron {
+  opacity: 1;
+}
+
 .val-badge {
-  font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px;
-  border-radius: 3px; flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
-.val-lock {
-  font-size: 9px; flex-shrink: 0; opacity: 0.5; margin-left: 2px;
-}
-.sep-line { height: 1px; background: var(--tf-border-light); }
 
-/* Dropdown Panel - YouTrack 风格 */
+.sep-line {
+  height: 1px;
+  background: var(--tf-border-light);
+}
+
+/* ========== Dropdown Panel - YouTrack 风格 ========== */
 .dropdown-panel {
   width: 240px;
   background: var(--tf-bg-elevated);
@@ -216,39 +297,86 @@ function commitInput(field: SidebarField) {
   border-bottom: 1px solid var(--tf-border-light);
 }
 .search-input {
-  width: 100%; border: none; outline: none; background: none;
-  font-size: 13px; color: var(--tf-text-primary);
+  width: 100%;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 13px;
+  color: var(--tf-text-primary);
 }
-.search-input::placeholder { color: var(--tf-text-muted); }
+.search-input::placeholder {
+  color: var(--tf-text-muted);
+}
 
-.dropdown-list { max-height: 240px; overflow-y: auto; padding: 4px 0; }
+.dropdown-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
 .dropdown-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 14px; cursor: pointer; font-size: 13px;
-  color: var(--tf-text-primary); transition: background 120ms;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  transition: background 120ms;
 }
-.dropdown-item:hover { background: var(--tf-bg-hover); }
-.dropdown-item.selected { background: var(--tf-accent-bg); font-weight: 500; }
-.item-text { flex: 1; }
+.dropdown-item:hover {
+  background: var(--tf-bg-hover);
+}
+.dropdown-item.selected {
+  background: var(--tf-accent-bg);
+  font-weight: 500;
+}
+.item-text {
+  flex: 1;
+}
 .item-badge {
-  font-size: 10px; font-weight: 700; color: #fff;
-  padding: 2px 6px; border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 3px;
 }
-.dropdown-empty { padding: 16px; text-align: center; color: var(--tf-text-muted); font-size: 12px; }
+.dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--tf-text-muted);
+  font-size: 12px;
+}
 
 .dropdown-input {
-  padding: 12px; display: flex; gap: 8px; align-items: center;
+  padding: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .input-field {
-  flex: 1; padding: 6px 10px; border: 1px solid var(--tf-border);
-  border-radius: 4px; background: var(--tf-bg-body); color: var(--tf-text-primary);
-  font-size: 13px; outline: none;
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--tf-border);
+  border-radius: 4px;
+  background: var(--tf-bg-body);
+  color: var(--tf-text-primary);
+  font-size: 13px;
+  outline: none;
 }
-.input-field:focus { border-color: var(--tf-accent); }
+.input-field:focus {
+  border-color: var(--tf-accent);
+}
 .input-btn {
-  padding: 6px 12px; border: none; border-radius: 4px;
-  background: var(--tf-accent); color: #fff; font-size: 12px;
-  font-weight: 500; cursor: pointer;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--tf-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
 }
-.input-btn:hover { background: var(--tf-accent-hover); }
+.input-btn:hover {
+  background: var(--tf-accent-hover);
+}
 </style>

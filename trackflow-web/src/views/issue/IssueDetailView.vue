@@ -106,7 +106,7 @@ import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
-import { usePermission } from '@/composables/usePermission'
+import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -194,25 +194,54 @@ async function loadRelatedData() {
   if (!issue.value) return
   const id = issue.value.id
   const pid = issue.value.projectId
+
+  // 先加载权限，决定是否需要加载编辑选项
+  const perms = await loadProjectPermissions(pid)
+  const needSprintOptions = perms.has('sprint:edit')
+  const needMemberOptions = perms.has('issue:assign')
+
   try {
-    const [transRes, commRes, actRes, attRes, linkRes, memRes, spRes, tagRes] = await Promise.allSettled([
+    // 核心数据：始终加载（transitions, comments, activities, attachments, links, tags）
+    const promises: Promise<any>[] = [
       issueApi.getAvailableTransitions(id),
       issueApi.listComments(id),
       issueApi.listActivities(id),
       issueApi.listAttachments(id),
       issueApi.listLinks(id),
-      projectApi.listMembers(pid, { _silent403: true }).catch(() => ({ data: [] })),
-      sprintApi.listByProject(pid, { _silent403: true }).catch(() => ({ data: [] })),
       tagApi.listProjectTags(pid),
-    ])
-    if (transRes.status === 'fulfilled') transitions.value = transRes.value.data || []
-    if (commRes.status === 'fulfilled') comments.value = commRes.value.data || []
-    if (actRes.status === 'fulfilled') activities.value = actRes.value.data || []
-    if (attRes.status === 'fulfilled') attachments.value = attRes.value.data || []
-    if (linkRes.status === 'fulfilled') links.value = linkRes.value.data || []
-    if (memRes.status === 'fulfilled') members.value = memRes.value.data || []
-    if (spRes.status === 'fulfilled') sprints.value = spRes.value.data || []
-    if (tagRes.status === 'fulfilled') projectTagList.value = tagRes.value.data || []
+    ]
+    // 仅在有分配权限时加载成员列表（编辑负责人的下拉选项）
+    if (needMemberOptions) {
+      promises.push(projectApi.listMembers(pid))
+    }
+    // 仅在有迭代编辑权限时加载 Sprint 列表（编辑迭代的下拉选项）
+    if (needSprintOptions) {
+      promises.push(sprintApi.listByProject(pid))
+    }
+
+    const results = await Promise.allSettled(promises)
+
+    let idx = 0
+    if (results[idx].status === 'fulfilled') transitions.value = (results[idx] as any).value.data || []
+    idx++
+    if (results[idx].status === 'fulfilled') comments.value = (results[idx] as any).value.data || []
+    idx++
+    if (results[idx].status === 'fulfilled') activities.value = (results[idx] as any).value.data || []
+    idx++
+    if (results[idx].status === 'fulfilled') attachments.value = (results[idx] as any).value.data || []
+    idx++
+    if (results[idx].status === 'fulfilled') links.value = (results[idx] as any).value.data || []
+    idx++
+    if (results[idx].status === 'fulfilled') projectTagList.value = (results[idx] as any).value.data || []
+    idx++
+    if (needMemberOptions) {
+      if (results[idx].status === 'fulfilled') members.value = (results[idx] as any).value.data || []
+      idx++
+    }
+    if (needSprintOptions) {
+      if (results[idx].status === 'fulfilled') sprints.value = (results[idx] as any).value.data || []
+      idx++
+    }
   } catch { /* ignore partial failures */ }
 }
 
@@ -245,7 +274,6 @@ const availableTransitions = computed<StatusInfo[]>(() => {
 const sidebarFields = computed<SidebarField[]>(() => {
   const i = issue.value
   if (!i) return []
-  const sprint = sprints.value.find(s => s.id === i.sprintId)
 
   // 权限判断
   const canEdit = canEditIssue.value
@@ -259,14 +287,17 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ...availableTransitions.value.map(s => ({ value: s.id, label: s.name }))
   ]
 
-  // 人员选项
-  const userOptions = members.value.map(m => ({ value: m.userId, label: m.displayName }))
+  // 人员选项（仅在有分配权限时提供）
+  const userOptions = canAssign ? members.value.map(m => ({ value: m.userId, label: m.displayName })) : []
 
-  // Sprint 选项
-  const sprintOptions = [
+  // Sprint 选项（仅在有编辑权限时提供）
+  const sprintOptions = canSprint ? [
     { value: '', label: 'Unscheduled' },
     ...sprints.value.filter(s => s.projectId === i.projectId).map(s => ({ value: s.id, label: s.name }))
-  ]
+  ] : []
+
+  // Sprint 显示值：优先使用 issue 自带的 sprintName，不依赖 sprints 列表
+  const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || 'Unscheduled'
 
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true },
@@ -281,7 +312,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ]},
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
-    { key: 'sprint', label: '迭代', value: sprint?.name || 'Unscheduled', editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
+    { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
     { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit },
     { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit },
     { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
