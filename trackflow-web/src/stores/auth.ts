@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { authApi } from '@/api'
+import type { AuthUser } from '@/api/types'
 
 /**
  * Keycloak OIDC 配置
@@ -31,7 +32,7 @@ export const useAuthStore = defineStore('auth', () => {
   // 从 localStorage 恢复状态
   const accessToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.accessToken))
   const refreshToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.refreshToken))
-  const user = ref<any>(restoreUser())
+  const user = ref<AuthUser | null>(restoreUser())
   const globalPermissions = ref<Set<string>>(new Set())
   const permissionsLoaded = ref(false)
 
@@ -81,7 +82,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const parts = token.split('.')
       if (parts.length !== 3) return
-      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+      const payload = JSON.parse(decodeBase64Url(parts[1]))
       const exp = payload.exp
       if (!exp) return
 
@@ -384,7 +385,7 @@ export const useAuthStore = defineStore('auth', () => {
 /**
  * 从 localStorage 恢复 user 对象
  */
-function restoreUser(): Record<string, any> | null {
+function restoreUser(): AuthUser | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.user)
     return raw ? JSON.parse(raw) : null
@@ -424,18 +425,60 @@ function generateRandomString(length: number): string {
 }
 
 /**
+ * 解码 Base64url 编码的字符串，正确处理 UTF-8 多字节字符（如中文）
+ * atob() 只支持 Latin-1，直接用于包含 UTF-8 的 JWT payload 会产生乱码
+ */
+function decodeBase64Url(base64url: string): string {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  const binaryStr = atob(base64)
+  const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0))
+  return new TextDecoder('utf-8').decode(bytes)
+}
+
+/**
+ * 判断字符串是否包含 CJK（中日韩）字符
+ */
+function containsCjk(text: string): boolean {
+  return /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(text)
+}
+
+/**
+ * 从 JWT 中的 given_name / family_name 构建正确格式的显示名称
+ * CJK 姓名：姓+名（无空格）；西方姓名：名+空格+姓
+ * 与后端 UserSyncService.buildDisplayName 逻辑保持一致
+ */
+function buildDisplayName(payload: Record<string, any>): string {
+  const givenName = payload.given_name as string | undefined
+  const familyName = payload.family_name as string | undefined
+
+  if (givenName && familyName) {
+    if (containsCjk(givenName) || containsCjk(familyName)) {
+      // CJK 姓名：姓 + 名（无空格）
+      return familyName + givenName
+    } else {
+      // 西方姓名：名 + 空格 + 姓
+      return givenName + ' ' + familyName
+    }
+  }
+  if (givenName) return givenName
+  if (familyName) return familyName
+  // 回退到 name claim 或 username
+  return payload.name || payload.preferred_username || ''
+}
+
+/**
  * 解析 JWT payload，提取用户信息
  * Keycloak JWT payload 包含: preferred_username, name, email, sub 等字段
  */
-function parseJwtPayload(token: string): Record<string, any> | null {
+function parseJwtPayload(token: string): AuthUser | null {
   try {
     const parts = token.split('.')
     if (parts.length !== 3) return null
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    const payload = JSON.parse(decodeBase64Url(parts[1]))
     return {
       id: payload.sub,
       username: payload.preferred_username,
-      displayName: payload.name || payload.preferred_username,
+      displayName: buildDisplayName(payload),
       email: payload.email || '',
       roles: payload.realm_access?.roles || []
     }

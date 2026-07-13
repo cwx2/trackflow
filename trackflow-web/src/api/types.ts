@@ -10,6 +10,23 @@ export interface R<T = any> {
 }
 
 /**
+ * 从 JWT Token 解析出的当前认证用户信息
+ * 存储在 auth store 的 user 字段中，持久化到 localStorage
+ */
+export interface AuthUser {
+  /** Keycloak subject ID */
+  id: string
+  /** 登录用户名 */
+  username: string
+  /** 显示名称（CJK 姓+名，西方名+姓） */
+  displayName: string
+  /** 邮箱 */
+  email: string
+  /** Keycloak realm_access.roles（如 tf_admin, tf_user） */
+  roles: string[]
+}
+
+/**
  * 分页结果
  */
 export interface PageResult<T = any> {

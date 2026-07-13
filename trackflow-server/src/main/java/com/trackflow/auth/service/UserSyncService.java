@@ -43,7 +43,10 @@ public class UserSyncService {
     /** Keycloak realm role: 系统管理员 */
     private static final String KC_ROLE_ADMIN = "tf_admin";
 
-    /** Keycloak realm role: 普通用户 */
+    /**
+     * Keycloak realm role: 普通用户
+     * 预留：后续可用于新用户首次登录时自动映射为 TrackFlow 默认角色
+     */
     private static final String KC_ROLE_USER = "tf_user";
 
     /**
@@ -58,7 +61,9 @@ public class UserSyncService {
     public SysUser syncFromJwt(Jwt jwt) {
         String keycloakId = jwt.getSubject();
         String username = jwt.getClaimAsString("preferred_username");
-        String displayName = jwt.getClaimAsString("name");
+        String givenName = jwt.getClaimAsString("given_name");
+        String familyName = jwt.getClaimAsString("family_name");
+        String displayName = buildDisplayName(givenName, familyName, jwt.getClaimAsString("name"), username);
         String email = jwt.getClaimAsString("email");
         List<String> keycloakRoles = extractRealmRoles(jwt);
 
@@ -170,6 +175,58 @@ public class UserSyncService {
         if (keycloakRoles.contains(KC_ROLE_ADMIN)) {
             assignSystemAdminIfMissing(user);
         }
+    }
+
+    /**
+     * 构建用户显示名称。
+     * <p>
+     * 规则：
+     * 1. 如果 givenName 或 familyName 包含 CJK 字符（中日韩），使用"姓+名"（无空格）
+     * 2. 否则使用西方顺序"givenName + 空格 + familyName"
+     * 3. 如果 givenName 和 familyName 都为空，回退到 Keycloak name claim 或 username
+     *
+     * @param givenName  名（Keycloak given_name / firstName）
+     * @param familyName 姓（Keycloak family_name / lastName）
+     * @param nameClaim  Keycloak name claim（可能已拼接好）
+     * @param username   用户名（最后兜底）
+     * @return 正确格式的显示名称
+     */
+    static String buildDisplayName(String givenName, String familyName, String nameClaim, String username) {
+        if (givenName != null && !givenName.isBlank() && familyName != null && !familyName.isBlank()) {
+            if (containsCjk(givenName) || containsCjk(familyName)) {
+                // CJK 姓名：姓 + 名（无空格）
+                return familyName + givenName;
+            } else {
+                // 西方姓名：名 + 空格 + 姓
+                return givenName + " " + familyName;
+            }
+        }
+        // 只有一个字段有值
+        if (givenName != null && !givenName.isBlank()) {
+            return givenName;
+        }
+        if (familyName != null && !familyName.isBlank()) {
+            return familyName;
+        }
+        // 都为空，回退到 name claim 或 username
+        if (nameClaim != null && !nameClaim.isBlank()) {
+            return nameClaim;
+        }
+        return username;
+    }
+
+    /**
+     * 判断字符串是否包含 CJK（中日韩）统一表意文字
+     */
+    private static boolean containsCjk(String text) {
+        if (text == null) return false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (Character.UnicodeScript.of(c) == Character.UnicodeScript.HAN) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

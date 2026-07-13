@@ -31,13 +31,23 @@ function onRefreshFailed() {
 }
 
 /**
+ * 解码 Base64url 编码的字符串，正确处理 UTF-8 多字节字符
+ */
+function decodeBase64Url(base64url: string): string {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  const binaryStr = atob(base64)
+  const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0))
+  return new TextDecoder('utf-8').decode(bytes)
+}
+
+/**
  * 判断 JWT token 是否即将过期（剩余时间 < bufferSeconds）
  */
 function isTokenExpiringSoon(token: string, bufferSeconds = 30): boolean {
   try {
     const parts = token.split('.')
     if (parts.length !== 3) return true
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    const payload = JSON.parse(decodeBase64Url(parts[1]))
     const exp = payload.exp
     if (!exp) return true
     const now = Math.floor(Date.now() / 1000)
