@@ -1,6 +1,7 @@
 package com.trackflow.board.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
@@ -99,8 +100,9 @@ public class BoardColumnService {
                         .eq(BoardColumnConfig::getProjectId, projectId)
         );
 
-        // 插入新配置
+        // 批量构建新配置实体
         LocalDateTime now = LocalDateTime.now();
+        List<BoardColumnConfig> configs = new ArrayList<>();
         int order = 0;
         for (UpdateBoardColumnsDTO.ColumnItem item : dto.getColumns()) {
             BoardColumnConfig config = new BoardColumnConfig();
@@ -111,8 +113,11 @@ public class BoardColumnService {
             config.setCollapsed(item.getCollapsed() != null ? item.getCollapsed() : false);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
-            boardColumnConfigMapper.insert(config);
+            configs.add(config);
             order++;
         }
+
+        // 批量插入（MyBatis-Plus Db 工具类，内部使用 SqlSession BATCH 模式）
+        Db.saveBatch(configs);
     }
 }

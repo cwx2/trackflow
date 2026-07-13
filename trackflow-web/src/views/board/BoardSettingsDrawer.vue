@@ -139,10 +139,25 @@ function selectNone() {
 }
 
 function selectDefault() {
-  // 默认只显示核心状态：Open, In Progress, Code Review, Testing, Done, Cancelled
-  const defaultCodes = new Set(['open', 'in_progress', 'code_review', 'testing', 'done', 'cancelled'])
+  // 默认选择规则：基于 statusCategory 智能选择，无需硬编码状态代码
+  // - open: 第 1 个状态
+  // - in_progress: 前 3 个状态（通常是 In Progress / Code Review / Testing）
+  // - done: 第 1 个状态
+  // - cancelled: 第 1 个状态
+  const categoryLimits: Record<string, number> = {
+    open: 1,
+    in_progress: 3,
+    done: 1,
+    cancelled: 1
+  }
+  const categoryCounters: Record<string, number> = {}
+
   editableColumns.value.forEach(c => {
-    c.visible = defaultCodes.has(c.statusCode)
+    const cat = c.statusCategory || 'open'
+    const limit = categoryLimits[cat] ?? 1
+    const count = categoryCounters[cat] || 0
+    c.visible = count < limit
+    categoryCounters[cat] = count + 1
   })
 }
 
