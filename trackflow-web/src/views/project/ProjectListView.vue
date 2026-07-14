@@ -198,11 +198,10 @@
             {{ u.displayName || u.username }} ({{ u.email || '' }})
           </a-option>
         </a-select>
-        <a-select v-model="addMemberForm.roleId" style="width: 130px">
-          <a-option value="2">项目管理员</a-option>
-          <a-option value="3">开发人员</a-option>
-          <a-option value="4">测试人员</a-option>
-          <a-option value="5">观察者</a-option>
+        <a-select v-model="addMemberForm.roleId" style="width: 130px" @focus="loadProjectRoles">
+          <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
+            {{ r.name }}
+          </a-option>
         </a-select>
         <a-button type="primary" size="small" @click="addMember" :disabled="!addMemberForm.userId">
           添加
@@ -224,11 +223,11 @@
                 :model-value="record.roleId"
                 size="mini"
                 @change="(val: any) => changeMemberRole(record.userId, val)"
+                @focus="loadProjectRoles"
               >
-                <a-option value="2">项目管理员</a-option>
-                <a-option value="3">开发人员</a-option>
-                <a-option value="4">测试人员</a-option>
-                <a-option value="5">观察者</a-option>
+                <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
+                  {{ r.name }}
+                </a-option>
               </a-select>
             </template>
           </a-table-column>
@@ -254,7 +253,7 @@ import {
   IconMore,
   IconFolder
 } from '@arco-design/web-vue/es/icon'
-import { projectApi, userApi } from '@/api'
+import { projectApi, userApi, workflowApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 
@@ -326,6 +325,7 @@ const showMembersDialog = ref(false)
 const currentProject = ref<any>(null)
 const projectMembers = ref<any[]>([])
 const allUsers = ref<any[]>([])
+const projectRoles = ref<{ id: string; name: string }[]>([])
 const addMemberForm = reactive({ userId: undefined as string | undefined, roleId: '3' })
 const showAddMember = ref(false)
 
@@ -406,6 +406,7 @@ function editProject(project: any) {
 function manageMembers(project: any) {
   currentProject.value = project
   loadProjectMembers(project.id)
+  loadProjectRoles()
   showMembersDialog.value = true
 }
 
@@ -489,6 +490,16 @@ async function loadAllUsers() {
     allUsers.value = res.data?.list || []
   } catch (e) {
     allUsers.value = []
+  }
+}
+
+async function loadProjectRoles() {
+  if (projectRoles.value.length > 0) return
+  try {
+    const res = await workflowApi.listProjectRoles()
+    projectRoles.value = (res.data || []).map((r: any) => ({ id: String(r.id), name: r.name }))
+  } catch (e) {
+    projectRoles.value = []
   }
 }
 

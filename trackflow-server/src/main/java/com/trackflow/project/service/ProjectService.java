@@ -239,14 +239,32 @@ public class ProjectService {
      */
     @Transactional
     public void addMember(Long projectId, AddMemberDTO dto) {
-        // 检查是否已经是成员
+        // 1. 校验项目状态（归档项目不允许添加成员）
+        Project project = getById(projectId);
+        if (!"active".equals(project.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
+        }
+
+        // 2. 校验用户存在且状态为 active
+        SysUser user = userMapper.selectById(dto.getUserId());
+        if (user == null || !"active".equals(user.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "用户不存在或已禁用");
+        }
+
+        // 3. 校验角色类型必须为 project
+        SysRole role = roleMapper.selectById(dto.getRoleId());
+        if (role == null || !"project".equals(role.getRoleType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
+        }
+
+        // 4. 检查是否已经是成员
         Long count = memberMapper.selectCount(
                 new LambdaQueryWrapper<ProjectMember>()
                         .eq(ProjectMember::getProjectId, projectId)
                         .eq(ProjectMember::getUserId, dto.getUserId())
         );
         if (count > 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "User is already a member of this project");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该用户已是项目成员");
         }
 
         ProjectMember member = new ProjectMember();
@@ -267,6 +285,18 @@ public class ProjectService {
      */
     @Transactional
     public void updateMemberRole(Long projectId, Long userId, Long roleId) {
+        // 校验项目状态（归档项目不允许管理成员）
+        Project project = getById(projectId);
+        if (!"active".equals(project.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
+        }
+
+        // 校验角色类型必须为 project
+        SysRole role = roleMapper.selectById(roleId);
+        if (role == null || !"project".equals(role.getRoleType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
+        }
+
         ProjectMember member = memberMapper.selectOne(
                 new LambdaQueryWrapper<ProjectMember>()
                         .eq(ProjectMember::getProjectId, projectId)
@@ -285,6 +315,12 @@ public class ProjectService {
      */
     @Transactional
     public void removeMember(Long projectId, Long userId) {
+        // 校验项目状态（归档项目不允许管理成员）
+        Project project = getById(projectId);
+        if (!"active".equals(project.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
+        }
+
         // 保护最后一个项目管理员
         List<ProjectMember> admins = memberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>()
@@ -292,7 +328,7 @@ public class ProjectService {
                         .eq(ProjectMember::getRoleId, PROJECT_ADMIN_ROLE_ID)
         );
         if (admins.size() == 1 && admins.get(0).getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Cannot remove the last project admin");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移除项目中最后一个管理员");
         }
 
         memberMapper.delete(
