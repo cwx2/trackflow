@@ -6,9 +6,12 @@ import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
 import com.trackflow.board.vo.BoardColumnVO;
+import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,11 +25,16 @@ public class BoardColumnService {
 
     private final BoardColumnConfigMapper boardColumnConfigMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final IssueMapper issueMapper;
 
     /**
-     * 获取项目的看板列配置
-     * 如果项目没有自定义配置，返回所有状态的默认配置（全部可见，按 sortOrder 排序）
+     * 获取项目的看板列配置。
+     * <p>
+     * 如果项目没有自定义配置，基于该项目工作流中实际涉及的状态自动初始化配置
+     * （仅工作流引用的状态为 visible=true，其余为 visible=false），
+     * 并持久化到数据库以保证后续一致性。
      */
+    @Transactional
     public List<BoardColumnVO> getColumns(Long projectId) {
         // 获取所有状态
         List<IssueStatus> allStatuses = issueStatusMapper.selectList(
@@ -40,27 +48,25 @@ public class BoardColumnService {
                         .orderByAsc(BoardColumnConfig::getSortOrder)
         );
 
-        // 如果项目没有配置，返回默认配置（全部可见）
+        // 如果项目没有配置，基于项目实际使用情况自动初始化
         if (configs.isEmpty()) {
-            return allStatuses.stream().map(status -> {
-                BoardColumnVO vo = new BoardColumnVO();
-                vo.setStatusId(String.valueOf(status.getId()));
-                vo.setStatusName(status.getName());
-                vo.setStatusCode(status.getCode());
-                vo.setStatusColor(status.getColor());
-                vo.setStatusCategory(status.getCategory());
-                vo.setVisible(true);
-                vo.setSortOrder(status.getSortOrder());
-                vo.setCollapsed(false);
-                return vo;
-            }).collect(Collectors.toList());
+            try {
+                configs = initializeDefaultColumns(projectId, allStatuses);
+            } catch (DataIntegrityViolationException e) {
+                // 并发情况下可能出现唯一约束冲突，重新查询已写入的配置
+                configs = boardColumnConfigMapper.selectList(
+                        new LambdaQueryWrapper<BoardColumnConfig>()
+                                .eq(BoardColumnConfig::getProjectId, projectId)
+                                .orderByAsc(BoardColumnConfig::getSortOrder)
+                );
+            }
         }
 
-        // 已有配置：按配置返回
+        // 按配置返回
         Map<Long, BoardColumnConfig> configMap = configs.stream()
                 .collect(Collectors.toMap(BoardColumnConfig::getStatusId, c -> c));
 
-        // 构建结果列表，按 config 的 sortOrder 排序
+        // 构建结果列表
         List<BoardColumnVO> result = new ArrayList<>();
         for (IssueStatus status : allStatuses) {
             BoardColumnConfig config = configMap.get(status.getId());
@@ -76,8 +82,8 @@ public class BoardColumnService {
                 vo.setSortOrder(config.getSortOrder());
                 vo.setCollapsed(config.getCollapsed());
             } else {
-                // 新增的状态默认可见
-                vo.setVisible(true);
+                // 新增的全局状态默认不可见，不自动污染已配置的项目看板
+                vo.setVisible(false);
                 vo.setSortOrder(status.getSortOrder() + 1000);
                 vo.setCollapsed(false);
             }
@@ -87,6 +93,60 @@ public class BoardColumnService {
         // 按 sortOrder 排序
         result.sort(Comparator.comparingInt(BoardColumnVO::getSortOrder));
         return result;
+    }
+
+    /**
+     * 基于项目实际使用情况，自动初始化看板列配置。
+     * <p>
+     * 默认可见规则：
+     * 1. 种子状态（id 1-6：Open, In Progress, Code Review, Testing, Done, Cancelled）始终可见
+     * 2. 项目中已有工单处于该状态的列可见
+     * 3. 其余状态默认隐藏
+     * <p>
+     * 配置持久化到数据库，后续不再重复计算。
+     */
+    private List<BoardColumnConfig> initializeDefaultColumns(Long projectId, List<IssueStatus> allStatuses) {
+        // 种子状态 ID 集合（V5 中初始创建的基础状态）
+        Set<Long> seedStatusIds = Set.of(1L, 2L, 3L, 4L, 5L, 6L);
+
+        // 查询该项目已有工单涉及的状态 ID
+        Set<Long> usedStatusIds = getProjectUsedStatusIds(projectId);
+
+        LocalDateTime now = LocalDateTime.now();
+        List<BoardColumnConfig> configs = new ArrayList<>();
+        int order = 0;
+        for (IssueStatus status : allStatuses) {
+            BoardColumnConfig config = new BoardColumnConfig();
+            config.setProjectId(projectId);
+            config.setStatusId(status.getId());
+            // 种子状态或项目已有工单使用的状态默认可见
+            config.setVisible(seedStatusIds.contains(status.getId()) || usedStatusIds.contains(status.getId()));
+            config.setSortOrder(order);
+            config.setCollapsed(false);
+            config.setCreatedAt(now);
+            config.setUpdatedAt(now);
+            configs.add(config);
+            order++;
+        }
+
+        // 持久化
+        Db.saveBatch(configs);
+        return configs;
+    }
+
+    /**
+     * 查询项目中已有工单使用的状态 ID 集合。
+     */
+    private Set<Long> getProjectUsedStatusIds(Long projectId) {
+        List<Issue> issues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .isNull(Issue::getDeletedAt)
+                        .select(Issue::getStatusId)
+        );
+        return issues.stream()
+                .map(Issue::getStatusId)
+                .collect(Collectors.toSet());
     }
 
     /**
