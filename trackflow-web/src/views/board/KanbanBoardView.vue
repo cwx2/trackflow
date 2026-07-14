@@ -109,11 +109,11 @@
                 :class="{
                   'kanban-card--dragging': draggingIssue?.id === issue.id,
                   'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                  'kanban-card--no-drag': !canChangeStatus
+                  'kanban-card--no-drag': !isCardDraggable(issue)
                 }"
                 role="button"
                 tabindex="0"
-                :draggable="canChangeStatus"
+                :draggable="isCardDraggable(issue)"
                 @dragstart="onDragStart($event, issue)"
                 @dragend="onDragEnd"
                 @click="openIssue(issue)"
@@ -226,7 +226,7 @@
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
-import { issueApi, sprintApi, boardApi } from '@/api'
+import { issueApi, sprintApi, boardApi, workflowApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
@@ -332,6 +332,11 @@ const dragOverColumnId = ref<string | null>(null)
 const allowedTargetStatuses = ref<Set<string>>(new Set())
 const transitioningIssueIds = ref<Set<string>>(new Set())
 
+// ===== 可拖拽源状态（工作流规则维度）=====
+// 存储当前用户在该项目中可以发起状态转换的源状态 ID 集合
+// 用于 per-card 判断是否可拖拽，避免用户拖起卡片后才发现无法放置
+const transitionableSourceStatuses = ref<Set<string>>(new Set())
+
 // ===== 撤销历史 =====
 interface UndoEntry {
   issueId: string
@@ -375,12 +380,26 @@ function openIssue(issue: IssueVO) {
 
 // ===== 拖拽逻辑 =====
 
+/**
+ * 判断卡片是否可拖拽。
+ * 条件：用户有 issue:change_status 权限 && 该卡片的当前状态在工作流规则中有出边。
+ * 注意：developer 还有所有权约束（只能改自己的），这里不做预判——
+ * 拖拽开始时 onDragStart 会调用后端获取精确可用转换，若为空则拖拽无效。
+ */
+function isCardDraggable(issue: IssueVO): boolean {
+  if (!canChangeStatus.value) return false
+  // 如果 transitionableSourceStatuses 尚未加载（空集合），fallback 为允许拖拽
+  // 避免加载期间所有卡片都不可拖拽的闪烁问题
+  if (transitionableSourceStatuses.value.size === 0) return true
+  return transitionableSourceStatuses.value.has(issue.statusId)
+}
+
 /** 开始拖拽：获取可用目标状态 */
 async function onDragStart(event: DragEvent, issue: IssueVO) {
-  // 权限检查：没有变更状态权限则禁止拖拽
-  if (!canChangeStatus.value) {
+  // 权限检查：没有变更状态权限或工作流不允许从当前状态转换
+  if (!isCardDraggable(issue)) {
     event.preventDefault()
-    Message.warning('您没有变更工单状态的权限')
+    Message.warning('该工单当前状态不允许变更')
     return
   }
 
@@ -572,6 +591,21 @@ async function loadBoardColumns() {
   }
 }
 
+/** 加载当前用户可发起转换的源状态集合（用于 per-card 拖拽判断） */
+async function loadTransitionableStatuses() {
+  if (!selectedProject.value || !canChangeStatus.value) {
+    transitionableSourceStatuses.value = new Set()
+    return
+  }
+  try {
+    const res = await workflowApi.getTransitionableStatuses(selectedProject.value)
+    transitionableSourceStatuses.value = new Set(res.data || [])
+  } catch {
+    // 加载失败时 fallback 为空集合 → isCardDraggable 会 fallback 为 true
+    transitionableSourceStatuses.value = new Set()
+  }
+}
+
 function onSettingsSaved() {
   loadBoardColumns()
 }
@@ -593,7 +627,7 @@ async function loadBoard() {
   expandedEmptyColumns.value.clear()
   loading.value = true
   try {
-    await Promise.all([loadSprints(), loadBoardColumns()])
+    await Promise.all([loadSprints(), loadBoardColumns(), loadTransitionableStatuses()])
     await loadIssues()
   } catch {
     issues.value = []

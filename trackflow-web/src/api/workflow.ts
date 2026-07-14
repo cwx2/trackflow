@@ -23,5 +23,10 @@ export const workflowApi = {
   /** 获取系统中已使用的工单类型列表 */
   listIssueTypes() {
     return request.get<any, R<string[]>>('/workflows/issue-types')
+  },
+
+  /** 获取当前用户在指定项目中可发起状态转换的源状态 ID 列表 */
+  getTransitionableStatuses(projectId: string) {
+    return request.get<any, R<string[]>>(`/projects/${projectId}/workflows/transitionable-statuses`)
   }
 }

@@ -1,6 +1,7 @@
 package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.vo.RoleVO;
 import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
@@ -13,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -73,5 +75,18 @@ public class WorkflowController {
     @PreAuthorize("isAuthenticated()")
     public R<List<String>> listIssueTypes() {
         return R.ok(workflowService.listIssueTypes());
+    }
+
+    /**
+     * 获取当前用户在指定项目中可以发起状态转换的源状态 ID 列表。
+     * 用于看板预判哪些卡片可拖拽（工作流规则维度）。
+     */
+    @GetMapping("/projects/{projectId}/workflows/transitionable-statuses")
+    @PreAuthorize("@perm.check(#projectId, 'issue:change_status')")
+    public R<List<String>> getTransitionableStatuses(@PathVariable Long projectId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Set<Long> statusIds = workflowService.getTransitionableSourceStatuses(projectId, userId);
+        List<String> result = statusIds.stream().map(String::valueOf).toList();
+        return R.ok(result);
     }
 }

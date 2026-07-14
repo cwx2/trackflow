@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -261,6 +262,40 @@ public class WorkflowService {
                         .orderByAsc(SysRole::getSortOrder)
         );
         return roleConverter.toVOList(roles);
+    }
+
+    /**
+     * 获取当前用户在指定项目中可以发起状态转换的源状态 ID 集合。
+     * 用于看板等场景预判哪些卡片可拖拽（基于状态维度）。
+     *
+     * 注意：对于 developer 角色，还有所有权检查（只能改自己的工单），
+     * 这里仅返回工作流规则维度的判断，不考虑所有权。
+     * 前端应将此作为"必要条件"而非"充分条件"。
+     */
+    public Set<Long> getTransitionableSourceStatuses(Long projectId, Long userId) {
+        // 系统管理员：返回所有状态（使用 project_admin 规则）
+        if (permissionService.isSystemAdmin(userId)) {
+            List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, PROJECT_ADMIN_ROLE_ID);
+            if (ids.isEmpty()) {
+                // Fallback: 全局规则
+                ids = transitionMapper.findTransitionableSourceStatusIds(null, PROJECT_ADMIN_ROLE_ID);
+            }
+            return new HashSet<>(ids);
+        }
+
+        // 获取用户在项目中的角色
+        List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(userId, projectId);
+        if (roleIds.isEmpty()) {
+            return Set.of();
+        }
+
+        String roleIdsStr = roleIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, roleIdsStr);
+        if (ids.isEmpty()) {
+            // Fallback: 全局规则
+            ids = transitionMapper.findTransitionableSourceStatusIds(null, roleIdsStr);
+        }
+        return new HashSet<>(ids);
     }
 
     /**

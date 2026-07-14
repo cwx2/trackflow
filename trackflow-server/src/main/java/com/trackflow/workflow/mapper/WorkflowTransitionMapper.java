@@ -28,4 +28,16 @@ public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition>
                                        @Param("issueType") String issueType,
                                        @Param("roleIds") String roleIds,
                                        @Param("oldStatusId") Long oldStatusId);
+
+    /**
+     * 查找指定角色可以发起转换的所有源状态 ID（即有出边的状态）
+     * 用于看板等场景预判卡片是否可拖拽
+     */
+    @Select("""
+            SELECT DISTINCT old_status_id FROM workflow_transition
+            WHERE (project_id = #{projectId} OR project_id IS NULL)
+              AND role_id IN (${roleIds})
+            """)
+    List<Long> findTransitionableSourceStatusIds(@Param("projectId") Long projectId,
+                                                 @Param("roleIds") String roleIds);
 }
