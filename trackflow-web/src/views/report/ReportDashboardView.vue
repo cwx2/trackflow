@@ -159,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -188,6 +188,7 @@ const selectedProjectId = ref<string | undefined>(undefined)
 const selectedSprintId = ref<string | undefined>(undefined)
 const dateRange = ref<string[] | undefined>(undefined)
 const dashboardData = ref<DashboardData | null>(null)
+let themeObserver: MutationObserver | null = null
 
 const dateShortcuts = [
   { label: '近 7 天', value: () => [daysAgo(6), today()] },
@@ -199,10 +200,29 @@ const dateShortcuts = [
 function today() { return new Date() }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d }
 
-// ─── 主题色 ─────────────────────────────────────────────
+// ─── 主题色（动态读取 CSS 变量，适配亮色/暗色/护眼主题） ─────────
 
-const chartTextColor = '#9ca3af'
-const chartAxisColor = '#30363d'
+const chartColors = ref({
+  textColor: '#9ca3af',
+  axisColor: '#30363d',
+  tooltipBg: '#22252a',
+  tooltipBorder: '#30363d',
+  tooltipText: '#e6edf3',
+  cardBorder: '#2a2d33'
+})
+
+function readThemeColors() {
+  const style = getComputedStyle(document.documentElement)
+  chartColors.value = {
+    textColor: style.getPropertyValue('--tf-text-secondary').trim() || '#9ca3af',
+    axisColor: style.getPropertyValue('--tf-border').trim() || '#30363d',
+    tooltipBg: style.getPropertyValue('--tf-bg-elevated').trim() || '#22252a',
+    tooltipBorder: style.getPropertyValue('--tf-border').trim() || '#30363d',
+    tooltipText: style.getPropertyValue('--tf-text-primary').trim() || '#e6edf3',
+    cardBorder: style.getPropertyValue('--tf-bg-elevated').trim() || '#2a2d33'
+  }
+}
+
 const chartBgColor = 'transparent'
 
 // ─── 图表 Options ─────────────────────────────────────────
@@ -210,20 +230,21 @@ const chartBgColor = 'transparent'
 const statusChartOption = computed(() => {
   if (!dashboardData.value) return {}
   const items = dashboardData.value.statusDistribution.items
+  const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
-      backgroundColor: '#22252a',
-      borderColor: '#30363d',
-      textStyle: { color: '#e6edf3' }
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText }
     },
     legend: {
       orient: 'vertical',
       right: 10,
       top: 'center',
-      textStyle: { color: chartTextColor, fontSize: 11 },
+      textStyle: { color: c.textColor, fontSize: 11 },
       itemWidth: 10,
       itemHeight: 10
     },
@@ -232,10 +253,10 @@ const statusChartOption = computed(() => {
       radius: ['42%', '70%'],
       center: ['35%', '50%'],
       avoidLabelOverlap: true,
-      itemStyle: { borderRadius: 4, borderColor: '#2a2d33', borderWidth: 2 },
+      itemStyle: { borderRadius: 4, borderColor: c.cardBorder, borderWidth: 2 },
       label: { show: false },
       emphasis: {
-        label: { show: true, fontSize: 13, fontWeight: 500, color: '#e6edf3' },
+        label: { show: true, fontSize: 13, fontWeight: 500, color: c.tooltipText },
         itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
       },
       data: items.map(item => ({
@@ -250,28 +271,29 @@ const statusChartOption = computed(() => {
 const priorityChartOption = computed(() => {
   if (!dashboardData.value) return {}
   const { labels, data, colors } = dashboardData.value.priorityDistribution
+  const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#22252a',
-      borderColor: '#30363d',
-      textStyle: { color: '#e6edf3' }
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText }
     },
     grid: { left: 40, right: 20, top: 16, bottom: 30 },
     xAxis: {
       type: 'category',
       data: labels,
-      axisLine: { lineStyle: { color: chartAxisColor } },
-      axisLabel: { color: chartTextColor, fontSize: 11 },
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 11 },
       axisTick: { show: false }
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
       axisLine: { show: false },
-      axisLabel: { color: chartTextColor, fontSize: 11 },
-      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
     },
     series: [{
       type: 'bar',
@@ -287,20 +309,21 @@ const priorityChartOption = computed(() => {
 const typeChartOption = computed(() => {
   if (!dashboardData.value) return {}
   const items = dashboardData.value.typeDistribution.items
+  const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
-      backgroundColor: '#22252a',
-      borderColor: '#30363d',
-      textStyle: { color: '#e6edf3' }
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText }
     },
     legend: {
       orient: 'vertical',
       right: 10,
       top: 'center',
-      textStyle: { color: chartTextColor, fontSize: 11 },
+      textStyle: { color: c.textColor, fontSize: 11 },
       itemWidth: 10,
       itemHeight: 10
     },
@@ -309,10 +332,10 @@ const typeChartOption = computed(() => {
       radius: ['0%', '70%'],
       center: ['35%', '50%'],
       roseType: 'radius',
-      itemStyle: { borderRadius: 4, borderColor: '#2a2d33', borderWidth: 2 },
+      itemStyle: { borderRadius: 4, borderColor: c.cardBorder, borderWidth: 2 },
       label: { show: false },
       emphasis: {
-        label: { show: true, fontSize: 13, fontWeight: 500, color: '#e6edf3' }
+        label: { show: true, fontSize: 13, fontWeight: 500, color: c.tooltipText }
       },
       data: items.map(item => ({
         name: item.name,
@@ -326,13 +349,14 @@ const typeChartOption = computed(() => {
 const workloadChartOption = computed(() => {
   if (!dashboardData.value) return {}
   const items = dashboardData.value.workload.items
+  const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#22252a',
-      borderColor: '#30363d',
-      textStyle: { color: '#e6edf3' },
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText },
       formatter: (params: any) => {
         const item = items[params[0]?.dataIndex]
         if (!item) return ''
@@ -344,14 +368,14 @@ const workloadChartOption = computed(() => {
       type: 'value',
       minInterval: 1,
       axisLine: { show: false },
-      axisLabel: { color: chartTextColor, fontSize: 11 },
-      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
     },
     yAxis: {
       type: 'category',
       data: items.map(i => i.name),
-      axisLine: { lineStyle: { color: chartAxisColor } },
-      axisLabel: { color: chartTextColor, fontSize: 11, width: 70, overflow: 'truncate' },
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 11, width: 70, overflow: 'truncate' },
       axisTick: { show: false }
     },
     series: [
@@ -378,21 +402,21 @@ const workloadChartOption = computed(() => {
 const trendChartOption = computed(() => {
   if (!dashboardData.value) return {}
   const { dates, created, resolved } = dashboardData.value.trend
-  // 格式化日期为 MM-DD
   const shortDates = dates.map(d => d.substring(5))
+  const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#22252a',
-      borderColor: '#30363d',
-      textStyle: { color: '#e6edf3' }
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText }
     },
     legend: {
       data: ['新建', '关闭'],
       right: 20,
       top: 0,
-      textStyle: { color: chartTextColor, fontSize: 11 },
+      textStyle: { color: c.textColor, fontSize: 11 },
       itemWidth: 14,
       itemHeight: 3
     },
@@ -401,16 +425,16 @@ const trendChartOption = computed(() => {
       type: 'category',
       data: shortDates,
       boundaryGap: false,
-      axisLine: { lineStyle: { color: chartAxisColor } },
-      axisLabel: { color: chartTextColor, fontSize: 10, interval: 'auto' },
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 10, interval: 'auto' },
       axisTick: { show: false }
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
       axisLine: { show: false },
-      axisLabel: { color: chartTextColor, fontSize: 11 },
-      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
     },
     series: [
       {
@@ -449,19 +473,20 @@ const burndownChartOption = computed(() => {
   if (!dashboardData.value?.burndown) return {}
   const { dates, ideal, actual, sprintName } = dashboardData.value.burndown
   const shortDates = dates.map(d => d.substring(5))
+  const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#22252a',
-      borderColor: '#30363d',
-      textStyle: { color: '#e6edf3' }
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText }
     },
     legend: {
       data: ['理想进度', '实际剩余'],
       right: 20,
       top: 0,
-      textStyle: { color: chartTextColor, fontSize: 11 },
+      textStyle: { color: c.textColor, fontSize: 11 },
       itemWidth: 14,
       itemHeight: 3
     },
@@ -470,16 +495,16 @@ const burndownChartOption = computed(() => {
       type: 'category',
       data: shortDates,
       boundaryGap: false,
-      axisLine: { lineStyle: { color: chartAxisColor } },
-      axisLabel: { color: chartTextColor, fontSize: 10 },
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 10 },
       axisTick: { show: false }
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
       axisLine: { show: false },
-      axisLabel: { color: chartTextColor, fontSize: 11 },
-      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
     },
     series: [
       {
@@ -511,6 +536,11 @@ const burndownChartOption = computed(() => {
 // ─── 数据加载 ─────────────────────────────────────────
 
 onMounted(async () => {
+  readThemeColors()
+  // 监听主题变化（MutationObserver on data-theme attribute）
+  themeObserver = new MutationObserver(() => readThemeColors())
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
   await loadProjects()
   // 自动选择第一个项目
   if (projects.value.length > 0) {
@@ -518,6 +548,11 @@ onMounted(async () => {
     await loadSprints()
     await loadDashboard()
   }
+})
+
+onBeforeUnmount(() => {
+  themeObserver?.disconnect()
+  themeObserver = null
 })
 
 watch(selectedProjectId, async () => {

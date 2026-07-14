@@ -5,6 +5,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.report.vo.*;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysUser;
@@ -33,72 +34,79 @@ public class ReportStatisticsService {
 
     /**
      * 获取仪表盘全量数据（一次请求，前端缓存分发）
-     * 一次查询 issues + closedStatusIds，避免重复查询
      */
-    public Map<String, Object> getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
+    public DashboardVO getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
         List<Issue> issues = queryIssues(projectId, sprintId);
         Set<Long> closedIds = getClosedStatusIds();
 
-        Map<String, Object> dashboard = new LinkedHashMap<>();
-        dashboard.put("statusDistribution", buildStatusDistribution(issues));
-        dashboard.put("priorityDistribution", buildPriorityDistribution(issues));
-        dashboard.put("typeDistribution", buildTypeDistribution(issues));
-        dashboard.put("workload", buildWorkload(issues, closedIds));
-        dashboard.put("trend", getTrend(projectId, startDate, endDate));
+        DashboardVO dashboard = new DashboardVO();
+        dashboard.setStatusDistribution(buildStatusDistribution(issues));
+        dashboard.setPriorityDistribution(buildPriorityDistribution(issues));
+        dashboard.setTypeDistribution(buildTypeDistribution(issues));
+        dashboard.setWorkload(buildWorkload(issues, closedIds));
+        dashboard.setTrend(buildTrend(projectId, startDate, endDate));
         if (sprintId != null) {
-            dashboard.put("burndown", getBurndown(projectId, sprintId));
+            dashboard.setBurndown(buildBurndown(projectId, sprintId));
         }
-        dashboard.put("overview", buildOverview(issues, closedIds));
+        dashboard.setOverview(buildOverview(issues, closedIds));
         return dashboard;
     }
 
     // ─── Public endpoints (single chart) ────────────────────────────────
 
-    public Map<String, Object> getStatusDistribution(Long projectId, Long sprintId) {
+    public StatusDistributionVO getStatusDistribution(Long projectId, Long sprintId) {
         return buildStatusDistribution(queryIssues(projectId, sprintId));
     }
 
-    public Map<String, Object> getPriorityDistribution(Long projectId, Long sprintId) {
+    public PriorityDistributionVO getPriorityDistribution(Long projectId, Long sprintId) {
         return buildPriorityDistribution(queryIssues(projectId, sprintId));
     }
 
-    public Map<String, Object> getTypeDistribution(Long projectId, Long sprintId) {
+    public TypeDistributionVO getTypeDistribution(Long projectId, Long sprintId) {
         return buildTypeDistribution(queryIssues(projectId, sprintId));
     }
 
-    public Map<String, Object> getWorkload(Long projectId, Long sprintId) {
+    public WorkloadVO getWorkload(Long projectId, Long sprintId) {
         return buildWorkload(queryIssues(projectId, sprintId), getClosedStatusIds());
+    }
+
+    public TrendVO getTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
+        return buildTrend(projectId, startDate, endDate);
+    }
+
+    public BurndownVO getBurndown(Long projectId, Long sprintId) {
+        return buildBurndown(projectId, sprintId);
     }
 
     // ─── Internal build methods ─────────────────────────────────────────
 
-    private Map<String, Object> buildStatusDistribution(List<Issue> issues) {
+    private StatusDistributionVO buildStatusDistribution(List<Issue> issues) {
         List<IssueStatus> statuses = statusMapper.selectList(new LambdaQueryWrapper<IssueStatus>()
                 .orderByAsc(IssueStatus::getSortOrder));
 
         Map<Long, Long> grouped = issues.stream()
                 .collect(Collectors.groupingBy(Issue::getStatusId, Collectors.counting()));
 
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<StatusDistributionVO.StatusItem> items = new ArrayList<>();
         for (IssueStatus status : statuses) {
             long count = grouped.getOrDefault(status.getId(), 0L);
             if (count > 0) {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("name", status.getName());
-                item.put("value", count);
-                item.put("color", status.getColor());
-                item.put("category", status.getCategory());
+                StatusDistributionVO.StatusItem item = new StatusDistributionVO.StatusItem();
+                item.setName(status.getName());
+                item.setValue(count);
+                item.setColor(status.getColor());
+                item.setCategory(status.getCategory());
                 items.add(item);
             }
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("items", items);
-        result.put("total", issues.size());
-        return result;
+        StatusDistributionVO vo = new StatusDistributionVO();
+        vo.setItems(items);
+        vo.setTotal(issues.size());
+        return vo;
     }
 
-    private Map<String, Object> buildPriorityDistribution(List<Issue> issues) {
+    private PriorityDistributionVO buildPriorityDistribution(List<Issue> issues) {
         List<String> priorityOrder = List.of("Critical", "High", "Normal", "Low");
         Map<String, String> priorityColors = Map.of(
                 "Critical", "#f85149",
@@ -123,15 +131,15 @@ public class ReportStatisticsService {
             colors.add(priorityColors.getOrDefault(priority, "#6b7280"));
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("labels", labels);
-        result.put("data", data);
-        result.put("colors", colors);
-        result.put("total", issues.size());
-        return result;
+        PriorityDistributionVO vo = new PriorityDistributionVO();
+        vo.setLabels(labels);
+        vo.setData(data);
+        vo.setColors(colors);
+        vo.setTotal(issues.size());
+        return vo;
     }
 
-    private Map<String, Object> buildTypeDistribution(List<Issue> issues) {
+    private TypeDistributionVO buildTypeDistribution(List<Issue> issues) {
         Map<String, String> typeColors = Map.of(
                 "Bug", "#f85149",
                 "Task", "#58a6ff",
@@ -145,23 +153,23 @@ public class ReportStatisticsService {
                         i -> i.getIssueType() != null ? i.getIssueType() : "Task",
                         Collectors.counting()));
 
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<TypeDistributionVO.TypeItem> items = new ArrayList<>();
         for (Map.Entry<String, Long> entry : grouped.entrySet()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", entry.getKey());
-            item.put("value", entry.getValue());
-            item.put("color", typeColors.getOrDefault(entry.getKey(), "#6b7280"));
+            TypeDistributionVO.TypeItem item = new TypeDistributionVO.TypeItem();
+            item.setName(entry.getKey());
+            item.setValue(entry.getValue());
+            item.setColor(typeColors.getOrDefault(entry.getKey(), "#6b7280"));
             items.add(item);
         }
-        items.sort((a, b) -> Long.compare((Long) b.get("value"), (Long) a.get("value")));
+        items.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("items", items);
-        result.put("total", issues.size());
-        return result;
+        TypeDistributionVO vo = new TypeDistributionVO();
+        vo.setItems(items);
+        vo.setTotal(issues.size());
+        return vo;
     }
 
-    private Map<String, Object> buildWorkload(List<Issue> issues, Set<Long> closedIds) {
+    private WorkloadVO buildWorkload(List<Issue> issues, Set<Long> closedIds) {
         Map<Long, Long> grouped = issues.stream()
                 .filter(i -> i.getAssigneeId() != null)
                 .collect(Collectors.groupingBy(Issue::getAssigneeId, Collectors.counting()));
@@ -173,37 +181,37 @@ public class ReportStatisticsService {
                 userMapper.selectBatchIds(userIds).stream()
                         .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
 
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<WorkloadVO.WorkloadItem> items = new ArrayList<>();
         for (Map.Entry<Long, Long> entry : grouped.entrySet()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", nameMap.getOrDefault(entry.getKey(), "未知用户"));
-            item.put("value", entry.getValue());
+            WorkloadVO.WorkloadItem item = new WorkloadVO.WorkloadItem();
+            item.setName(nameMap.getOrDefault(entry.getKey(), "未知用户"));
+            item.setValue(entry.getValue());
             long doneCount = issues.stream()
                     .filter(i -> entry.getKey().equals(i.getAssigneeId()))
                     .filter(i -> closedIds.contains(i.getStatusId()))
                     .count();
-            item.put("done", doneCount);
-            item.put("inProgress", entry.getValue() - doneCount);
+            item.setDone(doneCount);
+            item.setInProgress(entry.getValue() - doneCount);
             items.add(item);
         }
-        items.sort((a, b) -> Long.compare((Long) b.get("value"), (Long) a.get("value")));
+        items.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
 
         if (unassigned > 0) {
-            Map<String, Object> unassignedItem = new LinkedHashMap<>();
-            unassignedItem.put("name", "未分配");
-            unassignedItem.put("value", unassigned);
-            unassignedItem.put("done", 0L);
-            unassignedItem.put("inProgress", unassigned);
+            WorkloadVO.WorkloadItem unassignedItem = new WorkloadVO.WorkloadItem();
+            unassignedItem.setName("未分配");
+            unassignedItem.setValue(unassigned);
+            unassignedItem.setDone(0L);
+            unassignedItem.setInProgress(unassigned);
             items.add(unassignedItem);
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("items", items);
-        result.put("total", issues.size());
-        return result;
+        WorkloadVO vo = new WorkloadVO();
+        vo.setItems(items);
+        vo.setTotal(issues.size());
+        return vo;
     }
 
-    private Map<String, Object> buildOverview(List<Issue> issues, Set<Long> closedIds) {
+    private OverviewVO buildOverview(List<Issue> issues, Set<Long> closedIds) {
         long total = issues.size();
         long open = issues.stream().filter(i -> !closedIds.contains(i.getStatusId())).count();
         long closed = total - open;
@@ -213,22 +221,17 @@ public class ReportStatisticsService {
                 .filter(i -> !closedIds.contains(i.getStatusId()))
                 .count();
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", total);
-        result.put("open", open);
-        result.put("closed", closed);
-        result.put("unassigned", unassigned);
-        result.put("overdue", overdue);
-        result.put("completionRate", total > 0 ? Math.round(closed * 100.0 / total) : 0);
-        return result;
+        OverviewVO vo = new OverviewVO();
+        vo.setTotal(total);
+        vo.setOpen(open);
+        vo.setClosed(closed);
+        vo.setUnassigned(unassigned);
+        vo.setOverdue(overdue);
+        vo.setCompletionRate(total > 0 ? Math.round(closed * 100.0 / total) : 0);
+        return vo;
     }
 
-    // ─── Trend & Burndown (separate queries by nature) ──────────────────
-
-    /**
-     * 工单趋势（每日新建/关闭 — 折线图）
-     */
-    public Map<String, Object> getTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
+    private TrendVO buildTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
@@ -266,24 +269,22 @@ public class ReportStatisticsService {
             current = current.plusDays(1);
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("dates", dates);
-        result.put("created", createdData);
-        result.put("resolved", resolvedData);
-        return result;
+        TrendVO vo = new TrendVO();
+        vo.setDates(dates);
+        vo.setCreated(createdData);
+        vo.setResolved(resolvedData);
+        return vo;
     }
 
-    /**
-     * Sprint 燃尽图数据
-     */
-    public Map<String, Object> getBurndown(Long projectId, Long sprintId) {
+    private BurndownVO buildBurndown(Long projectId, Long sprintId) {
         Sprint sprint = sprintMapper.selectById(sprintId);
         if (sprint == null || sprint.getStartDate() == null || sprint.getEndDate() == null) {
-            Map<String, Object> empty = new LinkedHashMap<>();
-            empty.put("dates", List.of());
-            empty.put("ideal", List.of());
-            empty.put("actual", List.of());
-            empty.put("sprintName", sprint != null ? sprint.getName() : "");
+            BurndownVO empty = new BurndownVO();
+            empty.setDates(List.of());
+            empty.setIdeal(List.of());
+            empty.setActual(List.of());
+            empty.setSprintName(sprint != null ? sprint.getName() : "");
+            empty.setTotalIssues(0);
             return empty;
         }
 
@@ -326,13 +327,13 @@ public class ReportStatisticsService {
             current = current.plusDays(1);
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("dates", dates);
-        result.put("ideal", ideal);
-        result.put("actual", actual);
-        result.put("sprintName", sprint.getName());
-        result.put("totalIssues", totalIssues);
-        return result;
+        BurndownVO vo = new BurndownVO();
+        vo.setDates(dates);
+        vo.setIdeal(ideal);
+        vo.setActual(actual);
+        vo.setSprintName(sprint.getName());
+        vo.setTotalIssues(totalIssues);
+        return vo;
     }
 
     // ─── Private helpers ────────────────────────────────────────────────

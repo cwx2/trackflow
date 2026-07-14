@@ -4,13 +4,13 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.service.ReportStatisticsService;
+import com.trackflow.report.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.Map;
 
 /**
  * 报表统计数据 API — 提供仪表盘图表所需的统计数据
@@ -28,16 +28,14 @@ public class ReportStatisticsController {
      */
     @GetMapping("/dashboard")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> dashboard(
+    public R<DashboardVO> dashboard(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
-
-        Map<String, Object> data = statisticsService.getDashboardData(projectId, sprintId, startDate, endDate);
-        return R.ok(data);
+        return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate));
     }
 
     /**
@@ -45,7 +43,7 @@ public class ReportStatisticsController {
      */
     @GetMapping("/status-distribution")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> statusDistribution(
+    public R<StatusDistributionVO> statusDistribution(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -58,7 +56,7 @@ public class ReportStatisticsController {
      */
     @GetMapping("/priority-distribution")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> priorityDistribution(
+    public R<PriorityDistributionVO> priorityDistribution(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -71,7 +69,7 @@ public class ReportStatisticsController {
      */
     @GetMapping("/trend")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> trend(
+    public R<TrendVO> trend(
             @RequestParam Long projectId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
@@ -85,7 +83,7 @@ public class ReportStatisticsController {
      */
     @GetMapping("/workload")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> workload(
+    public R<WorkloadVO> workload(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -98,7 +96,7 @@ public class ReportStatisticsController {
      */
     @GetMapping("/type-distribution")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> typeDistribution(
+    public R<TypeDistributionVO> typeDistribution(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -111,7 +109,7 @@ public class ReportStatisticsController {
      */
     @GetMapping("/burndown")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> burndown(
+    public R<BurndownVO> burndown(
             @RequestParam Long projectId,
             @RequestParam Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
