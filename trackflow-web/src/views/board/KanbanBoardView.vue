@@ -910,16 +910,6 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.select-error-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px;
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
 .empty-icon {
   font-size: 48px;
   margin-bottom: 16px;

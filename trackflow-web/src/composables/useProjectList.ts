@@ -10,8 +10,15 @@ import { useProjectStore } from '@/stores/project'
  * 提供自动选择逻辑和重试能力。
  *
  * 使用场景：看板、迭代、创建工单等需要项目选择器的页面。
+ *
+ * 注意：此 composable 用于下拉选择器场景，一次性加载当前用户可见的全部项目。
+ * 后端已通过 project_member 表限制返回结果（非管理员仅返回参与的项目），
+ * 因此实际返回量通常远小于 pageSize 上限。
  */
 export type ProjectLoadState = 'idle' | 'loading' | 'success' | 'error'
+
+/** 下拉选择器场景的最大加载数量（后端已按成员关系过滤，实际量远小于此值） */
+const SELECTOR_PAGE_SIZE = 500
 
 export function useProjectList() {
   const projects = ref<ProjectVO[]>([])
@@ -27,7 +34,7 @@ export function useProjectList() {
   async function loadProjects(): Promise<ProjectVO[]> {
     projectLoadState.value = 'loading'
     try {
-      const res = await projectApi.list({ pageSize: 100 })
+      const res = await projectApi.list({ pageSize: SELECTOR_PAGE_SIZE })
       projects.value = res.data?.list || []
       projectLoadState.value = 'success'
 

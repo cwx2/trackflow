@@ -244,8 +244,6 @@ onMounted(() => {
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
 .priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-
-.select-error-state { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; font-size: 12px; color: var(--color-text-3); }
 .priority-dot.critical { background: #ef4444; }
 .priority-dot.high { background: #f59e0b; }
 .priority-dot.normal { background: #6366f1; }

@@ -694,14 +694,4 @@ onMounted(async () => {
   color: var(--color-text-3);
   margin-bottom: 16px;
 }
-
-.select-error-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px;
-  font-size: 12px;
-  color: var(--color-text-3);
-}
 </style>
