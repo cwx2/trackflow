@@ -17,6 +17,8 @@ export { dashboardApi } from './dashboard'
 export { timeEntryApi } from './timeEntry'
 export { workflowApi } from './workflow'
 export { boardApi } from './board'
+export { reportApi } from './report'
+export { notificationPreferenceApi } from './notificationPreference'
 
 // 类型导出
 export type * from './types'

@@ -19,4 +19,22 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
             @Param("startDate") String startDate,
             @Param("endDate") String endDate
     );
+
+    /**
+     * 按项目聚合：查询用户有权访问的所有项目工时（项目视图概览）
+     */
+    List<Map<String, Object>> selectEntriesByProjectForUser(
+            @Param("userId") Long userId,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate
+    );
+
+    /**
+     * 查询指定项目在日期范围内的所有工时（项目视图明细）
+     */
+    List<Map<String, Object>> selectEntriesByProject(
+            @Param("projectId") Long projectId,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate
+    );
 }

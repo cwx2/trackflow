@@ -7,6 +7,7 @@ import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.service.TimeEntryService;
+import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -120,5 +121,30 @@ public class TimeEntryController {
             targetUserId = currentUserId;
         }
         return R.ok(timeEntryService.sumByUserAndDateRange(targetUserId, startDate, endDate));
+    }
+
+    /**
+     * 按项目汇总工时（项目视图概览）
+     * 返回当前用户可见项目的工时聚合列表
+     */
+    @GetMapping("/by-project")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<ProjectTimeSummaryVO>> listByProject(
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(timeEntryService.listByProjectForUser(currentUserId, startDate, endDate));
+    }
+
+    /**
+     * 查询指定项目在日期范围内的工时明细（项目视图详情）
+     */
+    @GetMapping("/by-project/{projectId}")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<List<TimeEntryVO>> listByProjectDetail(
+            @PathVariable Long projectId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        return R.ok(timeEntryService.listByProject(projectId, startDate, endDate));
     }
 }

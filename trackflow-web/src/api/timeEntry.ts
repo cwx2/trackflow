@@ -7,6 +7,7 @@ export interface TimeEntryVO {
   issueKey?: string
   issueTitle?: string
   userId: string
+  userName?: string
   workDate: string
   duration: number       // minutes
   startTime?: number     // minutes from midnight
@@ -14,6 +15,14 @@ export interface TimeEntryVO {
   description?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface ProjectTimeSummaryVO {
+  projectId: string
+  projectName: string
+  projectKey: string
+  totalDuration: number  // minutes
+  entries: TimeEntryVO[]
 }
 
 export const timeEntryApi = {
@@ -45,5 +54,15 @@ export const timeEntryApi = {
   /** 汇总工时（分钟） */
   summary(params: { userId?: string; startDate: string; endDate: string }) {
     return request.get<any, R<number>>('/time-entries/summary', { params })
+  },
+
+  /** 按项目汇总工时（项目视图概览） */
+  listByProject(params: { startDate: string; endDate: string }) {
+    return request.get<any, R<ProjectTimeSummaryVO[]>>('/time-entries/by-project', { params })
+  },
+
+  /** 查询指定项目在日期范围内的工时明细 */
+  listByProjectDetail(projectId: string, params: { startDate: string; endDate: string }) {
+    return request.get<any, R<TimeEntryVO[]>>(`/time-entries/by-project/${projectId}`, { params })
   }
 }

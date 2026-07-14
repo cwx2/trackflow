@@ -9,6 +9,7 @@ public class TimeEntryVO {
     private String issueKey;
     private String issueTitle;
     private String userId;
+    private String userName;
     private String workDate;
     private Integer duration;       // minutes
     private Integer startTime;      // minutes from midnight

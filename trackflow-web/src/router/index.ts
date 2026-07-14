@@ -76,6 +76,12 @@ const routes = [
         component: () => import('@/views/timesheet/TimesheetView.vue')
       },
       {
+        path: 'reports',
+        name: 'Reports',
+        component: () => import('@/views/report/ReportListView.vue'),
+        meta: { requiresReport: true }
+      },
+      {
         path: 'admin',
         name: 'Admin',
         component: () => import('@/views/admin/AdminView.vue'),
@@ -119,7 +125,12 @@ const routes = [
       {
         path: 'settings/notifications',
         name: 'NotificationSettings',
-        component: () => import('@/views/settings/ProfileView.vue') // 暂时复用，后续独立
+        component: () => import('@/views/settings/NotificationSettingsView.vue')
+      },
+      {
+        path: ':pathMatch(.*)*',
+        name: 'NotFound',
+        component: () => import('@/views/error/NotFoundView.vue')
       }
     ]
   }
@@ -164,6 +175,15 @@ router.beforeEach(async (to, _from, next) => {
   // 创建工单路由权限检查：统一使用 authStore.canCreateIssue
   if (to.meta.requiresCreateIssue) {
     if (!authStore.canCreateIssue) {
+      next({ name: 'Forbidden' })
+      return
+    }
+  }
+
+  // 报表路由权限检查：system:admin 或在任意项目中有 report:view
+  if (to.meta.requiresReport) {
+    const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:report')
+    if (!canAccess) {
       next({ name: 'Forbidden' })
       return
     }

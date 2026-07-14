@@ -16,4 +16,40 @@
         ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 
+    <!-- 按项目聚合工时：查询用户有权访问的项目的所有工时（用于"项目"视图） -->
+    <select id="selectEntriesByProjectForUser" resultType="map">
+        SELECT
+            t.id, t.issue_id, t.user_id, t.work_date, t.duration,
+            t.start_time, t.work_type, t.description,
+            t.created_at, t.updated_at,
+            i.issue_key, i.title AS issue_title,
+            p.id AS project_id, p.name AS project_name, p.key AS project_key
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = i.project_id
+        WHERE i.project_id IN (
+            SELECT pm.project_id FROM project_member pm WHERE pm.user_id = #{userId}
+        )
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+        ORDER BY p.name ASC, t.work_date ASC, t.start_time ASC, t.created_at ASC
+    </select>
+
+    <!-- 按项目查询工时：指定项目的所有工时 -->
+    <select id="selectEntriesByProject" resultType="map">
+        SELECT
+            t.id, t.issue_id, t.user_id, t.work_date, t.duration,
+            t.start_time, t.work_type, t.description,
+            t.created_at, t.updated_at,
+            i.issue_key, i.title AS issue_title,
+            u.display_name AS user_name
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        JOIN sys_user u ON u.id = t.user_id
+        WHERE i.project_id = #{projectId}
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+        ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
+    </select>
+
 </mapper>

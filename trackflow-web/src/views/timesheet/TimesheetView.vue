@@ -7,106 +7,251 @@
 
     <!-- Tabs -->
     <div class="timesheet-tabs">
-      <button class="tab-btn" :class="{ active: activeTab === 'people' }" @click="activeTab = 'people'">人员</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="activeTab = 'projects'">项目</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'workgroups' }" @click="activeTab = 'workgroups'">工作群组</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'people' }" @click="switchTab('people')">人员</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'projects' }" @click="switchTab('projects')">项目</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'workgroups' }" @click="switchTab('workgroups')">工作群组</button>
     </div>
 
-    <!-- User selector & filters -->
-    <div class="timesheet-controls">
-      <div class="controls-left">
-        <div class="user-selector">
-          <span class="user-avatar-dot"></span>
-          <span class="user-name">{{ currentUserName }}</span>
-          <span class="selector-arrow">▾</span>
-        </div>
-        <div class="filters">
-          <span class="filter-label">项目:</span>
-          <span class="filter-value">全部</span>
-          <span class="filter-label">工作类型:</span>
-          <span class="filter-value">全部</span>
-          <span class="filter-edit">✏️</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Date range & navigation -->
-    <div class="timesheet-datebar">
-      <div class="date-info">
-        <span class="date-range">{{ dateRangeLabel }}</span>
-        <span class="total-time">总已用时间: {{ formatDuration(weekTotal) }}</span>
-      </div>
-      <div class="date-nav">
-        <button class="nav-btn" @click="navigate(-1)">←</button>
-        <button class="nav-btn today-btn" @click="goToday">今天</button>
-        <button class="nav-btn" @click="navigate(1)">→</button>
-        <div class="view-toggle">
-          <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
-          <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
-        </div>
-        <button class="add-time-btn" @click="openAddDialog()">添加已花费时间</button>
-      </div>
-    </div>
-
-    <!-- Week View -->
-    <div v-if="viewMode === 'week'" class="week-grid">
-      <div
-        v-for="(day, index) in weekDays"
-        :key="index"
-        class="day-column"
-        :class="{ today: isToday(day.date), weekend: day.isWeekend }"
-        @click="openAddDialog(day.date)"
-      >
-        <div class="day-header">
-          <span class="day-hours">{{ formatDuration(getDayTotal(day.date)) }}</span>
-          <span class="day-name">{{ day.dayName }}</span>
-          <span class="day-date">{{ day.dateNum }}</span>
-        </div>
-        <div class="day-entries">
-          <div v-for="entry in getDayEntries(day.date)" :key="entry.id" class="time-entry" @click.stop="openEditDialog(entry)">
-            <div class="entry-issue" @click.stop="$router.push(`/issues/${entry.issueId}`)">{{ entry.issueKey || entry.issueId }}</div>
-            <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
-            <div v-if="entry.description" class="entry-desc">{{ entry.description }}</div>
-            <div v-if="entry.workType" class="entry-type">{{ workTypeLabel(entry.workType) }}</div>
+    <!-- ===================== 人员视图 ===================== -->
+    <template v-if="activeTab === 'people'">
+      <!-- User selector & filters -->
+      <div class="timesheet-controls">
+        <div class="controls-left">
+          <div class="user-selector">
+            <span class="user-avatar-dot"></span>
+            <span class="user-name">{{ currentUserName }}</span>
+            <span class="selector-arrow">▾</span>
+          </div>
+          <div class="filters">
+            <span class="filter-label">项目:</span>
+            <span class="filter-value">全部</span>
+            <span class="filter-label">工作类型:</span>
+            <span class="filter-value">全部</span>
           </div>
         </div>
-        <div class="day-footer">
-          <span class="day-total" :class="{ insufficient: getDayTotal(day.date) > 0 && getDayTotal(day.date) < 480 && !day.isWeekend }">
-            {{ formatDuration(getDayTotal(day.date)) }} / 8h
-          </span>
+      </div>
+
+      <!-- Date range & navigation -->
+      <div class="timesheet-datebar">
+        <div class="date-info">
+          <span class="date-range">{{ dateRangeLabel }}</span>
+          <span class="total-time">总已用时间: {{ formatDuration(weekTotal) }}</span>
+        </div>
+        <div class="date-nav">
+          <button class="nav-btn" @click="navigate(-1)">←</button>
+          <button class="nav-btn today-btn" @click="goToday">今天</button>
+          <button class="nav-btn" @click="navigate(1)">→</button>
+          <div class="view-toggle">
+            <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
+            <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
+          </div>
+          <button class="add-time-btn" @click="openAddDialog()">添加已花费时间</button>
         </div>
       </div>
-    </div>
 
-    <!-- Month View -->
-    <div v-else class="month-grid">
-      <div class="month-header-row">
-        <div v-for="name in ['周一','周二','周三','周四','周五','周六','周日']" :key="name" class="month-header-cell">{{ name }}</div>
-      </div>
-      <div class="month-body">
+      <!-- Week View -->
+      <div v-if="viewMode === 'week'" class="week-grid">
         <div
-          v-for="(day, index) in monthDays"
+          v-for="(day, index) in weekDays"
           :key="index"
-          class="month-cell"
-          :class="{ today: isToday(day.date), weekend: day.isWeekend, 'other-month': !day.currentMonth }"
+          class="day-column"
+          :class="{ today: isToday(day.date), weekend: day.isWeekend }"
           @click="openAddDialog(day.date)"
         >
-          <div class="month-cell-header">
-            <span class="month-cell-date">{{ day.dateNum }}</span>
-            <span v-if="getDayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(getDayTotal(day.date)) }}</span>
+          <div class="day-header">
+            <span class="day-hours">{{ formatDuration(getDayTotal(day.date)) }}</span>
+            <span class="day-name">{{ day.dayName }}</span>
+            <span class="day-date">{{ day.dateNum }}</span>
           </div>
-          <div class="month-cell-entries">
-            <div v-for="entry in getDayEntries(day.date).slice(0, 2)" :key="entry.id" class="month-entry" @click.stop="openEditDialog(entry)">
-              <span class="month-entry-key">{{ entry.issueKey }}</span>
-              <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
+          <div class="day-entries">
+            <div v-for="entry in getDayEntries(day.date)" :key="entry.id" class="time-entry" @click.stop="openEditDialog(entry)">
+              <div class="entry-issue" @click.stop="$router.push(`/issues/${entry.issueId}`)">{{ entry.issueKey || entry.issueId }}</div>
+              <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
+              <div v-if="entry.description" class="entry-desc">{{ entry.description }}</div>
+              <div v-if="entry.workType" class="entry-type">{{ workTypeLabel(entry.workType) }}</div>
             </div>
-            <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
-              +{{ getDayEntries(day.date).length - 2 }} 更多
+          </div>
+          <div class="day-footer">
+            <span class="day-total" :class="{ insufficient: getDayTotal(day.date) > 0 && getDayTotal(day.date) < 480 && !day.isWeekend }">
+              {{ formatDuration(getDayTotal(day.date)) }} / 8h
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Month View -->
+      <div v-else class="month-grid">
+        <div class="month-header-row">
+          <div v-for="name in ['周一','周二','周三','周四','周五','周六','周日']" :key="name" class="month-header-cell">{{ name }}</div>
+        </div>
+        <div class="month-body">
+          <div
+            v-for="(day, index) in monthDays"
+            :key="index"
+            class="month-cell"
+            :class="{ today: isToday(day.date), weekend: day.isWeekend, 'other-month': !day.currentMonth }"
+            @click="openAddDialog(day.date)"
+          >
+            <div class="month-cell-header">
+              <span class="month-cell-date">{{ day.dateNum }}</span>
+              <span v-if="getDayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(getDayTotal(day.date)) }}</span>
+            </div>
+            <div class="month-cell-entries">
+              <div v-for="entry in getDayEntries(day.date).slice(0, 2)" :key="entry.id" class="month-entry" @click.stop="openEditDialog(entry)">
+                <span class="month-entry-key">{{ entry.issueKey }}</span>
+                <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
+              </div>
+              <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
+                +{{ getDayEntries(day.date).length - 2 }} 更多
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
+
+    <!-- ===================== 项目视图 ===================== -->
+    <template v-else-if="activeTab === 'projects'">
+      <!-- Project selector & filters -->
+      <div class="timesheet-controls">
+        <div class="controls-left">
+          <div class="project-selector">
+            <a-select
+              v-model="selectedProjectId"
+              placeholder="选择项目查看明细"
+              allow-clear
+              allow-search
+              style="width: 260px"
+              @change="onProjectChange"
+            >
+              <a-option v-for="p in projectSummaries" :key="p.projectId" :value="p.projectId">
+                {{ p.projectKey }} - {{ p.projectName }}
+              </a-option>
+            </a-select>
+          </div>
+          <div class="filters">
+            <span class="filter-label">汇总范围:</span>
+            <span class="filter-value">{{ selectedProjectId ? '项目明细' : '所有可见项目' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date range & navigation -->
+      <div class="timesheet-datebar">
+        <div class="date-info">
+          <span class="date-range">{{ dateRangeLabel }}</span>
+          <span class="total-time">总已用时间: {{ formatDuration(projectViewTotal) }}</span>
+        </div>
+        <div class="date-nav">
+          <button class="nav-btn" @click="navigate(-1)">←</button>
+          <button class="nav-btn today-btn" @click="goToday">今天</button>
+          <button class="nav-btn" @click="navigate(1)">→</button>
+          <div class="view-toggle">
+            <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
+            <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project Overview (no project selected) -->
+      <div v-if="!selectedProjectId" class="project-overview">
+        <div v-if="projectSummaries.length === 0 && !loading" class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div class="empty-title">暂无项目工时数据</div>
+          <div class="empty-desc">当前日期范围内您可见的项目没有工时记录</div>
+        </div>
+        <div v-else class="project-summary-list">
+          <div
+            v-for="p in projectSummaries"
+            :key="p.projectId"
+            class="project-summary-card"
+            @click="onProjectChange(p.projectId)"
+          >
+            <div class="project-summary-left">
+              <span class="project-key-badge">{{ p.projectKey }}</span>
+              <span class="project-name-text">{{ p.projectName }}</span>
+            </div>
+            <div class="project-summary-right">
+              <span class="project-total-dur">{{ formatDuration(p.totalDuration) }}</span>
+              <span class="project-entry-count">{{ p.entries.length }} 条记录</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project Detail (project selected) -->
+      <div v-else class="project-detail-view">
+        <!-- Week grid for project -->
+        <div v-if="viewMode === 'week'" class="week-grid">
+          <div
+            v-for="(day, index) in weekDays"
+            :key="index"
+            class="day-column"
+            :class="{ today: isToday(day.date), weekend: day.isWeekend }"
+          >
+            <div class="day-header">
+              <span class="day-hours">{{ formatDuration(getProjectDayTotal(day.date)) }}</span>
+              <span class="day-name">{{ day.dayName }}</span>
+              <span class="day-date">{{ day.dateNum }}</span>
+            </div>
+            <div class="day-entries">
+              <div v-for="entry in getProjectDayEntries(day.date)" :key="entry.id" class="time-entry">
+                <div class="entry-issue">{{ entry.issueKey || entry.issueId }}</div>
+                <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
+                <div v-if="entry.userName" class="entry-user">{{ entry.userName }}</div>
+                <div v-if="entry.workType" class="entry-type">{{ workTypeLabel(entry.workType) }}</div>
+              </div>
+            </div>
+            <div class="day-footer">
+              <span class="day-total">{{ formatDuration(getProjectDayTotal(day.date)) }}</span>
+            </div>
+          </div>
+        </div>
+        <!-- Month grid for project -->
+        <div v-else class="month-grid">
+          <div class="month-header-row">
+            <div v-for="name in ['周一','周二','周三','周四','周五','周六','周日']" :key="name" class="month-header-cell">{{ name }}</div>
+          </div>
+          <div class="month-body">
+            <div
+              v-for="(day, index) in monthDays"
+              :key="index"
+              class="month-cell"
+              :class="{ today: isToday(day.date), weekend: day.isWeekend, 'other-month': !day.currentMonth }"
+            >
+              <div class="month-cell-header">
+                <span class="month-cell-date">{{ day.dateNum }}</span>
+                <span v-if="getProjectDayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(getProjectDayTotal(day.date)) }}</span>
+              </div>
+              <div class="month-cell-entries">
+                <div v-for="entry in getProjectDayEntries(day.date).slice(0, 2)" :key="entry.id" class="month-entry">
+                  <span class="month-entry-key">{{ entry.issueKey }}</span>
+                  <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
+                </div>
+                <div v-if="getProjectDayEntries(day.date).length > 2" class="month-entry-more">
+                  +{{ getProjectDayEntries(day.date).length - 2 }} 更多
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ===================== 工作群组视图 ===================== -->
+    <template v-else-if="activeTab === 'workgroups'">
+      <div class="workgroup-empty">
+        <div class="empty-state">
+          <div class="empty-icon">👥</div>
+          <div class="empty-title">工作群组功能暂未上线</div>
+          <div class="empty-desc">工作群组允许您将团队成员分组，按群组查看聚合工时。该功能正在开发中，敬请期待。</div>
+          <div class="empty-hint">
+            <span class="hint-icon">💡</span>
+            <span>您可以使用"项目"视图按项目维度查看团队工时汇总</span>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
@@ -225,13 +370,16 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useRoute, useRouter } from 'vue-router'
 import { timeEntryApi, issueApi } from '@/api'
-import type { TimeEntryVO } from '@/api/timeEntry'
+import type { TimeEntryVO, ProjectTimeSummaryVO } from '@/api/timeEntry'
 
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 // State
-const activeTab = ref<'people' | 'projects' | 'workgroups'>('people')
+const activeTab = ref<'people' | 'projects' | 'workgroups'>((route.query.view as any) || 'people')
 const viewMode = ref<'week' | 'month'>('week')
 const currentWeekStart = ref(getMonday(new Date()))
 const currentMonthDate = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
@@ -242,6 +390,11 @@ const saving = ref(false)
 const deleting = ref(false)
 const timeEntries = ref<TimeEntryVO[]>([])
 const issueOptions = ref<{ value: string; label: string }[]>([])
+
+// Project view state
+const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
+const selectedProjectId = ref<string | undefined>(undefined)
+const projectEntries = ref<TimeEntryVO[]>([])
 
 // Form
 const dateMode = ref<'single' | 'range'>('single')
@@ -279,7 +432,6 @@ const weekDays = computed(() => {
 const monthDays = computed(() => {
   const [year, month] = currentMonthDate.value.split('-').map(Number)
   const firstDay = new Date(year, month - 1, 1)
-  const lastDay = new Date(year, month, 0)
 
   // Start from Monday of the week containing the first day
   const startDate = new Date(firstDay)
@@ -318,23 +470,31 @@ const weekTotal = computed(() => {
   return timeEntries.value.reduce((sum, e) => sum + e.duration, 0)
 })
 
-// Data loading
+const projectViewTotal = computed(() => {
+  if (selectedProjectId.value) {
+    return projectEntries.value.reduce((sum, e) => sum + e.duration, 0)
+  }
+  return projectSummaries.value.reduce((sum, p) => sum + p.totalDuration, 0)
+})
+
+// Tab switching
+function switchTab(tab: 'people' | 'projects' | 'workgroups') {
+  activeTab.value = tab
+  // Persist to URL query for refresh preservation
+  router.replace({ query: { ...route.query, view: tab } })
+  if (tab === 'people') {
+    loadEntries()
+  } else if (tab === 'projects') {
+    loadProjectSummaries()
+  }
+  // workgroups: no data to load
+}
+
+// Data loading - People view
 async function loadEntries() {
   loading.value = true
   try {
-    let startDate: string, endDate: string
-    if (viewMode.value === 'week') {
-      startDate = currentWeekStart.value
-      const end = new Date(currentWeekStart.value)
-      end.setDate(end.getDate() + 6)
-      endDate = formatDateKey(end)
-    } else {
-      const [year, month] = currentMonthDate.value.split('-').map(Number)
-      startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const lastDay = new Date(year, month, 0)
-      endDate = formatDateKey(lastDay)
-    }
-
+    const { startDate, endDate } = getDateRange()
     const res = await timeEntryApi.list({ startDate, endDate })
     if (res.code === 0 && res.data) {
       timeEntries.value = res.data
@@ -343,6 +503,61 @@ async function loadEntries() {
     Message.error({ content: '加载工时数据失败', duration: 3000 })
   } finally {
     loading.value = false
+  }
+}
+
+// Data loading - Project view
+async function loadProjectSummaries() {
+  loading.value = true
+  try {
+    const { startDate, endDate } = getDateRange()
+    const res = await timeEntryApi.listByProject({ startDate, endDate })
+    if (res.code === 0 && res.data) {
+      projectSummaries.value = res.data
+    }
+  } catch {
+    Message.error({ content: '加载项目工时数据失败', duration: 3000 })
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadProjectDetail(projectId: string) {
+  loading.value = true
+  try {
+    const { startDate, endDate } = getDateRange()
+    const res = await timeEntryApi.listByProjectDetail(projectId, { startDate, endDate })
+    if (res.code === 0 && res.data) {
+      projectEntries.value = res.data
+    }
+  } catch {
+    Message.error({ content: '加载项目工时明细失败', duration: 3000 })
+  } finally {
+    loading.value = false
+  }
+}
+
+function onProjectChange(val: string | undefined) {
+  selectedProjectId.value = val || undefined
+  if (val) {
+    loadProjectDetail(val)
+  } else {
+    projectEntries.value = []
+    loadProjectSummaries()
+  }
+}
+
+function getDateRange(): { startDate: string; endDate: string } {
+  if (viewMode.value === 'week') {
+    const startDate = currentWeekStart.value
+    const end = new Date(currentWeekStart.value)
+    end.setDate(end.getDate() + 6)
+    return { startDate, endDate: formatDateKey(end) }
+  } else {
+    const [year, month] = currentMonthDate.value.split('-').map(Number)
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const lastDay = new Date(year, month, 0)
+    return { startDate, endDate: formatDateKey(lastDay) }
   }
 }
 
@@ -360,13 +575,22 @@ async function searchIssues(keyword: string) {
   } catch { /* silent */ }
 }
 
-// Actions
+// People view helpers
 function getDayEntries(dateKey: string): TimeEntryVO[] {
   return timeEntries.value.filter(e => e.workDate === dateKey)
 }
 
 function getDayTotal(dateKey: string): number {
   return getDayEntries(dateKey).reduce((sum, e) => sum + e.duration, 0)
+}
+
+// Project view helpers
+function getProjectDayEntries(dateKey: string): TimeEntryVO[] {
+  return projectEntries.value.filter(e => e.workDate === dateKey)
+}
+
+function getProjectDayTotal(dateKey: string): number {
+  return getProjectDayEntries(dateKey).reduce((sum, e) => sum + e.duration, 0)
 }
 
 function isToday(dateKey: string): boolean {
@@ -393,7 +617,19 @@ function goToday() {
 
 function switchView(mode: 'week' | 'month') {
   viewMode.value = mode
-  loadEntries()
+  reloadCurrentTab()
+}
+
+function reloadCurrentTab() {
+  if (activeTab.value === 'people') {
+    loadEntries()
+  } else if (activeTab.value === 'projects') {
+    if (selectedProjectId.value) {
+      loadProjectDetail(selectedProjectId.value)
+    } else {
+      loadProjectSummaries()
+    }
+  }
 }
 
 function openAddDialog(date?: string) {
@@ -483,7 +719,7 @@ async function saveEntry() {
       Message.success('工时已添加')
     }
     closeDialog()
-    loadEntries()
+    reloadCurrentTab()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
   } finally {
@@ -506,7 +742,7 @@ async function deleteEntry() {
         await timeEntryApi.delete(editingEntry.value!.id)
         Message.success('工时已删除')
         closeDialog()
-        loadEntries()
+        reloadCurrentTab()
       } catch (e: any) {
         Message.error(e.response?.data?.message || '删除失败')
       } finally {
@@ -590,14 +826,19 @@ function getMonday(d: Date): string {
   return formatDateKey(date)
 }
 
-// Watchers
-watch(currentWeekStart, () => { if (viewMode.value === 'week') loadEntries() })
-watch(currentMonthDate, () => { if (viewMode.value === 'month') loadEntries() })
+// Watchers - reload data on date navigation
+watch(currentWeekStart, () => { if (viewMode.value === 'week') reloadCurrentTab() })
+watch(currentMonthDate, () => { if (viewMode.value === 'month') reloadCurrentTab() })
 
 // Init
 onMounted(() => {
-  loadEntries()
-  // Preload some issues for the selector
+  // Load data for the currently active tab (may be restored from URL)
+  if (activeTab.value === 'projects') {
+    loadProjectSummaries()
+  } else if (activeTab.value === 'people') {
+    loadEntries()
+  }
+  // Preload some issues for the add dialog
   searchIssues('')
 })
 </script>
@@ -619,10 +860,10 @@ onMounted(() => {
 .user-selector { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
 .user-avatar-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--tf-accent); }
 .selector-arrow { font-size: 10px; color: var(--tf-text-tertiary); }
-.filters { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.project-selector { display: flex; align-items: center; gap: 8px; }
+.filters { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 4px; }
 .filter-label { color: var(--tf-text-tertiary); }
 .filter-value { color: var(--tf-text-secondary); }
-.filter-edit { cursor: pointer; font-size: 11px; }
 
 /* Date bar */
 .timesheet-datebar { padding: 8px 24px 12px; display: flex; align-items: center; justify-content: space-between; }
@@ -661,6 +902,7 @@ onMounted(() => {
 .entry-duration { font-size: 12px; font-weight: 600; color: var(--tf-text-primary); }
 .entry-desc { font-size: 10px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry-type { font-size: 10px; color: var(--tf-text-muted); margin-top: 2px; }
+.entry-user { font-size: 10px; color: var(--tf-text-secondary); margin-top: 2px; font-weight: 500; }
 .day-footer { padding: 6px 10px; border-top: 1px solid var(--tf-border-light); flex-shrink: 0; }
 .day-total { font-size: 11px; color: var(--tf-text-tertiary); }
 .day-total.insufficient { color: var(--tf-warning); font-weight: 500; }
@@ -685,6 +927,33 @@ onMounted(() => {
 .month-entry-key { color: var(--tf-accent); font-weight: 500; }
 .month-entry-dur { color: var(--tf-text-tertiary); }
 .month-entry-more { font-size: 9px; color: var(--tf-text-muted); text-align: center; padding: 1px; }
+
+/* Project Overview */
+.project-overview { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+.project-summary-list { display: flex; flex-direction: column; gap: 8px; }
+.project-summary-card { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: var(--tf-radius-md); background: var(--tf-bg-elevated); border: 1px solid var(--tf-border-light); cursor: pointer; transition: border-color 0.15s, background 0.1s; }
+.project-summary-card:hover { border-color: var(--tf-accent); background: var(--tf-bg-hover); }
+.project-summary-left { display: flex; align-items: center; gap: 10px; }
+.project-key-badge { font-size: 11px; font-weight: 600; color: var(--tf-accent); background: var(--tf-accent-bg); padding: 2px 8px; border-radius: var(--tf-radius-sm); }
+.project-name-text { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
+.project-summary-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.project-total-dur { font-size: 14px; font-weight: 600; color: var(--tf-text-primary); }
+.project-entry-count { font-size: 11px; color: var(--tf-text-tertiary); }
+
+/* Project detail */
+.project-detail-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Workgroup empty state */
+.workgroup-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+
+/* Empty state */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; }
+.empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.7; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--tf-text-primary); margin-bottom: 8px; }
+.empty-desc { font-size: 13px; color: var(--tf-text-tertiary); max-width: 360px; line-height: 1.5; }
+.empty-hint { display: flex; align-items: center; gap: 6px; margin-top: 20px; padding: 10px 16px; background: var(--tf-bg-surface); border-radius: var(--tf-radius-md); border: 1px solid var(--tf-border-light); }
+.hint-icon { font-size: 14px; }
+.empty-hint span:last-child { font-size: 12px; color: var(--tf-text-secondary); }
 
 /* Loading */
 .loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.05); z-index: 10; pointer-events: none; }
@@ -712,13 +981,9 @@ onMounted(() => {
 .extra-records { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
 .extra-record-row { display: flex; align-items: center; gap: 8px; }
 .remove-record-btn { width: 24px; height: 24px; border: none; background: transparent; color: var(--tf-text-tertiary); cursor: pointer; font-size: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
-.remove-record-btn:hover { background: rgba(248,81,73,0.1); color: var(--tf-danger); }
+.remove-record-btn:hover { background: var(--tf-bg-hover); color: var(--tf-text-primary); }
 
-.dialog-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 1px solid var(--tf-border-light); margin-top: 8px; }
+.dialog-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 1px solid var(--tf-border-light); }
 .actions-left { display: flex; gap: 8px; }
 .actions-right { display: flex; gap: 8px; }
-
-.dialog-footer { display: flex; justify-content: space-between; width: 100%; }
-.footer-right { display: flex; gap: 8px; }
-.form-hint { font-size: 11px; color: var(--tf-text-tertiary); }
 </style>

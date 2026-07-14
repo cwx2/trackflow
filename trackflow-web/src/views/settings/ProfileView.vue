@@ -34,6 +34,13 @@
         </a-select>
       </div>
     </div>
+
+    <!-- 导航到通知设置 -->
+    <div class="settings-footer">
+      <router-link to="/settings/notifications" class="footer-link">
+        通知设置 →
+      </router-link>
+    </div>
   </div>
 </template>
 
@@ -133,5 +140,22 @@ function onThemeChange(val: string) {
 .pref-desc {
   font-size: 11px;
   color: var(--tf-text-tertiary);
+}
+
+.settings-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tf-border-light);
+}
+
+.footer-link {
+  font-size: 12px;
+  color: var(--tf-text-accent);
+  text-decoration: none;
+  transition: opacity 150ms;
+}
+
+.footer-link:hover {
+  opacity: 0.8;
 }
 </style>

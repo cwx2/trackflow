@@ -9,14 +9,15 @@ import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
+import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -101,23 +102,7 @@ public class TimeEntryService {
      */
     public List<TimeEntryVO> listByUserAndDateRange(Long userId, String startDate, String endDate) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate);
-
-        return rows.stream().map(row -> {
-            TimeEntryVO vo = new TimeEntryVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setIssueId(String.valueOf(row.get("issue_id")));
-            vo.setIssueKey((String) row.get("issue_key"));
-            vo.setIssueTitle((String) row.get("issue_title"));
-            vo.setUserId(String.valueOf(row.get("user_id")));
-            if (row.get("work_date") != null) vo.setWorkDate(row.get("work_date").toString());
-            if (row.get("duration") != null) vo.setDuration((Integer) row.get("duration"));
-            if (row.get("start_time") != null) vo.setStartTime((Integer) row.get("start_time"));
-            vo.setWorkType((String) row.get("work_type"));
-            vo.setDescription((String) row.get("description"));
-            if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
-            if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
-            return vo;
-        }).toList();
+        return rows.stream().map(this::mapRowToVO).toList();
     }
 
     /**
@@ -155,7 +140,69 @@ public class TimeEntryService {
         return entries.stream().mapToInt(TimeEntry::getDuration).sum();
     }
 
+    /**
+     * 按项目汇总工时（项目视图概览）：返回用户可见项目的工时聚合
+     */
+    public List<ProjectTimeSummaryVO> listByProjectForUser(Long userId, String startDate, String endDate) {
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(userId, startDate, endDate);
+
+        // 按 project_id 分组
+        Map<String, List<Map<String, Object>>> grouped = rows.stream()
+                .collect(Collectors.groupingBy(
+                        row -> String.valueOf(row.get("project_id")),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        List<ProjectTimeSummaryVO> result = new ArrayList<>();
+        for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
+            List<Map<String, Object>> projectRows = entry.getValue();
+            Map<String, Object> first = projectRows.get(0);
+
+            ProjectTimeSummaryVO vo = new ProjectTimeSummaryVO();
+            vo.setProjectId(String.valueOf(first.get("project_id")));
+            vo.setProjectName((String) first.get("project_name"));
+            vo.setProjectKey((String) first.get("project_key"));
+
+            List<TimeEntryVO> entries = projectRows.stream().map(this::mapRowToVO).toList();
+            vo.setEntries(entries);
+            vo.setTotalDuration(entries.stream().mapToInt(TimeEntryVO::getDuration).sum());
+
+            result.add(vo);
+        }
+        return result;
+    }
+
+    /**
+     * 查询指定项目在日期范围内的工时明细（项目视图详情）
+     */
+    public List<TimeEntryVO> listByProject(Long projectId, String startDate, String endDate) {
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(projectId, startDate, endDate);
+        return rows.stream().map(row -> {
+            TimeEntryVO vo = mapRowToVO(row);
+            vo.setUserName((String) row.get("user_name"));
+            return vo;
+        }).toList();
+    }
+
     // ========== 内部方法 ==========
+
+    private TimeEntryVO mapRowToVO(Map<String, Object> row) {
+        TimeEntryVO vo = new TimeEntryVO();
+        vo.setId(String.valueOf(row.get("id")));
+        vo.setIssueId(String.valueOf(row.get("issue_id")));
+        vo.setIssueKey((String) row.get("issue_key"));
+        vo.setIssueTitle((String) row.get("issue_title"));
+        vo.setUserId(String.valueOf(row.get("user_id")));
+        if (row.get("work_date") != null) vo.setWorkDate(row.get("work_date").toString());
+        if (row.get("duration") != null) vo.setDuration((Integer) row.get("duration"));
+        if (row.get("start_time") != null) vo.setStartTime((Integer) row.get("start_time"));
+        vo.setWorkType((String) row.get("work_type"));
+        vo.setDescription((String) row.get("description"));
+        if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
+        if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
+        return vo;
+    }
 
     private void recordActivity(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
         IssueActivity activity = new IssueActivity();
