@@ -16,9 +16,9 @@
       <EditorContent :editor="editor" />
     </div>
 
-    <textarea v-show="markdownMode" v-model="mdSource" class="md-source" rows="10"></textarea>
+    <textarea v-show="markdownMode" v-model="mdSource" class="md-source" rows="10" @input="onMdInput"></textarea>
 
-    <div class="editor-footer">
+    <div v-if="mode === 'edit'" class="editor-footer">
       <button class="btn-save" @click="save">保存</button>
       <button class="btn-cancel" @click="$emit('cancel')">取消</button>
       <div class="footer-spacer"></div>
@@ -31,17 +31,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onBeforeUnmount, watch } from 'vue'
+import { ref, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: string
   placeholder?: string
-}>()
+  /** 'edit' = 显示保存/取消按钮（详情页编辑）；'inline' = 实时同步（创建表单） */
+  mode?: 'edit' | 'inline'
+}>(), {
+  mode: 'edit'
+})
 
 const emit = defineEmits<{
   'update:modelValue': [val: string]
@@ -53,6 +57,8 @@ const emit = defineEmits<{
 const focused = ref(false)
 const markdownMode = ref(false)
 const mdSource = ref(props.modelValue || '')
+/** 防止 watch(modelValue) 和 onUpdate 相互触发的标志 */
+const isUpdatingFromInside = ref(false)
 
 const editor = useEditor({
   content: markdownToHtml(props.modelValue || ''),
@@ -65,6 +71,16 @@ const editor = useEditor({
   editorProps: { attributes: { class: 'tiptap-body' } },
   onFocus: () => { focused.value = true },
   onBlur: () => { focused.value = false },
+  onUpdate: ({ editor: ed }) => {
+    // 在 inline 模式下，每次编辑都实时同步到父组件
+    if (props.mode === 'inline') {
+      const content = htmlToMarkdown(ed.getHTML())
+      isUpdatingFromInside.value = true
+      emit('update:modelValue', content)
+      // 使用 nextTick 重置标志，确保 watch 不会回写
+      nextTick(() => { isUpdatingFromInside.value = false })
+    }
+  },
 })
 
 const toolbar = ref([
@@ -104,6 +120,15 @@ function save() {
 function onFileSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (file) emit('upload', file)
+}
+
+/** Markdown 编辑模式下实时同步内容到父组件 */
+function onMdInput() {
+  if (props.mode === 'inline') {
+    isUpdatingFromInside.value = true
+    emit('update:modelValue', mdSource.value)
+    nextTick(() => { isUpdatingFromInside.value = false })
+  }
 }
 
 function htmlToMarkdown(html: string): string {
@@ -149,6 +174,8 @@ function markdownToHtml(md: string): string {
 }
 
 watch(() => props.modelValue, (val) => {
+  // 如果是组件内部编辑触发的更新，不回写到编辑器（避免光标跳动）
+  if (isUpdatingFromInside.value) return
   if (markdownMode.value) { mdSource.value = val }
   else {
     const current = htmlToMarkdown(editor.value?.getHTML() || '')

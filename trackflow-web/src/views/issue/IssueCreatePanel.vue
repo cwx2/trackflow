@@ -28,7 +28,7 @@
       <div class="create-body">
         <!-- 左侧：编辑区 -->
         <div class="editor-area">
-          <RichEditor v-model="form.description" placeholder="在此处键入或粘贴描述" />
+          <RichEditor v-model="form.description" placeholder="在此处键入或粘贴描述" mode="inline" />
 
           <!-- 附件区域 -->
           <div class="attachment-area">
@@ -182,22 +182,27 @@ function close() {
 }
 
 async function submitAndClose() {
-  await doSubmit()
-  close()
+  const success = await doSubmit()
+  if (success) {
+    emit('created')
+    close()
+  }
 }
 
 async function submitAndNew() {
-  await doSubmit()
-  // 保留项目，清空其他字段
-  form.title = ''
-  form.description = ''
-  form.assigneeId = undefined
-  form.dueDate = ''
-  form.estimatedHours = undefined
+  const success = await doSubmit()
+  if (success) {
+    // 保留项目，清空其他字段以便继续创建
+    form.title = ''
+    form.description = ''
+    form.assigneeId = undefined
+    form.dueDate = ''
+    form.estimatedHours = undefined
+  }
 }
 
-async function doSubmit() {
-  if (!canSubmit.value) return
+async function doSubmit(): Promise<boolean> {
+  if (!canSubmit.value) return false
   submitting.value = true
   try {
     await issueApi.create({
@@ -212,9 +217,10 @@ async function doSubmit() {
       assigneeId: form.assigneeId || undefined
     })
     Message.success('工单创建成功')
-    emit('created')
+    return true
   } catch (e: any) {
     Message.error(e.response?.data?.message || '创建失败')
+    return false
   } finally {
     submitting.value = false
   }
