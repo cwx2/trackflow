@@ -132,12 +132,13 @@
           </a-select>
         </a-form-item>
         <a-form-item label="分组依据">
-          <a-select v-model="form.groupBy" placeholder="选择分组">
+          <a-select v-model="form.groupBy" placeholder="选择分组" :disabled="isGroupByLocked">
             <a-option value="status">状态</a-option>
             <a-option value="assignee">负责人</a-option>
             <a-option value="priority">优先级</a-option>
             <a-option value="type">工单类型</a-option>
           </a-select>
+          <span v-if="isGroupByLocked" class="form-hint">已根据报表类型自动设置</span>
         </a-form-item>
         <a-form-item label="共享">
           <a-switch v-model="form.shared" />
@@ -149,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { reportApi } from '@/api/report'
 import { projectApi } from '@/api'
@@ -180,9 +181,24 @@ const form = reactive({
 /** 是否有创建报表权限（system:admin 或 nav:report_create） */
 const canCreateReport = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
-  // 创建权限由后端 project:edit 控制，这里前端简单通过 report:create 判断
-  // 但由于 report:create 是项目级权限，我们用 nav 级逻辑判断
   return authStore.hasGlobalPermission('nav:report_create')
+})
+
+/** type → groupBy 自动映射 */
+const typeToGroupByMap: Record<string, string> = {
+  by_status: 'status',
+  by_assignee: 'assignee',
+  by_priority: 'priority'
+}
+
+/** 当 type 有固定的 groupBy 映射时，禁用 groupBy 选择 */
+const isGroupByLocked = computed(() => form.type in typeToGroupByMap)
+
+// type 变化时自动锁定 groupBy
+watch(() => form.type, (newType) => {
+  if (newType in typeToGroupByMap) {
+    form.groupBy = typeToGroupByMap[newType]
+  }
 })
 
 onMounted(async () => {
