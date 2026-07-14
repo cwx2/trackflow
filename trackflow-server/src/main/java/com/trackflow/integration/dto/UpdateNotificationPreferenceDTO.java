@@ -1,5 +1,7 @@
 package com.trackflow.integration.dto;
 
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -18,6 +20,11 @@ public class UpdateNotificationPreferenceDTO {
     private Boolean emailEnabled;
 
     // 静音时段（HH:mm 格式）
+    @Size(max = 5)
+    @Pattern(regexp = "^\\d{2}:\\d{2}$", message = "时间格式必须为HH:mm")
     private String quietHoursStart;
+
+    @Size(max = 5)
+    @Pattern(regexp = "^\\d{2}:\\d{2}$", message = "时间格式必须为HH:mm")
     private String quietHoursEnd;
 }

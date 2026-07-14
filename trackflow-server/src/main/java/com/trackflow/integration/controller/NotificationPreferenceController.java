@@ -7,6 +7,7 @@ import com.trackflow.integration.dto.UpdateNotificationPreferenceDTO;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.vo.NotificationPreferenceVO;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -34,7 +35,7 @@ public class NotificationPreferenceController {
      * 更新当前用户的通知偏好
      */
     @PutMapping
-    public R<NotificationPreferenceVO> update(@RequestBody UpdateNotificationPreferenceDTO dto) {
+    public R<NotificationPreferenceVO> update(@Valid @RequestBody UpdateNotificationPreferenceDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         NotificationPreference pref = preferenceService.update(userId, dto);
         return R.ok(preferenceConverter.toVO(pref));
