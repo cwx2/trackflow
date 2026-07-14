@@ -306,7 +306,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
       { value: 'Critical', label: 'Critical' }, { value: 'High', label: 'High' },
       { value: 'Normal', label: 'Normal' }, { value: 'Low', label: 'Low' },
     ]},
-    { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition, options: statusOptions },
+    { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
     { key: 'issueType', label: '类型', value: i.issueType, editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: [
       { value: 'Bug', label: 'Bug' }, { value: 'Task', label: 'Task' },
       { value: 'Feature', label: 'Feature' }, { value: 'Epic', label: 'Epic' }, { value: 'Story', label: 'Story' },
