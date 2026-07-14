@@ -8,8 +8,10 @@ export interface DashboardSummaryVO {
   dueSoon: number
   overdue: number
   reportedByMeOpen: number
+  testingCount: number
   totalIssues: number
   activeProjects: number
+  primaryRoleCode: string | null
 }
 
 export interface DashboardActivityVO {

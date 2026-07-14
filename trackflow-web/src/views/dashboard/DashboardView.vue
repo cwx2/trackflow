@@ -39,14 +39,26 @@
         <div class="stat-label">已逾期</div>
         <div class="stat-icon stat-icon-overdue">⚠️</div>
       </div>
-      <div class="stat-card" @click="navigateToQuery('due-soon')">
+      <!-- 第五个卡片：根据角色动态展示 -->
+      <div class="stat-card" :class="{ highlight: summary.testingCount > 0 && isTester }" @click="navigateToQuery(isTester ? 'testing' : 'due-soon')">
         <div class="stat-value" :class="{ loading: summaryLoading }">
           <a-skeleton v-if="summaryLoading" :animation="true" style="width:40px;height:24px" />
-          <span v-else>{{ summary.dueSoon }}</span>
+          <span v-else>{{ isTester ? summary.testingCount : summary.dueSoon }}</span>
         </div>
-        <div class="stat-label">即将到期</div>
-        <div class="stat-icon stat-icon-due">⏰</div>
+        <div class="stat-label">{{ isTester ? '待测试' : '即将到期' }}</div>
+        <div class="stat-icon">{{ isTester ? '🧪' : '⏰' }}</div>
       </div>
+    </div>
+
+    <!-- 角色提示条（当测试人员没有分配工单时显示） -->
+    <div v-if="showRoleHint" class="role-hint-bar">
+      <span class="role-hint-icon">💡</span>
+      <span class="role-hint-text">
+        作为测试人员，您可以关注
+        <a class="role-hint-link" @click="navigateToQuery('testing')">待测试的工单（{{ summary.testingCount }}）</a>
+        或查看
+        <a class="role-hint-link" @click="navigateToQuery('reported-by-me')">我报告的问题（{{ summary.reportedByMeOpen }}）</a>
+      </span>
     </div>
 
     <!-- 双栏内容区 -->
@@ -63,9 +75,15 @@
           </a-skeleton>
         </div>
         <div v-else-if="assignedIssues.length === 0" class="widget-empty">
-          <span class="empty-icon">🎉</span>
-          <span class="empty-text">没有待处理的工单</span>
-          <span class="empty-hint">所有工作已完成</span>
+          <span class="empty-icon">📭</span>
+          <span class="empty-text">暂无分配给您的工单</span>
+          <span class="empty-hint" v-if="isTester">
+            您可以查看 <a class="empty-link" @click="navigateToQuery('testing')">待测试的工单</a>
+          </span>
+          <span class="empty-hint" v-else-if="summary.reportedByMeOpen > 0">
+            您报告的 {{ summary.reportedByMeOpen }} 个工单仍在处理中
+          </span>
+          <span class="empty-hint" v-else>工作台显示与您相关的工单动态</span>
         </div>
         <div v-else class="issue-list">
           <div
@@ -189,8 +207,10 @@ const summary = ref<DashboardSummaryVO>({
   dueSoon: 0,
   overdue: 0,
   reportedByMeOpen: 0,
+  testingCount: 0,
   totalIssues: 0,
-  activeProjects: 0
+  activeProjects: 0,
+  primaryRoleCode: null
 })
 
 const assignedIssues = ref<IssueVO[]>([])
@@ -209,6 +229,17 @@ const greeting = computed(() => {
   if (hour < 14) return '中午好'
   if (hour < 18) return '下午好'
   return '晚上好'
+})
+
+const isTester = computed(() => summary.value.primaryRoleCode === 'tester')
+
+/** 当测试人员没有分配工单，且有待测试工单时，显示角色引导条 */
+const showRoleHint = computed(() => {
+  return !summaryLoading.value
+    && isTester.value
+    && summary.value.assignedOpen === 0
+    && summary.value.assignedInProgress === 0
+    && summary.value.testingCount > 0
 })
 
 // Data loading
@@ -323,7 +354,6 @@ function formatAction(activity: DashboardActivityVO): string {
 }
 
 function navigateToQuery(type: string) {
-  // Navigate to issue list with precise filter params
   const params: Record<string, string> = {}
   switch (type) {
     case 'assigned-open':
@@ -345,6 +375,14 @@ function navigateToQuery(type: string) {
     case 'due-soon':
       params.dueSoon = 'true'
       params.label = '即将到期'
+      break
+    case 'testing':
+      params.statusId = '4'  // Testing status
+      params.label = '待测试'
+      break
+    case 'reported-by-me':
+      params.reportedByMe = 'true'
+      params.label = '我报告的'
       break
   }
   const query = new URLSearchParams(params).toString()
@@ -415,6 +453,15 @@ onMounted(() => {
   color: var(--tf-danger);
 }
 
+.stat-card.highlight {
+  border-color: var(--tf-accent);
+  background: var(--tf-accent-bg);
+}
+
+.stat-card.highlight .stat-value {
+  color: var(--tf-accent);
+}
+
 .stat-value {
   font-size: 24px;
   font-weight: 700;
@@ -434,6 +481,39 @@ onMounted(() => {
   right: 14px;
   font-size: 18px;
   opacity: 0.6;
+}
+
+/* Role Hint Bar */
+.role-hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--tf-accent-bg);
+  border: 1px solid var(--tf-accent);
+  border-radius: var(--tf-radius-md);
+  margin-bottom: 16px;
+}
+
+.role-hint-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.role-hint-text {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+}
+
+.role-hint-link {
+  color: var(--tf-accent);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.role-hint-link:hover {
+  text-decoration: underline;
 }
 
 /* Dashboard Content - Two columns */
@@ -501,7 +581,17 @@ onMounted(() => {
 
 .empty-icon { font-size: 28px; margin-bottom: 4px; }
 .empty-text { font-size: 13px; color: var(--tf-text-secondary); }
-.empty-hint { font-size: 11px; color: var(--tf-text-tertiary); }
+.empty-hint { font-size: 11px; color: var(--tf-text-tertiary); text-align: center; }
+
+.empty-link {
+  color: var(--tf-accent);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.empty-link:hover {
+  text-decoration: underline;
+}
 
 /* Issue List */
 .issue-list {

@@ -11,7 +11,9 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.vo.IssueVO;
 import com.trackflow.project.mapper.ProjectMapper;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.entity.Project;
+import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -33,13 +35,24 @@ public class DashboardService {
     private final IssueActivityMapper activityMapper;
     private final IssueConverter issueConverter;
     private final ProjectMapper projectMapper;
+    private final ProjectMemberMapper projectMemberMapper;
     private final SysUserMapper sysUserMapper;
 
     /**
-     * 获取仪表盘统计概览
+     * 获取仪表盘统计概览。
+     * 统计范围：用户所在项目的所有工单（而非仅 assignee_id = userId）。
+     * 对于有明确 assignee 的统计（待处理、进行中），仍基于 assignee_id。
+     * 对于角色相关统计（如测试人员看 Testing 状态），基于项目范围。
      */
     public DashboardSummaryVO getSummary(Long userId) {
         DashboardSummaryVO vo = new DashboardSummaryVO();
+
+        // 获取用户所在的项目 ID 列表
+        List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+
+        // 获取用户的主要角色
+        String primaryRole = determinePrimaryRole(userId, userProjectIds);
+        vo.setPrimaryRoleCode(primaryRole);
 
         // 获取状态分类
         List<IssueStatus> statuses = statusMapper.selectList(null);
@@ -51,6 +64,10 @@ public class DashboardService {
                 .map(IssueStatus::getId).collect(Collectors.toSet());
         Set<Long> doneStatusIds = statuses.stream()
                 .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
+                .map(IssueStatus::getId).collect(Collectors.toSet());
+        // Testing 状态 ID
+        Set<Long> testingStatusIds = statuses.stream()
+                .filter(s -> "Testing".equalsIgnoreCase(s.getName()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
 
         // 分配给我的待处理
@@ -65,32 +82,39 @@ public class DashboardService {
                 .eq("assignee_id", userId)
                 .in("status_id", inProgressStatusIds)));
 
-        // 本周已完成（状态为 done 且本周更新的）
+        // 本周已完成：分配给我或我报告的，且本周变为 done/cancelled 状态
         LocalDateTime weekStart = LocalDate.now()
                 .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                 .atStartOfDay();
         vo.setCompletedThisWeek(issueMapper.selectCount(new QueryWrapper<Issue>()
                 .isNull("deleted_at")
-                .eq("assignee_id", userId)
+                .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
                 .in("status_id", doneStatusIds)
                 .ge("updated_at", weekStart)));
 
-        // 即将到期（7天内）
+        // 即将到期（7天内）：我所在项目范围内，分配给我或我报告的
         LocalDate today = LocalDate.now();
         LocalDate sevenDaysLater = today.plusDays(7);
-        vo.setDueSoon(issueMapper.selectCount(new QueryWrapper<Issue>()
-                .isNull("deleted_at")
-                .eq("assignee_id", userId)
-                .notIn("status_id", doneStatusIds)
-                .ge("due_date", today)
-                .le("due_date", sevenDaysLater)));
+        if (!userProjectIds.isEmpty()) {
+            vo.setDueSoon(issueMapper.selectCount(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .in("project_id", userProjectIds)
+                    .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
+                    .notIn("status_id", doneStatusIds)
+                    .ge("due_date", today)
+                    .le("due_date", sevenDaysLater)));
 
-        // 逾期未完成
-        vo.setOverdue(issueMapper.selectCount(new QueryWrapper<Issue>()
-                .isNull("deleted_at")
-                .eq("assignee_id", userId)
-                .notIn("status_id", doneStatusIds)
-                .lt("due_date", today)));
+            // 逾期未完成：我所在项目范围内，分配给我或我报告的
+            vo.setOverdue(issueMapper.selectCount(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .in("project_id", userProjectIds)
+                    .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
+                    .notIn("status_id", doneStatusIds)
+                    .lt("due_date", today)));
+        } else {
+            vo.setDueSoon(0L);
+            vo.setOverdue(0L);
+        }
 
         // 我报告的未解决
         vo.setReportedByMeOpen(issueMapper.selectCount(new QueryWrapper<Issue>()
@@ -98,9 +122,24 @@ public class DashboardService {
                 .eq("reporter_id", userId)
                 .notIn("status_id", doneStatusIds)));
 
-        // 总工单数
-        vo.setTotalIssues(issueMapper.selectCount(new QueryWrapper<Issue>()
-                .isNull("deleted_at")));
+        // 待测试工单数（Testing 状态，用户所在项目范围内）
+        if (!userProjectIds.isEmpty() && !testingStatusIds.isEmpty()) {
+            vo.setTestingCount(issueMapper.selectCount(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .in("project_id", userProjectIds)
+                    .in("status_id", testingStatusIds)));
+        } else {
+            vo.setTestingCount(0L);
+        }
+
+        // 总工单数（用户所在项目范围）
+        if (!userProjectIds.isEmpty()) {
+            vo.setTotalIssues(issueMapper.selectCount(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .in("project_id", userProjectIds)));
+        } else {
+            vo.setTotalIssues(0L);
+        }
 
         // 活跃项目数
         vo.setActiveProjects(projectMapper.selectCount(new QueryWrapper<Project>()
@@ -135,7 +174,7 @@ public class DashboardService {
     }
 
     /**
-     * 即将到期工单
+     * 即将到期工单（用户所在项目范围内，分配给我或我报告的）
      */
     public List<IssueVO> getOverdueIssues(Long userId, int days, int limit) {
         List<IssueStatus> statuses = statusMapper.selectList(null);
@@ -143,12 +182,18 @@ public class DashboardService {
                 .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
 
+        List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+        if (userProjectIds.isEmpty()) {
+            return List.of();
+        }
+
         LocalDate today = LocalDate.now();
         LocalDate deadline = today.plusDays(days);
 
         QueryWrapper<Issue> wrapper = new QueryWrapper<>();
         wrapper.isNull("deleted_at")
-                .eq("assignee_id", userId)
+                .in("project_id", userProjectIds)
+                .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
                 .notIn("status_id", closedStatusIds)
                 .isNotNull("due_date")
                 .le("due_date", deadline)
@@ -164,14 +209,28 @@ public class DashboardService {
 
     /**
      * 最近活动流（用户相关工单的变更记录）
+     * 扩展范围：分配给我的 + 我报告的 + 我所在项目的
      */
     public List<DashboardActivityVO> getRecentActivity(Long userId, int limit) {
-        // 查询用户相关的 issue IDs（我创建的 + 分配给我的）
-        List<Long> relatedIssueIds = issueMapper.selectList(new QueryWrapper<Issue>()
-                .isNull("deleted_at")
-                .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
-                .select("id"))
-                .stream().map(Issue::getId).toList();
+        // 查询用户所在项目的 issue IDs
+        List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+
+        List<Long> relatedIssueIds;
+        if (!userProjectIds.isEmpty()) {
+            // 用户所在项目中与其相关的工单（assignee/reporter + 同项目范围）
+            relatedIssueIds = issueMapper.selectList(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .in("project_id", userProjectIds)
+                    .select("id"))
+                    .stream().map(Issue::getId).toList();
+        } else {
+            // 退化为仅查分配给我或我创建的
+            relatedIssueIds = issueMapper.selectList(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
+                    .select("id"))
+                    .stream().map(Issue::getId).toList();
+        }
 
         if (relatedIssueIds.isEmpty()) {
             return List.of();
@@ -197,6 +256,36 @@ public class DashboardService {
             }
             return vo;
         }).toList();
+    }
+
+    /**
+     * 确定用户的主要角色代码。
+     * 优先级：tester > developer > tech_lead > product_manager > project_admin > observer
+     */
+    private String determinePrimaryRole(Long userId, List<Long> projectIds) {
+        if (projectIds.isEmpty()) {
+            return null;
+        }
+        // 一次查出用户在所有项目中的角色 ID（避免 N+1）
+        List<Long> roleIds = projectMemberMapper.selectList(
+                new QueryWrapper<ProjectMember>()
+                        .eq("user_id", userId)
+                        .select("role_id"))
+                .stream()
+                .map(ProjectMember::getRoleId)
+                .distinct()
+                .toList();
+
+        // 角色优先级映射（role_id → code based on sys_role table）
+        // 4=tester, 3=developer, 7=tech_lead, 6=product_manager, 2=project_admin, 5=observer, 1=system_admin
+        if (roleIds.contains(4L)) return "tester";
+        if (roleIds.contains(3L)) return "developer";
+        if (roleIds.contains(7L)) return "tech_lead";
+        if (roleIds.contains(6L)) return "product_manager";
+        if (roleIds.contains(2L)) return "project_admin";
+        if (roleIds.contains(1L)) return "system_admin";
+        if (roleIds.contains(5L)) return "observer";
+        return null;
     }
 
     private void fillAssigneeNames(List<Issue> issues, List<IssueVO> voList) {
