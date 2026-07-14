@@ -21,4 +21,11 @@ public class CreateProjectDTO {
     private String description;
 
     private Long leadId;
+
+    /**
+     * 项目模板类型：default / scrum / kanban
+     * 为空时等同于 "default"
+     */
+    @Pattern(regexp = "^(default|scrum|kanban)$", message = "模板类型无效，可选值：default、scrum、kanban")
+    private String template;
 }

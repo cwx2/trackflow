@@ -36,6 +36,22 @@
             {{ s.name }}
           </a-option>
         </a-select>
+        <a-divider direction="vertical" style="margin: 0 4px" />
+        <!-- Swimlane 分组选择 -->
+        <a-select
+          v-model="swimlaneGroupBy"
+          placeholder="分组"
+          style="width: 140px"
+          size="small"
+          :disabled="!selectedProject"
+          @change="onSwimlaneChange"
+        >
+          <a-option value="none">无分组</a-option>
+          <a-option value="assignee">按负责人</a-option>
+          <a-option value="priority">按优先级</a-option>
+          <a-option value="type">按类型</a-option>
+          <a-option value="sprint">按迭代</a-option>
+        </a-select>
       </div>
       <div class="toolbar-right">
         <div class="search-wrapper">
@@ -73,8 +89,11 @@
 
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
-      <!-- 看板主体 -->
-      <div class="board-container" v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults">
+      <!-- ===== 无分组模式（原始平面看板） ===== -->
+      <div
+        v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && swimlaneGroupBy === 'none'"
+        class="board-container"
+      >
         <template v-for="status in visibleStatuses" :key="status.id">
           <!-- 有工单的列 或 手动展开的空列：正常展示 -->
           <div
@@ -82,8 +101,8 @@
             class="board-column"
             :class="{
               'board-column--expanded-empty': getColumnIssues(status.id).length === 0,
-              'board-column--drop-target': dragOverColumnId === status.id,
-              'board-column--drop-forbidden': dragOverColumnId === status.id && !isDropAllowed(status.id)
+              'board-column--drop-target': dragOverColumnId === status.id && !dragOverSwimlaneKey,
+              'board-column--drop-forbidden': dragOverColumnId === status.id && !dragOverSwimlaneKey && !isDropAllowed(status.id)
             }"
             @dragover="onDragOver($event, status.id)"
             @dragleave="onDragLeave($event)"
@@ -92,7 +111,6 @@
             <div class="column-header" :style="{ borderTopColor: status.color }">
               <span class="column-title">{{ status.name }}</span>
               <span class="column-count">{{ getColumnIssues(status.id).length }}</span>
-              <!-- 折叠按钮（仅对手动展开的空列显示） -->
               <button
                 v-if="getColumnIssues(status.id).length === 0 && !draggingIssue"
                 class="column-collapse-btn"
@@ -137,7 +155,6 @@
                   </span>
                 </div>
               </div>
-              <!-- 展开的空列：空状态引导 / 拖拽放置区 -->
               <div
                 v-if="getColumnIssues(status.id).length === 0"
                 class="column-empty-state"
@@ -160,7 +177,7 @@
             </div>
           </div>
 
-          <!-- 空列：折叠为窄条（拖拽时也可作为目标） -->
+          <!-- 空列：折叠为窄条 -->
           <div
             v-else
             class="board-column-collapsed"
@@ -183,6 +200,114 @@
             <span class="collapsed-count">0</span>
           </div>
         </template>
+      </div>
+
+      <!-- ===== Swimlane 分组模式 ===== -->
+      <div
+        v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && swimlaneGroupBy !== 'none'"
+        class="swimlane-container"
+      >
+        <!-- Swimlane 表头（状态列标题） -->
+        <div class="swimlane-header">
+          <div class="swimlane-label-cell"></div>
+          <div class="swimlane-columns-header">
+            <div
+              v-for="status in visibleStatuses"
+              :key="status.id"
+              class="swimlane-col-header"
+              :style="{ borderTopColor: status.color }"
+            >
+              <span class="column-title">{{ status.name }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Swimlane 各行 -->
+        <div class="swimlane-body">
+          <div
+            v-for="lane in swimlanes"
+            :key="lane.key"
+            class="swimlane-row"
+            :class="{ 'swimlane-row--collapsed': collapsedSwimlanes.has(lane.key) }"
+          >
+            <!-- 泳道行标题 -->
+            <div
+              class="swimlane-row-header"
+              role="button"
+              tabindex="0"
+              @click="toggleSwimlane(lane.key)"
+              @keydown.enter="toggleSwimlane(lane.key)"
+            >
+              <span class="swimlane-toggle-icon">
+                {{ collapsedSwimlanes.has(lane.key) ? '▶' : '▼' }}
+              </span>
+              <span class="swimlane-row-label">{{ lane.label }}</span>
+              <span class="swimlane-row-count">{{ lane.issues.length }}</span>
+            </div>
+
+            <!-- 泳道行内容（状态列 × 卡片） -->
+            <div v-show="!collapsedSwimlanes.has(lane.key)" class="swimlane-row-body">
+              <div class="swimlane-label-cell"></div>
+              <div class="swimlane-columns">
+                <div
+                  v-for="status in visibleStatuses"
+                  :key="status.id"
+                  class="swimlane-cell"
+                  :class="{
+                    'swimlane-cell--drop-target': dragOverColumnId === status.id && dragOverSwimlaneKey === lane.key,
+                    'swimlane-cell--drop-forbidden': dragOverColumnId === status.id && dragOverSwimlaneKey === lane.key && !isDropAllowed(status.id)
+                  }"
+                  @dragover="onDragOverSwimlane($event, status.id, lane.key)"
+                  @dragleave="onDragLeaveSwimlane($event)"
+                  @drop="onDrop($event, status.id)"
+                >
+                  <div
+                    v-for="issue in getSwimlaneColumnIssues(lane.key, status.id)"
+                    :key="issue.id"
+                    class="kanban-card"
+                    :class="{
+                      'kanban-card--dragging': draggingIssue?.id === issue.id,
+                      'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
+                      'kanban-card--no-drag': !isCardDraggable(issue)
+                    }"
+                    role="button"
+                    tabindex="0"
+                    :draggable="isCardDraggable(issue)"
+                    @dragstart="onDragStart($event, issue)"
+                    @dragend="onDragEnd"
+                    @click="openIssue(issue)"
+                    @keydown.enter="openIssue(issue)"
+                  >
+                    <div class="card-header">
+                      <span class="card-key">{{ issue.issueKey }}</span>
+                      <span
+                        class="card-priority"
+                        :class="issue.priority?.toLowerCase()"
+                        :title="issue.priority"
+                      >
+                        {{ priorityIcon(issue.priority) }}
+                      </span>
+                    </div>
+                    <div class="card-title">{{ issue.title }}</div>
+                    <div class="card-footer">
+                      <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
+                      <span class="card-assignee" v-if="issue.assigneeName">
+                        {{ issue.assigneeName }}
+                      </span>
+                    </div>
+                  </div>
+                  <!-- 空单元格 drop hint -->
+                  <div
+                    v-if="getSwimlaneColumnIssues(lane.key, status.id).length === 0 && draggingIssue && isDropAllowed(status.id)"
+                    class="swimlane-cell-empty-hint"
+                  >
+                    📥
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 空状态：搜索无结果 -->
@@ -249,6 +374,200 @@ const keyword = ref('')
 const loading = ref(false)
 const { projects, projectLoadState, loadProjects } = useProjectList()
 
+// ===== Swimlane 分组 =====
+type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint'
+const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
+const COLLAPSED_SWIMLANES_KEY = 'tf_kanban_collapsed_swimlanes'
+
+const swimlaneGroupBy = ref<SwimlaneGroupBy>(
+  (localStorage.getItem(SWIMLANE_STORAGE_KEY) as SwimlaneGroupBy) || 'none'
+)
+const collapsedSwimlanes = ref<Set<string>>(
+  new Set(JSON.parse(localStorage.getItem(COLLAPSED_SWIMLANES_KEY) || '[]'))
+)
+
+function onSwimlaneChange() {
+  localStorage.setItem(SWIMLANE_STORAGE_KEY, swimlaneGroupBy.value)
+  // 切换分组维度时清除折叠状态
+  collapsedSwimlanes.value.clear()
+  localStorage.removeItem(COLLAPSED_SWIMLANES_KEY)
+}
+
+function toggleSwimlane(key: string) {
+  if (collapsedSwimlanes.value.has(key)) {
+    collapsedSwimlanes.value.delete(key)
+  } else {
+    collapsedSwimlanes.value.add(key)
+  }
+  localStorage.setItem(COLLAPSED_SWIMLANES_KEY, JSON.stringify([...collapsedSwimlanes.value]))
+}
+
+// Swimlane 数据结构
+interface SwimlaneRow {
+  key: string
+  label: string
+  issues: IssueVO[]
+}
+
+// 类型映射
+const TYPE_LABELS: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Story: '故事' }
+
+const swimlanes = computed<SwimlaneRow[]>(() => {
+  if (swimlaneGroupBy.value === 'none') return []
+
+  const allIssues = issues.value
+
+  switch (swimlaneGroupBy.value) {
+    case 'assignee':
+      return groupByAssignee(allIssues)
+    case 'priority':
+      return groupByPriority(allIssues)
+    case 'type':
+      return groupByType(allIssues)
+    case 'sprint':
+      return groupBySprint(allIssues)
+    default:
+      return []
+  }
+})
+
+function groupByAssignee(allIssues: IssueVO[]): SwimlaneRow[] {
+  const groups = new Map<string, IssueVO[]>()
+  const unassigned: IssueVO[] = []
+
+  for (const issue of allIssues) {
+    if (!issue.assigneeId || !issue.assigneeName) {
+      unassigned.push(issue)
+    } else {
+      const key = issue.assigneeId
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(issue)
+    }
+  }
+
+  // 按工单数量降序排列负责人
+  const rows: SwimlaneRow[] = [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([assigneeId, issues]) => ({
+      key: assigneeId,
+      label: issues[0].assigneeName || '未知',
+      issues
+    }))
+
+  // "未分配" 放在最后
+  if (unassigned.length > 0) {
+    rows.push({ key: '__unassigned__', label: '未分配', issues: unassigned })
+  }
+
+  return rows
+}
+
+function groupByPriority(allIssues: IssueVO[]): SwimlaneRow[] {
+  const priorities = ['Critical', 'High', 'Normal', 'Low']
+  const groups = new Map<string, IssueVO[]>()
+  for (const p of priorities) groups.set(p, [])
+
+  for (const issue of allIssues) {
+    const p = issue.priority || 'Normal'
+    if (!groups.has(p)) groups.set(p, [])
+    groups.get(p)!.push(issue)
+  }
+
+  return priorities
+    .filter(p => (groups.get(p)?.length ?? 0) > 0)
+    .map(p => ({
+      key: p,
+      label: `${priorityIcon(p)} ${p}`,
+      issues: groups.get(p)!
+    }))
+}
+
+function groupByType(allIssues: IssueVO[]): SwimlaneRow[] {
+  const types = ['Bug', 'Task', 'Feature', 'Story']
+  const groups = new Map<string, IssueVO[]>()
+  const other: IssueVO[] = []
+
+  for (const issue of allIssues) {
+    const t = issue.issueType
+    if (types.includes(t)) {
+      if (!groups.has(t)) groups.set(t, [])
+      groups.get(t)!.push(issue)
+    } else {
+      other.push(issue)
+    }
+  }
+
+  const rows: SwimlaneRow[] = types
+    .filter(t => (groups.get(t)?.length ?? 0) > 0)
+    .map(t => ({
+      key: t,
+      label: TYPE_LABELS[t] || t,
+      issues: groups.get(t)!
+    }))
+
+  if (other.length > 0) {
+    rows.push({ key: '__other__', label: '其他', issues: other })
+  }
+
+  return rows
+}
+
+function groupBySprint(allIssues: IssueVO[]): SwimlaneRow[] {
+  const groups = new Map<string, IssueVO[]>()
+  const noSprint: IssueVO[] = []
+
+  for (const issue of allIssues) {
+    if (!issue.sprintId) {
+      noSprint.push(issue)
+    } else {
+      if (!groups.has(issue.sprintId)) groups.set(issue.sprintId, [])
+      groups.get(issue.sprintId)!.push(issue)
+    }
+  }
+
+  // 用 sprints 列表映射名称
+  const sprintMap = new Map(sprints.value.map(s => [s.id, s.name]))
+
+  const rows: SwimlaneRow[] = [...groups.entries()].map(([sprintId, issues]) => ({
+    key: sprintId,
+    label: sprintMap.get(sprintId) || `Sprint ${sprintId}`,
+    issues
+  }))
+
+  if (noSprint.length > 0) {
+    rows.push({ key: '__no_sprint__', label: '未规划', issues: noSprint })
+  }
+
+  return rows
+}
+
+/** 获取某泳道中某状态列的工单 */
+function getSwimlaneColumnIssues(laneKey: string, statusId: string): IssueVO[] {
+  const lane = swimlanes.value.find(l => l.key === laneKey)
+  if (!lane) return []
+  return lane.issues.filter(i => i.statusId === statusId)
+}
+
+// Swimlane 模式下的拖拽 hover 状态
+const dragOverSwimlaneKey = ref<string | null>(null)
+
+function onDragOverSwimlane(event: DragEvent, statusId: string, laneKey: string) {
+  event.preventDefault()
+  dragOverColumnId.value = statusId
+  dragOverSwimlaneKey.value = laneKey
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = isDropAllowed(statusId) ? 'move' : 'none'
+  }
+}
+
+function onDragLeaveSwimlane(event: DragEvent) {
+  const relatedTarget = event.relatedTarget as HTMLElement | null
+  const currentTarget = event.currentTarget as HTMLElement
+  if (relatedTarget && currentTarget.contains(relatedTarget)) return
+  dragOverColumnId.value = null
+  dragOverSwimlaneKey.value = null
+}
+
 // 搜索相关
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const isSearchActive = computed(() => keyword.value.trim().length > 0)
@@ -275,7 +594,7 @@ function clearSearch() {
   loadIssuesWithLoading()
 }
 
-/** 带 loading 状态的工单刷新（仅 keyword 变化时使用） */
+/** 带 loading 状态的工单刷新 */
 async function loadIssuesWithLoading() {
   if (!selectedProject.value) return
   loading.value = true
@@ -290,7 +609,6 @@ async function loadIssuesWithLoading() {
 }
 
 function onProjectChange() {
-  // 切换项目时清除搜索关键词，防止搜索状态泄漏到其他项目
   keyword.value = ''
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   loadBoard()
@@ -303,13 +621,11 @@ const issues = ref<IssueVO[]>([])
 const allColumnConfigs = ref<BoardColumnVO[]>([])
 const showSettings = ref(false)
 
-// 根据列配置过滤出可见的状态（供模板遍历）
+// 根据列配置过滤出可见的状态
 const visibleStatuses = computed(() => {
   if (allColumnConfigs.value.length === 0) {
-    // 未加载配置时使用原始状态
     return statuses.value
   }
-  // 过滤出 visible=true 的列，映射回 IssueStatusVO 格式
   return allColumnConfigs.value
     .filter(c => c.visible)
     .map(c => ({
@@ -323,6 +639,7 @@ const visibleStatuses = computed(() => {
       sortOrder: c.sortOrder
     } as IssueStatusVO))
 })
+
 // 被手动展开的空列集合
 const expandedEmptyColumns = ref<Set<string>>(new Set())
 
@@ -332,9 +649,7 @@ const dragOverColumnId = ref<string | null>(null)
 const allowedTargetStatuses = ref<Set<string>>(new Set())
 const transitioningIssueIds = ref<Set<string>>(new Set())
 
-// ===== 可拖拽源状态（工作流规则维度）=====
-// 存储当前用户在该项目中可以发起状态转换的源状态 ID 集合
-// 用于 per-card 判断是否可拖拽，避免用户拖起卡片后才发现无法放置
+// ===== 可拖拽源状态 =====
 const transitionableSourceStatuses = ref<Set<string>>(new Set())
 
 // ===== 撤销历史 =====
@@ -348,7 +663,7 @@ interface UndoEntry {
   timestamp: number
 }
 const undoStack = ref<UndoEntry[]>([])
-const UNDO_TIMEOUT = 10000 // 10 秒内可撤销
+const UNDO_TIMEOUT = 10000
 
 function getColumnIssues(statusId: string): IssueVO[] {
   return issues.value.filter(i => i.statusId === statusId)
@@ -373,30 +688,19 @@ function typeLabel(type: string): string {
 }
 
 function openIssue(issue: IssueVO) {
-  // 拖拽结束后不触发点击
   if (draggingIssue.value) return
   router.push({ name: 'IssueDetail', params: { id: issue.id } })
 }
 
 // ===== 拖拽逻辑 =====
 
-/**
- * 判断卡片是否可拖拽。
- * 条件：用户有 issue:change_status 权限 && 该卡片的当前状态在工作流规则中有出边。
- * 注意：developer 还有所有权约束（只能改自己的），这里不做预判——
- * 拖拽开始时 onDragStart 会调用后端获取精确可用转换，若为空则拖拽无效。
- */
 function isCardDraggable(issue: IssueVO): boolean {
   if (!canChangeStatus.value) return false
-  // 如果 transitionableSourceStatuses 尚未加载（空集合），fallback 为允许拖拽
-  // 避免加载期间所有卡片都不可拖拽的闪烁问题
   if (transitionableSourceStatuses.value.size === 0) return true
   return transitionableSourceStatuses.value.has(issue.statusId)
 }
 
-/** 开始拖拽：获取可用目标状态 */
 async function onDragStart(event: DragEvent, issue: IssueVO) {
-  // 权限检查：没有变更状态权限或工作流不允许从当前状态转换
   if (!isCardDraggable(issue)) {
     event.preventDefault()
     Message.warning('该工单当前状态不允许变更')
@@ -405,62 +709,55 @@ async function onDragStart(event: DragEvent, issue: IssueVO) {
 
   draggingIssue.value = issue
 
-  // 设置拖拽数据和效果
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', issue.id)
   }
 
-  // 异步获取该工单可以转换到哪些状态
   try {
     const res = await issueApi.getAvailableTransitions(issue.id)
     const allowed = res.data || []
     allowedTargetStatuses.value = new Set(allowed.map(s => s.id))
   } catch {
-    // 获取失败时允许所有状态（后端会二次校验）
     allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
   }
 }
 
-/** 拖拽结束：清理状态 */
 function onDragEnd() {
   draggingIssue.value = null
   dragOverColumnId.value = null
+  dragOverSwimlaneKey.value = null
   allowedTargetStatuses.value.clear()
 }
 
-/** 拖拽经过列：判断是否允许放置 */
 function onDragOver(event: DragEvent, statusId: string) {
   event.preventDefault()
   dragOverColumnId.value = statusId
+  dragOverSwimlaneKey.value = null
 
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = isDropAllowed(statusId) ? 'move' : 'none'
   }
 }
 
-/** 拖拽离开列 */
 function onDragLeave(event: DragEvent) {
-  // 防止子元素触发 dragleave
   const relatedTarget = event.relatedTarget as HTMLElement | null
   const currentTarget = event.currentTarget as HTMLElement
   if (relatedTarget && currentTarget.contains(relatedTarget)) return
   dragOverColumnId.value = null
+  dragOverSwimlaneKey.value = null
 }
 
-/** 判断是否允许放置到目标列 */
 function isDropAllowed(targetStatusId: string): boolean {
   if (!draggingIssue.value) return false
-  // 不能拖到自己当前所在列
   if (draggingIssue.value.statusId === targetStatusId) return false
-  // 检查工作流是否允许
   return allowedTargetStatuses.value.has(targetStatusId)
 }
 
-/** 释放：执行状态转换 */
 async function onDrop(event: DragEvent, targetStatusId: string) {
   event.preventDefault()
   dragOverColumnId.value = null
+  dragOverSwimlaneKey.value = null
 
   const issue = draggingIssue.value
   if (!issue || !isDropAllowed(targetStatusId)) {
@@ -471,19 +768,16 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   const oldStatusId = issue.statusId
   const targetStatus = statuses.value.find(s => s.id === targetStatusId)
 
-  // 乐观更新：立即在 UI 中移动卡片
+  // 乐观更新
   issue.statusId = targetStatusId
   transitioningIssueIds.value.add(issue.id)
 
-  // 清理拖拽状态
   draggingIssue.value = null
   allowedTargetStatuses.value.clear()
 
-  // 调用后端 API
   try {
     await issueApi.transitStatus(issue.id, targetStatusId)
 
-    // 记录撤销历史
     const undoEntry: UndoEntry = {
       issueId: issue.id,
       issueKey: issue.issueKey,
@@ -495,7 +789,6 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     }
     undoStack.value.push(undoEntry)
 
-    // 显示带撤销按钮的通知
     const notifId = `undo-${issue.id}-${Date.now()}`
     Notification.success({
       id: notifId,
@@ -512,7 +805,6 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       }, '↩ 撤销 (Ctrl+Z)')
     })
   } catch (e: any) {
-    // 回滚：恢复原状态
     issue.statusId = oldStatusId
     const errMsg = e.response?.data?.message || '状态变更失败'
     Message.error(`${issue.issueKey} 移动失败：${errMsg}`)
@@ -523,7 +815,6 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
 
 // ===== 撤销逻辑 =====
 
-/** 撤销状态转换 */
 async function undoTransition(entry: UndoEntry) {
   const issue = issues.value.find(i => i.id === entry.issueId)
   if (!issue) {
@@ -531,7 +822,6 @@ async function undoTransition(entry: UndoEntry) {
     return
   }
 
-  // 乐观更新
   const currentStatusId = issue.statusId
   issue.statusId = entry.oldStatusId
   transitioningIssueIds.value.add(issue.id)
@@ -539,10 +829,8 @@ async function undoTransition(entry: UndoEntry) {
   try {
     await issueApi.undoTransitStatus(issue.id, entry.oldStatusId)
     Message.success(`${entry.issueKey} 已撤销回「${entry.oldStatusName}」`)
-    // 从撤销栈移除
     undoStack.value = undoStack.value.filter(e => e !== entry)
   } catch (e: any) {
-    // 回滚
     issue.statusId = currentStatusId
     const errMsg = e.response?.data?.message || '撤销失败'
     Message.error(`撤销失败：${errMsg}`)
@@ -551,10 +839,8 @@ async function undoTransition(entry: UndoEntry) {
   }
 }
 
-/** Ctrl+Z 撤销最近一次操作 */
 function handleKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-    // 找到最近一条有效的撤销记录（10秒内）
     const now = Date.now()
     const validEntries = undoStack.value.filter(entry => now - entry.timestamp < UNDO_TIMEOUT)
     if (validEntries.length > 0) {
@@ -586,12 +872,10 @@ async function loadBoardColumns() {
     const res = await boardApi.getColumns(selectedProject.value)
     allColumnConfigs.value = res.data || []
   } catch {
-    // 如果加载列配置失败，回退到显示所有状态
     allColumnConfigs.value = []
   }
 }
 
-/** 加载当前用户可发起转换的源状态集合（用于 per-card 拖拽判断） */
 async function loadTransitionableStatuses() {
   if (!selectedProject.value || !canChangeStatus.value) {
     transitionableSourceStatuses.value = new Set()
@@ -601,7 +885,6 @@ async function loadTransitionableStatuses() {
     const res = await workflowApi.getTransitionableStatuses(selectedProject.value)
     transitionableSourceStatuses.value = new Set(res.data || [])
   } catch {
-    // 加载失败时 fallback 为空集合 → isCardDraggable 会 fallback 为 true
     transitionableSourceStatuses.value = new Set()
   }
 }
@@ -623,7 +906,6 @@ async function loadSprints() {
 
 async function loadBoard() {
   if (!selectedProject.value) { issues.value = []; return }
-  // 切换项目/Sprint 时重置手动展开的列
   expandedEmptyColumns.value.clear()
   loading.value = true
   try {
@@ -637,7 +919,6 @@ async function loadBoard() {
   }
 }
 
-/** 仅刷新工单列表（搜索关键词变化时调用，不重新加载 sprints/columns） */
 async function loadIssues() {
   if (!selectedProject.value) { issues.value = []; return }
   const res = await issueApi.list({
@@ -653,7 +934,6 @@ onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
   document.addEventListener('keydown', handleKeydown)
 
-  // 如果已有选中的项目（从 Store 恢复或自动选择），自动加载看板
   if (selectedProject.value) {
     loadBoard()
   }
@@ -733,6 +1013,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+/* ===== 平面看板（无分组） ===== */
 .board-container {
   flex: 1;
   display: flex;
@@ -763,7 +1044,6 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
-/* 拖拽放置目标高亮 */
 .board-column--drop-target {
   border-color: rgb(var(--primary-6));
   box-shadow: 0 0 0 2px rgba(var(--primary-6), 0.15);
@@ -854,7 +1134,6 @@ onUnmounted(() => {
   outline-offset: -2px;
 }
 
-/* 折叠列作为拖拽目标时 */
 .board-column-collapsed--drop-target {
   border-color: rgb(var(--primary-6));
   background: var(--color-fill-2);
@@ -914,7 +1193,6 @@ onUnmounted(() => {
   outline-offset: 1px;
 }
 
-/* 无拖拽权限的卡片 */
 .kanban-card--no-drag {
   cursor: pointer;
 }
@@ -922,14 +1200,12 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-/* 正在被拖拽的卡片 */
 .kanban-card--dragging {
   opacity: 0.4;
   transform: scale(0.97);
   border-color: rgb(var(--primary-6));
 }
 
-/* 正在执行状态转换的卡片 */
 .kanban-card--transitioning {
   opacity: 0.6;
   pointer-events: none;
@@ -1059,6 +1335,146 @@ onUnmounted(() => {
 .empty-desc {
   font-size: 13px;
   color: var(--color-text-3);
+}
+
+/* ===== Swimlane 分组视图 ===== */
+.swimlane-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 0;
+}
+
+.swimlane-header {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-bg-1);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.swimlane-label-cell {
+  width: 200px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.swimlane-columns-header {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  padding: 8px 16px 8px 0;
+}
+
+.swimlane-col-header {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 12px;
+  border-top: 3px solid var(--color-border);
+  background: var(--color-fill-1);
+  border-radius: 6px 6px 0 0;
+  text-align: center;
+}
+
+.swimlane-body {
+  flex: 1;
+}
+
+.swimlane-row {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.swimlane-row--collapsed .swimlane-row-header {
+  border-bottom: none;
+}
+
+.swimlane-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--color-fill-1);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  position: sticky;
+  left: 0;
+}
+.swimlane-row-header:hover {
+  background: var(--color-fill-2);
+}
+.swimlane-row-header:focus-visible {
+  outline: 2px solid rgb(var(--primary-6));
+  outline-offset: -2px;
+}
+
+.swimlane-toggle-icon {
+  font-size: 10px;
+  color: var(--color-text-3);
+  width: 14px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+
+.swimlane-row-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.swimlane-row-count {
+  font-size: 11px;
+  color: var(--color-text-3);
+  background: var(--color-fill-3);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.swimlane-row-body {
+  display: flex;
+}
+
+.swimlane-columns {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  padding: 8px 16px 12px 0;
+}
+
+.swimlane-cell {
+  flex: 1;
+  min-width: 160px;
+  min-height: 60px;
+  padding: 6px;
+  background: var(--color-fill-1);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background 0.15s, border-color 0.15s;
+  border: 2px solid transparent;
+}
+
+.swimlane-cell--drop-target {
+  border-color: rgb(var(--primary-6));
+  background: var(--color-fill-2);
+}
+
+.swimlane-cell--drop-forbidden {
+  border-color: rgb(var(--danger-6));
+  opacity: 0.6;
+}
+
+.swimlane-cell-empty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  font-size: 16px;
+  opacity: 0.5;
 }
 
 /* ===== 撤销按钮（Notification footer 中） ===== */
