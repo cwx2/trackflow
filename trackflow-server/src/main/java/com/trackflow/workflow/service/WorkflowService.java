@@ -1,6 +1,7 @@
 package com.trackflow.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -25,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -39,19 +42,87 @@ public class WorkflowService {
     private final ProjectMemberMapper memberMapper;
     private final SysRoleMapper roleMapper;
     private final RoleConverter roleConverter;
+    private final PermissionService permissionService;
 
     /**
-     * 获取当前用户对指定 Issue 可以转换到的目标状态列表
+     * 需要检查工单所有权的角色 code 集合。
+     * 这些角色只能修改分配给自己或由自己创建/报告的工单状态。
+     * project_admin、tech_lead、product_manager 可修改任意工单。
+     */
+    private static final Set<String> OWNERSHIP_REQUIRED_ROLES = Set.of("developer", "tester");
+
+    /**
+     * project_admin 的角色 ID（来自 V2__seed_roles.sql 种子数据，ID 固定为 2）。
+     * 系统管理员无项目角色时，使用此角色的工作流规则。
+     */
+    private static final String PROJECT_ADMIN_ROLE_ID = "2";
+
+    /**
+     * 获取当前用户对指定 Issue 可以转换到的目标状态列表。
+     * 
+     * 所有权规则：
+     * - system_admin：全局权限，不受限制
+     * - project_admin / tech_lead / product_manager：可修改项目内任意工单状态
+     * - developer / tester：只能修改分配给自己或由自己报告的工单状态
+     * - observer：无状态变更权限（workflow_transition 表中无对应规则）
      */
     public List<IssueStatus> getAvailableTransitions(Issue issue, Long userId) {
+        // 系统管理员直接跳过所有权检查（由全局权限保障）
+        if (permissionService.isSystemAdmin(userId)) {
+            // 系统管理员使用 project_admin 的工作流规则
+            return getTransitionsForRoles(issue, PROJECT_ADMIN_ROLE_ID);
+        }
+
         // 获取用户在项目中的角色
         List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(userId, issue.getProjectId());
         if (roleIds.isEmpty()) {
             return List.of();
         }
 
-        String roleIdsStr = roleIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        // 检查用户是否需要所有权校验
+        if (requiresOwnershipCheck(roleIds)) {
+            // developer/tester 需要是工单的 assignee 或 reporter 才能变更状态
+            if (!isIssueOwner(issue, userId)) {
+                log.debug("User {} denied status transition on issue {} - not assignee or reporter",
+                        userId, issue.getId());
+                return List.of();
+            }
+        }
 
+        String roleIdsStr = roleIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        return getTransitionsForRoles(issue, roleIdsStr);
+    }
+
+    /**
+     * 检查用户是否为工单的"所有者"（assignee 或 reporter）
+     */
+    public boolean isIssueOwner(Issue issue, Long userId) {
+        return Objects.equals(issue.getAssigneeId(), userId)
+                || Objects.equals(issue.getReporterId(), userId)
+                || Objects.equals(issue.getCreatedBy(), userId);
+    }
+
+    /**
+     * 判断用户的角色是否需要所有权校验。
+     * 只要用户在该项目中拥有任何一个"管理级"角色（project_admin / tech_lead / product_manager），
+     * 就不需要所有权校验。
+     */
+    private boolean requiresOwnershipCheck(List<Long> roleIds) {
+        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+        // 如果用户拥有任何一个不需要所有权检查的角色，则跳过检查
+        for (SysRole role : roles) {
+            if (!OWNERSHIP_REQUIRED_ROLES.contains(role.getCode())) {
+                return false;
+            }
+        }
+        // 所有角色都是需要检查所有权的角色
+        return true;
+    }
+
+    /**
+     * 根据角色 ID 列表查询可用的状态转换
+     */
+    private List<IssueStatus> getTransitionsForRoles(Issue issue, String roleIdsStr) {
         // 查询允许的目标状态
         List<Long> allowedStatusIds = transitionMapper.findAllowedNewStatusIds(
                 issue.getProjectId(), issue.getIssueType(), roleIdsStr, issue.getStatusId()
