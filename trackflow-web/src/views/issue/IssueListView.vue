@@ -950,12 +950,41 @@ async function preloadSprintNames() {
     }
   }))
 }
-function onFilterChange() { currentPage.value = 1; refreshList() }
+function onFilterChange() {
+  currentPage.value = 1
+  // Sync project context when filterProject dropdown changes
+  if (filterProject.value) {
+    const matched = projectList.value.find(p => p.id === filterProject.value)
+    activeProjectId.value = filterProject.value
+    activeQueryName.value = matched?.name || '所有工单'
+    router.replace({ query: { ...route.query, project: filterProject.value } })
+  } else {
+    // Cleared project filter
+    activeProjectId.value = null
+    activeQueryName.value = '所有工单'
+    const { project, ...rest } = route.query
+    router.replace({ query: rest })
+  }
+  refreshList()
+}
 function selectQuery(q: any) {
-  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; filterBarRef.value?.clearAll(); currentPage.value = 1; refreshList()
+  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; filterBarRef.value?.clearAll(); currentPage.value = 1
+  const { project, ...rest } = route.query
+  router.replace({ query: rest })
+  refreshList()
 }
 function selectProject(p: any) {
-  activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; currentPage.value = 1; refreshList()
+  if (activeProjectId.value === p.id) {
+    // Toggle off: clicking active project clears the filter
+    activeProjectId.value = null; activeQueryId.value = null; activeQueryName.value = '所有工单'; filterProject.value = undefined; currentPage.value = 1
+    const { project, ...rest } = route.query
+    router.replace({ query: rest })
+  } else {
+    // Select project
+    activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; filterProject.value = p.id; currentPage.value = 1
+    router.replace({ query: { ...route.query, project: p.id } })
+  }
+  refreshList()
 }
 
 watch(currentPage, () => refreshList())
@@ -988,8 +1017,17 @@ onMounted(async () => {
   if (route.query.project) activeProjectId.value = String(route.query.project)
 
   await loadPanel()
-  loadProjects()
+  await loadProjects()
   await loadStatuses()
+
+  // Sync project context display from URL param after projectList is loaded
+  if (activeProjectId.value && projectList.value.length > 0) {
+    const matched = projectList.value.find(p => p.id === activeProjectId.value)
+    if (matched) {
+      activeQueryName.value = matched.name
+      filterProject.value = matched.id
+    }
+  }
 
   // Handle dashboard filter params (statusId, label, sprint, etc.)
   if (route.query.statusId || route.query.overdue || route.query.dueSoon || route.query.sprint) {
