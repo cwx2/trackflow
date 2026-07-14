@@ -15,6 +15,9 @@
         <router-link to="/" class="nav-item" :class="{ active: $route.name === 'Issues' }">
           <span class="nav-icon">📋</span>
           <span class="nav-label">问题</span>
+          <span v-if="issueBadgeCount > 0" class="nav-badge" :title="`${issueBadgeCount} 个待测试工单`">
+            {{ issueBadgeCount > 99 ? '99+' : issueBadgeCount }}
+          </span>
         </router-link>
         <router-link to="/projects" class="nav-item" :class="{ active: $route.name === 'Projects' }">
           <span class="nav-icon">📁</span>
@@ -27,6 +30,7 @@
         <router-link to="/sprints" class="nav-item" :class="{ active: $route.name === 'Sprints' }">
           <span class="nav-icon">🏃</span>
           <span class="nav-label">迭代</span>
+          <span v-if="!canManageSprint && navBadgeLoaded" class="nav-readonly-tag" title="您当前无迭代管理权限">只读</span>
         </router-link>
         <router-link to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
           <span class="nav-icon">⏱</span>
@@ -103,11 +107,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
+import { useNavBadge } from '@/composables/useNavBadge'
 import TabBar from './TabBar.vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { issueBadgeCount, canManageSprint, loaded: navBadgeLoaded, init: initNavBadge } = useNavBadge()
 
 // TabBar 仅在 Issue 相关路由显示（Issue 列表、Issue 详情）
 const showTabBar = computed(() => {
@@ -201,7 +207,10 @@ function handleClickOutside(e: MouseEvent) {
   }
 }
 
-onMounted(() => document.addEventListener('click', handleClickOutside))
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+  initNavBadge()
+})
 onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
 
@@ -294,6 +303,35 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--tf-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.nav-readonly-tag {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 /* 底部 */

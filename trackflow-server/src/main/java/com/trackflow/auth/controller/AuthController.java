@@ -85,6 +85,10 @@ public class AuthController {
             if (permissionService.hasPermissionInAnyProject(userId, "report:create")) {
                 permissions.add("nav:report_create");
             }
+            // 用户在任意项目中有 sprint:create 权限 → 迭代管理模式（非只读）
+            if (permissionService.hasPermissionInAnyProject(userId, "sprint:create")) {
+                permissions.add("nav:sprint_manage");
+            }
         }
 
         return R.ok(permissions);

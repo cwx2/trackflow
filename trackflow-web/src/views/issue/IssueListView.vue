@@ -53,11 +53,12 @@
             v-for="q in filteredQueries"
             :key="q.id"
             class="query-item"
-            :class="{ active: activeQueryId === q.id }"
+            :class="{ active: activeQueryId === q.id, 'query-highlight': isHighlightedQuery(q) }"
             @click="selectQuery(q)"
           >
+            <span class="query-icon" v-if="isTestingQuery(q)">🧪</span>
             <span class="query-name">{{ q.name }}</span>
-            <span class="query-count">{{ formatCount(q.count) }}</span>
+            <span class="query-count" :class="{ 'count-accent': isTestingQuery(q) && q.count > 0 }">{{ formatCount(q.count) }}</span>
             <span
               v-if="q.userId && !q.shared"
               class="query-delete-btn"
@@ -357,6 +358,7 @@ import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useNavBadge } from '@/composables/useNavBadge'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -366,6 +368,7 @@ import FilterBar from './components/FilterBar.vue'
 
 const router = useRouter()
 const route = useRoute()
+const { isTester } = useNavBadge()
 
 // Composables
 const {
@@ -891,6 +894,16 @@ function formatCount(count: number) {
   if (count >= 1000) return (count / 1000).toFixed(1) + 'k'
   return String(count)
 }
+
+/** 是否为"待我测试"查询 */
+function isTestingQuery(q: any): boolean {
+  return q.name === '待我测试'
+}
+
+/** 是否为测试人员应高亮的查询（仅对 tester 角色生效） */
+function isHighlightedQuery(q: any): boolean {
+  return isTester.value && isTestingQuery(q) && q.count > 0
+}
 function formatTime(dt: string) {
   if (!dt) return ''
   const d = new Date(dt)
@@ -1029,8 +1042,8 @@ onMounted(async () => {
     }
   }
 
-  // Handle dashboard filter params (statusId, label, sprint, etc.)
-  if (route.query.statusId || route.query.overdue || route.query.dueSoon || route.query.sprint) {
+  // Handle dashboard filter params (statusId, statusCode, statusCategory, label, sprint, etc.)
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe) {
     applyDashboardFilter()
   } else {
     refreshList()
@@ -1038,6 +1051,11 @@ onMounted(async () => {
 })
 
 function applyDashboardFilter() {
+  // 清除已选中的保存查询，防止 buildFilters() 中 queryId 覆盖 dashboard 过滤条件
+  activeQueryId.value = null
+  filterProject.value = undefined
+  searchKeyword.value = ''
+
   const filters: Record<string, any> = {}
   const chips: any[] = []
 
@@ -1055,6 +1073,48 @@ function applyDashboardFilter() {
       operator: 'any_of',
       values: statusIds,
       valueLabels: statusNames
+    })
+  }
+
+  // statusCode: 单个状态代码（如 'testing'）
+  if (route.query.statusCode) {
+    const code = String(route.query.statusCode)
+    const matchedStatus = statusCache.value.find(st => st.code === code)
+    if (matchedStatus) {
+      filters.statusId = matchedStatus.id
+      chips.push({
+        fieldKey: 'status',
+        operator: 'any_of',
+        values: [matchedStatus.id],
+        valueLabels: [matchedStatus.name]
+      })
+    }
+  }
+
+  // statusCategory: 状态分类（如 'open', 'in_progress', 'done'）
+  if (route.query.statusCategory) {
+    const category = String(route.query.statusCategory)
+    const matchedStatuses = statusCache.value.filter(st => st.category === category)
+    if (matchedStatuses.length > 0) {
+      const ids = matchedStatuses.map(s => s.id)
+      filters.statusId = ids.join(',')
+      chips.push({
+        fieldKey: 'status',
+        operator: 'any_of',
+        values: ids,
+        valueLabels: matchedStatuses.map(s => s.name)
+      })
+    }
+  }
+
+  // reportedByMe: 我报告的未解决工单
+  if (route.query.reportedByMe) {
+    filters.reportedByMe = 'true'
+    chips.push({
+      fieldKey: 'reporter',
+      operator: 'equals',
+      values: ['me'],
+      valueLabels: ['我']
     })
   }
 
@@ -1113,6 +1173,10 @@ function applyDashboardFilter() {
 .query-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .query-item.active .query-name { color: var(--tf-accent); }
 .query-count { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; margin-left: 8px; }
+.query-count.count-accent { color: var(--tf-accent); font-weight: 600; }
+.query-icon { font-size: 12px; flex-shrink: 0; margin-right: 4px; }
+.query-item.query-highlight { background: var(--tf-accent-bg); border-left: 2px solid var(--tf-accent); padding-left: 6px; }
+.query-item.query-highlight .query-name { color: var(--tf-accent); font-weight: 500; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
 
 /* Group action button */
