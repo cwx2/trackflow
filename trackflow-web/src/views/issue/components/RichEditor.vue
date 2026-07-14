@@ -37,6 +37,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
+import { htmlToMarkdown, markdownToEditorHtml } from '@/utils/markdown'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -61,7 +62,7 @@ const mdSource = ref(props.modelValue || '')
 const isUpdatingFromInside = ref(false)
 
 const editor = useEditor({
-  content: markdownToHtml(props.modelValue || ''),
+  content: markdownToEditorHtml(props.modelValue || ''),
   extensions: [
     StarterKit,
     Link.configure({ openOnClick: false }),
@@ -106,7 +107,7 @@ function toggleMarkdown() {
     mdSource.value = htmlToMarkdown(editor.value?.getHTML() || '')
     markdownMode.value = true
   } else {
-    editor.value?.commands.setContent(markdownToHtml(mdSource.value))
+    editor.value?.commands.setContent(markdownToEditorHtml(mdSource.value))
     markdownMode.value = false
   }
 }
@@ -131,47 +132,6 @@ function onMdInput() {
   }
 }
 
-function htmlToMarkdown(html: string): string {
-  let md = html
-  md = md.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
-  md = md.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
-  md = md.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
-  md = md.replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
-  md = md.replace(/<em>(.*?)<\/em>/gi, '*$1*')
-  md = md.replace(/<s>(.*?)<\/s>/gi, '~~$1~~')
-  md = md.replace(/<code>(.*?)<\/code>/gi, '`$1`')
-  md = md.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-  md = md.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gis, (_, c) => c.replace(/<p[^>]*>(.*?)<\/p>/gi, '> $1\n'))
-  md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-  md = md.replace(/<\/?[uo]l[^>]*>/gi, '')
-  md = md.replace(/<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gis, '```\n$1\n```\n')
-  md = md.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-  md = md.replace(/<br\s*\/?>/gi, '\n')
-  md = md.replace(/<[^>]+>/g, '')
-  md = md.replace(/\n{3,}/g, '\n\n')
-  return md.trim()
-}
-
-function markdownToHtml(md: string): string {
-  if (!md) return '<p></p>'
-  let html = md
-  html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>')
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-  html = html.replace(/^> (.*$)/gm, '<blockquote><p>$1</p></blockquote>')
-  html = html.replace(/^- (.*$)/gm, '<li>$1</li>')
-  html = html.split('\n\n').map(p => {
-    if (p.startsWith('<h') || p.startsWith('<pre') || p.startsWith('<blockquote') || p.startsWith('<li')) return p
-    if (p.trim()) return `<p>${p.replace(/\n/g, '<br>')}</p>`
-    return ''
-  }).join('')
-  html = html.replace(/((<li>.*?<\/li>\s*)+)/g, '<ul>$1</ul>')
-  return html || '<p></p>'
-}
 
 watch(() => props.modelValue, (val) => {
   // 如果是组件内部编辑触发的更新，不回写到编辑器（避免光标跳动）
@@ -179,7 +139,7 @@ watch(() => props.modelValue, (val) => {
   if (markdownMode.value) { mdSource.value = val }
   else {
     const current = htmlToMarkdown(editor.value?.getHTML() || '')
-    if (current !== val) editor.value?.commands.setContent(markdownToHtml(val))
+    if (current !== val) editor.value?.commands.setContent(markdownToEditorHtml(val))
   }
 })
 
