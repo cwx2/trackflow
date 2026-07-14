@@ -106,6 +106,7 @@ public class IssueController {
     // ========== 状态转换 ==========
 
     @GetMapping("/{id}/available-transitions")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:change_status')")
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable Long id) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
@@ -114,6 +115,7 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/transitions")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:change_status')")
     public R<Void> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 校验项目成员权限 + 工作流规则（含所有权检查）
         Issue issue = issueService.getByIdWithAccessCheck(id);

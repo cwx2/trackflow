@@ -26,8 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -48,8 +50,10 @@ public class WorkflowService {
      * 需要检查工单所有权的角色 code 集合。
      * 这些角色只能修改分配给自己或由自己创建/报告的工单状态。
      * project_admin、tech_lead、product_manager 可修改任意工单。
+     * tester 不在此集合中——测试人员的核心职责就是验证他人开发的工单，
+     * 其权限已通过 workflow_transition 表的转换规则充分约束。
      */
-    private static final Set<String> OWNERSHIP_REQUIRED_ROLES = Set.of("developer", "tester");
+    private static final Set<String> OWNERSHIP_REQUIRED_ROLES = Set.of("developer");
 
     /**
      * project_admin 的角色 ID（来自 V2__seed_roles.sql 种子数据，ID 固定为 2）。
@@ -63,7 +67,8 @@ public class WorkflowService {
      * 所有权规则：
      * - system_admin：全局权限，不受限制
      * - project_admin / tech_lead / product_manager：可修改项目内任意工单状态
-     * - developer / tester：只能修改分配给自己或由自己报告的工单状态
+     * - tester：可修改任意工单状态（受 workflow_transition 规则约束可用转换路径）
+     * - developer：只能修改分配给自己或由自己报告的工单状态
      * - observer：无状态变更权限（workflow_transition 表中无对应规则）
      */
     public List<IssueStatus> getAvailableTransitions(Issue issue, Long userId) {
@@ -103,15 +108,22 @@ public class WorkflowService {
     }
 
     /**
+     * 角色 ID → code 缓存。角色 code 为静态种子数据，几乎不变，可安全缓存。
+     */
+    private final Map<Long, String> roleCodeCache = new ConcurrentHashMap<>();
+
+    /**
      * 判断用户的角色是否需要所有权校验。
      * 只要用户在该项目中拥有任何一个"管理级"角色（project_admin / tech_lead / product_manager），
      * 就不需要所有权校验。
      */
     private boolean requiresOwnershipCheck(List<Long> roleIds) {
-        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
-        // 如果用户拥有任何一个不需要所有权检查的角色，则跳过检查
-        for (SysRole role : roles) {
-            if (!OWNERSHIP_REQUIRED_ROLES.contains(role.getCode())) {
+        for (Long roleId : roleIds) {
+            String code = roleCodeCache.computeIfAbsent(roleId, id -> {
+                SysRole role = roleMapper.selectById(id);
+                return role != null ? role.getCode() : "";
+            });
+            if (!OWNERSHIP_REQUIRED_ROLES.contains(code)) {
                 return false;
             }
         }
