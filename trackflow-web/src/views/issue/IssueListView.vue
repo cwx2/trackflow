@@ -113,6 +113,7 @@
     <section class="issue-list-area">
       <!-- Search/Filter bar (YouTrack style with mode toggle) -->
       <FilterBar
+        ref="filterBarRef"
         :project-id="activeProjectId"
         :status-list="statusCache"
         :project-list="projectList"
@@ -387,6 +388,7 @@ const canCreateIssueGlobal = authStore.canCreateIssue
 
 // Panel state (declared before useColumnConfig so it can be passed as ref)
 const activeProjectId = ref<string | null>(null)
+const filterBarRef = ref<InstanceType<typeof FilterBar> | null>(null)
 
 const {
   visibleColumns, toggleColumn, reorderColumn,
@@ -950,7 +952,7 @@ async function preloadSprintNames() {
 }
 function onFilterChange() { currentPage.value = 1; refreshList() }
 function selectQuery(q: any) {
-  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; currentPage.value = 1; refreshList()
+  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; searchKeyword.value = ''; globalFilterParams.value = {}; filterBarRef.value?.clearAll(); currentPage.value = 1; refreshList()
 }
 function selectProject(p: any) {
   activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; currentPage.value = 1; refreshList()

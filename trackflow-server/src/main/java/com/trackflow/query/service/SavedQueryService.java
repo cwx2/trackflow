@@ -65,11 +65,12 @@ public class SavedQueryService {
 
         for (SavedQuery q : queries) {
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", q.getId());
+            item.put("id", String.valueOf(q.getId()));
             item.put("name", q.getName());
             item.put("folder", q.getFolder());
             item.put("pinned", q.getPinned());
             item.put("shared", q.getShared());
+            item.put("userId", q.getUserId() != null ? String.valueOf(q.getUserId()) : null);
 
             // 实时计数（带项目成员过滤）
             long count = countForQueryWithProjectFilter(q, accessibleProjectIds);
@@ -197,13 +198,13 @@ public class SavedQueryService {
     /**
      * 批量获取查询计数（带项目成员过滤）
      */
-    public Map<Long, Long> batchCountWithAccessCheck(List<Long> queryIds, Long userId) {
+    public Map<String, Long> batchCountWithAccessCheck(List<Long> queryIds, Long userId) {
         List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
-        Map<Long, Long> result = new LinkedHashMap<>();
+        Map<String, Long> result = new LinkedHashMap<>();
         for (Long queryId : queryIds) {
             SavedQuery query = queryMapper.selectById(queryId);
             if (query != null) {
-                result.put(queryId, countForQueryWithProjectFilter(query, accessibleProjectIds));
+                result.put(String.valueOf(queryId), countForQueryWithProjectFilter(query, accessibleProjectIds));
             }
         }
         return result;
@@ -212,12 +213,12 @@ public class SavedQueryService {
     /**
      * 批量获取查询计数
      */
-    public Map<Long, Long> batchCount(List<Long> queryIds) {
-        Map<Long, Long> result = new LinkedHashMap<>();
+    public Map<String, Long> batchCount(List<Long> queryIds) {
+        Map<String, Long> result = new LinkedHashMap<>();
         for (Long queryId : queryIds) {
             SavedQuery query = queryMapper.selectById(queryId);
             if (query != null) {
-                result.put(queryId, countForQuery(query));
+                result.put(String.valueOf(queryId), countForQuery(query));
             }
         }
         return result;

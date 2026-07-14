@@ -67,18 +67,18 @@ public class SavedQueryController {
      * 更新保存查询
      */
     @PutMapping("/{id}")
-    public R<SavedQueryVO> update(@PathVariable Long id, @Valid @RequestBody UpdateQueryDTO dto) {
+    public R<SavedQueryVO> update(@PathVariable String id, @Valid @RequestBody UpdateQueryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(savedQueryConverter.toVO(savedQueryService.update(id, userId, dto)));
+        return R.ok(savedQueryConverter.toVO(savedQueryService.update(Long.parseLong(id), userId, dto)));
     }
 
     /**
      * 删除保存查询
      */
     @DeleteMapping("/{id}")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable String id) {
         Long userId = SecurityUtils.getCurrentUserId();
-        savedQueryService.delete(id, userId);
+        savedQueryService.delete(Long.parseLong(id), userId);
         return R.ok();
     }
 
@@ -88,11 +88,12 @@ public class SavedQueryController {
      */
     @GetMapping("/{id}/results")
     public R<PageResult<IssueVO>> executeById(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(id, page, pageSize, userId);
+        Long queryId = Long.parseLong(id);
+        Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(queryId, page, pageSize, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
         fillAssigneeNames(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
@@ -142,7 +143,7 @@ public class SavedQueryController {
      * 批量获取查询计数（带项目成员过滤）
      */
     @PostMapping("/counts")
-    public R<Map<Long, Long>> batchCount(@RequestBody Map<String, List<Long>> body) {
+    public R<Map<String, Long>> batchCount(@RequestBody Map<String, List<Long>> body) {
         Long userId = SecurityUtils.getCurrentUserId();
         List<Long> queryIds = body.get("queryIds");
         return R.ok(savedQueryService.batchCountWithAccessCheck(queryIds, userId));

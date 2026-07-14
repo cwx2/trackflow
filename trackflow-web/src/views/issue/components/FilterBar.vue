@@ -704,6 +704,16 @@ function applyInitialFilters(filters: InitialFilter[]) {
     }
   })
 }
+
+/**
+ * 清空所有搜索/筛选状态（供外部组件调用）
+ */
+function clearAll() {
+  searchKeyword.value = ''
+  activeFilters.value = []
+}
+
+defineExpose({ clearAll })
 </script>
 
 <style scoped>
