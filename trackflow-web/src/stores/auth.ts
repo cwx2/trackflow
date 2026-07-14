@@ -29,6 +29,22 @@ const STORAGE_KEYS = {
  */
 const TOKEN_REFRESH_BUFFER = 60
 
+/**
+ * Token 有效性检查间隔（毫秒）
+ * 作为 setTimeout 的补充，防止浏览器后台暂停定时器导致 token 过期未刷新
+ */
+const TOKEN_CHECK_INTERVAL = 30 * 1000 // 每 30 秒检查一次
+
+/**
+ * Token 刷新失败后的重试延迟（毫秒）
+ */
+const TOKEN_REFRESH_RETRY_DELAY = 5 * 1000 // 5 秒后重试
+
+/**
+ * Token 刷新最大重试次数
+ */
+const TOKEN_REFRESH_MAX_RETRIES = 3
+
 export const useAuthStore = defineStore('auth', () => {
   // 从 localStorage 恢复状态
   const accessToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.accessToken))
@@ -40,8 +56,12 @@ export const useAuthStore = defineStore('auth', () => {
   const globalPermissions = ref<Set<string>>(new Set())
   const permissionsLoaded = ref(false)
 
-  // Token 刷新定时器
+  // Token 刷新定时器（setTimeout，在 token 过期前触发）
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
+  // Token 有效性定期检查器（setInterval，防止 setTimeout 在后台被暂停）
+  let tokenCheckInterval: ReturnType<typeof setInterval> | null = null
+  // 是否正在执行主动刷新（防止 interval 和 timer 同时触发）
+  let isProactiveRefreshing = false
 
   const isAuthenticated = computed(() => !!accessToken.value)
 
@@ -54,6 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
     } else {
       localStorage.removeItem(STORAGE_KEYS.accessToken)
       clearRefreshTimer()
+      stopTokenCheckInterval()
     }
   })
 
@@ -73,9 +94,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }, { deep: true, immediate: true })
 
-  // 初始化时，如果有 token 则启动定时刷新
+  // 初始化时，如果有 token 则启动定时刷新和定期检查
   if (accessToken.value) {
     scheduleTokenRefresh(accessToken.value)
+    startTokenCheckInterval()
+  }
+
+  /**
+   * 获取 token 的剩余有效时间（秒）
+   * 返回负数表示已过期
+   */
+  function getTokenRemainingTime(token: string): number {
+    try {
+      const parts = token.split('.')
+      if (parts.length !== 3) return -1
+      const payload = JSON.parse(decodeBase64Url(parts[1]))
+      const exp = payload.exp
+      if (!exp) return -1
+      return exp - Math.floor(Date.now() / 1000)
+    } catch {
+      return -1
+    }
   }
 
   /**
@@ -94,20 +133,80 @@ export const useAuthStore = defineStore('auth', () => {
       // 在过期前 TOKEN_REFRESH_BUFFER 秒刷新
       const refreshAt = (exp - TOKEN_REFRESH_BUFFER) - now
       if (refreshAt <= 0) {
-        // Token 已经即将过期或已过期，立即刷新
-        refresh()
+        // Token 已经即将过期或已过期，立即刷新（带重试）
+        performProactiveRefresh()
         return
       }
 
-      refreshTimer = setTimeout(async () => {
-        const success = await refresh()
-        if (!success) {
-          // 刷新失败，但不强制登出——让请求拦截器处理
-          console.warn('[auth] Proactive token refresh failed')
-        }
+      refreshTimer = setTimeout(() => {
+        performProactiveRefresh()
       }, refreshAt * 1000)
     } catch {
       // 解析失败，不设置定时器
+    }
+  }
+
+  /**
+   * 执行主动 token 刷新（带重试和失败处理）
+   */
+  async function performProactiveRefresh(retries = 0): Promise<void> {
+    if (isProactiveRefreshing) return
+    isProactiveRefreshing = true
+
+    try {
+      const success = await refresh()
+      if (success) {
+        isProactiveRefreshing = false
+        return
+      }
+
+      // 刷新失败，尝试重试
+      isProactiveRefreshing = false
+      if (retries < TOKEN_REFRESH_MAX_RETRIES) {
+        console.warn(`[auth] Proactive token refresh failed, retry ${retries + 1}/${TOKEN_REFRESH_MAX_RETRIES} in ${TOKEN_REFRESH_RETRY_DELAY / 1000}s`)
+        // 复用 refreshTimer：如果此时新 token 到达触发 scheduleTokenRefresh，会取消此 retry（正确行为）
+        refreshTimer = setTimeout(() => {
+          performProactiveRefresh(retries + 1)
+        }, TOKEN_REFRESH_RETRY_DELAY)
+      } else {
+        // 所有重试都失败了 — refresh_token 大概率也已过期
+        console.error('[auth] Token refresh failed after all retries')
+        logout('会话已过期，请重新登录')
+      }
+    } catch {
+      isProactiveRefreshing = false
+      if (retries < TOKEN_REFRESH_MAX_RETRIES) {
+        refreshTimer = setTimeout(() => {
+          performProactiveRefresh(retries + 1)
+        }, TOKEN_REFRESH_RETRY_DELAY)
+      } else {
+        logout('会话已过期，请重新登录')
+      }
+    }
+  }
+
+  /**
+   * 启动定期 token 有效性检查
+   * 作为 setTimeout 的补充，解决浏览器后台 tab 暂停定时器的问题
+   */
+  function startTokenCheckInterval() {
+    stopTokenCheckInterval()
+    tokenCheckInterval = setInterval(() => {
+      if (!accessToken.value || !refreshToken.value) return
+      const remaining = getTokenRemainingTime(accessToken.value)
+      // 如果 token 即将过期（< TOKEN_REFRESH_BUFFER 秒）且没有正在进行的刷新
+      if (remaining < TOKEN_REFRESH_BUFFER && remaining > -1800 && !isProactiveRefreshing) {
+        // remaining > -1800：对应 Keycloak SSO Session Idle 默认值 30 分钟（refresh_token 有效期）
+        // 如果 access_token 过期超过 30 分钟，refresh_token 也必然已过期，不必尝试
+        performProactiveRefresh()
+      }
+    }, TOKEN_CHECK_INTERVAL)
+  }
+
+  function stopTokenCheckInterval() {
+    if (tokenCheckInterval !== null) {
+      clearInterval(tokenCheckInterval)
+      tokenCheckInterval = null
     }
   }
 
@@ -222,6 +321,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   function logout(reason?: string) {
     clearRefreshTimer()
+    stopTokenCheckInterval()
     clearStorage()
     accessToken.value = null
     refreshToken.value = null
@@ -334,20 +434,33 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 页面可见性变化时刷新权限（用户从后台切回前台）
+  // 页面可见性变化时刷新 token 和权限（用户从后台切回前台）
   // 节流：距上次刷新 < 30s 则跳过，避免频繁 alt-tab 产生不必要的请求
   let lastVisibilityRefresh = 0
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && isAuthenticated.value && permissionsLoaded.value) {
+      if (document.visibilityState === 'visible' && isAuthenticated.value) {
         const now = Date.now()
         if (now - lastVisibilityRefresh < 30000) return
         lastVisibilityRefresh = now
-        refreshGlobalPermissions()
-        // 同时清除项目级权限缓存，下次访问时重新加载
-        import('@/composables/usePermission').then(({ invalidateProjectPermissions }) => {
-          invalidateProjectPermissions()
-        }).catch(() => { /* ignore */ })
+
+        // 首先检查 token 是否需要刷新（优先级高于权限刷新）
+        if (accessToken.value) {
+          const remaining = getTokenRemainingTime(accessToken.value)
+          if (remaining < TOKEN_REFRESH_BUFFER) {
+            // token 即将过期或已过期，立即刷新
+            performProactiveRefresh()
+          }
+        }
+
+        // 刷新全局权限
+        if (permissionsLoaded.value) {
+          refreshGlobalPermissions()
+          // 同时清除项目级权限缓存，下次访问时重新加载
+          import('@/composables/usePermission').then(({ invalidateProjectPermissions }) => {
+            invalidateProjectPermissions()
+          }).catch(() => { /* ignore */ })
+        }
       }
     })
   }
@@ -356,8 +469,10 @@ export const useAuthStore = defineStore('auth', () => {
   watch(isAuthenticated, (authenticated) => {
     if (authenticated) {
       startPermissionRefresh()
+      startTokenCheckInterval()
     } else {
       stopPermissionRefresh()
+      stopTokenCheckInterval()
     }
   }, { immediate: true })
 

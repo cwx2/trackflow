@@ -16,18 +16,23 @@ const request = axios.create({
  * - 在 refresh 进行中的请求排队等待
  */
 let isRefreshing = false
-let refreshSubscribers: Array<(token: string) => void> = []
+let refreshSubscribers: Array<{
+  resolve: (token: string) => void
+  reject: (error: Error) => void
+}> = []
 
-function subscribeTokenRefresh(cb: (token: string) => void) {
-  refreshSubscribers.push(cb)
+function subscribeTokenRefresh(resolve: (token: string) => void, reject: (error: Error) => void) {
+  refreshSubscribers.push({ resolve, reject })
 }
 
 function onTokenRefreshed(newToken: string) {
-  refreshSubscribers.forEach((cb) => cb(newToken))
+  refreshSubscribers.forEach(({ resolve }) => resolve(newToken))
   refreshSubscribers = []
 }
 
 function onRefreshFailed() {
+  const error = new Error('Token refresh failed')
+  refreshSubscribers.forEach(({ reject }) => reject(error))
   refreshSubscribers = []
 }
 
@@ -61,11 +66,16 @@ request.interceptors.request.use(
     if (isTokenExpiringSoon(authStore.accessToken, 30)) {
       // 如果已有刷新进行中，等待其完成
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          subscribeTokenRefresh((newToken: string) => {
-            config.headers.Authorization = `Bearer ${newToken}`
-            resolve(config)
-          })
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh(
+            (newToken: string) => {
+              config.headers.Authorization = `Bearer ${newToken}`
+              resolve(config)
+            },
+            (error: Error) => {
+              reject(new axios.Cancel(error.message))
+            }
+          )
         })
       }
 
@@ -81,13 +91,13 @@ request.interceptors.request.use(
           // refresh_token 也过期了，跳转登录
           isRefreshing = false
           onRefreshFailed()
-          authStore.logout('登录已过期，请重新登录')
+          authStore.logout('会话已过期，请重新登录')
           return Promise.reject(new axios.Cancel('Token refresh failed'))
         }
       } catch {
         isRefreshing = false
         onRefreshFailed()
-        authStore.logout('登录已过期，请重新登录')
+        authStore.logout('会话已过期，请重新登录')
         return Promise.reject(new axios.Cancel('Token refresh failed'))
       }
     } else {
@@ -142,12 +152,15 @@ request.interceptors.response.use(
       // 如果已有刷新进行中，排队等待
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
-          subscribeTokenRefresh((newToken: string) => {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`
-            resolve(request(originalRequest))
-          })
-          // 如果等待超时（5秒），reject
-          setTimeout(() => reject(error), 5000)
+          subscribeTokenRefresh(
+            (newToken: string) => {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`
+              resolve(request(originalRequest))
+            },
+            () => {
+              reject(error)
+            }
+          )
         })
       }
 
@@ -162,13 +175,13 @@ request.interceptors.response.use(
         } else {
           isRefreshing = false
           onRefreshFailed()
-          authStore.logout('登录已过期，请重新登录')
+          authStore.logout('会话已过期，请重新登录')
           return Promise.reject(error)
         }
       } catch {
         isRefreshing = false
         onRefreshFailed()
-        authStore.logout('登录已过期，请重新登录')
+        authStore.logout('会话已过期，请重新登录')
         return Promise.reject(error)
       }
     }
