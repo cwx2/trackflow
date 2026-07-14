@@ -159,7 +159,7 @@ import {
   IconRight,
   IconCloseCircle
 } from '@arco-design/web-vue/es/icon'
-import { projectApi } from '@/api'
+import { projectApi, workflowApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
@@ -192,19 +192,25 @@ const canViewSprints = computed(() => {
   return projectPerms.value.has('sprint:view')
 })
 
-// 角色映射
-const roleMap: Record<string, string> = {
-  '1': '系统管理员',
-  '2': '项目管理员',
-  '3': '开发人员',
-  '4': '测试人员',
-  '5': '观察者',
-  '6': '产品经理',
-  '7': '技术负责人'
+// 角色映射（动态加载）
+const roleMap = ref<Record<string, string>>({})
+
+async function loadRoles() {
+  try {
+    const res = await workflowApi.listProjectRoles()
+    const roles = res.data || []
+    const map: Record<string, string> = {}
+    roles.forEach((r) => {
+      map[String(r.id)] = r.name
+    })
+    roleMap.value = map
+  } catch {
+    roleMap.value = {}
+  }
 }
 
 function getRoleName(roleId: string): string {
-  return roleMap[roleId] || `角色 ${roleId}`
+  return roleMap.value[roleId] || `角色 ${roleId}`
 }
 
 // 颜色
@@ -240,10 +246,11 @@ async function loadProject() {
     const res = await projectApi.getDetail(projectId)
     project.value = res.data
 
-    // 并行加载权限和成员
+    // 并行加载权限、成员和角色
     await Promise.all([
       loadPerms(projectId),
-      loadMembers(projectId)
+      loadMembers(projectId),
+      loadRoles()
     ])
   } catch (e: any) {
     if (e.response?.status === 403) {
