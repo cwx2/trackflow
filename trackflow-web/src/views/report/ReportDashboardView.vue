@@ -1,0 +1,774 @@
+<template>
+  <div class="report-dashboard">
+    <!-- 页面头部 -->
+    <div class="dashboard-header">
+      <div class="header-left">
+        <h1 class="page-title">报表</h1>
+        <span class="page-desc">项目数据概览与可视化分析</span>
+      </div>
+      <div class="header-right">
+        <a-select
+          v-model="selectedProjectId"
+          placeholder="选择项目"
+          size="small"
+          style="width: 180px"
+          @change="loadDashboard"
+        >
+          <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
+        </a-select>
+        <a-select
+          v-model="selectedSprintId"
+          placeholder="全部 Sprint"
+          allow-clear
+          size="small"
+          style="width: 200px"
+          @change="loadDashboard"
+        >
+          <a-option v-for="s in sprints" :key="s.id" :value="s.id">
+            {{ s.name }}
+            <span v-if="s.status === 'active'" class="sprint-active-badge">进行中</span>
+          </a-option>
+        </a-select>
+        <a-range-picker
+          v-model="dateRange"
+          size="small"
+          style="width: 240px"
+          :shortcuts="dateShortcuts"
+          @change="loadDashboard"
+        />
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="dashboard-loading">
+      <div class="overview-skeleton">
+        <a-skeleton :animation="true" v-for="i in 4" :key="i">
+          <a-skeleton-line :rows="2" :widths="['60%', '40%']" />
+        </a-skeleton>
+      </div>
+      <div class="chart-skeleton">
+        <a-skeleton :animation="true" v-for="i in 4" :key="i">
+          <a-skeleton-shape shape="square" :style="{ width: '100%', height: '240px' }" />
+        </a-skeleton>
+      </div>
+    </div>
+
+    <!-- 空状态（未选择项目） -->
+    <div v-else-if="!selectedProjectId" class="dashboard-empty">
+      <div class="empty-icon">📊</div>
+      <h3 class="empty-title">选择项目查看报表</h3>
+      <p class="empty-desc">请从顶部下拉框选择一个项目，查看该项目的统计数据和可视化图表。</p>
+    </div>
+
+    <!-- 仪表盘主体 -->
+    <template v-else-if="dashboardData">
+      <!-- 概览卡片 -->
+      <div class="overview-cards">
+        <div class="stat-card">
+          <div class="stat-value">{{ dashboardData.overview.total }}</div>
+          <div class="stat-label">工单总数</div>
+        </div>
+        <div class="stat-card stat-open">
+          <div class="stat-value">{{ dashboardData.overview.open }}</div>
+          <div class="stat-label">进行中</div>
+        </div>
+        <div class="stat-card stat-done">
+          <div class="stat-value">{{ dashboardData.overview.closed }}</div>
+          <div class="stat-label">已完成</div>
+        </div>
+        <div class="stat-card stat-rate">
+          <div class="stat-value">{{ dashboardData.overview.completionRate }}%</div>
+          <div class="stat-label">完成率</div>
+        </div>
+        <div class="stat-card stat-overdue" v-if="dashboardData.overview.overdue > 0">
+          <div class="stat-value">{{ dashboardData.overview.overdue }}</div>
+          <div class="stat-label">已逾期</div>
+        </div>
+      </div>
+
+      <!-- 图表网格 -->
+      <div class="chart-grid">
+        <!-- 工单状态分布 — 环形图 -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3 class="chart-title">状态分布</h3>
+            <span class="chart-subtitle">各状态工单占比</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="statusChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+
+        <!-- 优先级分布 — 柱状图 -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3 class="chart-title">优先级分布</h3>
+            <span class="chart-subtitle">各优先级工单数量</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="priorityChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+
+        <!-- 工单类型分布 — 饼图 -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3 class="chart-title">类型分布</h3>
+            <span class="chart-subtitle">Bug / Task / Feature 占比</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="typeChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+
+        <!-- 团队工作负载 — 横向柱状图 -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3 class="chart-title">团队负载</h3>
+            <span class="chart-subtitle">按负责人统计工单数</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="workloadChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+
+        <!-- 工单趋势 — 折线图（占两列） -->
+        <div class="chart-card chart-card-wide">
+          <div class="chart-card-header">
+            <h3 class="chart-title">工单趋势</h3>
+            <span class="chart-subtitle">每日新建 / 关闭工单数</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="trendChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+
+        <!-- Sprint 燃尽图（仅选择了 Sprint 时显示） -->
+        <div v-if="dashboardData.burndown" class="chart-card chart-card-wide">
+          <div class="chart-card-header">
+            <h3 class="chart-title">Sprint 燃尽图</h3>
+            <span class="chart-subtitle">{{ dashboardData.burndown.sprintName }} — 理想 vs 实际进度</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="burndownChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { PieChart, BarChart, LineChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+} from 'echarts/components'
+import VChart from 'vue-echarts'
+import { reportStatisticsApi } from '@/api/reportStatistics'
+import { projectApi, sprintApi } from '@/api'
+import type { DashboardData } from '@/api/reportStatistics'
+import type { ProjectVO } from '@/api/types'
+
+// 注册 ECharts 组件
+use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
+
+// ─── 状态 ─────────────────────────────────────────────
+
+const loading = ref(false)
+const projects = ref<ProjectVO[]>([])
+const sprints = ref<{ id: string; name: string; status: string }[]>([])
+const selectedProjectId = ref<string | undefined>(undefined)
+const selectedSprintId = ref<string | undefined>(undefined)
+const dateRange = ref<string[] | undefined>(undefined)
+const dashboardData = ref<DashboardData | null>(null)
+
+const dateShortcuts = [
+  { label: '近 7 天', value: () => [daysAgo(6), today()] },
+  { label: '近 14 天', value: () => [daysAgo(13), today()] },
+  { label: '近 30 天', value: () => [daysAgo(29), today()] },
+  { label: '近 90 天', value: () => [daysAgo(89), today()] }
+]
+
+function today() { return new Date() }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d }
+
+// ─── 主题色 ─────────────────────────────────────────────
+
+const chartTextColor = '#9ca3af'
+const chartAxisColor = '#30363d'
+const chartBgColor = 'transparent'
+
+// ─── 图表 Options ─────────────────────────────────────────
+
+const statusChartOption = computed(() => {
+  if (!dashboardData.value) return {}
+  const items = dashboardData.value.statusDistribution.items
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c} ({d}%)',
+      backgroundColor: '#22252a',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' }
+    },
+    legend: {
+      orient: 'vertical',
+      right: 10,
+      top: 'center',
+      textStyle: { color: chartTextColor, fontSize: 11 },
+      itemWidth: 10,
+      itemHeight: 10
+    },
+    series: [{
+      type: 'pie',
+      radius: ['42%', '70%'],
+      center: ['35%', '50%'],
+      avoidLabelOverlap: true,
+      itemStyle: { borderRadius: 4, borderColor: '#2a2d33', borderWidth: 2 },
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 13, fontWeight: 500, color: '#e6edf3' },
+        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+      },
+      data: items.map(item => ({
+        name: item.name,
+        value: item.value,
+        itemStyle: { color: item.color }
+      }))
+    }]
+  }
+})
+
+const priorityChartOption = computed(() => {
+  if (!dashboardData.value) return {}
+  const { labels, data, colors } = dashboardData.value.priorityDistribution
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#22252a',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' }
+    },
+    grid: { left: 40, right: 20, top: 16, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: chartAxisColor } },
+      axisLabel: { color: chartTextColor, fontSize: 11 },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: chartTextColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+    },
+    series: [{
+      type: 'bar',
+      barWidth: '50%',
+      data: data.map((val, idx) => ({
+        value: val,
+        itemStyle: { color: colors[idx], borderRadius: [3, 3, 0, 0] }
+      }))
+    }]
+  }
+})
+
+const typeChartOption = computed(() => {
+  if (!dashboardData.value) return {}
+  const items = dashboardData.value.typeDistribution.items
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c} ({d}%)',
+      backgroundColor: '#22252a',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' }
+    },
+    legend: {
+      orient: 'vertical',
+      right: 10,
+      top: 'center',
+      textStyle: { color: chartTextColor, fontSize: 11 },
+      itemWidth: 10,
+      itemHeight: 10
+    },
+    series: [{
+      type: 'pie',
+      radius: ['0%', '70%'],
+      center: ['35%', '50%'],
+      roseType: 'radius',
+      itemStyle: { borderRadius: 4, borderColor: '#2a2d33', borderWidth: 2 },
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 13, fontWeight: 500, color: '#e6edf3' }
+      },
+      data: items.map(item => ({
+        name: item.name,
+        value: item.value,
+        itemStyle: { color: item.color }
+      }))
+    }]
+  }
+})
+
+const workloadChartOption = computed(() => {
+  if (!dashboardData.value) return {}
+  const items = dashboardData.value.workload.items
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#22252a',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' },
+      formatter: (params: any) => {
+        const item = items[params[0]?.dataIndex]
+        if (!item) return ''
+        return `${item.name}<br/>总计: ${item.value}<br/>已完成: ${item.done}<br/>进行中: ${item.inProgress}`
+      }
+    },
+    grid: { left: 80, right: 30, top: 8, bottom: 20 },
+    xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: chartTextColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: items.map(i => i.name),
+      axisLine: { lineStyle: { color: chartAxisColor } },
+      axisLabel: { color: chartTextColor, fontSize: 11, width: 70, overflow: 'truncate' },
+      axisTick: { show: false }
+    },
+    series: [
+      {
+        name: '已完成',
+        type: 'bar',
+        stack: 'total',
+        barWidth: '60%',
+        data: items.map(i => i.done),
+        itemStyle: { color: '#3fb950', borderRadius: [0, 0, 0, 0] }
+      },
+      {
+        name: '进行中',
+        type: 'bar',
+        stack: 'total',
+        barWidth: '60%',
+        data: items.map(i => i.inProgress),
+        itemStyle: { color: '#58a6ff', borderRadius: [0, 3, 3, 0] }
+      }
+    ]
+  }
+})
+
+const trendChartOption = computed(() => {
+  if (!dashboardData.value) return {}
+  const { dates, created, resolved } = dashboardData.value.trend
+  // 格式化日期为 MM-DD
+  const shortDates = dates.map(d => d.substring(5))
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#22252a',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' }
+    },
+    legend: {
+      data: ['新建', '关闭'],
+      right: 20,
+      top: 0,
+      textStyle: { color: chartTextColor, fontSize: 11 },
+      itemWidth: 14,
+      itemHeight: 3
+    },
+    grid: { left: 40, right: 20, top: 32, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: shortDates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: chartAxisColor } },
+      axisLabel: { color: chartTextColor, fontSize: 10, interval: 'auto' },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: chartTextColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+    },
+    series: [
+      {
+        name: '新建',
+        type: 'line',
+        data: created,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { width: 2, color: '#58a6ff' },
+        itemStyle: { color: '#58a6ff' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+          { offset: 0, color: 'rgba(88, 166, 255, 0.2)' },
+          { offset: 1, color: 'rgba(88, 166, 255, 0)' }
+        ]}}
+      },
+      {
+        name: '关闭',
+        type: 'line',
+        data: resolved,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { width: 2, color: '#3fb950' },
+        itemStyle: { color: '#3fb950' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+          { offset: 0, color: 'rgba(63, 185, 80, 0.15)' },
+          { offset: 1, color: 'rgba(63, 185, 80, 0)' }
+        ]}}
+      }
+    ]
+  }
+})
+
+const burndownChartOption = computed(() => {
+  if (!dashboardData.value?.burndown) return {}
+  const { dates, ideal, actual, sprintName } = dashboardData.value.burndown
+  const shortDates = dates.map(d => d.substring(5))
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#22252a',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3' }
+    },
+    legend: {
+      data: ['理想进度', '实际剩余'],
+      right: 20,
+      top: 0,
+      textStyle: { color: chartTextColor, fontSize: 11 },
+      itemWidth: 14,
+      itemHeight: 3
+    },
+    grid: { left: 40, right: 20, top: 32, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: shortDates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: chartAxisColor } },
+      axisLabel: { color: chartTextColor, fontSize: 10 },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: chartTextColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: chartAxisColor, type: 'dashed' } }
+    },
+    series: [
+      {
+        name: '理想进度',
+        type: 'line',
+        data: ideal,
+        lineStyle: { width: 2, color: '#6b7280', type: 'dashed' },
+        itemStyle: { color: '#6b7280' },
+        symbol: 'none'
+      },
+      {
+        name: '实际剩余',
+        type: 'line',
+        data: actual,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { width: 2.5, color: '#f85149' },
+        itemStyle: { color: '#f85149' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+          { offset: 0, color: 'rgba(248, 81, 73, 0.12)' },
+          { offset: 1, color: 'rgba(248, 81, 73, 0)' }
+        ]}}
+      }
+    ]
+  }
+})
+
+// ─── 数据加载 ─────────────────────────────────────────
+
+onMounted(async () => {
+  await loadProjects()
+  // 自动选择第一个项目
+  if (projects.value.length > 0) {
+    selectedProjectId.value = projects.value[0].id
+    await loadSprints()
+    await loadDashboard()
+  }
+})
+
+watch(selectedProjectId, async () => {
+  selectedSprintId.value = undefined
+  if (selectedProjectId.value) {
+    await loadSprints()
+  }
+})
+
+async function loadProjects() {
+  try {
+    const res = await projectApi.list({ page: 1, pageSize: 100 })
+    projects.value = res.data?.list || []
+  } catch {
+    // non-critical
+  }
+}
+
+async function loadSprints() {
+  if (!selectedProjectId.value) return
+  try {
+    const res = await sprintApi.listByProject(selectedProjectId.value)
+    sprints.value = (res.data || []).map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      status: s.status
+    }))
+  } catch {
+    sprints.value = []
+  }
+}
+
+async function loadDashboard() {
+  if (!selectedProjectId.value) return
+  loading.value = true
+  dashboardData.value = null
+  try {
+    const params: any = { projectId: selectedProjectId.value }
+    if (selectedSprintId.value) params.sprintId = selectedSprintId.value
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.startDate = formatDate(dateRange.value[0])
+      params.endDate = formatDate(dateRange.value[1])
+    }
+    const res = await reportStatisticsApi.dashboard(params)
+    dashboardData.value = res.data
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '加载报表数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function formatDate(val: any): string {
+  if (typeof val === 'string') return val.substring(0, 10)
+  if (val instanceof Date) return val.toISOString().substring(0, 10)
+  return ''
+}
+</script>
+
+<style scoped>
+.report-dashboard {
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.page-desc {
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sprint-active-badge {
+  font-size: 10px;
+  color: var(--tf-success);
+  margin-left: 4px;
+}
+
+/* 概览卡片 */
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border-light);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--tf-text-primary);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  font-weight: 400;
+}
+
+.stat-open .stat-value { color: var(--tf-accent); }
+.stat-done .stat-value { color: var(--tf-success); }
+.stat-rate .stat-value { color: var(--tf-purple, #a371f7); }
+.stat-overdue .stat-value { color: var(--tf-danger); }
+
+/* 图表网格 */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.chart-card {
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border-light);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card-wide {
+  grid-column: 1 / -1;
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  margin: 0;
+}
+
+.chart-subtitle {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.chart-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.chart-instance {
+  width: 100%;
+  height: 240px;
+}
+
+.chart-card-wide .chart-instance {
+  height: 280px;
+}
+
+/* 加载状态 */
+.dashboard-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.overview-skeleton {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.chart-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* 空状态 */
+.dashboard-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0 0 8px;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+  margin: 0;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+/* 响应式 */
+@media (max-width: 900px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+  .overview-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+</style>

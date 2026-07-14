@@ -18,7 +18,9 @@ export { timeEntryApi } from './timeEntry'
 export { workflowApi } from './workflow'
 export { boardApi } from './board'
 export { reportApi } from './report'
+export { reportStatisticsApi } from './reportStatistics'
 export { notificationPreferenceApi } from './notificationPreference'
+export { transitionActionApi } from './transitionAction'
 
 // 类型导出
 export type * from './types'

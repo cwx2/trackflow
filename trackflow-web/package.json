@@ -18,10 +18,12 @@
     "@tiptap/vue-3": "^3.27.3",
     "axios": "^1.7.9",
     "dompurify": "^3.4.11",
+    "echarts": "^6.1.0",
     "lowlight": "^3.3.0",
     "markdown-it": "^14.3.0",
     "pinia": "^2.2.6",
     "vue": "^3.5.13",
+    "vue-echarts": "^8.0.1",
     "vue-router": "^4.4.5"
   },
   "devDependencies": {

@@ -73,15 +73,26 @@
                 v-for="toStatus in statuses"
                 :key="toStatus.id"
                 class="matrix-cell"
-                :class="{ disabled: fromStatus.id === toStatus.id }"
+                :class="{
+                  disabled: fromStatus.id === toStatus.id,
+                  clickable: fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id)
+                }"
+                @click="fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id) && openActionPanel(fromStatus, toStatus)"
               >
-                <input
-                  v-if="fromStatus.id !== toStatus.id"
-                  type="checkbox"
-                  :checked="isAllowed(fromStatus.id, toStatus.id)"
-                  @change="toggleTransition(fromStatus.id, toStatus.id)"
-                  class="matrix-checkbox"
-                />
+                <div v-if="fromStatus.id !== toStatus.id" class="cell-content">
+                  <input
+                    type="checkbox"
+                    :checked="isAllowed(fromStatus.id, toStatus.id)"
+                    @change="toggleTransition(fromStatus.id, toStatus.id)"
+                    @click.stop
+                    class="matrix-checkbox"
+                  />
+                  <span
+                    v-if="hasAction(fromStatus.id, toStatus.id)"
+                    class="action-dot"
+                    title="已配置动作"
+                  ></span>
+                </div>
                 <span v-else class="cell-dash">—</span>
               </td>
             </tr>
@@ -99,8 +110,20 @@
 
     <div class="help-text" v-if="statuses.length > 0">
       <icon-info-circle /> 勾选单元格表示允许从行状态转换到列状态（针对当前选择的角色）。
-      共 {{ statuses.length }} 个状态。
+      共 {{ statuses.length }} 个状态。点击已允许的转换可配置自动化动作。
     </div>
+
+    <!-- 动作配置面板 -->
+    <TransitionActionPanel
+      v-model:visible="actionPanelVisible"
+      :project-id="selectedProject"
+      :old-status-id="actionPanelFrom"
+      :new-status-id="actionPanelTo"
+      :old-status-name="actionPanelFromName"
+      :new-status-name="actionPanelToName"
+      :issue-type="selectedType"
+      @refresh="onActionRefresh"
+    />
   </div>
 </template>
 
@@ -108,8 +131,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconSettings, IconInfoCircle } from '@arco-design/web-vue/es/icon'
-import { issueApi, projectApi, workflowApi } from '@/api'
+import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
+import TransitionActionPanel from './TransitionActionPanel.vue'
 
 const selectedProject = ref('0')
 const selectedType = ref('*')
@@ -125,6 +149,16 @@ const issueTypes = ref<string[]>([])
 // 转换矩阵 Set: "fromId-toId"
 const allowedTransitions = reactive(new Set<string>())
 
+// 动作指示器: "fromId-toId" 有配置动作的转换路径
+const actionPaths = reactive(new Set<string>())
+
+// 动作面板状态
+const actionPanelVisible = ref(false)
+const actionPanelFrom = ref('')
+const actionPanelTo = ref('')
+const actionPanelFromName = ref('')
+const actionPanelToName = ref('')
+
 function isAllowed(from: string, to: string) {
   return allowedTransitions.has(`${from}-${to}`)
 }
@@ -138,8 +172,40 @@ function toggleTransition(from: string, to: string) {
   }
 }
 
+function hasAction(from: string, to: string): boolean {
+  return actionPaths.has(`${from}-${to}`)
+}
+
+function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
+  if (!isAllowed(fromStatus.id, toStatus.id)) return
+  actionPanelFrom.value = fromStatus.id
+  actionPanelTo.value = toStatus.id
+  actionPanelFromName.value = fromStatus.name
+  actionPanelToName.value = toStatus.name
+  actionPanelVisible.value = true
+}
+
+async function loadActionPaths() {
+  try {
+    const projectId = selectedProject.value || '0'
+    const res = await transitionActionApi.list(projectId)
+    const actions = res.data || []
+    actionPaths.clear()
+    for (const a of actions) {
+      actionPaths.add(`${a.oldStatusId}-${a.newStatusId}`)
+    }
+  } catch {
+    actionPaths.clear()
+  }
+}
+
+function onActionRefresh() {
+  loadActionPaths()
+}
+
 function onFilterChange() {
   loadMatrix()
+  loadActionPaths()
 }
 
 async function loadStatuses() {
@@ -240,7 +306,7 @@ async function saveMatrix() {
 
 onMounted(async () => {
   await Promise.all([loadStatuses(), loadProjects(), loadRoles(), loadIssueTypes()])
-  await loadMatrix()
+  await Promise.all([loadMatrix(), loadActionPaths()])
 })
 </script>
 
@@ -331,6 +397,30 @@ onMounted(async () => {
 }
 .matrix-cell.disabled {
   background: var(--bg-tertiary);
+}
+.matrix-cell.clickable {
+  cursor: pointer;
+}
+.matrix-cell.clickable:hover {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+}
+
+.cell-content {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-dot {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-blue, rgb(var(--arcoblue-6)));
+  box-shadow: 0 0 0 2px var(--bg-primary, var(--color-bg-2));
 }
 
 .matrix-checkbox {

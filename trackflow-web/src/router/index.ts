@@ -78,7 +78,7 @@ const routes = [
       {
         path: 'reports',
         name: 'Reports',
-        component: () => import('@/views/report/ReportListView.vue'),
+        component: () => import('@/views/report/ReportDashboardView.vue'),
         meta: { requiresReport: true }
       },
       {

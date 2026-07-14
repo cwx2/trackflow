@@ -128,7 +128,8 @@ public class IssueController {
             }
             return R.fail(40300, "当前角色不允许执行此状态转换");
         }
-        issueService.transitStatus(id, dto.getStatusId(), dto.getComment());
+        issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
+                dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()));
         return R.ok();
     }
 
