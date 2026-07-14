@@ -383,7 +383,7 @@ const { loadPermissions, canEditIssue } = usePermission(issues)
 
 // 全局级创建权限：统一使用 authStore.canCreateIssue
 const authStore = useAuthStore()
-const canCreateIssueGlobal = computed(() => authStore.canCreateIssue)
+const canCreateIssueGlobal = authStore.canCreateIssue
 
 // Panel state (declared before useColumnConfig so it can be passed as ref)
 const activeProjectId = ref<string | null>(null)
