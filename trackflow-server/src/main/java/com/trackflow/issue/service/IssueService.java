@@ -55,6 +55,9 @@ public class IssueService {
      */
     @Transactional
     public Issue create(CreateIssueDTO dto) {
+        // 归档项目不允许创建工单
+        projectService.assertProjectActive(dto.getProjectId());
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         // 生成 Issue Key
@@ -382,6 +385,9 @@ public class IssueService {
     @Transactional
     public Issue update(Long id, UpdateIssueDTO dto) {
         Issue issue = getById(id);
+        // 归档项目不允许编辑工单
+        projectService.assertProjectActive(issue.getProjectId());
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         if (dto.getTitle() != null) {
@@ -470,6 +476,9 @@ public class IssueService {
     @Transactional
     public void delete(Long id) {
         Issue issue = getById(id);
+        // 归档项目不允许删除工单
+        projectService.assertProjectActive(issue.getProjectId());
+
         issue.setDeletedAt(LocalDateTime.now());
         issueMapper.updateById(issue);
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
@@ -496,6 +505,9 @@ public class IssueService {
     public void transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet) {
         Issue issue = getById(id);
+        // 归档项目不允许变更工单状态
+        projectService.assertProjectActive(issue.getProjectId());
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long oldStatusId = issue.getStatusId();
 
@@ -533,6 +545,9 @@ public class IssueService {
     @Transactional
     public void assign(Long id, Long assigneeId) {
         Issue issue = getById(id);
+        // 归档项目不允许分配工单
+        projectService.assertProjectActive(issue.getProjectId());
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
         recordActivity(id, currentUserId, "assigned", "assignee",
                 issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
@@ -554,6 +569,10 @@ public class IssueService {
 
     @Transactional
     public IssueComment addComment(Long issueId, String content) {
+        // 归档项目不允许添加评论
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
         IssueComment comment = new IssueComment();
         comment.setIssueId(issueId);
@@ -619,6 +638,7 @@ public class IssueService {
         vo.setId(String.valueOf(row.get("id")));
         vo.setProjectId(String.valueOf(row.get("project_id")));
         vo.setProjectName((String) row.get("project_name"));
+        vo.setProjectStatus((String) row.get("project_status"));
         vo.setIssueKey((String) row.get("issue_key"));
         vo.setTitle((String) row.get("title"));
         vo.setDescription((String) row.get("description"));
@@ -734,7 +754,10 @@ public class IssueService {
     @Transactional
     public IssueAttachment uploadAttachment(Long issueId, MultipartFile file) {
         // 验证 Issue 存在
-        getById(issueId);
+        Issue issue = getById(issueId);
+        // 归档项目不允许上传附件
+        projectService.assertProjectActive(issue.getProjectId());
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         // 上传到 MinIO
@@ -763,6 +786,10 @@ public class IssueService {
      */
     @Transactional
     public void deleteAttachment(Long issueId, Long attachmentId) {
+        // 归档项目不允许删除附件
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
         IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
         if (attachment == null || !attachment.getIssueId().equals(issueId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在");

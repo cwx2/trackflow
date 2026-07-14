@@ -186,6 +186,9 @@ public class ProjectService {
     @Transactional
     public Project update(Long id, UpdateProjectDTO dto) {
         Project project = getById(id);
+        // 归档项目不允许修改
+        assertProjectActive(id);
+
         if (dto.getName() != null) project.setName(dto.getName());
         if (dto.getDescription() != null) project.setDescription(dto.getDescription());
 

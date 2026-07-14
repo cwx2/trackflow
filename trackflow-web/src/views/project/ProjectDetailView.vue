@@ -7,6 +7,18 @@
 
     <!-- 项目详情 -->
     <template v-else-if="project">
+      <!-- 归档状态提示 -->
+      <div v-if="isArchived" class="archived-banner">
+        <icon-lock class="archived-icon" />
+        <div class="archived-info">
+          <span class="archived-title">此项目已归档</span>
+          <span class="archived-desc">归档项目为只读状态，无法创建或修改工单、迭代和成员</span>
+        </div>
+        <a-button v-if="canEditProject" size="small" type="outline" @click="handleRestore">
+          恢复项目
+        </a-button>
+      </div>
+
       <!-- 顶部面包屑 + 操作 -->
       <div class="page-header">
         <div class="breadcrumb">
@@ -15,7 +27,7 @@
           <span class="breadcrumb-current">{{ project.name }}</span>
         </div>
         <div class="header-actions">
-          <a-button v-if="canEditProject" size="small" @click="goToSettings">
+          <a-button v-if="canEditProject && !isArchived" size="small" @click="goToSettings">
             <template #icon><icon-settings /></template>
             项目设置
           </a-button>
@@ -42,9 +54,15 @@
               <icon-user-group class="meta-icon" />
               {{ project.memberCount }} 名成员
             </span>
-            <span v-if="project.leadName" class="meta-item">
+            <span v-if="project.leadName" class="meta-item lead-item" :class="{ editable: canEditProject && !isArchived }" @click="canEditProject && !isArchived && openLeadEditor()">
               <icon-star class="meta-icon" />
               负责人：{{ project.leadName }}
+              <icon-edit v-if="canEditProject && !isArchived" class="edit-hint-icon" />
+            </span>
+            <span v-else-if="canEditProject && !isArchived" class="meta-item lead-item editable" @click="openLeadEditor()">
+              <icon-star class="meta-icon" />
+              设置负责人
+              <icon-edit class="edit-hint-icon" />
             </span>
           </div>
         </div>
@@ -97,7 +115,7 @@
             <icon-right class="nav-card-arrow" />
           </div>
 
-          <div v-if="canManageMembers" class="nav-card" @click="goToMembers">
+          <div v-if="canManageMembers && !isArchived" class="nav-card" @click="goToMembers">
             <div class="nav-card-icon members-icon">
               <icon-user-group />
             </div>
@@ -141,6 +159,36 @@
       <p class="error-desc">{{ error }}</p>
       <a-button type="primary" @click="loadProject">重试</a-button>
     </div>
+
+    <!-- 变更负责人弹窗 -->
+    <a-modal
+      v-model:visible="showLeadModal"
+      title="变更项目负责人"
+      :width="420"
+      ok-text="确认变更"
+      cancel-text="取消"
+      :ok-loading="leadSaving"
+      :ok-button-props="{ disabled: !selectedLeadId || selectedLeadId === project?.leadId }"
+      @ok="submitLeadChange"
+    >
+      <div class="lead-change-form">
+        <p class="lead-change-hint">
+          选择新的项目负责人。变更后新负责人将自动升级为项目管理员角色。
+        </p>
+        <a-select
+          v-model="selectedLeadId"
+          placeholder="选择项目成员..."
+          allow-search
+          :loading="leadMembersLoading"
+          style="width: 100%"
+        >
+          <a-option v-for="m in leadMembers" :key="m.userId" :value="m.userId">
+            {{ m.displayName || m.username }}
+            <span v-if="m.email" style="color: var(--tf-text-tertiary); margin-left: 4px; font-size: 11px">{{ m.email }}</span>
+          </a-option>
+        </a-select>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -157,12 +205,15 @@ import {
   IconApps,
   IconThunderbolt,
   IconRight,
-  IconCloseCircle
+  IconCloseCircle,
+  IconEdit,
+  IconLock
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, workflowApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
+import { Message, Modal } from '@arco-design/web-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -191,6 +242,8 @@ const canViewSprints = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
   return projectPerms.value.has('sprint:view')
 })
+
+const isArchived = computed(() => project.value?.status === 'archived')
 
 // 角色映射（动态加载）
 const roleMap = ref<Record<string, string>>({})
@@ -285,6 +338,47 @@ async function loadMembers(projectId: string) {
   }
 }
 
+// ========== 负责人变更 ==========
+const showLeadModal = ref(false)
+const selectedLeadId = ref<string | undefined>()
+const leadMembers = ref<ProjectMemberVO[]>([])
+const leadMembersLoading = ref(false)
+const leadSaving = ref(false)
+
+async function openLeadEditor() {
+  const projectId = route.params.id as string
+  if (!projectId) return
+  selectedLeadId.value = project.value?.leadId || undefined
+  showLeadModal.value = true
+  // 加载项目成员列表
+  leadMembersLoading.value = true
+  try {
+    const res = await projectApi.listMembers(projectId)
+    leadMembers.value = res.data || []
+  } catch {
+    leadMembers.value = []
+  } finally {
+    leadMembersLoading.value = false
+  }
+}
+
+async function submitLeadChange() {
+  if (!selectedLeadId.value || !project.value) return
+  if (selectedLeadId.value === project.value.leadId) return
+  leadSaving.value = true
+  try {
+    await projectApi.update(project.value.id, { leadId: selectedLeadId.value })
+    Message.success('项目负责人已变更')
+    showLeadModal.value = false
+    // 重新加载项目详情
+    await loadProject()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '变更负责人失败')
+  } finally {
+    leadSaving.value = false
+  }
+}
+
 // 导航
 function goToIssues() {
   router.push({ path: '/', query: { project: project.value?.id } })
@@ -306,6 +400,26 @@ function goToMembers() {
 function goToSettings() {
   // 暂时回到项目列表编辑
   router.push({ path: '/projects', query: { edit: project.value?.id } })
+}
+
+async function handleRestore() {
+  if (!project.value) return
+
+  Modal.warning({
+    title: '恢复项目',
+    content: `确定要将项目「${project.value.name}」恢复为活跃状态？恢复后项目将重新允许创建和修改工单。`,
+    okText: '确认恢复',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await projectApi.restore(project.value!.id)
+        Message.success('项目已恢复为活跃状态')
+        await loadProject()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '恢复项目失败')
+      }
+    }
+  })
 }
 
 onMounted(() => {
@@ -428,6 +542,48 @@ onMounted(() => {
   padding: 2px 8px;
   border-radius: 3px;
   font-weight: 500;
+}
+
+.lead-item {
+  position: relative;
+}
+
+.lead-item.editable {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: background 0.15s;
+}
+
+.lead-item.editable:hover {
+  background: var(--tf-bg-hover);
+}
+
+.edit-hint-icon {
+  font-size: 11px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 2px;
+}
+
+.lead-item.editable:hover .edit-hint-icon {
+  opacity: 1;
+}
+
+/* Lead change modal */
+.lead-change-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lead-change-hint {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* Section */
@@ -621,5 +777,41 @@ onMounted(() => {
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 归档状态横幅 */
+.archived-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(210, 153, 34, 0.08);
+  border: 1px solid rgba(210, 153, 34, 0.25);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.archived-icon {
+  font-size: 20px;
+  color: #d29922;
+  flex-shrink: 0;
+}
+
+.archived-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.archived-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d29922;
+}
+
+.archived-desc {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
 }
 </style>

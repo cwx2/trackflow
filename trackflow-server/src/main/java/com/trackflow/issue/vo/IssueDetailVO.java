@@ -12,6 +12,7 @@ public class IssueDetailVO {
     private String id;
     private String projectId;
     private String projectName;
+    private String projectStatus;
     private String issueKey;
     private String title;
     private String description;

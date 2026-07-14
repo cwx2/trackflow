@@ -1,5 +1,14 @@
 <template>
   <div class="issue-detail-page" v-if="issue">
+    <!-- 归档项目提示 -->
+    <div v-if="isProjectArchived" class="archived-banner">
+      <icon-lock class="archived-icon" />
+      <div class="archived-info">
+        <span class="archived-title">此工单所属项目已归档</span>
+        <span class="archived-desc">归档项目为只读状态，无法编辑工单、评论或变更状态</span>
+      </div>
+    </div>
+
     <DetailTopBar
       :project-name="projectName"
       :issue-key="issue.issueKey"
@@ -105,6 +114,7 @@
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
+import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
@@ -137,9 +147,13 @@ const loadError = ref<string | null>(null)
 // ============ 数据 ============
 const issue = ref<IssueDetailVO | null>(null)
 
+// 归档状态
+const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
+
 // 权限控制（必须在 issue ref 声明之后）
 const { canCreateIssue, canEditIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
-  () => issue.value?.projectId
+  () => issue.value?.projectId,
+  { isProjectArchived: () => isProjectArchived.value }
 )
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
@@ -484,6 +498,40 @@ function priorityDot(p: string) {
   background: var(--tf-bg-body);
   color: var(--tf-text-primary);
   overflow: hidden;
+}
+
+/* 归档状态横幅 */
+.archived-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(210, 153, 34, 0.08);
+  border-bottom: 1px solid rgba(210, 153, 34, 0.25);
+  flex-shrink: 0;
+}
+
+.archived-icon {
+  font-size: 18px;
+  color: #d29922;
+  flex-shrink: 0;
+}
+
+.archived-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.archived-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d29922;
+}
+
+.archived-desc {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
 }
 
 .page-body {

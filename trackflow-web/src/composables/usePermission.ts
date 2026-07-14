@@ -88,8 +88,15 @@ export async function forceRefreshProjectPermissions(projectId: string): Promise
  * ```ts
  * const { permissions, hasPermission, canEditIssue, canManageSprint, loading } = usePermission(projectId)
  * ```
+ * 
+ * @param projectIdRef - 获取当前 projectId 的 getter
+ * @param options - 可选配置
+ * @param options.isProjectArchived - 项目是否归档的 getter，归档时所有写权限返回 false
  */
-export function usePermission(projectIdRef: () => string | undefined) {
+export function usePermission(
+  projectIdRef: () => string | undefined,
+  options?: { isProjectArchived?: () => boolean }
+) {
   const authStore = useAuthStore()
   const permissions = ref<Set<string>>(new Set())
   const loading = ref(false)
@@ -123,46 +130,54 @@ export function usePermission(projectIdRef: () => string | undefined) {
     return permissions.value.has(permission)
   }
 
+  /**
+   * 检查写权限：归档项目自动返回 false
+   */
+  function hasWritePermission(permission: string): boolean {
+    if (options?.isProjectArchived?.()) return false
+    return hasPermission(permission)
+  }
+
   // ===== 便捷 computed =====
 
   /** 是否可以创建 Issue */
-  const canCreateIssue = computed(() => hasPermission('issue:create'))
+  const canCreateIssue = computed(() => hasWritePermission('issue:create'))
 
   /** 是否可以编辑 Issue */
-  const canEditIssue = computed(() => hasPermission('issue:edit'))
+  const canEditIssue = computed(() => hasWritePermission('issue:edit'))
 
   /** 是否可以删除 Issue */
-  const canDeleteIssue = computed(() => hasPermission('issue:delete'))
+  const canDeleteIssue = computed(() => hasWritePermission('issue:delete'))
 
   /** 是否可以分配 Issue */
-  const canAssignIssue = computed(() => hasPermission('issue:assign'))
+  const canAssignIssue = computed(() => hasWritePermission('issue:assign'))
 
   /** 是否可以变更 Issue 状态 */
-  const canChangeStatus = computed(() => hasPermission('issue:change_status'))
+  const canChangeStatus = computed(() => hasWritePermission('issue:change_status'))
 
   /** 是否可以评论 */
-  const canComment = computed(() => hasPermission('issue:comment'))
+  const canComment = computed(() => hasWritePermission('issue:comment'))
 
   /** 是否可以创建 Sprint */
-  const canCreateSprint = computed(() => hasPermission('sprint:create'))
+  const canCreateSprint = computed(() => hasWritePermission('sprint:create'))
 
   /** 是否可以编辑 Sprint */
-  const canEditSprint = computed(() => hasPermission('sprint:edit'))
+  const canEditSprint = computed(() => hasWritePermission('sprint:edit'))
 
   /** 是否可以删除 Sprint */
-  const canDeleteSprint = computed(() => hasPermission('sprint:delete'))
+  const canDeleteSprint = computed(() => hasWritePermission('sprint:delete'))
 
   /** 是否可以查看 Sprint */
   const canViewSprint = computed(() => hasPermission('sprint:view'))
 
   /** 是否可以管理工作流 */
-  const canManageWorkflow = computed(() => hasPermission('project:manage_workflow'))
+  const canManageWorkflow = computed(() => hasWritePermission('project:manage_workflow'))
 
   /** 是否可以管理项目成员 */
-  const canManageMembers = computed(() => hasPermission('project:manage_members'))
+  const canManageMembers = computed(() => hasWritePermission('project:manage_members'))
 
   /** 是否可以编辑项目 */
-  const canEditProject = computed(() => hasPermission('project:edit'))
+  const canEditProject = computed(() => hasWritePermission('project:edit'))
 
   return {
     permissions,

@@ -133,6 +133,7 @@ export interface IssueVO {
 export interface IssueDetailVO extends IssueVO {
   description?: string
   projectName?: string
+  projectStatus?: string
   reporterName?: string
   sprintName?: string
   parentId?: string
@@ -226,6 +227,26 @@ export interface SprintVO {
   todoIssues: number
   /** 逾期工单数 */
   overdueIssues: number
+}
+
+/** Sprint 燃尽图数据 */
+export interface SprintBurndownVO {
+  sprintId: string
+  sprintName: string
+  /** X 轴日期列表 (yyyy-MM-dd) */
+  dates: string[]
+  /** 理想线：每天的理想剩余工单数 */
+  idealLine: number[]
+  /** 实际线：每天的实际剩余工单数（仅到今天） */
+  actualLine: number[]
+  /** 今天在 dates 中的索引（-1 = 不在范围内） */
+  todayIndex: number
+  /** Sprint 总工单数（起始值） */
+  totalIssues: number
+  /** 日均完成速率 */
+  velocity: number
+  /** 预测完成日期 (yyyy-MM-dd)，null 表示速率为 0 */
+  forecastDate: string | null
 }
 
 // ========== 用户/角色/组织 ==========
