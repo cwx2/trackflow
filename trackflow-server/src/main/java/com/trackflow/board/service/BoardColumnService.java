@@ -23,6 +23,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BoardColumnService {
 
+    /** 基础工作流状态 code 集合（V5__issue_schema.sql 中定义的种子状态） */
+    private static final Set<String> SEED_STATUS_CODES = Set.of(
+            "open", "in_progress", "code_review", "testing", "done", "cancelled"
+    );
+
     private final BoardColumnConfigMapper boardColumnConfigMapper;
     private final IssueStatusMapper issueStatusMapper;
     private final IssueMapper issueMapper;
@@ -99,15 +104,18 @@ public class BoardColumnService {
      * 基于项目实际使用情况，自动初始化看板列配置。
      * <p>
      * 默认可见规则：
-     * 1. 种子状态（id 1-6：Open, In Progress, Code Review, Testing, Done, Cancelled）始终可见
+     * 1. 基础工作流状态（open, in_progress, code_review, testing, done, cancelled）始终可见
      * 2. 项目中已有工单处于该状态的列可见
      * 3. 其余状态默认隐藏
      * <p>
      * 配置持久化到数据库，后续不再重复计算。
      */
     private List<BoardColumnConfig> initializeDefaultColumns(Long projectId, List<IssueStatus> allStatuses) {
-        // 种子状态 ID 集合（V5 中初始创建的基础状态）
-        Set<Long> seedStatusIds = Set.of(1L, 2L, 3L, 4L, 5L, 6L);
+        // 将 code 映射为 ID（不再硬编码 ID，对迁移脚本 ID 变更更健壮）
+        Set<Long> seedStatusIds = allStatuses.stream()
+                .filter(s -> SEED_STATUS_CODES.contains(s.getCode()))
+                .map(IssueStatus::getId)
+                .collect(Collectors.toSet());
 
         // 查询该项目已有工单涉及的状态 ID
         Set<Long> usedStatusIds = getProjectUsedStatusIds(projectId);
@@ -119,7 +127,7 @@ public class BoardColumnService {
             BoardColumnConfig config = new BoardColumnConfig();
             config.setProjectId(projectId);
             config.setStatusId(status.getId());
-            // 种子状态或项目已有工单使用的状态默认可见
+            // 基础工作流状态或项目已有工单使用的状态默认可见
             config.setVisible(seedStatusIds.contains(status.getId()) || usedStatusIds.contains(status.getId()));
             config.setSortOrder(order);
             config.setCollapsed(false);

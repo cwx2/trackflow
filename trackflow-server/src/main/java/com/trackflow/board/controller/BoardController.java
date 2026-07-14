@@ -20,9 +20,10 @@ public class BoardController {
 
     /**
      * 获取项目看板列配置
+     * 需要项目查看权限（确保当前用户是项目成员）
      */
     @GetMapping("/columns")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<BoardColumnVO>> getColumns(@RequestParam Long projectId) {
         List<BoardColumnVO> columns = boardColumnService.getColumns(projectId);
         return R.ok(columns);
