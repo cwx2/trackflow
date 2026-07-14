@@ -46,7 +46,7 @@
             style="width: 240px"
             allow-clear
             @input="onSearchInput"
-            @press-enter="loadBoard"
+            @press-enter="loadIssuesWithLoading"
             @clear="onSearchClear"
           >
             <template #prefix>
@@ -259,20 +259,34 @@ const showNoSearchResults = computed(() =>
 function onSearchInput() {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchDebounceTimer = setTimeout(() => {
-    loadBoard()
+    loadIssuesWithLoading()
   }, 350)
 }
 
 function onSearchClear() {
   keyword.value = ''
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  loadBoard()
+  loadIssuesWithLoading()
 }
 
 function clearSearch() {
   keyword.value = ''
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  loadBoard()
+  loadIssuesWithLoading()
+}
+
+/** 带 loading 状态的工单刷新（仅 keyword 变化时使用） */
+async function loadIssuesWithLoading() {
+  if (!selectedProject.value) return
+  loading.value = true
+  try {
+    await loadIssues()
+  } catch {
+    issues.value = []
+    Message.error('搜索失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 function onProjectChange() {
@@ -580,19 +594,25 @@ async function loadBoard() {
   loading.value = true
   try {
     await Promise.all([loadSprints(), loadBoardColumns()])
-    const res = await issueApi.list({
-      projectId: selectedProject.value,
-      sprintId: selectedSprint.value || undefined,
-      keyword: keyword.value || undefined,
-      pageSize: 200
-    })
-    issues.value = res.data?.list || []
+    await loadIssues()
   } catch {
     issues.value = []
     Message.error('加载看板数据失败')
   } finally {
     loading.value = false
   }
+}
+
+/** 仅刷新工单列表（搜索关键词变化时调用，不重新加载 sprints/columns） */
+async function loadIssues() {
+  if (!selectedProject.value) { issues.value = []; return }
+  const res = await issueApi.list({
+    projectId: selectedProject.value,
+    sprintId: selectedSprint.value || undefined,
+    keyword: keyword.value || undefined,
+    pageSize: 100
+  })
+  issues.value = res.data?.list || []
 }
 
 onMounted(async () => {

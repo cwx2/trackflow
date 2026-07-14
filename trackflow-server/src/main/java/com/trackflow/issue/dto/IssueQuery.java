@@ -1,6 +1,7 @@
 package com.trackflow.issue.dto;
 
 import com.trackflow.common.model.PageQuery;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -14,6 +15,7 @@ public class IssueQuery extends PageQuery {
     private Long reporterId;
     private String sprintId;       // Supports single ID or comma-separated IDs
     private String issueType;      // Supports single value or comma-separated values
+    @Size(max = 100, message = "搜索关键词不能超过100个字符")
     private String keyword;
 
     // Negative filters (for "is not" / "none of" operators)

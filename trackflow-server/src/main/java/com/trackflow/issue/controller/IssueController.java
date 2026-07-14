@@ -47,7 +47,7 @@ public class IssueController {
     }
 
     @GetMapping
-    public R<PageResult<IssueVO>> list(IssueQuery query) {
+    public R<PageResult<IssueVO>> list(@Valid IssueQuery query) {
         // listByQuery 内部已做项目成员校验
         Page<Issue> result = issueService.listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
