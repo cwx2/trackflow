@@ -50,64 +50,24 @@
       </div>
 
       <!-- Week View -->
-      <div v-if="viewMode === 'week'" class="week-grid">
-        <div
-          v-for="(day, index) in weekDays"
-          :key="index"
-          class="day-column"
-          :class="{ today: isToday(day.date), weekend: day.isWeekend }"
-          @click="openAddDialog(day.date)"
-        >
-          <div class="day-header">
-            <span class="day-hours">{{ formatDuration(getDayTotal(day.date)) }}</span>
-            <span class="day-name">{{ day.dayName }}</span>
-            <span class="day-date">{{ day.dateNum }}</span>
-          </div>
-          <div class="day-entries">
-            <div v-for="entry in getDayEntries(day.date)" :key="entry.id" class="time-entry" @click.stop="openEditDialog(entry)">
-              <div class="entry-issue" @click.stop="$router.push(`/issues/${entry.issueId}`)">{{ entry.issueKey || entry.issueId }}</div>
-              <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
-              <div v-if="entry.description" class="entry-desc">{{ entry.description }}</div>
-              <div v-if="entry.workType" class="entry-type">{{ workTypeLabel(entry.workType) }}</div>
-            </div>
-          </div>
-          <div class="day-footer">
-            <span class="day-total" :class="{ insufficient: getDayTotal(day.date) > 0 && getDayTotal(day.date) < 480 && !day.isWeekend }">
-              {{ formatDuration(getDayTotal(day.date)) }} / 8h
-            </span>
-          </div>
-        </div>
-      </div>
+      <WeekGrid
+        v-if="viewMode === 'week'"
+        :week-days="weekDays"
+        :entries="timeEntries"
+        :show-quota="true"
+        @day-click="openAddDialog"
+        @entry-click="openEditDialog"
+        @issue-click="(entry) => $router.push(`/issues/${entry.issueId}`)"
+      />
 
       <!-- Month View -->
-      <div v-else class="month-grid">
-        <div class="month-header-row">
-          <div v-for="name in ['周一','周二','周三','周四','周五','周六','周日']" :key="name" class="month-header-cell">{{ name }}</div>
-        </div>
-        <div class="month-body">
-          <div
-            v-for="(day, index) in monthDays"
-            :key="index"
-            class="month-cell"
-            :class="{ today: isToday(day.date), weekend: day.isWeekend, 'other-month': !day.currentMonth }"
-            @click="openAddDialog(day.date)"
-          >
-            <div class="month-cell-header">
-              <span class="month-cell-date">{{ day.dateNum }}</span>
-              <span v-if="getDayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(getDayTotal(day.date)) }}</span>
-            </div>
-            <div class="month-cell-entries">
-              <div v-for="entry in getDayEntries(day.date).slice(0, 2)" :key="entry.id" class="month-entry" @click.stop="openEditDialog(entry)">
-                <span class="month-entry-key">{{ entry.issueKey }}</span>
-                <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
-              </div>
-              <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
-                +{{ getDayEntries(day.date).length - 2 }} 更多
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <MonthGrid
+        v-else
+        :month-days="monthDays"
+        :entries="timeEntries"
+        @day-click="openAddDialog"
+        @entry-click="openEditDialog"
+      />
     </template>
 
     <!-- ===================== 项目视图 ===================== -->
@@ -181,60 +141,17 @@
 
       <!-- Project Detail (project selected) -->
       <div v-else class="project-detail-view">
-        <!-- Week grid for project -->
-        <div v-if="viewMode === 'week'" class="week-grid">
-          <div
-            v-for="(day, index) in weekDays"
-            :key="index"
-            class="day-column"
-            :class="{ today: isToday(day.date), weekend: day.isWeekend }"
-          >
-            <div class="day-header">
-              <span class="day-hours">{{ formatDuration(getProjectDayTotal(day.date)) }}</span>
-              <span class="day-name">{{ day.dayName }}</span>
-              <span class="day-date">{{ day.dateNum }}</span>
-            </div>
-            <div class="day-entries">
-              <div v-for="entry in getProjectDayEntries(day.date)" :key="entry.id" class="time-entry">
-                <div class="entry-issue">{{ entry.issueKey || entry.issueId }}</div>
-                <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
-                <div v-if="entry.userName" class="entry-user">{{ entry.userName }}</div>
-                <div v-if="entry.workType" class="entry-type">{{ workTypeLabel(entry.workType) }}</div>
-              </div>
-            </div>
-            <div class="day-footer">
-              <span class="day-total">{{ formatDuration(getProjectDayTotal(day.date)) }}</span>
-            </div>
-          </div>
-        </div>
-        <!-- Month grid for project -->
-        <div v-else class="month-grid">
-          <div class="month-header-row">
-            <div v-for="name in ['周一','周二','周三','周四','周五','周六','周日']" :key="name" class="month-header-cell">{{ name }}</div>
-          </div>
-          <div class="month-body">
-            <div
-              v-for="(day, index) in monthDays"
-              :key="index"
-              class="month-cell"
-              :class="{ today: isToday(day.date), weekend: day.isWeekend, 'other-month': !day.currentMonth }"
-            >
-              <div class="month-cell-header">
-                <span class="month-cell-date">{{ day.dateNum }}</span>
-                <span v-if="getProjectDayTotal(day.date) > 0" class="month-cell-total">{{ formatDuration(getProjectDayTotal(day.date)) }}</span>
-              </div>
-              <div class="month-cell-entries">
-                <div v-for="entry in getProjectDayEntries(day.date).slice(0, 2)" :key="entry.id" class="month-entry">
-                  <span class="month-entry-key">{{ entry.issueKey }}</span>
-                  <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
-                </div>
-                <div v-if="getProjectDayEntries(day.date).length > 2" class="month-entry-more">
-                  +{{ getProjectDayEntries(day.date).length - 2 }} 更多
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <WeekGrid
+          v-if="viewMode === 'week'"
+          :week-days="weekDays"
+          :entries="projectEntries"
+          :show-user="true"
+        />
+        <MonthGrid
+          v-else
+          :month-days="monthDays"
+          :entries="projectEntries"
+        />
       </div>
     </template>
 
@@ -373,6 +290,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import { timeEntryApi, issueApi } from '@/api'
 import type { TimeEntryVO, ProjectTimeSummaryVO } from '@/api/timeEntry'
+import WeekGrid from './WeekGrid.vue'
+import MonthGrid from './MonthGrid.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -575,27 +494,10 @@ async function searchIssues(keyword: string) {
   } catch { /* silent */ }
 }
 
-// People view helpers
-function getDayEntries(dateKey: string): TimeEntryVO[] {
-  return timeEntries.value.filter(e => e.workDate === dateKey)
-}
+// People view helpers — kept for future use if needed
+// (Grid rendering delegated to WeekGrid / MonthGrid sub-components)
 
-function getDayTotal(dateKey: string): number {
-  return getDayEntries(dateKey).reduce((sum, e) => sum + e.duration, 0)
-}
-
-// Project view helpers
-function getProjectDayEntries(dateKey: string): TimeEntryVO[] {
-  return projectEntries.value.filter(e => e.workDate === dateKey)
-}
-
-function getProjectDayTotal(dateKey: string): number {
-  return getProjectDayEntries(dateKey).reduce((sum, e) => sum + e.duration, 0)
-}
-
-function isToday(dateKey: string): boolean {
-  return dateKey === formatDateKey(new Date())
-}
+// Project view helpers — delegated to sub-components
 
 function navigate(delta: number) {
   if (viewMode.value === 'week') {
@@ -799,14 +701,6 @@ function parseTimeToMinutes(timeStr: string): number | undefined {
   return parseInt(parts[0]) * 60 + parseInt(parts[1])
 }
 
-function workTypeLabel(type: string): string {
-  const map: Record<string, string> = {
-    Development: '开发', Testing: '测试', Documentation: '文档',
-    Design: '设计', Review: '代码审查', Meeting: '会议', Other: '其他'
-  }
-  return map[type] || type
-}
-
 function formatDateKey(d: Date): string {
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
@@ -881,52 +775,9 @@ onMounted(() => {
 .add-time-btn { height: 32px; padding: 0 14px; border: none; border-radius: var(--tf-radius-md); background: var(--tf-accent); color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
 .add-time-btn:hover { opacity: 0.9; }
 
-/* Week Grid */
-.week-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--tf-border); overflow: hidden; }
-.day-column { display: flex; flex-direction: column; border-right: 1px solid var(--tf-border-light); overflow: hidden; cursor: pointer; transition: background 0.1s; }
-.day-column:last-child { border-right: none; }
-.day-column:hover { background: var(--tf-bg-hover); }
-.day-column.today { background: var(--tf-accent-bg); }
-.day-column.today:hover { background: rgba(56, 139, 253, 0.12); }
-.day-column.weekend { background: var(--tf-bg-surface); }
-.day-column.weekend:hover { background: var(--tf-bg-hover); }
-.day-header { display: flex; align-items: baseline; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--tf-border-light); flex-shrink: 0; }
-.day-hours { font-size: 11px; color: var(--tf-text-tertiary); }
-.day-name { font-size: 12px; font-weight: 500; color: var(--tf-text-secondary); }
-.day-date { font-size: 12px; color: var(--tf-text-tertiary); }
-.day-entries { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
-.time-entry { padding: 6px 8px; border-radius: var(--tf-radius-sm); background: var(--tf-bg-elevated); border: 1px solid var(--tf-border-light); cursor: pointer; transition: border-color 0.15s; }
-.time-entry:hover { border-color: var(--tf-accent); }
-.entry-issue { font-size: 11px; font-weight: 500; color: var(--tf-accent); margin-bottom: 2px; cursor: pointer; }
-.entry-issue:hover { text-decoration: underline; }
-.entry-duration { font-size: 12px; font-weight: 600; color: var(--tf-text-primary); }
-.entry-desc { font-size: 10px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entry-type { font-size: 10px; color: var(--tf-text-muted); margin-top: 2px; }
-.entry-user { font-size: 10px; color: var(--tf-text-secondary); margin-top: 2px; font-weight: 500; }
-.day-footer { padding: 6px 10px; border-top: 1px solid var(--tf-border-light); flex-shrink: 0; }
-.day-total { font-size: 11px; color: var(--tf-text-tertiary); }
-.day-total.insufficient { color: var(--tf-warning); font-weight: 500; }
+/* Week Grid - styles moved to WeekGrid.vue */
 
-/* Month Grid */
-.month-grid { flex: 1; display: flex; flex-direction: column; border-top: 1px solid var(--tf-border); overflow: hidden; }
-.month-header-row { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--tf-border-light); }
-.month-header-cell { padding: 6px 8px; font-size: 11px; font-weight: 500; color: var(--tf-text-tertiary); text-align: center; text-transform: uppercase; }
-.month-body { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(6, 1fr); overflow: hidden; }
-.month-cell { border-right: 1px solid var(--tf-border-light); border-bottom: 1px solid var(--tf-border-light); padding: 4px 6px; cursor: pointer; overflow: hidden; transition: background 0.1s; min-height: 0; }
-.month-cell:nth-child(7n) { border-right: none; }
-.month-cell:hover { background: var(--tf-bg-hover); }
-.month-cell.today { background: var(--tf-accent-bg); }
-.month-cell.weekend { background: var(--tf-bg-surface); }
-.month-cell.other-month { opacity: 0.4; }
-.month-cell-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-.month-cell-date { font-size: 11px; font-weight: 500; color: var(--tf-text-secondary); }
-.month-cell-total { font-size: 10px; color: var(--tf-accent); font-weight: 500; }
-.month-cell-entries { overflow: hidden; }
-.month-entry { display: flex; justify-content: space-between; padding: 1px 4px; border-radius: 2px; margin-bottom: 1px; font-size: 10px; cursor: pointer; }
-.month-entry:hover { background: var(--tf-bg-hover); }
-.month-entry-key { color: var(--tf-accent); font-weight: 500; }
-.month-entry-dur { color: var(--tf-text-tertiary); }
-.month-entry-more { font-size: 9px; color: var(--tf-text-muted); text-align: center; padding: 1px; }
+/* Month Grid - styles moved to MonthGrid.vue */
 
 /* Project Overview */
 .project-overview { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
