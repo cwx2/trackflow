@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 
 /**
  * 报表统计服务 — 提供图表所需的各种聚合数据
+ * TODO: 大数据量时应改为 SQL 聚合查询，当前全量 selectList 仅适用于中小项目
  */
 @Service
 @RequiredArgsConstructor
@@ -32,33 +33,49 @@ public class ReportStatisticsService {
 
     /**
      * 获取仪表盘全量数据（一次请求，前端缓存分发）
+     * 一次查询 issues + closedStatusIds，避免重复查询
      */
     public Map<String, Object> getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
+        List<Issue> issues = queryIssues(projectId, sprintId);
+        Set<Long> closedIds = getClosedStatusIds();
+
         Map<String, Object> dashboard = new LinkedHashMap<>();
-        dashboard.put("statusDistribution", getStatusDistribution(projectId, sprintId));
-        dashboard.put("priorityDistribution", getPriorityDistribution(projectId, sprintId));
-        dashboard.put("typeDistribution", getTypeDistribution(projectId, sprintId));
-        dashboard.put("workload", getWorkload(projectId, sprintId));
+        dashboard.put("statusDistribution", buildStatusDistribution(issues));
+        dashboard.put("priorityDistribution", buildPriorityDistribution(issues));
+        dashboard.put("typeDistribution", buildTypeDistribution(issues));
+        dashboard.put("workload", buildWorkload(issues, closedIds));
         dashboard.put("trend", getTrend(projectId, startDate, endDate));
         if (sprintId != null) {
             dashboard.put("burndown", getBurndown(projectId, sprintId));
         }
-        // 概览数字
-        dashboard.put("overview", getOverview(projectId, sprintId));
+        dashboard.put("overview", buildOverview(issues, closedIds));
         return dashboard;
     }
 
-    /**
-     * 工单状态分布（饼图/环形图数据）
-     */
+    // ─── Public endpoints (single chart) ────────────────────────────────
+
     public Map<String, Object> getStatusDistribution(Long projectId, Long sprintId) {
-        List<Issue> issues = queryIssues(projectId, sprintId);
+        return buildStatusDistribution(queryIssues(projectId, sprintId));
+    }
+
+    public Map<String, Object> getPriorityDistribution(Long projectId, Long sprintId) {
+        return buildPriorityDistribution(queryIssues(projectId, sprintId));
+    }
+
+    public Map<String, Object> getTypeDistribution(Long projectId, Long sprintId) {
+        return buildTypeDistribution(queryIssues(projectId, sprintId));
+    }
+
+    public Map<String, Object> getWorkload(Long projectId, Long sprintId) {
+        return buildWorkload(queryIssues(projectId, sprintId), getClosedStatusIds());
+    }
+
+    // ─── Internal build methods ─────────────────────────────────────────
+
+    private Map<String, Object> buildStatusDistribution(List<Issue> issues) {
         List<IssueStatus> statuses = statusMapper.selectList(new LambdaQueryWrapper<IssueStatus>()
                 .orderByAsc(IssueStatus::getSortOrder));
-        Map<Long, IssueStatus> statusMap = statuses.stream()
-                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
 
-        // 按状态分组计数
         Map<Long, Long> grouped = issues.stream()
                 .collect(Collectors.groupingBy(Issue::getStatusId, Collectors.counting()));
 
@@ -81,13 +98,7 @@ public class ReportStatisticsService {
         return result;
     }
 
-    /**
-     * 优先级分布（柱状图数据）
-     */
-    public Map<String, Object> getPriorityDistribution(Long projectId, Long sprintId) {
-        List<Issue> issues = queryIssues(projectId, sprintId);
-
-        // 定义优先级顺序
+    private Map<String, Object> buildPriorityDistribution(List<Issue> issues) {
         List<String> priorityOrder = List.of("Critical", "High", "Normal", "Low");
         Map<String, String> priorityColors = Map.of(
                 "Critical", "#f85149",
@@ -120,12 +131,7 @@ public class ReportStatisticsService {
         return result;
     }
 
-    /**
-     * 工单类型分布（饼图数据）
-     */
-    public Map<String, Object> getTypeDistribution(Long projectId, Long sprintId) {
-        List<Issue> issues = queryIssues(projectId, sprintId);
-
+    private Map<String, Object> buildTypeDistribution(List<Issue> issues) {
         Map<String, String> typeColors = Map.of(
                 "Bug", "#f85149",
                 "Task", "#58a6ff",
@@ -147,7 +153,6 @@ public class ReportStatisticsService {
             item.put("color", typeColors.getOrDefault(entry.getKey(), "#6b7280"));
             items.add(item);
         }
-        // 按数量降序
         items.sort((a, b) -> Long.compare((Long) b.get("value"), (Long) a.get("value")));
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -156,20 +161,13 @@ public class ReportStatisticsService {
         return result;
     }
 
-    /**
-     * 团队工作负载（横向柱状图）
-     */
-    public Map<String, Object> getWorkload(Long projectId, Long sprintId) {
-        List<Issue> issues = queryIssues(projectId, sprintId);
-
-        // 统计每个负责人的工单数
+    private Map<String, Object> buildWorkload(List<Issue> issues, Set<Long> closedIds) {
         Map<Long, Long> grouped = issues.stream()
                 .filter(i -> i.getAssigneeId() != null)
                 .collect(Collectors.groupingBy(Issue::getAssigneeId, Collectors.counting()));
 
         long unassigned = issues.stream().filter(i -> i.getAssigneeId() == null).count();
 
-        // 获取用户名
         Set<Long> userIds = grouped.keySet();
         Map<Long, String> nameMap = userIds.isEmpty() ? Map.of() :
                 userMapper.selectBatchIds(userIds).stream()
@@ -180,16 +178,14 @@ public class ReportStatisticsService {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("name", nameMap.getOrDefault(entry.getKey(), "未知用户"));
             item.put("value", entry.getValue());
-            // 统计此人已完成和进行中的
             long doneCount = issues.stream()
                     .filter(i -> entry.getKey().equals(i.getAssigneeId()))
-                    .filter(i -> isClosedStatus(i.getStatusId()))
+                    .filter(i -> closedIds.contains(i.getStatusId()))
                     .count();
             item.put("done", doneCount);
             item.put("inProgress", entry.getValue() - doneCount);
             items.add(item);
         }
-        // 按总数降序
         items.sort((a, b) -> Long.compare((Long) b.get("value"), (Long) a.get("value")));
 
         if (unassigned > 0) {
@@ -207,24 +203,44 @@ public class ReportStatisticsService {
         return result;
     }
 
+    private Map<String, Object> buildOverview(List<Issue> issues, Set<Long> closedIds) {
+        long total = issues.size();
+        long open = issues.stream().filter(i -> !closedIds.contains(i.getStatusId())).count();
+        long closed = total - open;
+        long unassigned = issues.stream().filter(i -> i.getAssigneeId() == null).count();
+        long overdue = issues.stream()
+                .filter(i -> i.getDueDate() != null && i.getDueDate().isBefore(LocalDate.now()))
+                .filter(i -> !closedIds.contains(i.getStatusId()))
+                .count();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", total);
+        result.put("open", open);
+        result.put("closed", closed);
+        result.put("unassigned", unassigned);
+        result.put("overdue", overdue);
+        result.put("completionRate", total > 0 ? Math.round(closed * 100.0 / total) : 0);
+        return result;
+    }
+
+    // ─── Trend & Burndown (separate queries by nature) ──────────────────
+
     /**
      * 工单趋势（每日新建/关闭 — 折线图）
      */
     public Map<String, Object> getTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
         if (endDate == null) endDate = LocalDate.now();
-        if (startDate == null) startDate = endDate.minusDays(29); // 默认30天
+        if (startDate == null) startDate = endDate.minusDays(29);
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        // 查询时间范围内创建的工单
         List<Issue> createdIssues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
                 .eq(Issue::getProjectId, projectId)
                 .isNull(Issue::getDeletedAt)
                 .ge(Issue::getCreatedAt, start)
                 .le(Issue::getCreatedAt, end));
 
-        // 查询时间范围内关闭的工单
         List<Issue> resolvedIssues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
                 .eq(Issue::getProjectId, projectId)
                 .isNull(Issue::getDeletedAt)
@@ -232,18 +248,12 @@ public class ReportStatisticsService {
                 .ge(Issue::getResolvedAt, start)
                 .le(Issue::getResolvedAt, end));
 
-        // 按日期分组
         Map<LocalDate, Long> createdByDay = createdIssues.stream()
-                .collect(Collectors.groupingBy(
-                        i -> i.getCreatedAt().toLocalDate(),
-                        Collectors.counting()));
+                .collect(Collectors.groupingBy(i -> i.getCreatedAt().toLocalDate(), Collectors.counting()));
 
         Map<LocalDate, Long> resolvedByDay = resolvedIssues.stream()
-                .collect(Collectors.groupingBy(
-                        i -> i.getResolvedAt().toLocalDate(),
-                        Collectors.counting()));
+                .collect(Collectors.groupingBy(i -> i.getResolvedAt().toLocalDate(), Collectors.counting()));
 
-        // 生成连续日期序列
         List<String> dates = new ArrayList<>();
         List<Long> createdData = new ArrayList<>();
         List<Long> resolvedData = new ArrayList<>();
@@ -277,7 +287,6 @@ public class ReportStatisticsService {
             return empty;
         }
 
-        // Sprint 内的工单
         List<Issue> issues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
                 .eq(Issue::getProjectId, projectId)
                 .eq(Issue::getSprintId, sprintId)
@@ -289,16 +298,12 @@ public class ReportStatisticsService {
         LocalDate today = LocalDate.now();
         LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
 
-        // 计算 sprint 天数
         long totalDays = sprintStart.until(sprintEnd).getDays();
         if (totalDays <= 0) totalDays = 1;
 
-        // 计算每日完成数
         Map<LocalDate, Long> resolvedByDay = issues.stream()
                 .filter(i -> i.getResolvedAt() != null)
-                .collect(Collectors.groupingBy(
-                        i -> i.getResolvedAt().toLocalDate(),
-                        Collectors.counting()));
+                .collect(Collectors.groupingBy(i -> i.getResolvedAt().toLocalDate(), Collectors.counting()));
 
         List<String> dates = new ArrayList<>();
         List<Double> ideal = new ArrayList<>();
@@ -330,31 +335,7 @@ public class ReportStatisticsService {
         return result;
     }
 
-    /**
-     * 概览卡片数字
-     */
-    private Map<String, Object> getOverview(Long projectId, Long sprintId) {
-        List<Issue> issues = queryIssues(projectId, sprintId);
-        long total = issues.size();
-        long open = issues.stream().filter(i -> !isClosedStatus(i.getStatusId())).count();
-        long closed = total - open;
-        long unassigned = issues.stream().filter(i -> i.getAssigneeId() == null).count();
-        long overdue = issues.stream()
-                .filter(i -> i.getDueDate() != null && i.getDueDate().isBefore(LocalDate.now()))
-                .filter(i -> !isClosedStatus(i.getStatusId()))
-                .count();
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", total);
-        result.put("open", open);
-        result.put("closed", closed);
-        result.put("unassigned", unassigned);
-        result.put("overdue", overdue);
-        result.put("completionRate", total > 0 ? Math.round(closed * 100.0 / total) : 0);
-        return result;
-    }
-
-    // ─── Private helpers ───────────────────────────────────────────────
+    // ─── Private helpers ────────────────────────────────────────────────
 
     private List<Issue> queryIssues(Long projectId, Long sprintId) {
         LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
@@ -364,11 +345,6 @@ public class ReportStatisticsService {
             wrapper.eq(Issue::getSprintId, sprintId);
         }
         return issueMapper.selectList(wrapper);
-    }
-
-    private boolean isClosedStatus(Long statusId) {
-        Set<Long> closedIds = getClosedStatusIds();
-        return closedIds.contains(statusId);
     }
 
     private Set<Long> getClosedStatusIds() {

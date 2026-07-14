@@ -6,6 +6,7 @@ import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.service.ReportStatisticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -26,6 +27,7 @@ public class ReportStatisticsController {
      * 获取仪表盘全量统计数据（一次请求获取所有图表数据）
      */
     @GetMapping("/dashboard")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> dashboard(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId,
@@ -42,6 +44,7 @@ public class ReportStatisticsController {
      * 获取工单状态分布
      */
     @GetMapping("/status-distribution")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> statusDistribution(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
@@ -54,6 +57,7 @@ public class ReportStatisticsController {
      * 获取优先级分布
      */
     @GetMapping("/priority-distribution")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> priorityDistribution(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
@@ -66,6 +70,7 @@ public class ReportStatisticsController {
      * 获取工单趋势（每日新建/关闭）
      */
     @GetMapping("/trend")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> trend(
             @RequestParam Long projectId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -79,6 +84,7 @@ public class ReportStatisticsController {
      * 获取团队工作负载（按负责人统计）
      */
     @GetMapping("/workload")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> workload(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
@@ -91,6 +97,7 @@ public class ReportStatisticsController {
      * 获取工单类型分布
      */
     @GetMapping("/type-distribution")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> typeDistribution(
             @RequestParam Long projectId,
             @RequestParam(required = false) Long sprintId) {
@@ -103,6 +110,7 @@ public class ReportStatisticsController {
      * 获取 Sprint 燃尽图数据
      */
     @GetMapping("/burndown")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> burndown(
             @RequestParam Long projectId,
             @RequestParam Long sprintId) {
