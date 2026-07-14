@@ -86,7 +86,7 @@ public class WorkflowService {
 
         // 检查用户是否需要所有权校验
         if (requiresOwnershipCheck(roleIds)) {
-            // developer/tester 需要是工单的 assignee 或 reporter 才能变更状态
+            // developer 需要是工单的 assignee 或 reporter 才能变更状态
             if (!isIssueOwner(issue, userId)) {
                 log.debug("User {} denied status transition on issue {} - not assignee or reporter",
                         userId, issue.getId());
