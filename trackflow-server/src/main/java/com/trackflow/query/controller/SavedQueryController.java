@@ -13,6 +13,7 @@ import com.trackflow.query.dto.CreateQueryDTO;
 import com.trackflow.query.dto.ExecuteQueryDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.service.SavedQueryService;
+import com.trackflow.query.vo.QueryPanelVO;
 import com.trackflow.query.vo.SavedQueryVO;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -43,7 +44,7 @@ public class SavedQueryController {
      * 获取查询面板（左侧面板数据 + 实时计数）
      */
     @GetMapping("/panel")
-    public R<Map<String, Object>> getPanel(@RequestParam(required = false) Long projectId) {
+    public R<QueryPanelVO> getPanel(@RequestParam(required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
             projectService.assertProjectMember(userId, projectId);

@@ -15,6 +15,8 @@ import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.query.entity.SavedQuery;
 import com.trackflow.query.mapper.SavedQueryMapper;
+import com.trackflow.query.vo.QueryPanelItemVO;
+import com.trackflow.query.vo.QueryPanelVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,7 +39,7 @@ public class SavedQueryService {
      * 获取用户的查询面板（左侧面板数据）
      * 返回 pinned + 普通查询，包含实时计数
      */
-    public Map<String, Object> getPanel(Long userId, Long projectId) {
+    public QueryPanelVO getPanel(Long userId, Long projectId) {
         // 查询用户可见的查询（自己的 + 共享的）
         LambdaQueryWrapper<SavedQuery> wrapper = new LambdaQueryWrapper<>();
         wrapper.and(w -> w
@@ -60,21 +62,20 @@ public class SavedQueryService {
         List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
 
         // 分为 pinned 和普通
-        List<Map<String, Object>> pinned = new ArrayList<>();
-        List<Map<String, Object>> normal = new ArrayList<>();
+        List<QueryPanelItemVO> pinned = new ArrayList<>();
+        List<QueryPanelItemVO> normal = new ArrayList<>();
 
         for (SavedQuery q : queries) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", String.valueOf(q.getId()));
-            item.put("name", q.getName());
-            item.put("folder", q.getFolder());
-            item.put("pinned", q.getPinned());
-            item.put("shared", q.getShared());
-            item.put("userId", q.getUserId() != null ? String.valueOf(q.getUserId()) : null);
-
-            // 实时计数（带项目成员过滤）
             long count = countForQueryWithProjectFilter(q, accessibleProjectIds);
-            item.put("count", count);
+            QueryPanelItemVO item = QueryPanelItemVO.builder()
+                    .id(String.valueOf(q.getId()))
+                    .name(q.getName())
+                    .folder(q.getFolder())
+                    .pinned(q.getPinned())
+                    .shared(q.getShared())
+                    .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
+                    .count(count)
+                    .build();
 
             if (Boolean.TRUE.equals(q.getPinned())) {
                 pinned.add(item);
@@ -83,10 +84,7 @@ public class SavedQueryService {
             }
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("pinned", pinned);
-        result.put("queries", normal);
-        return result;
+        return new QueryPanelVO(pinned, normal);
     }
 
     /**

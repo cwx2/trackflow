@@ -74,6 +74,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 参数格式异常（如路径变量非法、数字格式错误）
+     */
+    @ExceptionHandler({NumberFormatException.class, IllegalArgumentException.class})
+    public ResponseEntity<R<Void>> handleBadFormatException(Exception ex, HttpServletRequest request) {
+        log.warn("Bad request format on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(R.fail(ErrorCode.VALIDATION_ERROR.getCode(), "请求参数格式错误"));
+    }
+
+    /**
      * 非预期异常
      */
     @ExceptionHandler(Exception.class)
