@@ -33,7 +33,10 @@ export const useAuthStore = defineStore('auth', () => {
   // 从 localStorage 恢复状态
   const accessToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.accessToken))
   const refreshToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.refreshToken))
-  const user = ref<AuthUser | null>(restoreUser())
+  // 优先从 token 重新解析 user（确保 UTF-8 正确解码），降级使用 localStorage 缓存
+  const user = ref<AuthUser | null>(
+    accessToken.value ? (parseJwtPayload(accessToken.value) ?? restoreUser()) : restoreUser()
+  )
   const globalPermissions = ref<Set<string>>(new Set())
   const permissionsLoaded = ref(false)
 
@@ -68,7 +71,7 @@ export const useAuthStore = defineStore('auth', () => {
     } else {
       localStorage.removeItem(STORAGE_KEYS.user)
     }
-  }, { deep: true })
+  }, { deep: true, immediate: true })
 
   // 初始化时，如果有 token 则启动定时刷新
   if (accessToken.value) {
