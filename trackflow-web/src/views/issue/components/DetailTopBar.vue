@@ -22,7 +22,7 @@
         <button class="icon-btn" :disabled="(index ?? 0) >= (total ?? 0)" @click="$emit('next')"><icon-right :size="12" /></button>
       </div>
       <button class="icon-btn" @click="$emit('copy')" title="复制"><icon-copy :size="16" /></button>
-      <button class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="16" /></button>
+      <button v-if="showCreate" class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="16" /></button>
       <button class="icon-btn" @click="$emit('toggle-sidebar')" title="面板"><icon-menu :size="16" /></button>
     </div>
   </header>
@@ -39,6 +39,7 @@ defineProps<{
   updatedAgo: string
   index?: number
   total?: number
+  showCreate?: boolean
 }>()
 
 defineEmits<{

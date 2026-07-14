@@ -73,6 +73,10 @@ public class AuthController {
             if (permissionService.hasPermissionInAnyProject(userId, "project:manage_workflow")) {
                 permissions.add("nav:workflow");
             }
+            // 用户在任意项目中有 issue:create 权限 → 显示创建入口
+            if (permissionService.hasPermissionInAnyProject(userId, "issue:create")) {
+                permissions.add("nav:create_issue");
+            }
         }
 
         return R.ok(permissions);

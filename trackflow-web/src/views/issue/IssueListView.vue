@@ -40,6 +40,13 @@
         <div class="group-header" @click="toggleGroup('saved')">
           <span class="group-arrow">{{ expandedGroups.has('saved') ? '\u25BE' : '\u25B8' }}</span>
           <span class="group-title">已保存的搜索</span>
+          <a-button
+            type="text" size="mini" class="group-action-btn"
+            title="保存当前筛选为查询"
+            @click.stop="openCreateQueryModal"
+          >
+            <template #icon><icon-plus :size="12" /></template>
+          </a-button>
         </div>
         <div v-if="expandedGroups.has('saved')" class="group-items">
           <div
@@ -51,10 +58,47 @@
           >
             <span class="query-name">{{ q.name }}</span>
             <span class="query-count">{{ formatCount(q.count) }}</span>
+            <span
+              v-if="q.userId && !q.shared"
+              class="query-delete-btn"
+              title="删除此查询"
+              @click.stop="confirmDeleteQuery(q)"
+            >✕</span>
           </div>
           <div v-if="filteredQueries.length === 0" class="empty-queries">暂无保存的搜索</div>
         </div>
       </div>
+
+      <!-- Create query modal -->
+      <a-modal
+        v-model:visible="showCreateQueryModal"
+        title="保存查询"
+        :width="400"
+        :ok-loading="createQueryLoading"
+        ok-text="保存查询"
+        cancel-text="取消"
+        @ok="handleCreateQuery"
+        @cancel="showCreateQueryModal = false"
+      >
+        <a-form :model="createQueryForm" layout="vertical">
+          <a-form-item label="查询名称" required>
+            <a-input v-model="createQueryForm.name" placeholder="输入查询名称，如：待我测试" :max-length="50" />
+          </a-form-item>
+          <a-form-item label="筛选条件">
+            <div class="query-preview-filters">
+              <template v-if="createQueryFiltersPreview.length > 0">
+                <div v-for="(f, i) in createQueryFiltersPreview" :key="i" class="preview-chip">
+                  {{ f }}
+                </div>
+              </template>
+              <span v-else class="preview-empty">无筛选条件（将返回所有工单）</span>
+            </div>
+          </a-form-item>
+          <a-form-item label="固定到面板顶部">
+            <a-switch v-model="createQueryForm.pinned" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
     </aside>
 
     <!-- Resizable divider -->
@@ -99,10 +143,10 @@
           <a-select v-model="filterProject" placeholder="所有项目" size="small" style="width: 120px" allow-clear @change="onFilterChange">
             <a-option v-for="p in projectList" :key="p.id" :value="p.id">{{ p.key }}</a-option>
           </a-select>
-          <a-button size="small" @click="toggleInlineCreate">
+          <a-button v-if="canCreateIssueGlobal" size="small" @click="toggleInlineCreate">
             {{ showInlineCreate ? '取消' : '快速创建' }}
           </a-button>
-          <a-button type="primary" size="small" @click="showCreatePanel = true">创建工单</a-button>
+          <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="showCreatePanel = true">创建工单</a-button>
           <ColumnConfigPopover
             :standard-columns="standardColumns"
             :custom-field-columns="customFieldColumns"
@@ -287,7 +331,7 @@
             <icon-search class="empty-icon" />
             <p class="empty-title">暂无工单</p>
             <p class="empty-desc">尝试调整筛选条件或创建新的工单</p>
-            <a-button type="primary" size="small" @click="toggleInlineCreate">创建工单</a-button>
+            <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="toggleInlineCreate">创建工单</a-button>
           </div>
         </template>
       </a-table>
@@ -307,10 +351,11 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading } from '@arco-design/web-vue/es/icon'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
+import { useAuthStore } from '@/stores/auth'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -336,6 +381,12 @@ const { isCellEditing, executeEdit } = useInlineEdit(issues)
 const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority } = useBatchOps()
 const { loadPermissions, canEditIssue } = usePermission(issues)
 
+// 全局级创建权限：system:admin 或在任意项目中有 issue:create
+const authStore = useAuthStore()
+const canCreateIssueGlobal = computed(() => {
+  return authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:create_issue')
+})
+
 // Panel state (declared before useColumnConfig so it can be passed as ref)
 const activeProjectId = ref<string | null>(null)
 
@@ -351,6 +402,126 @@ const activeQueryId = ref<string | null>(null)
 const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
 const expandedGroups = reactive(new Set<string>(['saved', 'projects']))
 const panelSearch = ref('')
+
+// Create query modal state
+const showCreateQueryModal = ref(false)
+const createQueryLoading = ref(false)
+const createQueryForm = reactive({
+  name: '',
+  pinned: true
+})
+
+// Computed: preview of current filters for the create modal
+const createQueryFiltersPreview = computed(() => {
+  const previews: string[] = []
+  if (activeQueryId.value) {
+    const q = savedQueries.value.find(sq => sq.id === activeQueryId.value)
+    if (q) previews.push(`基于查询: ${q.name}`)
+  }
+  if (activeProjectId.value) {
+    const p = projectList.value.find(pr => pr.id === activeProjectId.value)
+    if (p) previews.push(`项目: ${p.name}`)
+  }
+  if (searchKeyword.value) {
+    previews.push(`关键字: ${searchKeyword.value}`)
+  }
+  if (globalFilterParams.value.statusId) {
+    previews.push(`状态: ${globalFilterParams.value.statusId}`)
+  }
+  if (globalFilterParams.value.assigneeId) {
+    previews.push(`负责人: ${globalFilterParams.value.assigneeId}`)
+  }
+  if (globalFilterParams.value.priority) {
+    previews.push(`优先级: ${globalFilterParams.value.priority}`)
+  }
+  if (globalFilterParams.value.sprintId) {
+    previews.push(`Sprint: ${globalFilterParams.value.sprintId}`)
+  }
+  return previews
+})
+
+function openCreateQueryModal() {
+  createQueryForm.name = ''
+  createQueryForm.pinned = true
+  showCreateQueryModal.value = true
+}
+
+async function handleCreateQuery() {
+  if (!createQueryForm.name.trim()) {
+    Message.warning('请输入查询名称')
+    return
+  }
+  createQueryLoading.value = true
+  try {
+    // Build filters array in the backend format
+    const filters: any[] = []
+    if (globalFilterParams.value.statusId) {
+      const statusIds = String(globalFilterParams.value.statusId).split(',')
+      // Map status IDs to codes for the backend
+      const statusCodes = statusIds.map(id => {
+        const s = statusCache.value.find(st => st.id === id)
+        return s?.code || id
+      })
+      filters.push({ field: 'status', operator: 'in', value: statusCodes })
+    }
+    if (globalFilterParams.value.assigneeId) {
+      filters.push({ field: 'assignee', operator: 'eq', value: [globalFilterParams.value.assigneeId] })
+    }
+    if (globalFilterParams.value.priority) {
+      filters.push({ field: 'priority', operator: 'eq', value: [globalFilterParams.value.priority] })
+    }
+    if (globalFilterParams.value.sprintId) {
+      filters.push({ field: 'sprint', operator: 'eq', value: [globalFilterParams.value.sprintId] })
+    }
+    if (globalFilterParams.value.issueType) {
+      filters.push({ field: 'type', operator: 'eq', value: [globalFilterParams.value.issueType] })
+    }
+    if (searchKeyword.value.trim()) {
+      filters.push({ field: 'keyword', operator: 'contains', value: [searchKeyword.value.trim()] })
+    }
+    if (activeProjectId.value) {
+      filters.push({ field: 'project', operator: 'eq', value: [activeProjectId.value] })
+    }
+
+    await queryApi.create({
+      name: createQueryForm.name.trim(),
+      filters: filters,
+      pinned: createQueryForm.pinned,
+      shared: false
+    })
+    Message.success('查询已保存')
+    showCreateQueryModal.value = false
+    loadPanel() // Refresh panel to show new query
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存查询失败')
+  } finally {
+    createQueryLoading.value = false
+  }
+}
+
+async function confirmDeleteQuery(q: any) {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除查询「${q.name}」吗？此操作不可撤销。`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await queryApi.delete(q.id)
+        Message.success('查询已删除')
+        if (activeQueryId.value === q.id) {
+          activeQueryId.value = null
+          activeQueryName.value = '所有工单'
+          refreshList()
+        }
+        loadPanel()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '删除失败')
+      }
+    }
+  })
+}
 
 // Panel resize
 const PANEL_WIDTH_KEY = 'trackflow:panel-width'
@@ -905,6 +1076,20 @@ function applyDashboardFilter() {
 .query-item.active .query-name { color: var(--tf-accent); }
 .query-count { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; margin-left: 8px; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
+
+/* Group action button */
+.group-action-btn { margin-left: auto; opacity: 0; transition: opacity 0.15s; }
+.group-header:hover .group-action-btn { opacity: 1; }
+
+/* Query delete button */
+.query-delete-btn { font-size: 10px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; }
+.query-item:hover .query-delete-btn { opacity: 1; }
+.query-delete-btn:hover { color: var(--tf-danger); background: rgba(248, 81, 73, 0.1); }
+
+/* Create query modal */
+.query-preview-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.preview-chip { padding: 2px 8px; background: var(--tf-bg-surface); border: 1px solid var(--tf-border); border-radius: 3px; font-size: 12px; color: var(--tf-text-secondary); }
+.preview-empty { font-size: 12px; color: var(--tf-text-tertiary); }
 
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }

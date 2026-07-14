@@ -13,7 +13,7 @@ export const queryApi = {
   },
 
   /** 创建保存查询 */
-  create(data: { name: string; filters: string; pinned?: boolean; folder?: string; shared?: boolean }) {
+  create(data: { name: string; filters: any[]; pinned?: boolean; folder?: string; shared?: boolean }) {
     return request.post<any, R<SavedQueryVO>>('/queries', data)
   },
 

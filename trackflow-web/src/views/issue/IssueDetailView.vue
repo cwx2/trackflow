@@ -6,6 +6,7 @@
       :reporter="reporterName"
       :created-ago="timeAgo(issue.createdAt)"
       :updated-ago="timeAgo(issue.updatedAt)"
+      :show-create="canCreateIssue"
       @copy="copyIssue"
       @create="showCreatePanel = true"
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
@@ -137,7 +138,7 @@ const loadError = ref<string | null>(null)
 const issue = ref<IssueDetailVO | null>(null)
 
 // 权限控制（必须在 issue ref 声明之后）
-const { canEditIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
+const { canCreateIssue, canEditIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
   () => issue.value?.projectId
 )
 const transitions = ref<IssueStatusVO[]>([])

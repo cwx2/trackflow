@@ -43,7 +43,7 @@
       </nav>
 
       <div class="sidebar-footer">
-        <router-link to="/issues/create" class="footer-item">
+        <router-link v-if="canCreateIssue" to="/issues/create" class="footer-item">
           <span class="nav-icon">➕</span>
           <span class="nav-label">创建</span>
         </router-link>
@@ -131,6 +131,17 @@ const canManageWorkflow = computed(() => {
     return authStore.hasGlobalPermission('nav:workflow')
   }
   return false
+})
+
+const canCreateIssue = computed(() => {
+  // system:admin 自动拥有所有权限
+  if (isAdmin.value) return true
+  // 后端在 my-global-permissions 中返回 nav:create_issue 表示用户在任意项目中有 issue:create
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:create_issue')
+  }
+  // 权限未加载时乐观显示（避免闪烁），后端兜底
+  return true
 })
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))

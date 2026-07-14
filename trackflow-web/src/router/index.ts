@@ -31,7 +31,8 @@ const routes = [
       {
         path: 'issues/create',
         name: 'IssueCreate',
-        component: () => import('@/views/issue/IssueCreateView.vue')
+        component: () => import('@/views/issue/IssueCreateView.vue'),
+        meta: { requiresCreateIssue: true }
       },
       {
         path: 'issues/:id',
@@ -154,6 +155,15 @@ router.beforeEach(async (to, _from, next) => {
   // 工作流路由权限检查：system:admin 或在任意项目中有 project:manage_workflow
   if (to.meta.requiresWorkflow) {
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:workflow')
+    if (!canAccess) {
+      next({ name: 'Forbidden' })
+      return
+    }
+  }
+
+  // 创建工单路由权限检查：system:admin 或在任意项目中有 issue:create
+  if (to.meta.requiresCreateIssue) {
+    const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:create_issue')
     if (!canAccess) {
       next({ name: 'Forbidden' })
       return
