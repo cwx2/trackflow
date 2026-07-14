@@ -7,11 +7,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +29,8 @@ public class ReportService {
 
     private final ReportDefinitionMapper reportMapper;
     private final IssueMapper issueMapper;
+    private final IssueStatusMapper statusMapper;
+    private final SysUserMapper userMapper;
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
 
@@ -118,9 +124,12 @@ public class ReportService {
 
         List<Issue> issues = issueMapper.selectList(wrapper);
 
-        // 按 groupBy 分组统计
+        // 构建 ID→名称映射
+        Map<Long, String> nameMap = buildNameMap(issues, groupBy);
+
+        // 按 groupBy 分组统计（使用可读名称）
         Map<String, Long> grouped = issues.stream()
-                .collect(Collectors.groupingBy(issue -> getGroupValue(issue, groupBy), Collectors.counting()));
+                .collect(Collectors.groupingBy(issue -> getGroupValue(issue, groupBy, nameMap), Collectors.counting()));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("title", report.getName());
@@ -132,13 +141,47 @@ public class ReportService {
         return result;
     }
 
-    private String getGroupValue(Issue issue, String groupBy) {
+    /**
+     * 构建 ID→可读名称映射（按需查询数据库）
+     */
+    private Map<Long, String> buildNameMap(List<Issue> issues, String groupBy) {
         return switch (groupBy) {
-            case "status" -> String.valueOf(issue.getStatusId());
-            case "priority" -> issue.getPriority();
-            case "type" -> issue.getIssueType();
-            case "assignee" -> issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : "Unassigned";
-            default -> "Other";
+            case "status" -> {
+                Set<Long> statusIds = issues.stream()
+                        .map(Issue::getStatusId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                if (statusIds.isEmpty()) yield Map.of();
+                yield statusMapper.selectBatchIds(statusIds).stream()
+                        .collect(Collectors.toMap(IssueStatus::getId, IssueStatus::getName, (a, b) -> a));
+            }
+            case "assignee" -> {
+                Set<Long> userIds = issues.stream()
+                        .map(Issue::getAssigneeId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                if (userIds.isEmpty()) yield Map.of();
+                yield userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            }
+            default -> Map.of();
+        };
+    }
+
+    private String getGroupValue(Issue issue, String groupBy, Map<Long, String> nameMap) {
+        return switch (groupBy) {
+            case "status" -> {
+                Long statusId = issue.getStatusId();
+                yield nameMap.getOrDefault(statusId, "未知状态");
+            }
+            case "priority" -> issue.getPriority() != null ? issue.getPriority() : "无";
+            case "type" -> issue.getIssueType() != null ? issue.getIssueType() : "未分类";
+            case "assignee" -> {
+                Long assigneeId = issue.getAssigneeId();
+                if (assigneeId == null) yield "未分配";
+                yield nameMap.getOrDefault(assigneeId, "未知用户");
+            }
+            default -> "其他";
         };
     }
 

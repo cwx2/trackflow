@@ -77,6 +77,14 @@ public class AuthController {
             if (permissionService.hasPermissionInAnyProject(userId, "issue:create")) {
                 permissions.add("nav:create_issue");
             }
+            // 用户在任意项目中有 report:view 权限 → 显示报表入口
+            if (permissionService.hasPermissionInAnyProject(userId, "report:view")) {
+                permissions.add("nav:report");
+            }
+            // 用户在任意项目中有 report:create 权限 → 显示创建报表按钮
+            if (permissionService.hasPermissionInAnyProject(userId, "report:create")) {
+                permissions.add("nav:report_create");
+            }
         }
 
         return R.ok(permissions);

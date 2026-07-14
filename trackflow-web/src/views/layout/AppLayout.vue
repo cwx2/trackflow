@@ -32,6 +32,10 @@
           <span class="nav-icon">⏱</span>
           <span class="nav-label">时间表</span>
         </router-link>
+        <router-link v-if="canViewReport" to="/reports" class="nav-item" :class="{ active: $route.name === 'Reports' }">
+          <span class="nav-icon">📈</span>
+          <span class="nav-label">报表</span>
+        </router-link>
         <router-link v-if="canManageWorkflow" to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
           <span class="nav-icon">🔄</span>
           <span class="nav-label">工作流</span>
@@ -131,6 +135,17 @@ const canManageWorkflow = computed(() => {
     return authStore.hasGlobalPermission('nav:workflow')
   }
   return false
+})
+
+const canViewReport = computed(() => {
+  // system:admin 自动拥有所有权限
+  if (isAdmin.value) return true
+  // 后端在 my-global-permissions 中返回 nav:report 表示用户在任意项目中有 report:view
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:report')
+  }
+  // 权限未加载时乐观显示（大多数角色都有 report:view）
+  return true
 })
 
 const canCreateIssue = computed(() => {
