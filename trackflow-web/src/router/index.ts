@@ -161,10 +161,9 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // 创建工单路由权限检查：system:admin 或在任意项目中有 issue:create
+  // 创建工单路由权限检查：统一使用 authStore.canCreateIssue
   if (to.meta.requiresCreateIssue) {
-    const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:create_issue')
-    if (!canAccess) {
+    if (!authStore.canCreateIssue) {
       next({ name: 'Forbidden' })
       return
     }

@@ -366,6 +366,14 @@ export const useAuthStore = defineStore('auth', () => {
     return globalPermissions.value.has(permission)
   }
 
+  /**
+   * 当前用户是否可以创建工单（全局级判断）
+   * system:admin 或在任意项目中拥有 issue:create 权限
+   */
+  const canCreateIssue = computed(() => {
+    return hasGlobalPermission('nav:create_issue')
+  })
+
   return {
     accessToken,
     refreshToken,
@@ -373,6 +381,7 @@ export const useAuthStore = defineStore('auth', () => {
     globalPermissions,
     permissionsLoaded,
     isAuthenticated,
+    canCreateIssue,
     login,
     handleCallback,
     refresh,

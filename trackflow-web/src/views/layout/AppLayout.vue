@@ -136,12 +136,9 @@ const canManageWorkflow = computed(() => {
 const canCreateIssue = computed(() => {
   // system:admin 自动拥有所有权限
   if (isAdmin.value) return true
-  // 后端在 my-global-permissions 中返回 nav:create_issue 表示用户在任意项目中有 issue:create
-  if (authStore.permissionsLoaded) {
-    return authStore.hasGlobalPermission('nav:create_issue')
-  }
   // 权限未加载时乐观显示（避免闪烁），后端兜底
-  return true
+  if (!authStore.permissionsLoaded) return true
+  return authStore.canCreateIssue
 })
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))

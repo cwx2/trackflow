@@ -381,11 +381,9 @@ const { isCellEditing, executeEdit } = useInlineEdit(issues)
 const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority } = useBatchOps()
 const { loadPermissions, canEditIssue } = usePermission(issues)
 
-// 全局级创建权限：system:admin 或在任意项目中有 issue:create
+// 全局级创建权限：统一使用 authStore.canCreateIssue
 const authStore = useAuthStore()
-const canCreateIssueGlobal = computed(() => {
-  return authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:create_issue')
-})
+const canCreateIssueGlobal = computed(() => authStore.canCreateIssue)
 
 // Panel state (declared before useColumnConfig so it can be passed as ref)
 const activeProjectId = ref<string | null>(null)
