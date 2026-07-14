@@ -173,13 +173,7 @@ public class IssueService {
 
         String keyword = query.getKeyword();
         if (keyword != null && !keyword.isBlank()) {
-            wrapper.and(w -> w
-                    .like("title", keyword)
-                    .or()
-                    .like("description", keyword)
-                    .or()
-                    .like("issue_key", keyword)
-            );
+            applyKeywordFilter(wrapper, keyword);
         }
 
         wrapper.orderByDesc("updated_at");
@@ -208,6 +202,23 @@ public class IssueService {
                 ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
                 : java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
         wrapper.notIn(column, values);
+    }
+
+    /**
+     * 关键词过滤：匹配 title、description、issue_key 或 assignee 的 display_name/username。
+     * 使用参数化查询防止 SQL 注入。
+     */
+    private void applyKeywordFilter(QueryWrapper<Issue> wrapper, String keyword) {
+        String likePattern = "%" + keyword + "%";
+        wrapper.and(w -> w
+                .like("title", keyword)
+                .or()
+                .like("description", keyword)
+                .or()
+                .like("issue_key", keyword)
+                .or()
+                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} OR username LIKE {0})", likePattern)
+        );
     }
 
     /**
@@ -283,13 +294,7 @@ public class IssueService {
         }
 
         if (keyword != null && !keyword.isBlank()) {
-            wrapper.and(w -> w
-                    .like("title", keyword)
-                    .or()
-                    .like("description", keyword)
-                    .or()
-                    .like("issue_key", keyword)
-            );
+            applyKeywordFilter(wrapper, keyword);
         }
 
         wrapper.orderByDesc("updated_at");

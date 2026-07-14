@@ -11,7 +11,7 @@
           size="small"
           allow-search
           :loading="projectLoadState === 'loading'"
-          @change="loadBoard"
+          @change="onProjectChange"
         >
           <template v-if="projectLoadState === 'error'" #empty>
             <div class="select-error-state">
@@ -38,14 +38,27 @@
         </a-select>
       </div>
       <div class="toolbar-right">
-        <a-input-search
-          v-model="keyword"
-          placeholder="搜索工单"
-          size="small"
-          style="width: 200px"
-          @search="loadBoard"
-          @press-enter="loadBoard"
-        />
+        <div class="search-wrapper">
+          <a-input
+            v-model="keyword"
+            placeholder="搜索工单（编号/标题/负责人）"
+            size="small"
+            style="width: 240px"
+            allow-clear
+            @input="onSearchInput"
+            @press-enter="loadBoard"
+            @clear="onSearchClear"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input>
+          <transition name="fade">
+            <span v-if="isSearchActive" class="search-active-badge">
+              筛选中
+            </span>
+          </transition>
+        </div>
         <a-tooltip content="看板列设置">
           <a-button
             size="small"
@@ -61,7 +74,7 @@
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
       <!-- 看板主体 -->
-      <div class="board-container" v-if="selectedProject && visibleStatuses.length > 0">
+      <div class="board-container" v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults">
         <template v-for="status in visibleStatuses" :key="status.id">
           <!-- 有工单的列 或 手动展开的空列：正常展示 -->
           <div
@@ -172,6 +185,14 @@
         </template>
       </div>
 
+      <!-- 空状态：搜索无结果 -->
+      <div v-if="showNoSearchResults" class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <h3 class="empty-title">未找到匹配的工单</h3>
+        <p class="empty-desc">没有工单匹配关键词「{{ keyword }}」</p>
+        <a-button type="primary" size="small" @click="clearSearch">清除搜索</a-button>
+      </div>
+
       <!-- 空状态：未选择项目 -->
       <div v-else-if="!selectedProject && projectLoadState === 'error'" class="empty-state">
         <div class="empty-icon">⚠️</div>
@@ -211,7 +232,7 @@ import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
-import { IconSettings } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconSearch } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -227,6 +248,39 @@ const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
 const { projects, projectLoadState, loadProjects } = useProjectList()
+
+// 搜索相关
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+const isSearchActive = computed(() => keyword.value.trim().length > 0)
+const showNoSearchResults = computed(() =>
+  isSearchActive.value && selectedProject.value && issues.value.length === 0 && !loading.value
+)
+
+function onSearchInput() {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    loadBoard()
+  }, 350)
+}
+
+function onSearchClear() {
+  keyword.value = ''
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  loadBoard()
+}
+
+function clearSearch() {
+  keyword.value = ''
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  loadBoard()
+}
+
+function onProjectChange() {
+  // 切换项目时清除搜索关键词，防止搜索状态泄漏到其他项目
+  keyword.value = ''
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  loadBoard()
+}
 const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const issues = ref<IssueVO[]>([])
@@ -553,6 +607,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
 })
 </script>
 
@@ -583,6 +638,31 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-active-badge {
+  font-size: 11px;
+  color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.1);
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .page-title {
