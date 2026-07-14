@@ -240,15 +240,14 @@ public class ProjectService {
 
             // 记录角色自动升级的活动日志
             SysRole adminRole = roleMapper.selectById(PROJECT_ADMIN_ROLE_ID);
-            String roleDetail = String.format(
-                    "{\"old_role_id\":%d,\"old_role_name\":\"%s\",\"new_role_id\":%d,\"new_role_name\":\"%s\",\"reason\":\"lead_promotion\"}",
-                    oldRoleId,
-                    oldRole != null ? oldRole.getName() : "",
-                    PROJECT_ADMIN_ROLE_ID,
-                    adminRole != null ? adminRole.getName() : "项目管理员"
-            );
+            Map<String, Object> roleDetailMap = new java.util.LinkedHashMap<>();
+            roleDetailMap.put("old_role_id", oldRoleId);
+            roleDetailMap.put("old_role_name", oldRole != null ? oldRole.getName() : "");
+            roleDetailMap.put("new_role_id", PROJECT_ADMIN_ROLE_ID);
+            roleDetailMap.put("new_role_name", adminRole != null ? adminRole.getName() : "项目管理员");
+            roleDetailMap.put("reason", "lead_promotion");
             Long currentUserId = SecurityUtils.getCurrentUserId();
-            projectActivityService.log(projectId, currentUserId, "change_role", newLeadId, roleDetail);
+            projectActivityService.log(projectId, currentUserId, "change_role", newLeadId, roleDetailMap);
         }
 
         // 4. 更新负责人字段
@@ -264,14 +263,12 @@ public class ProjectService {
             }
         }
         String newLeadName = newLead.getDisplayName() != null ? newLead.getDisplayName() : newLead.getUsername();
-        String detail = String.format(
-                "{\"old_lead_id\":%s,\"old_lead_name\":\"%s\",\"new_lead_id\":%d,\"new_lead_name\":\"%s\"}",
-                oldLeadId != null ? oldLeadId.toString() : "null",
-                oldLeadName,
-                newLeadId,
-                newLeadName
-        );
-        projectActivityService.log(projectId, currentUserId, "change_lead", newLeadId, detail);
+        Map<String, Object> leadDetailMap = new java.util.LinkedHashMap<>();
+        leadDetailMap.put("old_lead_id", oldLeadId);
+        leadDetailMap.put("old_lead_name", oldLeadName);
+        leadDetailMap.put("new_lead_id", newLeadId);
+        leadDetailMap.put("new_lead_name", newLeadName);
+        projectActivityService.log(projectId, currentUserId, "change_lead", newLeadId, leadDetailMap);
 
         // 6. 通知新负责人
         notificationService.notify(

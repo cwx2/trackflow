@@ -25,17 +25,27 @@ public class ProjectActivityService {
 
     private final ProjectActivityMapper activityMapper;
     private final SysUserMapper userMapper;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
      * 记录项目活动
+     *
+     * @param detailMap 扩展信息 Map，内部序列化为 JSON（避免手动拼接 JSON 字符串）
      */
-    public void log(Long projectId, Long userId, String action, Long targetUserId, String detail) {
+    public void log(Long projectId, Long userId, String action, Long targetUserId, Map<String, Object> detailMap) {
         ProjectActivity activity = new ProjectActivity();
         activity.setProjectId(projectId);
         activity.setUserId(userId);
         activity.setAction(action);
         activity.setTargetUserId(targetUserId);
-        activity.setDetail(detail);
+        if (detailMap != null && !detailMap.isEmpty()) {
+            try {
+                activity.setDetail(objectMapper.writeValueAsString(detailMap));
+            } catch (Exception e) {
+                // fallback: 不影响主流程
+                activity.setDetail(null);
+            }
+        }
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
     }
