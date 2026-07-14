@@ -12,7 +12,10 @@ import com.trackflow.issue.vo.IssueTagVO;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.*;
 import com.trackflow.project.entity.Project;
+import com.trackflow.project.entity.ProjectActivity;
+import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.project.vo.ProjectActivityVO;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectVO;
@@ -22,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/projects")
@@ -32,6 +36,7 @@ public class ProjectController {
     private final ProjectConverter projectConverter;
     private final IssueTagService tagService;
     private final IssueConverter issueConverter;
+    private final ProjectActivityService projectActivityService;
 
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('project:create')")
@@ -104,9 +109,31 @@ public class ProjectController {
 
     @DeleteMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.check(#id, 'project:manage_members')")
-    public R<Void> removeMember(@PathVariable Long id, @PathVariable Long userId) {
-        projectService.removeMember(id, userId);
-        return R.ok();
+    public R<Map<String, Object>> removeMember(@PathVariable Long id, @PathVariable Long userId) {
+        int affectedCount = projectService.removeMember(id, userId);
+        return R.ok(Map.of("affectedIssueCount", affectedCount));
+    }
+
+    @GetMapping("/{id}/members/{userId}/assigned-issue-count")
+    @PreAuthorize("@perm.check(#id, 'project:manage_members')")
+    public R<Map<String, Object>> getAssignedIssueCount(@PathVariable Long id, @PathVariable Long userId) {
+        int count = projectService.countAssignedIssues(id, userId);
+        return R.ok(Map.of("count", count));
+    }
+
+    // ========== 项目活动日志 ==========
+
+    @GetMapping("/{id}/activities")
+    @PreAuthorize("@perm.check(#id, 'project:view')")
+    public R<PageResult<ProjectActivityVO>> listActivities(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
+        Page<ProjectActivity> pageObj = new Page<>(page, pageSize);
+        Page<ProjectActivityVO> result = projectActivityService.listByProject(id, pageObj);
+        PageResult<ProjectActivityVO> pageResult = new PageResult<>(
+                result.getRecords(), result.getTotal(), (int) result.getCurrent(), (int) result.getSize());
+        return R.ok(pageResult);
     }
 
     // ========== 标签 ==========

@@ -162,11 +162,12 @@
       v-model:visible="showEditDialog"
       title="编辑项目"
       :width="480"
-      ok-text="保存"
+      ok-text="保存修改"
       cancel-text="取消"
       :ok-loading="editSaving"
       :ok-button-props="{ disabled: !editForm.name }"
       @ok="submitEdit"
+      @close="editMembers = []"
     >
       <a-form :model="editForm" layout="vertical">
         <a-form-item label="项目名称" required>
@@ -175,6 +176,25 @@
         <a-form-item label="描述">
           <a-textarea v-model="editForm.description" :auto-size="{ minRows: 2, maxRows: 5 }" />
         </a-form-item>
+        <a-form-item label="项目负责人">
+          <a-select
+            v-model="editForm.leadId"
+            placeholder="选择项目负责人..."
+            allow-search
+            :loading="editMembersLoading"
+            @focus="loadEditMembers"
+          >
+            <a-option v-for="m in editMembers" :key="m.userId" :value="m.userId">
+              {{ m.displayName || m.username }}
+              <span v-if="m.email" style="color: var(--tf-text-tertiary); margin-left: 4px; font-size: 11px">{{ m.email }}</span>
+            </a-option>
+          </a-select>
+          <template #extra>
+            <span style="font-size: 11px; color: var(--tf-text-tertiary)">
+              只能选择当前项目成员。变更后新负责人将自动升级为项目管理员。
+            </span>
+          </template>
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -182,70 +202,101 @@
     <a-modal
       v-model:visible="showMembersDialog"
       :title="'成员管理 — ' + (currentProject?.name || '')"
-      :width="640"
+      :width="700"
       :footer="false"
     >
-      <!-- 添加成员 -->
-      <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center">
-        <a-select
-          v-model="addMemberForm.userId"
-          placeholder="选择用户..."
-          allow-search
-          style="flex: 1"
-          @focus="loadAllUsers"
-        >
-          <a-option v-for="u in allUsers" :key="u.id" :value="u.id">
-            {{ u.displayName || u.username }} ({{ u.email || '' }})
-          </a-option>
-        </a-select>
-        <a-select v-model="addMemberForm.roleId" style="width: 130px" @focus="loadProjectRoles">
-          <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
-            {{ r.name }}
-          </a-option>
-        </a-select>
-        <a-button type="primary" size="small" @click="addMember" :disabled="!addMemberForm.userId">
-          添加
-        </a-button>
-      </div>
+      <a-tabs default-active-key="members" @change="onMemberTabChange">
+        <a-tab-pane key="members" title="成员列表">
+          <!-- 添加成员 -->
+          <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center">
+            <a-select
+              v-model="addMemberForm.userId"
+              placeholder="选择用户..."
+              allow-search
+              style="flex: 1"
+              @focus="loadAllUsers"
+            >
+              <a-option v-for="u in allUsers" :key="u.id" :value="u.id">
+                {{ u.displayName || u.username }} ({{ u.email || '' }})
+              </a-option>
+            </a-select>
+            <a-select v-model="addMemberForm.roleId" style="width: 130px" @focus="loadProjectRoles">
+              <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
+                {{ r.name }}
+              </a-option>
+            </a-select>
+            <a-button type="primary" size="small" @click="addMember" :disabled="!addMemberForm.userId">
+              添加
+            </a-button>
+          </div>
 
-      <!-- 成员列表 -->
-      <a-table :data="projectMembers" :pagination="false" size="small">
-        <template #columns>
-          <a-table-column title="用户" data-index="displayName">
-            <template #cell="{ record }">
-              {{ record.displayName || record.username }}
-              <span style="color: var(--tf-text-tertiary); margin-left: 4px">{{ record.email }}</span>
+          <!-- 成员列表 -->
+          <a-table :data="projectMembers" :pagination="false" size="small">
+            <template #columns>
+              <a-table-column title="用户" data-index="displayName">
+                <template #cell="{ record }">
+                  {{ record.displayName || record.username }}
+                  <span style="color: var(--tf-text-tertiary); margin-left: 4px">{{ record.email }}</span>
+                </template>
+              </a-table-column>
+              <a-table-column title="角色" :width="140">
+                <template #cell="{ record }">
+                  <a-select
+                    :model-value="record.roleId"
+                    size="mini"
+                    @change="(val: any) => changeMemberRole(record.userId, val)"
+                    @focus="loadProjectRoles"
+                  >
+                    <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
+                      {{ r.name }}
+                    </a-option>
+                  </a-select>
+                </template>
+              </a-table-column>
+              <a-table-column title="操作" :width="80">
+                <template #cell="{ record }">
+                  <a-button type="text" size="mini" status="danger" @click="confirmRemoveMember(record)">移除</a-button>
+                </template>
+              </a-table-column>
             </template>
-          </a-table-column>
-          <a-table-column title="角色" :width="140">
-            <template #cell="{ record }">
-              <a-select
-                :model-value="record.roleId"
-                size="mini"
-                @change="(val: any) => changeMemberRole(record.userId, val)"
-                @focus="loadProjectRoles"
-              >
-                <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
-                  {{ r.name }}
-                </a-option>
-              </a-select>
-            </template>
-          </a-table-column>
-          <a-table-column title="操作" :width="80">
-            <template #cell="{ record }">
-              <a-popconfirm content="确定移除该成员？" @ok="removeMember(record.userId)">
-                <a-button type="text" size="mini" status="danger">移除</a-button>
-              </a-popconfirm>
-            </template>
-          </a-table-column>
-        </template>
-      </a-table>
+          </a-table>
+        </a-tab-pane>
+
+        <a-tab-pane key="activity" title="活动日志">
+          <div v-if="activityLoading" style="text-align: center; padding: 32px">
+            <a-spin />
+          </div>
+          <div v-else-if="activities.length === 0" class="activity-empty">
+            <span style="font-size: 32px">📋</span>
+            <p style="color: var(--tf-text-tertiary); margin-top: 8px">暂无活动记录</p>
+            <p style="color: var(--tf-text-tertiary); font-size: 12px">成员变动操作将记录在此处</p>
+          </div>
+          <div v-else class="activity-list">
+            <div v-for="act in activities" :key="act.id" class="activity-item">
+              <div class="activity-icon">
+                <span v-if="act.action === 'add_member'">➕</span>
+                <span v-else-if="act.action === 'remove_member'">➖</span>
+                <span v-else-if="act.action === 'change_role'">🔄</span>
+                <span v-else-if="act.action === 'change_lead'">⭐</span>
+                <span v-else>📝</span>
+              </div>
+              <div class="activity-content">
+                <span class="activity-text">{{ formatActivityText(act) }}</span>
+                <span class="activity-time">{{ formatRelativeTime(act.createdAt) }}</span>
+              </div>
+            </div>
+            <div v-if="activityHasMore" style="text-align: center; margin-top: 12px">
+              <a-button type="text" size="small" @click="loadMoreActivities">加载更多</a-button>
+            </div>
+          </div>
+        </a-tab-pane>
+      </a-tabs>
     </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import {
@@ -254,6 +305,7 @@ import {
   IconFolder
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi, workflowApi } from '@/api'
+import type { ProjectActivityVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 
@@ -317,8 +369,10 @@ const editForm = reactive({
   id: '',
   name: '',
   description: '',
-  leadId: ''
+  leadId: '' as string | undefined
 })
+const editMembers = ref<any[]>([])
+const editMembersLoading = ref(false)
 
 // 成员管理
 const showMembersDialog = ref(false)
@@ -328,6 +382,12 @@ const allUsers = ref<any[]>([])
 const projectRoles = ref<{ id: string; name: string }[]>([])
 const addMemberForm = reactive({ userId: undefined as string | undefined, roleId: '3' })
 const showAddMember = ref(false)
+
+// 活动日志
+const activities = ref<ProjectActivityVO[]>([])
+const activityLoading = ref(false)
+const activityPage = ref(1)
+const activityHasMore = ref(false)
 
 // 项目颜色池
 const colorPool = [
@@ -399,12 +459,31 @@ function editProject(project: any) {
   editForm.id = project.id
   editForm.name = project.name
   editForm.description = project.description || ''
-  editForm.leadId = project.leadId
+  editForm.leadId = project.leadId || undefined
+  editMembers.value = []
   showEditDialog.value = true
+  // 自动加载成员列表
+  loadEditMembers()
+}
+
+async function loadEditMembers() {
+  if (editMembers.value.length > 0 || !editForm.id) return
+  editMembersLoading.value = true
+  try {
+    const res = await projectApi.listMembers(editForm.id)
+    editMembers.value = res.data || []
+  } catch {
+    editMembers.value = []
+  } finally {
+    editMembersLoading.value = false
+  }
 }
 
 function manageMembers(project: any) {
   currentProject.value = project
+  activities.value = []
+  activityPage.value = 1
+  activityHasMore.value = false
   loadProjectMembers(project.id)
   loadProjectRoles()
   showMembersDialog.value = true
@@ -436,7 +515,8 @@ async function submitCreate() {
     await projectApi.create({
       name: createForm.name,
       key: createForm.key,
-      description: createForm.description || undefined
+      description: createForm.description || undefined,
+      template: createForm.template || 'default'
     })
     showCreateDialog.value = false
     createForm.name = ''
@@ -460,7 +540,8 @@ async function submitEdit() {
   try {
     await projectApi.update(editForm.id, {
       name: editForm.name,
-      description: editForm.description || undefined
+      description: editForm.description || undefined,
+      leadId: editForm.leadId || undefined
     })
     showEditDialog.value = false
     Message.success('项目更新成功')
@@ -519,11 +600,52 @@ async function addMember() {
   }
 }
 
+async function confirmRemoveMember(record: any) {
+  if (!currentProject.value) return
+  try {
+    // 预检：查询该成员被分配的工单数量
+    const res = await projectApi.getAssignedIssueCount(currentProject.value.id, record.userId)
+    const count = res.data?.count || 0
+    const memberName = record.displayName || record.username
+
+    const content = count > 0
+      ? () => h('div', [
+          h('p', { style: 'margin: 0 0 12px 0' }, `该成员当前负责 ${count} 个工单，移除后将自动取消这些工单的负责人分配。`),
+          h('p', { style: 'margin: 0' }, `确定移除成员「${memberName}」？`)
+        ])
+      : `确定移除成员「${memberName}」？`
+
+    Modal.warning({
+      title: '移除项目成员',
+      content,
+      okText: '确定移除',
+      cancelText: '取消',
+      hideCancel: false,
+      onOk: () => removeMember(record.userId)
+    })
+  } catch (e: any) {
+    // 预检失败时退回简单确认
+    Modal.warning({
+      title: '移除项目成员',
+      content: `确定移除成员「${record.displayName || record.username}」？`,
+      okText: '确定移除',
+      cancelText: '取消',
+      hideCancel: false,
+      onOk: () => removeMember(record.userId)
+    })
+  }
+}
+
 async function removeMember(userId: string) {
   if (!currentProject.value) return
   try {
-    await projectApi.removeMember(currentProject.value.id, userId)
-    Message.success('成员已移除')
+    const res = await projectApi.removeMember(currentProject.value.id, userId)
+    const affectedCount = res.data?.affectedIssueCount || 0
+    if (affectedCount > 0) {
+      Message.success(`成员已移除，${affectedCount} 个工单的负责人已自动取消分配`)
+    } else {
+      Message.success('成员已移除')
+    }
     loadProjectMembers(currentProject.value.id)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '移除失败')
@@ -538,6 +660,80 @@ async function changeMemberRole(userId: string, roleId: string) {
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新失败')
   }
+}
+
+// ========== 活动日志 ==========
+
+function onMemberTabChange(key: string | number) {
+  if (key === 'activity' && activities.value.length === 0) {
+    loadActivities()
+  }
+}
+
+async function loadActivities() {
+  if (!currentProject.value) return
+  activityLoading.value = true
+  activityPage.value = 1
+  try {
+    const res = await projectApi.listActivities(currentProject.value.id, { page: 1, pageSize: 20 })
+    if (res.code === 0 && res.data) {
+      activities.value = res.data.list || []
+      activityHasMore.value = (res.data.pagination?.page ?? 1) < (res.data.pagination?.totalPages ?? 1)
+    }
+  } catch {
+    activities.value = []
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+async function loadMoreActivities() {
+  if (!currentProject.value) return
+  activityPage.value++
+  try {
+    const res = await projectApi.listActivities(currentProject.value.id, { page: activityPage.value, pageSize: 20 })
+    if (res.code === 0 && res.data) {
+      activities.value.push(...(res.data.list || []))
+      activityHasMore.value = (res.data.pagination?.page ?? 1) < (res.data.pagination?.totalPages ?? 1)
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
+function formatActivityText(act: ProjectActivityVO): string {
+  const operator = act.userName || '未知用户'
+  const target = act.targetUserName || '未知用户'
+  let detail: any = {}
+  try { detail = act.detail ? JSON.parse(act.detail) : {} } catch { /* ignore */ }
+
+  switch (act.action) {
+    case 'add_member':
+      return `${operator} 添加了成员 ${target}（角色：${detail.role_name || ''}）`
+    case 'remove_member':
+      return `${operator} 移除了成员 ${target}`
+    case 'change_role':
+      return `${operator} 将 ${target} 的角色从「${detail.old_role_name || ''}」变更为「${detail.new_role_name || ''}」`
+    case 'change_lead':
+      return `${operator} 将项目负责人从「${detail.old_lead_name || '未设置'}」变更为「${detail.new_lead_name || ''}」`
+    default:
+      return `${operator} 执行了操作 ${act.action}`
+  }
+}
+
+function formatRelativeTime(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes} 分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} 小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} 天前`
+  return date.toLocaleDateString('zh-CN')
 }
 
 onMounted(() => {
@@ -730,5 +926,53 @@ watch(projects, () => {
   margin: 0 0 24px;
   max-width: 360px;
   line-height: 1.5;
+}
+
+/* ===== 活动日志 ===== */
+.activity-empty {
+  text-align: center;
+  padding: 48px 16px;
+}
+
+.activity-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-1);
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.activity-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-text {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  line-height: 1.5;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
 }
 </style>

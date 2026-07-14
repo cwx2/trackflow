@@ -1,11 +1,16 @@
 package com.trackflow.project.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.integration.service.NotificationService;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.AddMemberDTO;
 import com.trackflow.project.dto.CreateProjectDTO;
@@ -47,6 +52,10 @@ public class ProjectService {
     private final ProjectConverter projectConverter;
     private final PermissionService permissionService;
     private final StringRedisTemplate redisTemplate;
+    private final IssueMapper issueMapper;
+    private final ProjectActivityService projectActivityService;
+    private final NotificationService notificationService;
+    private final ProjectInitializationService projectInitializationService;
 
     /**
      * 创建项目
@@ -80,6 +89,9 @@ public class ProjectService {
             member.setJoinedAt(LocalDateTime.now());
             memberMapper.insert(member);
         }
+
+        // 根据模板类型初始化项目（工作流、看板列配置等）
+        projectInitializationService.initialize(project.getId(), dto.getTemplate());
 
         return project;
     }
@@ -176,9 +188,112 @@ public class ProjectService {
         Project project = getById(id);
         if (dto.getName() != null) project.setName(dto.getName());
         if (dto.getDescription() != null) project.setDescription(dto.getDescription());
-        if (dto.getLeadId() != null) project.setLeadId(dto.getLeadId());
+
+        // 负责人变更：需要完整的业务校验和权限联动
+        if (dto.getLeadId() != null && !dto.getLeadId().equals(project.getLeadId())) {
+            changeLead(project, dto.getLeadId());
+        }
+
         projectMapper.updateById(project);
         return project;
+    }
+
+    /**
+     * 变更项目负责人
+     * 1. 校验新负责人是项目成员
+     * 2. 校验新负责人用户状态为 active
+     * 3. 如果新负责人当前角色不是 project_admin，自动升级
+     * 4. 记录活动日志
+     */
+    private void changeLead(Project project, Long newLeadId) {
+        Long projectId = project.getId();
+        Long oldLeadId = project.getLeadId();
+
+        // 1. 校验新负责人用户存在且状态为 active
+        SysUser newLead = userMapper.selectById(newLeadId);
+        if (newLead == null || !"active".equals(newLead.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "新负责人用户不存在或已禁用");
+        }
+
+        // 2. 校验新负责人必须是项目成员
+        Long memberCount = memberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .eq(ProjectMember::getUserId, newLeadId)
+        );
+        if (memberCount == 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "新负责人必须是该项目的成员");
+        }
+
+        // 3. 如果新负责人当前角色不是 project_admin，自动升级
+        ProjectMember newLeadMember = memberMapper.selectOne(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .eq(ProjectMember::getUserId, newLeadId)
+        );
+        if (newLeadMember != null && !PROJECT_ADMIN_ROLE_ID.equals(newLeadMember.getRoleId())) {
+            Long oldRoleId = newLeadMember.getRoleId();
+            SysRole oldRole = roleMapper.selectById(oldRoleId);
+            newLeadMember.setRoleId(PROJECT_ADMIN_ROLE_ID);
+            memberMapper.updateById(newLeadMember);
+            permissionService.invalidateCache(newLeadId);
+
+            // 记录角色自动升级的活动日志
+            SysRole adminRole = roleMapper.selectById(PROJECT_ADMIN_ROLE_ID);
+            String roleDetail = String.format(
+                    "{\"old_role_id\":%d,\"old_role_name\":\"%s\",\"new_role_id\":%d,\"new_role_name\":\"%s\",\"reason\":\"lead_promotion\"}",
+                    oldRoleId,
+                    oldRole != null ? oldRole.getName() : "",
+                    PROJECT_ADMIN_ROLE_ID,
+                    adminRole != null ? adminRole.getName() : "项目管理员"
+            );
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            projectActivityService.log(projectId, currentUserId, "change_role", newLeadId, roleDetail);
+        }
+
+        // 4. 更新负责人字段
+        project.setLeadId(newLeadId);
+
+        // 5. 记录负责人变更活动日志
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        String oldLeadName = "";
+        if (oldLeadId != null) {
+            SysUser oldLead = userMapper.selectById(oldLeadId);
+            if (oldLead != null) {
+                oldLeadName = oldLead.getDisplayName() != null ? oldLead.getDisplayName() : oldLead.getUsername();
+            }
+        }
+        String newLeadName = newLead.getDisplayName() != null ? newLead.getDisplayName() : newLead.getUsername();
+        String detail = String.format(
+                "{\"old_lead_id\":%s,\"old_lead_name\":\"%s\",\"new_lead_id\":%d,\"new_lead_name\":\"%s\"}",
+                oldLeadId != null ? oldLeadId.toString() : "null",
+                oldLeadName,
+                newLeadId,
+                newLeadName
+        );
+        projectActivityService.log(projectId, currentUserId, "change_lead", newLeadId, detail);
+
+        // 6. 通知新负责人
+        notificationService.notify(
+                newLeadId,
+                "你已成为项目负责人",
+                String.format("你已成为项目「%s」的负责人", project.getName()),
+                "lead_changed",
+                "project",
+                projectId
+        );
+
+        // 7. 通知旧负责人（如果存在且不同）
+        if (oldLeadId != null && !oldLeadId.equals(currentUserId)) {
+            notificationService.notify(
+                    oldLeadId,
+                    "项目负责人已变更",
+                    String.format("项目「%s」的负责人已变更为「%s」", project.getName(), newLeadName),
+                    "lead_changed",
+                    "project",
+                    projectId
+            );
+        }
     }
 
     /**
@@ -278,6 +393,22 @@ public class ProjectService {
         permissionService.invalidateCache(dto.getUserId());
         // 失效项目列表缓存
         redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + dto.getUserId());
+
+        // 审计日志
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        projectActivityService.log(projectId, currentUserId, "add_member", dto.getUserId(),
+                Map.of("role_id", role.getId(), "role_name", role.getName()));
+
+        // 通知被添加的用户
+        String targetName = user.getDisplayName() != null ? user.getDisplayName() : user.getUsername();
+        notificationService.notify(
+                dto.getUserId(),
+                "你已被添加到项目",
+                String.format("你已被添加到项目「%s」，角色为「%s」", project.getName(), role.getName()),
+                "member_added",
+                "project",
+                projectId
+        );
     }
 
     /**
@@ -292,8 +423,8 @@ public class ProjectService {
         }
 
         // 校验角色类型必须为 project
-        SysRole role = roleMapper.selectById(roleId);
-        if (role == null || !"project".equals(role.getRoleType())) {
+        SysRole newRole = roleMapper.selectById(roleId);
+        if (newRole == null || !"project".equals(newRole.getRoleType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
         }
 
@@ -305,16 +436,53 @@ public class ProjectService {
         if (member == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Member not found");
         }
+
+        Long oldRoleId = member.getRoleId();
+        SysRole oldRole = roleMapper.selectById(oldRoleId);
+
         member.setRoleId(roleId);
         memberMapper.updateById(member);
         permissionService.invalidateCache(userId);
+
+        // 审计日志
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        String oldRoleName = oldRole != null ? oldRole.getName() : "";
+        String newRoleName = newRole.getName();
+        projectActivityService.log(projectId, currentUserId, "change_role", userId,
+                Map.of("old_role_id", oldRoleId, "old_role_name", oldRoleName,
+                       "new_role_id", roleId, "new_role_name", newRoleName));
+
+        // 通知角色变更的用户
+        notificationService.notify(
+                userId,
+                "你的项目角色已变更",
+                String.format("你在项目「%s」中的角色已从「%s」变更为「%s」", project.getName(), oldRoleName, newRoleName),
+                "role_changed",
+                "project",
+                projectId
+        );
     }
 
     /**
-     * 移除项目成员
+     * 查询指定用户在项目中被分配的工单数量（用于移除前确认提示）
+     */
+    public int countAssignedIssues(Long projectId, Long userId) {
+        Long count = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .eq(Issue::getAssigneeId, userId)
+                        .isNull(Issue::getDeletedAt)
+        );
+        return count.intValue();
+    }
+
+    /**
+     * 移除项目成员（含级联清理：清空该成员被分配的工单负责人）
+     *
+     * @return 受影响的工单数量
      */
     @Transactional
-    public void removeMember(Long projectId, Long userId) {
+    public int removeMember(Long projectId, Long userId) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
         if (!"active".equals(project.getStatus())) {
@@ -331,6 +499,48 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移除项目中最后一个管理员");
         }
 
+        // === 级联处理：清空该用户在此项目中所有工单的 assignee_id ===
+        List<Issue> assignedIssues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getId)
+                        .eq(Issue::getProjectId, projectId)
+                        .eq(Issue::getAssigneeId, userId)
+                        .isNull(Issue::getDeletedAt)
+        );
+
+        int affectedCount = assignedIssues.size();
+        if (affectedCount > 0) {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            LocalDateTime now = LocalDateTime.now();
+
+            // 批量更新 assignee_id 为 null
+            issueMapper.update(null,
+                    new LambdaUpdateWrapper<Issue>()
+                            .eq(Issue::getProjectId, projectId)
+                            .eq(Issue::getAssigneeId, userId)
+                            .isNull(Issue::getDeletedAt)
+                            .set(Issue::getAssigneeId, null)
+                            .set(Issue::getUpdatedAt, now)
+                            .set(Issue::getUpdatedBy, currentUserId)
+            );
+
+            // 批量插入活动日志
+            List<IssueActivity> activities = assignedIssues.stream().map(issue -> {
+                IssueActivity activity = new IssueActivity();
+                activity.setIssueId(issue.getId());
+                activity.setUserId(currentUserId);
+                activity.setAction("field_change");
+                activity.setFieldName("assignee_id");
+                activity.setOldValue(userId.toString());
+                activity.setNewValue(null);
+                activity.setDetail("{\"reason\":\"member_removed\"}");
+                activity.setCreatedAt(now);
+                return activity;
+            }).toList();
+            com.baomidou.mybatisplus.extension.toolkit.Db.saveBatch(activities);
+        }
+
+        // 删除成员记录
         memberMapper.delete(
                 new LambdaQueryWrapper<ProjectMember>()
                         .eq(ProjectMember::getProjectId, projectId)
@@ -339,6 +549,25 @@ public class ProjectService {
         permissionService.invalidateCache(userId);
         // 失效项目列表缓存
         redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + userId);
+
+        // 审计日志
+        Long operatorId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> detailMap = affectedCount > 0
+                ? Map.of("affected_issue_count", affectedCount)
+                : null;
+        projectActivityService.log(projectId, operatorId, "remove_member", userId, detailMap);
+
+        // 通知被移除的用户
+        notificationService.notify(
+                userId,
+                "你已被移出项目",
+                String.format("你已被移出项目「%s」", project.getName()),
+                "member_removed",
+                "project",
+                projectId
+        );
+
+        return affectedCount;
     }
 
     // ========== 项目成员校验（数据隔离核心方法） ==========
@@ -366,6 +595,20 @@ public class ProjectService {
         );
         if (count == 0) {
             throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
+        }
+    }
+
+    /**
+     * 校验项目是否处于 active 状态。归档项目不允许写操作。
+     *
+     * @param projectId 目标项目 ID
+     * @throws BusinessException 如果项目已归档
+     */
+    public void assertProjectActive(Long projectId) {
+        if (projectId == null) return;
+        Project project = getById(projectId);
+        if (!"active".equals(project.getStatus())) {
+            throw new BusinessException(ErrorCode.PROJECT_ARCHIVED, "归档项目不允许此操作");
         }
     }
 

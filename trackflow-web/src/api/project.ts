@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO } from './types'
+import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -25,7 +25,7 @@ export const projectApi = {
   },
 
   /** 创建项目 */
-  create(data: { name: string; key: string; description?: string }) {
+  create(data: { name: string; key: string; description?: string; template?: string }) {
     return request.post<any, R<ProjectVO>>('/projects', data)
   },
 
@@ -59,8 +59,18 @@ export const projectApi = {
     return request.put<any, R<void>>(`/projects/${projectId}/members/${userId}`, { roleId })
   },
 
-  /** 移除成员 */
+  /** 查询成员被分配的工单数量（移除前预检） */
+  getAssignedIssueCount(projectId: string, userId: string) {
+    return request.get<any, R<{ count: number }>>(`/projects/${projectId}/members/${userId}/assigned-issue-count`)
+  },
+
+  /** 移除成员（级联清空该成员被分配的工单负责人） */
   removeMember(projectId: string, userId: string) {
-    return request.delete<any, R<void>>(`/projects/${projectId}/members/${userId}`)
+    return request.delete<any, R<{ affectedIssueCount: number }>>(`/projects/${projectId}/members/${userId}`)
+  },
+
+  /** 获取项目活动日志 */
+  listActivities(projectId: string, params?: { page?: number; pageSize?: number }) {
+    return request.get<any, R<PageResult<ProjectActivityVO>>>(`/projects/${projectId}/activities`, { params })
   }
 }

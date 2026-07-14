@@ -99,6 +99,19 @@ export interface ProjectMemberVO {
   joinedAt: string
 }
 
+// ========== 项目活动日志 ==========
+export interface ProjectActivityVO {
+  id: string
+  projectId: string
+  userId: string
+  action: string
+  targetUserId?: string
+  detail?: string
+  createdAt: string
+  userName: string
+  targetUserName?: string
+}
+
 // ========== Issue ==========
 export interface IssueVO {
   id: string
