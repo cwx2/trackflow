@@ -65,9 +65,9 @@ public class DashboardService {
         Set<Long> doneStatusIds = statuses.stream()
                 .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
-        // Testing 状态 ID
+        // Testing 状态 ID（使用 code 字段匹配，比 name 更稳定，不受国际化影响）
         Set<Long> testingStatusIds = statuses.stream()
-                .filter(s -> "Testing".equalsIgnoreCase(s.getName()))
+                .filter(s -> "testing".equals(s.getCode()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
 
         // 分配给我的待处理
@@ -208,36 +208,33 @@ public class DashboardService {
     }
 
     /**
-     * 最近活动流（用户相关工单的变更记录）
-     * 扩展范围：分配给我的 + 我报告的 + 我所在项目的
+     * 最近活动流（用户所在项目的变更记录）
+     * 使用 JOIN 方式基于 project_id 过滤，避免将大量 issue ID 加载到内存再传入 IN 子句。
      */
     public List<DashboardActivityVO> getRecentActivity(Long userId, int limit) {
-        // 查询用户所在项目的 issue IDs
         List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
 
-        List<Long> relatedIssueIds;
+        List<Map<String, Object>> rows;
         if (!userProjectIds.isEmpty()) {
-            // 用户所在项目中与其相关的工单（assignee/reporter + 同项目范围）
-            relatedIssueIds = issueMapper.selectList(new QueryWrapper<Issue>()
-                    .isNull("deleted_at")
-                    .in("project_id", userProjectIds)
-                    .select("id"))
-                    .stream().map(Issue::getId).toList();
+            // 基于项目范围的活动查询（通过 SQL JOIN 过滤，无需先加载 issue ID 列表）
+            rows = issueMapper.selectDashboardActivitiesByProjects(userProjectIds, limit);
         } else {
-            // 退化为仅查分配给我或我创建的
-            relatedIssueIds = issueMapper.selectList(new QueryWrapper<Issue>()
+            // 退化为仅查分配给我或我创建的工单活动
+            List<Long> relatedIssueIds = issueMapper.selectList(new QueryWrapper<Issue>()
                     .isNull("deleted_at")
                     .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
                     .select("id"))
                     .stream().map(Issue::getId).toList();
+
+            if (relatedIssueIds.isEmpty()) {
+                return List.of();
+            }
+            rows = issueMapper.selectDashboardActivities(relatedIssueIds, limit);
         }
 
-        if (relatedIssueIds.isEmpty()) {
+        if (rows == null || rows.isEmpty()) {
             return List.of();
         }
-
-        // 查询这些 issue 的活动记录（SQL 层已自动解析 assignee 字段为用户名）
-        List<Map<String, Object>> rows = issueMapper.selectDashboardActivities(relatedIssueIds, limit);
 
         return rows.stream().map(row -> {
             DashboardActivityVO vo = new DashboardActivityVO();

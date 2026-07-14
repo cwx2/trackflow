@@ -302,6 +302,7 @@ const filteredValueOptions = computed(() => {
 
 watch(mode, (newMode) => {
   emit('mode-change', newMode)
+  if (suppressEmit) return
   if (newMode === 'search') {
     // Clear filters, apply search
     emitSearch()
@@ -641,6 +642,9 @@ function emitFilters() {
         if (!isNegative) filters.sprintId = chip.values.join(',')
         else filters.sprintIdNot = chip.values.join(',')
         break
+      case 'reporter':
+        if (chip.values.includes('me')) filters.reportedByMe = 'true'
+        break
     }
   }
 
@@ -689,7 +693,11 @@ watch(() => props.initialFilters, (filters) => {
   }
 }, { immediate: true })
 
+/** 标记：正在应用外部过滤条件，阻止 mode watch 触发 emitFilters（避免冗余请求） */
+let suppressEmit = false
+
 function applyInitialFilters(filters: InitialFilter[]) {
+  suppressEmit = true
   mode.value = 'filter'
   activeFilters.value = filters.map(f => {
     const field = FILTER_FIELDS.find(ff => ff.key === f.fieldKey)
@@ -703,6 +711,8 @@ function applyInitialFilters(filters: InitialFilter[]) {
       valueLabel: f.valueLabels?.join(', ') || f.values.join(', ')
     }
   })
+  // nextTick 后恢复 emit 能力，确保 mode watch 已执行完毕
+  nextTick(() => { suppressEmit = false })
 }
 
 /**

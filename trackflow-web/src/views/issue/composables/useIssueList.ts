@@ -27,6 +27,7 @@ export interface IssueListFilters {
   // Special filters
   overdue?: string
   dueSoon?: string
+  reportedByMe?: string
 }
 
 export function useIssueList() {
@@ -94,6 +95,7 @@ export function useIssueList() {
       // Special filters
       if (filters.overdue) params.overdue = filters.overdue
       if (filters.dueSoon) params.dueSoon = filters.dueSoon
+      if (filters.reportedByMe) params.reportedByMe = filters.reportedByMe
 
       let res
       if (filters.queryId) {

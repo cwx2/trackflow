@@ -18,6 +18,7 @@ import com.trackflow.issue.mapper.*;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.vo.*;
+import com.trackflow.workflow.service.TransitionActionEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class IssueService {
     private final IssueConverter issueConverter;
     private final IssueTagService tagService;
     private final PermissionService permissionService;
+    private final TransitionActionEngine transitionActionEngine;
 
     /**
      * 创建 Issue
@@ -152,9 +154,12 @@ public class IssueService {
         applyNegativeFilter(wrapper, "sprint_id", query.getSprintIdNot(), true);
         applyNegativeFilter(wrapper, "issue_type", query.getIssueTypeNot(), false);
 
-        // Special filters: overdue and dueSoon (auto-exclude done/cancelled statuses)
-        if ("true".equals(query.getOverdue()) || "true".equals(query.getDueSoon())) {
-            // Get done/cancelled status IDs to exclude
+        // Special filters: overdue, dueSoon, reportedByMe (all exclude done/cancelled statuses)
+        boolean needClosedExclusion = "true".equals(query.getOverdue())
+                || "true".equals(query.getDueSoon())
+                || "true".equals(query.getReportedByMe());
+
+        if (needClosedExclusion) {
             List<IssueStatus> allStatuses = statusMapper.selectList(null);
             List<Long> closedIds = allStatuses.stream()
                     .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
@@ -162,6 +167,9 @@ public class IssueService {
             if (!closedIds.isEmpty()) {
                 wrapper.notIn("status_id", closedIds);
             }
+        }
+
+        if ("true".equals(query.getOverdue()) || "true".equals(query.getDueSoon())) {
             wrapper.isNotNull("due_date");
             if ("true".equals(query.getOverdue())) {
                 wrapper.lt("due_date", LocalDate.now());
@@ -169,6 +177,11 @@ public class IssueService {
             if ("true".equals(query.getDueSoon())) {
                 wrapper.le("due_date", LocalDate.now().plusDays(7));
             }
+        }
+
+        // reportedByMe: reporter_id = current user
+        if ("true".equals(query.getReportedByMe())) {
+            wrapper.eq("reporter_id", currentUserId);
         }
 
         String keyword = query.getKeyword();
@@ -467,6 +480,21 @@ public class IssueService {
      */
     @Transactional
     public void transitStatus(Long id, Long newStatusId, String comment) {
+        transitStatus(id, newStatusId, comment, null, false);
+    }
+
+    /**
+     * 状态变更（支持 manual override assignee）
+     *
+     * @param id                    Issue ID
+     * @param newStatusId           目标状态 ID
+     * @param comment               可选评论
+     * @param assigneeId            显式指定的 assignee（null 表示 unassign）
+     * @param assigneeExplicitlySet true = 用户明确设置了 assignee（即使为 null）
+     */
+    @Transactional
+    public void transitStatus(Long id, Long newStatusId, String comment,
+                              Long assigneeId, boolean assigneeExplicitlySet) {
         Issue issue = getById(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long oldStatusId = issue.getStatusId();
@@ -493,6 +521,10 @@ public class IssueService {
         if (comment != null && !comment.isBlank()) {
             addComment(id, comment);
         }
+
+        // 调用 TransitionActionEngine 执行自动化动作（auto-assign 等）
+        transitionActionEngine.execute(issue, oldStatusId, newStatusId,
+                currentUserId, assigneeId, assigneeExplicitlySet);
     }
 
     /**

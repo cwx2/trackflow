@@ -28,4 +28,5 @@ public class IssueQuery extends PageQuery {
     // Special filters
     private String overdue;   // "true" = due_date < today AND status not done
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
+    private String reportedByMe;  // "true" = reporter_id = current user AND status not done
 }

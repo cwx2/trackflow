@@ -357,15 +357,15 @@ function navigateToQuery(type: string) {
   const params: Record<string, string> = {}
   switch (type) {
     case 'assigned-open':
-      params.statusId = '1,7,8,9,17,18'  // open category
+      params.statusCategory = 'open'
       params.label = '待处理'
       break
     case 'assigned-in-progress':
-      params.statusId = '2,3,4,10,11,12,13'  // in_progress category
+      params.statusCategory = 'in_progress'
       params.label = '进行中'
       break
     case 'completed-week':
-      params.statusId = '5,14,15,16'  // done category
+      params.statusCategory = 'done'
       params.label = '本周完成'
       break
     case 'overdue':
@@ -377,7 +377,7 @@ function navigateToQuery(type: string) {
       params.label = '即将到期'
       break
     case 'testing':
-      params.statusId = '4'  // Testing status
+      params.statusCode = 'testing'
       params.label = '待测试'
       break
     case 'reported-by-me':

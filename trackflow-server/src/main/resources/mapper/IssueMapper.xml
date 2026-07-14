@@ -100,4 +100,24 @@
         LIMIT #{limit}
     </select>
 
+    <!-- Dashboard 活动流（基于项目范围）：通过 JOIN issue 表的 project_id 过滤，避免传递大量 ID -->
+    <select id="selectDashboardActivitiesByProjects" resultType="map">
+        SELECT
+            a.id, a.issue_id, a.user_id, a.action, a.field_name,
+            <include refid="assignee_resolve_columns"/>,
+            a.created_at,
+            u.display_name AS user_name,
+            i.issue_key, i.title AS issue_title
+        FROM issue_activity a
+        INNER JOIN issue i ON i.id = a.issue_id AND i.deleted_at IS NULL
+        LEFT JOIN sys_user u ON u.id = a.user_id
+        <include refid="assignee_resolve_joins"/>
+        WHERE i.project_id IN
+        <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+            #{pid}
+        </foreach>
+        ORDER BY a.created_at DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
