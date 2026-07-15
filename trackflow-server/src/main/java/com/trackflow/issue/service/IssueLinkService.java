@@ -3,7 +3,7 @@ package com.trackflow.issue.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
-import com.trackflow.common.service.StatusCacheHelper;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.CreateIssueLinkDTO;

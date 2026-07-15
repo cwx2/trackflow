@@ -1,7 +1,7 @@
 package com.trackflow.workflow.strategy;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.common.service.StatusCacheHelper;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;

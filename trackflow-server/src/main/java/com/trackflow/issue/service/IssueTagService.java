@@ -5,10 +5,13 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.CreateTagDTO;
+import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueTag;
 import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueTagMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
+import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +27,8 @@ public class IssueTagService {
 
     private final IssueTagMapper tagMapper;
     private final IssueTagRelationMapper tagRelationMapper;
+    private final IssueMapper issueMapper;
+    private final ProjectService projectService;
 
     /**
      * 获取项目下所有标签
@@ -41,6 +46,9 @@ public class IssueTagService {
      */
     @Transactional
     public IssueTag createTag(Long projectId, CreateTagDTO dto) {
+        // 归档项目不允许创建标签
+        projectService.assertProjectActive(projectId);
+
         // 检查同名标签是否已存在
         Long exists = tagMapper.selectCount(
                 new LambdaQueryWrapper<IssueTag>()
@@ -81,6 +89,8 @@ public class IssueTagService {
      */
     @Transactional
     public void addTagToIssue(Long issueId, Long tagId) {
+        assertIssueProjectActive(issueId);
+
         // 检查标签是否存在
         IssueTag tag = tagMapper.selectById(tagId);
         if (tag == null) {
@@ -109,10 +119,22 @@ public class IssueTagService {
      */
     @Transactional
     public void removeTagFromIssue(Long issueId, Long tagId) {
+        assertIssueProjectActive(issueId);
+
         tagRelationMapper.delete(
                 new LambdaQueryWrapper<IssueTagRelation>()
                         .eq(IssueTagRelation::getIssueId, issueId)
                         .eq(IssueTagRelation::getTagId, tagId)
         );
+    }
+
+    /**
+     * 校验 Issue 所属项目未归档
+     */
+    private void assertIssueProjectActive(Long issueId) {
+        var issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            projectService.assertProjectActive(issue.getProjectId());
+        }
     }
 }

@@ -10,7 +10,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.service.MinioService;
-import com.trackflow.common.service.StatusCacheHelper;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
