@@ -4,9 +4,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-import java.util.Collections;
-import java.util.Set;
-
 /**
  * 安全工具类：获取当前认证用户信息
  */

@@ -99,6 +99,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         // 解析 API Key 的 scope（permissions 字段）
         Set<String> scope = parseScope(apiKey.getPermissions());
+        if (scope == null) {
+            // permissions 字段损坏，无法确定权限范围——拒绝认证（fail-closed）
+            log.warn("API Key auth rejected due to corrupted permissions: key={}", prefix);
+            return false;
+        }
 
         // 使用自定义 ApiKeyAuthenticationToken，携带 scope 信息
         ApiKeyAuthenticationToken authToken = new ApiKeyAuthenticationToken(
@@ -120,6 +125,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     /**
      * 解析 API Key 的 permissions JSON 字段为 scope 集合。
      * 空字符串、null、空数组 "[]" 均返回空集合（表示不限制）。
+     * 解析失败时返回 null，调用方应拒绝认证（fail-closed 原则）。
      */
     private Set<String> parseScope(String permissionsJson) {
         if (permissionsJson == null || permissionsJson.isBlank()
@@ -130,8 +136,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             List<String> permissions = objectMapper.readValue(permissionsJson, new TypeReference<>() {});
             return new HashSet<>(permissions);
         } catch (Exception e) {
-            log.warn("Failed to parse API Key permissions: {}", permissionsJson, e);
-            return Collections.emptySet();
+            log.warn("Failed to parse API Key permissions (auth rejected): {}", permissionsJson, e);
+            return null;  // 解析失败：认证拒绝
         }
     }
 
