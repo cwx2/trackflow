@@ -91,6 +91,113 @@
         <p class="description-empty">暂无项目说明</p>
       </div>
 
+      <!-- 项目统计卡片 -->
+      <div v-if="statistics" class="section statistics-section">
+        <h2 class="section-title">项目统计</h2>
+        <div class="stats-cards">
+          <div class="stat-card">
+            <span class="stat-value">{{ statistics.totalIssues }}</span>
+            <span class="stat-label">工单总数</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value stat-open">{{ statistics.openIssues }}</span>
+            <span class="stat-label">未解决</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value stat-done">{{ statistics.closedIssues }}</span>
+            <span class="stat-label">已关闭</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value stat-rate">{{ statistics.completionRate }}%</span>
+            <span class="stat-label">完成率</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value stat-new">+{{ statistics.createdThisWeek }}</span>
+            <span class="stat-label">本周新建</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value stat-closed-week">+{{ statistics.closedThisWeek }}</span>
+            <span class="stat-label">本周关闭</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 工单状态分布 -->
+      <div v-if="statistics && statistics.statusDistribution.length > 0" class="section">
+        <h2 class="section-title">状态分布</h2>
+        <!-- 堆叠条形图 -->
+        <div class="status-bar-container">
+          <div class="status-bar">
+            <div
+              v-for="item in statistics.statusDistribution"
+              :key="item.statusId"
+              class="status-bar-segment"
+              :style="{ width: getStatusPercent(item.count) + '%', background: item.statusColor || '#6b7280' }"
+              :title="`${item.statusName}: ${item.count} (${getStatusPercent(item.count).toFixed(1)}%)`"
+            ></div>
+          </div>
+          <div class="status-legend">
+            <div v-for="item in statistics.statusDistribution" :key="item.statusId" class="legend-item">
+              <span class="legend-dot" :style="{ background: item.statusColor || '#6b7280' }"></span>
+              <span class="legend-name">{{ item.statusName }}</span>
+              <span class="legend-count">{{ item.count }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 当前 Sprint 进度 -->
+      <div v-if="statistics?.activeSprint" class="section">
+        <h2 class="section-title">当前 Sprint</h2>
+        <div class="sprint-card">
+          <div class="sprint-header">
+            <span class="sprint-name">{{ statistics.activeSprint.name }}</span>
+            <span class="sprint-remaining">
+              {{ statistics.activeSprint.remainingDays > 0 ? `剩余 ${statistics.activeSprint.remainingDays} 天` : '已到期' }}
+            </span>
+          </div>
+          <div class="sprint-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: sprintProgressPercent + '%' }"></div>
+            </div>
+            <span class="progress-text">
+              {{ statistics.activeSprint.completedIssues }}/{{ statistics.activeSprint.totalIssues }} 已完成
+              ({{ sprintProgressPercent.toFixed(0) }}%)
+            </span>
+          </div>
+          <div class="sprint-dates">
+            <span>{{ formatSprintDate(statistics.activeSprint.startDate) }}</span>
+            <span>→</span>
+            <span>{{ formatSprintDate(statistics.activeSprint.endDate) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 近期活动 -->
+      <div class="section">
+        <h2 class="section-title">近期活动</h2>
+        <div v-if="activitiesLoading" class="activities-loading">
+          <a-spin :size="20" />
+        </div>
+        <div v-else-if="recentActivities.length > 0" class="activities-list">
+          <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
+            <div class="activity-dot"></div>
+            <div class="activity-content">
+              <div class="activity-main">
+                <span class="activity-user">{{ activity.userName }}</span>
+                <span class="activity-action">{{ formatActivityAction(activity) }}</span>
+              </div>
+              <span class="activity-time">{{ formatRelativeTime(activity.createdAt) }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="activities-empty">
+          <icon-history class="empty-icon" />
+          <p class="empty-title">暂无活动记录</p>
+          <p class="empty-desc">项目成员的操作记录将在此展示</p>
+        </div>
+      </div>
+
       <!-- 项目可见性设置 -->
       <div v-if="canEditProject && !isArchived" class="section visibility-section">
         <h2 class="section-title">可见性设置</h2>
@@ -193,6 +300,50 @@
       <a-button type="primary" @click="loadProject">重试</a-button>
     </div>
 
+    <!-- 编辑项目弹窗 -->
+    <a-modal
+      v-model:visible="showEditDialog"
+      title="编辑项目"
+      :width="480"
+      ok-text="保存修改"
+      cancel-text="取消"
+      :ok-loading="editSaving"
+      :ok-button-props="{ disabled: !editForm.name }"
+      @ok="submitEdit"
+    >
+      <a-form :model="editForm" layout="vertical">
+        <a-form-item label="项目名称" required>
+          <a-input v-model="editForm.name" placeholder="项目名称" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea
+            v-model="editForm.description"
+            placeholder="可选，简要描述项目用途"
+            :auto-size="{ minRows: 2, maxRows: 5 }"
+          />
+        </a-form-item>
+        <a-form-item label="项目负责人">
+          <a-select
+            v-model="editForm.leadId"
+            placeholder="选择项目负责人..."
+            allow-search
+            allow-clear
+            :loading="editMembersLoading"
+          >
+            <a-option v-for="m in editMemberList" :key="m.userId" :value="m.userId">
+              {{ m.displayName || m.username }}
+              <span v-if="m.email" style="color: var(--tf-text-tertiary); margin-left: 4px; font-size: 11px">{{ m.email }}</span>
+            </a-option>
+          </a-select>
+          <template #extra>
+            <span style="font-size: 11px; color: var(--tf-text-tertiary)">
+              只能选择当前项目成员。变更后新负责人将自动升级为项目管理员。
+            </span>
+          </template>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- 变更负责人弹窗 -->
     <a-modal
       v-model:visible="showLeadModal"
@@ -256,7 +407,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   IconSettings,
@@ -274,12 +425,13 @@ import {
   IconMore,
   IconExclamationCircleFill,
   IconEye,
-  IconEyeInvisible
+  IconEyeInvisible,
+  IconHistory
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, workflowApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
-import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
+import type { ProjectDetailVO, ProjectMemberVO, ProjectStatisticsVO, ProjectActivityVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 
 const route = useRoute()
@@ -291,6 +443,11 @@ const members = ref<ProjectMemberVO[]>([])
 const loading = ref(true)
 const membersLoading = ref(false)
 const error = ref('')
+
+// 统计和活动数据
+const statistics = ref<ProjectStatisticsVO | null>(null)
+const recentActivities = ref<ProjectActivityVO[]>([])
+const activitiesLoading = ref(false)
 
 // 权限
 const projectPerms = ref<Set<string>>(new Set())
@@ -437,7 +594,9 @@ async function loadProject() {
     await Promise.all([
       loadPerms(projectId),
       loadMembers(projectId),
-      loadRoles()
+      loadRoles(),
+      loadStatistics(projectId),
+      loadActivities(projectId)
     ])
   } catch (e: any) {
     if (e.response?.status === 403) {
@@ -472,12 +631,149 @@ async function loadMembers(projectId: string) {
   }
 }
 
+async function loadStatistics(projectId: string) {
+  try {
+    const res = await projectApi.getStatistics(projectId)
+    statistics.value = res.data
+  } catch {
+    statistics.value = null
+  }
+}
+
+async function loadActivities(projectId: string) {
+  activitiesLoading.value = true
+  try {
+    const res = await projectApi.listActivities(projectId, { page: 1, pageSize: 10 })
+    recentActivities.value = res.data?.list || []
+  } catch {
+    recentActivities.value = []
+  } finally {
+    activitiesLoading.value = false
+  }
+}
+
+// 统计相关计算属性
+const sprintProgressPercent = computed(() => {
+  if (!statistics.value?.activeSprint) return 0
+  const { totalIssues, completedIssues } = statistics.value.activeSprint
+  if (totalIssues === 0) return 0
+  return (completedIssues / totalIssues) * 100
+})
+
+function getStatusPercent(count: number): number {
+  if (!statistics.value || statistics.value.totalIssues === 0) return 0
+  return (count / statistics.value.totalIssues) * 100
+}
+
+function formatSprintDate(dateStr?: string): string {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function formatActivityAction(activity: ProjectActivityVO): string {
+  const action = activity.action
+  const detail = activity.detail ? (() => { try { return JSON.parse(activity.detail!) } catch { return {} } })() : {}
+
+  switch (action) {
+    case 'member_added':
+    case 'add_member':
+      return `添加了成员 ${activity.targetUserName || ''}`
+    case 'member_removed':
+    case 'remove_member':
+      return `移除了成员 ${activity.targetUserName || ''}`
+    case 'member_role_changed':
+    case 'change_role':
+      return `变更了 ${activity.targetUserName || ''} 的角色`
+    case 'project_created':
+    case 'create_project':
+      return '创建了项目'
+    case 'project_updated':
+    case 'update_project':
+      return `更新了项目${detail.fields ? '（' + detail.fields + '）' : ''}`
+    case 'project_archived':
+    case 'archive_project':
+      return '归档了项目'
+    case 'project_restored':
+    case 'restore_project':
+      return '恢复了项目'
+    case 'lead_changed':
+    case 'change_lead':
+      return `将负责人变更为 ${activity.targetUserName || ''}`
+    case 'visibility_changed':
+    case 'change_visibility':
+      return `将可见性变更为 ${detail.visibility || ''}`
+    default:
+      return action.replace(/_/g, ' ')
+  }
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  const diffHour = Math.floor(diffMs / 3600000)
+  const diffDay = Math.floor(diffMs / 86400000)
+
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}分钟前`
+  if (diffHour < 24) return `${diffHour}小时前`
+  if (diffDay < 7) return `${diffDay}天前`
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
 // ========== 负责人变更 ==========
 const showLeadModal = ref(false)
 const selectedLeadId = ref<string | undefined>()
 const leadMembers = ref<ProjectMemberVO[]>([])
 const leadMembersLoading = ref(false)
 const leadSaving = ref(false)
+
+// ========== 编辑项目弹窗 ==========
+const showEditDialog = ref(false)
+const editSaving = ref(false)
+const editForm = reactive({
+  name: '',
+  description: '',
+  leadId: undefined as string | undefined
+})
+const editMemberList = ref<ProjectMemberVO[]>([])
+const editMembersLoading = ref(false)
+
+async function loadEditMemberList() {
+  const projectId = route.params.id as string
+  if (!projectId || editMemberList.value.length > 0) return
+  editMembersLoading.value = true
+  try {
+    const res = await projectApi.listMembers(projectId)
+    editMemberList.value = res.data || []
+  } catch {
+    editMemberList.value = []
+  } finally {
+    editMembersLoading.value = false
+  }
+}
+
+async function submitEdit() {
+  if (!editForm.name || !project.value) return
+  editSaving.value = true
+  try {
+    await projectApi.update(project.value.id, {
+      name: editForm.name,
+      description: editForm.description || undefined,
+      leadId: editForm.leadId || undefined
+    })
+    Message.success('项目更新成功')
+    showEditDialog.value = false
+    // 重新加载项目详情
+    await loadProject()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '更新失败')
+  } finally {
+    editSaving.value = false
+  }
+}
 
 async function openLeadEditor() {
   const projectId = route.params.id as string
@@ -532,8 +828,12 @@ function goToMembers() {
 }
 
 function goToSettings() {
-  // 暂时回到项目列表编辑
-  router.push({ path: '/projects', query: { edit: project.value?.id } })
+  if (!project.value) return
+  editForm.name = project.value.name
+  editForm.description = project.value.description || ''
+  editForm.leadId = project.value.leadId || undefined
+  showEditDialog.value = true
+  loadEditMemberList()
 }
 
 async function handleRestore() {
@@ -1127,5 +1427,278 @@ onMounted(() => {
 .visibility-public {
   background: rgba(63, 185, 80, 0.1);
   color: #3fb950;
+}
+
+/* ========== 统计卡片 ========== */
+.statistics-section {
+  margin-bottom: 32px;
+}
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.stat-card:hover {
+  background: var(--tf-bg-hover);
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--tf-text-primary);
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.stat-value.stat-open { color: var(--tf-accent, #58a6ff); }
+.stat-value.stat-done { color: #3fb950; }
+.stat-value.stat-rate { color: #d29922; }
+.stat-value.stat-new { color: var(--tf-accent, #58a6ff); }
+.stat-value.stat-closed-week { color: #3fb950; }
+
+.stat-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  font-weight: 500;
+}
+
+/* ========== 状态分布 ========== */
+.status-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--tf-bg-surface);
+}
+
+.status-bar-segment {
+  transition: width 0.3s ease;
+  min-width: 3px;
+}
+
+.status-bar-segment:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+.status-bar-segment:last-child {
+  border-radius: 0 5px 5px 0;
+}
+
+.status-bar-segment:only-child {
+  border-radius: 5px;
+}
+
+.status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  color: var(--tf-text-secondary);
+}
+
+.legend-count {
+  color: var(--tf-text-tertiary);
+  font-weight: 500;
+}
+
+/* ========== Sprint 进度 ========== */
+.sprint-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+}
+
+.sprint-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sprint-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.sprint-remaining {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.sprint-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tf-bg-hover);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: #3fb950;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+}
+
+.sprint-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+/* ========== 近期活动 ========== */
+.activities-loading {
+  padding: 16px;
+  text-align: center;
+}
+
+.activities-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  position: relative;
+}
+
+.activity-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 24px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--tf-border, rgba(255, 255, 255, 0.06));
+}
+
+.activity-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tf-accent, #58a6ff);
+  flex-shrink: 0;
+  margin-top: 5px;
+  opacity: 0.7;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.activity-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.activity-user {
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  white-space: nowrap;
+}
+
+.activity-action {
+  color: var(--tf-text-secondary);
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.activities-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.activities-empty .empty-icon {
+  font-size: 32px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.activities-empty .empty-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+  margin: 0 0 4px;
+}
+
+.activities-empty .empty-desc {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
 }
 </style>
