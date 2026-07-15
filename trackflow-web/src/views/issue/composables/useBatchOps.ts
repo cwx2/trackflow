@@ -22,9 +22,7 @@ export function useBatchOps() {
     issues: IssueVO[],
     targetStatusId: string
   ): Promise<BatchResult> {
-    return executeBatch(issues, async (issue) => {
-      await issueApi.transitStatus(issue.id, targetStatusId)
-    }, '状态变更')
+    return executeBatchApi(issues, 'status', { statusId: targetStatusId }, '状态变更')
   }
 
   /**
@@ -34,9 +32,7 @@ export function useBatchOps() {
     issues: IssueVO[],
     assigneeId: string
   ): Promise<BatchResult> {
-    return executeBatch(issues, async (issue) => {
-      await issueApi.assign(issue.id, assigneeId)
-    }, '分配')
+    return executeBatchApi(issues, 'assign', { assigneeId: assigneeId || '0' }, '分配')
   }
 
   /**
@@ -46,9 +42,7 @@ export function useBatchOps() {
     issues: IssueVO[],
     sprintId: string | null
   ): Promise<BatchResult> {
-    return executeBatch(issues, async (issue) => {
-      await issueApi.update(issue.id, { sprintId })
-    }, 'Sprint 移动')
+    return executeBatchApi(issues, 'sprint', { sprintId: sprintId || '0' }, 'Sprint 移动')
   }
 
   /**
@@ -58,54 +52,60 @@ export function useBatchOps() {
     issues: IssueVO[],
     priority: string
   ): Promise<BatchResult> {
-    return executeBatch(issues, async (issue) => {
-      await issueApi.update(issue.id, { priority })
-    }, '优先级变更')
+    return executeBatchApi(issues, 'priority', { priority }, '优先级变更')
   }
 
   /**
-   * 通用批量执行引擎
+   * 批量删除
    */
-  async function executeBatch(
+  async function batchDelete(
+    issues: IssueVO[]
+  ): Promise<BatchResult> {
+    return executeBatchApi(issues, 'delete', {}, '删除')
+  }
+
+  /**
+   * 调用后端批量 API
+   */
+  async function executeBatchApi(
     issues: IssueVO[],
-    action: (issue: IssueVO) => Promise<void>,
+    operation: string,
+    params: Record<string, any>,
     operationName: string
   ): Promise<BatchResult> {
     const batch = issues.slice(0, MAX_BATCH_SIZE)
     executing.value = true
 
     try {
-      const results = await Promise.allSettled(
-        batch.map(issue => action(issue))
-      )
-
-      const result: BatchResult = {
-        total: batch.length,
-        succeeded: 0,
-        failed: 0,
-        failures: []
-      }
-
-      results.forEach((r, idx) => {
-        if (r.status === 'fulfilled') {
-          result.succeeded++
-        } else {
-          result.failed++
-          const reason = (r.reason as any)?.response?.data?.message
-            || (r.reason as any)?.message
-            || '未知错误'
-          result.failures.push({
-            issueId: batch[idx].id,
-            issueKey: batch[idx].issueKey,
-            reason
-          })
-        }
+      const res = await issueApi.batch({
+        operation,
+        issueIds: batch.map(i => i.id),
+        ...params
       })
 
-      // 显示结果通知
-      showBatchResult(result, operationName)
+      const data = res.data
+      const result: BatchResult = {
+        total: data?.total ?? batch.length,
+        succeeded: data?.succeeded ?? 0,
+        failed: data?.failed ?? 0,
+        failures: data?.failures ?? []
+      }
 
+      showBatchResult(result, operationName)
       return result
+    } catch (e: any) {
+      const errorMsg = e.response?.data?.message || '批量操作失败'
+      Message.error({ content: errorMsg, duration: 5000 })
+      return {
+        total: batch.length,
+        succeeded: 0,
+        failed: batch.length,
+        failures: batch.map(i => ({
+          issueId: i.id,
+          issueKey: i.issueKey,
+          reason: errorMsg
+        }))
+      }
     } finally {
       executing.value = false
     }
@@ -140,6 +140,7 @@ export function useBatchOps() {
     batchTransitStatus,
     batchAssign,
     batchUpdateSprint,
-    batchUpdatePriority
+    batchUpdatePriority,
+    batchDelete
   }
 }

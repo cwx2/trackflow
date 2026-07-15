@@ -154,5 +154,24 @@ export const issueApi = {
   /** 删除关联 */
   deleteLink(issueId: string, linkId: string) {
     return request.delete<any, R<void>>(`/issues/${issueId}/links/${linkId}`)
+  },
+
+  // ========== 批量操作 ==========
+
+  /** 批量操作 */
+  batch(data: {
+    operation: string
+    issueIds: string[]
+    statusId?: string
+    assigneeId?: string
+    sprintId?: string
+    priority?: string
+  }) {
+    return request.post<any, R<{
+      total: number
+      succeeded: number
+      failed: number
+      failures: Array<{ issueId: string; issueKey: string; reason: string }>
+    }>>('/issues/batch', data)
   }
 }

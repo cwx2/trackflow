@@ -838,9 +838,9 @@ async function openSprintEdit(issue: IssueVO) {
 function getSprintGroups(projectId: string) {
   const sprints = sprintOptionsCache[projectId] || []
   const groups: { label: string; items: SprintVO[] }[] = []
-  const active = sprints.filter(s => s.status === 'Active')
-  const planned = sprints.filter(s => s.status === 'Planned')
-  const completed = sprints.filter(s => s.status === 'Completed')
+  const active = sprints.filter(s => s.status?.toLowerCase() === 'active')
+  const planned = sprints.filter(s => s.status?.toLowerCase() === 'planned')
+  const completed = sprints.filter(s => s.status?.toLowerCase() === 'completed')
   if (active.length) groups.push({ label: '\u8FDB\u884C\u4E2D', items: active })
   if (planned.length) groups.push({ label: '\u8BA1\u5212\u4E2D', items: planned })
   if (completed.length) groups.push({ label: '\u5DF2\u5B8C\u6210', items: completed })

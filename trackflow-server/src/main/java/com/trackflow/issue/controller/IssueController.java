@@ -103,6 +103,46 @@ public class IssueController {
         return R.ok();
     }
 
+    // ========== 批量操作 ==========
+
+    @PostMapping("/batch")
+    @PreAuthorize("isAuthenticated()")
+    public R<BatchOperationResultVO> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
+        BatchOperationResultVO result = switch (dto.getOperation()) {
+            case "status" -> {
+                if (dto.getStatusId() == null) {
+                    yield null;
+                }
+                yield issueService.batchTransitStatus(dto.getIssueIds(), dto.getStatusId());
+            }
+            case "assign" -> {
+                if (dto.getAssigneeId() == null) {
+                    yield null;
+                }
+                yield issueService.batchAssign(dto.getIssueIds(), dto.getAssigneeId());
+            }
+            case "sprint" -> {
+                if (dto.getSprintId() == null) {
+                    yield null;
+                }
+                yield issueService.batchUpdateSprint(dto.getIssueIds(), dto.getSprintId());
+            }
+            case "priority" -> {
+                if (dto.getPriority() == null || dto.getPriority().isBlank()) {
+                    yield null;
+                }
+                yield issueService.batchUpdatePriority(dto.getIssueIds(), dto.getPriority());
+            }
+            case "delete" -> issueService.batchDelete(dto.getIssueIds());
+            default -> null;
+        };
+
+        if (result == null) {
+            return R.fail(40000, "无效的批量操作类型或缺少必填参数");
+        }
+        return R.ok(result);
+    }
+
     // ========== 状态转换 ==========
 
     @GetMapping("/{id}/available-transitions")

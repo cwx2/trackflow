@@ -159,6 +159,12 @@
           </div>
         </template>
       </a-trigger>
+
+      <!-- 批量删除 -->
+      <a-button size="small" type="outline" status="danger" @click="confirmBatchDelete">
+        <template #icon><icon-delete /></template>
+        删除
+      </a-button>
     </div>
 
     <a-button size="small" type="text" @click="$emit('deselect-all')">
@@ -169,7 +175,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire } from '@arco-design/web-vue/es/icon'
+import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete } from '@arco-design/web-vue/es/icon'
+import { Modal } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 
@@ -184,6 +191,7 @@ const emit = defineEmits<{
   'batch-assign': [assigneeId: string | null]
   'batch-sprint': [sprintId: string | null]
   'batch-priority': [priority: string]
+  'batch-delete': []
 }>()
 
 // ========== 状态下拉 ==========
@@ -266,8 +274,8 @@ interface SprintGroup {
 }
 
 const sprintGroups = computed<SprintGroup[]>(() => {
-  const active = sprints.value.filter(s => s.status === 'Active')
-  const planned = sprints.value.filter(s => s.status === 'Planned')
+  const active = sprints.value.filter(s => s.status?.toLowerCase() === 'active')
+  const planned = sprints.value.filter(s => s.status?.toLowerCase() === 'planned')
   const groups: SprintGroup[] = []
   if (active.length) groups.push({ label: '进行中', items: active })
   if (planned.length) groups.push({ label: '计划中', items: planned })
@@ -311,6 +319,20 @@ const priorityOptions = [
 function handleBatchPriority(priority: string) {
   showPriorityDropdown.value = false
   emit('batch-priority', priority)
+}
+
+// ========== 批量删除 ==========
+function confirmBatchDelete() {
+  Modal.confirm({
+    title: '确认批量删除',
+    content: `确定要删除选中的 ${props.selectedCount} 个工单吗？此操作不可撤销。`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk() {
+      emit('batch-delete')
+    }
+  })
 }
 </script>
 
