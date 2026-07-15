@@ -7,7 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -96,6 +99,43 @@ public class GlobalExceptionHandler {
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(R.fail(ErrorCode.VALIDATION_ERROR, "请求参数格式错误"));
+    }
+
+    /**
+     * 缺少必需请求参数（如 @RequestParam 标记的参数未传递）
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<R<Void>> handleMissingParameterException(MissingServletRequestParameterException ex,
+                                                                    HttpServletRequest request) {
+        log.warn("Missing required parameter on {} {}: '{}'",
+                request.getMethod(), request.getRequestURI(), ex.getParameterName());
+        String message = String.format("缺少必需参数: %s", ex.getParameterName());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(R.fail(ErrorCode.BAD_REQUEST, message));
+    }
+
+    /**
+     * HTTP 方法不支持（如对只支持 GET 的路径发 POST）
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<R<Void>> handleMethodNotSupportedException(HttpRequestMethodNotSupportedException ex,
+                                                                      HttpServletRequest request) {
+        log.warn("Method not supported: {} {} (supported: {})",
+                request.getMethod(), request.getRequestURI(), ex.getSupportedHttpMethods());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(R.fail(40500, "不支持的请求方法: " + ex.getMethod()));
+    }
+
+    /**
+     * 不支持的媒体类型（如需要 JSON 但传了 form-data）
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<R<Void>> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException ex,
+                                                                         HttpServletRequest request) {
+        log.warn("Unsupported media type on {} {}: {}",
+                request.getMethod(), request.getRequestURI(), ex.getContentType());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(R.fail(41500, "不支持的内容类型: " + ex.getContentType()));
     }
 
     /**
