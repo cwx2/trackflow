@@ -10,6 +10,7 @@ import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueStatusMapper;
@@ -263,8 +264,24 @@ public class IssueController {
     @PostMapping("/{id}/transitions/undo")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
-        // 撤销操作：绕过工作流校验，但仍需验证用户有该项目的 issue:edit 权限
-        issueService.transitStatus(id, dto.getStatusId(), "撤销状态变更");
+        // 撤销操作：验证目标状态必须是上一个状态（从活动记录获取），防止任意跳转
+        IssueActivity lastStatusChange = issueService.getLastStatusChange(id);
+        if (lastStatusChange == null) {
+            return R.fail(ErrorCode.BAD_REQUEST, "该工单没有状态变更记录，无法撤销");
+        }
+
+        // 验证目标状态名称与上一次变更的旧状态一致
+        IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
+        if (targetStatus == null) {
+            return R.fail(ErrorCode.BAD_REQUEST, "目标状态不存在");
+        }
+        if (!targetStatus.getName().equals(lastStatusChange.getOldValue())) {
+            return R.fail(ErrorCode.BAD_REQUEST,
+                    "撤销操作只能回退到上一个状态（" + lastStatusChange.getOldValue() + "），不允许任意跳转");
+        }
+
+        // 目标状态已验证为上一个状态，跳过工作流校验执行撤销
+        issueService.transitStatusSkipWorkflow(id, dto.getStatusId(), "撤销状态变更");
         return R.ok();
     }
 

@@ -740,7 +740,8 @@ public class IssueService {
             if (!workflowService.isTransitionAllowed(issue, statusId, userId)) {
                 return "工作流不允许此状态转换";
             }
-            transitStatus(issue.getId(), statusId, null);
+            // 已校验通过，跳过 Service 层重复校验
+            transitStatusSkipWorkflow(issue.getId(), statusId, null);
             return null;
         }, "状态转换");
     }
@@ -827,7 +828,7 @@ public class IssueService {
      */
     @Transactional
     public void transitStatus(Long id, Long newStatusId, String comment) {
-        transitStatus(id, newStatusId, comment, null, false);
+        transitStatus(id, newStatusId, comment, null, false, null, false);
     }
 
     /**
@@ -842,7 +843,7 @@ public class IssueService {
     @Transactional
     public void transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet) {
-        transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, null);
+        transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, null, false);
     }
 
     /**
@@ -852,6 +853,26 @@ public class IssueService {
     public void transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet,
                               Integer expectedVersion) {
+        transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, expectedVersion, false);
+    }
+
+    /**
+     * 状态变更（跳过工作流校验 - 仅限撤销操作内部调用）
+     */
+    @Transactional
+    public void transitStatusSkipWorkflow(Long id, Long newStatusId, String comment) {
+        transitStatus(id, newStatusId, comment, null, false, null, true);
+    }
+
+    /**
+     * 状态变更内部实现
+     *
+     * @param skipWorkflowCheck true = 跳过工作流规则校验（仅用于撤销操作，目标状态已在 Controller 中校验为上一状态）
+     */
+    @Transactional
+    public void transitStatus(Long id, Long newStatusId, String comment,
+                              Long assigneeId, boolean assigneeExplicitlySet,
+                              Integer expectedVersion, boolean skipWorkflowCheck) {
         Issue issue = getById(id);
         // 归档项目不允许变更工单状态
         projectService.assertProjectActive(issue.getProjectId());
@@ -864,6 +885,14 @@ public class IssueService {
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long oldStatusId = issue.getStatusId();
+
+        // 工作流校验（除非明确跳过，如撤销操作已在 Controller 中验证过目标状态）
+        if (!skipWorkflowCheck) {
+            if (!workflowService.isTransitionAllowed(issue, newStatusId, currentUserId)) {
+                throw new BusinessException(ErrorCode.WORKFLOW_TRANSITION_DENIED,
+                        "当前角色不允许执行此状态转换");
+            }
+        }
 
         // 验证目标状态存在
         IssueStatus newStatus = statusMapper.selectById(newStatusId);
@@ -896,6 +925,16 @@ public class IssueService {
         // 调用 TransitionActionEngine 执行自动化动作（auto-assign 等）
         transitionActionEngine.execute(issue, oldStatusId, newStatusId,
                 currentUserId, assigneeId, assigneeExplicitlySet);
+    }
+
+    /**
+     * 获取指定工单最近一次状态变更的活动记录。
+     *
+     * @param issueId Issue ID
+     * @return 最近一次状态变更记录，无历史时返回 null
+     */
+    public IssueActivity getLastStatusChange(Long issueId) {
+        return activityMapper.selectLastStatusChange(issueId);
     }
 
     /**

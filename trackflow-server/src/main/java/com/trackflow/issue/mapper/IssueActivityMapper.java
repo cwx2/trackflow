@@ -19,4 +19,15 @@ public interface IssueActivityMapper extends BaseMapper<IssueActivity> {
             "WHERE issue_id = #{issueId} AND field_name = 'assignee_id' AND old_value IS NOT NULL " +
             "ORDER BY created_at DESC LIMIT 1")
     String selectPreviousAssignee(@Param("issueId") Long issueId);
+
+    /**
+     * 查询指定 Issue 最近一次状态变更活动记录。
+     *
+     * @param issueId Issue ID
+     * @return 最近一次状态变更的活动记录，无历史时返回 null
+     */
+    @Select("SELECT * FROM issue_activity " +
+            "WHERE issue_id = #{issueId} AND field_name = 'status' " +
+            "ORDER BY created_at DESC LIMIT 1")
+    IssueActivity selectLastStatusChange(@Param("issueId") Long issueId);
 }
