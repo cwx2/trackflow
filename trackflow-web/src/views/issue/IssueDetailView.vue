@@ -32,6 +32,7 @@
         :links="issueLinks"
         :attachments="issueAttachments"
         :readonly="!canEditIssueEffective"
+        :can-delete="canDeleteIssue"
         :children="issue.children || []"
         :child-progress="issue.childProgress || null"
         @update-title="onUpdateTitle"
@@ -41,6 +42,9 @@
         @create-tag="onCreateTag"
         @add-link="() => {}"
         @upload="() => {}"
+        @copy-id="onCopyId"
+        @clone="onCloneIssue"
+        @delete="onDeleteIssue"
       >
         <template #activity>
           <ActivityStream :items="activityItems" />
@@ -71,7 +75,7 @@
     <a-button type="primary" size="small" @click="loadAll">重试</a-button>
   </div>
 
-  <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="issue?.projectId" />
+  <IssueCreatePanel :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" />
 
   <!-- Add Time Entry Dialog -->
   <a-modal
@@ -114,7 +118,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
@@ -133,8 +137,10 @@ import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue } from '@/utils/fieldLabels'
 
 const route = useRoute()
+const router = useRouter()
 const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
+const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
 const showTimeDialog = ref(false)
 const timeSaving = ref(false)
 
@@ -154,7 +160,7 @@ const issue = ref<IssueDetailVO | null>(null)
 const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
 
 // 权限控制（必须在 issue ref 声明之后）
-const { canCreateIssue, canEditIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
+const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
   () => issue.value?.projectId,
   { isProjectArchived: () => isProjectArchived.value }
 )
@@ -468,6 +474,56 @@ const activityItems = computed<ActivityItem[]>(() => {
 function copyIssue() {
   navigator.clipboard.writeText(`${issue.value?.issueKey} ${issue.value?.title}`)
   Message.success('已复制')
+}
+
+function onCopyId() {
+  if (!issue.value) return
+  navigator.clipboard.writeText(issue.value.issueKey)
+  Message.success(`已复制 ${issue.value.issueKey}`)
+}
+
+function onCloneIssue() {
+  if (!issue.value) return
+  showCreatePanel.value = true
+  // Defer pre-filling the clone data — IssueCreatePanel watches `visible`
+  // We use a custom event approach via a ref to pass clone data
+  cloneData.value = {
+    projectId: issue.value.projectId,
+    title: `[Clone] ${issue.value.title}`,
+    description: issue.value.description || '',
+    issueType: issue.value.issueType,
+    priority: issue.value.priority
+  }
+}
+
+function onDeleteIssue() {
+  if (!issue.value) return
+  Modal.warning({
+    title: '删除工单',
+    content: `确定要删除工单 ${issue.value.issueKey} 吗？删除后可在回收站恢复。`,
+    okText: '删除',
+    cancelText: '取消',
+    hideCancel: false,
+    onOk: async () => {
+      try {
+        await issueApi.delete(issue.value!.id)
+        Message.success('工单已删除')
+        router.push('/')
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '删除失败')
+      }
+    }
+  })
+}
+
+function onCreatePanelClose(val: boolean) {
+  showCreatePanel.value = val
+  if (!val) cloneData.value = undefined
+}
+
+function onIssueCreated() {
+  showCreatePanel.value = false
+  cloneData.value = undefined
 }
 
 async function onUpdateTitle(val: string) {

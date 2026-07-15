@@ -23,7 +23,23 @@
           <button class="action-icon" title="编辑" @click="startEditDesc">&#9998;</button>
           <button class="action-icon" title="附件" @click="$emit('upload')">&#128206;</button>
           <button class="action-icon" title="链接" @click="$emit('add-link')">&#128279;</button>
-          <button class="action-icon" title="更多">&#8943;</button>
+          <a-dropdown trigger="click" position="br">
+            <button class="action-icon" title="更多操作">&#8943;</button>
+            <template #content>
+              <a-doption @click="$emit('copy-id')">
+                <template #icon><icon-copy /></template>
+                复制工单 ID
+              </a-doption>
+              <a-doption @click="$emit('clone')">
+                <template #icon><icon-branch /></template>
+                克隆工单
+              </a-doption>
+              <a-doption v-if="canDelete" class="danger-option" @click="$emit('delete')">
+                <template #icon><icon-delete /></template>
+                删除工单
+              </a-doption>
+            </template>
+          </a-dropdown>
         </div>
       </div>
 
@@ -141,6 +157,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
+import { IconCopy, IconDelete, IconBranch } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'
@@ -160,6 +177,7 @@ const props = defineProps<{
   links: LinkItem[]
   attachments: AttachItem[]
   readonly?: boolean
+  canDelete?: boolean
   children?: ChildIssueVO[]
   childProgress?: ChildProgressVO | null
 }>()
@@ -172,6 +190,9 @@ const emit = defineEmits<{
   'create-tag': [name: string]
   'add-link': []
   'upload': []
+  'copy-id': []
+  'clone': []
+  'delete': []
 }>()
 
 const editingTitle = ref(false)
@@ -297,6 +318,10 @@ function commitDesc(content: string) {
   transition: color 150ms, background 150ms;
 }
 .action-icon:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
+
+/* More actions dropdown */
+.danger-option :deep(.arco-dropdown-option-content) { color: #f85149; }
+.danger-option :deep(.arco-icon) { color: #f85149; }
 
 /* Tags */
 .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }

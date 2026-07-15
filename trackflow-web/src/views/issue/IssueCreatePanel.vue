@@ -10,7 +10,7 @@
     @cancel="close"
   >
     <template #title>
-      <span class="panel-modal-title">创建工单</span>
+      <span class="panel-modal-title">{{ cloneData ? '克隆工单' : '创建工单' }}</span>
     </template>
 
     <div class="create-panel">
@@ -206,6 +206,7 @@ import RichEditor from './components/RichEditor.vue'
 const props = defineProps<{
   visible: boolean
   projectId?: string
+  cloneData?: { projectId: string; title: string; description: string; issueType: string; priority: string }
 }>()
 
 const emit = defineEmits<{
@@ -250,7 +251,18 @@ watch(() => props.projectId, (val) => {
 }, { immediate: true })
 
 watch(() => props.visible, (val) => {
-  if (val) loadProjects()
+  if (val) {
+    loadProjects()
+    // Pre-fill form if clone data is provided
+    if (props.cloneData) {
+      form.projectId = props.cloneData.projectId
+      form.title = props.cloneData.title
+      form.description = props.cloneData.description
+      form.issueType = props.cloneData.issueType
+      form.priority = props.cloneData.priority
+      onProjectChange(props.cloneData.projectId)
+    }
+  }
 })
 
 async function onProjectChange(val: any) {
