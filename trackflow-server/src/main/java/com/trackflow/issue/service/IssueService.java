@@ -458,9 +458,10 @@ public class IssueService {
             // 校验 assignee 是否为有效的项目成员（assigneeId=0 表示取消分配，跳过校验）
             validateAssignee(dto.getAssigneeId(), issue.getProjectId());
             Long normalizedAssigneeId = normalizeAssigneeId(dto.getAssigneeId());
-            recordActivity(id, currentUserId, "assigned", "assignee",
-                    issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
-                    normalizedAssigneeId != null ? String.valueOf(normalizedAssigneeId) : null);
+            // 存储用户显示名快照（而非 userId），确保历史记录不可变
+            String oldAssigneeName = getUserDisplayName(issue.getAssigneeId());
+            String newAssigneeName = getUserDisplayName(normalizedAssigneeId);
+            recordActivity(id, currentUserId, "assigned", "assignee", oldAssigneeName, newAssigneeName);
             Long oldAssigneeId = issue.getAssigneeId();
             issue.setAssigneeId(normalizedAssigneeId);
             // 通知新负责人（仅当 assignee 实际变更且不为空时）
@@ -910,9 +911,10 @@ public class IssueService {
 
         Long normalizedAssigneeId = normalizeAssigneeId(assigneeId);
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        recordActivity(id, currentUserId, "assigned", "assignee",
-                issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
-                normalizedAssigneeId != null ? String.valueOf(normalizedAssigneeId) : null);
+        // 存储用户显示名快照（而非 userId），确保历史记录不可变
+        String oldAssigneeName = getUserDisplayName(issue.getAssigneeId());
+        String newAssigneeName = getUserDisplayName(normalizedAssigneeId);
+        recordActivity(id, currentUserId, "assigned", "assignee", oldAssigneeName, newAssigneeName);
         issue.setAssigneeId(normalizedAssigneeId);
         issueMapper.updateById(issue);
 
@@ -1299,6 +1301,18 @@ public class IssueService {
      */
     private Long normalizeAssigneeId(Long assigneeId) {
         return (assigneeId != null && assigneeId == 0L) ? null : assigneeId;
+    }
+
+    /**
+     * 获取用户显示名（用于活动记录快照）。
+     * 返回用户 displayName，用户不存在或已删除时返回 null。
+     */
+    private String getUserDisplayName(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        SysUser user = sysUserMapper.selectById(userId);
+        return user != null ? user.getDisplayName() : null;
     }
 
     private void recordActivity(Long issueId, Long userId, String action,
