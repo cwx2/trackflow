@@ -210,19 +210,28 @@ public class IssueController {
             return R.fail(40300, "当前角色不允许执行此状态转换");
         }
 
-        // 关闭父工单时检查子任务状态（非强制模式下返回警告）
+        // 关闭状态时的前置检查（非强制模式下返回警告）
         IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
         if (targetStatus != null && targetStatus.getIsClosed() && !Boolean.TRUE.equals(dto.getForce())) {
+            // 收集所有警告，合并返回
+            List<String> warnings = new java.util.ArrayList<>();
+
             long openChildren = issueService.countOpenChildren(id);
             if (openChildren > 0) {
-                return R.fail(40910, "该工单有 " + openChildren + " 个未完成的子任务，确认要关闭吗？");
+                warnings.add("有 " + openChildren + " 个未完成的子任务");
             }
 
-            // 检查阻塞关系：有未解决的 blocker 时返回警告
             List<String> blockerKeys = linkService.getUnresolvedBlockerKeys(id);
             if (!blockerKeys.isEmpty()) {
-                String blockers = String.join("、", blockerKeys);
-                return R.fail(40911, "此工单被 " + blockers + " 阻塞，确定要强制关闭吗？");
+                warnings.add("被 " + String.join("、", blockerKeys) + " 阻塞");
+            }
+
+            if (!warnings.isEmpty()) {
+                String message = "此工单" + String.join("，且", warnings) + "，确定要强制关闭吗？";
+                // 使用 40910（子任务）或 40911（阻塞）或 40912（两者皆有）
+                int code = openChildren > 0 && !blockerKeys.isEmpty() ? 40912
+                         : openChildren > 0 ? 40910 : 40911;
+                return R.fail(code, message);
             }
         }
 

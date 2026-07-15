@@ -270,7 +270,13 @@ const issueTags = computed(() => issue.value?.tags || [])
 const projectTags = computed(() => projectTagList.value)
 
 const issueLinks = computed(() => {
-  return links.value.map(l => ({ ...l, typeLabel: l.linkType, statusName: l.issueStatus?.name || '', statusColor: l.issueStatus?.color || '' }))
+  return links.value.map(l => ({
+    ...l,
+    typeLabel: l.linkType,
+    statusName: l.issueStatus?.name || '',
+    statusColor: l.issueStatus?.color || '',
+    isUnresolvedBlocker: l.linkType === 'blocked_by' && l.issueStatus && !l.issueStatus.isClosed
+  }))
 })
 
 const issueAttachments = computed(() => {
@@ -285,7 +291,13 @@ const currentStatus = computed<StatusInfo>(() => {
 })
 
 const availableTransitions = computed<StatusInfo[]>(() => {
-  return transitions.value.map(s => ({ id: s.id, name: s.name, color: s.color }))
+  return transitions.value.map(s => ({
+    id: s.id,
+    name: s.name,
+    color: s.color,
+    blocked: s.blocked || false,
+    blockedBy: s.blockedBy || []
+  }))
 })
 
 const sidebarFields = computed<SidebarField[]>(() => {
@@ -301,7 +313,12 @@ const sidebarFields = computed<SidebarField[]>(() => {
   // 状态选项
   const statusOptions = [
     { value: currentStatus.value.id, label: `● ${currentStatus.value.name}（当前）` },
-    ...availableTransitions.value.map(s => ({ value: s.id, label: s.name }))
+    ...availableTransitions.value.map(s => ({
+      value: s.id,
+      label: s.blocked ? `⚠ ${s.name}` : s.name,
+      badge: s.blocked ? '被阻塞' : undefined,
+      badgeColor: s.blocked ? '#d29922' : undefined
+    }))
   ]
 
   // 人员选项（仅在有分配权限时提供）
@@ -392,10 +409,13 @@ async function onTransition(target: StatusInfo) {
     if (res.code === 0) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
-    } else if (res.code === 40910) {
-      // 子任务未完成警告 — 弹出确认框
+    } else if (res.code === 40910 || res.code === 40911 || res.code === 40912) {
+      // 关闭前置警告：子任务未完成(40910) / 被阻塞(40911) / 两者皆有(40912)
+      const title = res.code === 40911 ? '存在阻塞关系'
+                  : res.code === 40912 ? '存在阻塞关系和未完成子任务'
+                  : '确认关闭'
       Modal.warning({
-        title: '确认关闭',
+        title,
         content: res.message,
         okText: '强制关闭',
         cancelText: '取消',

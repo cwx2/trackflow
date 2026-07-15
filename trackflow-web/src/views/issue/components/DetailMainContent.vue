@@ -108,7 +108,8 @@
             <span class="link-group-count">{{ group.items.length }}</span>
           </div>
           <div v-if="group.expanded" class="link-group-items">
-            <div v-for="link in group.items" :key="link.id" class="link-item">
+            <div v-for="link in group.items" :key="link.id" class="link-item" :class="{ 'link-blocked': link.isUnresolvedBlocker }">
+              <span v-if="link.isUnresolvedBlocker" class="link-block-icon" title="未解决的阻塞">⛔</span>
               <router-link :to="`/issues/${link.issueId}`" class="link-key-ref">{{ link.issueKey }}</router-link>
               <span class="link-title-text">{{ link.issueTitle }}</span>
               <span class="link-status" :style="{ color: link.statusColor }">{{ link.statusName }}</span>
@@ -146,7 +147,7 @@ import ChildIssuesList from './ChildIssuesList.vue'
 import type { ChildIssueVO, ChildProgressVO } from '@/api/types'
 
 export interface TagItem { id: string; name: string; color: string }
-export interface LinkItem { id: string; typeLabel: string; issueId: string; issueKey: string; issueTitle: string; statusName: string; statusColor: string }
+export interface LinkItem { id: string; typeLabel: string; issueId: string; issueKey: string; issueTitle: string; statusName: string; statusColor: string; isUnresolvedBlocker?: boolean }
 export interface AttachItem { id: string; fileName: string; sizeText: string }
 
 const props = defineProps<{
@@ -395,6 +396,12 @@ function commitDesc(content: string) {
   transition: background 150ms;
 }
 .link-item:hover { background: var(--tf-bg-hover); }
+.link-item.link-blocked {
+  background: rgba(248, 81, 73, 0.06);
+  border-left: 2px solid #f85149;
+  padding-left: 6px;
+}
+.link-block-icon { font-size: 11px; flex-shrink: 0; }
 .link-key-ref { color: var(--tf-accent); font-weight: 500; text-decoration: none; flex-shrink: 0; }
 .link-key-ref:hover { text-decoration: underline; }
 .link-title-text { color: var(--tf-text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -110,6 +110,8 @@ export interface StatusInfo {
   id: string
   name: string
   color: string
+  blocked?: boolean
+  blockedBy?: string[]
 }
 
 const props = defineProps<{
