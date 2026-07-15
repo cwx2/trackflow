@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.entity.UserRole;
+import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 用户管理服务
@@ -26,7 +29,9 @@ public class UserService {
 
     private final SysUserMapper userMapper;
     private final UserRoleMapper userRoleMapper;
+    private final SysRoleMapper roleMapper;
     private final PermissionService permissionService;
+    private final SystemAuditService systemAuditService;
 
     /**
      * 分页查询用户列表
@@ -88,6 +93,11 @@ public class UserService {
         user.setStatus("disabled");
         userMapper.updateById(user);
         permissionService.invalidateCache(id);
+
+        // 审计日志
+        systemAuditService.log("disable_user", "user", id,
+                Map.of("username", user.getUsername(),
+                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : ""));
     }
 
     /**
@@ -98,6 +108,11 @@ public class UserService {
         SysUser user = getById(id);
         user.setStatus("active");
         userMapper.updateById(user);
+
+        // 审计日志
+        systemAuditService.log("enable_user", "user", id,
+                Map.of("username", user.getUsername(),
+                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : ""));
     }
 
     /**
@@ -118,6 +133,14 @@ public class UserService {
         userRole.setRoleId(roleId);
         userRoleMapper.insert(userRole);
         permissionService.invalidateCache(userId);
+
+        // 审计日志
+        SysRole role = roleMapper.selectById(roleId);
+        String roleName = role != null ? role.getName() : String.valueOf(roleId);
+        SysUser user = userMapper.selectById(userId);
+        String username = user != null ? user.getUsername() : String.valueOf(userId);
+        systemAuditService.log("assign_global_role", "user", userId,
+                Map.of("roleId", roleId, "roleName", roleName, "username", username));
     }
 
     /**
@@ -136,6 +159,14 @@ public class UserService {
                         .eq(UserRole::getRoleId, roleId)
         );
         permissionService.invalidateCache(userId);
+
+        // 审计日志
+        SysRole role = roleMapper.selectById(roleId);
+        String roleName = role != null ? role.getName() : String.valueOf(roleId);
+        SysUser user = userMapper.selectById(userId);
+        String username = user != null ? user.getUsername() : String.valueOf(userId);
+        systemAuditService.log("remove_global_role", "user", userId,
+                Map.of("roleId", roleId, "roleName", roleName, "username", username));
     }
 
     /**

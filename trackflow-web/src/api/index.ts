@@ -22,6 +22,7 @@ export { reportStatisticsApi } from './reportStatistics'
 export { notificationPreferenceApi } from './notificationPreference'
 export { transitionActionApi } from './transitionAction'
 export { notificationApi } from './notification'
+export { auditLogApi } from './auditLog'
 
 // 类型导出
 export type * from './types'

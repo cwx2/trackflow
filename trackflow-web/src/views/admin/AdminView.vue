@@ -85,6 +85,12 @@ const menuItems = [
     icon: '📝',
     title: '自定义字段',
     description: '定义和管理 Issue 自定义字段'
+  },
+  {
+    path: '/admin/audit-logs',
+    icon: '📜',
+    title: '审计日志',
+    description: '查看系统权限变更记录，追踪管理操作历史'
   }
 ]
 </script>

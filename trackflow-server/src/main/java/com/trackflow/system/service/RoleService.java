@@ -39,6 +39,7 @@ public class RoleService {
     private final UserRoleMapper userRoleMapper;
     private final SysPermissionMapper permissionMapper;
     private final PermissionService permissionService;
+    private final SystemAuditService systemAuditService;
 
     @Transactional
     public SysRole create(CreateRoleDTO dto) {
@@ -117,7 +118,12 @@ public class RoleService {
      */
     @Transactional
     public void replacePermissions(Long id, List<String> permissions) {
-        getById(id); // 确保存在
+        SysRole role = getById(id); // 确保存在
+
+        // 记录旧权限（审计用）
+        List<String> oldPermissions = rolePermissionMapper.selectList(
+                new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRoleId, id)
+        ).stream().map(RolePermission::getPermission).collect(Collectors.toList());
 
         // 删除旧权限
         rolePermissionMapper.delete(
@@ -134,6 +140,12 @@ public class RoleService {
 
         // 失效缓存
         permissionService.invalidateCacheForRole(id);
+
+        // 审计日志：记录旧权限和新权限
+        systemAuditService.log("update_role_permissions", "role", id,
+                Map.of("roleName", role.getName(),
+                        "oldPermissions", oldPermissions,
+                        "newPermissions", permissions));
     }
 
     /**
