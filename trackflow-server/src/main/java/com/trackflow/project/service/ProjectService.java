@@ -587,9 +587,12 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
         }
 
+        // 去重（前端多选可能传入重复值）
+        List<Long> distinctRoleIds = newRoleIds.stream().distinct().toList();
+
         // 校验所有角色类型必须为 project
-        List<SysRole> newRoles = roleMapper.selectBatchIds(newRoleIds);
-        if (newRoles.size() != newRoleIds.size()) {
+        List<SysRole> newRoles = roleMapper.selectBatchIds(distinctRoleIds);
+        if (newRoles.size() != distinctRoleIds.size()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "存在无效的角色ID");
         }
         for (SysRole role : newRoles) {
@@ -612,7 +615,7 @@ public class ProjectService {
 
         // 保护最后一个项目管理员：如果用户当前有 project_admin 角色，且新角色列表中没有，
         // 需要确认还有其他 project_admin
-        if (oldRoleIds.contains(PROJECT_ADMIN_ROLE_ID) && !newRoleIds.contains(PROJECT_ADMIN_ROLE_ID)) {
+        if (oldRoleIds.contains(PROJECT_ADMIN_ROLE_ID) && !distinctRoleIds.contains(PROJECT_ADMIN_ROLE_ID)) {
             long adminCount = memberMapper.selectCount(
                     new LambdaQueryWrapper<ProjectMember>()
                             .eq(ProjectMember::getProjectId, projectId)
@@ -628,8 +631,8 @@ public class ProjectService {
         }
 
         // 计算需要删除和新增的角色
-        List<Long> toRemove = oldRoleIds.stream().filter(rid -> !newRoleIds.contains(rid)).toList();
-        List<Long> toAdd = newRoleIds.stream().filter(rid -> !oldRoleIds.contains(rid)).toList();
+        List<Long> toRemove = oldRoleIds.stream().filter(rid -> !distinctRoleIds.contains(rid)).toList();
+        List<Long> toAdd = distinctRoleIds.stream().filter(rid -> !oldRoleIds.contains(rid)).toList();
 
         // 删除不再需要的角色记录
         if (!toRemove.isEmpty()) {
@@ -665,7 +668,7 @@ public class ProjectService {
         List<String> newRoleNames = newRoles.stream().map(SysRole::getName).toList();
         projectActivityService.log(projectId, currentUserId, "change_role", userId,
                 Map.of("old_role_ids", oldRoleIds, "old_role_names", String.join(", ", oldRoleNames),
-                       "new_role_ids", newRoleIds, "new_role_names", String.join(", ", newRoleNames)));
+                       "new_role_ids", distinctRoleIds, "new_role_names", String.join(", ", newRoleNames)));
 
         // 通知角色变更的用户
         if (!toRemove.isEmpty() || !toAdd.isEmpty()) {

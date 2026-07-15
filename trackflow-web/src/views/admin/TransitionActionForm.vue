@@ -284,7 +284,14 @@ async function loadRoleMembers(roleId?: number) {
   try {
     const res = await projectApi.listMembers(props.projectId)
     const allMembers: ProjectMemberVO[] = res.data || []
-    roleMembers.value = allMembers.filter((m: any) => String(m.roleId) === String(roleId))
+    roleMembers.value = allMembers.filter((m: any) => {
+      // 多角色：检查 roleIds 数组是否包含目标角色
+      if (m.roleIds && m.roleIds.length > 0) {
+        return m.roleIds.includes(String(roleId))
+      }
+      // 兼容：单角色 fallback
+      return String(m.roleId) === String(roleId)
+    })
     // 初始化未配置的成员权重为 1
     for (const m of roleMembers.value) {
       if (!weightMap[m.userId]) {

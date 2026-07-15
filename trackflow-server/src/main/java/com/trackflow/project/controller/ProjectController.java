@@ -3,6 +3,8 @@ package com.trackflow.project.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.CreateTagDTO;
@@ -130,7 +132,11 @@ public class ProjectController {
     @PutMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.check(#id, 'project:manage_members')")
     public R<Void> updateMemberRole(@PathVariable Long id, @PathVariable Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
-        projectService.updateMemberRole(id, userId, dto.getRoleId());
+        List<Long> effectiveRoleIds = dto.getEffectiveRoleIds();
+        if (effectiveRoleIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
+        }
+        projectService.updateMemberRoles(id, userId, effectiveRoleIds);
         return R.ok();
     }
 

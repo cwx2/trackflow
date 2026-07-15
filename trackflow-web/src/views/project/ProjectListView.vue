@@ -210,6 +210,7 @@
       :title="'成员管理 — ' + (currentProject?.name || '')"
       :width="700"
       :footer="false"
+      class="members-modal"
     >
       <a-tabs default-active-key="members" @change="onMemberTabChange">
         <a-tab-pane key="members" title="成员列表">
@@ -220,6 +221,7 @@
               placeholder="选择用户..."
               allow-search
               style="flex: 1"
+              popup-container=".members-modal"
               @focus="loadAllUsers"
             >
               <a-option v-for="u in allUsers" :key="u.id" :value="u.id">
@@ -231,6 +233,7 @@
               placeholder="选择角色..."
               multiple
               style="width: 200px"
+              popup-container=".members-modal"
               @focus="loadProjectRoles"
             >
               <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
@@ -258,6 +261,7 @@
                     size="mini"
                     multiple
                     :max-tag-count="2"
+                    popup-container=".members-modal"
                     @change="(val: any) => changeMemberRole(record.userId, val)"
                     @focus="loadProjectRoles"
                   >
