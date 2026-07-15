@@ -38,6 +38,9 @@ public class BoardColumnService {
      * 如果项目没有自定义配置，基于该项目工作流中实际涉及的状态自动初始化配置
      * （仅工作流引用的状态为 visible=true，其余为 visible=false），
      * 并持久化到数据库以保证后续一致性。
+     * <p>
+     * 重要：如果项目中有工单处于某个"不可见"的状态，自动将该状态提升为可见，
+     * 确保看板上不会有工单"消失"。
      */
     @Transactional
     public List<BoardColumnVO> getColumns(Long projectId) {
@@ -65,7 +68,14 @@ public class BoardColumnService {
                                 .orderByAsc(BoardColumnConfig::getSortOrder)
                 );
             }
+            // 初始化时已基于 usedStatusIds 设置了可见性，无需再次检查
         }
+
+        // 查询项目中实际使用的状态 ID，确保有工单的状态一定可见
+        Set<Long> usedStatusIds = getProjectUsedStatusIds(projectId);
+
+        // 自动提升有工单但不可见的状态为可见（持久化到数据库）
+        configs = ensureUsedStatusesVisible(projectId, configs, usedStatusIds);
 
         // 按配置返回
         Map<Long, BoardColumnConfig> configMap = configs.stream()
@@ -87,10 +97,16 @@ public class BoardColumnService {
                 vo.setSortOrder(config.getSortOrder());
                 vo.setCollapsed(config.getCollapsed());
             } else {
-                // 新增的全局状态默认不可见，不自动污染已配置的项目看板
-                vo.setVisible(false);
+                // 新增的全局状态：如果有工单使用则可见，否则不可见
+                boolean hasIssues = usedStatusIds.contains(status.getId());
+                vo.setVisible(hasIssues);
                 vo.setSortOrder(status.getSortOrder() + 1000);
                 vo.setCollapsed(false);
+
+                // 如果有工单使用，也要持久化配置以避免每次都重新检查
+                if (hasIssues) {
+                    persistNewColumnConfig(projectId, status, status.getSortOrder() + 1000);
+                }
             }
             result.add(vo);
         }
@@ -98,6 +114,61 @@ public class BoardColumnService {
         // 按 sortOrder 排序
         result.sort(Comparator.comparingInt(BoardColumnVO::getSortOrder));
         return result;
+    }
+
+    /**
+     * 确保项目中有工单使用的状态在看板列配置中为可见。
+     * <p>
+     * 如果某个状态有工单但当前配置为 visible=false，自动更新为 visible=true。
+     * 这防止了工单在看板上"消失"的问题。
+     *
+     * @return 更新后的配置列表
+     */
+    private List<BoardColumnConfig> ensureUsedStatusesVisible(
+            Long projectId,
+            List<BoardColumnConfig> configs,
+            Set<Long> usedStatusIds) {
+
+        boolean updated = false;
+        for (BoardColumnConfig config : configs) {
+            if (!config.getVisible() && usedStatusIds.contains(config.getStatusId())) {
+                // 有工单处于这个状态，但列被隐藏了 —— 自动提升为可见
+                config.setVisible(true);
+                config.setUpdatedAt(LocalDateTime.now());
+                boardColumnConfigMapper.updateById(config);
+                updated = true;
+            }
+        }
+
+        if (updated) {
+            // 重新查询确保顺序一致
+            configs = boardColumnConfigMapper.selectList(
+                    new LambdaQueryWrapper<BoardColumnConfig>()
+                            .eq(BoardColumnConfig::getProjectId, projectId)
+                            .orderByAsc(BoardColumnConfig::getSortOrder)
+            );
+        }
+
+        return configs;
+    }
+
+    /**
+     * 为项目持久化一个新的看板列配置（用于新增的全局状态有工单引用时）。
+     */
+    private void persistNewColumnConfig(Long projectId, IssueStatus status, int sortOrder) {
+        try {
+            BoardColumnConfig config = new BoardColumnConfig();
+            config.setProjectId(projectId);
+            config.setStatusId(status.getId());
+            config.setVisible(true);
+            config.setSortOrder(sortOrder);
+            config.setCollapsed(false);
+            config.setCreatedAt(LocalDateTime.now());
+            config.setUpdatedAt(LocalDateTime.now());
+            boardColumnConfigMapper.insert(config);
+        } catch (DataIntegrityViolationException e) {
+            // 唯一约束冲突（并发或已存在），忽略
+        }
     }
 
     /**
