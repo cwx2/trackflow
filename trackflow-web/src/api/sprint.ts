@@ -24,6 +24,11 @@ export const sprintApi = {
     return request.get<any, R<SprintVO>>(`/sprints/${id}`)
   },
 
+  /** 更新 Sprint */
+  update(id: string, data: { name?: string; goal?: string; startDate?: string; endDate?: string }) {
+    return request.put<any, R<SprintVO>>(`/sprints/${id}`, data)
+  },
+
   /** 激活 Sprint */
   activate(id: string) {
     return request.put<any, R<SprintVO>>(`/sprints/${id}/activate`)

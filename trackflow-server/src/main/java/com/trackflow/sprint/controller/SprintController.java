@@ -4,6 +4,7 @@ import com.trackflow.common.model.R;
 import com.trackflow.sprint.converter.SprintConverter;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
+import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.service.SprintService;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
@@ -38,6 +39,12 @@ public class SprintController {
     @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
     public R<SprintVO> getById(@PathVariable Long id) {
         return R.ok(sprintConverter.toVO(sprintService.getById(id)));
+    }
+
+    @PutMapping("/api/v1/sprints/{id}")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
+    public R<SprintVO> update(@PathVariable Long id, @Valid @RequestBody UpdateSprintDTO dto) {
+        return R.ok(sprintConverter.toVO(sprintService.update(id, dto)));
     }
 
     @PutMapping("/api/v1/sprints/{id}/activate")

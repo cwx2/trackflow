@@ -109,6 +109,7 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
+          <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button v-if="canEditSprint" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
         </div>
       </div>
@@ -169,6 +170,7 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip v-if="canEditSprint" :content="hasActiveSprint ? '请先完成当前活跃迭代' : undefined">
             <a-button type="primary" size="mini" :disabled="hasActiveSprint" @click="activateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
@@ -230,6 +232,7 @@
 
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button
             size="mini"
             type="text"
@@ -315,6 +318,28 @@
         <a-form-item label="结束日期">
           <a-date-picker v-model="createForm.endDate" style="width: 100%" />
         </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 编辑 Sprint 弹窗 -->
+    <a-modal v-model:visible="showEdit" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改">
+      <a-form :model="editForm" layout="vertical">
+        <a-form-item label="名称" required>
+          <a-input v-model="editForm.name" placeholder="迭代名称" />
+        </a-form-item>
+        <a-form-item label="目标">
+          <a-textarea v-model="editForm.goal" placeholder="迭代目标（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
+        </a-form-item>
+        <a-form-item label="开始日期" v-if="!editingCompleted">
+          <a-date-picker v-model="editForm.startDate" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="结束日期" v-if="!editingCompleted">
+          <a-date-picker v-model="editForm.endDate" style="width: 100%" />
+        </a-form-item>
+        <div v-if="editingCompleted" class="edit-completed-hint">
+          <span class="hint-icon">ℹ️</span>
+          <span class="hint-text">已完成的迭代不允许修改日期</span>
+        </div>
       </a-form>
     </a-modal>
 
@@ -425,6 +450,18 @@ const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
 const creating = ref(false)
 const expandedCompletedSprints = ref<Set<string>>(new Set())
+
+// ===== 编辑迭代相关 =====
+const showEdit = ref(false)
+const updating = ref(false)
+const editingSprintId = ref<string>('')
+const editingCompleted = ref(false)
+const editForm = reactive({
+  name: '',
+  goal: '',
+  startDate: '',
+  endDate: ''
+})
 
 // ===== 完成迭代相关 =====
 const showCompleteModal = ref(false)
@@ -620,6 +657,49 @@ async function handleCreate() {
     Message.error(e.response?.data?.message || '创建失败')
   } finally {
     creating.value = false
+  }
+}
+
+function openEditModal(sprint: SprintVO) {
+  editingSprintId.value = sprint.id
+  editingCompleted.value = (sprint.status === 'completed' || sprint.status === 'Completed')
+  editForm.name = sprint.name
+  editForm.goal = sprint.goal || ''
+  editForm.startDate = sprint.startDate || ''
+  editForm.endDate = sprint.endDate || ''
+  showEdit.value = true
+}
+
+async function handleUpdate() {
+  if (!editForm.name.trim()) {
+    Message.warning('请输入迭代名称')
+    return
+  }
+  // 前端日期顺序校验
+  if (!editingCompleted.value && editForm.startDate && editForm.endDate) {
+    if (editForm.startDate >= editForm.endDate) {
+      Message.warning('开始日期必须早于结束日期')
+      return
+    }
+  }
+  updating.value = true
+  try {
+    const data: Record<string, any> = {
+      name: editForm.name.trim(),
+      goal: editForm.goal || ''
+    }
+    if (!editingCompleted.value) {
+      data.startDate = editForm.startDate || null
+      data.endDate = editForm.endDate || null
+    }
+    await sprintApi.update(editingSprintId.value, data)
+    Message.success('迭代更新成功')
+    showEdit.value = false
+    loadSprints()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '更新失败')
+  } finally {
+    updating.value = false
   }
 }
 
@@ -982,5 +1062,24 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   padding: 32px 0;
+}
+
+/* ===== 编辑弹窗提示 ===== */
+.edit-completed-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--color-fill-1);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.hint-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.hint-text {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 </style>

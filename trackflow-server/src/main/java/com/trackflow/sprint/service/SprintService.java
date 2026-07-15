@@ -8,6 +8,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
+import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.sprint.vo.BurndownVO;
@@ -67,6 +68,46 @@ public class SprintService {
         sprint.setEndDate(dto.getEndDate());
         sprint.setStatus("planned");
         sprintMapper.insert(sprint);
+        return sprint;
+    }
+
+    @Transactional
+    public Sprint update(Long id, UpdateSprintDTO dto) {
+        Sprint sprint = getById(id);
+        projectService.assertProjectActive(sprint.getProjectId());
+
+        boolean isCompleted = "completed".equals(sprint.getStatus());
+
+        // 已完成 Sprint 只允许修改 name 和 goal（用于归档标注），不允许修改日期
+        if (isCompleted && (dto.getStartDate() != null || dto.getEndDate() != null)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "已完成的迭代不允许修改日期");
+        }
+
+        if (dto.getName() != null) {
+            String trimmed = dto.getName().trim();
+            if (trimmed.isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "迭代名称不能为空");
+            }
+            sprint.setName(trimmed);
+        }
+        if (dto.getGoal() != null) {
+            sprint.setGoal(dto.getGoal());
+        }
+        if (dto.getStartDate() != null) {
+            sprint.setStartDate(dto.getStartDate());
+        }
+        if (dto.getEndDate() != null) {
+            sprint.setEndDate(dto.getEndDate());
+        }
+
+        // 日期合理性校验：如果两个日期都存在，开始必须早于结束
+        LocalDate start = sprint.getStartDate();
+        LocalDate end = sprint.getEndDate();
+        if (start != null && end != null && !start.isBefore(end)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "开始日期必须早于结束日期");
+        }
+
+        sprintMapper.updateById(sprint);
         return sprint;
     }
 
