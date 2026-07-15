@@ -68,13 +68,13 @@ function goBack() {
 .forbidden-title {
   font-size: 22px;
   font-weight: 600;
-  color: var(--color-text-1);
+  color: var(--tf-text-primary);
   margin: 0 0 12px;
 }
 
 .forbidden-desc {
   font-size: 14px;
-  color: var(--color-text-2);
+  color: var(--tf-text-secondary);
   line-height: 1.6;
   margin: 0 0 32px;
 }
@@ -87,14 +87,14 @@ function goBack() {
 
 .forbidden-info {
   font-size: 12px;
-  color: var(--color-text-3);
+  color: var(--tf-text-tertiary);
   padding: 8px 16px;
-  background: var(--color-fill-1);
+  background: var(--tf-bg-surface);
   border-radius: 4px;
 }
 
 .info-label {
-  color: var(--color-text-4);
+  color: var(--tf-text-tertiary);
 }
 
 .info-value {

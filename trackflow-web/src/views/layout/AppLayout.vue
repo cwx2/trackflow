@@ -144,7 +144,8 @@ const canManageWorkflow = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:workflow')
   }
-  return false
+  // 权限未加载时乐观显示，路由守卫 + 后端 @PreAuthorize 做最终拦截
+  return true
 })
 
 const canViewReport = computed(() => {
@@ -154,16 +155,21 @@ const canViewReport = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:report')
   }
-  // 权限未加载时不显示（避免与路由守卫不一致导致 403）
-  return false
+  // 权限未加载时乐观显示，确保所有页面导航一致（包括 403/404 错误页）
+  // 路由守卫 + 后端 @PreAuthorize 做最终权限拦截
+  return true
 })
 
 const canCreateIssue = computed(() => {
   // system:admin 自动拥有所有权限
   if (isAdmin.value) return true
-  // 权限未加载时不显示（避免误导用户点击后被 403 拦截）
-  if (!authStore.permissionsLoaded) return false
-  return authStore.canCreateIssue
+  // 权限已加载时精确判断
+  if (authStore.permissionsLoaded) {
+    return authStore.canCreateIssue
+  }
+  // 权限未加载时乐观显示，确保所有页面导航一致（包括 403/404 错误页）
+  // 点击后路由守卫会等待权限加载完成再做拦截
+  return true
 })
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
