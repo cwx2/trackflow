@@ -19,6 +19,7 @@ import com.trackflow.project.service.ProjectService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.TransitionActionEngine;
+import com.trackflow.workflow.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,8 @@ public class IssueService {
     private final IssueTagService tagService;
     private final PermissionService permissionService;
     private final TransitionActionEngine transitionActionEngine;
+    private final WorkflowService workflowService;
+    private final IssueNotificationHelper notificationHelper;
 
     /**
      * 创建 Issue
@@ -98,6 +101,9 @@ public class IssueService {
 
         // 记录活动
         recordActivity(issue.getId(), currentUserId, "created", null, null, null);
+
+        // 通知被分配人（若创建时指定了 assignee）
+        notificationHelper.notifyCreated(issue, currentUserId);
 
         return issue;
     }
@@ -412,7 +418,12 @@ public class IssueService {
             recordActivity(id, currentUserId, "assigned", "assignee",
                     issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
                     String.valueOf(dto.getAssigneeId()));
+            Long oldAssigneeId = issue.getAssigneeId();
             issue.setAssigneeId(dto.getAssigneeId());
+            // 通知新负责人（仅当 assignee 实际变更时）
+            if (!dto.getAssigneeId().equals(oldAssigneeId)) {
+                notificationHelper.notifyAssigned(issue, dto.getAssigneeId(), currentUserId);
+            }
         }
         if (dto.getSprintId() != null) {
             // Sprint 修改需要 sprint:edit 权限（仅 project_admin 具有）
@@ -484,6 +495,166 @@ public class IssueService {
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
     }
 
+    // ========== 批量操作 ==========
+
+    /**
+     * 批量状态转换
+     */
+    public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setTotal(issueIds.size());
+
+        for (Long issueId : issueIds) {
+            try {
+                Issue issue = getById(issueId);
+                projectService.assertProjectActive(issue.getProjectId());
+                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:change_status")) {
+                    result.addFailure(issueId, issue.getIssueKey(), "无状态变更权限");
+                    continue;
+                }
+                if (!workflowService.isTransitionAllowed(issue, statusId, currentUserId)) {
+                    result.addFailure(issueId, issue.getIssueKey(), "工作流不允许此状态转换");
+                    continue;
+                }
+                transitStatus(issueId, statusId, null);
+                result.addSuccess();
+            } catch (BusinessException e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
+            } catch (Exception e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
+                log.warn("批量状态转换失败 issueId={}", issueId, e);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 批量分配
+     */
+    public BatchOperationResultVO batchAssign(List<Long> issueIds, Long assigneeId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setTotal(issueIds.size());
+
+        for (Long issueId : issueIds) {
+            try {
+                Issue issue = getById(issueId);
+                projectService.assertProjectActive(issue.getProjectId());
+                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:assign")) {
+                    result.addFailure(issueId, issue.getIssueKey(), "无分配权限");
+                    continue;
+                }
+                assign(issueId, assigneeId);
+                result.addSuccess();
+            } catch (BusinessException e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
+            } catch (Exception e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
+                log.warn("批量分配失败 issueId={}", issueId, e);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 批量更新 Sprint
+     */
+    public BatchOperationResultVO batchUpdateSprint(List<Long> issueIds, Long sprintId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setTotal(issueIds.size());
+
+        for (Long issueId : issueIds) {
+            try {
+                Issue issue = getById(issueId);
+                projectService.assertProjectActive(issue.getProjectId());
+                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")) {
+                    result.addFailure(issueId, issue.getIssueKey(), "无编辑权限");
+                    continue;
+                }
+                UpdateIssueDTO dto = new UpdateIssueDTO();
+                dto.setSprintId(sprintId);
+                update(issueId, dto);
+                result.addSuccess();
+            } catch (BusinessException e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
+            } catch (Exception e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
+                log.warn("批量更新Sprint失败 issueId={}", issueId, e);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 批量更新优先级
+     */
+    public BatchOperationResultVO batchUpdatePriority(List<Long> issueIds, String priority) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setTotal(issueIds.size());
+
+        for (Long issueId : issueIds) {
+            try {
+                Issue issue = getById(issueId);
+                projectService.assertProjectActive(issue.getProjectId());
+                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")) {
+                    result.addFailure(issueId, issue.getIssueKey(), "无编辑权限");
+                    continue;
+                }
+                UpdateIssueDTO dto = new UpdateIssueDTO();
+                dto.setPriority(priority);
+                update(issueId, dto);
+                result.addSuccess();
+            } catch (BusinessException e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
+            } catch (Exception e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
+                log.warn("批量更新优先级失败 issueId={}", issueId, e);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 批量删除
+     */
+    public BatchOperationResultVO batchDelete(List<Long> issueIds) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setTotal(issueIds.size());
+
+        for (Long issueId : issueIds) {
+            try {
+                Issue issue = getById(issueId);
+                projectService.assertProjectActive(issue.getProjectId());
+                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:delete")) {
+                    result.addFailure(issueId, issue.getIssueKey(), "无删除权限");
+                    continue;
+                }
+                delete(issueId);
+                result.addSuccess();
+            } catch (BusinessException e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
+            } catch (Exception e) {
+                Issue issue = issueMapper.selectById(issueId);
+                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
+                log.warn("批量删除失败 issueId={}", issueId, e);
+            }
+        }
+        return result;
+    }
+
     /**
      * 状态变更
      */
@@ -529,6 +700,9 @@ public class IssueService {
                 oldStatus != null ? oldStatus.getName() : String.valueOf(oldStatusId),
                 newStatus.getName());
 
+        // 通知报告人+负责人状态已变更
+        notificationHelper.notifyStatusChanged(issue, oldStatusId, newStatusId, currentUserId);
+
         // 如果带了评论，同时添加评论
         if (comment != null && !comment.isBlank()) {
             addComment(id, comment);
@@ -554,6 +728,9 @@ public class IssueService {
                 String.valueOf(assigneeId));
         issue.setAssigneeId(assigneeId);
         issueMapper.updateById(issue);
+
+        // 通知被分配人
+        notificationHelper.notifyAssigned(issue, assigneeId, currentUserId);
     }
 
     // ========== 评论 ==========
@@ -584,6 +761,10 @@ public class IssueService {
         commentMapper.insert(comment);
 
         recordActivity(issueId, currentUserId, "commented", null, null, null);
+
+        // 通知报告人+负责人+之前评论者
+        notificationHelper.notifyCommented(issue, currentUserId);
+
         return comment;
     }
 
