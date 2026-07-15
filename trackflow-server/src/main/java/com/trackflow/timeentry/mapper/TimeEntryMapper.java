@@ -12,6 +12,11 @@ import java.util.Map;
 public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
 
     /**
+     * 汇总指定 Issue 的工时总分钟数
+     */
+    Integer sumDurationByIssueId(@Param("issueId") Long issueId);
+
+    /**
      * 查询工时条目，JOIN issue 表获取 issueKey
      */
     List<Map<String, Object>> selectEntriesWithIssueKey(

@@ -2,6 +2,13 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.timeentry.mapper.TimeEntryMapper">
 
+    <!-- 汇总指定 Issue 的工时总分钟数 -->
+    <select id="sumDurationByIssueId" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(duration), 0)
+        FROM time_entry
+        WHERE issue_id = #{issueId}
+    </select>
+
     <select id="selectEntriesWithIssueKey" resultType="map">
         SELECT
             t.id, t.issue_id, t.user_id, t.work_date, t.duration,

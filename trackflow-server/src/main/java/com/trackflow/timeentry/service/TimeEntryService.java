@@ -3,8 +3,10 @@ package com.trackflow.timeentry.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
@@ -13,7 +15,10 @@ import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -25,10 +30,12 @@ public class TimeEntryService {
 
     private final TimeEntryMapper timeEntryMapper;
     private final IssueActivityMapper activityMapper;
+    private final IssueMapper issueMapper;
 
     /**
      * 创建工时记录
      */
+    @Transactional
     public TimeEntry create(Long userId, CreateTimeEntryDTO dto) {
         TimeEntry entry = new TimeEntry();
         entry.setIssueId(dto.getIssueId());
@@ -51,12 +58,16 @@ public class TimeEntryService {
         }
         recordActivity(dto.getIssueId(), userId, "time_logged", "spent_time", null, detail);
 
+        // 同步更新 issue.spent_hours
+        refreshIssueSpentHours(dto.getIssueId());
+
         return entry;
     }
 
     /**
      * 更新工时记录
      */
+    @Transactional
     public TimeEntry update(Long id, Long userId, UpdateTimeEntryDTO dto) {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
@@ -65,6 +76,8 @@ public class TimeEntryService {
         if (!entry.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权修改他人工时记录");
         }
+
+        Long oldIssueId = entry.getIssueId();
 
         if (dto.getIssueId() != null) entry.setIssueId(dto.getIssueId());
         if (dto.getWorkDate() != null) entry.setWorkDate(LocalDate.parse(dto.getWorkDate()));
@@ -75,12 +88,21 @@ public class TimeEntryService {
         entry.setUpdatedAt(LocalDateTime.now());
 
         timeEntryMapper.updateById(entry);
+
+        // 同步更新 issue.spent_hours
+        refreshIssueSpentHours(entry.getIssueId());
+        // 如果工时记录转移到了其他 Issue，旧 Issue 也需要刷新
+        if (dto.getIssueId() != null && !oldIssueId.equals(dto.getIssueId())) {
+            refreshIssueSpentHours(oldIssueId);
+        }
+
         return entry;
     }
 
     /**
      * 删除工时记录
      */
+    @Transactional
     public void delete(Long id, Long userId) {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
@@ -90,11 +112,16 @@ public class TimeEntryService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
         }
 
+        Long issueId = entry.getIssueId();
+
         // 记录活动：删除了工时
         String durationStr = formatDuration(entry.getDuration());
-        recordActivity(entry.getIssueId(), userId, "time_removed", "spent_time", durationStr, null);
+        recordActivity(issueId, userId, "time_removed", "spent_time", durationStr, null);
 
         timeEntryMapper.deleteById(id);
+
+        // 同步更新 issue.spent_hours
+        refreshIssueSpentHours(issueId);
     }
 
     /**
@@ -186,6 +213,22 @@ public class TimeEntryService {
     }
 
     // ========== 内部方法 ==========
+
+    /**
+     * 重新计算并更新 Issue 的 spent_hours 字段
+     * spent_hours = SUM(time_entry.duration) / 60，保留 2 位小数
+     */
+    private void refreshIssueSpentHours(Long issueId) {
+        Integer totalMinutes = timeEntryMapper.sumDurationByIssueId(issueId);
+        BigDecimal spentHours = BigDecimal.valueOf(totalMinutes != null ? totalMinutes : 0)
+                .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            issue.setSpentHours(spentHours);
+            issueMapper.updateById(issue);
+        }
+    }
 
     private TimeEntryVO mapRowToVO(Map<String, Object> row) {
         TimeEntryVO vo = new TimeEntryVO();
