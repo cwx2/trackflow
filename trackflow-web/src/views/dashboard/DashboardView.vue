@@ -257,7 +257,7 @@ import { Message } from '@arco-design/web-vue'
 import { dashboardApi } from '@/api'
 import type { DashboardSummaryVO, DashboardActivityVO, DashboardChartsVO } from '@/api/dashboard'
 import type { IssueVO } from '@/api/types'
-import { fieldLabelMap } from '@/utils/fieldLabels'
+import { fieldLabelMap, localizeActionShort } from '@/utils/fieldLabels'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -629,29 +629,7 @@ function isOverdue(dt: string): boolean {
 }
 
 function formatAction(activity: DashboardActivityVO): string {
-  const actionMap: Record<string, string> = {
-    'create': '创建了',
-    'created': '创建了',
-    'update': '更新了',
-    'updated': '更新了',
-    'status_change': '变更了状态',
-    'status_changed': '变更了状态',
-    'assign': '分配了',
-    'assigned': '分配了',
-    'comment': '评论了',
-    'commented': '评论了',
-    'attach': '添加了附件',
-    'attached': '添加了附件',
-    'attachment_added': '添加了附件',
-    'attachment_removed': '删除了附件',
-    'time_logged': '记录了工时',
-    'time_removed': '删除了工时',
-    'deleted': '删除了',
-    'restored': '恢复了',
-    'reopened': '重新打开了',
-    'resolved': '解决了'
-  }
-  let text = actionMap[activity.action] || activity.action
+  let text = localizeActionShort(activity.action)
   if (activity.fieldName && (activity.action === 'update' || activity.action === 'updated')) {
     text = `更新了 ${fieldLabelMap[activity.fieldName] || activity.fieldName}`
   }

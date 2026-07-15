@@ -74,6 +74,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { localizeAction } from '@/utils/fieldLabels'
 
 export interface ActivityItem {
   id: string
@@ -120,28 +121,6 @@ function initial(name: string) { return name ? name[0].toUpperCase() : 'U' }
 function avatarBg(name: string) {
   const c = ['#5c6bc0','#26a69a','#ef5350','#ab47bc','#42a5f5','#ff7043','#66bb6a']
   return c[(name || '').charCodeAt(0) % c.length]
-}
-
-/** 操作类型英文 → 中文映射，作为最终 fallback 兜底 */
-const actionLabelMap: Record<string, string> = {
-  created: '创建了此工单',
-  deleted: '删除了此工单',
-  restored: '恢复了此工单',
-  updated: '修改了工单',
-  assigned: '修改了负责人',
-  status_changed: '修改了状态',
-  commented: '添加了评论',
-  time_logged: '记录了工时',
-  time_removed: '删除了工时',
-  attachment_added: '添加了附件',
-  attachment_removed: '删除了附件',
-  auto_assigned: '自动分配了负责人',
-  auto_assign_skipped: '跳过了自动分配',
-}
-
-function localizeAction(action?: string): string {
-  if (!action) return '未知操作'
-  return actionLabelMap[action] || action
 }
 </script>
 

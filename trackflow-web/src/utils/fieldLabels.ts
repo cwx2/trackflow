@@ -106,3 +106,52 @@ export function localizeFieldValue(fieldName?: string | null, value?: string | n
 
   return value
 }
+
+/**
+ * 操作类型 action 中文映射（统一维护）
+ *
+ * - short: 用于 Dashboard 等拼接场景（"{user} {short} {issueKey}"）
+ * - full: 用于 ActivityStream 独立句子场景
+ *
+ * 同时覆盖后端可能返回的长形式（created）和短形式（create）。
+ */
+export const actionLabelMap: Record<string, { short: string; full: string }> = {
+  create: { short: '创建了', full: '创建了此工单' },
+  created: { short: '创建了', full: '创建了此工单' },
+  update: { short: '更新了', full: '修改了工单' },
+  updated: { short: '更新了', full: '修改了工单' },
+  status_change: { short: '变更了状态', full: '修改了状态' },
+  status_changed: { short: '变更了状态', full: '修改了状态' },
+  assign: { short: '分配了', full: '修改了负责人' },
+  assigned: { short: '分配了', full: '修改了负责人' },
+  comment: { short: '评论了', full: '添加了评论' },
+  commented: { short: '评论了', full: '添加了评论' },
+  attach: { short: '添加了附件', full: '添加了附件' },
+  attached: { short: '添加了附件', full: '添加了附件' },
+  attachment_added: { short: '添加了附件', full: '添加了附件' },
+  attachment_removed: { short: '删除了附件', full: '删除了附件' },
+  time_logged: { short: '记录了工时', full: '记录了工时' },
+  time_removed: { short: '删除了工时', full: '删除了工时' },
+  deleted: { short: '删除了', full: '删除了此工单' },
+  restored: { short: '恢复了', full: '恢复了此工单' },
+  reopened: { short: '重新打开了', full: '重新打开了此工单' },
+  resolved: { short: '解决了', full: '解决了此工单' },
+  auto_assigned: { short: '自动分配了', full: '自动分配了负责人' },
+  auto_assign_skipped: { short: '跳过了自动分配', full: '跳过了自动分配' },
+}
+
+/**
+ * 本地化 action（完整句子模式，用于 ActivityStream）
+ */
+export function localizeAction(action?: string | null): string {
+  if (!action) return '未知操作'
+  return actionLabelMap[action]?.full || action
+}
+
+/**
+ * 本地化 action（简短动词模式，用于 Dashboard 拼接）
+ */
+export function localizeActionShort(action?: string | null): string {
+  if (!action) return '操作了'
+  return actionLabelMap[action]?.short || action
+}
