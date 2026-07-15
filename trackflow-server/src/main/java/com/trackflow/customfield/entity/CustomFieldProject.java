@@ -20,4 +20,7 @@ public class CustomFieldProject implements Serializable {
     private Long customFieldId;
 
     private Long projectId;
+
+    /** 字段在项目中的显示顺序 */
+    private Integer position;
 }

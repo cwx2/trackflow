@@ -20,7 +20,7 @@
       <!-- 设置标题 -->
       <div class="settings-title-section">
         <h1 class="settings-title">项目设置</h1>
-        <p class="settings-desc">管理项目基本信息、成员和角色配置</p>
+        <p class="settings-desc">管理项目基本信息、成员、自定义字段配置</p>
       </div>
 
       <!-- Tab 导航 -->
@@ -37,6 +37,13 @@
           <ProjectSettingsMembers
             :project="project"
             :can-manage="canManageMembers"
+            :is-archived="isArchived"
+          />
+        </a-tab-pane>
+        <a-tab-pane key="custom-fields" title="自定义字段">
+          <ProjectSettingsCustomFields
+            :project="project"
+            :can-manage="canManageCustomFields"
             :is-archived="isArchived"
           />
         </a-tab-pane>
@@ -63,6 +70,7 @@ import { loadProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO } from '@/api/types'
 import ProjectSettingsGeneral from './ProjectSettingsGeneral.vue'
 import ProjectSettingsMembers from './ProjectSettingsMembers.vue'
+import ProjectSettingsCustomFields from './ProjectSettingsCustomFields.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -76,7 +84,7 @@ const projectPerms = ref<Set<string>>(new Set())
 // Active tab from route query or default
 const activeTab = computed(() => {
   const tab = route.query.tab as string
-  return ['general', 'members'].includes(tab) ? tab : 'general'
+  return ['general', 'members', 'custom-fields'].includes(tab) ? tab : 'general'
 })
 
 // Permissions
@@ -88,6 +96,11 @@ const canEditProject = computed(() => {
 const canManageMembers = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
   return projectPerms.value.has('project:manage_members')
+})
+
+const canManageCustomFields = computed(() => {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  return projectPerms.value.has('project:manage_custom_fields')
 })
 
 const isArchived = computed(() => project.value?.status === 'archived')

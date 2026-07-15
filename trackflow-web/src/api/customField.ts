@@ -70,5 +70,32 @@ export const customFieldApi = {
       return request.get<any, R<AvailableColumnVO[]>>(`/projects/${projectId}/available-columns`)
     }
     return request.get<any, R<AvailableColumnVO[]>>('/available-columns')
+  },
+
+  // ========== 项目级字段管理 ==========
+
+  /** 获取项目设置中的字段列表（含全局字段） */
+  listProjectSettingsFields(projectId: string) {
+    return request.get<any, R<CustomFieldDefinitionVO[]>>(`/projects/${projectId}/settings/custom-fields`)
+  },
+
+  /** 获取可附加到项目的字段列表 */
+  listAvailableForProject(projectId: string) {
+    return request.get<any, R<CustomFieldDefinitionVO[]>>(`/projects/${projectId}/settings/custom-fields/available`)
+  },
+
+  /** 附加字段到项目 */
+  attachToProject(projectId: string, fieldId: string) {
+    return request.post<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}`)
+  },
+
+  /** 从项目移除字段 */
+  detachFromProject(projectId: string, fieldId: string) {
+    return request.delete<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}`)
+  },
+
+  /** 调整字段在项目中的排序 */
+  reorderProjectFields(projectId: string, fieldIds: string[]) {
+    return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/reorder`, { fieldIds })
   }
 }

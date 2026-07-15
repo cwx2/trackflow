@@ -599,4 +599,164 @@ public class CustomFieldService {
         col.setRemovable(removable);
         return col;
     }
+
+    // ========== 项目级自定义字段管理 ==========
+
+    /**
+     * 获取项目已附加的自定义字段列表（含全局字段）
+     * 按 position 排序
+     */
+    public List<CustomFieldDefinition> listProjectFields(Long projectId) {
+        // 获取全局字段（is_for_all = true）
+        List<CustomFieldDefinition> globalFields = definitionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getIsForAll, true)
+                        .orderByAsc(CustomFieldDefinition::getPosition));
+
+        // 获取项目专属字段
+        List<CustomFieldProject> projectMappings = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .orderByAsc(CustomFieldProject::getPosition));
+
+        List<Long> projectFieldIds = projectMappings.stream()
+                .map(CustomFieldProject::getCustomFieldId)
+                .toList();
+
+        List<CustomFieldDefinition> projectFields = projectFieldIds.isEmpty()
+                ? List.of()
+                : definitionMapper.selectBatchIds(projectFieldIds);
+
+        // 按 projectMappings 的 position 排序
+        Map<Long, Integer> positionMap = projectMappings.stream()
+                .collect(Collectors.toMap(CustomFieldProject::getCustomFieldId, CustomFieldProject::getPosition));
+        projectFields = projectFields.stream()
+                .sorted(Comparator.comparingInt(f -> positionMap.getOrDefault(f.getId(), 0)))
+                .toList();
+
+        // 合并：全局字段在前，项目字段在后
+        List<CustomFieldDefinition> result = new ArrayList<>(globalFields);
+        for (CustomFieldDefinition pf : projectFields) {
+            if (result.stream().noneMatch(f -> f.getId().equals(pf.getId()))) {
+                result.add(pf);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取可以附加到项目的字段列表（排除已附加的和全局字段）
+     */
+    public List<CustomFieldDefinition> listAvailableFieldsForProject(Long projectId) {
+        // 已关联的字段 ID
+        Set<Long> attachedIds = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId))
+                .stream()
+                .map(CustomFieldProject::getCustomFieldId)
+                .collect(Collectors.toSet());
+
+        // 获取所有非全局字段
+        List<CustomFieldDefinition> allNonGlobal = definitionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getIsForAll, false)
+                        .orderByAsc(CustomFieldDefinition::getPosition));
+
+        // 排除已附加的
+        return allNonGlobal.stream()
+                .filter(f -> !attachedIds.contains(f.getId()))
+                .toList();
+    }
+
+    /**
+     * 附加自定义字段到项目
+     */
+    @Transactional
+    public void attachFieldToProject(Long projectId, Long customFieldId) {
+        // 验证字段存在
+        CustomFieldDefinition field = definitionMapper.selectById(customFieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+
+        // 全局字段无需附加
+        if (Boolean.TRUE.equals(field.getIsForAll())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "全局字段无需附加到项目，它已对所有项目可用");
+        }
+
+        // 检查是否已附加
+        boolean exists = projectMapper.exists(new LambdaQueryWrapper<CustomFieldProject>()
+                .eq(CustomFieldProject::getCustomFieldId, customFieldId)
+                .eq(CustomFieldProject::getProjectId, projectId));
+        if (exists) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该字段已附加到本项目");
+        }
+
+        // 计算 position（追加到末尾）
+        Long count = projectMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        int position = count != null ? count.intValue() : 0;
+
+        CustomFieldProject cfp = new CustomFieldProject();
+        cfp.setCustomFieldId(customFieldId);
+        cfp.setProjectId(projectId);
+        cfp.setPosition(position);
+        projectMapper.insert(cfp);
+    }
+
+    /**
+     * 从项目移除自定义字段
+     * 注意：移除后该字段在本项目所有工单中的值将被清除
+     */
+    @Transactional
+    public void detachFieldFromProject(Long projectId, Long customFieldId) {
+        // 验证字段存在
+        CustomFieldDefinition field = definitionMapper.selectById(customFieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+
+        // 全局字段不能从项目移除
+        if (Boolean.TRUE.equals(field.getIsForAll())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "全局字段不能从项目中移除");
+        }
+
+        // 验证关联存在
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, customFieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        if (mapping == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该字段未附加到本项目");
+        }
+
+        // 删除关联
+        projectMapper.deleteById(mapping.getId());
+
+        // 清除该项目所有工单中该字段的值
+        // 获取项目中所有 issue 的 ID
+        // 注意：这里直接用 SQL 删除更高效
+        valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
+                .eq(CustomFieldValue::getCustomFieldId, customFieldId)
+                .inSql(CustomFieldValue::getIssueId,
+                        "SELECT id FROM issue WHERE project_id = " + projectId));
+    }
+
+    /**
+     * 调整字段在项目中的显示顺序
+     */
+    @Transactional
+    public void reorderProjectFields(Long projectId, List<Long> fieldIds) {
+        for (int i = 0; i < fieldIds.size(); i++) {
+            CustomFieldProject mapping = projectMapper.selectOne(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getProjectId, projectId)
+                            .eq(CustomFieldProject::getCustomFieldId, fieldIds.get(i)));
+            if (mapping != null) {
+                mapping.setPosition(i);
+                projectMapper.updateById(mapping);
+            }
+        }
+    }
 }
