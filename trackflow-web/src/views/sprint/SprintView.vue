@@ -169,7 +169,9 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
-          <a-button v-if="canEditSprint" type="primary" size="mini" @click="activateSprint(sprint.id)">开始迭代</a-button>
+          <a-tooltip v-if="canEditSprint" :content="hasActiveSprint ? '请先完成当前活跃迭代' : undefined">
+            <a-button type="primary" size="mini" :disabled="hasActiveSprint" @click="activateSprint(sprint.id)">开始迭代</a-button>
+          </a-tooltip>
           <a-popconfirm v-if="canDeleteSprint" content="确定删除此迭代？" @ok="deleteSprint(sprint.id)">
             <a-button size="mini" status="danger">删除</a-button>
           </a-popconfirm>
@@ -454,6 +456,7 @@ const createForm = reactive({
 const activeSprints = computed(() => sprints.value.filter(s => s.status === 'active' || s.status === 'Active'))
 const plannedSprints = computed(() => sprints.value.filter(s => s.status === 'planned' || s.status === 'Planned'))
 const completedSprints = computed(() => sprints.value.filter(s => s.status === 'completed' || s.status === 'Completed'))
+const hasActiveSprint = computed(() => activeSprints.value.length > 0)
 
 // ===== 工具函数 =====
 

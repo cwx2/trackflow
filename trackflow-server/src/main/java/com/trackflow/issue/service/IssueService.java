@@ -490,169 +490,128 @@ public class IssueService {
         // 归档项目不允许删除工单
         projectService.assertProjectActive(issue.getProjectId());
 
-        issue.setDeletedAt(LocalDateTime.now());
-        issueMapper.updateById(issue);
+        // 先记录活动（deleteById 后逻辑删除字段被填充，查询会过滤掉）
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
+        // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
+        issueMapper.deleteById(id);
     }
 
     // ========== 批量操作 ==========
 
     /**
-     * 批量状态转换
+     * 批量操作通用执行模板。
+     * <p>
+     * 遍历 issueIds，对每个 issue 执行：getById → assertProjectActive → 权限校验 → action。
+     * 部分成功部分失败是设计意图（非事务），结果收集在 BatchOperationResultVO 中。
+     *
+     * @param issueIds       工单 ID 列表
+     * @param permissionCode 权限代码（如 "issue:edit"）
+     * @param action         对单个 issue 执行的业务动作（入参为已通过校验的 issue），返回 null 表示成功，返回非空字符串表示业务拒绝原因
+     * @param operationName  操作名称（用于日志）
      */
-    public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId) {
+    private BatchOperationResultVO executeBatch(
+            List<Long> issueIds,
+            String permissionCode,
+            BatchIssueAction action,
+            String operationName) {
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
         BatchOperationResultVO result = new BatchOperationResultVO();
         result.setTotal(issueIds.size());
 
         for (Long issueId : issueIds) {
+            Issue issue = null;
             try {
-                Issue issue = getById(issueId);
+                issue = getById(issueId);
                 projectService.assertProjectActive(issue.getProjectId());
-                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:change_status")) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无状态变更权限");
+                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), permissionCode)) {
+                    result.addFailure(issueId, issue.getIssueKey(), "无" + permissionCode + "权限");
                     continue;
                 }
-                if (!workflowService.isTransitionAllowed(issue, statusId, currentUserId)) {
-                    result.addFailure(issueId, issue.getIssueKey(), "工作流不允许此状态转换");
-                    continue;
+                String rejectReason = action.execute(issue, currentUserId);
+                if (rejectReason != null) {
+                    result.addFailure(issueId, issue.getIssueKey(), rejectReason);
+                } else {
+                    result.addSuccess();
                 }
-                transitStatus(issueId, statusId, null);
-                result.addSuccess();
             } catch (BusinessException e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
+                String key = issue != null ? issue.getIssueKey() : "?";
+                result.addFailure(issueId, key, e.getMessage());
             } catch (Exception e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
-                log.warn("批量状态转换失败 issueId={}", issueId, e);
+                String key = issue != null ? issue.getIssueKey() : "?";
+                result.addFailure(issueId, key, "操作失败");
+                log.warn("批量{}失败 issueId={}", operationName, issueId, e);
             }
         }
         return result;
+    }
+
+    /**
+     * 批量操作的单条执行动作接口
+     */
+    @FunctionalInterface
+    private interface BatchIssueAction {
+        /**
+         * @return null 表示成功，非空字符串表示业务拒绝原因
+         */
+        String execute(Issue issue, Long currentUserId) throws Exception;
+    }
+
+    /**
+     * 批量状态转换
+     */
+    public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId) {
+        return executeBatch(issueIds, "issue:change_status", (issue, userId) -> {
+            if (!workflowService.isTransitionAllowed(issue, statusId, userId)) {
+                return "工作流不允许此状态转换";
+            }
+            transitStatus(issue.getId(), statusId, null);
+            return null;
+        }, "状态转换");
     }
 
     /**
      * 批量分配
      */
     public BatchOperationResultVO batchAssign(List<Long> issueIds, Long assigneeId) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResultVO result = new BatchOperationResultVO();
-        result.setTotal(issueIds.size());
-
-        for (Long issueId : issueIds) {
-            try {
-                Issue issue = getById(issueId);
-                projectService.assertProjectActive(issue.getProjectId());
-                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:assign")) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无分配权限");
-                    continue;
-                }
-                assign(issueId, assigneeId);
-                result.addSuccess();
-            } catch (BusinessException e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
-            } catch (Exception e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
-                log.warn("批量分配失败 issueId={}", issueId, e);
-            }
-        }
-        return result;
+        return executeBatch(issueIds, "issue:assign", (issue, userId) -> {
+            assign(issue.getId(), assigneeId);
+            return null;
+        }, "分配");
     }
 
     /**
      * 批量更新 Sprint
      */
     public BatchOperationResultVO batchUpdateSprint(List<Long> issueIds, Long sprintId) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResultVO result = new BatchOperationResultVO();
-        result.setTotal(issueIds.size());
-
-        for (Long issueId : issueIds) {
-            try {
-                Issue issue = getById(issueId);
-                projectService.assertProjectActive(issue.getProjectId());
-                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无编辑权限");
-                    continue;
-                }
-                UpdateIssueDTO dto = new UpdateIssueDTO();
-                dto.setSprintId(sprintId);
-                update(issueId, dto);
-                result.addSuccess();
-            } catch (BusinessException e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
-            } catch (Exception e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
-                log.warn("批量更新Sprint失败 issueId={}", issueId, e);
-            }
-        }
-        return result;
+        return executeBatch(issueIds, "issue:edit", (issue, userId) -> {
+            UpdateIssueDTO dto = new UpdateIssueDTO();
+            dto.setSprintId(sprintId);
+            update(issue.getId(), dto);
+            return null;
+        }, "Sprint移动");
     }
 
     /**
      * 批量更新优先级
      */
     public BatchOperationResultVO batchUpdatePriority(List<Long> issueIds, String priority) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResultVO result = new BatchOperationResultVO();
-        result.setTotal(issueIds.size());
-
-        for (Long issueId : issueIds) {
-            try {
-                Issue issue = getById(issueId);
-                projectService.assertProjectActive(issue.getProjectId());
-                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无编辑权限");
-                    continue;
-                }
-                UpdateIssueDTO dto = new UpdateIssueDTO();
-                dto.setPriority(priority);
-                update(issueId, dto);
-                result.addSuccess();
-            } catch (BusinessException e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
-            } catch (Exception e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
-                log.warn("批量更新优先级失败 issueId={}", issueId, e);
-            }
-        }
-        return result;
+        return executeBatch(issueIds, "issue:edit", (issue, userId) -> {
+            UpdateIssueDTO dto = new UpdateIssueDTO();
+            dto.setPriority(priority);
+            update(issue.getId(), dto);
+            return null;
+        }, "优先级变更");
     }
 
     /**
      * 批量删除
      */
     public BatchOperationResultVO batchDelete(List<Long> issueIds) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        BatchOperationResultVO result = new BatchOperationResultVO();
-        result.setTotal(issueIds.size());
-
-        for (Long issueId : issueIds) {
-            try {
-                Issue issue = getById(issueId);
-                projectService.assertProjectActive(issue.getProjectId());
-                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:delete")) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无删除权限");
-                    continue;
-                }
-                delete(issueId);
-                result.addSuccess();
-            } catch (BusinessException e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", e.getMessage());
-            } catch (Exception e) {
-                Issue issue = issueMapper.selectById(issueId);
-                result.addFailure(issueId, issue != null ? issue.getIssueKey() : "?", "操作失败");
-                log.warn("批量删除失败 issueId={}", issueId, e);
-            }
-        }
-        return result;
+        return executeBatch(issueIds, "issue:delete", (issue, userId) -> {
+            delete(issue.getId());
+            return null;
+        }, "删除");
     }
 
     /**
@@ -983,6 +942,77 @@ public class IssueService {
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
         recordActivity(issueId, currentUserId, "attachment_removed", "attachment", attachment.getFileName(), null);
+    }
+
+    // ========== 回收站 ==========
+
+    /**
+     * 回收站列表：查询指定项目中已删除的 Issue（分页）
+     */
+    public Page<Map<String, Object>> listTrash(Long projectId, int page, int pageSize) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        projectService.assertProjectMember(currentUserId, projectId);
+        Page<Map<String, Object>> p = new Page<>(page, pageSize);
+        return issueMapper.selectTrashPage(p, projectId);
+    }
+
+    /**
+     * 恢复已删除的 Issue（从回收站还原）
+     */
+    @Transactional
+    public void restore(Long id) {
+        Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(id);
+        if (row == null || row.get("deleted_at") == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "工单不在回收站中");
+        }
+        Long projectId = ((Number) row.get("project_id")).longValue();
+        projectService.assertProjectActive(projectId);
+
+        int affected = issueMapper.restoreById(id);
+        if (affected == 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "恢复失败，工单不在回收站中");
+        }
+        recordActivity(id, SecurityUtils.getCurrentUserId(), "restored", null, null, null);
+    }
+
+    /**
+     * 永久删除 Issue（物理删除），同时清理关联数据
+     */
+    @Transactional
+    public void permanentDelete(Long id) {
+        Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(id);
+        if (row == null || row.get("deleted_at") == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能永久删除回收站中的工单");
+        }
+
+        // 清理附件（MinIO + DB）
+        List<IssueAttachment> attachments = attachmentMapper.selectList(
+                new LambdaQueryWrapper<IssueAttachment>().eq(IssueAttachment::getIssueId, id)
+        );
+        for (IssueAttachment att : attachments) {
+            minioService.delete(att.getFilePath());
+        }
+        attachmentMapper.delete(new LambdaQueryWrapper<IssueAttachment>().eq(IssueAttachment::getIssueId, id));
+
+        // 清理评论
+        commentMapper.delete(new LambdaQueryWrapper<IssueComment>().eq(IssueComment::getIssueId, id));
+
+        // 清理活动记录
+        activityMapper.delete(new LambdaQueryWrapper<IssueActivity>().eq(IssueActivity::getIssueId, id));
+
+        // 物理删除工单
+        issueMapper.permanentDeleteById(id);
+    }
+
+    /**
+     * 获取已删除工单所属的 projectId（用于 @PreAuthorize SpEL）
+     */
+    public Long getDeletedIssueProjectId(Long issueId) {
+        Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(issueId);
+        if (row == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+        }
+        return ((Number) row.get("project_id")).longValue();
     }
 
     // ========== 内部方法 ==========
