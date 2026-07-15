@@ -76,6 +76,7 @@ public class SavedQueryService {
                     .shared(q.getShared())
                     .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
                     .count(count)
+                    .filters(q.getFilters())
                     .build();
 
             if (Boolean.TRUE.equals(q.getPinned())) {

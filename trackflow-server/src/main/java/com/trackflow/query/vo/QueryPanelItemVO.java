@@ -21,4 +21,5 @@ public class QueryPanelItemVO {
     private Boolean shared;
     private String userId;
     private long count;
+    private String filters;
 }
