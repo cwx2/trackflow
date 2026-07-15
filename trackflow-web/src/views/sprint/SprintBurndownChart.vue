@@ -1,0 +1,293 @@
+<template>
+  <div class="burndown-chart-container">
+    <div class="burndown-header">
+      <div class="burndown-title">
+        <span class="chart-icon">📉</span>
+        <span class="chart-label">燃尽图</span>
+      </div>
+      <div class="burndown-meta" v-if="burndownData">
+        <span class="meta-item" v-if="burndownData.velocity > 0">
+          <span class="meta-label">日均速率</span>
+          <span class="meta-value">{{ burndownData.velocity }} 工单/天</span>
+        </span>
+        <span class="meta-item forecast" v-if="burndownData.forecastDate && !isCompleted">
+          <span class="meta-label">预计完成</span>
+          <span class="meta-value" :class="{ overdue: isForecastLate }">{{ formatForecastDate(burndownData.forecastDate) }}</span>
+        </span>
+      </div>
+    </div>
+    <div class="chart-wrapper" v-if="burndownData && burndownData.dates.length > 0">
+      <v-chart :option="chartOption" autoresize class="chart-instance" />
+    </div>
+    <div class="chart-empty" v-else-if="burndownData && burndownData.dates.length === 0">
+      <span class="empty-text">Sprint 未设置日期范围，无法生成燃尽图</span>
+    </div>
+    <div class="chart-loading" v-else-if="loading">
+      <a-spin :size="24" />
+    </div>
+    <div class="chart-error" v-else-if="error">
+      <span class="error-text">加载失败</span>
+      <a-link @click="loadData">重试</a-link>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart } from 'echarts/charts'
+import {
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  MarkLineComponent
+} from 'echarts/components'
+import VChart from 'vue-echarts'
+import { sprintApi } from '@/api'
+import type { SprintBurndownVO } from '@/api/types'
+
+// 注册 ECharts 组件
+use([CanvasRenderer, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
+
+const props = defineProps<{
+  sprintId: string
+  sprintEndDate?: string
+  isCompleted?: boolean
+}>()
+
+const burndownData = ref<SprintBurndownVO | null>(null)
+const loading = ref(false)
+const error = ref(false)
+
+const isForecastLate = computed(() => {
+  if (!burndownData.value?.forecastDate || !props.sprintEndDate) return false
+  return burndownData.value.forecastDate > props.sprintEndDate
+})
+
+function formatForecastDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+const chartOption = computed(() => {
+  if (!burndownData.value || burndownData.value.dates.length === 0) return {}
+
+  const { dates, idealLine, actualLine, todayIndex } = burndownData.value
+  // 短日期显示 (MM-DD)
+  const shortDates = dates.map(d => d.substring(5))
+
+  // 主题色（使用 CSS 变量兼容暗色/亮色主题）
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+  const textColor = isDark ? '#9ca3af' : '#57606a'
+  const axisColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+  const tooltipBg = isDark ? '#2a2d33' : '#fff'
+  const tooltipBorder = isDark ? '#3d4048' : '#e5e7eb'
+  const idealColor = isDark ? '#6b7280' : '#9ca3af'
+  const actualColor = isDark ? '#58a6ff' : '#0969da'
+  const todayLineColor = isDark ? '#d29922' : '#9a6700'
+
+  const series: any[] = [
+    {
+      name: '理想进度',
+      type: 'line',
+      data: idealLine,
+      lineStyle: { width: 2, color: idealColor, type: 'dashed' },
+      itemStyle: { color: idealColor },
+      symbol: 'none',
+      z: 1
+    },
+    {
+      name: '实际剩余',
+      type: 'line',
+      data: actualLine,
+      smooth: 0.3,
+      symbol: 'circle',
+      symbolSize: 4,
+      lineStyle: { width: 2.5, color: actualColor },
+      itemStyle: { color: actualColor },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: isDark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(9, 105, 218, 0.08)' },
+            { offset: 1, color: 'rgba(88, 166, 255, 0)' }
+          ]
+        }
+      },
+      markLine: todayIndex >= 0 ? {
+        silent: true,
+        symbol: 'none',
+        lineStyle: { color: todayLineColor, width: 1.5, type: 'solid' },
+        label: {
+          show: true,
+          formatter: '今天',
+          color: todayLineColor,
+          fontSize: 10,
+          position: 'start'
+        },
+        data: [{ xAxis: todayIndex }]
+      } : undefined,
+      z: 2
+    }
+  ]
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: textColor, fontSize: 12 },
+      formatter: (params: any[]) => {
+        if (!params || params.length === 0) return ''
+        const dateIdx = params[0].dataIndex
+        const fullDate = dates[dateIdx]
+        let html = `<div style="font-weight:500;margin-bottom:4px">${fullDate}</div>`
+        for (const p of params) {
+          if (p.value !== undefined) {
+            html += `<div style="display:flex;align-items:center;gap:6px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
+              <span>${p.seriesName}：<b>${p.value}</b> 工单</span>
+            </div>`
+          }
+        }
+        return html
+      }
+    },
+    legend: {
+      data: ['理想进度', '实际剩余'],
+      right: 0,
+      top: 0,
+      textStyle: { color: textColor, fontSize: 11 },
+      itemWidth: 14,
+      itemHeight: 3
+    },
+    grid: { left: 36, right: 12, top: 28, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: shortDates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: axisColor } },
+      axisLabel: {
+        color: textColor,
+        fontSize: 10,
+        interval: shortDates.length > 14 ? Math.floor(shortDates.length / 7) - 1 : 0
+      },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: textColor, fontSize: 10 },
+      splitLine: { lineStyle: { color: axisColor, type: 'dashed' } }
+    },
+    series
+  }
+})
+
+async function loadData() {
+  loading.value = true
+  error.value = false
+  try {
+    const res = await sprintApi.burndown(props.sprintId)
+    burndownData.value = res.data
+  } catch {
+    error.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(() => props.sprintId, () => {
+  loadData()
+})
+
+onMounted(() => {
+  loadData()
+})
+</script>
+
+<style scoped>
+.burndown-chart-container {
+  margin-top: 12px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+.burndown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.burndown-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-icon {
+  font-size: 14px;
+}
+
+.chart-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.burndown-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-label {
+  font-size: 11px;
+  color: var(--color-text-3);
+}
+
+.meta-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.meta-value.overdue {
+  color: rgb(var(--danger-6));
+}
+
+.chart-wrapper {
+  height: 200px;
+}
+
+.chart-instance {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-empty,
+.chart-loading,
+.chart-error {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.empty-text,
+.error-text {
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+</style>
