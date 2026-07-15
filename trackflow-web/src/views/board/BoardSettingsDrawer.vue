@@ -43,7 +43,7 @@
             <a-checkbox v-model="col.visible" class="column-checkbox">
               <div class="column-info">
                 <span class="column-color" :style="{ backgroundColor: col.statusColor }"></span>
-                <span class="column-name">{{ col.statusName }}</span>
+                <span class="column-name">{{ localizeStatusName(col.statusName) }}</span>
               </div>
             </a-checkbox>
           </div>
@@ -58,6 +58,7 @@ import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { boardApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
+import { localizeStatusName } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   visible: boolean

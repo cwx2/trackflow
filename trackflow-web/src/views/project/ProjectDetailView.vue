@@ -133,13 +133,13 @@
               :key="item.statusId"
               class="status-bar-segment"
               :style="{ width: getStatusPercent(item.count) + '%', background: item.statusColor || '#6b7280' }"
-              :title="`${item.statusName}: ${item.count} (${getStatusPercent(item.count).toFixed(1)}%)`"
+              :title="`${localizeStatusName(item.statusName)}: ${item.count} (${getStatusPercent(item.count).toFixed(1)}%)`"
             ></div>
           </div>
           <div class="status-legend">
             <div v-for="item in statistics.statusDistribution" :key="item.statusId" class="legend-item">
               <span class="legend-dot" :style="{ background: item.statusColor || '#6b7280' }"></span>
-              <span class="legend-name">{{ item.statusName }}</span>
+              <span class="legend-name">{{ localizeStatusName(item.statusName) }}</span>
               <span class="legend-count">{{ item.count }}</span>
             </div>
           </div>
@@ -306,6 +306,7 @@ import {
 import { projectApi, workflowApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectStatisticsVO, ProjectActivityVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 

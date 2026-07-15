@@ -389,7 +389,7 @@
                   <div v-if="transitionsLoading[record.id]" class="dropdown-loading"><a-spin :size="16" /></div>
                   <template v-else>
                     <div v-for="st in availableTransitions[record.id]" :key="st.id" class="dropdown-item" @click="selectStatus(record, st)">
-                      <span class="status-dot" :style="{ background: st.color }"></span><span>{{ st.name }}</span>
+                      <span class="status-dot" :style="{ background: st.color }"></span><span>{{ localizeStatusName(st.name) }}</span>
                     </div>
                     <div v-if="(availableTransitions[record.id] || []).length === 0" class="dropdown-empty">无可用转换</div>
                   </template>
@@ -486,6 +486,7 @@ import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -1014,7 +1015,7 @@ function isColumnSortable(key: string): boolean {
 // Status helpers
 function getStatusName(id: string) {
   const s = statusCache.value.find(st => st.id === id)
-  return s?.name || '\u672A\u77E5'
+  return localizeStatusName(s?.name)
 }
 function getStatusColor(id: string) {
   const s = statusCache.value.find(st => st.id === id)

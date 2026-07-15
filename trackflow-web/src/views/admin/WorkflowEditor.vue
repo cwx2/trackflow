@@ -59,7 +59,7 @@
               <th class="corner-cell">从 ↓ / 到 →</th>
               <th v-for="status in statuses" :key="status.id" class="col-header">
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                {{ status.name }}
+                {{ localizeStatusName(status.name) }}
               </th>
             </tr>
           </thead>
@@ -67,7 +67,7 @@
             <tr v-for="fromStatus in statuses" :key="fromStatus.id">
               <td class="row-header">
                 <span class="status-dot" :style="{ background: fromStatus.color }"></span>
-                {{ fromStatus.name }}
+                {{ localizeStatusName(fromStatus.name) }}
               </td>
               <td
                 v-for="toStatus in statuses"
@@ -134,6 +134,7 @@ import { IconSettings, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
+import { localizeStatusName } from '@/utils/fieldLabels'
 
 const selectedProject = ref('0')
 const selectedType = ref('*')
@@ -180,8 +181,8 @@ function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   if (!isAllowed(fromStatus.id, toStatus.id)) return
   actionPanelFrom.value = fromStatus.id
   actionPanelTo.value = toStatus.id
-  actionPanelFromName.value = fromStatus.name
-  actionPanelToName.value = toStatus.name
+  actionPanelFromName.value = localizeStatusName(fromStatus.name)
+  actionPanelToName.value = localizeStatusName(toStatus.name)
   actionPanelVisible.value = true
 }
 

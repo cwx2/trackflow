@@ -109,12 +109,12 @@
             @drop="onDrop($event, status.id)"
           >
             <div class="column-header" :style="{ borderTopColor: status.color }">
-              <span class="column-title">{{ status.name }}</span>
+              <span class="column-title">{{ localizeStatusName(status.name) }}</span>
               <span class="column-count">{{ getColumnIssues(status.id).length }}</span>
               <button
                 v-if="getColumnIssues(status.id).length === 0 && !draggingIssue"
                 class="column-collapse-btn"
-                :aria-label="`折叠 ${status.name} 列`"
+                :aria-label="`折叠 ${localizeStatusName(status.name)} 列`"
                 title="折叠此列"
                 @click="collapseColumn(status.id)"
               >✕</button>
@@ -187,8 +187,8 @@
             }"
             role="button"
             tabindex="0"
-            :aria-label="`${status.name}，0 个工单，点击展开`"
-            :title="`${status.name} (0 工单) - ${draggingIssue ? '释放以移动' : '点击展开'}`"
+            :aria-label="`${localizeStatusName(status.name)}，0 个工单，点击展开`"
+            :title="`${localizeStatusName(status.name)} (0 工单) - ${draggingIssue ? '释放以移动' : '点击展开'}`"
             @click="!draggingIssue && expandColumn(status.id)"
             @keydown.enter="expandColumn(status.id)"
             @dragover="onDragOver($event, status.id)"
@@ -196,7 +196,7 @@
             @drop="onDrop($event, status.id)"
           >
             <div class="collapsed-indicator" :style="{ backgroundColor: status.color || 'var(--color-border)' }"></div>
-            <span class="collapsed-name">{{ status.name }}</span>
+            <span class="collapsed-name">{{ localizeStatusName(status.name) }}</span>
             <span class="collapsed-count">0</span>
           </div>
         </template>
@@ -217,7 +217,7 @@
               class="swimlane-col-header"
               :style="{ borderTopColor: status.color }"
             >
-              <span class="column-title">{{ status.name }}</span>
+              <span class="column-title">{{ localizeStatusName(status.name) }}</span>
             </div>
           </div>
         </div>
@@ -356,6 +356,7 @@ import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO } from '@/api/type
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
+import { localizeStatusName } from '@/utils/fieldLabels'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import { IconSettings, IconSearch } from '@arco-design/web-vue/es/icon'
 

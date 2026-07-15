@@ -28,7 +28,7 @@
                 @click="handleBatchState(status)"
               >
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                <span>{{ status.name }}</span>
+                <span>{{ localizeStatusName(status.name) }}</span>
               </div>
               <div v-if="allStatuses.length === 0" class="dropdown-empty">
                 无可用状态
@@ -179,6 +179,7 @@ import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete } fr
 import { Modal } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
+import { localizeStatusName } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   selectedCount: number

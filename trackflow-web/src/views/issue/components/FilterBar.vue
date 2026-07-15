@@ -153,6 +153,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, sprintApi, userApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, SprintVO, UserVO } from '@/api/types'
+import { localizeStatusName } from '@/utils/fieldLabels'
 
 // ==================== Types ====================
 
@@ -459,7 +460,7 @@ async function loadValueOptions(fieldKey: string) {
       case 'status':
         valueOptions.value = props.statusList.map(s => ({
           id: s.id,
-          label: s.name,
+          label: localizeStatusName(s.name),
           color: s.color
         }))
         break

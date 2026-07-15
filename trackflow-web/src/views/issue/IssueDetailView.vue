@@ -134,7 +134,7 @@ import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-import { localizeFieldName, localizeFieldValue } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue, localizeStatusName } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -311,7 +311,7 @@ const issueLinks = computed(() => {
   return links.value.map(l => ({
     ...l,
     typeLabel: l.linkType,
-    statusName: l.issueStatus?.name || '',
+    statusName: localizeStatusName(l.issueStatus?.name),
     statusColor: l.issueStatus?.color || '',
     isUnresolvedBlocker: l.linkType === 'blocked_by' && l.issueStatus && !l.issueStatus.isClosed
   }))
@@ -323,7 +323,7 @@ const issueAttachments = computed(() => {
 
 const currentStatus = computed<StatusInfo>(() => {
   if (issue.value?.status) {
-    return { id: issue.value.status.id, name: issue.value.status.name, color: issue.value.status.color }
+    return { id: issue.value.status.id, name: localizeStatusName(issue.value.status.name), color: issue.value.status.color }
   }
   return { id: '', name: '未知', color: '#666' }
 })
@@ -331,7 +331,7 @@ const currentStatus = computed<StatusInfo>(() => {
 const availableTransitions = computed<StatusInfo[]>(() => {
   return transitions.value.map(s => ({
     id: s.id,
-    name: s.name,
+    name: localizeStatusName(s.name),
     color: s.color,
     blocked: s.blocked || false,
     blockedBy: s.blockedBy || []

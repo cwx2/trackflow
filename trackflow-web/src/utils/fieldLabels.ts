@@ -84,6 +84,17 @@ export const statusLabelMap: Record<string, string> = {
 }
 
 /**
+ * 本地化状态名称
+ * 统一用于系统中所有展示状态名称的位置（列表、详情、下拉、看板、筛选器等）
+ * @param name 英文状态名（如 "Open"、"In Progress"）
+ * @returns 中文状态名（如 "待处理"、"进行中"），未匹配时返回原值
+ */
+export function localizeStatusName(name?: string | null): string {
+  if (!name) return '未知'
+  return statusLabelMap[name] || name
+}
+
+/**
  * 根据字段名，本地化字段值
  * 适用于活动记录中展示 old_value / new_value 的场景
  * @param fieldName 字段标识（如 "priority"、"status"）
