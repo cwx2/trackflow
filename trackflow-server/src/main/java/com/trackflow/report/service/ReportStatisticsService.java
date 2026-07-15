@@ -1,6 +1,7 @@
 package com.trackflow.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.service.StatusCacheHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -31,6 +32,7 @@ public class ReportStatisticsService {
     private final IssueStatusMapper statusMapper;
     private final SysUserMapper userMapper;
     private final SprintMapper sprintMapper;
+    private final StatusCacheHelper statusCacheHelper;
 
     /**
      * 获取仪表盘全量数据（一次请求，前端缓存分发）
@@ -349,10 +351,6 @@ public class ReportStatisticsService {
     }
 
     private Set<Long> getClosedStatusIds() {
-        return statusMapper.selectList(new LambdaQueryWrapper<IssueStatus>()
-                        .eq(IssueStatus::getIsClosed, true))
-                .stream()
-                .map(IssueStatus::getId)
-                .collect(Collectors.toSet());
+        return statusCacheHelper.getClosedStatusIds();
     }
 }

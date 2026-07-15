@@ -119,6 +119,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
+import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
@@ -409,13 +410,10 @@ async function onTransition(target: StatusInfo) {
     if (res.code === 0) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
-    } else if (res.code === 40910 || res.code === 40911 || res.code === 40912) {
-      // 关闭前置警告：子任务未完成(40910) / 被阻塞(40911) / 两者皆有(40912)
-      const title = res.code === 40911 ? '存在阻塞关系'
-                  : res.code === 40912 ? '存在阻塞关系和未完成子任务'
-                  : '确认关闭'
+    } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
+      // 关闭前置检查警告（子任务未完成 / 被阻塞 / 组合）— 统一弹窗
       Modal.warning({
-        title,
+        title: '确认关闭',
         content: res.message,
         okText: '强制关闭',
         cancelText: '取消',

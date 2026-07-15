@@ -2,6 +2,7 @@ package com.trackflow.issue.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
@@ -14,6 +15,7 @@ import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueTagService;
+import com.trackflow.issue.service.precheck.ClosePreCheckChain;
 import com.trackflow.issue.vo.*;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -42,6 +44,7 @@ public class IssueController {
     private final IssueTagService tagService;
     private final SysUserMapper sysUserMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final ClosePreCheckChain closePreCheckChain;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -166,7 +169,7 @@ public class IssueController {
         };
 
         if (result == null) {
-            return R.fail(40000, "无效的批量操作类型或缺少必填参数");
+            return R.fail(ErrorCode.INVALID_BATCH_OPERATION);
         }
         return R.ok(result);
     }
@@ -205,33 +208,18 @@ public class IssueController {
             // 区分错误原因：所有权问题 vs 工作流规则限制
             // 系统管理员和特权角色不受所有权限制，错误必然是工作流规则
             if (!permissionService.isSystemAdmin(userId) && !workflowService.isIssueOwner(issue, userId)) {
-                return R.fail(40300, "只能修改分配给自己或由自己创建的工单状态");
+                return R.fail(ErrorCode.OWNERSHIP_REQUIRED, "只能修改分配给自己或由自己创建的工单状态");
             }
-            return R.fail(40300, "当前角色不允许执行此状态转换");
+            return R.fail(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
         }
 
-        // 关闭状态时的前置检查（非强制模式下返回警告）
+        // 关闭状态时的前置检查链（非强制模式下返回警告）
         IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
         if (targetStatus != null && targetStatus.getIsClosed() && !Boolean.TRUE.equals(dto.getForce())) {
-            // 收集所有警告，合并返回
-            List<String> warnings = new java.util.ArrayList<>();
-
-            long openChildren = issueService.countOpenChildren(id);
-            if (openChildren > 0) {
-                warnings.add("有 " + openChildren + " 个未完成的子任务");
-            }
-
-            List<String> blockerKeys = linkService.getUnresolvedBlockerKeys(id);
-            if (!blockerKeys.isEmpty()) {
-                warnings.add("被 " + String.join("、", blockerKeys) + " 阻塞");
-            }
-
+            List<String> warnings = closePreCheckChain.execute(issue);
             if (!warnings.isEmpty()) {
                 String message = "此工单" + String.join("，且", warnings) + "，确定要强制关闭吗？";
-                // 使用 40910（子任务）或 40911（阻塞）或 40912（两者皆有）
-                int code = openChildren > 0 && !blockerKeys.isEmpty() ? 40912
-                         : openChildren > 0 ? 40910 : 40911;
-                return R.fail(code, message);
+                return R.fail(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, message);
             }
         }
 

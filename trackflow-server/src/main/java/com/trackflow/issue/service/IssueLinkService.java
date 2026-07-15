@@ -3,6 +3,7 @@ package com.trackflow.issue.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.CreateIssueLinkDTO;
@@ -37,6 +38,7 @@ public class IssueLinkService {
     private final IssueStatusMapper statusMapper;
     private final IssueConverter issueConverter;
     private final ProjectService projectService;
+    private final StatusCacheHelper statusCacheHelper;
 
     /**
      * 获取 Issue 的所有关联（包括作为 source 和 target 的）
@@ -153,11 +155,8 @@ public class IssueLinkService {
             return List.of();
         }
 
-        // 获取所有关闭状态的 ID
-        Set<Long> closedStatusIds = statusMapper.selectList(
-                new LambdaQueryWrapper<IssueStatus>()
-                        .eq(IssueStatus::getIsClosed, true)
-        ).stream().map(IssueStatus::getId).collect(Collectors.toSet());
+        // 使用缓存获取关闭状态 ID
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
 
         // 批量查询所有 blocker issue（避免 N+1）
         List<Long> sourceIds = blockingLinks.stream()

@@ -1,6 +1,7 @@
 package com.trackflow.workflow.strategy;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.service.StatusCacheHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -30,6 +32,7 @@ public class RoleBasedStrategy implements AssignmentStrategy {
     private final ProjectMemberMapper projectMemberMapper;
     private final IssueMapper issueMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final StatusCacheHelper statusCacheHelper;
 
     /** 轮转计数器：key = "projectId:roleId"
      * TODO: 多实例部署时应改为 Redis 原子计数器（INCR），确保分布式环境下计数一致
@@ -93,12 +96,8 @@ public class RoleBasedStrategy implements AssignmentStrategy {
      * 最少负载模式：选择打开 Issue 最少的候选人（限定当前项目范围）
      */
     private Long resolveLeastLoaded(List<Long> candidates, Long projectId) {
-        // 查询所有"未关闭"状态 ID
-        List<Long> openStatusIds = issueStatusMapper.selectList(
-                new LambdaQueryWrapper<IssueStatus>()
-                        .eq(IssueStatus::getIsClosed, false)
-                        .select(IssueStatus::getId)
-        ).stream().map(IssueStatus::getId).collect(Collectors.toList());
+        // 使用缓存获取所有"未关闭"状态 ID
+        Set<Long> openStatusIds = statusCacheHelper.getOpenStatusIds();
 
         if (openStatusIds.isEmpty()) {
             // 没有 open 状态定义，退化为选第一个
