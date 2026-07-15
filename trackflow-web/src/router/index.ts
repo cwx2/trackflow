@@ -55,6 +55,12 @@ const routes = [
         component: () => import('@/views/project/ProjectDetailView.vue')
       },
       {
+        path: 'projects/:id/settings',
+        name: 'ProjectSettings',
+        component: () => import('@/views/project/settings/ProjectSettingsView.vue'),
+        meta: { requiresProjectEdit: true }
+      },
+      {
         path: 'boards',
         name: 'Boards',
         component: () => import('@/views/board/KanbanBoardView.vue')

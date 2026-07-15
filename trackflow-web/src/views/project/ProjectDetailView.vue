@@ -67,12 +67,12 @@
               <icon-user-group class="meta-icon" />
               {{ project.memberCount }} 名成员
             </span>
-            <span v-if="project.leadName" class="meta-item lead-item" :class="{ editable: canEditProject && !isArchived }" @click="canEditProject && !isArchived && openLeadEditor()">
+            <span v-if="project.leadName" class="meta-item lead-item" :class="{ editable: canEditProject && !isArchived }" @click="canEditProject && !isArchived && goToSettings()">
               <icon-star class="meta-icon" />
               负责人：{{ project.leadName }}
               <icon-edit v-if="canEditProject && !isArchived" class="edit-hint-icon" />
             </span>
-            <span v-else-if="canEditProject && !isArchived" class="meta-item lead-item editable" @click="openLeadEditor()">
+            <span v-else-if="canEditProject && !isArchived" class="meta-item lead-item editable" @click="goToSettings()">
               <icon-star class="meta-icon" />
               设置负责人
               <icon-edit class="edit-hint-icon" />
@@ -198,26 +198,6 @@
         </div>
       </div>
 
-      <!-- 项目可见性设置 -->
-      <div v-if="canEditProject && !isArchived" class="section visibility-section">
-        <h2 class="section-title">可见性设置</h2>
-        <div class="visibility-options">
-          <div
-            v-for="opt in visibilityOptions"
-            :key="opt.value"
-            class="visibility-option"
-            :class="{ active: project.visibility === opt.value }"
-            @click="handleVisibilityChange(opt.value)"
-          >
-            <div class="visibility-option-header">
-              <component :is="opt.icon" class="visibility-option-icon" />
-              <span class="visibility-option-label">{{ opt.label }}</span>
-            </div>
-            <p class="visibility-option-desc">{{ opt.desc }}</p>
-          </div>
-        </div>
-      </div>
-
       <!-- 功能入口 -->
       <div class="section">
         <h2 class="section-title">功能入口</h2>
@@ -299,115 +279,11 @@
       <p class="error-desc">{{ error }}</p>
       <a-button type="primary" @click="loadProject">重试</a-button>
     </div>
-
-    <!-- 编辑项目弹窗 -->
-    <a-modal
-      v-model:visible="showEditDialog"
-      title="编辑项目"
-      :width="480"
-      ok-text="保存修改"
-      cancel-text="取消"
-      :ok-loading="editSaving"
-      :ok-button-props="{ disabled: !editForm.name }"
-      @ok="submitEdit"
-    >
-      <a-form :model="editForm" layout="vertical">
-        <a-form-item label="项目名称" required>
-          <a-input v-model="editForm.name" placeholder="项目名称" />
-        </a-form-item>
-        <a-form-item label="描述">
-          <a-textarea
-            v-model="editForm.description"
-            placeholder="可选，简要描述项目用途"
-            :auto-size="{ minRows: 2, maxRows: 5 }"
-          />
-        </a-form-item>
-        <a-form-item label="项目负责人">
-          <a-select
-            v-model="editForm.leadId"
-            placeholder="选择项目负责人..."
-            allow-search
-            allow-clear
-            :loading="editMembersLoading"
-          >
-            <a-option v-for="m in editMemberList" :key="m.userId" :value="m.userId">
-              {{ m.displayName || m.username }}
-              <span v-if="m.email" style="color: var(--tf-text-tertiary); margin-left: 4px; font-size: 11px">{{ m.email }}</span>
-            </a-option>
-          </a-select>
-          <template #extra>
-            <span style="font-size: 11px; color: var(--tf-text-tertiary)">
-              只能选择当前项目成员。变更后新负责人将自动升级为项目管理员。
-            </span>
-          </template>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <!-- 变更负责人弹窗 -->
-    <a-modal
-      v-model:visible="showLeadModal"
-      title="变更项目负责人"
-      :width="420"
-      ok-text="确认变更"
-      cancel-text="取消"
-      :ok-loading="leadSaving"
-      :ok-button-props="{ disabled: !selectedLeadId || selectedLeadId === project?.leadId }"
-      @ok="submitLeadChange"
-    >
-      <div class="lead-change-form">
-        <p class="lead-change-hint">
-          选择新的项目负责人。变更后新负责人将自动升级为项目管理员角色。
-        </p>
-        <a-select
-          v-model="selectedLeadId"
-          placeholder="选择项目成员..."
-          allow-search
-          :loading="leadMembersLoading"
-          style="width: 100%"
-        >
-          <a-option v-for="m in leadMembers" :key="m.userId" :value="m.userId">
-            {{ m.displayName || m.username }}
-            <span v-if="m.email" style="color: var(--tf-text-tertiary); margin-left: 4px; font-size: 11px">{{ m.email }}</span>
-          </a-option>
-        </a-select>
-      </div>
-    </a-modal>
-
-    <!-- 删除项目确认弹窗 -->
-    <a-modal
-      v-model:visible="showDeleteDialog"
-      title="删除项目"
-      :ok-text="'永久删除'"
-      :cancel-text="'取消'"
-      :ok-loading="deleting"
-      :ok-button-props="{ disabled: deleteConfirmKey !== project?.key, status: 'danger' }"
-      @ok="submitDelete"
-    >
-      <div class="delete-confirm-content">
-        <div class="delete-warning">
-          <icon-exclamation-circle-fill class="warning-icon" />
-          <span>此操作不可撤销！项目及其所有数据将被永久删除。</span>
-        </div>
-        <div v-if="deletePreCheckData" class="delete-impact">
-          <p class="impact-title">即将删除的数据：</p>
-          <ul class="impact-list">
-            <li>📋 {{ deletePreCheckData.issueCount }} 个工单<span v-if="deletePreCheckData.openIssueCount > 0" class="impact-warn">（其中 {{ deletePreCheckData.openIssueCount }} 个未关闭）</span></li>
-            <li>🏃 {{ deletePreCheckData.sprintCount }} 个 Sprint</li>
-            <li>👥 {{ deletePreCheckData.memberCount }} 名成员</li>
-          </ul>
-        </div>
-        <div class="delete-confirm-input">
-          <p>请输入项目标识 <strong>{{ project?.key }}</strong> 确认删除：</p>
-          <a-input v-model="deleteConfirmKey" placeholder="输入项目标识确认" />
-        </div>
-      </div>
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   IconSettings,
@@ -423,7 +299,6 @@ import {
   IconEdit,
   IconLock,
   IconMore,
-  IconExclamationCircleFill,
   IconEye,
   IconEyeInvisible,
   IconHistory
@@ -479,49 +354,6 @@ const visibilityLabel = computed(() => {
   const map: Record<string, string> = { private: '私有项目', internal: '内部项目', public: '公开项目' }
   return map[project.value?.visibility || 'private'] || '私有项目'
 })
-
-const visibilityOptions = [
-  { value: 'private', label: '私有', desc: '仅项目成员可访问', icon: IconEyeInvisible },
-  { value: 'internal', label: '内部', desc: '所有登录用户可查看（非成员为只读）', icon: IconEye },
-  { value: 'public', label: '公开', desc: '所有人可查看（包括未登录用户）', icon: IconEye }
-]
-
-async function handleVisibilityChange(value: string) {
-  if (!project.value || project.value.visibility === value) return
-
-  // 降低可见性时需要确认（破坏性操作）
-  if (value === 'private' && project.value.visibility !== 'private') {
-    Modal.warning({
-      title: '确认将项目设为私有',
-      content: '设为私有后，所有非项目成员将立即无法访问此项目。确定继续？',
-      okText: '确认设为私有',
-      cancelText: '取消',
-      onOk: async () => {
-        await doVisibilityUpdate(value)
-      }
-    })
-    return
-  }
-
-  await doVisibilityUpdate(value)
-}
-
-async function doVisibilityUpdate(value: string) {
-  if (!project.value) return
-  try {
-    await projectApi.update(project.value.id, { visibility: value })
-    project.value.visibility = value as any
-    Message.success('可见性已更新')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新可见性失败')
-  }
-}
-
-// 删除项目
-const showDeleteDialog = ref(false)
-const deleting = ref(false)
-const deleteConfirmKey = ref('')
-const deletePreCheckData = ref<{ issueCount: number; sprintCount: number; memberCount: number; openIssueCount: number } | null>(null)
 
 // 角色映射（动态加载）
 const roleMap = ref<Record<string, string>>({})
@@ -723,92 +555,6 @@ function formatRelativeTime(dateStr: string): string {
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
-// ========== 负责人变更 ==========
-const showLeadModal = ref(false)
-const selectedLeadId = ref<string | undefined>()
-const leadMembers = ref<ProjectMemberVO[]>([])
-const leadMembersLoading = ref(false)
-const leadSaving = ref(false)
-
-// ========== 编辑项目弹窗 ==========
-const showEditDialog = ref(false)
-const editSaving = ref(false)
-const editForm = reactive({
-  name: '',
-  description: '',
-  leadId: undefined as string | undefined
-})
-const editMemberList = ref<ProjectMemberVO[]>([])
-const editMembersLoading = ref(false)
-
-async function loadEditMemberList() {
-  const projectId = route.params.id as string
-  if (!projectId || editMemberList.value.length > 0) return
-  editMembersLoading.value = true
-  try {
-    const res = await projectApi.listMembers(projectId)
-    editMemberList.value = res.data || []
-  } catch {
-    editMemberList.value = []
-  } finally {
-    editMembersLoading.value = false
-  }
-}
-
-async function submitEdit() {
-  if (!editForm.name || !project.value) return
-  editSaving.value = true
-  try {
-    await projectApi.update(project.value.id, {
-      name: editForm.name,
-      description: editForm.description || undefined,
-      leadId: editForm.leadId || undefined
-    })
-    Message.success('项目更新成功')
-    showEditDialog.value = false
-    // 重新加载项目详情
-    await loadProject()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
-  } finally {
-    editSaving.value = false
-  }
-}
-
-async function openLeadEditor() {
-  const projectId = route.params.id as string
-  if (!projectId) return
-  selectedLeadId.value = project.value?.leadId || undefined
-  showLeadModal.value = true
-  // 加载项目成员列表
-  leadMembersLoading.value = true
-  try {
-    const res = await projectApi.listMembers(projectId)
-    leadMembers.value = res.data || []
-  } catch {
-    leadMembers.value = []
-  } finally {
-    leadMembersLoading.value = false
-  }
-}
-
-async function submitLeadChange() {
-  if (!selectedLeadId.value || !project.value) return
-  if (selectedLeadId.value === project.value.leadId) return
-  leadSaving.value = true
-  try {
-    await projectApi.update(project.value.id, { leadId: selectedLeadId.value })
-    Message.success('项目负责人已变更')
-    showLeadModal.value = false
-    // 重新加载项目详情
-    await loadProject()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '变更负责人失败')
-  } finally {
-    leadSaving.value = false
-  }
-}
-
 // 导航
 function goToIssues() {
   router.push({ path: '/', query: { project: project.value?.id } })
@@ -823,17 +569,12 @@ function goToSprints() {
 }
 
 function goToMembers() {
-  // 暂时回到项目列表的成员管理弹窗
-  router.push({ path: '/projects', query: { manage: project.value?.id } })
+  router.push({ path: `/projects/${project.value?.id}/settings`, query: { tab: 'members' } })
 }
 
 function goToSettings() {
   if (!project.value) return
-  editForm.name = project.value.name
-  editForm.description = project.value.description || ''
-  editForm.leadId = project.value.leadId || undefined
-  showEditDialog.value = true
-  loadEditMemberList()
+  router.push({ path: `/projects/${project.value.id}/settings` })
 }
 
 async function handleRestore() {
@@ -858,31 +599,8 @@ async function handleRestore() {
 
 async function confirmDeleteProject() {
   if (!project.value) return
-  try {
-    const res = await projectApi.deletePreCheck(project.value.id)
-    if (res.code === 0 && res.data) {
-      deletePreCheckData.value = res.data
-      deleteConfirmKey.value = ''
-      showDeleteDialog.value = true
-    }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '无法获取项目信息')
-  }
-}
-
-async function submitDelete() {
-  if (!project.value || deleteConfirmKey.value !== project.value.key) return
-  deleting.value = true
-  try {
-    await projectApi.delete(project.value.id, deleteConfirmKey.value)
-    showDeleteDialog.value = false
-    Message.success('项目已永久删除')
-    router.push('/projects')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
-  } finally {
-    deleting.value = false
-  }
+  // Navigate to settings page danger zone
+  router.push({ path: `/projects/${project.value.id}/settings`, query: { tab: 'general' } })
 }
 
 onMounted(() => {
