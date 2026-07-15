@@ -19,6 +19,8 @@ import com.trackflow.issue.dto.UpdateIssueDTO;
 import com.trackflow.issue.entity.*;
 import com.trackflow.issue.mapper.*;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.TransitionActionEngine;
@@ -57,6 +59,7 @@ public class IssueService {
     private final IssueNotificationHelper notificationHelper;
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldService customFieldService;
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 创建 Issue
@@ -86,7 +89,9 @@ public class IssueService {
         issue.setIssueType(dto.getIssueType() != null ? dto.getIssueType() : "Task");
         issue.setStatusId(defaultStatus != null ? defaultStatus.getId() : 1L);
         issue.setPriority(dto.getPriority() != null ? dto.getPriority() : "Normal");
-        issue.setAssigneeId(dto.getAssigneeId());
+        // 校验 assignee 是否为有效的项目成员
+        validateAssignee(dto.getAssigneeId(), dto.getProjectId());
+        issue.setAssigneeId(normalizeAssigneeId(dto.getAssigneeId()));
         issue.setReporterId(currentUserId);
         issue.setSprintId(dto.getSprintId());
         issue.setParentId(dto.getParentId());
@@ -450,14 +455,17 @@ public class IssueService {
             issue.setPriority(dto.getPriority());
         }
         if (dto.getAssigneeId() != null) {
+            // 校验 assignee 是否为有效的项目成员（assigneeId=0 表示取消分配，跳过校验）
+            validateAssignee(dto.getAssigneeId(), issue.getProjectId());
+            Long normalizedAssigneeId = normalizeAssigneeId(dto.getAssigneeId());
             recordActivity(id, currentUserId, "assigned", "assignee",
                     issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
-                    String.valueOf(dto.getAssigneeId()));
+                    normalizedAssigneeId != null ? String.valueOf(normalizedAssigneeId) : null);
             Long oldAssigneeId = issue.getAssigneeId();
-            issue.setAssigneeId(dto.getAssigneeId());
-            // 通知新负责人（仅当 assignee 实际变更时）
-            if (!dto.getAssigneeId().equals(oldAssigneeId)) {
-                notificationHelper.notifyAssigned(issue, dto.getAssigneeId(), currentUserId);
+            issue.setAssigneeId(normalizedAssigneeId);
+            // 通知新负责人（仅当 assignee 实际变更且不为空时）
+            if (normalizedAssigneeId != null && !normalizedAssigneeId.equals(oldAssigneeId)) {
+                notificationHelper.notifyAssigned(issue, normalizedAssigneeId, currentUserId);
             }
         }
         if (dto.getSprintId() != null) {
@@ -897,16 +905,21 @@ public class IssueService {
         Issue issue = getById(id);
         // 归档项目不允许分配工单
         projectService.assertProjectActive(issue.getProjectId());
+        // 校验 assignee 是否为有效的项目成员
+        validateAssignee(assigneeId, issue.getProjectId());
 
+        Long normalizedAssigneeId = normalizeAssigneeId(assigneeId);
         Long currentUserId = SecurityUtils.getCurrentUserId();
         recordActivity(id, currentUserId, "assigned", "assignee",
                 issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null,
-                String.valueOf(assigneeId));
-        issue.setAssigneeId(assigneeId);
+                normalizedAssigneeId != null ? String.valueOf(normalizedAssigneeId) : null);
+        issue.setAssigneeId(normalizedAssigneeId);
         issueMapper.updateById(issue);
 
-        // 通知被分配人
-        notificationHelper.notifyAssigned(issue, assigneeId, currentUserId);
+        // 通知被分配人（仅当实际分配给某人时）
+        if (normalizedAssigneeId != null) {
+            notificationHelper.notifyAssigned(issue, normalizedAssigneeId, currentUserId);
+        }
     }
 
     // ========== 评论 ==========
@@ -1260,6 +1273,33 @@ public class IssueService {
     }
 
     // ========== 内部方法 ==========
+
+    /**
+     * 校验 assigneeId 有效性：用户必须存在、未被禁用、且是指定项目的成员。
+     * assigneeId 为 null 或 0 时跳过校验（表示取消分配）。
+     */
+    private void validateAssignee(Long assigneeId, Long projectId) {
+        if (assigneeId == null || assigneeId == 0L) {
+            return;
+        }
+        SysUser user = sysUserMapper.selectById(assigneeId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的负责人不存在");
+        }
+        if ("disabled".equals(user.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的负责人已被禁用");
+        }
+        if (!projectService.isProjectMember(assigneeId, projectId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的负责人不是该项目的成员");
+        }
+    }
+
+    /**
+     * 将 assigneeId = 0 转换为 null（0 是前端表示"取消分配"的约定值，DB 用 NULL 表示无负责人）。
+     */
+    private Long normalizeAssigneeId(Long assigneeId) {
+        return (assigneeId != null && assigneeId == 0L) ? null : assigneeId;
+    }
 
     private void recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue) {

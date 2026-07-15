@@ -22,9 +22,12 @@ public class Issue implements Serializable {
     private String issueType;
     private Long statusId;
     private String priority;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long assigneeId;
     private Long reporterId;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long sprintId;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long parentId;
     private LocalDate dueDate;
     private BigDecimal estimatedHours;
