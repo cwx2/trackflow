@@ -16,6 +16,19 @@ public class SprintVO {
     private LocalDate endDate;
     private LocalDateTime createdAt;
 
+    // ===== 状态推导 =====
+    /**
+     * 状态提示信息：当 Sprint 的 status 与日期存在矛盾时提供警告。
+     * 为 null 时表示状态与日期一致，无异常。
+     * 示例值："已超过结束日期，建议尽快完成迭代" / "开始日期尚未到达"
+     */
+    private String statusHint;
+
+    /**
+     * 是否已超期（active 且 end_date < today）
+     */
+    private boolean overdue;
+
     // ===== Issue 统计 =====
     /** 工单总数 */
     private int totalIssues;

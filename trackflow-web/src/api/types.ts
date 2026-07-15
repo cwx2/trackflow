@@ -258,6 +258,10 @@ export interface SprintVO {
   startDate?: string
   endDate?: string
   createdAt: string
+  /** 状态提示信息：当 status 与日期矛盾时后端返回警告文案 */
+  statusHint?: string
+  /** 是否已超期（active 且 end_date < today） */
+  overdue?: boolean
   /** 工单总数 */
   totalIssues: number
   /** 已完成工单数 */

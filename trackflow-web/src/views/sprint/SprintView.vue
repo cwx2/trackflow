@@ -31,10 +31,12 @@
     <!-- Sprint 列表 -->
     <div class="sprint-list" v-if="loadingState === 'success' && sprints.length > 0">
       <!-- Active Sprints -->
-      <div v-for="sprint in activeSprints" :key="sprint.id" class="sprint-card active">
+      <div v-for="sprint in activeSprints" :key="sprint.id" class="sprint-card active" :class="{ 'sprint-overdue': sprint.overdue }">
         <div class="sprint-header">
           <div class="sprint-info">
-            <span class="sprint-status-badge active">进行中</span>
+            <span class="sprint-status-badge active" :class="{ overdue: sprint.overdue }">
+              {{ sprint.overdue ? '已超期' : '进行中' }}
+            </span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
             <span class="sprint-remaining" v-if="getRemainingDays(sprint) !== null">
               <template v-if="(getRemainingDays(sprint) ?? 0) > 0">
@@ -51,6 +53,12 @@
           <div class="sprint-dates">
             {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
           </div>
+        </div>
+
+        <!-- 状态警告 -->
+        <div class="sprint-status-warning" v-if="sprint.statusHint">
+          <span class="warning-icon">⚠️</span>
+          <span class="warning-text">{{ sprint.statusHint }}</span>
         </div>
 
         <!-- 进度区域 -->
@@ -126,6 +134,12 @@
           </div>
         </div>
 
+        <!-- 状态提示 -->
+        <div class="sprint-status-hint" v-if="sprint.statusHint">
+          <span class="hint-icon">💡</span>
+          <span class="hint-text">{{ sprint.statusHint }}</span>
+        </div>
+
         <!-- 进度区域 -->
         <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
           <div class="progress-bar-container">
@@ -171,8 +185,8 @@
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
-          <a-tooltip v-if="canEditSprint" :content="hasActiveSprint ? '请先完成当前活跃迭代' : undefined">
-            <a-button type="primary" size="mini" :disabled="hasActiveSprint" @click="activateSprint(sprint.id)">开始迭代</a-button>
+          <a-tooltip v-if="canEditSprint" :content="getActivateTooltip(sprint)">
+            <a-button type="primary" size="mini" :disabled="hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
           <a-popconfirm v-if="canDeleteSprint" content="确定删除此迭代？" @ok="deleteSprint(sprint.id)">
             <a-button size="mini" status="danger">删除</a-button>
@@ -525,6 +539,37 @@ function getProgressPercent(sprint: SprintVO, type: 'done' | 'inProgress' | 'tod
 function getCompletionPercent(sprint: SprintVO): number {
   if (sprint.totalIssues === 0) return 0
   return Math.round((sprint.doneIssues / sprint.totalIssues) * 100)
+}
+
+function isSprintNotStartable(sprint: SprintVO): boolean {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  // 开始日期还没到
+  if (sprint.startDate) {
+    const start = new Date(sprint.startDate)
+    start.setHours(0, 0, 0, 0)
+    if (start.getTime() > today.getTime()) return true
+  }
+  // 结束日期已过期
+  if (sprint.endDate) {
+    const end = new Date(sprint.endDate)
+    end.setHours(0, 0, 0, 0)
+    if (end.getTime() < today.getTime()) return true
+  }
+  return false
+}
+
+function getActivateTooltip(sprint: SprintVO): string | undefined {
+  if (hasActiveSprint.value) return '请先完成当前活跃迭代'
+  if (isSprintNotStartable(sprint)) return `开始日期（${formatDate(sprint.startDate)}）尚未到达`
+  if (sprint.endDate) {
+    const end = new Date(sprint.endDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    end.setHours(0, 0, 0, 0)
+    if (end.getTime() < today.getTime()) return `结束日期（${formatDate(sprint.endDate)}）已过期，无法激活`
+  }
+  return undefined
 }
 
 function viewSprintIssues(sprint: SprintVO) {
@@ -1081,5 +1126,54 @@ onMounted(async () => {
 .hint-text {
   font-size: 12px;
   color: var(--color-text-3);
+}
+
+/* ===== Sprint 状态警告/提示 ===== */
+.sprint-card.sprint-overdue {
+  border-left-color: rgb(var(--danger-6));
+}
+.sprint-status-badge.active.overdue {
+  background: rgba(var(--danger-6), 0.1);
+  color: rgb(var(--danger-6));
+}
+
+.sprint-status-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: rgba(var(--danger-6), 0.06);
+  border: 1px solid rgba(var(--danger-6), 0.15);
+  border-radius: 4px;
+  font-size: 12px;
+  color: rgb(var(--danger-6));
+}
+.sprint-status-warning .warning-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.sprint-status-warning .warning-text {
+  flex: 1;
+}
+
+.sprint-status-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: rgba(var(--primary-6), 0.06);
+  border: 1px solid rgba(var(--primary-6), 0.15);
+  border-radius: 4px;
+  font-size: 12px;
+  color: rgb(var(--primary-6));
+}
+.sprint-status-hint .hint-icon {
+  font-size: 13px;
+}
+.sprint-status-hint .hint-text {
+  flex: 1;
+  color: rgb(var(--primary-6));
 }
 </style>

@@ -34,11 +34,45 @@ public class SprintService {
     private final ProjectService projectService;
 
     /**
-     * 查询项目的 Sprint 列表（带工单统计）。
-     * MyBatis resultMap 直接映射为 SprintVO，无需手动转换。
+     * 查询项目的 Sprint 列表（带工单统计 + 状态推导）。
+     * MyBatis resultMap 直接映射为 SprintVO，然后根据日期推导状态一致性。
      */
     public List<SprintVO> listByProjectWithStats(Long projectId) {
-        return sprintMapper.selectSprintsWithStats(projectId);
+        List<SprintVO> sprints = sprintMapper.selectSprintsWithStats(projectId);
+        LocalDate today = LocalDate.now();
+        for (SprintVO sprint : sprints) {
+            computeStatusHint(sprint, today);
+        }
+        return sprints;
+    }
+
+    /**
+     * 根据 Sprint 的 status 和日期范围，推导状态是否合理并设置提示信息。
+     * 规则：
+     * - active 且 start_date > today → 提示"开始日期尚未到达"
+     * - active 且 end_date < today → 标记超期，提示"已超过结束日期"
+     * - planned 且 start_date ≤ today ≤ end_date → 提示"已到开始日期，可以激活"
+     * - planned 且 end_date < today → 提示"已超过结束日期且未开始"
+     */
+    private void computeStatusHint(SprintVO sprint, LocalDate today) {
+        String status = sprint.getStatus();
+        LocalDate startDate = sprint.getStartDate();
+        LocalDate endDate = sprint.getEndDate();
+
+        if ("active".equals(status)) {
+            if (startDate != null && startDate.isAfter(today)) {
+                sprint.setStatusHint("开始日期尚未到达，Sprint 不应处于进行中状态");
+            } else if (endDate != null && endDate.isBefore(today)) {
+                sprint.setOverdue(true);
+                sprint.setStatusHint("已超过结束日期，建议尽快完成迭代");
+            }
+        } else if ("planned".equals(status)) {
+            if (endDate != null && endDate.isBefore(today)) {
+                sprint.setStatusHint("已超过计划结束日期且尚未开始");
+            } else if (startDate != null && !startDate.isAfter(today)) {
+                sprint.setStatusHint("已到开始日期，可以激活此迭代");
+            }
+        }
     }
 
     public List<Sprint> listByProject(Long projectId) {
@@ -131,6 +165,19 @@ public class SprintService {
         if (activeCount > 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "该项目已有一个活跃的迭代，请先完成当前迭代再激活新的");
+        }
+
+        // 日期合理性校验：开始日期不能在未来（容忍当天）
+        LocalDate today = LocalDate.now();
+        if (sprint.getStartDate() != null && sprint.getStartDate().isAfter(today)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "迭代开始日期（" + sprint.getStartDate() + "）还未到达，无法激活。请等到开始日期或修改日期后再激活");
+        }
+
+        // 结束日期校验：不允许激活已经过期的 Sprint
+        if (sprint.getEndDate() != null && sprint.getEndDate().isBefore(today)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "迭代结束日期（" + sprint.getEndDate() + "）已过，无法激活一个已过期的迭代");
         }
 
         sprint.setStatus("active");
