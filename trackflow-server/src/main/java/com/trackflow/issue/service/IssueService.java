@@ -428,8 +428,12 @@ public class IssueService {
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         if (dto.getTitle() != null) {
-            recordActivity(id, currentUserId, "updated", "title", issue.getTitle(), dto.getTitle());
-            issue.setTitle(dto.getTitle());
+            String trimmedTitle = dto.getTitle().trim();
+            if (trimmedTitle.isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "标题不能为空");
+            }
+            recordActivity(id, currentUserId, "updated", "title", issue.getTitle(), trimmedTitle);
+            issue.setTitle(trimmedTitle);
         }
         if (dto.getDescription() != null) {
             recordActivity(id, currentUserId, "updated", "description",
