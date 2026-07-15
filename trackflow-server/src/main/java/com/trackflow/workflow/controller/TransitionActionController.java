@@ -32,10 +32,10 @@ public class TransitionActionController {
     @GetMapping
     @PreAuthorize("@perm.check(#projectId, 'workflow:manage')")
     public R<List<TransitionActionVO>> list(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) String issueType,
-            @RequestParam(required = false) Long oldStatusId,
-            @RequestParam(required = false) Long newStatusId) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "issueType", required = false) String issueType,
+            @RequestParam(value = "oldStatusId", required = false) Long oldStatusId,
+            @RequestParam(value = "newStatusId", required = false) Long newStatusId) {
 
         List<TransitionAction> actions = transitionActionService.list(
                 projectId, issueType, oldStatusId, newStatusId);

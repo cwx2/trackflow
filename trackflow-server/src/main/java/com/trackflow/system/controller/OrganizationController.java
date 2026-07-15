@@ -36,10 +36,10 @@ public class OrganizationController {
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
     public R<PageResult<OrgVO>> list(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer pageSize,
-            @RequestParam(required = false) String sort) {
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "sort", required = false) String sort) {
 
         Page<Organization> pageObj = PageHelper.buildPage(page, pageSize, sort);
         Page<Organization> result = organizationService.list(pageObj, keyword);

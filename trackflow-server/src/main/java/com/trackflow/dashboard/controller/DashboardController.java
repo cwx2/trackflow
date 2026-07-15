@@ -46,7 +46,7 @@ public class DashboardController {
     @GetMapping("/assigned-to-me")
     @PreAuthorize("isAuthenticated()")
     public R<List<IssueVO>> assignedToMe(
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(value = "limit", defaultValue = "10") int limit) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getAssignedToMe(userId, limit));
     }
@@ -57,8 +57,8 @@ public class DashboardController {
     @GetMapping("/overdue")
     @PreAuthorize("isAuthenticated()")
     public R<List<IssueVO>> overdue(
-            @RequestParam(defaultValue = "7") int days,
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(value = "days", defaultValue = "7") int days,
+            @RequestParam(value = "limit", defaultValue = "10") int limit) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getOverdueIssues(userId, days, limit));
     }
@@ -69,7 +69,7 @@ public class DashboardController {
     @GetMapping("/activity")
     @PreAuthorize("isAuthenticated()")
     public R<List<DashboardActivityVO>> activity(
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getRecentActivity(userId, limit));
     }

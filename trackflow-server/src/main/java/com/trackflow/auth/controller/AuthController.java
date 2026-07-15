@@ -47,7 +47,7 @@ public class AuthController {
      */
     @GetMapping("/my-permissions")
     @PreAuthorize("isAuthenticated()")
-    public R<Set<String>> getMyPermissions(@RequestParam Long projectId) {
+    public R<Set<String>> getMyPermissions(@RequestParam("projectId") Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         Set<String> permissions = new HashSet<>(permissionService.getProjectPermissions(userId, projectId));
         // 合并全局权限

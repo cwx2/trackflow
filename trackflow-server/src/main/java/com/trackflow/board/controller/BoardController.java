@@ -24,7 +24,7 @@ public class BoardController {
      */
     @GetMapping("/columns")
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
-    public R<List<BoardColumnVO>> getColumns(@RequestParam Long projectId) {
+    public R<List<BoardColumnVO>> getColumns(@RequestParam("projectId") Long projectId) {
         List<BoardColumnVO> columns = boardColumnService.getColumns(projectId);
         return R.ok(columns);
     }
@@ -36,7 +36,7 @@ public class BoardController {
     @PutMapping("/columns")
     @PreAuthorize("@perm.check(#projectId, 'project:edit')")
     public R<Void> saveColumns(
-            @RequestParam Long projectId,
+            @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardColumnsDTO dto) {
         boardColumnService.saveColumns(projectId, dto);
         return R.ok();

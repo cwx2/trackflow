@@ -24,9 +24,9 @@ public class NotificationController {
 
     @GetMapping
     public R<PageResult<NotificationVO>> list(
-            @RequestParam(required = false, defaultValue = "false") Boolean unreadOnly,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer pageSize) {
+            @RequestParam(value = "unreadOnly", required = false, defaultValue = "false") Boolean unreadOnly,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Notification> pageObj = PageHelper.buildPage(page, pageSize);
         Page<Notification> result = notificationService.list(userId, unreadOnly, pageObj);

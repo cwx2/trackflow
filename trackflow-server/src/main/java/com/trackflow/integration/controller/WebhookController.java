@@ -30,7 +30,7 @@ public class WebhookController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public R<List<WebhookVO>> list(@RequestParam Long projectId) {
+    public R<List<WebhookVO>> list(@RequestParam("projectId") Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(webhookConverter.toVOList(webhookService.listByProject(projectId)));

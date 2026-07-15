@@ -95,7 +95,7 @@ public class CustomFieldController {
     @GetMapping("/projects/{projectId}/custom-fields")
     public R<List<CustomFieldDefinitionVO>> listByProject(
             @PathVariable Long projectId,
-            @RequestParam(required = false) String issueType) {
+            @RequestParam(value = "issueType", required = false) String issueType) {
         List<CustomFieldDefinition> fields = customFieldService.listByProject(projectId, issueType);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         for (int i = 0; i < fields.size(); i++) {

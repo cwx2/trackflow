@@ -36,14 +36,14 @@ public class UserController {
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<PageResult<UserVO>> list(
-            @RequestParam(required = false) String username,
-            @RequestParam(required = false) String displayName,
-            @RequestParam(required = false) String email,
-            @RequestParam(required = false) Long orgId,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer pageSize,
-            @RequestParam(required = false) String sort) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "displayName", required = false) String displayName,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "orgId", required = false) Long orgId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "sort", required = false) String sort) {
 
         Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort);
         Page<SysUser> result = userService.list(pageObj, username, displayName, email, orgId, status);

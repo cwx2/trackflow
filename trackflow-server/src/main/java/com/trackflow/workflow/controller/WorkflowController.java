@@ -33,8 +33,8 @@ public class WorkflowController {
     @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<List<WorkflowTransitionVO>> getTransitionMatrix(
             @PathVariable Long projectId,
-            @RequestParam(required = false) String issueType,
-            @RequestParam(required = false) Long roleId) {
+            @RequestParam(value = "issueType", required = false) String issueType,
+            @RequestParam(value = "roleId", required = false) Long roleId) {
 
         Long effectiveProjectId = (projectId == 0L) ? null : projectId;
         List<WorkflowTransition> transitions = workflowService.getTransitionMatrix(effectiveProjectId, issueType, roleId);

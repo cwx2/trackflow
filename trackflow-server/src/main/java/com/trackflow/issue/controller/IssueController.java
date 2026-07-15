@@ -113,9 +113,9 @@ public class IssueController {
     @GetMapping("/trash")
     @PreAuthorize("@perm.check(#projectId, 'issue:delete')")
     public R<PageResult<IssueTrashVO>> listTrash(
-            @RequestParam Long projectId,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
         return R.ok(issueService.listTrash(projectId, page, pageSize));
     }
 

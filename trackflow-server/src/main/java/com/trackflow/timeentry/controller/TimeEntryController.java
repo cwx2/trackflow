@@ -82,9 +82,9 @@ public class TimeEntryController {
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public R<List<TimeEntryVO>> list(
-            @RequestParam(required = false) Long userId,
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
+            @RequestParam(value = "userId", required = false) Long userId,
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         // 普通用户只能查自己的工时
         Long targetUserId = (userId != null) ? userId : currentUserId;
@@ -112,9 +112,9 @@ public class TimeEntryController {
     @GetMapping("/summary")
     @PreAuthorize("isAuthenticated()")
     public R<Integer> summary(
-            @RequestParam(required = false) Long userId,
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
+            @RequestParam(value = "userId", required = false) Long userId,
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
         if (!targetUserId.equals(currentUserId)) {
@@ -130,8 +130,8 @@ public class TimeEntryController {
     @GetMapping("/by-project")
     @PreAuthorize("isAuthenticated()")
     public R<List<ProjectTimeSummaryVO>> listByProject(
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         return R.ok(timeEntryService.listByProjectForUser(currentUserId, startDate, endDate));
     }
@@ -143,8 +143,8 @@ public class TimeEntryController {
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<TimeEntryVO>> listByProjectDetail(
             @PathVariable Long projectId,
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
+            @RequestParam("startDate") String startDate,
+            @RequestParam("endDate") String endDate) {
         return R.ok(timeEntryService.listByProject(projectId, startDate, endDate));
     }
 }

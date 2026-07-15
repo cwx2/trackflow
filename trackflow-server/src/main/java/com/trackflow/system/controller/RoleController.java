@@ -38,9 +38,9 @@ public class RoleController {
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<PageResult<RoleVO>> list(
-            @RequestParam(required = false) String roleType,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer pageSize) {
+            @RequestParam(value = "roleType", required = false) String roleType,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
 
         Page<SysRole> pageObj = PageHelper.buildPage(page, pageSize);
         Page<SysRole> result = roleService.list(pageObj, roleType);

@@ -44,7 +44,7 @@ public class SavedQueryController {
      * 获取查询面板（左侧面板数据 + 实时计数）
      */
     @GetMapping("/panel")
-    public R<QueryPanelVO> getPanel(@RequestParam(required = false) Long projectId) {
+    public R<QueryPanelVO> getPanel(@RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
             projectService.assertProjectMember(userId, projectId);
@@ -90,8 +90,8 @@ public class SavedQueryController {
     @GetMapping("/{id}/results")
     public R<PageResult<IssueVO>> executeById(
             @PathVariable String id,
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer pageSize) {
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         Long queryId = Long.parseLong(id);
         Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(queryId, page, pageSize, userId);

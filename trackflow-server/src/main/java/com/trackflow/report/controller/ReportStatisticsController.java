@@ -29,10 +29,10 @@ public class ReportStatisticsController {
     @GetMapping("/dashboard")
     @PreAuthorize("isAuthenticated()")
     public R<DashboardVO> dashboard(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) Long sprintId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "sprintId", required = false) Long sprintId,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate));
@@ -44,8 +44,8 @@ public class ReportStatisticsController {
     @GetMapping("/status-distribution")
     @PreAuthorize("isAuthenticated()")
     public R<StatusDistributionVO> statusDistribution(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) Long sprintId) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getStatusDistribution(projectId, sprintId));
@@ -57,8 +57,8 @@ public class ReportStatisticsController {
     @GetMapping("/priority-distribution")
     @PreAuthorize("isAuthenticated()")
     public R<PriorityDistributionVO> priorityDistribution(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) Long sprintId) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getPriorityDistribution(projectId, sprintId));
@@ -70,9 +70,9 @@ public class ReportStatisticsController {
     @GetMapping("/trend")
     @PreAuthorize("isAuthenticated()")
     public R<TrendVO> trend(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getTrend(projectId, startDate, endDate));
@@ -84,8 +84,8 @@ public class ReportStatisticsController {
     @GetMapping("/workload")
     @PreAuthorize("isAuthenticated()")
     public R<WorkloadVO> workload(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) Long sprintId) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getWorkload(projectId, sprintId));
@@ -97,8 +97,8 @@ public class ReportStatisticsController {
     @GetMapping("/type-distribution")
     @PreAuthorize("isAuthenticated()")
     public R<TypeDistributionVO> typeDistribution(
-            @RequestParam Long projectId,
-            @RequestParam(required = false) Long sprintId) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getTypeDistribution(projectId, sprintId));
@@ -110,8 +110,8 @@ public class ReportStatisticsController {
     @GetMapping("/burndown")
     @PreAuthorize("isAuthenticated()")
     public R<BurndownVO> burndown(
-            @RequestParam Long projectId,
-            @RequestParam Long sprintId) {
+            @RequestParam("projectId") Long projectId,
+            @RequestParam("sprintId") Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getBurndown(projectId, sprintId));
