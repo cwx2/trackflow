@@ -525,7 +525,7 @@ public class IssueService {
                 issue = getById(issueId);
                 projectService.assertProjectActive(issue.getProjectId());
                 if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), permissionCode)) {
-                    result.addFailure(issueId, issue.getIssueKey(), "无" + permissionCode + "权限");
+                    result.addFailure(issueId, issue.getIssueKey(), "无" + operationName + "权限");
                     continue;
                 }
                 String rejectReason = action.execute(issue, currentUserId);
