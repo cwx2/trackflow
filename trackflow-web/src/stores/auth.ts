@@ -363,6 +363,9 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 加载当前用户的全局权限
    * 支持并发调用去重：多次调用只发起一次请求
+   *
+   * 注意：加载失败时 permissionsLoaded 保持 false，确保路由守卫下次导航时重试，
+   * 避免因后端短暂不可用导致用户被永久锁定在无权限状态。
    */
   let _permissionLoadPromise: Promise<void> | null = null
 
@@ -377,11 +380,11 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         const res = await authApi.getMyGlobalPermissions()
         globalPermissions.value = new Set(res.data || [])
-      } catch (e) {
-        console.warn('[auth] Failed to load global permissions', e)
-        globalPermissions.value = new Set()
-      } finally {
         permissionsLoaded.value = true
+      } catch (e) {
+        console.warn('[auth] Failed to load global permissions, will retry on next navigation', e)
+        // 不设置 permissionsLoaded = true，确保下次导航时重试
+      } finally {
         _permissionLoadPromise = null
       }
     })()

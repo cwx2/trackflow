@@ -16,7 +16,7 @@ public class Sprint implements Serializable {
     private Long projectId;
     private String name;
     private String goal;
-    private String status; // planned / active / completed
+    private SprintStatus status;
     private LocalDate startDate;
     private LocalDate endDate;
 

@@ -10,6 +10,7 @@ import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
 import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
@@ -48,25 +49,20 @@ public class SprintService {
 
     /**
      * 根据 Sprint 的 status 和日期范围，推导状态是否合理并设置提示信息。
-     * 规则：
-     * - active 且 start_date > today → 提示"开始日期尚未到达"
-     * - active 且 end_date < today → 标记超期，提示"已超过结束日期"
-     * - planned 且 start_date ≤ today ≤ end_date → 提示"已到开始日期，可以激活"
-     * - planned 且 end_date < today → 提示"已超过结束日期且未开始"
      */
     private void computeStatusHint(SprintVO sprint, LocalDate today) {
         String status = sprint.getStatus();
         LocalDate startDate = sprint.getStartDate();
         LocalDate endDate = sprint.getEndDate();
 
-        if ("active".equals(status)) {
+        if (SprintStatus.ACTIVE.getValue().equals(status)) {
             if (startDate != null && startDate.isAfter(today)) {
                 sprint.setStatusHint("开始日期尚未到达，Sprint 不应处于进行中状态");
             } else if (endDate != null && endDate.isBefore(today)) {
                 sprint.setOverdue(true);
                 sprint.setStatusHint("已超过结束日期，建议尽快完成迭代");
             }
-        } else if ("planned".equals(status)) {
+        } else if (SprintStatus.PLANNED.getValue().equals(status)) {
             if (endDate != null && endDate.isBefore(today)) {
                 sprint.setStatusHint("已超过计划结束日期且尚未开始");
             } else if (startDate != null && !startDate.isAfter(today)) {
@@ -100,7 +96,7 @@ public class SprintService {
         sprint.setGoal(dto.getGoal());
         sprint.setStartDate(dto.getStartDate());
         sprint.setEndDate(dto.getEndDate());
-        sprint.setStatus("planned");
+        sprint.setStatus(SprintStatus.PLANNED);
         sprintMapper.insert(sprint);
         return sprint;
     }
@@ -110,7 +106,7 @@ public class SprintService {
         Sprint sprint = getById(id);
         projectService.assertProjectActive(sprint.getProjectId());
 
-        boolean isCompleted = "completed".equals(sprint.getStatus());
+        boolean isCompleted = sprint.getStatus() == SprintStatus.COMPLETED;
 
         // 已完成 Sprint 只允许修改 name 和 goal（用于归档标注），不允许修改日期
         if (isCompleted && (dto.getStartDate() != null || dto.getEndDate() != null)) {
@@ -152,7 +148,7 @@ public class SprintService {
         projectService.assertProjectActive(sprint.getProjectId());
 
         // 只有计划中的 Sprint 才能激活
-        if (!"planned".equals(sprint.getStatus())) {
+        if (sprint.getStatus() != SprintStatus.PLANNED) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只有计划中的迭代才能激活");
         }
 
@@ -160,7 +156,7 @@ public class SprintService {
         Long activeCount = sprintMapper.selectCount(
                 new LambdaQueryWrapper<Sprint>()
                         .eq(Sprint::getProjectId, sprint.getProjectId())
-                        .eq(Sprint::getStatus, "active")
+                        .eq(Sprint::getStatus, SprintStatus.ACTIVE)
         );
         if (activeCount > 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
@@ -180,7 +176,7 @@ public class SprintService {
                     "迭代结束日期（" + sprint.getEndDate() + "）已过，无法激活一个已过期的迭代");
         }
 
-        sprint.setStatus("active");
+        sprint.setStatus(SprintStatus.ACTIVE);
         sprintMapper.updateById(sprint);
         return sprint;
     }
@@ -191,7 +187,7 @@ public class SprintService {
         // 归档项目不允许操作 Sprint
         projectService.assertProjectActive(sprint.getProjectId());
 
-        if (!"active".equals(sprint.getStatus())) {
+        if (sprint.getStatus() != SprintStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只有进行中的迭代才能完成");
         }
 
@@ -215,7 +211,7 @@ public class SprintService {
                 if (targetSprint == null || !targetSprint.getProjectId().equals(sprint.getProjectId())) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代不存在或不属于当前项目");
                 }
-                if ("completed".equals(targetSprint.getStatus())) {
+                if (targetSprint.getStatus() == SprintStatus.COMPLETED) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代已完成，无法移入");
                 }
                 newSprintId = dto.getTargetSprintId();
@@ -232,7 +228,7 @@ public class SprintService {
         }
 
         // 完成 Sprint
-        sprint.setStatus("completed");
+        sprint.setStatus(SprintStatus.COMPLETED);
         sprintMapper.updateById(sprint);
         return sprint;
     }
@@ -255,14 +251,14 @@ public class SprintService {
                 new LambdaQueryWrapper<Sprint>()
                         .eq(Sprint::getProjectId, sprint.getProjectId())
                         .ne(Sprint::getId, sprintId)
-                        .in(Sprint::getStatus, "planned", "active")
+                        .in(Sprint::getStatus, SprintStatus.PLANNED, SprintStatus.ACTIVE)
                         .orderByAsc(Sprint::getCreatedAt)
         );
         List<CompletionPreviewVO.TargetSprintItem> targetSprints = candidateSprints.stream().map(s -> {
             CompletionPreviewVO.TargetSprintItem item = new CompletionPreviewVO.TargetSprintItem();
             item.setId(String.valueOf(s.getId()));
             item.setName(s.getName());
-            item.setStatus(s.getStatus());
+            item.setStatus(s.getStatus().getValue());
             return item;
         }).collect(Collectors.toList());
         vo.setTargetSprints(targetSprints);

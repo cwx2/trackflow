@@ -154,15 +154,15 @@ const canViewReport = computed(() => {
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:report')
   }
-  // 权限未加载时乐观显示（大多数角色都有 report:view）
-  return true
+  // 权限未加载时不显示（避免与路由守卫不一致导致 403）
+  return false
 })
 
 const canCreateIssue = computed(() => {
   // system:admin 自动拥有所有权限
   if (isAdmin.value) return true
-  // 权限未加载时乐观显示（避免闪烁），后端兜底
-  if (!authStore.permissionsLoaded) return true
+  // 权限未加载时不显示（避免误导用户点击后被 403 拦截）
+  if (!authStore.permissionsLoaded) return false
   return authStore.canCreateIssue
 })
 

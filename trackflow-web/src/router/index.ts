@@ -160,8 +160,12 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.loadGlobalPermissions()
   }
 
+  // 如果权限加载失败（permissionsLoaded 仍为 false），对于需要权限检查的路由允许通过
+  // 依赖后端 API 的 @PreAuthorize 做最终权限校验（前端仅作为 UX 优化）
+  const permissionCheckAvailable = authStore.permissionsLoaded
+
   // 管理路由权限检查
-  if (to.meta.requiresAdmin) {
+  if (to.meta.requiresAdmin && permissionCheckAvailable) {
     if (!authStore.hasGlobalPermission('system:admin')) {
       next({ name: 'Forbidden' })
       return
@@ -169,7 +173,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 工作流路由权限检查：system:admin 或在任意项目中有 project:manage_workflow
-  if (to.meta.requiresWorkflow) {
+  if (to.meta.requiresWorkflow && permissionCheckAvailable) {
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:workflow')
     if (!canAccess) {
       next({ name: 'Forbidden' })
@@ -178,7 +182,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 创建工单路由权限检查：统一使用 authStore.canCreateIssue
-  if (to.meta.requiresCreateIssue) {
+  if (to.meta.requiresCreateIssue && permissionCheckAvailable) {
     if (!authStore.canCreateIssue) {
       next({ name: 'Forbidden' })
       return
@@ -186,7 +190,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // 报表路由权限检查：system:admin 或在任意项目中有 report:view
-  if (to.meta.requiresReport) {
+  if (to.meta.requiresReport && permissionCheckAvailable) {
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:report')
     if (!canAccess) {
       next({ name: 'Forbidden' })
