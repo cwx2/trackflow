@@ -12,6 +12,11 @@ export interface DashboardSummaryVO {
   totalIssues: number
   activeProjects: number
   primaryRoleCode: string | null
+  // 周对比数据
+  lastWeekOpen: number
+  lastWeekInProgress: number
+  lastWeekCompleted: number
+  lastWeekOverdue: number
 }
 
 export interface DashboardActivityVO {
@@ -28,6 +33,44 @@ export interface DashboardActivityVO {
   createdAt: string
 }
 
+// ─── 图表数据类型 ─────────────────────────────────────
+
+export interface DashboardTrendData {
+  dates: string[]
+  created: number[]
+  resolved: number[]
+}
+
+export interface DashboardStatusItem {
+  name: string
+  value: number
+  color: string
+  category: string
+}
+
+export interface DashboardStatusDistribution {
+  items: DashboardStatusItem[]
+  total: number
+}
+
+export interface DashboardWorkloadItem {
+  name: string
+  total: number
+  done: number
+  inProgress: number
+}
+
+export interface DashboardWorkloadData {
+  items: DashboardWorkloadItem[]
+  total: number
+}
+
+export interface DashboardChartsVO {
+  trend: DashboardTrendData
+  statusDistribution: DashboardStatusDistribution
+  workload: DashboardWorkloadData
+}
+
 /**
  * Dashboard 模块 API
  */
@@ -35,6 +78,11 @@ export const dashboardApi = {
   /** 统计概览 */
   summary() {
     return request.get<any, R<DashboardSummaryVO>>('/dashboard/summary')
+  },
+
+  /** 图表数据（趋势、状态分布、工作负载） */
+  charts() {
+    return request.get<any, R<DashboardChartsVO>>('/dashboard/charts')
   },
 
   /** 分配给我的工单 */

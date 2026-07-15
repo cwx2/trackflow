@@ -5,7 +5,7 @@
       <span class="dashboard-greeting">{{ greeting }}，{{ userName }}</span>
     </div>
 
-    <!-- 统计卡片 -->
+    <!-- 统计卡片（含趋势对比） -->
     <div class="stats-grid">
       <div class="stat-card" @click="navigateToQuery('assigned-open')">
         <div class="stat-value" :class="{ loading: summaryLoading }">
@@ -29,6 +29,9 @@
           <span v-else>{{ summary.completedThisWeek }}</span>
         </div>
         <div class="stat-label">本周完成</div>
+        <div class="stat-compare" v-if="!summaryLoading && summary.lastWeekCompleted > 0">
+          <span :class="completedCompareClass">{{ completedCompareText }}</span>
+        </div>
         <div class="stat-icon stat-icon-done">✅</div>
       </div>
       <div class="stat-card warning" @click="navigateToQuery('overdue')">
@@ -37,9 +40,11 @@
           <span v-else>{{ summary.overdue }}</span>
         </div>
         <div class="stat-label">已逾期</div>
+        <div class="stat-compare" v-if="!summaryLoading && summary.lastWeekOverdue > 0">
+          <span :class="overdueCompareClass">{{ overdueCompareText }}</span>
+        </div>
         <div class="stat-icon stat-icon-overdue">⚠️</div>
       </div>
-      <!-- 第五个卡片：根据角色动态展示 -->
       <div class="stat-card" :class="{ highlight: summary.testingCount > 0 && isTester }" @click="navigateToQuery(isTester ? 'testing' : 'due-soon')">
         <div class="stat-value" :class="{ loading: summaryLoading }">
           <a-skeleton v-if="summaryLoading" :animation="true" style="width:40px;height:24px" />
@@ -50,7 +55,7 @@
       </div>
     </div>
 
-    <!-- 角色提示条（当测试人员没有分配工单时显示） -->
+    <!-- 角色提示条 -->
     <div v-if="showRoleHint" class="role-hint-bar">
       <span class="role-hint-icon">💡</span>
       <span class="role-hint-text">
@@ -59,6 +64,69 @@
         或查看
         <a class="role-hint-link" @click="navigateToQuery('reported-by-me')">我报告的问题（{{ summary.reportedByMeOpen }}）</a>
       </span>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="charts-grid">
+      <!-- 工单创建/关闭趋势（14天） -->
+      <div class="chart-card chart-wide">
+        <div class="chart-header">
+          <h3 class="chart-title">工单趋势</h3>
+          <span class="chart-subtitle">近 14 天创建与关闭对比</span>
+        </div>
+        <div class="chart-body">
+          <div v-if="chartsLoading" class="chart-loading">
+            <a-skeleton :animation="true">
+              <a-skeleton-shape shape="square" :style="{ width: '100%', height: '200px' }" />
+            </a-skeleton>
+          </div>
+          <v-chart v-else-if="chartsData" :option="trendChartOption" autoresize class="chart-instance" />
+          <div v-else class="chart-empty">
+            <span class="chart-empty-icon">📈</span>
+            <span class="chart-empty-text">暂无趋势数据</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 工单状态分布 -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">状态分布</h3>
+          <span class="chart-subtitle">当前工单按状态占比</span>
+        </div>
+        <div class="chart-body">
+          <div v-if="chartsLoading" class="chart-loading">
+            <a-skeleton :animation="true">
+              <a-skeleton-shape shape="circle" :style="{ width: '160px', height: '160px', margin: '20px auto' }" />
+            </a-skeleton>
+          </div>
+          <v-chart v-else-if="chartsData && chartsData.statusDistribution.items.length > 0" :option="statusChartOption" autoresize class="chart-instance" />
+          <div v-else class="chart-empty">
+            <span class="chart-empty-icon">🍩</span>
+            <span class="chart-empty-text">暂无工单数据</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 团队工作负载 -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">团队负载</h3>
+          <span class="chart-subtitle">成员工单分布</span>
+        </div>
+        <div class="chart-body">
+          <div v-if="chartsLoading" class="chart-loading">
+            <a-skeleton :animation="true">
+              <a-skeleton-shape shape="square" :style="{ width: '100%', height: '200px' }" />
+            </a-skeleton>
+          </div>
+          <v-chart v-else-if="chartsData && chartsData.workload.items.length > 0" :option="workloadChartOption" autoresize class="chart-instance" />
+          <div v-else class="chart-empty">
+            <span class="chart-empty-icon">👥</span>
+            <span class="chart-empty-text">暂无负载数据</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 双栏内容区 -->
@@ -187,9 +255,21 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Message } from '@arco-design/web-vue'
 import { dashboardApi } from '@/api'
-import type { DashboardSummaryVO, DashboardActivityVO } from '@/api/dashboard'
+import type { DashboardSummaryVO, DashboardActivityVO, DashboardChartsVO } from '@/api/dashboard'
 import type { IssueVO } from '@/api/types'
 import { fieldLabelMap } from '@/utils/fieldLabels'
+import VChart from 'vue-echarts'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, PieChart, BarChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+} from 'echarts/components'
+
+use([CanvasRenderer, LineChart, PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -199,6 +279,7 @@ const summaryLoading = ref(true)
 const assignedLoading = ref(true)
 const overdueLoading = ref(true)
 const activityLoading = ref(true)
+const chartsLoading = ref(true)
 
 const summary = ref<DashboardSummaryVO>({
   assignedOpen: 0,
@@ -210,12 +291,17 @@ const summary = ref<DashboardSummaryVO>({
   testingCount: 0,
   totalIssues: 0,
   activeProjects: 0,
-  primaryRoleCode: null
+  primaryRoleCode: null,
+  lastWeekOpen: 0,
+  lastWeekInProgress: 0,
+  lastWeekCompleted: 0,
+  lastWeekOverdue: 0
 })
 
 const assignedIssues = ref<IssueVO[]>([])
 const overdueIssues = ref<IssueVO[]>([])
 const activities = ref<DashboardActivityVO[]>([])
+const chartsData = ref<DashboardChartsVO | null>(null)
 
 // Computed
 const userName = computed(() => {
@@ -233,13 +319,220 @@ const greeting = computed(() => {
 
 const isTester = computed(() => summary.value.primaryRoleCode === 'tester')
 
-/** 当测试人员没有分配工单，且有待测试工单时，显示角色引导条 */
 const showRoleHint = computed(() => {
   return !summaryLoading.value
     && isTester.value
     && summary.value.assignedOpen === 0
     && summary.value.assignedInProgress === 0
     && summary.value.testingCount > 0
+})
+
+// ─── 周对比计算 ─────────────────────────────────────────
+
+const completedCompareText = computed(() => {
+  const curr = summary.value.completedThisWeek
+  const last = summary.value.lastWeekCompleted
+  if (last === 0) return ''
+  const diff = curr - last
+  const pct = Math.abs(Math.round((diff / last) * 100))
+  if (diff > 0) return `↑ ${pct}%`
+  if (diff < 0) return `↓ ${pct}%`
+  return '持平'
+})
+
+const completedCompareClass = computed(() => {
+  const diff = summary.value.completedThisWeek - summary.value.lastWeekCompleted
+  if (diff > 0) return 'compare-up'
+  if (diff < 0) return 'compare-down'
+  return 'compare-flat'
+})
+
+const overdueCompareText = computed(() => {
+  const curr = summary.value.overdue
+  const last = summary.value.lastWeekOverdue
+  if (last === 0) return ''
+  const diff = curr - last
+  const pct = Math.abs(Math.round((diff / last) * 100))
+  if (diff > 0) return `↑ ${pct}%`
+  if (diff < 0) return `↓ ${pct}%`
+  return '持平'
+})
+
+const overdueCompareClass = computed(() => {
+  const diff = summary.value.overdue - summary.value.lastWeekOverdue
+  // 逾期增加是坏事
+  if (diff > 0) return 'compare-down'
+  if (diff < 0) return 'compare-up'
+  return 'compare-flat'
+})
+
+// ─── ECharts 配置 ─────────────────────────────────────────
+
+const trendChartOption = computed(() => {
+  if (!chartsData.value) return {}
+  const { dates, created, resolved } = chartsData.value.trend
+  // 只显示日期 MM-DD 部分
+  const labels = dates.map(d => {
+    const parts = d.split('-')
+    return `${parts[1]}-${parts[2]}`
+  })
+  return {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'var(--tf-bg-elevated, #2a2d33)',
+      borderColor: 'var(--tf-border-light, #333)',
+      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 12 }
+    },
+    legend: {
+      data: ['新建', '关闭'],
+      top: 0,
+      right: 0,
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 11 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    grid: { left: 36, right: 16, top: 32, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: 'var(--tf-border-light, #333)' } },
+      axisLabel: { color: 'var(--tf-text-tertiary, #6b7280)', fontSize: 10 },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: 'var(--tf-text-tertiary, #6b7280)', fontSize: 10 },
+      splitLine: { lineStyle: { color: 'var(--tf-border-light, #333)', type: 'dashed' } }
+    },
+    series: [
+      {
+        name: '新建',
+        type: 'line',
+        data: created,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { width: 2, color: '#58a6ff' },
+        itemStyle: { color: '#58a6ff' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(88,166,255,0.15)' }, { offset: 1, color: 'rgba(88,166,255,0)' }] } }
+      },
+      {
+        name: '关闭',
+        type: 'line',
+        data: resolved,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: { width: 2, color: '#3fb950' },
+        itemStyle: { color: '#3fb950' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(63,185,80,0.15)' }, { offset: 1, color: 'rgba(63,185,80,0)' }] } }
+      }
+    ]
+  }
+})
+
+const statusChartOption = computed(() => {
+  if (!chartsData.value) return {}
+  const items = chartsData.value.statusDistribution.items
+  return {
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'var(--tf-bg-elevated, #2a2d33)',
+      borderColor: 'var(--tf-border-light, #333)',
+      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 12 },
+      formatter: '{b}: {c} ({d}%)'
+    },
+    legend: {
+      orient: 'vertical',
+      right: 8,
+      top: 'center',
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 11 },
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 8
+    },
+    series: [{
+      type: 'pie',
+      radius: ['42%', '70%'],
+      center: ['35%', '50%'],
+      avoidLabelOverlap: true,
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 12, fontWeight: 500, color: 'var(--tf-text-primary, #e6edf3)' }
+      },
+      data: items.map(item => ({
+        name: item.name,
+        value: item.value,
+        itemStyle: { color: item.color || '#58a6ff' }
+      }))
+    }]
+  }
+})
+
+const workloadChartOption = computed(() => {
+  if (!chartsData.value) return {}
+  const items = chartsData.value.workload.items
+  const names = items.map(i => i.name)
+  const doneData = items.map(i => i.done)
+  const inProgressData = items.map(i => i.inProgress)
+
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: 'var(--tf-bg-elevated, #2a2d33)',
+      borderColor: 'var(--tf-border-light, #333)',
+      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 12 }
+    },
+    legend: {
+      data: ['已完成', '进行中'],
+      top: 0,
+      right: 0,
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 11 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    grid: { left: 80, right: 16, top: 32, bottom: 8 },
+    xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: 'var(--tf-text-tertiary, #6b7280)', fontSize: 10 },
+      splitLine: { lineStyle: { color: 'var(--tf-border-light, #333)', type: 'dashed' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: names,
+      axisLine: { lineStyle: { color: 'var(--tf-border-light, #333)' } },
+      axisLabel: {
+        color: 'var(--tf-text-secondary, #9ca3af)',
+        fontSize: 11,
+        width: 64,
+        overflow: 'truncate'
+      },
+      axisTick: { show: false }
+    },
+    series: [
+      {
+        name: '已完成',
+        type: 'bar',
+        stack: 'total',
+        data: doneData,
+        itemStyle: { color: '#3fb950', borderRadius: [0, 0, 0, 0] },
+        barMaxWidth: 20
+      },
+      {
+        name: '进行中',
+        type: 'bar',
+        stack: 'total',
+        data: inProgressData,
+        itemStyle: { color: '#58a6ff', borderRadius: [0, 3, 3, 0] },
+        barMaxWidth: 20
+      }
+    ]
+  }
 })
 
 // Data loading
@@ -252,6 +545,17 @@ async function loadSummary() {
     }
   } catch { Message.error({ content: '加载统计数据失败', duration: 3000 }) }
   finally { summaryLoading.value = false }
+}
+
+async function loadCharts() {
+  chartsLoading.value = true
+  try {
+    const res = await dashboardApi.charts()
+    if (res.code === 0 && res.data) {
+      chartsData.value = res.data
+    }
+  } catch { Message.error({ content: '加载图表数据失败', duration: 3000 }) }
+  finally { chartsLoading.value = false }
 }
 
 async function loadAssigned() {
@@ -392,6 +696,7 @@ function navigateToQuery(type: string) {
 // Init
 onMounted(() => {
   loadSummary()
+  loadCharts()
   loadAssigned()
   loadOverdue()
   refreshActivity()
@@ -475,6 +780,24 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.stat-compare {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.compare-up {
+  color: var(--tf-success, #3fb950);
+}
+
+.compare-down {
+  color: var(--tf-danger, #f85149);
+}
+
+.compare-flat {
+  color: var(--tf-text-tertiary);
+}
+
 .stat-icon {
   position: absolute;
   top: 12px;
@@ -514,6 +837,87 @@ onMounted(() => {
 
 .role-hint-link:hover {
   text-decoration: underline;
+}
+
+/* Charts Grid */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.chart-card {
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border-light);
+  border-radius: var(--tf-radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card.chart-wide {
+  grid-column: 1 / -1;
+}
+
+.chart-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0;
+}
+
+.chart-subtitle {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.chart-body {
+  flex: 1;
+  padding: 8px 12px 12px;
+  min-height: 0;
+}
+
+.chart-instance {
+  width: 100%;
+  height: 220px;
+}
+
+.chart-card.chart-wide .chart-instance {
+  height: 200px;
+}
+
+.chart-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 8px;
+}
+
+.chart-empty-icon {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+.chart-empty-text {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
 }
 
 /* Dashboard Content - Two columns */
@@ -785,6 +1189,15 @@ onMounted(() => {
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+  .chart-card.chart-wide {
+    grid-column: auto;
+  }
+}
+
 @media (max-width: 1024px) {
   .stats-grid {
     grid-template-columns: repeat(3, 1fr);

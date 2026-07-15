@@ -2,6 +2,7 @@ package com.trackflow.dashboard.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
+import com.trackflow.dashboard.vo.DashboardChartsVO;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -145,6 +147,38 @@ public class DashboardService {
         vo.setActiveProjects(projectMapper.selectCount(new QueryWrapper<Project>()
                 .eq("status", "Active")));
 
+        // ─── 周对比数据（基于上周同一天的快照逻辑近似） ─────
+        LocalDateTime lastWeekStart = weekStart.minusWeeks(1);
+        LocalDateTime lastWeekEnd = weekStart; // 上周结束 = 本周开始
+
+        // 上周待处理快照近似：上周五这天的 open 状态（简化为上周末时间点之前创建且当时未关闭的数量）
+        // 实际采用简化方案：上周同期 assignedOpen 数量（用上周最后一天的状态）
+        // 简化实现：计算上周完成数量来对比
+        vo.setLastWeekCompleted(issueMapper.selectCount(new QueryWrapper<Issue>()
+                .isNull("deleted_at")
+                .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
+                .in("status_id", doneStatusIds)
+                .ge("updated_at", lastWeekStart)
+                .lt("updated_at", lastWeekEnd)));
+
+        // 上周逾期近似：使用当前逾期趋势（上周到期日在上周范围内且未完成的数量）
+        LocalDate lastWeekToday = today.minusWeeks(1);
+        if (!userProjectIds.isEmpty()) {
+            vo.setLastWeekOverdue(issueMapper.selectCount(new QueryWrapper<Issue>()
+                    .isNull("deleted_at")
+                    .in("project_id", userProjectIds)
+                    .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
+                    .notIn("status_id", doneStatusIds)
+                    .lt("due_date", lastWeekToday)));
+        } else {
+            vo.setLastWeekOverdue(0L);
+        }
+
+        // 上周同期 open/inProgress（简化：使用上周创建且当时未关闭的数量来对比变化趋势）
+        // 实际使用当前值的倒推估算（因为没有历史快照表）
+        vo.setLastWeekOpen(vo.getAssignedOpen()); // 占位，前端会用 completed 做对比
+        vo.setLastWeekInProgress(vo.getAssignedInProgress()); // 占位
+
         return vo;
     }
 
@@ -253,6 +287,148 @@ public class DashboardService {
             }
             return vo;
         }).toList();
+    }
+
+    /**
+     * 工作台图表数据（跨项目聚合，用户所在所有项目范围）
+     */
+    public DashboardChartsVO getCharts(Long userId) {
+        List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+        DashboardChartsVO charts = new DashboardChartsVO();
+
+        if (userProjectIds.isEmpty()) {
+            // 空数据
+            DashboardChartsVO.TrendSection emptyTrend = new DashboardChartsVO.TrendSection();
+            emptyTrend.setDates(List.of());
+            emptyTrend.setCreated(List.of());
+            emptyTrend.setResolved(List.of());
+            charts.setTrend(emptyTrend);
+
+            DashboardChartsVO.StatusDistributionSection emptyStatus = new DashboardChartsVO.StatusDistributionSection();
+            emptyStatus.setItems(List.of());
+            emptyStatus.setTotal(0);
+            charts.setStatusDistribution(emptyStatus);
+
+            DashboardChartsVO.WorkloadSection emptyWorkload = new DashboardChartsVO.WorkloadSection();
+            emptyWorkload.setItems(List.of());
+            emptyWorkload.setTotal(0);
+            charts.setWorkload(emptyWorkload);
+
+            return charts;
+        }
+
+        // ─── 趋势数据（近 14 天） ─────────────────────────────
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(13);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Issue> createdIssues = issueMapper.selectList(new QueryWrapper<Issue>()
+                .isNull("deleted_at")
+                .in("project_id", userProjectIds)
+                .ge("created_at", start)
+                .le("created_at", end));
+
+        // 状态列表（用于状态分布 + 工作负载中区分已完成/未完成）
+        List<IssueStatus> statuses = statusMapper.selectList(null);
+        Set<Long> closedStatusIds = statuses.stream()
+                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
+                .map(IssueStatus::getId).collect(Collectors.toSet());
+
+        List<Issue> resolvedIssues = issueMapper.selectList(new QueryWrapper<Issue>()
+                .isNull("deleted_at")
+                .in("project_id", userProjectIds)
+                .isNotNull("resolved_at")
+                .ge("resolved_at", start)
+                .le("resolved_at", end));
+
+        Map<LocalDate, Long> createdByDay = createdIssues.stream()
+                .collect(Collectors.groupingBy(i -> i.getCreatedAt().toLocalDate(), Collectors.counting()));
+        Map<LocalDate, Long> resolvedByDay = resolvedIssues.stream()
+                .collect(Collectors.groupingBy(i -> i.getResolvedAt().toLocalDate(), Collectors.counting()));
+
+        List<String> dates = new ArrayList<>();
+        List<Long> createdData = new ArrayList<>();
+        List<Long> resolvedData = new ArrayList<>();
+
+        LocalDate current = startDate;
+        while (!current.isAfter(endDate)) {
+            dates.add(current.toString());
+            createdData.add(createdByDay.getOrDefault(current, 0L));
+            resolvedData.add(resolvedByDay.getOrDefault(current, 0L));
+            current = current.plusDays(1);
+        }
+
+        DashboardChartsVO.TrendSection trend = new DashboardChartsVO.TrendSection();
+        trend.setDates(dates);
+        trend.setCreated(createdData);
+        trend.setResolved(resolvedData);
+        charts.setTrend(trend);
+
+        // ─── 状态分布 ─────────────────────────────────────────
+        List<Issue> allIssues = issueMapper.selectList(new QueryWrapper<Issue>()
+                .isNull("deleted_at")
+                .in("project_id", userProjectIds));
+
+        Map<Long, Long> statusGrouped = allIssues.stream()
+                .collect(Collectors.groupingBy(Issue::getStatusId, Collectors.counting()));
+
+        List<DashboardChartsVO.StatusItem> statusItems = new ArrayList<>();
+        for (IssueStatus status : statuses) {
+            long count = statusGrouped.getOrDefault(status.getId(), 0L);
+            if (count > 0) {
+                DashboardChartsVO.StatusItem item = new DashboardChartsVO.StatusItem();
+                item.setName(status.getName());
+                item.setValue(count);
+                item.setColor(status.getColor());
+                item.setCategory(status.getCategory());
+                statusItems.add(item);
+            }
+        }
+
+        DashboardChartsVO.StatusDistributionSection statusSection = new DashboardChartsVO.StatusDistributionSection();
+        statusSection.setItems(statusItems);
+        statusSection.setTotal(allIssues.size());
+        charts.setStatusDistribution(statusSection);
+
+        // ─── 团队工作负载（预分组，避免 O(n×m) 重复遍历） ────
+        // 按 assigneeId 分组，每组再按是否已关闭分区计数
+        Map<Long, Map<Boolean, Long>> assigneeDonePartition = allIssues.stream()
+                .filter(i -> i.getAssigneeId() != null)
+                .collect(Collectors.groupingBy(
+                        Issue::getAssigneeId,
+                        Collectors.partitioningBy(
+                                i -> closedStatusIds.contains(i.getStatusId()),
+                                Collectors.counting())));
+
+        Set<Long> userIds = assigneeDonePartition.keySet();
+        Map<Long, String> nameMap = userIds.isEmpty() ? Map.of() :
+                sysUserMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+
+        List<DashboardChartsVO.WorkloadItem> workloadItems = new ArrayList<>();
+        for (Map.Entry<Long, Map<Boolean, Long>> entry : assigneeDonePartition.entrySet()) {
+            DashboardChartsVO.WorkloadItem item = new DashboardChartsVO.WorkloadItem();
+            item.setName(nameMap.getOrDefault(entry.getKey(), "未知用户"));
+            long doneCount = entry.getValue().getOrDefault(true, 0L);
+            long pendingCount = entry.getValue().getOrDefault(false, 0L);
+            item.setTotal(doneCount + pendingCount);
+            item.setDone(doneCount);
+            item.setInProgress(pendingCount);
+            workloadItems.add(item);
+        }
+        workloadItems.sort((a, b) -> Long.compare(b.getTotal(), a.getTotal()));
+        // 限制最多显示 8 人
+        if (workloadItems.size() > 8) {
+            workloadItems = workloadItems.subList(0, 8);
+        }
+
+        DashboardChartsVO.WorkloadSection workloadSection = new DashboardChartsVO.WorkloadSection();
+        workloadSection.setItems(workloadItems);
+        workloadSection.setTotal(allIssues.size());
+        charts.setWorkload(workloadSection);
+
+        return charts;
     }
 
     /**

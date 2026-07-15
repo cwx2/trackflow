@@ -24,4 +24,15 @@ public class DashboardSummaryVO {
     private long activeProjects;
     /** 用户在项目中的主要角色代码（如 tester, developer 等） */
     private String primaryRoleCode;
+
+    // ─── 周对比数据（与上周同期对比） ─────────────────────
+
+    /** 上周同期待处理数 */
+    private long lastWeekOpen;
+    /** 上周同期进行中数 */
+    private long lastWeekInProgress;
+    /** 上周完成数 */
+    private long lastWeekCompleted;
+    /** 上周逾期数 */
+    private long lastWeekOverdue;
 }

@@ -3,6 +3,7 @@ package com.trackflow.dashboard.controller;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.dashboard.service.DashboardService;
+import com.trackflow.dashboard.vo.DashboardChartsVO;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
 import com.trackflow.issue.vo.IssueVO;
@@ -27,6 +28,16 @@ public class DashboardController {
     public R<DashboardSummaryVO> summary() {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getSummary(userId));
+    }
+
+    /**
+     * 仪表盘图表数据（趋势、状态分布、工作负载）
+     */
+    @GetMapping("/charts")
+    @PreAuthorize("isAuthenticated()")
+    public R<DashboardChartsVO> charts() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(dashboardService.getCharts(userId));
     }
 
     /**
