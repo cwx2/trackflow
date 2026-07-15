@@ -30,6 +30,7 @@ public class SavedQuery implements Serializable {
     private String sortCriteria;  // JSON array
 
     private String groupBy;
+    private String icon;
     private Integer sortOrder;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

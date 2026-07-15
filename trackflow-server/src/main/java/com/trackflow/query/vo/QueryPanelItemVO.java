@@ -16,6 +16,7 @@ public class QueryPanelItemVO {
     private String id;
     private String name;
     private String folder;
+    private String icon;
     private Boolean pinned;
     private Boolean shared;
     private String userId;

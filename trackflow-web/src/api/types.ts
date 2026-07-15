@@ -280,6 +280,7 @@ export interface SavedQueryVO {
   pinned: boolean
   folder?: string
   filters?: string
+  icon?: string
   sortOrder: number
   createdAt: string
 }

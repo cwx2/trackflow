@@ -17,6 +17,7 @@ public class SavedQueryVO {
     private String columns;
     private String sortCriteria;
     private String groupBy;
+    private String icon;
     private Integer sortOrder;
     private LocalDateTime createdAt;
 }

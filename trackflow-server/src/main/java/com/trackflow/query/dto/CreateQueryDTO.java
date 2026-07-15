@@ -22,4 +22,7 @@ public class CreateQueryDTO {
     private List<String> columns;
     private List<Map<String, String>> sortCriteria;
     private String groupBy;
+
+    @Size(max = 50, message = "图标不能超过50字符")
+    private String icon;
 }

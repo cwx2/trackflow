@@ -53,12 +53,12 @@
             v-for="q in filteredQueries"
             :key="q.id"
             class="query-item"
-            :class="{ active: activeQueryId === q.id, 'query-highlight': isHighlightedQuery(q) }"
+            :class="{ active: activeQueryId === q.id, 'query-highlight': q.icon && q.count > 0 }"
             @click="selectQuery(q)"
           >
-            <span class="query-icon" v-if="isTestingQuery(q)">🧪</span>
+            <span class="query-icon" v-if="q.icon">{{ q.icon }}</span>
             <span class="query-name">{{ q.name }}</span>
-            <span class="query-count" :class="{ 'count-accent': isTestingQuery(q) && q.count > 0 }">{{ formatCount(q.count) }}</span>
+            <span class="query-count" :class="{ 'count-accent': q.icon && q.count > 0 }">{{ formatCount(q.count) }}</span>
             <span
               v-if="q.userId && !q.shared"
               class="query-delete-btn"
@@ -83,7 +83,22 @@
       >
         <a-form :model="createQueryForm" layout="vertical">
           <a-form-item label="查询名称" required>
-            <a-input v-model="createQueryForm.name" placeholder="输入查询名称，如：待我测试" :max-length="50" />
+            <a-input v-model="createQueryForm.name" placeholder="输入查询名称，如：我的工单" :max-length="50" />
+          </a-form-item>
+          <a-form-item label="图标">
+            <div class="icon-picker">
+              <span
+                v-for="emoji in queryIconOptions"
+                :key="emoji"
+                class="icon-option"
+                :class="{ selected: createQueryForm.icon === emoji }"
+                @click="createQueryForm.icon = createQueryForm.icon === emoji ? '' : emoji"
+              >{{ emoji }}</span>
+            </div>
+            <div v-if="createQueryForm.icon" class="icon-preview">
+              已选：{{ createQueryForm.icon }}
+              <a-link @click="createQueryForm.icon = ''" style="margin-left: 8px; font-size: 12px;">清除</a-link>
+            </div>
           </a-form-item>
           <a-form-item label="筛选条件">
             <div class="query-preview-filters">
@@ -133,6 +148,7 @@
         @batch-assign="onBatchAssign"
         @batch-sprint="onBatchSprint"
         @batch-priority="onBatchPriority"
+        @batch-delete="onBatchDelete"
       />
 
       <!-- Filter bar -->
@@ -358,7 +374,6 @@ import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { useNavBadge } from '@/composables/useNavBadge'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -368,7 +383,6 @@ import FilterBar from './components/FilterBar.vue'
 
 const router = useRouter()
 const route = useRoute()
-const { isTester } = useNavBadge()
 
 // Composables
 const {
@@ -382,7 +396,7 @@ const {
 } = useSelection(issues)
 
 const { isCellEditing, executeEdit } = useInlineEdit(issues)
-const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority } = useBatchOps()
+const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchDelete } = useBatchOps()
 const { loadPermissions, canEditIssue } = usePermission(issues)
 
 // 全局级创建权限：统一使用 authStore.canCreateIssue
@@ -409,9 +423,11 @@ const panelSearch = ref('')
 // Create query modal state
 const showCreateQueryModal = ref(false)
 const createQueryLoading = ref(false)
+const queryIconOptions = ['🧪', '🐛', '🚀', '⚡', '📋', '🎯', '🔥', '💡', '⭐', '🏷️', '📌', '🔍', '✅', '⏳', '🎨', '🛡️']
 const createQueryForm = reactive({
   name: '',
-  pinned: true
+  pinned: true,
+  icon: ''
 })
 
 // Computed: preview of current filters for the create modal
@@ -446,6 +462,7 @@ const createQueryFiltersPreview = computed(() => {
 function openCreateQueryModal() {
   createQueryForm.name = ''
   createQueryForm.pinned = true
+  createQueryForm.icon = ''
   showCreateQueryModal.value = true
 }
 
@@ -490,7 +507,8 @@ async function handleCreateQuery() {
       name: createQueryForm.name.trim(),
       filters: filters,
       pinned: createQueryForm.pinned,
-      shared: false
+      shared: false,
+      icon: createQueryForm.icon || undefined
     })
     Message.success('查询已保存')
     showCreateQueryModal.value = false
@@ -878,6 +896,13 @@ async function onBatchPriority(priority: string) {
   }
   clearSelection()
 }
+async function onBatchDelete() {
+  const result = await batchDelete(selectedIssues.value)
+  if (result.succeeded > 0) {
+    refreshList()
+  }
+  clearSelection()
+}
 
 // Panel helpers
 const filteredQueries = computed(() => {
@@ -895,15 +920,6 @@ function formatCount(count: number) {
   return String(count)
 }
 
-/** 是否为"待我测试"查询 */
-function isTestingQuery(q: any): boolean {
-  return q.name === '待我测试'
-}
-
-/** 是否为测试人员应高亮的查询（仅对 tester 角色生效） */
-function isHighlightedQuery(q: any): boolean {
-  return isTester.value && isTestingQuery(q) && q.count > 0
-}
 function formatTime(dt: string) {
   if (!dt) return ''
   const d = new Date(dt)
@@ -1178,6 +1194,13 @@ function applyDashboardFilter() {
 .query-item.query-highlight { background: var(--tf-accent-bg); border-left: 2px solid var(--tf-accent); padding-left: 6px; }
 .query-item.query-highlight .query-name { color: var(--tf-accent); font-weight: 500; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
+
+/* Icon picker */
+.icon-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.icon-option { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--tf-border); transition: all 0.15s; }
+.icon-option:hover { background: var(--tf-bg-hover); transform: scale(1.1); }
+.icon-option.selected { background: var(--tf-accent-bg); border-color: var(--tf-accent); }
+.icon-preview { margin-top: 8px; font-size: 12px; color: var(--tf-text-secondary); }
 
 /* Group action button */
 .group-action-btn { margin-left: auto; opacity: 0; transition: opacity 0.15s; }

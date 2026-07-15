@@ -20,4 +20,7 @@ public class UpdateQueryDTO {
     private List<Map<String, String>> sortCriteria;
     private String groupBy;
     private Integer sortOrder;
+
+    @Size(max = 50, message = "图标不能超过50字符")
+    private String icon;
 }

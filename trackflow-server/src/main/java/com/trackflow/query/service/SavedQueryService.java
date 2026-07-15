@@ -71,6 +71,7 @@ public class SavedQueryService {
                     .id(String.valueOf(q.getId()))
                     .name(q.getName())
                     .folder(q.getFolder())
+                    .icon(q.getIcon())
                     .pinned(q.getPinned())
                     .shared(q.getShared())
                     .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
@@ -103,6 +104,7 @@ public class SavedQueryService {
         query.setColumns(toJson(dto.getColumns()));
         query.setSortCriteria(toJson(dto.getSortCriteria()));
         query.setGroupBy(dto.getGroupBy());
+        query.setIcon(dto.getIcon());
         query.setSortOrder(0);
         query.setCreatedAt(LocalDateTime.now());
         query.setUpdatedAt(LocalDateTime.now());
@@ -126,6 +128,10 @@ public class SavedQueryService {
         if (dto.getSortCriteria() != null) query.setSortCriteria(toJson(dto.getSortCriteria()));
         if (dto.getGroupBy() != null) query.setGroupBy(dto.getGroupBy());
         if (dto.getSortOrder() != null) query.setSortOrder(dto.getSortOrder());
+        // icon 允许设为 null（清除图标），使用特殊标记区分"未传"和"传了 null"
+        // 由于 JSON 反序列化时 missing key 和 explicit null 都是 null，
+        // 这里直接 setIcon（如果前端传了 icon 字段就更新，不传则不更新）
+        if (dto.getIcon() != null) query.setIcon(dto.getIcon());
 
         query.setUpdatedAt(LocalDateTime.now());
         queryMapper.updateById(query);
