@@ -68,7 +68,7 @@ public class ApiKeyService {
         apiKeyMapper.insert(apiKey);
 
         return Map.of(
-                "id", apiKey.getId(),
+                "id", String.valueOf(apiKey.getId()),
                 "name", apiKey.getName(),
                 "key", plainKey,  // 仅此一次返回明文
                 "prefix", apiKey.getPrefix(),
@@ -103,6 +103,6 @@ public class ApiKeyService {
     private String generateRandomString(int length) {
         byte[] bytes = new byte[length];
         SECURE_RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encode(bytes).toString().substring(0, length);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).substring(0, length);
     }
 }

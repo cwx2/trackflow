@@ -39,6 +39,7 @@ import com.trackflow.project.vo.ProjectMemberVO;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -85,6 +86,7 @@ public class ProjectService {
         project.setDescription(dto.getDescription());
         project.setLeadId(dto.getLeadId() != null ? dto.getLeadId() : SecurityUtils.getCurrentUserId());
         project.setStatus("active");
+        project.setVisibility("private");
         project.setIssueSequence(0);
         projectMapper.insert(project);
 
@@ -107,17 +109,24 @@ public class ProjectService {
 
     /**
      * 项目列表（只返回用户有权限的项目）
+     * 包含：成员项目 + internal/public 项目（对已登录非成员可见）
      */
     public Page<Project> list(Page<Project> page, String keyword, String status, Long userId) {
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
 
-        // 非系统管理员只能看到自己参与的项目
+        // 非系统管理员：成员项目 + internal/public 项目
         if (userId != null && !permissionService.isSystemAdmin(userId)) {
-            List<Long> projectIds = memberMapper.selectProjectIdsByUserId(userId);
-            if (projectIds.isEmpty()) {
-                return new Page<>();
-            }
-            wrapper.in(Project::getId, projectIds);
+            List<Long> memberProjectIds = memberMapper.selectProjectIdsByUserId(userId);
+            // 显示：用户参与的项目 OR visibility 为 internal/public 的项目
+            wrapper.and(w -> {
+                if (!memberProjectIds.isEmpty()) {
+                    w.in(Project::getId, memberProjectIds)
+                     .or()
+                     .in(Project::getVisibility, List.of("internal", "public"));
+                } else {
+                    w.in(Project::getVisibility, List.of("internal", "public"));
+                }
+            });
         }
 
         if (keyword != null && !keyword.isBlank()) {
@@ -174,6 +183,13 @@ public class ProjectService {
                         vo.setMyRoleName(role.getName());
                         vo.setMyRoleCode(role.getCode());
                     }
+                } else {
+                    // 非成员但项目可见（internal/public）→ 显示 NonMember 角色
+                    String visibility = project.getVisibility();
+                    if ("internal".equals(visibility) || "public".equals(visibility)) {
+                        vo.setMyRoleName("非成员");
+                        vo.setMyRoleCode("non_member");
+                    }
                 }
             }
         }
@@ -201,6 +217,12 @@ public class ProjectService {
         if (dto.getName() != null) project.setName(dto.getName());
         if (dto.getDescription() != null) project.setDescription(dto.getDescription());
 
+        // 可见性变更：需要失效所有用户的 accessible_projects 缓存
+        if (dto.getVisibility() != null && !dto.getVisibility().equals(project.getVisibility())) {
+            project.setVisibility(dto.getVisibility());
+            invalidateAllAccessibleProjectsCache();
+        }
+
         // 负责人变更：需要完整的业务校验和权限联动
         if (dto.getLeadId() != null && !dto.getLeadId().equals(project.getLeadId())) {
             changeLead(project, dto.getLeadId());
@@ -208,6 +230,25 @@ public class ProjectService {
 
         projectMapper.updateById(project);
         return project;
+    }
+
+    /**
+     * 失效所有用户的 accessible_projects 缓存。
+     * 当项目 visibility 变更时调用，确保所有用户及时看到/看不到该项目。
+     * 使用 SCAN 避免 KEYS 阻塞 Redis。
+     */
+    private void invalidateAllAccessibleProjectsCache() {
+        Set<String> keys = new java.util.HashSet<>();
+        var options = org.springframework.data.redis.core.ScanOptions.scanOptions()
+                .match(ACCESSIBLE_PROJECTS_CACHE_PREFIX + "*").count(200).build();
+        try (var cursor = redisTemplate.scan(options)) {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+        }
+        if (!keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     /**
@@ -237,26 +278,30 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "新负责人必须是该项目的成员");
         }
 
-        // 3. 如果新负责人当前角色不是 project_admin，自动升级
-        ProjectMember newLeadMember = memberMapper.selectOne(
-                new LambdaQueryWrapper<ProjectMember>()
-                        .eq(ProjectMember::getProjectId, projectId)
-                        .eq(ProjectMember::getUserId, newLeadId)
-        );
-        if (newLeadMember != null && !PROJECT_ADMIN_ROLE_ID.equals(newLeadMember.getRoleId())) {
-            Long oldRoleId = newLeadMember.getRoleId();
-            SysRole oldRole = roleMapper.selectById(oldRoleId);
-            newLeadMember.setRoleId(PROJECT_ADMIN_ROLE_ID);
-            memberMapper.updateById(newLeadMember);
+        // 3. 如果新负责人当前没有 project_admin 角色，自动添加
+        List<Long> newLeadRoleIds = memberMapper.selectRoleIdsByUserAndProject(newLeadId, projectId);
+        if (!newLeadRoleIds.contains(PROJECT_ADMIN_ROLE_ID)) {
+            // 添加 project_admin 角色记录
+            ProjectMember adminMember = new ProjectMember();
+            adminMember.setProjectId(projectId);
+            adminMember.setUserId(newLeadId);
+            adminMember.setRoleId(PROJECT_ADMIN_ROLE_ID);
+            adminMember.setJoinedAt(LocalDateTime.now());
+            memberMapper.insert(adminMember);
             permissionService.invalidateCache(newLeadId);
 
             // 记录角色自动升级的活动日志
             SysRole adminRole = roleMapper.selectById(PROJECT_ADMIN_ROLE_ID);
+            List<String> oldRoleNames = newLeadRoleIds.stream()
+                    .map(rid -> roleMapper.selectById(rid))
+                    .filter(Objects::nonNull)
+                    .map(SysRole::getName)
+                    .toList();
             Map<String, Object> roleDetailMap = new java.util.LinkedHashMap<>();
-            roleDetailMap.put("old_role_id", oldRoleId);
-            roleDetailMap.put("old_role_name", oldRole != null ? oldRole.getName() : "");
-            roleDetailMap.put("new_role_id", PROJECT_ADMIN_ROLE_ID);
-            roleDetailMap.put("new_role_name", adminRole != null ? adminRole.getName() : "项目管理员");
+            roleDetailMap.put("old_role_ids", newLeadRoleIds);
+            roleDetailMap.put("old_role_names", String.join(", ", oldRoleNames));
+            roleDetailMap.put("added_role_id", PROJECT_ADMIN_ROLE_ID);
+            roleDetailMap.put("added_role_name", adminRole != null ? adminRole.getName() : "项目管理员");
             roleDetailMap.put("reason", "lead_promotion");
             Long currentUserId = SecurityUtils.getCurrentUserId();
             projectActivityService.log(projectId, currentUserId, "change_role", newLeadId, roleDetailMap);
@@ -385,19 +430,50 @@ public class ProjectService {
         );
         if (members.isEmpty()) return List.of();
 
-        List<Long> userIds = members.stream().map(ProjectMember::getUserId).toList();
+        // 获取用户信息
+        List<Long> userIds = members.stream().map(ProjectMember::getUserId).distinct().toList();
         var users = userMapper.selectBatchIds(userIds);
         Map<Long, com.trackflow.system.entity.SysUser> userMap = users.stream()
                 .collect(java.util.stream.Collectors.toMap(com.trackflow.system.entity.SysUser::getId, u -> u));
 
-        return members.stream().map(m -> {
+        // 获取角色信息（用于填充 roleNames）
+        List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
+        var roles = roleMapper.selectBatchIds(roleIds);
+        Map<Long, String> roleNameMap = roles.stream()
+                .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+
+        // 按 userId 聚合（一个用户一条 VO，含多角色）
+        Map<Long, List<ProjectMember>> membersByUser = members.stream()
+                .collect(java.util.stream.Collectors.groupingBy(ProjectMember::getUserId));
+
+        return membersByUser.entrySet().stream().map(entry -> {
+            Long userId = entry.getKey();
+            List<ProjectMember> userMembers = entry.getValue();
+            ProjectMember first = userMembers.get(0);
+
             ProjectMemberVO vo = new ProjectMemberVO();
-            vo.setId(m.getId() != null ? m.getId().toString() : null);
-            vo.setProjectId(m.getProjectId() != null ? m.getProjectId().toString() : null);
-            vo.setUserId(m.getUserId() != null ? m.getUserId().toString() : null);
-            vo.setRoleId(m.getRoleId() != null ? m.getRoleId().toString() : null);
-            vo.setJoinedAt(m.getJoinedAt());
-            var user = userMap.get(m.getUserId());
+            vo.setId(first.getId() != null ? first.getId().toString() : null);
+            vo.setProjectId(first.getProjectId() != null ? first.getProjectId().toString() : null);
+            vo.setUserId(userId.toString());
+            // 向后兼容：roleId 取第一个角色
+            vo.setRoleId(first.getRoleId() != null ? first.getRoleId().toString() : null);
+            // 多角色列表
+            List<String> allRoleIds = userMembers.stream()
+                    .map(m -> m.getRoleId().toString())
+                    .toList();
+            vo.setRoleIds(allRoleIds);
+            List<String> allRoleNames = userMembers.stream()
+                    .map(m -> roleNameMap.getOrDefault(m.getRoleId(), ""))
+                    .filter(name -> !name.isEmpty())
+                    .toList();
+            vo.setRoleNames(allRoleNames);
+            // 取最早的 joinedAt
+            vo.setJoinedAt(userMembers.stream()
+                    .map(ProjectMember::getJoinedAt)
+                    .filter(java.util.Objects::nonNull)
+                    .min(LocalDateTime::compareTo)
+                    .orElse(null));
+            var user = userMap.get(userId);
             if (user != null) {
                 vo.setUsername(user.getUsername());
                 vo.setDisplayName(user.getDisplayName());
@@ -408,7 +484,7 @@ public class ProjectService {
     }
 
     /**
-     * 添加项目成员
+     * 添加项目成员（支持多角色）
      */
     @Transactional
     public void addMember(Long projectId, AddMemberDTO dto) {
@@ -424,28 +500,47 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "用户不存在或已禁用");
         }
 
-        // 3. 校验角色类型必须为 project
-        SysRole role = roleMapper.selectById(dto.getRoleId());
-        if (role == null || !"project".equals(role.getRoleType())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
+        // 3. 获取有效角色列表
+        List<Long> effectiveRoleIds = dto.getEffectiveRoleIds();
+        if (effectiveRoleIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
         }
 
-        // 4. 检查是否已经是成员
-        Long count = memberMapper.selectCount(
-                new LambdaQueryWrapper<ProjectMember>()
-                        .eq(ProjectMember::getProjectId, projectId)
-                        .eq(ProjectMember::getUserId, dto.getUserId())
-        );
-        if (count > 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "该用户已是项目成员");
+        // 4. 校验所有角色类型必须为 project
+        List<SysRole> roles = roleMapper.selectBatchIds(effectiveRoleIds);
+        if (roles.size() != effectiveRoleIds.size()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "存在无效的角色ID");
+        }
+        for (SysRole role : roles) {
+            if (!"project".equals(role.getRoleType())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色，角色「" + role.getName() + "」不是项目角色");
+            }
         }
 
-        ProjectMember member = new ProjectMember();
-        member.setProjectId(projectId);
-        member.setUserId(dto.getUserId());
-        member.setRoleId(dto.getRoleId());
-        member.setJoinedAt(LocalDateTime.now());
-        memberMapper.insert(member);
+        // 5. 查询该用户已有的角色（多角色场景下过滤已存在的）
+        List<Long> existingRoleIds = memberMapper.selectRoleIdsByUserAndProject(dto.getUserId(), projectId);
+        List<Long> newRoleIds = effectiveRoleIds.stream()
+                .filter(rid -> !existingRoleIds.contains(rid))
+                .toList();
+
+        if (newRoleIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该用户已拥有所有指定角色");
+        }
+
+        // 6. 插入新角色记录
+        LocalDateTime now = LocalDateTime.now();
+        List<String> addedRoleNames = new java.util.ArrayList<>();
+        for (Long roleId : newRoleIds) {
+            ProjectMember member = new ProjectMember();
+            member.setProjectId(projectId);
+            member.setUserId(dto.getUserId());
+            member.setRoleId(roleId);
+            member.setJoinedAt(now);
+            memberMapper.insert(member);
+            // 记录角色名称
+            roles.stream().filter(r -> r.getId().equals(roleId)).findFirst()
+                    .ifPresent(r -> addedRoleNames.add(r.getName()));
+        }
 
         // 失效权限缓存
         permissionService.invalidateCache(dto.getUserId());
@@ -454,15 +549,15 @@ public class ProjectService {
 
         // 审计日志
         Long currentUserId = SecurityUtils.getCurrentUserId();
+        String roleNamesStr = String.join(", ", addedRoleNames);
         projectActivityService.log(projectId, currentUserId, "add_member", dto.getUserId(),
-                Map.of("role_id", role.getId(), "role_name", role.getName()));
+                Map.of("role_ids", newRoleIds, "role_names", roleNamesStr));
 
         // 通知被添加的用户
-        String targetName = user.getDisplayName() != null ? user.getDisplayName() : user.getUsername();
         notificationService.notify(
                 dto.getUserId(),
                 "你已被添加到项目",
-                String.format("你已被添加到项目「%s」，角色为「%s」", project.getName(), role.getName()),
+                String.format("你已被添加到项目「%s」，角色为「%s」", project.getName(), roleNamesStr),
                 "member_added",
                 "project",
                 projectId
@@ -470,55 +565,120 @@ public class ProjectService {
     }
 
     /**
-     * 更新成员角色
+     * 更新成员角色（全量替换：设置用户在项目中的角色列表）
      */
     @Transactional
     public void updateMemberRole(Long projectId, Long userId, Long roleId) {
+        updateMemberRoles(projectId, userId, List.of(roleId));
+    }
+
+    /**
+     * 更新成员角色（多角色版本：全量替换）
+     */
+    @Transactional
+    public void updateMemberRoles(Long projectId, Long userId, List<Long> newRoleIds) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
         if (!"active".equals(project.getStatus())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
         }
 
-        // 校验角色类型必须为 project
-        SysRole newRole = roleMapper.selectById(roleId);
-        if (newRole == null || !"project".equals(newRole.getRoleType())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
+        if (newRoleIds == null || newRoleIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
         }
 
-        ProjectMember member = memberMapper.selectOne(
+        // 校验所有角色类型必须为 project
+        List<SysRole> newRoles = roleMapper.selectBatchIds(newRoleIds);
+        if (newRoles.size() != newRoleIds.size()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "存在无效的角色ID");
+        }
+        for (SysRole role : newRoles) {
+            if (!"project".equals(role.getRoleType())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "只能分配项目角色");
+            }
+        }
+
+        // 查询用户当前的成员记录
+        List<ProjectMember> existingMembers = memberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>()
                         .eq(ProjectMember::getProjectId, projectId)
                         .eq(ProjectMember::getUserId, userId)
         );
-        if (member == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Member not found");
+        if (existingMembers.isEmpty()) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该用户不是项目成员");
         }
 
-        Long oldRoleId = member.getRoleId();
-        SysRole oldRole = roleMapper.selectById(oldRoleId);
+        List<Long> oldRoleIds = existingMembers.stream().map(ProjectMember::getRoleId).toList();
 
-        member.setRoleId(roleId);
-        memberMapper.updateById(member);
+        // 保护最后一个项目管理员：如果用户当前有 project_admin 角色，且新角色列表中没有，
+        // 需要确认还有其他 project_admin
+        if (oldRoleIds.contains(PROJECT_ADMIN_ROLE_ID) && !newRoleIds.contains(PROJECT_ADMIN_ROLE_ID)) {
+            long adminCount = memberMapper.selectCount(
+                    new LambdaQueryWrapper<ProjectMember>()
+                            .eq(ProjectMember::getProjectId, projectId)
+                            .eq(ProjectMember::getRoleId, PROJECT_ADMIN_ROLE_ID)
+            );
+            // 如果所有 admin 记录都属于当前用户，则不允许移除 admin 角色
+            long userAdminCount = existingMembers.stream()
+                    .filter(m -> m.getRoleId().equals(PROJECT_ADMIN_ROLE_ID))
+                    .count();
+            if (adminCount <= userAdminCount) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移除项目中最后一个管理员的管理员角色");
+            }
+        }
+
+        // 计算需要删除和新增的角色
+        List<Long> toRemove = oldRoleIds.stream().filter(rid -> !newRoleIds.contains(rid)).toList();
+        List<Long> toAdd = newRoleIds.stream().filter(rid -> !oldRoleIds.contains(rid)).toList();
+
+        // 删除不再需要的角色记录
+        if (!toRemove.isEmpty()) {
+            memberMapper.delete(
+                    new LambdaQueryWrapper<ProjectMember>()
+                            .eq(ProjectMember::getProjectId, projectId)
+                            .eq(ProjectMember::getUserId, userId)
+                            .in(ProjectMember::getRoleId, toRemove)
+            );
+        }
+
+        // 新增角色记录
+        LocalDateTime now = LocalDateTime.now();
+        for (Long roleId : toAdd) {
+            ProjectMember member = new ProjectMember();
+            member.setProjectId(projectId);
+            member.setUserId(userId);
+            member.setRoleId(roleId);
+            member.setJoinedAt(now);
+            memberMapper.insert(member);
+        }
+
+        // 失效权限缓存
         permissionService.invalidateCache(userId);
 
         // 审计日志
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        String oldRoleName = oldRole != null ? oldRole.getName() : "";
-        String newRoleName = newRole.getName();
+        List<String> oldRoleNames = oldRoleIds.stream()
+                .map(rid -> roleMapper.selectById(rid))
+                .filter(java.util.Objects::nonNull)
+                .map(SysRole::getName)
+                .toList();
+        List<String> newRoleNames = newRoles.stream().map(SysRole::getName).toList();
         projectActivityService.log(projectId, currentUserId, "change_role", userId,
-                Map.of("old_role_id", oldRoleId, "old_role_name", oldRoleName,
-                       "new_role_id", roleId, "new_role_name", newRoleName));
+                Map.of("old_role_ids", oldRoleIds, "old_role_names", String.join(", ", oldRoleNames),
+                       "new_role_ids", newRoleIds, "new_role_names", String.join(", ", newRoleNames)));
 
         // 通知角色变更的用户
-        notificationService.notify(
-                userId,
-                "你的项目角色已变更",
-                String.format("你在项目「%s」中的角色已从「%s」变更为「%s」", project.getName(), oldRoleName, newRoleName),
-                "role_changed",
-                "project",
-                projectId
-        );
+        if (!toRemove.isEmpty() || !toAdd.isEmpty()) {
+            notificationService.notify(
+                    userId,
+                    "你的项目角色已变更",
+                    String.format("你在项目「%s」中的角色已变更为「%s」",
+                            project.getName(), String.join(", ", newRoleNames)),
+                    "role_changed",
+                    "project",
+                    projectId
+            );
+        }
     }
 
     /**
@@ -553,7 +713,10 @@ public class ProjectService {
                         .eq(ProjectMember::getProjectId, projectId)
                         .eq(ProjectMember::getRoleId, PROJECT_ADMIN_ROLE_ID)
         );
-        if (admins.size() == 1 && admins.get(0).getUserId().equals(userId)) {
+        // 如果该用户拥有 project_admin 角色，检查是否是唯一的 admin
+        boolean userHasAdmin = admins.stream().anyMatch(a -> a.getUserId().equals(userId));
+        long otherAdminCount = admins.stream().filter(a -> !a.getUserId().equals(userId)).count();
+        if (userHasAdmin && otherAdminCount == 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移除项目中最后一个管理员");
         }
 
@@ -689,7 +852,8 @@ public class ProjectService {
     }
 
     /**
-     * 获取用户所属的所有项目 ID 列表。系统管理员返回 null（表示不限制）。
+     * 获取用户可访问的所有项目 ID 列表。系统管理员返回 null（表示不限制）。
+     * 包含：成员项目 ID + internal/public 项目 ID。
      * 结果缓存在 Redis 中（TTL 30s），避免同一请求内多次查库。
      */
     public List<Long> getAccessibleProjectIds(Long userId) {
@@ -710,7 +874,16 @@ public class ProjectService {
             return java.util.Arrays.stream(cached.split(",")).map(Long::parseLong).toList();
         }
 
-        List<Long> projectIds = memberMapper.selectProjectIdsByUserId(userId);
+        // 成员项目
+        List<Long> memberProjectIds = memberMapper.selectProjectIdsByUserId(userId);
+
+        // internal/public 项目
+        List<Long> visibleProjectIds = projectMapper.selectProjectIdsByVisibility(List.of("internal", "public"));
+
+        // 合并去重
+        Set<Long> allIds = new java.util.LinkedHashSet<>(memberProjectIds);
+        allIds.addAll(visibleProjectIds);
+        List<Long> projectIds = new java.util.ArrayList<>(allIds);
 
         // 原子写入（set 自带 TTL，即使并发重复写入也只是覆盖相同值）
         String value = projectIds.isEmpty() ? "[]" : projectIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));

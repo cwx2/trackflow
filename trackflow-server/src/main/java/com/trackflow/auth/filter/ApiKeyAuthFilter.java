@@ -1,6 +1,9 @@
 package com.trackflow.auth.filter;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.auth.security.ApiKeyAuthenticationToken;
 import com.trackflow.system.entity.ApiKey;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.ApiKeyMapper;
@@ -11,7 +14,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCrypt;
@@ -20,8 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * API Key 认证过滤器
@@ -37,6 +38,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private final ApiKeyMapper apiKeyMapper;
     private final SysUserMapper sysUserMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -95,21 +97,42 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         SysUser user = sysUserMapper.selectById(apiKey.getUserId());
         if (user == null || !"active".equals(user.getStatus())) return false;
 
-        // 设置 SecurityContext
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+        // 解析 API Key 的 scope（permissions 字段）
+        Set<String> scope = parseScope(apiKey.getPermissions());
+
+        // 使用自定义 ApiKeyAuthenticationToken，携带 scope 信息
+        ApiKeyAuthenticationToken authToken = new ApiKeyAuthenticationToken(
                 user.getUsername(),
-                null,
+                user.getId(),
+                scope,
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_API_KEY"))
         );
-        authToken.setDetails(user.getId());
         SecurityContextHolder.getContext().setAuthentication(authToken);
 
         // 更新 last_used_at
         apiKey.setLastUsedAt(LocalDateTime.now());
         apiKeyMapper.updateById(apiKey);
 
-        log.debug("API Key authenticated: user={}, key={}", user.getUsername(), prefix);
+        log.debug("API Key authenticated: user={}, key={}, scope={}", user.getUsername(), prefix, scope);
         return true;
+    }
+
+    /**
+     * 解析 API Key 的 permissions JSON 字段为 scope 集合。
+     * 空字符串、null、空数组 "[]" 均返回空集合（表示不限制）。
+     */
+    private Set<String> parseScope(String permissionsJson) {
+        if (permissionsJson == null || permissionsJson.isBlank()
+                || "[]".equals(permissionsJson.trim())) {
+            return Collections.emptySet();
+        }
+        try {
+            List<String> permissions = objectMapper.readValue(permissionsJson, new TypeReference<>() {});
+            return new HashSet<>(permissions);
+        } catch (Exception e) {
+            log.warn("Failed to parse API Key permissions: {}", permissionsJson, e);
+            return Collections.emptySet();
+        }
     }
 
     @Override

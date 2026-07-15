@@ -30,7 +30,7 @@ export const projectApi = {
   },
 
   /** 更新项目 */
-  update(id: string, data: { name?: string; description?: string; leadId?: string }) {
+  update(id: string, data: { name?: string; description?: string; leadId?: string; visibility?: string }) {
     return request.put<any, R<ProjectVO>>(`/projects/${id}`, data)
   },
 
@@ -68,14 +68,14 @@ export const projectApi = {
     return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`, config)
   },
 
-  /** 添加项目成员 */
-  addMember(projectId: string, data: { userId: string; roleId: number }) {
+  /** 添加项目成员（支持多角色） */
+  addMember(projectId: string, data: { userId: string; roleIds: number[] }) {
     return request.post<any, R<void>>(`/projects/${projectId}/members`, data)
   },
 
-  /** 更新成员角色 */
-  updateMemberRole(projectId: string, userId: string, roleId: number) {
-    return request.put<any, R<void>>(`/projects/${projectId}/members/${userId}`, { roleId })
+  /** 更新成员角色（全量替换） */
+  updateMemberRole(projectId: string, userId: string, roleIds: number[]) {
+    return request.put<any, R<void>>(`/projects/${projectId}/members/${userId}`, { roleIds })
   },
 
   /** 查询成员被分配的工单数量（移除前预检） */

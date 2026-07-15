@@ -1,5 +1,6 @@
 package com.trackflow.project.dto;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -13,4 +14,7 @@ public class UpdateProjectDTO {
     private String description;
 
     private Long leadId;
+
+    @Pattern(regexp = "^(private|internal|public)$", message = "可见性无效，可选值：private、internal、public")
+    private String visibility;
 }

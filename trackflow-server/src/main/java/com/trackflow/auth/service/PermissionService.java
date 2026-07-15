@@ -1,5 +1,7 @@
 package com.trackflow.auth.service;
 
+import com.trackflow.project.mapper.ProjectMapper;
+import com.trackflow.project.entity.Project;
 import com.trackflow.system.mapper.RolePermissionMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,11 @@ import java.util.Set;
 
 /**
  * 权限服务：Redis 缓存 + 数据库查询
+ *
+ * 支持 NonMember / Anonymous 访问控制：
+ * - 如果用户不是项目成员，检查项目 visibility
+ * - internal 项目：已登录用户获得 NonMember 角色权限
+ * - public 项目：所有人获得 Anonymous 角色权限（已登录用户获得 NonMember 权限）
  */
 @Slf4j
 @Service
@@ -27,9 +34,15 @@ public class PermissionService {
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
     private static final String SYSTEM_ADMIN_PERMISSION = "system:admin";
 
+    /** NonMember 内置角色 ID（登录但非成员访问 internal/public 项目） */
+    private static final Long NON_MEMBER_ROLE_ID = 8L;
+    /** Anonymous 内置角色 ID（未登录访问 public 项目） */
+    private static final Long ANONYMOUS_ROLE_ID = 9L;
+
     private final StringRedisTemplate redisTemplate;
     private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
+    private final ProjectMapper projectMapper;
 
     /**
      * 检查用户是否拥有指定权限（全局 + 项目级）
@@ -150,6 +163,12 @@ public class PermissionService {
 
     /**
      * 获取用户在指定项目中的权限（缓存优先）
+     *
+     * 逻辑：
+     * 1. 先查成员角色权限 → 有则返回
+     * 2. 无成员关系时，查项目 visibility
+     * 3. visibility = internal/public 且用户已登录 → 返回 NonMember 角色权限
+     * 4. visibility = public 且未登录 → 返回 Anonymous 角色权限
      */
     public Set<String> getProjectPermissions(Long userId, Long projectId) {
         String cacheKey = PROJECT_CACHE_KEY_PREFIX + userId + ":" + projectId;
@@ -162,12 +181,61 @@ public class PermissionService {
         // 从数据库加载：project_member → role_permission
         Set<String> permissions = loadProjectPermissionsFromDb(userId, projectId);
 
+        // 如果用户不是成员，尝试 NonMember fallback
+        if (permissions.isEmpty() && userId != null) {
+            permissions = loadNonMemberPermissions(projectId);
+        }
+
         if (!permissions.isEmpty()) {
             redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
             redisTemplate.expire(cacheKey, CACHE_TTL);
         }
 
         return permissions;
+    }
+
+    /**
+     * 获取匿名用户（未登录）在指定项目中的权限。
+     * 仅当项目 visibility = public 时返回 Anonymous 角色权限。
+     *
+     * @apiNote 当前 SecurityConfig 要求所有 /api/v1/** 接口 authenticated()，
+     * 匿名访问需要后续开放部分 endpoint 为 permitAll 时使用此方法。
+     * 预留接口，供 Anonymous 请求链路实现时调用。
+     */
+    public Set<String> getAnonymousProjectPermissions(Long projectId) {
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            return Set.of();
+        }
+        if ("public".equals(project.getVisibility())) {
+            return loadRolePermissions(ANONYMOUS_ROLE_ID);
+        }
+        return Set.of();
+    }
+
+    /**
+     * 当用户不是项目成员时，根据项目可见性返回 NonMember 角色权限。
+     * - visibility = internal 或 public → 返回 NonMember 权限
+     * - visibility = private → 返回空集
+     */
+    private Set<String> loadNonMemberPermissions(Long projectId) {
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            return Set.of();
+        }
+        String visibility = project.getVisibility();
+        if ("internal".equals(visibility) || "public".equals(visibility)) {
+            return loadRolePermissions(NON_MEMBER_ROLE_ID);
+        }
+        return Set.of();
+    }
+
+    /**
+     * 加载指定角色的所有权限
+     */
+    private Set<String> loadRolePermissions(Long roleId) {
+        List<String> permissions = rolePermissionMapper.selectPermissionsByRoleId(roleId);
+        return new HashSet<>(permissions);
     }
 
     /**

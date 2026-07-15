@@ -21,6 +21,7 @@ public class Project extends BaseEntity {
     private Long orgId;
     private Long leadId;
     private String status;
+    private String visibility;
     private Integer issueSequence;
 
     @TableField(typeHandler = JsonbTypeHandler.class)

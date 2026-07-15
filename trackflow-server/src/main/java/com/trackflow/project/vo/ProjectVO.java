@@ -13,6 +13,7 @@ public class ProjectVO {
     private String orgId;       // Long→String
     private String leadId;      // Long→String
     private String status;
+    private String visibility;
     private Integer issueSequence;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

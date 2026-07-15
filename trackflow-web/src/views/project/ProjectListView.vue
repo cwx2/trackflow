@@ -32,7 +32,12 @@
 
         <!-- 项目信息 -->
         <div class="project-info">
-          <span class="project-name">{{ project.name }}</span>
+          <div class="project-name-row">
+            <span class="project-name">{{ project.name }}</span>
+            <span v-if="project.visibility && project.visibility !== 'private'" class="visibility-tag" :class="'vis-' + project.visibility">
+              {{ project.visibility === 'internal' ? '内部' : '公开' }}
+            </span>
+          </div>
           <span class="project-desc" v-if="project.description">{{ project.description }}</span>
         </div>
 
@@ -221,12 +226,18 @@
                 {{ u.displayName || u.username }} ({{ u.email || '' }})
               </a-option>
             </a-select>
-            <a-select v-model="addMemberForm.roleId" style="width: 130px" @focus="loadProjectRoles">
+            <a-select
+              v-model="addMemberForm.roleIds"
+              placeholder="选择角色..."
+              multiple
+              style="width: 200px"
+              @focus="loadProjectRoles"
+            >
               <a-option v-for="r in projectRoles" :key="r.id" :value="r.id">
                 {{ r.name }}
               </a-option>
             </a-select>
-            <a-button type="primary" size="small" @click="addMember" :disabled="!addMemberForm.userId">
+            <a-button type="primary" size="small" @click="addMember" :disabled="!addMemberForm.userId || addMemberForm.roleIds.length === 0">
               添加
             </a-button>
           </div>
@@ -240,11 +251,13 @@
                   <span style="color: var(--tf-text-tertiary); margin-left: 4px">{{ record.email }}</span>
                 </template>
               </a-table-column>
-              <a-table-column title="角色" :width="140">
+              <a-table-column title="角色" :width="200">
                 <template #cell="{ record }">
                   <a-select
-                    :model-value="record.roleId"
+                    :model-value="record.roleIds || [record.roleId]"
                     size="mini"
+                    multiple
+                    :max-tag-count="2"
                     @change="(val: any) => changeMemberRole(record.userId, val)"
                     @focus="loadProjectRoles"
                   >
@@ -436,7 +449,7 @@ const deleteTarget = ref<{
 const projectMembers = ref<any[]>([])
 const allUsers = ref<any[]>([])
 const projectRoles = ref<{ id: string; name: string }[]>([])
-const addMemberForm = reactive({ userId: undefined as string | undefined, roleId: '3' })
+const addMemberForm = reactive({ userId: undefined as string | undefined, roleIds: [] as string[] })
 const showAddMember = ref(false)
 
 // 活动日志
@@ -672,14 +685,15 @@ async function loadProjectRoles() {
 }
 
 async function addMember() {
-  if (!addMemberForm.userId || !currentProject.value) return
+  if (!addMemberForm.userId || !currentProject.value || addMemberForm.roleIds.length === 0) return
   try {
     await projectApi.addMember(currentProject.value.id, {
       userId: addMemberForm.userId,
-      roleId: Number(addMemberForm.roleId)
+      roleIds: addMemberForm.roleIds.map(Number)
     })
     Message.success('成员添加成功')
     addMemberForm.userId = undefined
+    addMemberForm.roleIds = []
     showAddMember.value = false
     loadProjectMembers(currentProject.value.id)
   } catch (e: any) {
@@ -739,13 +753,16 @@ async function removeMember(userId: string) {
   }
 }
 
-async function changeMemberRole(userId: string, roleId: string) {
+async function changeMemberRole(userId: string, roleIds: string[]) {
   if (!currentProject.value) return
   try {
-    await projectApi.updateMemberRole(currentProject.value.id, userId, Number(roleId))
+    await projectApi.updateMemberRole(currentProject.value.id, userId, roleIds.map(Number))
     Message.success('角色已更新')
+    loadProjectMembers(currentProject.value.id)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新失败')
+    // 刷新列表恢复正确状态
+    loadProjectMembers(currentProject.value.id)
   }
 }
 
@@ -911,10 +928,30 @@ watch(projects, () => {
   flex-direction: column;
   gap: 4px;
 }
+.project-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .project-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--tf-text-primary);
+}
+.visibility-tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.visibility-tag.vis-internal {
+  background: rgba(88, 166, 255, 0.1);
+  color: var(--tf-accent);
+}
+.visibility-tag.vis-public {
+  background: rgba(63, 185, 80, 0.1);
+  color: #3fb950;
 }
 .project-desc {
   font-size: 12px;

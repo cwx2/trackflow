@@ -58,6 +58,11 @@
               <icon-user class="meta-icon" />
               {{ project.myRoleName }}
             </span>
+            <span class="meta-item visibility-badge" :class="'visibility-' + project.visibility">
+              <icon-eye v-if="project.visibility !== 'private'" class="meta-icon" />
+              <icon-eye-invisible v-else class="meta-icon" />
+              {{ visibilityLabel }}
+            </span>
             <span v-if="project.memberCount" class="meta-item">
               <icon-user-group class="meta-icon" />
               {{ project.memberCount }} 名成员
@@ -84,6 +89,26 @@
       <div v-else class="section description-section">
         <h2 class="section-title">项目说明</h2>
         <p class="description-empty">暂无项目说明</p>
+      </div>
+
+      <!-- 项目可见性设置 -->
+      <div v-if="canEditProject && !isArchived" class="section visibility-section">
+        <h2 class="section-title">可见性设置</h2>
+        <div class="visibility-options">
+          <div
+            v-for="opt in visibilityOptions"
+            :key="opt.value"
+            class="visibility-option"
+            :class="{ active: project.visibility === opt.value }"
+            @click="handleVisibilityChange(opt.value)"
+          >
+            <div class="visibility-option-header">
+              <component :is="opt.icon" class="visibility-option-icon" />
+              <span class="visibility-option-label">{{ opt.label }}</span>
+            </div>
+            <p class="visibility-option-desc">{{ opt.desc }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- 功能入口 -->
@@ -151,7 +176,7 @@
               <span class="member-name">{{ member.displayName || member.username }}</span>
               <span class="member-email">{{ member.email }}</span>
             </div>
-            <span class="member-role">{{ getRoleName(member.roleId) }}</span>
+            <span class="member-role">{{ getMemberRoleNames(member) }}</span>
           </div>
         </div>
         <div v-else class="members-empty">
@@ -247,7 +272,9 @@ import {
   IconEdit,
   IconLock,
   IconMore,
-  IconExclamationCircleFill
+  IconExclamationCircleFill,
+  IconEye,
+  IconEyeInvisible
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, workflowApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -290,6 +317,49 @@ const canViewSprints = computed(() => {
 
 const isArchived = computed(() => project.value?.status === 'archived')
 
+// 可见性
+const visibilityLabel = computed(() => {
+  const map: Record<string, string> = { private: '私有项目', internal: '内部项目', public: '公开项目' }
+  return map[project.value?.visibility || 'private'] || '私有项目'
+})
+
+const visibilityOptions = [
+  { value: 'private', label: '私有', desc: '仅项目成员可访问', icon: IconEyeInvisible },
+  { value: 'internal', label: '内部', desc: '所有登录用户可查看（非成员为只读）', icon: IconEye },
+  { value: 'public', label: '公开', desc: '所有人可查看（包括未登录用户）', icon: IconEye }
+]
+
+async function handleVisibilityChange(value: string) {
+  if (!project.value || project.value.visibility === value) return
+
+  // 降低可见性时需要确认（破坏性操作）
+  if (value === 'private' && project.value.visibility !== 'private') {
+    Modal.warning({
+      title: '确认将项目设为私有',
+      content: '设为私有后，所有非项目成员将立即无法访问此项目。确定继续？',
+      okText: '确认设为私有',
+      cancelText: '取消',
+      onOk: async () => {
+        await doVisibilityUpdate(value)
+      }
+    })
+    return
+  }
+
+  await doVisibilityUpdate(value)
+}
+
+async function doVisibilityUpdate(value: string) {
+  if (!project.value) return
+  try {
+    await projectApi.update(project.value.id, { visibility: value })
+    project.value.visibility = value as any
+    Message.success('可见性已更新')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '更新可见性失败')
+  }
+}
+
 // 删除项目
 const showDeleteDialog = ref(false)
 const deleting = ref(false)
@@ -315,6 +385,19 @@ async function loadRoles() {
 
 function getRoleName(roleId: string): string {
   return roleMap.value[roleId] || `角色 ${roleId}`
+}
+
+function getMemberRoleNames(member: any): string {
+  // 优先使用后端返回的 roleNames
+  if (member.roleNames && member.roleNames.length > 0) {
+    return member.roleNames.join(', ')
+  }
+  // 兼容：使用 roleIds + roleMap
+  if (member.roleIds && member.roleIds.length > 0) {
+    return member.roleIds.map((rid: string) => getRoleName(rid)).join(', ')
+  }
+  // 最终 fallback
+  return getRoleName(member.roleId)
 }
 
 // 颜色
@@ -964,5 +1047,85 @@ onMounted(() => {
 
 :deep(.arco-dropdown-option.danger-option) {
   color: var(--tf-danger);
+}
+
+/* 可见性设置 */
+.visibility-section {
+  margin-bottom: 32px;
+}
+
+.visibility-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.visibility-option {
+  padding: 14px 16px;
+  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.visibility-option:hover {
+  background: var(--tf-bg-hover);
+  border-color: var(--tf-text-tertiary);
+}
+
+.visibility-option.active {
+  border-color: var(--tf-accent);
+  background: rgba(88, 166, 255, 0.06);
+}
+
+.visibility-option-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.visibility-option-icon {
+  font-size: 16px;
+  color: var(--tf-text-tertiary);
+}
+
+.visibility-option.active .visibility-option-icon {
+  color: var(--tf-accent);
+}
+
+.visibility-option-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.visibility-option-desc {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* 可见性 Badge */
+.visibility-badge {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.visibility-private {
+  background: var(--tf-bg-surface);
+  color: var(--tf-text-tertiary);
+}
+
+.visibility-internal {
+  background: rgba(88, 166, 255, 0.1);
+  color: var(--tf-accent);
+}
+
+.visibility-public {
+  background: rgba(63, 185, 80, 0.1);
+  color: #3fb950;
 }
 </style>

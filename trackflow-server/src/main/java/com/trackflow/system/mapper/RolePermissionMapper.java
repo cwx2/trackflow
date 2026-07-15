@@ -47,4 +47,14 @@ public interface RolePermissionMapper extends BaseMapper<RolePermission> {
             )
             """)
     boolean hasPermissionInAnyProject(@Param("userId") Long userId, @Param("permission") String permission);
+
+    /**
+     * 查询指定角色的所有权限（用于 NonMember / Anonymous 内置角色）
+     */
+    @Select("""
+            SELECT DISTINCT rp.permission
+            FROM role_permission rp
+            WHERE rp.role_id = #{roleId}
+            """)
+    List<String> selectPermissionsByRoleId(@Param("roleId") Long roleId);
 }

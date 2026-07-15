@@ -37,5 +37,6 @@ public interface ProjectConverter extends BaseConverter {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "visibility", ignore = true)
     Project toEntity(CreateProjectDTO dto);
 }

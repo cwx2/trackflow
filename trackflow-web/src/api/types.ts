@@ -72,6 +72,7 @@ export interface ProjectVO {
   orgId?: string
   leadId?: string
   status: string
+  visibility: 'private' | 'internal' | 'public'
   issueSequence: number
   createdAt: string
   updatedAt: string
@@ -92,7 +93,12 @@ export interface ProjectMemberVO {
   id: string
   projectId: string
   userId: string
+  /** 主角色ID（向后兼容） */
   roleId: string
+  /** 所有角色ID列表 */
+  roleIds: string[]
+  /** 所有角色名称列表 */
+  roleNames: string[]
   username: string
   displayName: string
   email?: string

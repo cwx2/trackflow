@@ -4,6 +4,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import java.util.Collections;
+import java.util.Set;
+
 /**
  * 安全工具类：获取当前认证用户信息
  */
@@ -44,8 +47,20 @@ public final class SecurityUtils {
      * 获取当前用户名
      */
     public static String getCurrentUsername() {
-        Jwt jwt = getCurrentJwt();
-        return jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return null;
+
+        // JWT 认证
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getClaimAsString("preferred_username");
+        }
+
+        // API Key 认证：principal 是 username 字符串
+        if (authentication.getPrincipal() instanceof String username) {
+            return username;
+        }
+
+        return null;
     }
 
     /**
