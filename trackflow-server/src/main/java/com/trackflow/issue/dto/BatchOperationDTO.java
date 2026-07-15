@@ -18,7 +18,7 @@ public class BatchOperationDTO {
      * 操作类型: status, assign, sprint, priority, delete
      */
     @NotNull(message = "操作类型不能为空")
-    @Pattern(regexp = "status|assign|sprint|priority|delete", message = "操作类型必须为: status, assign, sprint, priority, delete")
+    @Pattern(regexp = "status|assign|sprint|priority|delete|restore", message = "操作类型必须为: status, assign, sprint, priority, delete, restore")
     private String operation;
 
     /**

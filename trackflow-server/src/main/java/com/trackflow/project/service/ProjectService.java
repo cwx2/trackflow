@@ -64,6 +64,7 @@ public class ProjectService {
     private final ProjectActivityService projectActivityService;
     private final NotificationService notificationService;
     private final ProjectInitializationService projectInitializationService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
      * 创建项目
@@ -322,6 +323,55 @@ public class ProjectService {
         Project project = getById(id);
         project.setStatus("active");
         projectMapper.updateById(project);
+    }
+
+    // ========== 回收站保留策略设置 ==========
+
+    /**
+     * 获取项目回收站保留策略
+     */
+    public Map<String, Object> getTrashSettings(Long id) {
+        Project project = getById(id);
+        return Map.of("trashRetentionDays", parseRetentionDays(project.getSettings()));
+    }
+
+    /**
+     * 更新项目回收站保留策略
+     * @param days 保留天数，0 表示永久保留
+     */
+    @Transactional
+    public void updateTrashSettings(Long id, int days) {
+        Project project = getById(id);
+        String existingSettings = project.getSettings();
+        try {
+            var root = (existingSettings != null && !existingSettings.isBlank())
+                    ? (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(existingSettings)
+                    : objectMapper.createObjectNode();
+            root.put("trashRetentionDays", days);
+            project.setSettings(objectMapper.writeValueAsString(root));
+        } catch (Exception e) {
+            project.setSettings("{\"trashRetentionDays\":" + days + "}");
+        }
+        projectMapper.updateById(project);
+    }
+
+    /**
+     * 从 settings JSON 解析保留天数
+     */
+    public int parseRetentionDays(String settingsJson) {
+        if (settingsJson == null || settingsJson.isBlank() || "{}".equals(settingsJson)) {
+            return 30;
+        }
+        try {
+            var node = objectMapper.readTree(settingsJson);
+            var retentionNode = node.get("trashRetentionDays");
+            if (retentionNode == null) return 30;
+            if (retentionNode.isTextual() && "forever".equalsIgnoreCase(retentionNode.asText())) return 0;
+            int days = retentionNode.asInt(-1);
+            return days >= 0 ? days : 30;
+        } catch (Exception e) {
+            return 30;
+        }
     }
 
     // ========== 成员管理 ==========

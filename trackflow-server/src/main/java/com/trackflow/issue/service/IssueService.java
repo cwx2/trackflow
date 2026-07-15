@@ -750,6 +750,39 @@ public class IssueService {
     }
 
     /**
+     * 批量恢复（从回收站还原）
+     * 注意：此方法不使用 executeBatch 模板，因为已删除工单 getById() 会抛异常
+     */
+    public BatchOperationResultVO batchRestore(List<Long> issueIds) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setTotal(issueIds.size());
+
+        for (Long issueId : issueIds) {
+            try {
+                Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(issueId);
+                if (row == null || row.get("deleted_at") == null) {
+                    result.addFailure(issueId, "?", "工单不在回收站中");
+                    continue;
+                }
+                Long projectId = ((Number) row.get("project_id")).longValue();
+                if (!permissionService.hasPermission(currentUserId, projectId, "issue:delete")) {
+                    String key = row.get("issue_key") != null ? (String) row.get("issue_key") : "?";
+                    result.addFailure(issueId, key, "无恢复权限");
+                    continue;
+                }
+                issueMapper.restoreById(issueId);
+                recordActivity(issueId, currentUserId, "restored", null, null, null);
+                result.addSuccess();
+            } catch (Exception e) {
+                result.addFailure(issueId, "?", "恢复失败");
+                log.warn("批量恢复失败 issueId={}", issueId, e);
+            }
+        }
+        return result;
+    }
+
+    /**
      * 状态变更
      */
     @Transactional

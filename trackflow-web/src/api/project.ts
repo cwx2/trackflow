@@ -91,5 +91,15 @@ export const projectApi = {
   /** 获取项目活动日志 */
   listActivities(projectId: string, params?: { page?: number; pageSize?: number }) {
     return request.get<any, R<PageResult<ProjectActivityVO>>>(`/projects/${projectId}/activities`, { params })
+  },
+
+  /** 获取项目回收站保留策略 */
+  getTrashSettings(projectId: string) {
+    return request.get<any, R<{ trashRetentionDays: number }>>(`/projects/${projectId}/trash-settings`)
+  },
+
+  /** 更新项目回收站保留策略 */
+  updateTrashSettings(projectId: string, data: { trashRetentionDays: number }) {
+    return request.put<any, R<void>>(`/projects/${projectId}/trash-settings`, data)
   }
 }

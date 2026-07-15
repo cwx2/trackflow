@@ -4,7 +4,7 @@
       <div class="header-left">
         <span class="header-icon">🗑️</span>
         <h1 class="header-title">回收站</h1>
-        <span class="header-hint">已删除的工单将保留 30 天后自动清除</span>
+        <span class="header-hint">{{ retentionHint }}</span>
       </div>
       <div class="header-right">
         <a-select
@@ -12,12 +12,32 @@
           placeholder="选择项目"
           size="small"
           style="width: 180px"
-          @change="loadTrash"
+          @change="onProjectChange"
         >
           <a-option v-for="p in projectList" :key="p.id" :value="p.id">
             {{ p.key }} - {{ p.name }}
           </a-option>
         </a-select>
+        <a-dropdown v-if="selectedProjectId && isProjectAdmin" trigger="click">
+          <a-button size="small" type="text" title="保留策略设置">
+            <template #icon><icon-settings /></template>
+          </a-button>
+          <template #content>
+            <div class="retention-dropdown">
+              <div class="retention-title">回收站保留策略</div>
+              <div
+                v-for="opt in retentionOptions"
+                :key="opt.value"
+                class="retention-option"
+                :class="{ active: retentionDays === opt.value }"
+                @click="setRetention(opt.value)"
+              >
+                <span>{{ opt.label }}</span>
+                <span v-if="retentionDays === opt.value" class="check-mark">✓</span>
+              </div>
+            </div>
+          </template>
+        </a-dropdown>
       </div>
     </div>
 
@@ -41,13 +61,29 @@
 
       <!-- 回收站列表 -->
       <div v-else class="trash-list">
+        <!-- 批量操作栏 -->
+        <div v-if="selectedIds.length > 0" class="batch-bar">
+          <span class="batch-count">已选 {{ selectedIds.length }} 个工单</span>
+          <a-button size="mini" type="text" @click="batchRestoreSelected">
+            <template #icon><icon-undo /></template>
+            批量恢复
+          </a-button>
+          <a-button v-if="isProjectAdmin" size="mini" type="text" status="danger" @click="batchPermanentDelete">
+            <template #icon><icon-delete /></template>
+            批量永久删除
+          </a-button>
+          <a-button size="mini" type="text" @click="selectedIds = []">取消选择</a-button>
+        </div>
+
         <a-table
           :data="trashList"
           :columns="columns"
           :pagination="paginationConfig"
           :loading="loading"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true }"
           row-key="id"
           size="small"
+          @selection-change="onSelectionChange"
           @page-change="onPageChange"
         >
           <template #issueKey="{ record }">
@@ -92,7 +128,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconUndo, IconDelete } from '@arco-design/web-vue/es/icon'
+import { IconUndo, IconDelete, IconSettings } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import type { IssueTrashVO } from '@/api/types'
@@ -106,9 +142,27 @@ const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const selectedIds = ref<string[]>([])
+const retentionDays = ref(30)
+
+const retentionOptions = [
+  { value: 7, label: '7 天' },
+  { value: 14, label: '14 天' },
+  { value: 30, label: '30 天（默认）' },
+  { value: 60, label: '60 天' },
+  { value: 90, label: '90 天' },
+  { value: 0, label: '永久保留（不自动清理）' }
+]
 
 const isProjectAdmin = computed(() => {
   return authStore.hasGlobalPermission('system:admin')
+})
+
+const retentionHint = computed(() => {
+  if (retentionDays.value === 0) {
+    return '已删除的工单将永久保留，不会自动清理'
+  }
+  return `已删除的工单将保留 ${retentionDays.value} 天后自动清除`
 })
 
 const columns = [
@@ -141,19 +195,24 @@ async function loadProjects() {
   try {
     const res = await projectApi.list({ pageSize: 50 })
     projectList.value = res.data?.list || []
-    // Auto-select first project if only one
     if (projectList.value.length === 1) {
       selectedProjectId.value = projectList.value[0].id
-      await loadTrash()
+      await onProjectChange()
     }
   } catch {
     projectList.value = []
   }
 }
 
+async function onProjectChange() {
+  if (!selectedProjectId.value) return
+  await Promise.all([loadTrash(), loadRetentionSettings()])
+}
+
 async function loadTrash() {
   if (!selectedProjectId.value) return
   loading.value = true
+  selectedIds.value = []
   try {
     const res = await issueApi.listTrash({
       projectId: selectedProjectId.value,
@@ -170,9 +229,34 @@ async function loadTrash() {
   }
 }
 
+async function loadRetentionSettings() {
+  if (!selectedProjectId.value) return
+  try {
+    const res = await projectApi.getTrashSettings(selectedProjectId.value)
+    retentionDays.value = res.data?.trashRetentionDays ?? 30
+  } catch {
+    retentionDays.value = 30
+  }
+}
+
+async function setRetention(days: number) {
+  if (!selectedProjectId.value) return
+  try {
+    await projectApi.updateTrashSettings(selectedProjectId.value, { trashRetentionDays: days })
+    retentionDays.value = days
+    Message.success(days === 0 ? '已设为永久保留' : `已设为保留 ${days} 天`)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '设置失败')
+  }
+}
+
 function onPageChange(page: number) {
   currentPage.value = page
   loadTrash()
+}
+
+function onSelectionChange(keys: string[]) {
+  selectedIds.value = keys
 }
 
 async function handleRestore(record: IssueTrashVO) {
@@ -182,6 +266,26 @@ async function handleRestore(record: IssueTrashVO) {
     loadTrash()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '恢复失败')
+  }
+}
+
+async function batchRestoreSelected() {
+  if (selectedIds.value.length === 0) return
+  try {
+    const res = await issueApi.batch({
+      operation: 'restore',
+      issueIds: selectedIds.value
+    })
+    const data = res.data
+    if (data && data.failed === 0) {
+      Message.success(`已恢复 ${data.succeeded} 个工单`)
+    } else if (data) {
+      Message.warning(`恢复 ${data.succeeded} 个，失败 ${data.failed} 个`)
+    }
+    selectedIds.value = []
+    loadTrash()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '批量恢复失败')
   }
 }
 
@@ -200,6 +304,36 @@ function handlePermanentDelete(record: IssueTrashVO) {
       } catch (e: any) {
         Message.error(e.response?.data?.message || '永久删除失败')
       }
+    }
+  })
+}
+
+function batchPermanentDelete() {
+  if (selectedIds.value.length === 0) return
+  Modal.warning({
+    title: '批量永久删除',
+    content: `确定永久删除选中的 ${selectedIds.value.length} 个工单？此操作不可撤销。`,
+    okText: '永久删除',
+    cancelText: '取消',
+    hideCancel: false,
+    onOk: async () => {
+      let succeeded = 0
+      let failed = 0
+      for (const id of selectedIds.value) {
+        try {
+          await issueApi.permanentDelete(id)
+          succeeded++
+        } catch {
+          failed++
+        }
+      }
+      if (failed === 0) {
+        Message.success(`已永久删除 ${succeeded} 个工单`)
+      } else {
+        Message.warning(`删除 ${succeeded} 个，失败 ${failed} 个`)
+      }
+      selectedIds.value = []
+      loadTrash()
     }
   })
 }
@@ -324,5 +458,69 @@ onMounted(() => {
 .action-btns {
   display: flex;
   gap: 4px;
+}
+
+/* Header right area */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Retention dropdown */
+.retention-dropdown {
+  padding: 8px;
+  min-width: 200px;
+}
+
+.retention-title {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 8px 8px;
+  font-weight: 500;
+}
+
+.retention-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.retention-option:hover {
+  background: var(--tf-bg-hover);
+}
+
+.retention-option.active {
+  color: var(--tf-accent);
+  font-weight: 500;
+}
+
+.check-mark {
+  color: var(--tf-accent);
+  font-weight: 600;
+}
+
+/* Batch bar */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--tf-border-light);
+  background: var(--tf-bg-elevated);
+}
+
+.batch-count {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
 }
 </style>

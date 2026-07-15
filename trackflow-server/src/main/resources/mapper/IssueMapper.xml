@@ -161,6 +161,14 @@
         DELETE FROM issue WHERE id = #{id} AND deleted_at IS NOT NULL
     </delete>
 
+    <!-- 查询超过保留期限的已删除工单（用于定时清理） -->
+    <select id="selectExpiredTrash" resultType="map">
+        SELECT id FROM issue
+        WHERE project_id = #{projectId}
+          AND deleted_at IS NOT NULL
+          AND deleted_at &lt; #{cutoff}
+    </select>
+
     <!-- 子任务列表：查询指定父工单的所有子任务（带状态和负责人名称） -->
     <select id="selectChildrenByParentId" resultType="map">
         SELECT

@@ -62,4 +62,9 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * 查询指定父工单的所有子任务（带状态和负责人名称，单次 JOIN 查询）
      */
     List<Map<String, Object>> selectChildrenByParentId(@Param("parentId") Long parentId);
+
+    /**
+     * 查询指定项目中超过保留期限的已删除工单 ID 列表（用于定时清理）
+     */
+    List<Map<String, Object>> selectExpiredTrash(@Param("projectId") Long projectId, @Param("cutoff") java.time.LocalDateTime cutoff);
 }

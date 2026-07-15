@@ -161,6 +161,7 @@ public class IssueController {
                 yield issueService.batchUpdatePriority(dto.getIssueIds(), dto.getPriority());
             }
             case "delete" -> issueService.batchDelete(dto.getIssueIds());
+            case "restore" -> issueService.batchRestore(dto.getIssueIds());
             default -> null;
         };
 
@@ -178,7 +179,20 @@ public class IssueController {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         List<IssueStatus> statuses = workflowService.getAvailableTransitions(issue, userId);
-        return R.ok(issueConverter.toStatusVOList(statuses));
+        List<IssueStatusVO> voList = issueConverter.toStatusVOList(statuses);
+
+        // 检查阻塞关系：如果有未解决的 blocker，标注关闭状态为 blocked
+        List<String> blockerKeys = linkService.getUnresolvedBlockerKeys(id);
+        if (!blockerKeys.isEmpty()) {
+            for (IssueStatusVO vo : voList) {
+                if (Boolean.TRUE.equals(vo.getIsClosed())) {
+                    vo.setBlocked(true);
+                    vo.setBlockedBy(blockerKeys);
+                }
+            }
+        }
+
+        return R.ok(voList);
     }
 
     @PostMapping("/{id}/transitions")
@@ -202,6 +216,13 @@ public class IssueController {
             long openChildren = issueService.countOpenChildren(id);
             if (openChildren > 0) {
                 return R.fail(40910, "该工单有 " + openChildren + " 个未完成的子任务，确认要关闭吗？");
+            }
+
+            // 检查阻塞关系：有未解决的 blocker 时返回警告
+            List<String> blockerKeys = linkService.getUnresolvedBlockerKeys(id);
+            if (!blockerKeys.isEmpty()) {
+                String blockers = String.join("、", blockerKeys);
+                return R.fail(40911, "此工单被 " + blockers + " 阻塞，确定要强制关闭吗？");
             }
         }
 

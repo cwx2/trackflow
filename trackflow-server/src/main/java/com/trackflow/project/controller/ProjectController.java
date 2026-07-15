@@ -81,6 +81,19 @@ public class ProjectController {
         return R.ok();
     }
 
+    @GetMapping("/{id}/trash-settings")
+    @PreAuthorize("@perm.check(#id, 'project:edit')")
+    public R<Map<String, Object>> getTrashSettings(@PathVariable Long id) {
+        return R.ok(projectService.getTrashSettings(id));
+    }
+
+    @PutMapping("/{id}/trash-settings")
+    @PreAuthorize("@perm.check(#id, 'project:edit')")
+    public R<Void> updateTrashSettings(@PathVariable Long id, @Valid @RequestBody UpdateTrashSettingsDTO dto) {
+        projectService.updateTrashSettings(id, dto.getTrashRetentionDays());
+        return R.ok();
+    }
+
     @PutMapping("/{id}/restore")
     @PreAuthorize("@perm.check(#id, 'project:edit')")
     public R<Void> restore(@PathVariable Long id) {
