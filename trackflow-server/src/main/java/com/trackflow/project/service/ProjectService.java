@@ -76,7 +76,7 @@ public class ProjectService {
                 new LambdaQueryWrapper<Project>().eq(Project::getKey, dto.getKey().toUpperCase())
         );
         if (count > 0) {
-            throw new BusinessException(40902, 409, "Project key already exists");
+            throw new BusinessException(ErrorCode.PROJECT_KEY_DUPLICATE);
         }
 
         Project project = new Project();

@@ -3,6 +3,7 @@ package com.trackflow.auth.controller;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.auth.service.UserSyncService;
 import com.trackflow.auth.vo.UserInfoVO;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ public class AuthController {
     public R<UserInfoVO> getCurrentUser() {
         Jwt jwt = SecurityUtils.getCurrentJwt();
         if (jwt == null) {
-            return R.fail(40100, "未认证");
+            return R.fail(ErrorCode.AUTH_MISSING);
         }
         String givenName = jwt.getClaimAsString("given_name");
         String familyName = jwt.getClaimAsString("family_name");
@@ -64,7 +65,7 @@ public class AuthController {
     public R<Set<String>> getMyGlobalPermissions() {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
-            return R.fail(40100, "未认证");
+            return R.fail(ErrorCode.AUTH_MISSING);
         }
         Set<String> permissions = new HashSet<>(permissionService.getPermissions(userId));
 

@@ -2,6 +2,7 @@ package com.trackflow.integration.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.integration.dto.UpdateNotificationPreferenceDTO;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.mapper.NotificationPreferenceMapper;
@@ -40,7 +41,7 @@ public class NotificationPreferenceService {
         boolean hasStart = dto.getQuietHoursStart() != null && !dto.getQuietHoursStart().isEmpty();
         boolean hasEnd = dto.getQuietHoursEnd() != null && !dto.getQuietHoursEnd().isEmpty();
         if (hasStart != hasEnd) {
-            throw new BusinessException(40001, 400, "静音时段的开始和结束时间必须同时设置或同时清除");
+            throw new BusinessException(ErrorCode.QUIET_HOURS_INCOMPLETE);
         }
 
         NotificationPreference pref = getByUserId(userId);

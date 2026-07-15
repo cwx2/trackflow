@@ -49,4 +49,12 @@ public class R<T> implements Serializable {
     public static <T> R<T> fail(ErrorCode errorCode) {
         return new R<>(errorCode.getCode(), errorCode.getMessage(), null);
     }
+
+    /**
+     * 使用枚举错误码 + 自定义消息返回失败响应。
+     * 保留枚举的 code 数值，覆盖默认 message。
+     */
+    public static <T> R<T> fail(ErrorCode errorCode, String customMessage) {
+        return new R<>(errorCode.getCode(), customMessage, null);
+    }
 }

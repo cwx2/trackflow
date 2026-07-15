@@ -25,3 +25,7 @@ export { notificationApi } from './notification'
 
 // 类型导出
 export type * from './types'
+
+// 错误码常量
+export { ERROR_CODES } from './error-codes'
+export type { ErrorCodeValue } from './error-codes'

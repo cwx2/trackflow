@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(R.fail(ErrorCode.VALIDATION_ERROR.getCode(), message));
+                .body(R.fail(ErrorCode.VALIDATION_ERROR, message));
     }
 
     /**
@@ -50,7 +50,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<R<Void>> handleAccessDeniedException(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(R.fail(ErrorCode.ACCESS_DENIED.getCode(), "权限不足，您没有执行此操作的权限"));
+                .body(R.fail(ErrorCode.ACCESS_DENIED, "权限不足，您没有执行此操作的权限"));
     }
 
     /**
@@ -59,7 +59,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<R<Void>> handleAuthenticationException(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(R.fail(ErrorCode.AUTH_MISSING.getCode(), "未认证"));
+                .body(R.fail(ErrorCode.AUTH_MISSING, "未认证"));
     }
 
     /**
@@ -70,7 +70,7 @@ public class GlobalExceptionHandler {
                                                                    HttpServletRequest request) {
         log.warn("Resource not found: {} {}", request.getMethod(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(R.fail(ErrorCode.RESOURCE_NOT_FOUND.getCode(), "请求的资源不存在"));
+                .body(R.fail(ErrorCode.RESOURCE_NOT_FOUND, "请求的资源不存在"));
     }
 
     /**
@@ -80,7 +80,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<R<Void>> handleBadFormatException(Exception ex, HttpServletRequest request) {
         log.warn("Bad request format on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(R.fail(ErrorCode.VALIDATION_ERROR.getCode(), "请求参数格式错误"));
+                .body(R.fail(ErrorCode.VALIDATION_ERROR, "请求参数格式错误"));
     }
 
     /**
@@ -90,6 +90,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<R<Void>> handleGenericException(Exception ex, HttpServletRequest request) {
         log.error("Unexpected error on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(R.fail(ErrorCode.INTERNAL_ERROR.getCode(), "服务器内部错误"));
+                .body(R.fail(ErrorCode.INTERNAL_ERROR, "服务器内部错误"));
     }
 }
