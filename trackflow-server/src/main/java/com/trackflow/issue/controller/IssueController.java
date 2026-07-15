@@ -6,6 +6,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
@@ -45,6 +46,7 @@ public class IssueController {
     private final SysUserMapper sysUserMapper;
     private final IssueStatusMapper issueStatusMapper;
     private final ClosePreCheckChain closePreCheckChain;
+    private final CustomFieldService customFieldService;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -76,6 +78,21 @@ public class IssueController {
             }
         }
 
+        // 批量填充自定义字段展示值
+        List<Long> issueIds = result.getRecords().stream()
+                .map(Issue::getId)
+                .toList();
+        if (!issueIds.isEmpty()) {
+            Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds);
+            for (int i = 0; i < result.getRecords().size(); i++) {
+                Long issueId = result.getRecords().get(i).getId();
+                Map<String, String> cfValues = cfValuesMap.get(issueId);
+                if (cfValues != null && !cfValues.isEmpty()) {
+                    voList.get(i).setCustomFieldValues(cfValues);
+                }
+            }
+        }
+
         PageResult<IssueVO> pageResult = new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
@@ -98,6 +115,21 @@ public class IssueController {
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<IssueDetailVO> update(@PathVariable Long id, @Valid @RequestBody UpdateIssueDTO dto) {
         issueService.update(id, dto);
+        return R.ok(issueService.getDetail(id));
+    }
+
+    /**
+     * 更新单个自定义字段值（内联编辑）
+     */
+    @PutMapping("/{id}/custom-fields/{fieldId}")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+    public R<IssueDetailVO> updateCustomFieldValue(
+            @PathVariable Long id,
+            @PathVariable Long fieldId,
+            @RequestBody Map<String, String> body) {
+        Issue issue = issueService.getById(id);
+        String value = body.get("value");
+        customFieldService.saveSingleValue(id, fieldId, value, issue.getIssueType(), issue.getProjectId());
         return R.ok(issueService.getDetail(id));
     }
 

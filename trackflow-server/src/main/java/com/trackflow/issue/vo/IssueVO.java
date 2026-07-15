@@ -3,6 +3,7 @@ package com.trackflow.issue.vo;
 import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Data
 public class IssueVO {
@@ -21,4 +22,7 @@ public class IssueVO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer version;
+
+    /** 自定义字段值，key 格式为 "cf_{fieldId}"，value 为展示用文本 */
+    private Map<String, String> customFieldValues;
 }

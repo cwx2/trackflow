@@ -49,23 +49,59 @@
           </a-button>
         </div>
         <div v-if="expandedGroups.has('saved')" class="group-items">
-          <div
+          <a-dropdown
             v-for="q in filteredQueries"
             :key="q.id"
-            class="query-item"
-            :class="{ active: activeQueryId === q.id, 'query-highlight': q.icon && q.count > 0 }"
-            @click="selectQuery(q)"
+            trigger="contextMenu"
+            position="br"
+            :popup-max-height="false"
           >
-            <span class="query-icon" v-if="q.icon">{{ q.icon }}</span>
-            <span class="query-name">{{ q.name }}</span>
-            <span class="query-count" :class="{ 'count-accent': q.icon && q.count > 0 }">{{ formatCount(q.count) }}</span>
-            <span
-              v-if="q.userId && !q.shared"
-              class="query-delete-btn"
-              title="删除此查询"
-              @click.stop="confirmDeleteQuery(q)"
-            >✕</span>
-          </div>
+            <div
+              class="query-item"
+              :class="{ active: activeQueryId === q.id, 'query-highlight': q.icon && q.count > 0 }"
+              @click="selectQuery(q)"
+            >
+              <span class="query-icon" v-if="q.icon">{{ q.icon }}</span>
+              <span class="query-name">{{ q.name }}</span>
+              <span class="query-count" :class="{ 'count-accent': q.icon && q.count > 0 }">{{ formatCount(q.count) }}</span>
+              <span
+                v-if="q.userId"
+                class="query-action-btn"
+                title="更多操作"
+                @click.stop
+                @contextmenu.prevent.stop
+                @mousedown.stop="triggerContextMenu($event, q)"
+              >⋯</span>
+            </div>
+            <template #content>
+              <template v-if="q.userId">
+                <a-doption @click="openEditQueryModal(q)">
+                  <template #icon><icon-edit /></template>
+                  编辑查询
+                </a-doption>
+                <a-doption @click="openRenameQueryModal(q)">
+                  <template #icon><icon-pen-fill /></template>
+                  重命名
+                </a-doption>
+                <a-doption @click="toggleQueryShared(q)">
+                  <template #icon><icon-share-external /></template>
+                  {{ q.shared ? '设为私有' : '设为共享' }}
+                </a-doption>
+                <a-doption @click="toggleQueryPinned(q)">
+                  <template #icon><icon-pushpin /></template>
+                  {{ q.pinned ? '取消置顶' : '置顶' }}
+                </a-doption>
+                <a-doption class="query-ctx-delete" @click="confirmDeleteQuery(q)">
+                  <template #icon><icon-delete /></template>
+                  删除
+                </a-doption>
+              </template>
+              <a-doption v-else disabled>
+                <template #icon><icon-lock /></template>
+                系统预设查询（不可修改）
+              </a-doption>
+            </template>
+          </a-dropdown>
           <div v-if="filteredQueries.length === 0" class="empty-queries">暂无保存的搜索</div>
         </div>
       </div>
@@ -112,6 +148,77 @@
           </a-form-item>
           <a-form-item label="固定到面板顶部">
             <a-switch v-model="createQueryForm.pinned" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
+
+      <!-- Edit query modal -->
+      <a-modal
+        v-model:visible="showEditQueryModal"
+        title="编辑查询"
+        :width="440"
+        :ok-loading="editQueryLoading"
+        ok-text="保存修改"
+        cancel-text="取消"
+        @ok="handleEditQuery"
+        @cancel="showEditQueryModal = false"
+      >
+        <a-form :model="editQueryForm" layout="vertical">
+          <a-form-item label="查询名称" required>
+            <a-input v-model="editQueryForm.name" placeholder="输入查询名称" :max-length="50" />
+          </a-form-item>
+          <a-form-item label="图标">
+            <div class="icon-picker">
+              <span
+                v-for="emoji in queryIconOptions"
+                :key="emoji"
+                class="icon-option"
+                :class="{ selected: editQueryForm.icon === emoji }"
+                @click="editQueryForm.icon = editQueryForm.icon === emoji ? '' : emoji"
+              >{{ emoji }}</span>
+            </div>
+            <div v-if="editQueryForm.icon" class="icon-preview">
+              已选：{{ editQueryForm.icon }}
+              <a-link @click="editQueryForm.icon = ''" style="margin-left: 8px; font-size: 12px;">清除</a-link>
+            </div>
+          </a-form-item>
+          <a-form-item label="筛选条件">
+            <div class="query-edit-filters">
+              <div v-if="editQueryFiltersPreview.length > 0" class="edit-filter-chips">
+                <div v-for="(f, i) in editQueryFiltersPreview" :key="i" class="preview-chip">
+                  {{ f }}
+                </div>
+              </div>
+              <span v-else class="preview-empty">无筛选条件（将返回所有工单）</span>
+              <a-checkbox v-model="editQueryForm.replaceFilters" style="margin-top: 8px;">
+                用当前筛选条件替换
+              </a-checkbox>
+            </div>
+          </a-form-item>
+          <a-form-item label="固定到面板顶部">
+            <a-switch v-model="editQueryForm.pinned" />
+          </a-form-item>
+          <a-form-item label="共享">
+            <a-switch v-model="editQueryForm.shared" />
+            <span class="form-help-text">共享后其他项目成员也能看到此查询</span>
+          </a-form-item>
+        </a-form>
+      </a-modal>
+
+      <!-- Rename query modal -->
+      <a-modal
+        v-model:visible="showRenameQueryModal"
+        title="重命名查询"
+        :width="360"
+        :ok-loading="renameQueryLoading"
+        ok-text="确认"
+        cancel-text="取消"
+        @ok="handleRenameQuery"
+        @cancel="showRenameQueryModal = false"
+      >
+        <a-form layout="vertical">
+          <a-form-item label="新名称" required>
+            <a-input v-model="renameQueryForm.name" placeholder="输入新名称" :max-length="50" @keyup.enter="handleRenameQuery" />
           </a-form-item>
         </a-form>
       </a-modal>
@@ -343,6 +450,11 @@
         <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
         <template #dueDate="{ record }"><span class="time-ago">{{ record.dueDate || '\u2014' }}</span></template>
 
+        <!-- Custom field columns (cf_ prefix) -->
+        <template #customFieldCell="{ record, column }">
+          <span class="cf-cell">{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
+        </template>
+
         <!-- empty -->
         <template #empty>
           <div class="empty-state">
@@ -368,7 +480,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
@@ -473,35 +585,7 @@ async function handleCreateQuery() {
   }
   createQueryLoading.value = true
   try {
-    // Build filters array in the backend format
-    const filters: any[] = []
-    if (globalFilterParams.value.statusId) {
-      const statusIds = String(globalFilterParams.value.statusId).split(',')
-      // Map status IDs to codes for the backend
-      const statusCodes = statusIds.map(id => {
-        const s = statusCache.value.find(st => st.id === id)
-        return s?.code || id
-      })
-      filters.push({ field: 'status', operator: 'in', value: statusCodes })
-    }
-    if (globalFilterParams.value.assigneeId) {
-      filters.push({ field: 'assignee', operator: 'eq', value: [globalFilterParams.value.assigneeId] })
-    }
-    if (globalFilterParams.value.priority) {
-      filters.push({ field: 'priority', operator: 'eq', value: [globalFilterParams.value.priority] })
-    }
-    if (globalFilterParams.value.sprintId) {
-      filters.push({ field: 'sprint', operator: 'eq', value: [globalFilterParams.value.sprintId] })
-    }
-    if (globalFilterParams.value.issueType) {
-      filters.push({ field: 'type', operator: 'eq', value: [globalFilterParams.value.issueType] })
-    }
-    if (searchKeyword.value.trim()) {
-      filters.push({ field: 'keyword', operator: 'contains', value: [searchKeyword.value.trim()] })
-    }
-    if (activeProjectId.value) {
-      filters.push({ field: 'project', operator: 'eq', value: [activeProjectId.value] })
-    }
+    const filters = buildCurrentFilters()
 
     await queryApi.create({
       name: createQueryForm.name.trim(),
@@ -542,6 +626,182 @@ async function confirmDeleteQuery(q: any) {
       }
     }
   })
+}
+
+// ========== Edit query ==========
+const showEditQueryModal = ref(false)
+const editQueryLoading = ref(false)
+const editQueryForm = reactive({
+  id: '',
+  name: '',
+  icon: '',
+  pinned: false,
+  shared: false,
+  filters: [] as any[],
+  replaceFilters: false
+})
+
+const editQueryFiltersPreview = computed(() => {
+  if (editQueryForm.replaceFilters) {
+    return createQueryFiltersPreview.value.map(f => `[新] ${f}`)
+  }
+  // Show existing filter conditions
+  const previews: string[] = []
+  for (const f of editQueryForm.filters) {
+    const field = f.field || f.name || '未知'
+    const op = f.operator || 'eq'
+    const val = Array.isArray(f.value) ? f.value.join(', ') : (f.value || '')
+    previews.push(`${field} ${op} ${val}`)
+  }
+  return previews
+})
+
+function openEditQueryModal(q: any) {
+  editQueryForm.id = q.id
+  editQueryForm.name = q.name || ''
+  editQueryForm.icon = q.icon || ''
+  editQueryForm.pinned = q.pinned || false
+  editQueryForm.shared = q.shared || false
+  editQueryForm.replaceFilters = false
+  // Parse filters from the panel item (stored as JSON string)
+  try {
+    editQueryForm.filters = q.filters ? JSON.parse(q.filters) : []
+  } catch {
+    editQueryForm.filters = []
+  }
+  showEditQueryModal.value = true
+}
+
+async function handleEditQuery() {
+  if (!editQueryForm.name.trim()) {
+    Message.warning('请输入查询名称')
+    return
+  }
+  editQueryLoading.value = true
+  try {
+    const updateData: Record<string, any> = {
+      name: editQueryForm.name.trim(),
+      icon: editQueryForm.icon || '',
+      pinned: editQueryForm.pinned,
+      shared: editQueryForm.shared
+    }
+    // If user chose to replace filters with current ones
+    if (editQueryForm.replaceFilters) {
+      updateData.filters = buildCurrentFilters()
+    }
+    await queryApi.update(editQueryForm.id, updateData)
+    Message.success('查询已更新')
+    showEditQueryModal.value = false
+    loadPanel()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '更新失败')
+  } finally {
+    editQueryLoading.value = false
+  }
+}
+
+// ========== Rename query ==========
+const showRenameQueryModal = ref(false)
+const renameQueryLoading = ref(false)
+const renameQueryForm = reactive({
+  id: '',
+  name: ''
+})
+
+function openRenameQueryModal(q: any) {
+  renameQueryForm.id = q.id
+  renameQueryForm.name = q.name || ''
+  showRenameQueryModal.value = true
+}
+
+async function handleRenameQuery() {
+  if (!renameQueryForm.name.trim()) {
+    Message.warning('请输入查询名称')
+    return
+  }
+  renameQueryLoading.value = true
+  try {
+    await queryApi.update(renameQueryForm.id, { name: renameQueryForm.name.trim() })
+    Message.success('重命名成功')
+    showRenameQueryModal.value = false
+    // Update local activeQueryName if this is the currently selected query
+    if (activeQueryId.value === renameQueryForm.id) {
+      activeQueryName.value = renameQueryForm.name.trim()
+    }
+    loadPanel()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '重命名失败')
+  } finally {
+    renameQueryLoading.value = false
+  }
+}
+
+// ========== Toggle shared/pinned ==========
+async function toggleQueryShared(q: any) {
+  try {
+    await queryApi.update(q.id, { shared: !q.shared })
+    Message.success(q.shared ? '已设为私有' : '已设为共享')
+    loadPanel()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+async function toggleQueryPinned(q: any) {
+  try {
+    await queryApi.update(q.id, { pinned: !q.pinned })
+    Message.success(q.pinned ? '已取消置顶' : '已置顶')
+    loadPanel()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+// Context menu trigger (for the ⋯ button — dispatches a synthetic contextmenu event
+// so the a-dropdown with trigger="contextMenu" picks it up)
+function triggerContextMenu(event: MouseEvent, _q: any) {
+  const target = (event.target as HTMLElement).closest('.query-item')
+  if (target) {
+    const contextMenuEvent = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: event.clientX,
+      clientY: event.clientY
+    })
+    target.dispatchEvent(contextMenuEvent)
+  }
+}
+
+// Helper: build filters from current active state (reused from handleCreateQuery)
+function buildCurrentFilters(): any[] {
+  const filters: any[] = []
+  if (globalFilterParams.value.statusId) {
+    const statusIds = String(globalFilterParams.value.statusId).split(',')
+    const statusCodes = statusIds.map(id => {
+      const s = statusCache.value.find(st => st.id === id)
+      return s?.code || id
+    })
+    filters.push({ field: 'status', operator: 'in', value: statusCodes })
+  }
+  if (globalFilterParams.value.assigneeId) {
+    filters.push({ field: 'assignee', operator: 'eq', value: [globalFilterParams.value.assigneeId] })
+  }
+  if (globalFilterParams.value.priority) {
+    filters.push({ field: 'priority', operator: 'eq', value: [globalFilterParams.value.priority] })
+  }
+  if (globalFilterParams.value.sprintId) {
+    filters.push({ field: 'sprint', operator: 'eq', value: [globalFilterParams.value.sprintId] })
+  }
+  if (globalFilterParams.value.issueType) {
+    filters.push({ field: 'type', operator: 'eq', value: [globalFilterParams.value.issueType] })
+  }
+  if (searchKeyword.value.trim()) {
+    filters.push({ field: 'keyword', operator: 'contains', value: [searchKeyword.value.trim()] })
+  }
+  if (activeProjectId.value) {
+    filters.push({ field: 'project', operator: 'eq', value: [activeProjectId.value] })
+  }
+  return filters
 }
 
 // Panel resize
@@ -693,7 +953,7 @@ const tableColumns = computed(() => {
     .map(col => ({
       title: col.label,
       dataIndex: col.key,
-      slotName: col.key === 'title' ? 'title-cell' : col.key,
+      slotName: col.key === 'title' ? 'title-cell' : col.key.startsWith('cf_') ? 'customFieldCell' : col.key,
       titleSlotName: 'column-header',
       width: columnWidths[col.key] || DEFAULT_COLUMN_WIDTHS[col.key] || 100,
       ellipsis: true,
@@ -1222,10 +1482,24 @@ function applyDashboardFilter() {
 .query-item:hover .query-delete-btn { opacity: 1; }
 .query-delete-btn:hover { color: var(--tf-danger); background: rgba(248, 81, 73, 0.1); }
 
+/* Query action button (⋯) */
+.query-action-btn { font-size: 14px; color: var(--tf-text-quaternary); cursor: pointer; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; flex-shrink: 0; line-height: 1; }
+.query-item:hover .query-action-btn { opacity: 1; }
+.query-action-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
+
+/* Context menu delete option */
+.query-ctx-delete { color: var(--tf-danger) !important; }
+.query-ctx-delete:hover { background: rgba(248, 81, 73, 0.08) !important; }
+
 /* Create query modal */
 .query-preview-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 .preview-chip { padding: 2px 8px; background: var(--tf-bg-surface); border: 1px solid var(--tf-border); border-radius: 3px; font-size: 12px; color: var(--tf-text-secondary); }
 .preview-empty { font-size: 12px; color: var(--tf-text-tertiary); }
+
+/* Edit query modal */
+.query-edit-filters { display: flex; flex-direction: column; gap: 6px; }
+.edit-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.form-help-text { font-size: 12px; color: var(--tf-text-tertiary); margin-left: 8px; }
 
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
@@ -1272,6 +1546,7 @@ function applyDashboardFilter() {
 .priority-normal { background: var(--tf-accent); }
 .priority-low { background: var(--tf-text-tertiary); }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
+.cf-cell { font-size: 12px; color: var(--tf-text-secondary); }
 
 /* Inline dropdowns */
 .inline-dropdown { background: var(--tf-bg-elevated); border: 1px solid var(--tf-border); border-radius: 6px; padding: 4px; min-width: 150px; max-height: 240px; overflow-y: auto; }

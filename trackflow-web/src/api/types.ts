@@ -139,6 +139,8 @@ export interface IssueVO {
   createdAt: string
   updatedAt: string
   version: number
+  /** 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本 */
+  customFieldValues?: Record<string, string>
 }
 
 export interface IssueDetailVO extends IssueVO {
@@ -153,6 +155,8 @@ export interface IssueDetailVO extends IssueVO {
   estimatedHours?: number
   spentHours?: number
   customFields?: string
+  /** 结构化自定义字段值（带字段名称和类型，用于前端渲染） */
+  customFieldDetails?: CustomFieldValueVO[]
   tags?: IssueTagVO[]
   resolvedAt?: string
   children?: ChildIssueVO[]

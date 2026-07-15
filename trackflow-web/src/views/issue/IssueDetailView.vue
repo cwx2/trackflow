@@ -118,10 +118,10 @@ import { useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
-import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
+import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi, customFieldApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
-import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO } from '@/api/types'
+import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
@@ -193,6 +193,7 @@ const links = ref<IssueLinkVO[]>([])
 const projectTagList = ref<IssueTagVO[]>([])
 const members = ref<ProjectMemberVO[]>([])
 const sprints = ref<SprintVO[]>([])
+const customFieldDefs = ref<CustomFieldDefinitionVO[]>([])
 
 const issueId = computed(() => route.params.id as string || '')
 
@@ -254,6 +255,7 @@ async function loadRelatedData() {
       issueApi.listAttachments(id),
       issueApi.listLinks(id),
       tagApi.listProjectTags(pid),
+      customFieldApi.listByProject(pid, issue.value!.issueType),
     ]
     // 仅在有分配权限时加载成员列表（编辑负责人的下拉选项）
     if (needMemberOptions) {
@@ -278,6 +280,8 @@ async function loadRelatedData() {
     if (results[idx].status === 'fulfilled') links.value = (results[idx] as any).value.data || []
     idx++
     if (results[idx].status === 'fulfilled') projectTagList.value = (results[idx] as any).value.data || []
+    idx++
+    if (results[idx].status === 'fulfilled') customFieldDefs.value = (results[idx] as any).value.data || []
     idx++
     if (needMemberOptions) {
       if (results[idx].status === 'fulfilled') members.value = (results[idx] as any).value.data || []
@@ -378,11 +382,76 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit },
     { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit },
     { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
+    // 自定义字段
+    ...buildCustomFieldSidebarEntries(i, canEdit),
     { key: '_sep', label: '', value: '', readonly: true },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(i.createdAt), readonly: true },
     { key: 'updatedAt', label: '更新时间', value: formatDateTime(i.updatedAt), readonly: true },
   ]
 })
+
+/**
+ * 将自定义字段定义 + 已存储的值转为 SidebarField 数组
+ */
+function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
+  if (!customFieldDefs.value.length) return []
+
+  // 已存储的值 map: fieldId → value
+  const valuesMap = new Map<string, { value: string; displayValue: string }>()
+  if (i.customFieldDetails) {
+    for (const v of i.customFieldDetails) {
+      valuesMap.set(v.customFieldId, { value: v.value || '', displayValue: v.displayValue || v.value || '' })
+    }
+  }
+
+  return customFieldDefs.value.map(cf => {
+    const stored = valuesMap.get(cf.id)
+    const rawValue = stored?.value || ''
+    const displayValue = stored?.displayValue || (cf.isRequired ? '设置值' : '-')
+
+    // 根据字段类型确定 editType
+    let editType: 'select' | 'user-select' | 'date' | 'number' | undefined
+    let options: { value: string; label: string }[] | undefined
+
+    switch (cf.fieldFormat) {
+      case 'list':
+        editType = 'select'
+        options = (cf.options || []).map(o => ({ value: o.id, label: o.value }))
+        break
+      case 'user':
+        editType = 'user-select'
+        options = members.value.map(m => ({ value: m.userId, label: m.displayName }))
+        break
+      case 'date':
+        editType = 'date'
+        break
+      case 'int':
+      case 'float':
+        editType = 'number'
+        break
+      case 'bool':
+        editType = 'select'
+        options = [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]
+        break
+      case 'string':
+      default:
+        editType = 'number' // 用 number editType 的 input 模式（通用 input）— 实际用 issue-search 类型的通用 input
+        // 对于 string 类型，使用 issue-search 占位让 sidebar 显示文本输入
+        editType = 'issue-search' as any
+        break
+    }
+
+    return {
+      key: `cf_${cf.id}`,
+      label: cf.name,
+      value: displayValue,
+      editType: editType as any,
+      rawValue,
+      readonly: !canEdit,
+      options
+    }
+  })
+}
 
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
@@ -524,6 +593,17 @@ function parseDurationText(text: string): number | null {
 }
 
 async function onEditField(key: string, newValue: string) {
+  // 自定义字段编辑（key 格式: cf_{fieldId}）
+  if (key.startsWith('cf_')) {
+    const fieldId = key.substring(3)
+    try {
+      await issueApi.updateCustomFieldValue(issue.value!.id, fieldId, newValue)
+      await loadAll()
+      Message.success('已更新')
+    } catch (e: any) { handleUpdateError(e) }
+    return
+  }
+
   const fieldMap: Record<string, string> = { priority: 'priority', issueType: 'issueType', assignee: 'assigneeId', sprint: 'sprintId', dueDate: 'dueDate', estimatedHours: 'estimatedHours' }
   const prop = fieldMap[key]
   if (!prop) return

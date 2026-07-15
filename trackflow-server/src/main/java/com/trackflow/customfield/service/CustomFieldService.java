@@ -9,6 +9,8 @@ import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.*;
 import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
+import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class CustomFieldService {
     private final CustomFieldProjectMapper projectMapper;
     private final CustomFieldIssueTypeMapper issueTypeMapper;
     private final CustomFieldValidationEngine validationEngine;
+    private final SysUserMapper userMapper;
 
     @Transactional
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
@@ -338,6 +341,217 @@ public class CustomFieldService {
                 .eq(CustomFieldValue::getIssueId, issueId))
                 .stream()
                 .collect(Collectors.toMap(CustomFieldValue::getCustomFieldId, CustomFieldValue::getValue));
+    }
+
+    /**
+     * 批量获取多个 Issue 的自定义字段展示值
+     * 返回 Map<issueId, Map<"cf_{fieldId}", displayValue>>
+     * list 类型解析为选项文本，user 类型解析为用户名
+     */
+    public Map<Long, Map<String, String>> getBatchDisplayValues(List<Long> issueIds) {
+        if (issueIds == null || issueIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // 1. 批量加载所有相关 custom_field_value 记录
+        List<CustomFieldValue> allValues = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .in(CustomFieldValue::getIssueId, issueIds));
+        if (allValues.isEmpty()) {
+            return Map.of();
+        }
+
+        // 2. 收集涉及的 fieldId，加载字段定义
+        Set<Long> fieldIds = allValues.stream()
+                .map(CustomFieldValue::getCustomFieldId)
+                .collect(Collectors.toSet());
+        Map<Long, CustomFieldDefinition> fieldDefMap = definitionMapper.selectBatchIds(fieldIds)
+                .stream()
+                .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
+
+        // 3. 预加载 list 类型字段的选项映射 (optionId → optionValue)
+        Set<Long> listFieldIds = fieldDefMap.values().stream()
+                .filter(f -> "list".equals(f.getFieldFormat()))
+                .map(CustomFieldDefinition::getId)
+                .collect(Collectors.toSet());
+        Map<Long, String> optionTextMap = new HashMap<>();
+        if (!listFieldIds.isEmpty()) {
+            List<CustomFieldOption> options = optionMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldOption>()
+                            .in(CustomFieldOption::getCustomFieldId, listFieldIds));
+            for (CustomFieldOption opt : options) {
+                optionTextMap.put(opt.getId(), opt.getValue());
+            }
+        }
+
+        // 4. 预加载 user 类型字段引用的用户名
+        Set<Long> userFieldIds = fieldDefMap.values().stream()
+                .filter(f -> "user".equals(f.getFieldFormat()))
+                .map(CustomFieldDefinition::getId)
+                .collect(Collectors.toSet());
+        Map<Long, String> userNameMap = new HashMap<>();
+        if (!userFieldIds.isEmpty()) {
+            Set<Long> userIds = allValues.stream()
+                    .filter(v -> userFieldIds.contains(v.getCustomFieldId()) && v.getValue() != null)
+                    .map(v -> {
+                        try { return Long.parseLong(v.getValue()); }
+                        catch (NumberFormatException e) { return null; }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!userIds.isEmpty()) {
+                userMapper.selectBatchIds(userIds).forEach(u ->
+                        userNameMap.put(u.getId(), u.getDisplayName()));
+            }
+        }
+
+        // 5. 组装结果
+        Map<Long, Map<String, String>> result = new HashMap<>();
+        for (CustomFieldValue cfv : allValues) {
+            CustomFieldDefinition fieldDef = fieldDefMap.get(cfv.getCustomFieldId());
+            if (fieldDef == null) continue;
+
+            String displayValue = resolveDisplayValue(cfv.getValue(), fieldDef, optionTextMap, userNameMap);
+            result.computeIfAbsent(cfv.getIssueId(), k -> new HashMap<>())
+                    .put("cf_" + cfv.getCustomFieldId(), displayValue);
+        }
+
+        return result;
+    }
+
+    /**
+     * 将原始值转换为用户可读的展示值
+     */
+    private String resolveDisplayValue(String rawValue, CustomFieldDefinition fieldDef,
+                                       Map<Long, String> optionTextMap, Map<Long, String> userNameMap) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        return switch (fieldDef.getFieldFormat()) {
+            case "list" -> {
+                try {
+                    Long optionId = Long.parseLong(rawValue);
+                    yield optionTextMap.getOrDefault(optionId, rawValue);
+                } catch (NumberFormatException e) {
+                    yield rawValue;
+                }
+            }
+            case "user" -> {
+                try {
+                    Long userId = Long.parseLong(rawValue);
+                    yield userNameMap.getOrDefault(userId, rawValue);
+                } catch (NumberFormatException e) {
+                    yield rawValue;
+                }
+            }
+            case "bool" -> "true".equals(rawValue) ? "是" : "否";
+            default -> rawValue;
+        };
+    }
+
+    /**
+     * 获取 Issue 的自定义字段值（含字段名称、类型信息，用于前端展示）
+     */
+    public List<CustomFieldValueVO> getValuesForDisplay(Long issueId, Long projectId, String issueType) {
+        Map<Long, String> rawValues = getValues(issueId);
+        if (rawValues.isEmpty()) return List.of();
+
+        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        Map<Long, CustomFieldDefinition> fieldMap = applicableFields.stream()
+                .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
+
+        List<CustomFieldValueVO> result = new ArrayList<>();
+        for (Map.Entry<Long, String> entry : rawValues.entrySet()) {
+            CustomFieldDefinition field = fieldMap.get(entry.getKey());
+            if (field == null) continue; // 字段已删除或不再适用
+
+            CustomFieldValueVO vo = new CustomFieldValueVO();
+            vo.setCustomFieldId(String.valueOf(entry.getKey()));
+            vo.setFieldName(field.getName());
+            vo.setFieldFormat(field.getFieldFormat());
+            vo.setValue(entry.getValue());
+            vo.setDisplayValue(resolveDisplayValue(field, entry.getValue()));
+            result.add(vo);
+        }
+        return result;
+    }
+
+    /**
+     * 将存储值转为前端可读展示值
+     */
+    private String resolveDisplayValue(CustomFieldDefinition field, String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) return "";
+        switch (field.getFieldFormat()) {
+            case "list" -> {
+                try {
+                    Long optionId = Long.parseLong(rawValue);
+                    CustomFieldOption option = optionMapper.selectById(optionId);
+                    return option != null ? option.getValue() : rawValue;
+                } catch (NumberFormatException e) {
+                    return rawValue;
+                }
+            }
+            case "user" -> {
+                try {
+                    Long userId = Long.parseLong(rawValue);
+                    var user = userMapper.selectById(userId);
+                    return user != null ? user.getDisplayName() : rawValue;
+                } catch (NumberFormatException e) {
+                    return rawValue;
+                }
+            }
+            case "bool" -> { return "true".equals(rawValue) ? "是" : "否"; }
+            default -> { return rawValue; }
+        }
+    }
+
+    /**
+     * 保存单个自定义字段值（用于侧边栏内联编辑）
+     */
+    @Transactional
+    public void saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId) {
+        // 验证字段属于该项目/类型
+        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        CustomFieldDefinition field = applicableFields.stream()
+                .filter(f -> f.getId().equals(customFieldId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "字段不适用于当前工单"));
+
+        // 验证值
+        List<CustomFieldValidationEngine.FieldValidationError> errors = validationEngine.validate(field, value);
+        if (!errors.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    errors.stream().map(e -> e.getField() + ": " + e.getMessage())
+                            .collect(Collectors.joining("; ")));
+        }
+
+        // Upsert
+        CustomFieldValue existing = valueMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getIssueId, issueId)
+                        .eq(CustomFieldValue::getCustomFieldId, customFieldId));
+
+        if (value == null || value.isBlank()) {
+            // 清空值：如果非必填，允许删除
+            if (Boolean.TRUE.equals(field.getIsRequired())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, field.getName() + " 为必填项，不能清空");
+            }
+            if (existing != null) {
+                valueMapper.deleteById(existing.getId());
+            }
+        } else if (existing != null) {
+            existing.setValue(value);
+            existing.setUpdatedAt(LocalDateTime.now());
+            valueMapper.updateById(existing);
+        } else {
+            CustomFieldValue cfv = new CustomFieldValue();
+            cfv.setIssueId(issueId);
+            cfv.setCustomFieldId(customFieldId);
+            cfv.setValue(value);
+            cfv.setCreatedAt(LocalDateTime.now());
+            cfv.setUpdatedAt(LocalDateTime.now());
+            valueMapper.insert(cfv);
+        }
     }
 
     public void deleteValuesByIssue(Long issueId) {

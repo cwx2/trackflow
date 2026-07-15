@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.vo.IssueVO;
@@ -39,6 +40,7 @@ public class SavedQueryController {
     private final IssueConverter issueConverter;
     private final SysUserMapper sysUserMapper;
     private final ProjectService projectService;
+    private final CustomFieldService customFieldService;
 
     /**
      * 获取查询面板（左侧面板数据 + 实时计数）
@@ -97,6 +99,7 @@ public class SavedQueryController {
         Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(queryId, page, pageSize, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
         fillAssigneeNames(result.getRecords(), voList);
+        fillCustomFieldValues(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
                 voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
@@ -113,6 +116,7 @@ public class SavedQueryController {
         Page<Issue> result = savedQueryService.executeAdhocWithAccessCheck(dto, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
         fillAssigneeNames(result.getRecords(), voList);
+        fillCustomFieldValues(result.getRecords(), voList);
         PageResult<IssueVO> pageResult = new PageResult<>(
                 voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
@@ -135,6 +139,24 @@ public class SavedQueryController {
                 Issue issue = records.get(i);
                 if (issue.getAssigneeId() != null) {
                     voList.get(i).setAssigneeName(userNameMap.get(issue.getAssigneeId()));
+                }
+            }
+        }
+    }
+
+    /**
+     * 批量填充自定义字段展示值
+     */
+    private void fillCustomFieldValues(List<Issue> records, List<IssueVO> voList) {
+        List<Long> issueIds = records.stream()
+                .map(Issue::getId)
+                .toList();
+        if (!issueIds.isEmpty()) {
+            Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds);
+            for (int i = 0; i < records.size(); i++) {
+                Map<String, String> cfValues = cfValuesMap.get(records.get(i).getId());
+                if (cfValues != null && !cfValues.isEmpty()) {
+                    voList.get(i).setCustomFieldValues(cfValues);
                 }
             }
         }

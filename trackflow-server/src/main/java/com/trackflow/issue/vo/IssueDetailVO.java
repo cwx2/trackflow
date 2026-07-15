@@ -1,5 +1,6 @@
 package com.trackflow.issue.vo;
 
+import com.trackflow.customfield.vo.CustomFieldValueVO;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -32,6 +33,8 @@ public class IssueDetailVO {
     private BigDecimal estimatedHours;
     private BigDecimal spentHours;
     private String customFields;
+    /** 结构化自定义字段值列表（EAV 表数据，用于前端渲染） */
+    private List<CustomFieldValueVO> customFieldDetails;
     private List<IssueTagVO> tags;
     private LocalDateTime resolvedAt;
     private LocalDateTime createdAt;

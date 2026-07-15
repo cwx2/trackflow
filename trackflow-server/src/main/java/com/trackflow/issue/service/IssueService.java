@@ -12,6 +12,7 @@ import com.trackflow.common.model.PageResult;
 import com.trackflow.common.service.MinioService;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
 import com.trackflow.issue.dto.UpdateIssueDTO;
@@ -55,6 +56,7 @@ public class IssueService {
     private final WorkflowService workflowService;
     private final IssueNotificationHelper notificationHelper;
     private final StatusCacheHelper statusCacheHelper;
+    private final CustomFieldService customFieldService;
 
     /**
      * 创建 Issue
@@ -108,6 +110,19 @@ public class IssueService {
         }
 
         issueMapper.insert(issue);
+
+        // 保存自定义字段值到 EAV 表（带验证）
+        if (dto.getCustomFields() != null && !dto.getCustomFields().isEmpty()) {
+            Map<Long, String> fieldValues = new java.util.HashMap<>();
+            for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
+                try {
+                    fieldValues.put(Long.parseLong(entry.getKey()),
+                            entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                } catch (NumberFormatException ignored) {}
+            }
+            customFieldService.saveValues(issue.getId(), fieldValues,
+                    issue.getIssueType(), issue.getProjectId());
+        }
 
         // 记录活动
         recordActivity(issue.getId(), currentUserId, "created", null, null, null);
@@ -493,6 +508,16 @@ public class IssueService {
             } catch (JsonProcessingException e) {
                 // keep existing
             }
+            // 保存自定义字段值到 EAV 表（带验证）
+            Map<Long, String> fieldValues = new java.util.HashMap<>();
+            for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
+                try {
+                    fieldValues.put(Long.parseLong(entry.getKey()),
+                            entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                } catch (NumberFormatException ignored) {}
+            }
+            customFieldService.saveValues(issue.getId(), fieldValues,
+                    issue.getIssueType(), issue.getProjectId());
         }
 
         issueMapper.updateById(issue);
@@ -1019,6 +1044,10 @@ public class IssueService {
         // 标签（单独查询，因为是多对多关系）
         List<IssueTag> tags = tagService.listIssueTags(id);
         vo.setTags(issueConverter.toTagVOList(tags));
+
+        // 自定义字段结构化值
+        Long projectIdLong = Long.parseLong(vo.getProjectId());
+        vo.setCustomFieldDetails(customFieldService.getValuesForDisplay(id, projectIdLong, vo.getIssueType()));
 
         // 子任务列表 + 进度汇总
         List<ChildIssueVO> children = listChildren(id);
