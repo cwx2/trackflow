@@ -22,4 +22,10 @@ public class UpdateIssueDTO {
     private LocalDate dueDate;
     private BigDecimal estimatedHours;
     private Map<String, Object> customFields;
+
+    /**
+     * 乐观锁版本号。前端从 GET 响应中获取，PUT 时携带回来。
+     * 为 null 时兼容旧客户端（跳过版本校验）。
+     */
+    private Integer version;
 }

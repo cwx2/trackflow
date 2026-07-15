@@ -25,7 +25,11 @@ public enum ErrorCode {
     USER_DISABLED(40301, 403, "User account is disabled"),
     BUILTIN_ROLE_PROTECTED(40302, 403, "Built-in roles cannot be modified"),
 
+    // Project Archived
+    PROJECT_ARCHIVED(40002, 400, "归档项目不允许此操作"),
+
     // Conflict
+    CONFLICT(40900, 409, "Resource conflict"),
     ORG_HAS_REFERENCES(40901, 409, "Organization has associated users or projects"),
     ORG_CODE_DUPLICATE(40902, 409, "Organization code already exists"),
     ROLE_IN_USE(40903, 409, "Role is currently assigned and cannot be deleted"),

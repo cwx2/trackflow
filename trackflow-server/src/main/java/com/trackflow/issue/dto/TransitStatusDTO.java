@@ -21,4 +21,15 @@ public class TransitStatusDTO {
      * false/null = 未指定，由 TransitionActionEngine 自动分配。
      */
     private Boolean assigneeExplicit;
+
+    /**
+     * 是否强制关闭（忽略子任务未完成的警告）。
+     * 当父工单有未关闭子任务、用户确认后强制关闭时设为 true。
+     */
+    private Boolean force;
+
+    /**
+     * 乐观锁版本号（前端传入，用于并发控制）。
+     */
+    private Integer version;
 }

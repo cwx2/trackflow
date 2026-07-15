@@ -32,6 +32,8 @@
         :links="issueLinks"
         :attachments="issueAttachments"
         :readonly="!canEditIssue"
+        :children="issue.children || []"
+        :child-progress="issue.childProgress || null"
         @update-title="onUpdateTitle"
         @update-desc="onUpdateDesc"
         @remove-tag="onRemoveTag"
@@ -113,7 +115,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi } from '@/api'
@@ -357,11 +359,11 @@ function copyIssue() {
 }
 
 async function onUpdateTitle(val: string) {
-  try { await issueApi.update(issue.value!.id, { title: val }); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '更新失败') }
+  try { await issueApi.update(issue.value!.id, { title: val, version: issue.value!.version }); await loadAll() } catch (e: any) { handleUpdateError(e) }
 }
 
 async function onUpdateDesc(val: string) {
-  try { await issueApi.update(issue.value!.id, { description: val }); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '更新失败') }
+  try { await issueApi.update(issue.value!.id, { description: val, version: issue.value!.version }); await loadAll() } catch (e: any) { handleUpdateError(e) }
 }
 
 async function onRemoveTag(tagId: string) {
@@ -385,7 +387,37 @@ async function onAddComment(content: string) {
 }
 
 async function onTransition(target: StatusInfo) {
-  try { await issueApi.transitStatus(issue.value!.id, target.id); await loadAll(); Message.success(`状态已变更为 ${target.name}`) } catch (e: any) { Message.error(e.response?.data?.message || '变更失败') }
+  try {
+    const res = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version)
+    if (res.code === 0) {
+      await loadAll()
+      Message.success(`状态已变更为 ${target.name}`)
+    } else if (res.code === 40910) {
+      // 子任务未完成警告 — 弹出确认框
+      Modal.warning({
+        title: '确认关闭',
+        content: res.message,
+        okText: '强制关闭',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: async () => {
+          try {
+            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version, true)
+            if (forceRes.code === 0) {
+              await loadAll()
+              Message.success(`状态已变更为 ${target.name}`)
+            } else {
+              Message.error(forceRes.message || '变更失败')
+            }
+          } catch (e2: any) {
+            handleUpdateError(e2, '变更失败')
+          }
+        }
+      })
+    } else {
+      Message.error(res.message || '变更失败')
+    }
+  } catch (e: any) { handleUpdateError(e, '变更失败') }
 }
 
 function openTimeDialog() {
@@ -455,10 +487,22 @@ async function onEditField(key: string, newValue: string) {
 
   try {
     if (key === 'assignee' && newValue) { await issueApi.assign(issue.value!.id, newValue) }
-    else { await issueApi.update(issue.value!.id, { [prop]: val }) }
+    else { await issueApi.update(issue.value!.id, { [prop]: val, version: issue.value!.version }) }
     await loadAll()
     Message.success('已更新')
-  } catch (e: any) { Message.error(e.response?.data?.message || '更新失败') }
+  } catch (e: any) { handleUpdateError(e) }
+}
+
+/**
+ * 统一处理更新错误：409 冲突时显示特殊提示 + 自动刷新
+ */
+function handleUpdateError(e: any, fallbackMsg = '更新失败') {
+  if (e.response?.status === 409) {
+    Message.warning({ content: '该工单已被其他人修改，正在刷新...', duration: 3000 })
+    loadAll()
+  } else {
+    Message.error(e.response?.data?.message || fallbackMsg)
+  }
 }
 
 // ============ Utils ============

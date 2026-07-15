@@ -20,4 +20,5 @@ public class IssueVO {
     private LocalDate dueDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer version;
 }

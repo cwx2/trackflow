@@ -776,7 +776,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   allowedTargetStatuses.value.clear()
 
   try {
-    await issueApi.transitStatus(issue.id, targetStatusId)
+    await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
 
     const undoEntry: UndoEntry = {
       issueId: issue.id,

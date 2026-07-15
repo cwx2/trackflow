@@ -36,4 +36,10 @@ public class IssueDetailVO {
     private LocalDateTime resolvedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer version;
+
+    /** 子任务列表（仅当本工单有子任务时非空） */
+    private List<ChildIssueVO> children;
+    /** 子任务进度汇总（仅当有子任务时非空） */
+    private ChildProgressVO childProgress;
 }

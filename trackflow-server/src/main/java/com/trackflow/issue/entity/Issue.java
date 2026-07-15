@@ -34,6 +34,9 @@ public class Issue implements Serializable {
     private LocalDateTime resolvedAt;
     private LocalDateTime deletedAt;
 
+    @com.baomidou.mybatisplus.annotation.Version
+    private Integer version;
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
     @TableField(fill = FieldFill.INSERT)

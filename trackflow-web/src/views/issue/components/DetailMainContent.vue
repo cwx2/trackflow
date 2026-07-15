@@ -85,6 +85,14 @@
       @upload="() => $emit('upload')"
     />
 
+    <!-- 子任务 -->
+    <ChildIssuesList
+      v-if="children && children.length > 0"
+      :children="children"
+      :progress="childProgress"
+      :show-progress="true"
+    />
+
     <!-- 关联 Issue -->
     <section class="section" v-if="links.length > 0">
       <div class="section-head">
@@ -134,6 +142,8 @@
 import { ref, computed, nextTick } from 'vue'
 import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
+import ChildIssuesList from './ChildIssuesList.vue'
+import type { ChildIssueVO, ChildProgressVO } from '@/api/types'
 
 export interface TagItem { id: string; name: string; color: string }
 export interface LinkItem { id: string; typeLabel: string; issueId: string; issueKey: string; issueTitle: string; statusName: string; statusColor: string }
@@ -149,6 +159,8 @@ const props = defineProps<{
   links: LinkItem[]
   attachments: AttachItem[]
   readonly?: boolean
+  children?: ChildIssueVO[]
+  childProgress?: ChildProgressVO | null
 }>()
 
 const emit = defineEmits<{
