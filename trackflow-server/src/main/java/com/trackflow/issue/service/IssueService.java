@@ -858,6 +858,8 @@ public class IssueService {
         issue.setStatusId(newStatusId);
         if (newStatus.getIsClosed()) {
             issue.setResolvedAt(LocalDateTime.now());
+        } else {
+            issue.setResolvedAt(null);
         }
         issueMapper.updateById(issue);
 

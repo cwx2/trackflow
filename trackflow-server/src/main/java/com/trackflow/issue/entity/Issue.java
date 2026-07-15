@@ -31,6 +31,7 @@ public class Issue implements Serializable {
     private BigDecimal spentHours;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String customFields;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime resolvedAt;
     private LocalDateTime deletedAt;
 
