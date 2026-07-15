@@ -67,4 +67,10 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * 查询指定项目中超过保留期限的已删除工单 ID 列表（用于定时清理）
      */
     List<Map<String, Object>> selectExpiredTrash(@Param("projectId") Long projectId, @Param("cutoff") java.time.LocalDateTime cutoff);
+
+    /**
+     * 断开子工单与父工单的引用（将 parent_id 置 NULL）
+     * 用于父工单软删除时清理子工单的引用关系
+     */
+    int clearParentId(@Param("parentId") Long parentId);
 }

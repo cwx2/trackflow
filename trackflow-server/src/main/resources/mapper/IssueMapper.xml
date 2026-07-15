@@ -51,7 +51,7 @@
         LEFT JOIN sys_user a ON a.id = i.assignee_id
         LEFT JOIN sys_user r ON r.id = i.reporter_id
         LEFT JOIN sprint sp ON sp.id = i.sprint_id
-        LEFT JOIN issue pi ON pi.id = i.parent_id
+        LEFT JOIN issue pi ON pi.id = i.parent_id AND pi.deleted_at IS NULL
         WHERE i.id = #{id} AND i.deleted_at IS NULL
     </select>
 
@@ -181,5 +181,11 @@
         WHERE i.parent_id = #{parentId} AND i.deleted_at IS NULL
         ORDER BY i.created_at ASC
     </select>
+
+    <!-- 断开子工单与父工单的引用 -->
+    <update id="clearParentId">
+        UPDATE issue SET parent_id = NULL, updated_at = NOW()
+        WHERE parent_id = #{parentId}
+    </update>
 
 </mapper>

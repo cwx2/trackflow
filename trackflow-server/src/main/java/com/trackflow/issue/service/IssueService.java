@@ -533,6 +533,9 @@ public class IssueService {
         // 归档项目不允许删除工单
         projectService.assertProjectActive(issue.getProjectId());
 
+        // 断开子工单的父引用（将子工单 parent_id 置为 NULL），防止产生孤儿引用
+        issueMapper.clearParentId(id);
+
         // 先记录活动（deleteById 后逻辑删除字段被填充，查询会过滤掉）
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
         // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
