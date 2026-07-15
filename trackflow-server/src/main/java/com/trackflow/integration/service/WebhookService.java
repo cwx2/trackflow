@@ -55,7 +55,7 @@ public class WebhookService {
     /**
      * 触发 Webhook 事件
      */
-    @Async
+    @Async("notificationExecutor")
     public void fire(String event, Long projectId, Object payload) {
         List<Webhook> webhooks = webhookMapper.selectList(
                 new LambdaQueryWrapper<Webhook>()

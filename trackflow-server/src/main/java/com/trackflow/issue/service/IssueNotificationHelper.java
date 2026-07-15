@@ -1,11 +1,9 @@
 package com.trackflow.issue.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.issue.entity.Issue;
-import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
@@ -13,6 +11,7 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -24,6 +23,9 @@ import java.util.*;
  * - 排除当前操作者（不通知自己）
  * - 尊重用户 NotificationPreference 中的事件订阅开关
  * - 通知创建失败不影响主流程（catch + log）
+ * <p>
+ * 所有公共方法标记 @Async("notificationExecutor")，在独立线程池中执行，
+ * 不阻塞主请求线程。调用方无需等待通知发送完成。
  */
 @Slf4j
 @Component
@@ -41,6 +43,7 @@ public class IssueNotificationHelper {
     /**
      * 工单被分配时通知被分配人
      */
+    @Async("notificationExecutor")
     public void notifyAssigned(Issue issue, Long assigneeId, Long operatorId) {
         if (assigneeId == null || assigneeId.equals(operatorId)) {
             return;
@@ -66,6 +69,7 @@ public class IssueNotificationHelper {
     /**
      * 新评论通知：通知报告人 + 负责人 + 之前评论者（去重，排除当前用户）
      */
+    @Async("notificationExecutor")
     public void notifyCommented(Issue issue, Long commenterId) {
         try {
             Set<Long> recipients = collectCommentRecipients(issue, commenterId);
@@ -95,6 +99,7 @@ public class IssueNotificationHelper {
     /**
      * 状态变更通知：通知报告人 + 负责人（去重，排除当前用户）
      */
+    @Async("notificationExecutor")
     public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) {
         try {
             Set<Long> recipients = collectStatusChangeRecipients(issue, operatorId);
@@ -126,6 +131,7 @@ public class IssueNotificationHelper {
     /**
      * 工单创建时通知被分配人（若指定了 assignee 且不是创建者自己）
      */
+    @Async("notificationExecutor")
     public void notifyCreated(Issue issue, Long creatorId) {
         if (issue.getAssigneeId() == null || issue.getAssigneeId().equals(creatorId)) {
             return;
@@ -153,6 +159,7 @@ public class IssueNotificationHelper {
 
     /**
      * 收集评论通知接收人：报告人 + 负责人 + 之前评论者（去重，排除评论者自己）
+     * 使用 SELECT DISTINCT user_id 优化，避免加载全量评论对象。
      */
     private Set<Long> collectCommentRecipients(Issue issue, Long excludeUserId) {
         Set<Long> recipients = new HashSet<>();
@@ -165,17 +172,10 @@ public class IssueNotificationHelper {
         if (issue.getAssigneeId() != null) {
             recipients.add(issue.getAssigneeId());
         }
-        // 之前的评论者
-        List<IssueComment> previousComments = commentMapper.selectList(
-                new LambdaQueryWrapper<IssueComment>()
-                        .eq(IssueComment::getIssueId, issue.getId())
-                        .isNull(IssueComment::getDeletedAt)
-                        .select(IssueComment::getUserId)
-        );
-        for (IssueComment c : previousComments) {
-            if (c.getUserId() != null) {
-                recipients.add(c.getUserId());
-            }
+        // 之前的评论者（SELECT DISTINCT user_id，仅返回 Long 列表）
+        List<Long> commenterIds = commentMapper.selectDistinctCommenterIds(issue.getId());
+        if (commenterIds != null) {
+            recipients.addAll(commenterIds);
         }
 
         // 排除当前操作者
