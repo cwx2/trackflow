@@ -223,11 +223,10 @@ public class TimeEntryService {
         BigDecimal spentHours = BigDecimal.valueOf(totalMinutes != null ? totalMinutes : 0)
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
-        Issue issue = issueMapper.selectById(issueId);
-        if (issue != null) {
-            issue.setSpentHours(spentHours);
-            issueMapper.updateById(issue);
-        }
+        issueMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Issue>()
+                        .eq(Issue::getId, issueId)
+                        .set(Issue::getSpentHours, spentHours));
     }
 
     private TimeEntryVO mapRowToVO(Map<String, Object> row) {

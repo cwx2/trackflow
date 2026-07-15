@@ -10,6 +10,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.service.MinioService;
+import com.trackflow.common.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
@@ -31,6 +32,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -42,7 +44,6 @@ public class IssueService {
     private final IssueCommentMapper commentMapper;
     private final IssueAttachmentMapper attachmentMapper;
     private final IssueActivityMapper activityMapper;
-    private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
     private final com.trackflow.sprint.mapper.SprintMapper sprintMapper;
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
@@ -53,6 +54,7 @@ public class IssueService {
     private final TransitionActionEngine transitionActionEngine;
     private final WorkflowService workflowService;
     private final IssueNotificationHelper notificationHelper;
+    private final StatusCacheHelper statusCacheHelper;
 
     /**
      * 创建 Issue
@@ -616,11 +618,7 @@ public class IssueService {
      * 返回未关闭子工单数量，0 表示无阻碍。
      */
     public long countOpenChildren(Long parentId) {
-        List<IssueStatus> allStatuses = statusMapper.selectList(null);
-        List<Long> closedStatusIds = allStatuses.stream()
-                .filter(s -> s.getIsClosed() != null && s.getIsClosed())
-                .map(IssueStatus::getId)
-                .toList();
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
 
         LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<Issue>()
                 .eq(Issue::getParentId, parentId)
@@ -989,16 +987,6 @@ public class IssueService {
             vo.setSpentHours((java.math.BigDecimal) row.get("spent_hours"));
         }
 
-        // Calculate actual spent time from time_entry table
-        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.trackflow.timeentry.entity.TimeEntry> teWrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
-        teWrapper.eq("issue_id", id).select("duration");
-        List<com.trackflow.timeentry.entity.TimeEntry> timeEntries = timeEntryMapper.selectList(teWrapper);
-        if (!timeEntries.isEmpty()) {
-            int totalMinutes = timeEntries.stream().mapToInt(com.trackflow.timeentry.entity.TimeEntry::getDuration).sum();
-            // Convert minutes to hours as BigDecimal
-            vo.setSpentHours(java.math.BigDecimal.valueOf(totalMinutes).divide(java.math.BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP));
-        }
         if (row.get("resolved_at") != null) {
             vo.setResolvedAt(((java.sql.Timestamp) row.get("resolved_at")).toLocalDateTime());
         }
