@@ -9,8 +9,11 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.integration.service.NotificationService;
+import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.AddMemberDTO;
 import com.trackflow.project.dto.CreateProjectDTO;
@@ -19,6 +22,8 @@ import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.project.vo.ProjectDeletePreCheckVO;
+import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysRoleMapper;
@@ -34,6 +39,7 @@ import com.trackflow.project.vo.ProjectMemberVO;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 项目管理服务
@@ -53,6 +59,8 @@ public class ProjectService {
     private final PermissionService permissionService;
     private final StringRedisTemplate redisTemplate;
     private final IssueMapper issueMapper;
+    private final IssueStatusMapper issueStatusMapper;
+    private final SprintMapper sprintMapper;
     private final ProjectActivityService projectActivityService;
     private final NotificationService notificationService;
     private final ProjectInitializationService projectInitializationService;
@@ -690,5 +698,112 @@ public class ProjectService {
         project.setIssueSequence(next);
         projectMapper.updateById(project);
         return next;
+    }
+
+    // ========== 项目删除 ==========
+
+    /**
+     * 删除前预检查 — 返回受影响数据量供前端确认弹窗展示
+     */
+    public ProjectDeletePreCheckVO preCheckDelete(Long projectId) {
+        Project project = getById(projectId);
+
+        ProjectDeletePreCheckVO vo = new ProjectDeletePreCheckVO();
+        vo.setProjectName(project.getName());
+        vo.setProjectKey(project.getKey());
+
+        // 工单总数
+        long issueCount = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .isNull(Issue::getDeletedAt));
+        vo.setIssueCount((int) issueCount);
+
+        // 未关闭工单数
+        List<IssueStatus> statuses = issueStatusMapper.selectList(null);
+        Set<Long> doneStatusIds = statuses.stream()
+                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
+                .map(IssueStatus::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        long openIssueCount = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .isNull(Issue::getDeletedAt)
+                        .notIn(!doneStatusIds.isEmpty(), Issue::getStatusId, doneStatusIds));
+        vo.setOpenIssueCount((int) openIssueCount);
+
+        // Sprint 数量
+        long sprintCount = sprintMapper.selectCount(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId));
+        vo.setSprintCount((int) sprintCount);
+
+        // 成员数量
+        long memberCount = memberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId));
+        vo.setMemberCount((int) memberCount);
+
+        // 判断是否可删除
+        vo.setDeletable(true);
+        vo.setReason(null);
+
+        return vo;
+    }
+
+    /**
+     * 删除项目 — 级联删除所有关联数据（物理删除）
+     *
+     * 流程参考 OpenProject DeleteService：
+     * 1. 通知所有项目成员
+     * 2. 失效所有成员的权限缓存
+     * 3. 物理删除项目（FK CASCADE 自动清理 issue/sprint/member/tag 等）
+     *
+     * @param projectId         项目 ID
+     * @param confirmProjectKey 前端传入的项目 Key 用于二次确认
+     */
+    @Transactional
+    public void deleteProject(Long projectId, String confirmProjectKey) {
+        Project project = getById(projectId);
+
+        // 二次校验：前端传入的 key 必须匹配
+        if (!project.getKey().equalsIgnoreCase(confirmProjectKey)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "项目标识不匹配，请输入正确的项目标识确认删除");
+        }
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 1. 查询所有成员用于通知和缓存清理
+        List<ProjectMember> members = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId));
+
+        List<Long> memberUserIds = members.stream()
+                .map(ProjectMember::getUserId)
+                .distinct()
+                .toList();
+
+        // 2. 失效所有成员的权限缓存和项目列表缓存
+        for (Long memberId : memberUserIds) {
+            permissionService.invalidateCache(memberId);
+            redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + memberId);
+        }
+
+        // 3. 通知所有成员（排除执行者自己）
+        for (Long memberId : memberUserIds) {
+            if (!memberId.equals(currentUserId)) {
+                notificationService.notify(
+                        memberId,
+                        "项目已被删除",
+                        String.format("项目「%s」(%s) 已被删除，相关工单和数据已清除。", project.getName(), project.getKey()),
+                        "project_deleted",
+                        "project",
+                        projectId
+                );
+            }
+        }
+
+        // 4. 物理删除项目（FK CASCADE 自动删除所有关联数据）
+        projectMapper.deleteById(projectId);
     }
 }

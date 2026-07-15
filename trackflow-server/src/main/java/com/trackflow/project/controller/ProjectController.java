@@ -16,6 +16,7 @@ import com.trackflow.project.entity.ProjectActivity;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.project.vo.ProjectActivityVO;
+import com.trackflow.project.vo.ProjectDeletePreCheckVO;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectVO;
@@ -84,6 +85,19 @@ public class ProjectController {
     @PreAuthorize("@perm.check(#id, 'project:edit')")
     public R<Void> restore(@PathVariable Long id) {
         projectService.restore(id);
+        return R.ok();
+    }
+
+    @GetMapping("/{id}/delete-precheck")
+    @PreAuthorize("@perm.check(#id, 'project:delete')")
+    public R<ProjectDeletePreCheckVO> deletePreCheck(@PathVariable Long id) {
+        return R.ok(projectService.preCheckDelete(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("@perm.check(#id, 'project:delete')")
+    public R<Void> delete(@PathVariable Long id, @RequestParam String confirmKey) {
+        projectService.deleteProject(id, confirmKey);
         return R.ok();
     }
 

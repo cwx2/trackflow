@@ -57,6 +57,7 @@
                 <a-doption @click="editProject(project)">编辑</a-doption>
                 <a-doption @click="manageMembers(project)">成员管理</a-doption>
                 <a-doption class="danger-option" @click="archiveProject(project)">归档</a-doption>
+                <a-doption v-if="canDeleteProject(project)" class="danger-option" @click="confirmDeleteProject(project)">删除项目</a-doption>
               </template>
             </a-dropdown>
           </span>
@@ -292,6 +293,36 @@
         </a-tab-pane>
       </a-tabs>
     </a-modal>
+
+    <!-- 删除项目确认弹窗 -->
+    <a-modal
+      v-model:visible="showDeleteDialog"
+      title="删除项目"
+      :ok-text="'永久删除'"
+      :cancel-text="'取消'"
+      :ok-loading="deleting"
+      :ok-button-props="{ disabled: deleteConfirmKey !== deleteTarget?.projectKey, status: 'danger' }"
+      @ok="submitDelete"
+    >
+      <div class="delete-confirm-content">
+        <div class="delete-warning">
+          <icon-exclamation-circle-fill class="warning-icon" />
+          <span>此操作不可撤销！项目及其所有数据将被永久删除。</span>
+        </div>
+        <div v-if="deleteTarget" class="delete-impact">
+          <p class="impact-title">即将删除的数据：</p>
+          <ul class="impact-list">
+            <li>📋 {{ deleteTarget.issueCount }} 个工单<span v-if="deleteTarget.openIssueCount > 0" class="impact-warn">（其中 {{ deleteTarget.openIssueCount }} 个未关闭）</span></li>
+            <li>🏃 {{ deleteTarget.sprintCount }} 个 Sprint</li>
+            <li>👥 {{ deleteTarget.memberCount }} 名成员</li>
+          </ul>
+        </div>
+        <div class="delete-confirm-input">
+          <p>请输入项目标识 <strong>{{ deleteTarget?.projectKey }}</strong> 确认删除：</p>
+          <a-input v-model="deleteConfirmKey" placeholder="输入项目标识确认" />
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -302,7 +333,8 @@ import { Message, Modal } from '@arco-design/web-vue'
 import {
   IconPlus,
   IconMore,
-  IconFolder
+  IconFolder,
+  IconExclamationCircleFill
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectActivityVO } from '@/api/types'
@@ -346,6 +378,16 @@ function canManageProject(project: any): boolean {
   return perms.has('project:edit') || perms.has('project:manage_members')
 }
 
+/**
+ * 判断当前用户是否能删除指定项目（需要 project:delete 权限）
+ */
+function canDeleteProject(project: any): boolean {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  const perms = projectPermCache.value[project.id]
+  if (!perms) return false // 删除是高危操作，未加载权限时默认不允许
+  return perms.has('project:delete')
+}
+
 const projects = ref<any[]>([])
 const loading = ref(false)
 const creating = ref(false)
@@ -377,6 +419,20 @@ const editMembersLoading = ref(false)
 // 成员管理
 const showMembersDialog = ref(false)
 const currentProject = ref<any>(null)
+
+// 删除项目
+const showDeleteDialog = ref(false)
+const deleting = ref(false)
+const deleteConfirmKey = ref('')
+const deleteTarget = ref<{
+  id: string
+  projectName: string
+  projectKey: string
+  issueCount: number
+  sprintCount: number
+  memberCount: number
+  openIssueCount: number
+} | null>(null)
 const projectMembers = ref<any[]>([])
 const allUsers = ref<any[]>([])
 const projectRoles = ref<{ id: string; name: string }[]>([])
@@ -506,6 +562,37 @@ function archiveProject(project: any) {
       }
     }
   })
+}
+
+async function confirmDeleteProject(project: any) {
+  // 调用预检查接口获取受影响数据
+  try {
+    const res = await projectApi.deletePreCheck(project.id)
+    if (res.code === 0 && res.data) {
+      deleteTarget.value = { id: project.id, ...res.data }
+      deleteConfirmKey.value = ''
+      showDeleteDialog.value = true
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '无法获取项目信息')
+  }
+}
+
+async function submitDelete() {
+  if (!deleteTarget.value) return
+  if (deleteConfirmKey.value !== deleteTarget.value.projectKey) return
+  deleting.value = true
+  try {
+    await projectApi.delete(deleteTarget.value.id, deleteConfirmKey.value)
+    showDeleteDialog.value = false
+    projects.value = projects.value.filter(p => p.id !== deleteTarget.value!.id)
+    Message.success('项目已永久删除')
+    deleteTarget.value = null
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '删除失败')
+  } finally {
+    deleting.value = false
+  }
 }
 
 async function submitCreate() {
@@ -974,5 +1061,72 @@ watch(projects, () => {
 .activity-time {
   font-size: 11px;
   color: var(--tf-text-tertiary);
+}
+
+/* 删除项目确认弹窗 */
+.delete-confirm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.delete-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.2);
+  border-radius: var(--tf-radius-md);
+  font-size: 13px;
+  color: var(--tf-danger);
+}
+
+.delete-warning .warning-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.delete-impact {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+}
+
+.impact-title {
+  margin: 0 0 8px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.impact-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.impact-list li {
+  font-size: 13px;
+}
+
+.impact-warn {
+  color: var(--tf-danger);
+  font-weight: 500;
+}
+
+.delete-confirm-input {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+}
+
+.delete-confirm-input p {
+  margin: 0 0 8px;
+}
+
+.delete-confirm-input strong {
+  color: var(--tf-text-primary);
+  font-weight: 600;
 }
 </style>

@@ -44,6 +44,25 @@ export const projectApi = {
     return request.put<any, R<void>>(`/projects/${id}/restore`)
   },
 
+  /** 删除项目预检查（返回受影响数据量） */
+  deletePreCheck(id: string) {
+    return request.get<any, R<{
+      projectName: string
+      projectKey: string
+      issueCount: number
+      sprintCount: number
+      memberCount: number
+      openIssueCount: number
+      deletable: boolean
+      reason: string | null
+    }>>(`/projects/${id}/delete-precheck`)
+  },
+
+  /** 删除项目（需输入 confirmKey 确认） */
+  delete(id: string, confirmKey: string) {
+    return request.delete<any, R<void>>(`/projects/${id}`, { params: { confirmKey } })
+  },
+
   /** 获取项目成员列表 */
   listMembers(projectId: string, config?: RequestOptions) {
     return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`, config)
