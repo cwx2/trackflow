@@ -10,6 +10,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
@@ -79,6 +80,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({NumberFormatException.class, IllegalArgumentException.class})
     public ResponseEntity<R<Void>> handleBadFormatException(Exception ex, HttpServletRequest request) {
         log.warn("Bad request format on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(R.fail(ErrorCode.VALIDATION_ERROR, "请求参数格式错误"));
+    }
+
+    /**
+     * 路径变量/请求参数类型转换异常（如 Long 参数传入字符串）
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<R<Void>> handleTypeMismatchException(MethodArgumentTypeMismatchException ex,
+                                                               HttpServletRequest request) {
+        log.warn("Type mismatch on {} {}: parameter '{}' failed to convert '{}' to {}",
+                request.getMethod(), request.getRequestURI(),
+                ex.getName(), ex.getValue(),
+                ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(R.fail(ErrorCode.VALIDATION_ERROR, "请求参数格式错误"));
     }
