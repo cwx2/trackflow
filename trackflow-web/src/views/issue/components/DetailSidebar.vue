@@ -67,6 +67,11 @@
                 <input v-model="inputValue" type="text" class="input-field" placeholder="Issue Key" @keyup.enter="commitInput(field)" />
                 <button class="input-btn" @click="commitInput(field)">确定</button>
               </div>
+              <!-- 文本输入 -->
+              <div class="dropdown-input" v-if="field.editType === 'text'">
+                <input v-model="inputValue" type="text" class="input-field" :placeholder="field.label" @keyup.enter="commitInput(field)" />
+                <button class="input-btn" @click="commitInput(field)">确定</button>
+              </div>
             </div>
           </template>
         </a-trigger>
@@ -101,7 +106,7 @@ export interface SidebarField {
   badgeColor?: string
   class?: string
   readonly?: boolean
-  editType?: 'select' | 'user-select' | 'date' | 'number' | 'issue-search'
+  editType?: 'select' | 'user-select' | 'date' | 'number' | 'issue-search' | 'text'
   options?: FieldOption[]
   rawValue?: string
 }

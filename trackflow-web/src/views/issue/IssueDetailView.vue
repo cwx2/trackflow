@@ -435,9 +435,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
         break
       case 'string':
       default:
-        editType = 'number' // 用 number editType 的 input 模式（通用 input）— 实际用 issue-search 类型的通用 input
-        // 对于 string 类型，使用 issue-search 占位让 sidebar 显示文本输入
-        editType = 'issue-search' as any
+        editType = 'text'
         break
     }
 

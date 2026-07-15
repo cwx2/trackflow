@@ -126,10 +126,9 @@ public class IssueController {
     public R<IssueDetailVO> updateCustomFieldValue(
             @PathVariable Long id,
             @PathVariable Long fieldId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
         Issue issue = issueService.getById(id);
-        String value = body.get("value");
-        customFieldService.saveSingleValue(id, fieldId, value, issue.getIssueType(), issue.getProjectId());
+        customFieldService.saveSingleValue(id, fieldId, dto.getValue(), issue.getIssueType(), issue.getProjectId());
         return R.ok(issueService.getDetail(id));
     }
 

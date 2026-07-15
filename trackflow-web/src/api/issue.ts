@@ -34,6 +34,7 @@ export const issueApi = {
     projectId: string; title: string; description?: string
     issueType?: string; priority?: string; assigneeId?: string
     sprintId?: string; dueDate?: string; estimatedHours?: number
+    customFields?: Record<string, string>
   }) {
     return request.post<any, R<IssueDetailVO>>('/issues', data)
   },
@@ -41,6 +42,11 @@ export const issueApi = {
   /** 更新 Issue（部分更新） */
   update(id: string, data: Record<string, any>) {
     return request.put<any, R<IssueDetailVO>>(`/issues/${id}`, data)
+  },
+
+  /** 更新单个自定义字段值（内联编辑） */
+  updateCustomFieldValue(issueId: string, fieldId: string, value: string) {
+    return request.put<any, R<IssueDetailVO>>(`/issues/${issueId}/custom-fields/${fieldId}`, { value })
   },
 
   /** 删除 Issue */

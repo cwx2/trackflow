@@ -97,6 +97,80 @@
               <template #suffix>小时</template>
             </a-input-number>
           </div>
+
+          <!-- 自定义字段 -->
+          <template v-if="customFields.length > 0">
+            <div class="prop-section-divider"></div>
+            <div v-for="cf in customFields" :key="cf.id" class="prop-row">
+              <span class="prop-label">
+                {{ cf.name }}
+                <span v-if="cf.isRequired" class="required-mark">*</span>
+              </span>
+              <!-- string -->
+              <a-input
+                v-if="cf.fieldFormat === 'string'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                :placeholder="cf.defaultValue || ''"
+                allow-clear
+              />
+              <!-- int -->
+              <a-input-number
+                v-else-if="cf.fieldFormat === 'int'"
+                :model-value="customFieldValues[cf.id] ? Number(customFieldValues[cf.id]) : undefined"
+                @update:model-value="(v: any) => customFieldValues[cf.id] = v != null ? String(v) : ''"
+                size="small"
+                :precision="0"
+                hide-button
+                style="width: 100%"
+              />
+              <!-- float -->
+              <a-input-number
+                v-else-if="cf.fieldFormat === 'float'"
+                :model-value="customFieldValues[cf.id] ? Number(customFieldValues[cf.id]) : undefined"
+                @update:model-value="(v: any) => customFieldValues[cf.id] = v != null ? String(v) : ''"
+                size="small"
+                hide-button
+                style="width: 100%"
+              />
+              <!-- date -->
+              <a-date-picker
+                v-else-if="cf.fieldFormat === 'date'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                style="width: 100%"
+                placeholder="选择日期"
+              />
+              <!-- bool -->
+              <a-switch
+                v-else-if="cf.fieldFormat === 'bool'"
+                :model-value="customFieldValues[cf.id] === 'true'"
+                size="small"
+                @change="(v: boolean) => customFieldValues[cf.id] = String(v)"
+              />
+              <!-- list -->
+              <a-select
+                v-else-if="cf.fieldFormat === 'list'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                placeholder="选择"
+                allow-clear
+              >
+                <a-option v-for="opt in cf.options" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+              </a-select>
+              <!-- user -->
+              <a-select
+                v-else-if="cf.fieldFormat === 'user'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                placeholder="选择用户"
+                allow-clear
+                allow-search
+              >
+                <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
+              </a-select>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -126,6 +200,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconDown, IconAttachment } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
+import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import RichEditor from './components/RichEditor.vue'
 
 const props = defineProps<{
@@ -155,6 +230,14 @@ const form = reactive({
   dueDate: '',
   estimatedHours: undefined as number | undefined
 })
+
+// 自定义字段集成
+const projectIdRef = computed(() => form.projectId)
+const issueTypeRef = computed(() => form.issueType)
+const { fields: customFields, values: customFieldValues, loading: cfLoading, validateRequired: validateCustomFields, getPayload: getCustomFieldPayload, fetchFields: resetCustomFields } = useCustomFieldForm(
+  projectIdRef,
+  issueTypeRef
+)
 
 const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 
@@ -198,11 +281,21 @@ async function submitAndNew() {
     form.assigneeId = undefined
     form.dueDate = ''
     form.estimatedHours = undefined
+    // 重置自定义字段值到默认值
+    resetCustomFields()
   }
 }
 
 async function doSubmit(): Promise<boolean> {
   if (!canSubmit.value) return false
+
+  // 自定义字段必填校验
+  const cfErrors = validateCustomFields()
+  if (cfErrors.length > 0) {
+    Message.warning(cfErrors[0])
+    return false
+  }
+
   submitting.value = true
   try {
     await issueApi.create({
@@ -214,7 +307,8 @@ async function doSubmit(): Promise<boolean> {
       dueDate: form.dueDate || undefined,
       estimatedHours: form.estimatedHours || undefined,
       sprintId: form.sprintId || undefined,
-      assigneeId: form.assigneeId || undefined
+      assigneeId: form.assigneeId || undefined,
+      customFields: getCustomFieldPayload()
     })
     Message.success('工单创建成功')
     return true
@@ -254,6 +348,9 @@ onMounted(() => {
 .priority-dot.high { background: #f59e0b; }
 .priority-dot.normal { background: #6366f1; }
 .priority-dot.low { background: #64748b; }
+
+.prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
+.required-mark { color: #f85149; margin-left: 2px; }
 
 .panel-footer { display: flex; align-items: center; padding: 10px 0; border-top: 1px solid var(--color-border); flex-shrink: 0; }
 </style>
