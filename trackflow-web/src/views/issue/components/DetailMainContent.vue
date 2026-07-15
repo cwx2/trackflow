@@ -9,7 +9,7 @@
 
       <!-- Title + Action Icons -->
       <div class="title-row">
-        <h1 v-if="!editingTitle" class="iss-title" :class="{ editable: !readonly }" @dblclick="!readonly && startEditTitle()">{{ title }}</h1>
+        <h1 v-if="!editingTitle" class="iss-title" :class="{ editable: !readonly }" @click="!readonly && startEditTitle()">{{ title }}</h1>
         <input
           v-else
           ref="titleInput"
@@ -302,9 +302,14 @@ function commitDesc(content: string) {
   border-radius: 3px;
   padding: 2px 4px;
   margin: -2px -4px;
-  transition: background 150ms;
+  transition: background 150ms, border-color 150ms;
+  border-bottom: 1px solid transparent;
 }
-.iss-title.editable:hover { background: var(--tf-bg-hover); }
+.iss-title.editable:hover {
+  background: var(--tf-bg-hover);
+  border-bottom-color: var(--tf-text-muted, #6b7280);
+  border-bottom-style: dashed;
+}
 .title-edit-input {
   font-size: 20px; font-weight: 600; width: 100%; flex: 1;
   background: var(--tf-bg-elevated); border: 1px solid var(--tf-accent);
