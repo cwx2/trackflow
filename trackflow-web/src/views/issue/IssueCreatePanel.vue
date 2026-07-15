@@ -177,16 +177,22 @@
       <!-- 底部操作栏 -->
       <div class="panel-footer">
         <a-space>
-          <a-dropdown>
-            <a-button type="primary" :loading="submitting" :disabled="!canSubmit">
+          <div class="split-button">
+            <a-button type="primary" :loading="submitting" :disabled="!canSubmit" class="split-main" @click="submitAndClose">
               创建工单
-              <icon-down />
             </a-button>
-            <template #content>
-              <a-doption @click="submitAndClose">创建并关闭</a-doption>
-              <a-doption @click="submitAndNew">创建并继续</a-doption>
-            </template>
-          </a-dropdown>
+            <a-trigger trigger="click" position="br" :popup-visible="splitMenuVisible" @popup-visible-change="(v: boolean) => splitMenuVisible = v">
+              <button type="button" class="split-arrow-trigger" :disabled="!canSubmit">
+                <icon-down />
+              </button>
+              <template #content>
+                <div class="split-menu">
+                  <div class="split-menu-item" @click="onSplitSelect('close')">创建并关闭</div>
+                  <div class="split-menu-item" @click="onSplitSelect('continue')">创建并继续</div>
+                </div>
+              </template>
+            </a-trigger>
+          </div>
           <a-button @click="close">取消</a-button>
         </a-space>
       </div>
@@ -215,6 +221,7 @@ const emit = defineEmits<{
 }>()
 
 const submitting = ref(false)
+const splitMenuVisible = ref(false)
 
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
@@ -277,6 +284,12 @@ async function onProjectChange(val: any) {
 
 function close() {
   emit('update:visible', false)
+}
+
+function onSplitSelect(action: string) {
+  splitMenuVisible.value = false
+  if (action === 'close') submitAndClose()
+  else if (action === 'continue') submitAndNew()
 }
 
 async function submitAndClose() {
@@ -368,6 +381,47 @@ onMounted(() => {
 .required-mark { color: #f85149; margin-left: 2px; }
 
 .panel-footer { display: flex; align-items: center; padding: 10px 0; border-top: 1px solid var(--color-border); flex-shrink: 0; }
+
+.split-button { display: inline-flex; }
+.split-button .split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-arrow-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  height: 32px;
+  border: none;
+  border-top-right-radius: var(--border-radius-small, 4px);
+  border-bottom-right-radius: var(--border-radius-small, 4px);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgb(var(--primary-6, 22, 93, 255));
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 100ms;
+  font-size: 12px;
+}
+.split-arrow-trigger:hover { background: rgb(var(--primary-5, 14, 66, 210)); }
+.split-arrow-trigger:active { background: rgb(var(--primary-7, 14, 66, 210)); }
+.split-arrow-trigger:disabled { opacity: 0.4; cursor: not-allowed; }
+.split-arrow-trigger :deep(.arco-icon) { font-size: 12px; }
+
+.split-menu {
+  background: var(--color-bg-popup, #fff);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  min-width: 120px;
+}
+.split-menu-item {
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--color-text-1);
+  transition: background-color 100ms;
+}
+.split-menu-item:hover { background: var(--color-fill-2, #f2f3f5); }
 </style>
 
 <style>
