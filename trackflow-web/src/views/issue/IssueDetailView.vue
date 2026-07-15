@@ -249,13 +249,21 @@ async function loadRelatedData() {
 
   // 先加载权限，决定是否需要加载编辑选项
   const perms = await loadProjectPermissions(pid)
-  const needSprintOptions = perms.has('sprint:edit')
-  const needMemberOptions = perms.has('issue:assign')
+  const isAdmin = authStore.hasGlobalPermission('system:admin')
+  // 资源级权限：assignee 可变更状态（后端 hasIssuePermission 有同样逻辑）
+  const isAssignee = authStore.user?.userId === issue.value.assigneeId
+  const needTransitions = isAdmin || perms.has('issue:change_status') || isAssignee
+  const needSprintOptions = isAdmin || perms.has('sprint:edit')
+  const needMemberOptions = isAdmin || perms.has('issue:assign')
+
+  // 无状态变更权限时清空 transitions（确保 UI 渲染为只读）
+  if (!needTransitions) {
+    transitions.value = []
+  }
 
   try {
-    // 核心数据：始终加载（transitions, comments, activities, attachments, links, tags）
+    // 核心数据：始终加载（comments, activities, attachments, links, tags, custom fields）
     const promises: Promise<any>[] = [
-      issueApi.getAvailableTransitions(id),
       issueApi.listComments(id),
       issueApi.listActivities(id),
       issueApi.listAttachments(id),
@@ -263,6 +271,10 @@ async function loadRelatedData() {
       tagApi.listProjectTags(pid),
       customFieldApi.listByProject(pid, issue.value!.issueType),
     ]
+    // 仅在有状态变更权限时加载可用转换（避免无权限用户触发 403）
+    if (needTransitions) {
+      promises.push(issueApi.getAvailableTransitions(id))
+    }
     // 仅在有分配权限时加载成员列表（编辑负责人的下拉选项）
     if (needMemberOptions) {
       promises.push(projectApi.listMembers(pid))
@@ -275,8 +287,6 @@ async function loadRelatedData() {
     const results = await Promise.allSettled(promises)
 
     let idx = 0
-    if (results[idx].status === 'fulfilled') transitions.value = (results[idx] as any).value.data || []
-    idx++
     if (results[idx].status === 'fulfilled') comments.value = (results[idx] as any).value.data || []
     idx++
     if (results[idx].status === 'fulfilled') activities.value = (results[idx] as any).value.data || []
@@ -289,6 +299,10 @@ async function loadRelatedData() {
     idx++
     if (results[idx].status === 'fulfilled') customFieldDefs.value = (results[idx] as any).value.data || []
     idx++
+    if (needTransitions) {
+      if (results[idx].status === 'fulfilled') transitions.value = (results[idx] as any).value.data || []
+      idx++
+    }
     if (needMemberOptions) {
       if (results[idx].status === 'fulfilled') members.value = (results[idx] as any).value.data || []
       idx++

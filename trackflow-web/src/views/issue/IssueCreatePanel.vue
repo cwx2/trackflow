@@ -246,7 +246,10 @@ const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 watch(() => props.projectId, (val) => {
   if (val) {
     form.projectId = val
-    onProjectChange(val)
+    // 仅在面板可见时加载数据（避免隐藏状态下触发无权限的 API 调用）
+    if (props.visible) {
+      onProjectChange(val)
+    }
   }
 }, { immediate: true })
 
@@ -269,7 +272,7 @@ async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
   if (!pid) { members.value = []; sprints.value = []; return }
   try { const res = await projectApi.listMembers(pid); members.value = res.data || [] } catch { members.value = [] }
-  try { const res = await sprintApi.listByProject(pid); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed') } catch { sprints.value = [] }
+  try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed') } catch { sprints.value = [] }
 }
 
 function close() {
