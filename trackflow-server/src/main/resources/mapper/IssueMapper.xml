@@ -7,12 +7,12 @@
     <!-- assignee 字段 old/new value 解析为用户显示名（SELECT 列） -->
     <sql id="assignee_resolve_columns">
         CASE
-            WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
+            WHEN a.field_name IN ('assignee', 'assignee_id') AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
             THEN COALESCE(old_user.display_name, a.old_value)
             ELSE a.old_value
         END AS old_value,
         CASE
-            WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
+            WHEN a.field_name IN ('assignee', 'assignee_id') AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
             THEN COALESCE(new_user.display_name, a.new_value)
             ELSE a.new_value
         END AS new_value
@@ -21,10 +21,10 @@
     <!-- assignee 字段解析所需的 LEFT JOIN -->
     <sql id="assignee_resolve_joins">
         LEFT JOIN sys_user old_user ON old_user.id = CASE
-            WHEN a.field_name = 'assignee' AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
+            WHEN a.field_name IN ('assignee', 'assignee_id') AND a.old_value IS NOT NULL AND a.old_value SIMILAR TO '[0-9]+'
             THEN CAST(a.old_value AS BIGINT) ELSE NULL END
         LEFT JOIN sys_user new_user ON new_user.id = CASE
-            WHEN a.field_name = 'assignee' AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
+            WHEN a.field_name IN ('assignee', 'assignee_id') AND a.new_value IS NOT NULL AND a.new_value SIMILAR TO '[0-9]+'
             THEN CAST(a.new_value AS BIGINT) ELSE NULL END
     </sql>
 

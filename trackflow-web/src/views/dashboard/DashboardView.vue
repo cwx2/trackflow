@@ -647,6 +647,7 @@ function formatAction(activity: DashboardActivityVO): string {
     'time_logged': '记录了工时',
     'time_removed': '删除了工时',
     'deleted': '删除了',
+    'restored': '恢复了',
     'reopened': '重新打开了',
     'resolved': '解决了'
   }

@@ -43,3 +43,66 @@ export function localizeFieldName(name?: string | null): string | undefined {
   if (!name) return undefined
   return fieldLabelMap[name] || name
 }
+
+/**
+ * 优先级英文值 → 中文映射
+ */
+export const priorityLabelMap: Record<string, string> = {
+  Critical: '紧急',
+  High: '高',
+  Normal: '普通',
+  Low: '低',
+  critical: '紧急',
+  high: '高',
+  normal: '普通',
+  low: '低',
+}
+
+/**
+ * 状态英文名 → 中文映射
+ * 覆盖 issue_status 表中的所有预置状态
+ */
+export const statusLabelMap: Record<string, string> = {
+  'Open': '待处理',
+  'In Progress': '进行中',
+  'Code Review': '代码审查',
+  'Testing': '测试中',
+  'Done': '已完成',
+  'Cancelled': '已取消',
+  'Reopened': '重新打开',
+  'Todo': '待办',
+  'UI Todo': 'UI 待办',
+  'Done (Local Env)': '本地完成',
+  'No Test': '无需测试',
+  'Pending Code Review': '等待审查',
+  'Pending Publish': '等待发布',
+  'Online': '已上线',
+  'Solved': '已解决',
+  'Closed': '已关闭',
+  'Pending Cancel': '待取消',
+  'Pending Extension': '待延期',
+}
+
+/**
+ * 根据字段名，本地化字段值
+ * 适用于活动记录中展示 old_value / new_value 的场景
+ * @param fieldName 字段标识（如 "priority"、"status"）
+ * @param value 英文原值
+ * @returns 中文值或原值
+ */
+export function localizeFieldValue(fieldName?: string | null, value?: string | null): string | undefined {
+  if (!value) return undefined
+  if (!fieldName) return value
+
+  // 优先级字段
+  if (fieldName === 'priority') {
+    return priorityLabelMap[value] || value
+  }
+
+  // 状态字段
+  if (fieldName === 'status' || fieldName === 'status_id') {
+    return statusLabelMap[value] || value
+  }
+
+  return value
+}

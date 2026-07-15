@@ -130,7 +130,7 @@ import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-import { localizeFieldName } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const sidebarVisible = ref(true)
@@ -365,7 +365,7 @@ const activityItems = computed<ActivityItem[]>(() => {
   }
   for (const a of activities.value) {
     if (a.action === 'commented') continue
-    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: localizeFieldName(a.fieldName), from: a.oldValue || undefined, to: a.newValue || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
+    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
   }
   return items
 })

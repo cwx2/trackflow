@@ -45,7 +45,9 @@
           <!-- 评论 -->
           <div v-if="item.type === 'comment'" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
           <div v-else class="change-text">
-            <template v-if="item.action === 'created'">创建了该 Issue</template>
+            <template v-if="item.action === 'created'">创建了此工单</template>
+            <template v-else-if="item.action === 'deleted'">删除了此工单</template>
+            <template v-else-if="item.action === 'restored'">恢复了此工单</template>
             <template v-else-if="item.action === 'time_logged'">
               <span class="time-badge">⏱</span> 记录了工时: <span class="val-new">{{ item.to }}</span>
             </template>
@@ -59,12 +61,9 @@
               删除了附件: <span class="val-old">{{ item.from }}</span>
             </template>
             <template v-else-if="item.field">
-              {{ item.field }}:
-              <span class="val-old">{{ item.from || '空' }}</span>
-              →
-              <span class="val-new">{{ item.to || '空' }}</span>
+              修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
             </template>
-            <template v-else>{{ item.action }}</template>
+            <template v-else>{{ localizeAction(item.action) }}</template>
           </div>
         </div>
       </div>
@@ -121,6 +120,28 @@ function initial(name: string) { return name ? name[0].toUpperCase() : 'U' }
 function avatarBg(name: string) {
   const c = ['#5c6bc0','#26a69a','#ef5350','#ab47bc','#42a5f5','#ff7043','#66bb6a']
   return c[(name || '').charCodeAt(0) % c.length]
+}
+
+/** 操作类型英文 → 中文映射，作为最终 fallback 兜底 */
+const actionLabelMap: Record<string, string> = {
+  created: '创建了此工单',
+  deleted: '删除了此工单',
+  restored: '恢复了此工单',
+  updated: '修改了工单',
+  assigned: '修改了负责人',
+  status_changed: '修改了状态',
+  commented: '添加了评论',
+  time_logged: '记录了工时',
+  time_removed: '删除了工时',
+  attachment_added: '添加了附件',
+  attachment_removed: '删除了附件',
+  auto_assigned: '自动分配了负责人',
+  auto_assign_skipped: '跳过了自动分配',
+}
+
+function localizeAction(action?: string): string {
+  if (!action) return '未知操作'
+  return actionLabelMap[action] || action
 }
 </script>
 
