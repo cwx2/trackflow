@@ -98,12 +98,18 @@
           </div>
         </div>
 
+        <!-- 燃尽图 -->
+        <SprintBurndownChart
+          v-if="sprint.startDate && sprint.endDate && sprint.totalIssues > 0"
+          :sprint-id="sprint.id"
+          :sprint-end-date="sprint.endDate"
+          :is-completed="false"
+        />
+
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
-          <a-popconfirm v-if="canEditSprint" content="确定完成此迭代？未完成的工单将留在待办中。" @ok="completeSprint(sprint.id)">
-            <a-button size="mini">完成迭代</a-button>
-          </a-popconfirm>
+          <a-button v-if="canEditSprint" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
         </div>
       </div>
 
@@ -222,7 +228,23 @@
 
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button
+            size="mini"
+            type="text"
+            @click="toggleCompletedBurndown(sprint.id)"
+            v-if="sprint.startDate && sprint.endDate && sprint.totalIssues > 0"
+          >
+            {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
+          </a-button>
         </div>
+
+        <!-- 已完成 Sprint 的燃尽图（展开时显示） -->
+        <SprintBurndownChart
+          v-if="expandedCompletedSprints.has(sprint.id)"
+          :sprint-id="sprint.id"
+          :sprint-end-date="sprint.endDate"
+          :is-completed="true"
+        />
       </div>
     </div>
 
@@ -293,6 +315,85 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 完成 Sprint 确认弹窗 -->
+    <a-modal
+      v-model:visible="showCompleteModal"
+      :title="`完成迭代：${completingSprintName}`"
+      :width="560"
+      :ok-loading="completing"
+      :ok-text="'确认完成'"
+      @ok="confirmCompleteSprint"
+      @cancel="showCompleteModal = false"
+    >
+      <!-- 无未完成工单 -->
+      <div v-if="completionPreview && completionPreview.openIssues.length === 0" class="complete-no-issues">
+        <div class="complete-icon">✅</div>
+        <p class="complete-desc">该迭代中所有工单已完成，确认关闭迭代？</p>
+      </div>
+
+      <!-- 有未完成工单 -->
+      <div v-else-if="completionPreview" class="complete-with-issues">
+        <div class="complete-warning">
+          <span class="warning-icon">⚠️</span>
+          <span>该迭代中仍有 <strong>{{ completionPreview.openIssues.length }}</strong> 个未完成工单</span>
+        </div>
+
+        <!-- 未完成工单列表 -->
+        <div class="open-issues-list">
+          <div
+            v-for="issue in completionPreview.openIssues"
+            :key="issue.id"
+            class="open-issue-item"
+          >
+            <span class="issue-status-dot" :style="{ background: issue.statusColor || '#6b7280' }"></span>
+            <span class="issue-key">{{ issue.issueKey }}</span>
+            <span class="issue-title">{{ issue.title }}</span>
+            <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
+          </div>
+        </div>
+
+        <!-- 处理方式选择 -->
+        <div class="move-option-section">
+          <p class="move-option-label">请选择未完成工单的处理方式：</p>
+          <a-radio-group v-model="moveOption" direction="vertical">
+            <a-radio value="backlog">
+              <span class="radio-label">移回 Backlog</span>
+              <span class="radio-desc">清空工单的迭代归属，回到待规划状态</span>
+            </a-radio>
+            <a-radio value="next_sprint" :disabled="completionPreview.targetSprints.length === 0">
+              <span class="radio-label">移入其他迭代</span>
+              <span class="radio-desc" v-if="completionPreview.targetSprints.length > 0">
+                将未完成工单转移到指定的迭代中
+              </span>
+              <span class="radio-desc disabled" v-else>
+                当前项目没有其他可用迭代
+              </span>
+            </a-radio>
+          </a-radio-group>
+
+          <!-- 目标 Sprint 选择 -->
+          <div v-if="moveOption === 'next_sprint' && completionPreview.targetSprints.length > 0" class="target-sprint-select">
+            <a-select v-model="targetSprintId" placeholder="选择目标迭代" style="width: 100%">
+              <a-option
+                v-for="target in completionPreview.targetSprints"
+                :key="target.id"
+                :value="target.id"
+              >
+                {{ target.name }}
+                <span class="target-status-tag">{{ target.status === 'active' ? '进行中' : '计划中' }}</span>
+              </a-option>
+            </a-select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 加载中 -->
+      <div v-else class="complete-loading">
+        <a-spin :size="24" />
+        <p style="margin-top: 12px; color: var(--color-text-3);">正在获取工单信息…</p>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -304,7 +405,8 @@ import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
-import type { SprintVO } from '@/api/types'
+import type { SprintVO, CompletionPreviewVO } from '@/api/types'
+import SprintBurndownChart from './SprintBurndownChart.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -320,6 +422,16 @@ const { projects, projectLoadState, loadProjects } = useProjectList()
 const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
 const creating = ref(false)
+const expandedCompletedSprints = ref<Set<string>>(new Set())
+
+// ===== 完成迭代相关 =====
+const showCompleteModal = ref(false)
+const completing = ref(false)
+const completingSprintId = ref<string>('')
+const completingSprintName = ref<string>('')
+const completionPreview = ref<CompletionPreviewVO | null>(null)
+const moveOption = ref<string>('backlog')
+const targetSprintId = ref<string>('')
 
 /**
  * 加载状态机：
@@ -380,6 +492,16 @@ function viewSprintIssues(sprint: SprintVO) {
   router.push({ path: '/', query: { sprint: sprint.id, label: sprint.name } })
 }
 
+function toggleCompletedBurndown(sprintId: string) {
+  const set = new Set(expandedCompletedSprints.value)
+  if (set.has(sprintId)) {
+    set.delete(sprintId)
+  } else {
+    set.add(sprintId)
+  }
+  expandedCompletedSprints.value = set
+}
+
 // ===== API 调用 =====
 
 async function loadSprints() {
@@ -409,13 +531,55 @@ async function activateSprint(id: string) {
   }
 }
 
-async function completeSprint(id: string) {
+async function handleCompleteSprint(sprint: SprintVO) {
+  completingSprintId.value = sprint.id
+  completingSprintName.value = sprint.name
+  completionPreview.value = null
+  moveOption.value = 'backlog'
+  targetSprintId.value = ''
+  showCompleteModal.value = true
+
   try {
-    await sprintApi.complete(id)
+    const res = await sprintApi.completionPreview(sprint.id)
+    completionPreview.value = res.data
+
+    // 如果有未完成工单且有可迁移目标，默认选中第一个
+    if (res.data.openIssues.length > 0 && res.data.targetSprints.length > 0) {
+      targetSprintId.value = res.data.targetSprints[0].id
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '获取预览信息失败')
+    showCompleteModal.value = false
+  }
+}
+
+async function confirmCompleteSprint() {
+  if (!completionPreview.value) return
+
+  const hasOpenIssues = completionPreview.value.openIssues.length > 0
+
+  // 有未完成工单时需要验证选项
+  if (hasOpenIssues) {
+    if (moveOption.value === 'next_sprint' && !targetSprintId.value) {
+      Message.warning('请选择目标迭代')
+      return
+    }
+  }
+
+  completing.value = true
+  try {
+    const body = hasOpenIssues
+      ? { moveOption: moveOption.value, targetSprintId: moveOption.value === 'next_sprint' ? targetSprintId.value : undefined }
+      : undefined
+
+    await sprintApi.complete(completingSprintId.value, body)
     Message.success('迭代已完成')
+    showCompleteModal.value = false
     loadSprints()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
+  } finally {
+    completing.value = false
   }
 }
 
@@ -693,5 +857,127 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-text-3);
   margin-bottom: 16px;
+}
+
+/* ===== 完成迭代弹窗 ===== */
+.complete-no-issues {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  text-align: center;
+}
+.complete-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+.complete-desc {
+  font-size: 14px;
+  color: var(--color-text-2);
+}
+
+.complete-with-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.complete-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(var(--warning-6), 0.08);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-text-1);
+}
+.warning-icon {
+  font-size: 16px;
+}
+
+.open-issues-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+.open-issue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.open-issue-item:last-child {
+  border-bottom: none;
+}
+.issue-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.issue-key {
+  color: var(--color-text-3);
+  font-family: monospace;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.issue-title {
+  color: var(--color-text-1);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-assignee {
+  color: var(--color-text-3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.move-option-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.move-option-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  margin: 0;
+}
+.radio-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+.radio-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-3);
+  margin-top: 2px;
+}
+.radio-desc.disabled {
+  color: var(--color-text-4);
+  font-style: italic;
+}
+.target-sprint-select {
+  margin-top: 8px;
+  margin-left: 24px;
+}
+.target-status-tag {
+  font-size: 11px;
+  color: var(--color-text-3);
+  margin-left: 8px;
+}
+
+.complete-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0;
 }
 </style>

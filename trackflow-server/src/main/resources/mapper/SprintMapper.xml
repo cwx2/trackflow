@@ -60,4 +60,43 @@
             s.created_at DESC
     </select>
 
+    <!-- 查询 Sprint 中未关闭工单的 ID 列表 -->
+    <select id="selectOpenIssueIds" resultType="java.lang.Long">
+        SELECT i.id
+        FROM issue i
+        JOIN issue_status ist ON ist.id = i.status_id
+        WHERE i.sprint_id = #{sprintId}
+          AND i.deleted_at IS NULL
+          AND ist.is_closed = false
+    </select>
+
+    <!-- 查询 Sprint 中未关闭工单的详细信息（用于完成预览展示） -->
+    <resultMap id="openIssueItemMap" type="com.trackflow.sprint.vo.CompletionPreviewVO$OpenIssueItem">
+        <id property="id" column="id" javaType="java.lang.String"/>
+        <result property="issueKey" column="issue_key"/>
+        <result property="title" column="title"/>
+        <result property="priority" column="priority"/>
+        <result property="statusName" column="status_name"/>
+        <result property="statusColor" column="status_color"/>
+        <result property="assigneeName" column="assignee_name"/>
+    </resultMap>
+
+    <select id="selectOpenIssuesForCompletion" resultMap="openIssueItemMap">
+        SELECT
+            i.id,
+            i.issue_key,
+            i.title,
+            i.priority,
+            ist.name AS status_name,
+            ist.color AS status_color,
+            u.display_name AS assignee_name
+        FROM issue i
+        JOIN issue_status ist ON ist.id = i.status_id
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        WHERE i.sprint_id = #{sprintId}
+          AND i.deleted_at IS NULL
+          AND ist.is_closed = false
+        ORDER BY i.created_at ASC
+    </select>
+
 </mapper>

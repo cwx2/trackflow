@@ -2,8 +2,11 @@ package com.trackflow.sprint.controller;
 
 import com.trackflow.common.model.R;
 import com.trackflow.sprint.converter.SprintConverter;
+import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
 import com.trackflow.sprint.service.SprintService;
+import com.trackflow.sprint.vo.BurndownVO;
+import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.SprintVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,10 +46,16 @@ public class SprintController {
         return R.ok(sprintConverter.toVO(sprintService.activate(id)));
     }
 
+    @GetMapping("/api/v1/sprints/{id}/completion-preview")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
+    public R<CompletionPreviewVO> completionPreview(@PathVariable Long id) {
+        return R.ok(sprintService.getCompletionPreview(id));
+    }
+
     @PutMapping("/api/v1/sprints/{id}/complete")
     @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
-    public R<SprintVO> complete(@PathVariable Long id) {
-        return R.ok(sprintConverter.toVO(sprintService.complete(id)));
+    public R<SprintVO> complete(@PathVariable Long id, @RequestBody(required = false) @Valid CompleteSprintDTO dto) {
+        return R.ok(sprintConverter.toVO(sprintService.complete(id, dto)));
     }
 
     @DeleteMapping("/api/v1/sprints/{id}")
@@ -54,5 +63,11 @@ public class SprintController {
     public R<Void> delete(@PathVariable Long id) {
         sprintService.delete(id);
         return R.ok();
+    }
+
+    @GetMapping("/api/v1/sprints/{id}/burndown")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
+    public R<BurndownVO> burndown(@PathVariable Long id) {
+        return R.ok(sprintService.getBurndownData(id));
     }
 }

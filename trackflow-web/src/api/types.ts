@@ -363,3 +363,25 @@ export interface BoardColumnItem {
   sortOrder: number
   collapsed?: boolean
 }
+
+// ========== Sprint 完成预览 ==========
+export interface CompletionPreviewVO {
+  openIssues: CompletionPreviewIssue[]
+  targetSprints: CompletionPreviewTarget[]
+}
+
+export interface CompletionPreviewIssue {
+  id: string
+  issueKey: string
+  title: string
+  priority: string
+  statusName: string
+  statusColor: string
+  assigneeName?: string
+}
+
+export interface CompletionPreviewTarget {
+  id: string
+  name: string
+  status: string
+}
