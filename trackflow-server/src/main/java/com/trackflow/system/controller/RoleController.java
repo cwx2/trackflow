@@ -9,6 +9,7 @@ import com.trackflow.system.dto.CreateRoleDTO;
 import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.service.RoleService;
+import com.trackflow.system.vo.PermissionGroupVO;
 import com.trackflow.system.vo.RoleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -87,5 +88,14 @@ public class RoleController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Map<String, List<String>>> getAllPermissions() {
         return R.ok(roleService.getAllPermissions());
+    }
+
+    /**
+     * 获取所有权限定义（含分类、名称、描述等元数据）
+     */
+    @GetMapping("/permission-definitions")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<List<PermissionGroupVO>> getPermissionDefinitions() {
+        return R.ok(roleService.getAllPermissionGroups());
     }
 }

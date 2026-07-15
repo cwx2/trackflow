@@ -1,5 +1,6 @@
 package com.trackflow.auth.service;
 
+import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.system.mapper.RolePermissionMapper;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -255,5 +257,43 @@ public class PermissionService {
         // system:admin 拥有所有权限
         if (isSystemAdmin(userId)) return true;
         return rolePermissionMapper.hasPermissionInAnyProject(userId, permission);
+    }
+
+    /**
+     * 检查用户对特定 Issue 的权限（含资源级规则）。
+     *
+     * 资源级规则：
+     * - Issue 的 reporter（创建者）自动获得 issue:edit 权限
+     * - Issue 的 assignee（负责人）自动获得 issue:edit 和 issue:change_status 权限
+     *
+     * @param userId     当前操作用户
+     * @param issue      目标 Issue 对象
+     * @param permission 要检查的权限码
+     * @return true 如果用户有权限
+     */
+    public boolean hasIssuePermission(Long userId, Issue issue, String permission) {
+        if (userId == null || issue == null) return false;
+
+        // 1. 项目级权限直接满足（含 system:admin 检查）
+        if (hasPermission(userId, issue.getProjectId(), permission)) {
+            return true;
+        }
+
+        // 2. 资源级规则：创建者（reporter）可编辑
+        if ("issue:edit".equals(permission) && Objects.equals(userId, issue.getReporterId())) {
+            return true;
+        }
+
+        // 3. 资源级规则：负责人（assignee）可编辑
+        if ("issue:edit".equals(permission) && Objects.equals(userId, issue.getAssigneeId())) {
+            return true;
+        }
+
+        // 4. 资源级规则：负责人可变更状态
+        if ("issue:change_status".equals(permission) && Objects.equals(userId, issue.getAssigneeId())) {
+            return true;
+        }
+
+        return false;
     }
 }

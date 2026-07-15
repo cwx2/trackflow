@@ -11,9 +11,11 @@ export interface R<T = any> {
 
 /**
  * /api/v1/auth/me 返回的当前用户信息 VO
- * 对应后端 UserInfoVO，字段来自 Keycloak JWT
+ * 对应后端 UserInfoVO，字段来自 Keycloak JWT + 数据库
  */
 export interface UserInfoVO {
+  /** 数据库用户 ID（用于资源级权限判断） */
+  userId?: string
   /** Keycloak subject ID */
   keycloakId: string
   /** 登录用户名 */
@@ -31,6 +33,8 @@ export interface UserInfoVO {
 export interface AuthUser {
   /** Keycloak subject ID */
   id: string
+  /** 数据库用户 ID（用于资源级权限判断，与 Issue 的 reporterId/assigneeId 对比） */
+  userId?: string
   /** 登录用户名 */
   username: string
   /** 显示名称（CJK 姓+名，西方名+姓） */

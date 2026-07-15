@@ -2,6 +2,9 @@ package com.trackflow.auth.security;
 
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.mapper.IssueMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.core.Authentication;
@@ -27,6 +30,7 @@ import java.util.Set;
 public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
 
     private final PermissionService permissionService;
+    private final IssueMapper issueMapper;
 
     /**
      * 检查项目级权限
@@ -41,6 +45,35 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         }
 
         return permissionService.hasPermission(userId, projectId, permission);
+    }
+
+    /**
+     * 检查 Issue 资源级权限（项目级 + reporter/assignee 额外权限）
+     * 用于 @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+     *
+     * @param issueId    Issue 的数据库 ID
+     * @param permission 要检查的权限码
+     * @return true 如果用户有权限（项目级或资源级）
+     */
+    public boolean checkIssue(Long issueId, String permission) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        if (!isPermissionInScope(permission)) {
+            return false;
+        }
+
+        Issue issue = issueMapper.selectOne(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getProjectId, Issue::getReporterId, Issue::getAssigneeId)
+                        .eq(Issue::getId, issueId)
+                        .isNull(Issue::getDeletedAt)
+        );
+        if (issue == null) {
+            return false;
+        }
+
+        return permissionService.hasIssuePermission(userId, issue, permission);
     }
 
     /**

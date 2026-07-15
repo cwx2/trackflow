@@ -31,7 +31,7 @@
         :available-tags="projectTags"
         :links="issueLinks"
         :attachments="issueAttachments"
-        :readonly="!canEditIssue"
+        :readonly="!canEditIssueEffective"
         :children="issue.children || []"
         :child-progress="issue.childProgress || null"
         @update-title="onUpdateTitle"
@@ -158,6 +158,33 @@ const { canCreateIssue, canEditIssue, canChangeStatus, canComment, canAssignIssu
   () => issue.value?.projectId,
   { isProjectArchived: () => isProjectArchived.value }
 )
+
+// 资源级权限覆盖：Issue 的 reporter/assignee 即使项目角色无 issue:edit 也可编辑
+import { useAuthStore } from '@/stores/auth'
+const authStore = useAuthStore()
+
+/** 是否为 Issue 的创建者或负责人 */
+const isIssueOwner = computed(() => {
+  const dbUserId = authStore.user?.userId
+  if (!dbUserId || !issue.value) return false
+  return dbUserId === issue.value.reporterId || dbUserId === issue.value.assigneeId
+})
+
+/** 综合权限：项目级权限 OR 资源级权限（reporter/assignee 可编辑） */
+const canEditIssueEffective = computed(() => {
+  if (isProjectArchived.value) return false
+  return canEditIssue.value || isIssueOwner.value
+})
+
+/** 综合状态变更权限：项目级 OR 资源级（assignee 可变更状态） */
+const canChangeStatusEffective = computed(() => {
+  if (isProjectArchived.value) return false
+  if (canChangeStatus.value) return true
+  // assignee 额外获得 change_status 权限
+  const dbUserId = authStore.user?.userId
+  if (!dbUserId || !issue.value) return false
+  return dbUserId === issue.value.assigneeId
+})
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
 const activities = ref<IssueActivityVO[]>([])
@@ -305,9 +332,9 @@ const sidebarFields = computed<SidebarField[]>(() => {
   const i = issue.value
   if (!i) return []
 
-  // 权限判断
-  const canEdit = canEditIssue.value
-  const canTransition = canChangeStatus.value
+  // 权限判断（使用资源级覆盖后的综合权限）
+  const canEdit = canEditIssueEffective.value
+  const canTransition = canChangeStatusEffective.value
   const canAssign = canAssignIssue.value
   const canSprint = canEditSprint.value
 

@@ -8,16 +8,21 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.system.dto.CreateRoleDTO;
 import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.RolePermission;
+import com.trackflow.system.entity.SysPermission;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.UserRole;
 import com.trackflow.system.mapper.RolePermissionMapper;
+import com.trackflow.system.mapper.SysPermissionMapper;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
+import com.trackflow.system.vo.PermissionGroupVO;
+import com.trackflow.system.vo.PermissionVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -32,22 +37,8 @@ public class RoleService {
     private final SysRoleMapper roleMapper;
     private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
+    private final SysPermissionMapper permissionMapper;
     private final PermissionService permissionService;
-
-    /**
-     * 所有可用权限（按分类）
-     */
-    private static final Map<String, List<String>> ALL_PERMISSIONS = Map.of(
-            "system", List.of("system:admin", "system:manage_users", "system:manage_roles", "system:manage_orgs"),
-            "project", List.of("project:create", "project:edit", "project:delete", "project:view",
-                    "project:manage_members", "project:manage_workflow", "project:manage_custom_fields"),
-            "issue", List.of("issue:create", "issue:view", "issue:edit", "issue:delete",
-                    "issue:assign", "issue:change_status", "issue:comment", "issue:manage_attachments"),
-            "sprint", List.of("sprint:create", "sprint:edit", "sprint:delete", "sprint:view"),
-            "query", List.of("query:create", "query:share", "query:manage_public"),
-            "report", List.of("report:view", "report:create"),
-            "integration", List.of("webhook:manage")
-    );
 
     @Transactional
     public SysRole create(CreateRoleDTO dto) {
@@ -156,9 +147,53 @@ public class RoleService {
     }
 
     /**
-     * 获取所有可用权限（按分类）
+     * 获取所有可用权限（按分类分组，含元数据）
+     */
+    public List<PermissionGroupVO> getAllPermissionGroups() {
+        List<SysPermission> allPerms = permissionMapper.selectList(
+                new LambdaQueryWrapper<SysPermission>()
+                        .eq(SysPermission::getEnabled, true)
+                        .orderByAsc(SysPermission::getCategory)
+                        .orderByAsc(SysPermission::getSortOrder)
+        );
+
+        // 按 category 分组，保持插入顺序
+        Map<String, List<PermissionVO>> grouped = new LinkedHashMap<>();
+        for (SysPermission perm : allPerms) {
+            PermissionVO vo = new PermissionVO();
+            vo.setCode(perm.getCode());
+            vo.setName(perm.getName());
+            vo.setDescription(perm.getDescription());
+            vo.setScope(perm.getScope());
+            grouped.computeIfAbsent(perm.getCategory(), k -> new ArrayList<>()).add(vo);
+        }
+
+        // 转为 List<PermissionGroupVO>
+        List<PermissionGroupVO> result = new ArrayList<>();
+        for (Map.Entry<String, List<PermissionVO>> entry : grouped.entrySet()) {
+            PermissionGroupVO group = new PermissionGroupVO();
+            group.setCategory(entry.getKey());
+            group.setPermissions(entry.getValue());
+            result.add(group);
+        }
+        return result;
+    }
+
+    /**
+     * 获取所有可用权限（按分类，兼容旧格式：Map<category, List<code>>）
      */
     public Map<String, List<String>> getAllPermissions() {
-        return ALL_PERMISSIONS;
+        List<SysPermission> allPerms = permissionMapper.selectList(
+                new LambdaQueryWrapper<SysPermission>()
+                        .eq(SysPermission::getEnabled, true)
+                        .orderByAsc(SysPermission::getCategory)
+                        .orderByAsc(SysPermission::getSortOrder)
+        );
+
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (SysPermission perm : allPerms) {
+            result.computeIfAbsent(perm.getCategory(), k -> new ArrayList<>()).add(perm.getCode());
+        }
+        return result;
     }
 }

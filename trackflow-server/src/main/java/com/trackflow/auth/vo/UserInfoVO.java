@@ -15,6 +15,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserInfoVO {
 
+    /** 数据库用户 ID（Long→String，前端可用于资源级权限判断） */
+    private String userId;
+
     /** Keycloak subject ID */
     private String keycloakId;
 

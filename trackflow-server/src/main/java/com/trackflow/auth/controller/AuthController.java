@@ -33,7 +33,11 @@ public class AuthController {
         String nameClaim = jwt.getClaimAsString("name");
         String username = jwt.getClaimAsString("preferred_username");
 
+        // 获取数据库用户 ID（供前端资源级权限判断使用）
+        Long dbUserId = SecurityUtils.getCurrentUserId();
+
         UserInfoVO userInfo = UserInfoVO.builder()
+                .userId(dbUserId != null ? String.valueOf(dbUserId) : null)
                 .keycloakId(jwt.getSubject())
                 .username(username)
                 .displayName(UserSyncService.buildDisplayName(givenName, familyName, nameClaim, username))

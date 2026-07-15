@@ -84,12 +84,13 @@
           <button class="btn-close" @click="showPermDialog = false">✕</button>
         </div>
         <div class="modal-body">
-          <div v-for="(perms, category) in allPermissions" :key="category" class="perm-group">
-            <h4 class="perm-category">{{ category }}</h4>
+          <div v-for="group in permissionGroups" :key="group.category" class="perm-group">
+            <h4 class="perm-category">{{ CATEGORY_LABELS[group.category] || group.category }}</h4>
             <div class="perm-list">
-              <label v-for="perm in perms" :key="perm" class="perm-item">
-                <input type="checkbox" :checked="rolePerms.includes(perm)" @change="togglePerm(perm)" />
-                <span>{{ perm }}</span>
+              <label v-for="perm in group.permissions" :key="perm.code" class="perm-item">
+                <input type="checkbox" :checked="rolePerms.includes(perm.code)" @change="togglePerm(perm.code)" />
+                <span class="perm-name">{{ perm.name }}</span>
+                <span class="perm-code">{{ perm.code }}</span>
               </label>
             </div>
           </div>
@@ -105,7 +106,30 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import request from '@/api/request'
+
+interface PermissionItem {
+  code: string
+  name: string
+  description: string
+  scope: string
+}
+
+interface PermissionGroup {
+  category: string
+  permissions: PermissionItem[]
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  system: '系统权限',
+  project: '项目权限',
+  issue: '工单权限',
+  sprint: '迭代权限',
+  query: '查询权限',
+  report: '报表权限',
+  integration: '集成权限',
+}
 
 const roles = ref<any[]>([])
 const showCreateDialog = ref(false)
@@ -115,7 +139,7 @@ const roleForm = reactive({ name: '', code: '', roleType: 'project', description
 const showPermDialog = ref(false)
 const permRole = ref<any>(null)
 const rolePerms = ref<string[]>([])
-const allPermissions = ref<Record<string, string[]>>({})
+const permissionGroups = ref<PermissionGroup[]>([])
 
 async function loadRoles() {
   try {
@@ -124,11 +148,11 @@ async function loadRoles() {
   } catch (e) { roles.value = [] }
 }
 
-async function loadAllPermissions() {
+async function loadPermissionDefinitions() {
   try {
-    const res: any = await request.get('/roles/all-permissions')
-    allPermissions.value = res.data || {}
-  } catch (e) { allPermissions.value = {} }
+    const res: any = await request.get('/roles/permission-definitions')
+    permissionGroups.value = res.data || []
+  } catch (e) { permissionGroups.value = [] }
 }
 
 function openCreateDialog() {
@@ -159,7 +183,7 @@ async function deleteRole(id: number) {
     await request.delete(`/roles/${id}`)
     loadRoles()
   } catch (e: any) {
-    alert(e.response?.data?.message || '删除失败')
+    Message.error(e.response?.data?.message || '删除失败')
   }
 }
 
@@ -183,12 +207,12 @@ function togglePerm(perm: string) {
 async function savePermissions() {
   await request.put(`/roles/${permRole.value.id}/permissions`, rolePerms.value)
   showPermDialog.value = false
-  alert('权限已保存！')
+  Message.success('权限保存成功')
 }
 
 onMounted(() => {
   loadRoles()
-  loadAllPermissions()
+  loadPermissionDefinitions()
 })
 </script>
 
@@ -240,4 +264,6 @@ onMounted(() => {
 .perm-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .perm-item { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--text-primary); cursor: pointer; }
 .perm-item input { accent-color: var(--accent-blue); }
+.perm-name { color: var(--text-primary); }
+.perm-code { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-left: 2px; }
 </style>

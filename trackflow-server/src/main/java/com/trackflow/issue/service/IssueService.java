@@ -657,7 +657,8 @@ public class IssueService {
             try {
                 issue = getById(issueId);
                 projectService.assertProjectActive(issue.getProjectId());
-                if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), permissionCode)) {
+                // 使用资源级权限检查：reporter/assignee 对 issue:edit 和 issue:change_status 有额外权限
+                if (!permissionService.hasIssuePermission(currentUserId, issue, permissionCode)) {
                     result.addFailure(issueId, issue.getIssueKey(), "无" + operationName + "权限");
                     continue;
                 }

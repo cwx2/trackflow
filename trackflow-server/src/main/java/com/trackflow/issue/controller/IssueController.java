@@ -95,7 +95,7 @@ public class IssueController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:edit')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<IssueDetailVO> update(@PathVariable Long id, @Valid @RequestBody UpdateIssueDTO dto) {
         issueService.update(id, dto);
         return R.ok(issueService.getDetail(id));
@@ -177,7 +177,7 @@ public class IssueController {
     // ========== 状态转换 ==========
 
     @GetMapping("/{id}/available-transitions")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:change_status')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable Long id) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
@@ -199,7 +199,7 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/transitions")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:change_status')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<Void> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 校验项目成员权限 + 工作流规则（含所有权检查）
         Issue issue = issueService.getByIdWithAccessCheck(id);
@@ -230,7 +230,7 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/transitions/undo")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:edit')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 撤销操作：绕过工作流校验，但仍需验证用户有该项目的 issue:edit 权限
         issueService.transitStatus(id, dto.getStatusId(), "撤销状态变更");
