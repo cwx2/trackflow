@@ -48,6 +48,10 @@
           <span class="nav-icon">⚙️</span>
           <span class="nav-label">管理</span>
         </router-link>
+        <router-link to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
+          <span class="nav-icon">🗑️</span>
+          <span class="nav-label">回收站</span>
+        </router-link>
       </nav>
 
       <div class="sidebar-footer">

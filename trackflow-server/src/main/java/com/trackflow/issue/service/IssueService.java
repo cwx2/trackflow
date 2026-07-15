@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.model.PageResult;
 import com.trackflow.common.service.MinioService;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.CreateIssueDTO;
@@ -85,6 +86,13 @@ public class IssueService {
         issue.setReporterId(currentUserId);
         issue.setSprintId(dto.getSprintId());
         issue.setParentId(dto.getParentId());
+        // 创建时如果指定了 parentId，进行环路检测（虽然新工单没有子工单不会形成环路，但验证 parent 存在且有效）
+        if (dto.getParentId() != null) {
+            Issue parentIssue = issueMapper.selectById(dto.getParentId());
+            if (parentIssue == null || parentIssue.getDeletedAt() != null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的父工单不存在");
+            }
+        }
         issue.setDueDate(dto.getDueDate());
         issue.setEstimatedHours(dto.getEstimatedHours());
         issue.setCreatedBy(currentUserId);
@@ -394,6 +402,12 @@ public class IssueService {
         // 归档项目不允许编辑工单
         projectService.assertProjectActive(issue.getProjectId());
 
+        // 乐观锁版本校验：前端携带 version 时检查是否与 DB 一致
+        if (dto.getVersion() != null && !dto.getVersion().equals(issue.getVersion())) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "该工单已被其他人修改，请刷新页面后重试");
+        }
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         if (dto.getTitle() != null) {
@@ -451,6 +465,8 @@ public class IssueService {
             }
             String newParentKey = null;
             if (dto.getParentId() != 0) {
+                // 环路检测：禁止 A→B→A 类循环引用
+                validateNoCircularReference(id, dto.getParentId());
                 var newParent = issueMapper.selectById(dto.getParentId());
                 newParentKey = newParent != null ? newParent.getIssueKey() : null;
             }
@@ -494,6 +510,125 @@ public class IssueService {
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
         // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
         issueMapper.deleteById(id);
+    }
+
+    // ========== 父子关系逻辑 ==========
+
+    /**
+     * 环路检测：沿 parent_id 链向上追溯，如果找到 issueId 则说明会形成环路。
+     * 同时限制层级深度不超过 10（防止数据异常时死循环）。
+     */
+    private void validateNoCircularReference(Long issueId, Long newParentId) {
+        if (newParentId == null || newParentId == 0) return;
+        if (newParentId.equals(issueId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不允许将工单设为自身的子工单");
+        }
+
+        java.util.Set<Long> visited = new java.util.HashSet<>();
+        visited.add(issueId);
+        Long current = newParentId;
+        int depth = 0;
+        while (current != null && current != 0) {
+            if (!visited.add(current)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "不允许创建循环引用");
+            }
+            if (++depth > 10) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "父子层级过深（最多 10 级）");
+            }
+            Issue parent = issueMapper.selectOne(
+                    new LambdaQueryWrapper<Issue>()
+                            .select(Issue::getParentId)
+                            .eq(Issue::getId, current)
+                            .isNull(Issue::getDeletedAt)
+            );
+            current = parent != null ? parent.getParentId() : null;
+        }
+    }
+
+    /**
+     * 查询子任务列表（VO）
+     */
+    public List<ChildIssueVO> listChildren(Long parentId) {
+        List<Map<String, Object>> rows = issueMapper.selectChildrenByParentId(parentId);
+        return rows.stream().map(row -> {
+            ChildIssueVO vo = new ChildIssueVO();
+            vo.setId(String.valueOf(row.get("id")));
+            vo.setIssueKey((String) row.get("issue_key"));
+            vo.setTitle((String) row.get("title"));
+            vo.setIssueType((String) row.get("issue_type"));
+            vo.setPriority((String) row.get("priority"));
+            vo.setStatusName((String) row.get("status_name"));
+            vo.setStatusColor((String) row.get("status_color"));
+            vo.setStatusCategory((String) row.get("status_category"));
+            vo.setAssigneeName((String) row.get("assignee_name"));
+            return vo;
+        }).toList();
+    }
+
+    /**
+     * 计算子任务进度汇总
+     */
+    public ChildProgressVO calculateChildProgress(List<ChildIssueVO> children) {
+        if (children == null || children.isEmpty()) return null;
+
+        ChildProgressVO progress = new ChildProgressVO();
+        progress.setTotal(children.size());
+
+        int closed = 0;
+        for (ChildIssueVO child : children) {
+            String cat = child.getStatusCategory();
+            if ("done".equals(cat) || "cancelled".equals(cat)) {
+                closed++;
+            }
+        }
+        progress.setClosed(closed);
+        progress.setPercent(children.isEmpty() ? 0 : Math.round((float) closed * 100 / children.size()));
+
+        // 汇总工时：需要查询子任务的 estimated_hours 和 spent_hours
+        List<Long> childIds = children.stream()
+                .map(c -> Long.parseLong(c.getId()))
+                .toList();
+        if (!childIds.isEmpty()) {
+            java.math.BigDecimal totalEstimate = java.math.BigDecimal.ZERO;
+            java.math.BigDecimal totalSpent = java.math.BigDecimal.ZERO;
+            List<Issue> childIssues = issueMapper.selectList(
+                    new LambdaQueryWrapper<Issue>()
+                            .select(Issue::getEstimatedHours, Issue::getSpentHours)
+                            .in(Issue::getId, childIds)
+            );
+            for (Issue child : childIssues) {
+                if (child.getEstimatedHours() != null) {
+                    totalEstimate = totalEstimate.add(child.getEstimatedHours());
+                }
+                if (child.getSpentHours() != null) {
+                    totalSpent = totalSpent.add(child.getSpentHours());
+                }
+            }
+            progress.setAggregatedEstimate(totalEstimate);
+            progress.setAggregatedSpent(totalSpent);
+        }
+
+        return progress;
+    }
+
+    /**
+     * 检查父工单关闭时是否有未完成的子工单。
+     * 返回未关闭子工单数量，0 表示无阻碍。
+     */
+    public long countOpenChildren(Long parentId) {
+        List<IssueStatus> allStatuses = statusMapper.selectList(null);
+        List<Long> closedStatusIds = allStatuses.stream()
+                .filter(s -> s.getIsClosed() != null && s.getIsClosed())
+                .map(IssueStatus::getId)
+                .toList();
+
+        LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<Issue>()
+                .eq(Issue::getParentId, parentId)
+                .isNull(Issue::getDeletedAt);
+        if (!closedStatusIds.isEmpty()) {
+            wrapper.notIn(Issue::getStatusId, closedStatusIds);
+        }
+        return issueMapper.selectCount(wrapper);
     }
 
     // ========== 批量操作 ==========
@@ -634,9 +769,25 @@ public class IssueService {
     @Transactional
     public void transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet) {
+        transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, null);
+    }
+
+    /**
+     * 状态变更（带乐观锁版本校验）
+     */
+    @Transactional
+    public void transitStatus(Long id, Long newStatusId, String comment,
+                              Long assigneeId, boolean assigneeExplicitlySet,
+                              Integer expectedVersion) {
         Issue issue = getById(id);
         // 归档项目不允许变更工单状态
         projectService.assertProjectActive(issue.getProjectId());
+
+        // 乐观锁版本校验
+        if (expectedVersion != null && !expectedVersion.equals(issue.getVersion())) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "该工单已被其他人修改，请刷新页面后重试");
+        }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long oldStatusId = issue.getStatusId();
@@ -825,6 +976,11 @@ public class IssueService {
             vo.setUpdatedAt(((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime());
         }
 
+        // 乐观锁版本号
+        if (row.get("version") != null) {
+            vo.setVersion(((Number) row.get("version")).intValue());
+        }
+
         // 状态对象
         if (row.get("status_name") != null) {
             IssueStatusVO statusVO = new IssueStatusVO();
@@ -841,6 +997,13 @@ public class IssueService {
         // 标签（单独查询，因为是多对多关系）
         List<IssueTag> tags = tagService.listIssueTags(id);
         vo.setTags(issueConverter.toTagVOList(tags));
+
+        // 子任务列表 + 进度汇总
+        List<ChildIssueVO> children = listChildren(id);
+        if (!children.isEmpty()) {
+            vo.setChildren(children);
+            vo.setChildProgress(calculateChildProgress(children));
+        }
 
         return vo;
     }
@@ -949,11 +1112,32 @@ public class IssueService {
     /**
      * 回收站列表：查询指定项目中已删除的 Issue（分页）
      */
-    public Page<Map<String, Object>> listTrash(Long projectId, int page, int pageSize) {
+    public PageResult<IssueTrashVO> listTrash(Long projectId, int page, int pageSize) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(currentUserId, projectId);
         Page<Map<String, Object>> p = new Page<>(page, pageSize);
-        return issueMapper.selectTrashPage(p, projectId);
+        Page<Map<String, Object>> result = issueMapper.selectTrashPage(p, projectId);
+
+        List<IssueTrashVO> voList = result.getRecords().stream().map(row -> {
+            IssueTrashVO vo = new IssueTrashVO();
+            vo.setId(String.valueOf(row.get("id")));
+            vo.setProjectId(String.valueOf(row.get("project_id")));
+            vo.setIssueKey((String) row.get("issue_key"));
+            vo.setTitle((String) row.get("title"));
+            vo.setIssueType((String) row.get("issue_type"));
+            vo.setPriority((String) row.get("priority"));
+            vo.setAssigneeName((String) row.get("assignee_name"));
+            vo.setDeletedByName((String) row.get("deleted_by_name"));
+            Object deletedAt = row.get("deleted_at");
+            if (deletedAt instanceof java.sql.Timestamp ts) {
+                vo.setDeletedAt(ts.toLocalDateTime());
+            } else if (deletedAt instanceof LocalDateTime ldt) {
+                vo.setDeletedAt(ldt);
+            }
+            return vo;
+        }).toList();
+
+        return new PageResult<>(voList, result.getTotal(), (int) result.getCurrent(), (int) result.getSize());
     }
 
     /**

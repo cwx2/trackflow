@@ -366,7 +366,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -787,7 +787,7 @@ async function openStatusEdit(issue: IssueVO) {
 }
 function selectStatus(issue: IssueVO, status: IssueStatusVO) {
   statusDropdowns[issue.id] = false
-  executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id))
+  executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, undefined, issue.version))
 }
 
 // Inline edit - Assignee
@@ -848,13 +848,13 @@ function getSprintGroups(projectId: string) {
 }
 function selectSprint(issue: IssueVO, sprint: SprintVO | null) {
   sprintDropdowns[issue.id] = false
-  executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null }))
+  executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }))
 }
 
 // Inline edit - Priority
 function selectPriority(issue: IssueVO, priority: string) {
   priorityDropdowns[issue.id] = false
-  executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority }))
+  executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority, version: issue.version }))
 }
 
 // Batch operation handlers
@@ -1064,7 +1064,18 @@ onMounted(async () => {
   } else {
     refreshList()
   }
+
+  // Listen for undo-restore events from batch delete
+  window.addEventListener('trackflow:issues-restored', handleIssuesRestored)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('trackflow:issues-restored', handleIssuesRestored)
+})
+
+function handleIssuesRestored() {
+  refreshList()
+}
 
 function applyDashboardFilter() {
   // 清除已选中的保存查询，防止 buildFilters() 中 queryId 覆盖 dashboard 过滤条件

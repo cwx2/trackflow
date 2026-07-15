@@ -128,6 +128,7 @@ export interface IssueVO {
   dueDate?: string
   createdAt: string
   updatedAt: string
+  version: number
 }
 
 export interface IssueDetailVO extends IssueVO {
@@ -144,6 +145,30 @@ export interface IssueDetailVO extends IssueVO {
   customFields?: string
   tags?: IssueTagVO[]
   resolvedAt?: string
+  children?: ChildIssueVO[]
+  childProgress?: ChildProgressVO
+}
+
+/** 子任务简要信息 */
+export interface ChildIssueVO {
+  id: string
+  issueKey: string
+  title: string
+  issueType: string
+  priority: string
+  statusName: string
+  statusColor: string
+  statusCategory: string
+  assigneeName?: string
+}
+
+/** 子任务进度汇总 */
+export interface ChildProgressVO {
+  total: number
+  closed: number
+  percent: number
+  aggregatedEstimate?: number
+  aggregatedSpent?: number
 }
 
 export interface IssueStatusVO {
@@ -155,6 +180,18 @@ export interface IssueStatusVO {
   isDefault: boolean
   isClosed: boolean
   sortOrder: number
+}
+
+export interface IssueTrashVO {
+  id: string
+  projectId: string
+  issueKey: string
+  title: string
+  issueType: string
+  priority: string
+  assigneeName?: string
+  deletedAt: string
+  deletedByName?: string
 }
 
 export interface IssueCommentVO {

@@ -2,7 +2,7 @@ import request from './request'
 import type {
   R, PageResult, IssueVO, IssueDetailVO, IssueCommentVO,
   IssueActivityVO, IssueStatusVO, IssueAttachmentVO,
-  IssueTagVO, IssueLinkVO
+  IssueTagVO, IssueLinkVO, IssueTrashVO
 } from './types'
 
 /**
@@ -48,11 +48,28 @@ export const issueApi = {
     return request.delete<any, R<void>>(`/issues/${id}`)
   },
 
+  // ========== 回收站 ==========
+
+  /** 回收站列表 */
+  listTrash(params: { projectId: string; page?: number; pageSize?: number }) {
+    return request.get<any, R<PageResult<IssueTrashVO>>>('/issues/trash', { params })
+  },
+
+  /** 恢复工单 */
+  restore(id: string) {
+    return request.post<any, R<void>>(`/issues/${id}/restore`)
+  },
+
+  /** 永久删除工单 */
+  permanentDelete(id: string) {
+    return request.delete<any, R<void>>(`/issues/${id}/permanent`)
+  },
+
   // ========== 状态 ==========
 
   /** 状态流转 */
-  transitStatus(id: string, statusId: string, comment?: string) {
-    return request.post<any, R<void>>(`/issues/${id}/transitions`, { statusId, comment })
+  transitStatus(id: string, statusId: string, comment?: string, version?: number, force?: boolean) {
+    return request.post<any, R<void>>(`/issues/${id}/transitions`, { statusId, comment, version, force })
   },
 
   /** 撤销状态流转（绕过工作流校验） */

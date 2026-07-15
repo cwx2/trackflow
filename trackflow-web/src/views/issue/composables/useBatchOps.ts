@@ -56,12 +56,55 @@ export function useBatchOps() {
   }
 
   /**
-   * 批量删除
+   * 批量删除（带撤销 toast）
    */
   async function batchDelete(
     issues: IssueVO[]
   ): Promise<BatchResult> {
-    return executeBatchApi(issues, 'delete', {}, '删除')
+    const result = await executeBatchApi(issues, 'delete', {}, '删除', true)
+    // 若有删除成功的工单，显示带"撤销"按钮的 Notification
+    if (result.succeeded > 0) {
+      const deletedIds = issues.slice(0, MAX_BATCH_SIZE)
+        .map(i => i.id)
+        .filter(id => !result.failures.some(f => f.issueId === id))
+      showUndoNotification(deletedIds, result.succeeded)
+    }
+    return result
+  }
+
+  /**
+   * 显示带"撤销"按钮的删除通知（5 秒超时）
+   */
+  function showUndoNotification(deletedIds: string[], count: number) {
+    let undone = false
+    const key = `undo-delete-${Date.now()}`
+    Notification.info({
+      id: key,
+      title: `已删除 ${count} 个工单`,
+      content: '已移至回收站，可随时恢复',
+      duration: 5000,
+      closable: true,
+      footer: () => {
+        const btn = document.createElement('button')
+        btn.textContent = '撤销'
+        btn.className = 'arco-btn arco-btn-text arco-btn-size-mini'
+        btn.style.cssText = 'color: var(--tf-accent); font-weight: 500; margin-top: 4px;'
+        btn.onclick = async () => {
+          if (undone) return
+          undone = true
+          try {
+            await Promise.all(deletedIds.map(id => issueApi.restore(id)))
+            Message.success(`已撤销删除，${count} 个工单已恢复`)
+            // Trigger refresh via custom event
+            window.dispatchEvent(new CustomEvent('trackflow:issues-restored'))
+          } catch {
+            Message.error('撤销失败，请到回收站手动恢复')
+          }
+          Notification.remove(key)
+        }
+        return btn
+      }
+    })
   }
 
   /**
@@ -71,7 +114,8 @@ export function useBatchOps() {
     issues: IssueVO[],
     operation: string,
     params: Record<string, any>,
-    operationName: string
+    operationName: string,
+    suppressSuccessMessage = false
   ): Promise<BatchResult> {
     const batch = issues.slice(0, MAX_BATCH_SIZE)
     executing.value = true
@@ -91,7 +135,22 @@ export function useBatchOps() {
         failures: data?.failures ?? []
       }
 
-      showBatchResult(result, operationName)
+      if (!suppressSuccessMessage) {
+        showBatchResult(result, operationName)
+      } else if (result.failed > 0 && result.succeeded > 0) {
+        // 部分失败仍然显示
+        Notification.warning({
+          title: `${operationName}部分完成`,
+          content: `成功 ${result.succeeded} 个，失败 ${result.failed} 个`,
+          duration: 0,
+          closable: true
+        })
+      } else if (result.succeeded === 0 && result.failed > 0) {
+        Message.error({
+          content: `${operationName}失败，${result.failed} 个工单未能更新`,
+          duration: 5000
+        })
+      }
       return result
     } catch (e: any) {
       const errorMsg = e.response?.data?.message || '批量操作失败'
@@ -129,7 +188,7 @@ export function useBatchOps() {
       Notification.warning({
         title: `${operationName}部分完成`,
         content: `成功 ${result.succeeded} 个，失败 ${result.failed} 个`,
-        duration: 0, // 不自动关闭
+        duration: 0,
         closable: true
       })
     }

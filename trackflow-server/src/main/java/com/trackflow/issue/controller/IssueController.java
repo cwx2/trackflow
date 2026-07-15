@@ -10,6 +10,7 @@ import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueTagService;
@@ -40,6 +41,7 @@ public class IssueController {
     private final IssueLinkService linkService;
     private final IssueTagService tagService;
     private final SysUserMapper sysUserMapper;
+    private final IssueStatusMapper issueStatusMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -100,6 +102,31 @@ public class IssueController {
     @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:delete')")
     public R<Void> delete(@PathVariable Long id) {
         issueService.delete(id);
+        return R.ok();
+    }
+
+    // ========== 回收站 ==========
+
+    @GetMapping("/trash")
+    @PreAuthorize("@perm.check(#projectId, 'issue:delete')")
+    public R<PageResult<IssueTrashVO>> listTrash(
+            @RequestParam Long projectId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return R.ok(issueService.listTrash(projectId, page, pageSize));
+    }
+
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("@perm.check(@issueService.getDeletedIssueProjectId(#id), 'issue:delete')")
+    public R<Void> restore(@PathVariable Long id) {
+        issueService.restore(id);
+        return R.ok();
+    }
+
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("@perm.check(@issueService.getDeletedIssueProjectId(#id), 'project:admin')")
+    public R<Void> permanentDelete(@PathVariable Long id) {
+        issueService.permanentDelete(id);
         return R.ok();
     }
 
@@ -168,8 +195,19 @@ public class IssueController {
             }
             return R.fail(40300, "当前角色不允许执行此状态转换");
         }
+
+        // 关闭父工单时检查子任务状态（非强制模式下返回警告）
+        IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
+        if (targetStatus != null && targetStatus.getIsClosed() && !Boolean.TRUE.equals(dto.getForce())) {
+            long openChildren = issueService.countOpenChildren(id);
+            if (openChildren > 0) {
+                return R.fail(40910, "该工单有 " + openChildren + " 个未完成的子任务，确认要关闭吗？");
+            }
+        }
+
         issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
-                dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()));
+                dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
+                dto.getVersion());
         return R.ok();
     }
 

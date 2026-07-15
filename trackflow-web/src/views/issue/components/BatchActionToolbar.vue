@@ -325,7 +325,7 @@ function handleBatchPriority(priority: string) {
 function confirmBatchDelete() {
   Modal.confirm({
     title: '确认批量删除',
-    content: `确定要删除选中的 ${props.selectedCount} 个工单吗？此操作不可撤销。`,
+    content: `确定要删除选中的 ${props.selectedCount} 个工单吗？工单将移入回收站，可随时恢复。`,
     okText: '删除',
     cancelText: '取消',
     okButtonProps: { status: 'danger' },

@@ -36,7 +36,7 @@
             i.id, i.project_id, i.issue_key, i.title, i.description,
             i.issue_type, i.status_id, i.priority, i.assignee_id, i.reporter_id,
             i.sprint_id, i.parent_id, i.due_date, i.estimated_hours, i.spent_hours,
-            i.custom_fields, i.resolved_at, i.created_at, i.updated_at,
+            i.custom_fields, i.resolved_at, i.created_at, i.updated_at, i.version,
             p.name AS project_name,
             p.status AS project_status,
             s.name AS status_name, s.code AS status_code, s.color AS status_color,
@@ -119,6 +119,59 @@
         </foreach>
         ORDER BY a.created_at DESC
         LIMIT #{limit}
+    </select>
+
+    <!-- 回收站列表：查询已删除工单 + 删除人名称 -->
+    <select id="selectTrashPage" resultType="map">
+        SELECT
+            i.id, i.project_id, i.issue_key, i.title,
+            i.issue_type, i.priority, i.deleted_at,
+            a.display_name AS assignee_name,
+            d.display_name AS deleted_by_name
+        FROM issue i
+        LEFT JOIN sys_user a ON a.id = i.assignee_id
+        LEFT JOIN LATERAL (
+            SELECT user_id FROM issue_activity
+            WHERE issue_id = i.id AND action = 'deleted'
+            ORDER BY created_at DESC LIMIT 1
+        ) act ON true
+        LEFT JOIN sys_user d ON d.id = act.user_id
+        WHERE i.project_id = #{projectId}
+          AND i.deleted_at IS NOT NULL
+        ORDER BY i.deleted_at DESC
+    </select>
+
+    <!-- 按 ID 查询（忽略逻辑删除过滤） -->
+    <select id="selectByIdIgnoreDeleted" resultType="map">
+        SELECT
+            i.id, i.project_id, i.issue_key, i.title,
+            i.issue_type, i.priority, i.deleted_at,
+            i.assignee_id, i.reporter_id, i.sprint_id, i.status_id
+        FROM issue i
+        WHERE i.id = #{id}
+    </select>
+
+    <!-- 恢复：将 deleted_at 置空 -->
+    <update id="restoreById">
+        UPDATE issue SET deleted_at = NULL, updated_at = NOW() WHERE id = #{id} AND deleted_at IS NOT NULL
+    </update>
+
+    <!-- 物理删除 -->
+    <delete id="permanentDeleteById">
+        DELETE FROM issue WHERE id = #{id} AND deleted_at IS NOT NULL
+    </delete>
+
+    <!-- 子任务列表：查询指定父工单的所有子任务（带状态和负责人名称） -->
+    <select id="selectChildrenByParentId" resultType="map">
+        SELECT
+            i.id, i.issue_key, i.title, i.issue_type, i.priority,
+            s.name AS status_name, s.color AS status_color, s.category AS status_category,
+            u.display_name AS assignee_name
+        FROM issue i
+        LEFT JOIN issue_status s ON s.id = i.status_id
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        WHERE i.parent_id = #{parentId} AND i.deleted_at IS NULL
+        ORDER BY i.created_at ASC
     </select>
 
 </mapper>
