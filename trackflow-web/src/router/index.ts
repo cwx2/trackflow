@@ -213,12 +213,16 @@ router.beforeEach(async (to, _from, next) => {
   // 标签管理：打开 Issue 详情时自动创建标签
   const tabStore = useTabStore()
   if (to.name === 'IssueDetail' && to.params.id) {
+    const paramId = String(to.params.id)
+    // 如果参数包含连字符（如 DE4-1473），说明是 issue key，直接用作标题
+    // 否则是数据库 ID，先用占位标题，后续由 IssueDetailView 加载后更新
+    const isKey = paramId.includes('-') && !/^\d+$/.test(paramId)
     tabStore.openTab({
-      id: `issue-${to.params.id}`,
-      title: `Issue #${to.params.id}`,
+      id: `issue-${paramId}`,
+      title: isKey ? paramId : '加载中...',
       path: to.fullPath,
       closable: true,
-      issueId: String(to.params.id)
+      issueId: paramId
     })
   }
 

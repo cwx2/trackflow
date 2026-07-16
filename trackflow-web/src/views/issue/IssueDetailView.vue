@@ -125,6 +125,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi, customFieldApi } from '@/api'
 import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
+import { useTabStore } from '@/stores/tabs'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -138,6 +139,7 @@ import { localizeFieldName, localizeFieldValue, localizeStatusName } from '@/uti
 
 const route = useRoute()
 const router = useRouter()
+const tabStore = useTabStore()
 const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
 const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
@@ -223,6 +225,14 @@ async function loadAll() {
     const res = isKey ? await issueApi.getByKey(id) : await issueApi.getById(id)
     if (res.code === 0 && res.data) {
       issue.value = res.data
+      // 更新标签标题为工单编号（替代路由守卫中的占位标题）
+      tabStore.openTab({
+        id: `issue-${id}`,
+        title: res.data.issueKey,
+        path: route.fullPath,
+        closable: true,
+        issueId: id
+      })
       await loadRelatedData()
     } else {
       loadError.value = res.message || '加载工单失败'
