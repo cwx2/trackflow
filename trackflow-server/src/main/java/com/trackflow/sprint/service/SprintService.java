@@ -23,6 +23,7 @@ import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintVO;
 import com.trackflow.project.entity.Project;
+import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -34,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -47,6 +49,7 @@ public class SprintService {
     private final IssueMapper issueMapper;
     private final IssueActivityMapper activityMapper;
     private final ProjectService projectService;
+    private final ProjectActivityService projectActivityService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -115,6 +118,14 @@ public class SprintService {
         sprintMapper.insert(sprint);
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 记录项目活动日志
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("sprint_id", sprint.getId());
+        detail.put("sprint_name", sprint.getName());
+        if (sprint.getStartDate() != null) detail.put("start_date", sprint.getStartDate().toString());
+        if (sprint.getEndDate() != null) detail.put("end_date", sprint.getEndDate().toString());
+        projectActivityService.log(projectId, currentUserId, "create_sprint", null, detail);
 
         // 选项1：将当前活跃 Sprint 的未完成工单移入新 Sprint
         if (Boolean.TRUE.equals(dto.getMoveUnresolvedIssues())) {
@@ -236,20 +247,38 @@ public class SprintService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "已完成的迭代不允许修改日期");
         }
 
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        List<Map<String, Object>> changes = new ArrayList<>();
+
         if (dto.getName() != null) {
             String trimmed = dto.getName().trim();
             if (trimmed.isEmpty()) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "迭代名称不能为空");
             }
-            sprint.setName(trimmed);
+            if (!trimmed.equals(sprint.getName())) {
+                changes.add(buildFieldChange("name", sprint.getName(), trimmed));
+                sprint.setName(trimmed);
+            }
         }
         if (dto.getGoal() != null) {
+            String oldGoal = sprint.getGoal() != null ? sprint.getGoal() : "";
+            if (!dto.getGoal().equals(oldGoal)) {
+                changes.add(buildFieldChange("goal", oldGoal, dto.getGoal()));
+            }
             sprint.setGoal(dto.getGoal());
         }
         if (dto.getStartDate() != null) {
+            String oldDate = sprint.getStartDate() != null ? sprint.getStartDate().toString() : "";
+            if (!dto.getStartDate().equals(sprint.getStartDate())) {
+                changes.add(buildFieldChange("start_date", oldDate, dto.getStartDate().toString()));
+            }
             sprint.setStartDate(dto.getStartDate());
         }
         if (dto.getEndDate() != null) {
+            String oldDate = sprint.getEndDate() != null ? sprint.getEndDate().toString() : "";
+            if (!dto.getEndDate().equals(sprint.getEndDate())) {
+                changes.add(buildFieldChange("end_date", oldDate, dto.getEndDate().toString()));
+            }
             sprint.setEndDate(dto.getEndDate());
         }
 
@@ -261,7 +290,25 @@ public class SprintService {
         }
 
         sprintMapper.updateById(sprint);
+
+        // 记录项目活动日志（只在有实际变更时记录）
+        if (!changes.isEmpty()) {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("sprint_id", sprint.getId());
+            detail.put("sprint_name", sprint.getName());
+            detail.put("changes", changes);
+            projectActivityService.log(sprint.getProjectId(), currentUserId, "update_sprint", null, detail);
+        }
+
         return sprint;
+    }
+
+    private Map<String, Object> buildFieldChange(String field, String oldValue, String newValue) {
+        Map<String, Object> change = new LinkedHashMap<>();
+        change.put("field", field);
+        change.put("old_value", oldValue);
+        change.put("new_value", newValue);
+        return change;
     }
 
     @Transactional
@@ -301,6 +348,14 @@ public class SprintService {
 
         sprint.setStatus(SprintStatus.ACTIVE);
         sprintMapper.updateById(sprint);
+
+        // 记录项目活动日志
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("sprint_id", sprint.getId());
+        detail.put("sprint_name", sprint.getName());
+        projectActivityService.log(sprint.getProjectId(), currentUserId, "activate_sprint", null, detail);
+
         return sprint;
     }
 
@@ -375,6 +430,19 @@ public class SprintService {
         // 完成 Sprint
         sprint.setStatus(SprintStatus.COMPLETED);
         sprintMapper.updateById(sprint);
+
+        // 记录项目活动日志
+        Long completeUserId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> completeDetail = new LinkedHashMap<>();
+        completeDetail.put("sprint_id", sprint.getId());
+        completeDetail.put("sprint_name", sprint.getName());
+        int movedIssueCount = openIssues.size();
+        if (movedIssueCount > 0) {
+            completeDetail.put("unresolved_issues_count", movedIssueCount);
+            completeDetail.put("move_option", dto != null ? dto.getMoveOption() : "none");
+        }
+        projectActivityService.log(sprint.getProjectId(), completeUserId, "complete_sprint", null, completeDetail);
+
         return sprint;
     }
 
@@ -527,6 +595,18 @@ public class SprintService {
             }).toList();
             Db.saveBatch(activities);
         }
+
+        // 记录项目活动日志（在删除前记录，保留 Sprint 名称等信息）
+        Long deleteUserId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> deleteDetail = new LinkedHashMap<>();
+        deleteDetail.put("sprint_id", sprint.getId());
+        deleteDetail.put("sprint_name", sprint.getName());
+        deleteDetail.put("sprint_status", sprint.getStatus().getValue());
+        if (!issues.isEmpty()) {
+            deleteDetail.put("affected_issues_count", issues.size());
+            deleteDetail.put("move_option", dto != null ? dto.getMoveOption() : "none");
+        }
+        projectActivityService.log(sprint.getProjectId(), deleteUserId, "delete_sprint", null, deleteDetail);
 
         sprintMapper.deleteById(id);
     }
