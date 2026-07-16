@@ -269,6 +269,11 @@ public class IssueService {
 
     private void applyFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
         if (value == null || value.isBlank()) return;
+        // "none" means IS NULL (e.g. sprintId=none → issues with no sprint)
+        if ("none".equalsIgnoreCase(value.trim())) {
+            wrapper.isNull(column);
+            return;
+        }
         if (value.contains(",")) {
             List<?> values = isNumeric
                     ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
@@ -1264,6 +1269,7 @@ public class IssueService {
         vo.setPriority((String) row.get("priority"));
         vo.setAssigneeId(row.get("assignee_id") != null ? String.valueOf(row.get("assignee_id")) : null);
         vo.setAssigneeName((String) row.get("assignee_name"));
+        vo.setAssigneeAvatarUrl((String) row.get("assignee_avatar_url"));
         vo.setReporterId(String.valueOf(row.get("reporter_id")));
         vo.setReporterName((String) row.get("reporter_name"));
         vo.setSprintId(row.get("sprint_id") != null ? String.valueOf(row.get("sprint_id")) : null);

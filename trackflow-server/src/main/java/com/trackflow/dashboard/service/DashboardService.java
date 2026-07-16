@@ -468,12 +468,16 @@ public class DashboardService {
                 .distinct()
                 .toList();
         if (!assigneeIds.isEmpty()) {
-            Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
-                    .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
+                    .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
             for (int i = 0; i < issues.size(); i++) {
                 Issue issue = issues.get(i);
                 if (issue.getAssigneeId() != null) {
-                    voList.get(i).setAssigneeName(userNameMap.get(issue.getAssigneeId()));
+                    SysUser user = userMap.get(issue.getAssigneeId());
+                    if (user != null) {
+                        voList.get(i).setAssigneeName(user.getDisplayName());
+                        voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
+                    }
                 }
             }
         }

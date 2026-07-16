@@ -125,7 +125,7 @@ public class SavedQueryController {
     }
 
     /**
-     * 批量填充 assigneeName（复用逻辑）
+     * 批量填充 assigneeName + assigneeAvatarUrl（复用逻辑）
      */
     private void fillAssigneeNames(List<Issue> records, List<IssueVO> voList) {
         List<Long> assigneeIds = records.stream()
@@ -134,12 +134,16 @@ public class SavedQueryController {
                 .distinct()
                 .toList();
         if (!assigneeIds.isEmpty()) {
-            Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
-                    .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
+                    .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
             for (int i = 0; i < records.size(); i++) {
                 Issue issue = records.get(i);
                 if (issue.getAssigneeId() != null) {
-                    voList.get(i).setAssigneeName(userNameMap.get(issue.getAssigneeId()));
+                    SysUser user = userMap.get(issue.getAssigneeId());
+                    if (user != null) {
+                        voList.get(i).setAssigneeName(user.getDisplayName());
+                        voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
+                    }
                 }
             }
         }

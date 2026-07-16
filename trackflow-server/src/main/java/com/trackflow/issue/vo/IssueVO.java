@@ -16,6 +16,7 @@ public class IssueVO {
     private String priority;
     private String assigneeId;
     private String assigneeName;
+    private String assigneeAvatarUrl;
     private String reporterId;
     private String sprintId;
     private LocalDate dueDate;

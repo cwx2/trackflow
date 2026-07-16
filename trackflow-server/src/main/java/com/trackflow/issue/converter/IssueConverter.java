@@ -21,6 +21,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "reporterId", expression = "java(longToString(entity.getReporterId()))")
     @Mapping(target = "sprintId", expression = "java(longToString(entity.getSprintId()))")
     @Mapping(target = "assigneeName", ignore = true)
+    @Mapping(target = "assigneeAvatarUrl", ignore = true)
     @Mapping(target = "customFieldValues", ignore = true)
     IssueVO toVO(Issue entity);
 
@@ -34,6 +35,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "sprintId", expression = "java(longToString(entity.getSprintId()))")
     @Mapping(target = "parentId", expression = "java(longToString(entity.getParentId()))")
     @Mapping(target = "assigneeName", ignore = true)
+    @Mapping(target = "assigneeAvatarUrl", ignore = true)
     @Mapping(target = "projectName", ignore = true)
     @Mapping(target = "reporterName", ignore = true)
     @Mapping(target = "sprintName", ignore = true)

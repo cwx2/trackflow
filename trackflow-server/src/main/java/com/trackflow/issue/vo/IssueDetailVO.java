@@ -23,6 +23,7 @@ public class IssueDetailVO {
     private String priority;
     private String assigneeId;
     private String assigneeName;
+    private String assigneeAvatarUrl;
     private String reporterId;
     private String reporterName;
     private String sprintId;
