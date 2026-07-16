@@ -54,54 +54,133 @@
       </div>
     </div>
 
+    <!-- 矩阵工具栏：搜索 + 筛选 -->
+    <div class="matrix-toolbar" v-if="statuses.length > 0">
+      <a-input
+        v-model="searchKeyword"
+        placeholder="搜索状态名..."
+        style="width: 200px"
+        allow-clear
+        @clear="searchKeyword = ''"
+      >
+        <template #prefix><icon-search /></template>
+      </a-input>
+
+      <a-switch
+        v-model="onlyConfigured"
+        checked-text="只显示已配置"
+        unchecked-text="显示全部"
+      />
+
+      <span class="toolbar-stats">
+        {{ filteredStatuses.length }} / {{ statuses.length }} 个状态
+      </span>
+    </div>
+
     <a-spin :loading="loading" tip="加载中...">
       <!-- 转换矩阵 -->
-      <div class="matrix-container" v-if="statuses.length > 0">
+      <div class="matrix-container" v-if="filteredStatuses.length > 0">
         <table class="matrix-table">
           <thead>
             <tr>
               <th class="corner-cell">从 ↓ / 到 →</th>
-              <th v-for="status in statuses" :key="status.id" class="col-header">
+              <template v-for="group in columnGroups" :key="group.category">
+                <th
+                  v-if="group.statuses.length > 0"
+                  :colspan="group.statuses.length"
+                  class="group-header"
+                  :class="'group-' + group.category"
+                >
+                  {{ localizeCategoryName(group.category) }}
+                  <span class="group-count">({{ group.statuses.length }})</span>
+                </th>
+              </template>
+            </tr>
+            <tr>
+              <th class="corner-cell corner-cell-sub"></th>
+              <th
+                v-for="(status, colIdx) in filteredStatuses"
+                :key="status.id"
+                class="col-header"
+                :class="{ highlighted: highlightCol === colIdx }"
+              >
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                {{ localizeStatusName(status.name) }}
+                <span class="col-header-name" :title="localizeStatusName(status.name)">
+                  {{ localizeStatusName(status.name) }}
+                </span>
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="fromStatus in statuses" :key="fromStatus.id">
-              <td class="row-header">
-                <span class="status-dot" :style="{ background: fromStatus.color }"></span>
-                {{ localizeStatusName(fromStatus.name) }}
-              </td>
-              <td
-                v-for="toStatus in statuses"
-                :key="toStatus.id"
-                class="matrix-cell"
-                :class="{
-                  disabled: fromStatus.id === toStatus.id,
-                  clickable: fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id)
-                }"
-                @click="fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id) && openActionPanel(fromStatus, toStatus)"
-              >
-                <div v-if="fromStatus.id !== toStatus.id" class="cell-content">
-                  <input
-                    type="checkbox"
-                    :checked="isAllowed(fromStatus.id, toStatus.id)"
-                    @change="toggleTransition(fromStatus.id, toStatus.id)"
-                    @click.stop
-                    class="matrix-checkbox"
-                  />
-                  <span
-                    v-if="hasAction(fromStatus.id, toStatus.id)"
-                    class="action-dot"
-                    title="已配置动作"
-                  ></span>
-                </div>
-                <span v-else class="cell-dash">—</span>
-              </td>
-            </tr>
+            <template v-for="group in rowGroups" :key="group.category">
+              <!-- 行分组标题 -->
+              <tr v-if="group.statuses.length > 0" class="group-row">
+                <td
+                  :colspan="filteredStatuses.length + 1"
+                  class="group-row-header"
+                  :class="'group-' + group.category"
+                  @click="toggleGroupCollapse(group.category)"
+                >
+                  <span class="group-toggle">{{ collapsedGroups.has(group.category) ? '▶' : '▼' }}</span>
+                  {{ localizeCategoryName(group.category) }}
+                  <span class="group-count">({{ group.statuses.length }})</span>
+                </td>
+              </tr>
+              <!-- 行数据 -->
+              <template v-if="!collapsedGroups.has(group.category)">
+                <tr
+                  v-for="fromStatus in group.statuses"
+                  :key="fromStatus.id"
+                >
+                  <td
+                    class="row-header"
+                    :class="{ highlighted: highlightRow === getRowIndex(fromStatus) }"
+                  >
+                    <span class="status-dot" :style="{ background: fromStatus.color }"></span>
+                    {{ localizeStatusName(fromStatus.name) }}
+                  </td>
+                  <td
+                    v-for="(toStatus, colIdx) in filteredStatuses"
+                    :key="toStatus.id"
+                    class="matrix-cell"
+                    :class="{
+                      disabled: fromStatus.id === toStatus.id,
+                      clickable: fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id),
+                      highlighted: highlightRow === getRowIndex(fromStatus) || highlightCol === colIdx
+                    }"
+                    @click="fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id) && openActionPanel(fromStatus, toStatus)"
+                    @mouseenter="onCellHover(fromStatus, colIdx)"
+                    @mouseleave="onCellLeave"
+                  >
+                    <div v-if="fromStatus.id !== toStatus.id" class="cell-content">
+                      <input
+                        type="checkbox"
+                        :checked="isAllowed(fromStatus.id, toStatus.id)"
+                        @change="toggleTransition(fromStatus.id, toStatus.id)"
+                        @click.stop
+                        class="matrix-checkbox"
+                      />
+                      <span
+                        v-if="hasAction(fromStatus.id, toStatus.id)"
+                        class="action-dot"
+                        title="已配置动作"
+                      ></span>
+                    </div>
+                    <span v-else class="cell-dash">—</span>
+                  </td>
+                </tr>
+              </template>
+            </template>
           </tbody>
         </table>
+      </div>
+
+      <!-- 搜索无结果 -->
+      <div v-else-if="!loading && statuses.length > 0 && filteredStatuses.length === 0" class="empty-state">
+        <icon-search :size="48" />
+        <h3>没有匹配的状态</h3>
+        <p>尝试修改搜索关键词或关闭"只显示已配置"筛选。</p>
+        <a-button type="primary" @click="resetFilters">重置筛选</a-button>
       </div>
 
       <!-- 空状态 -->
@@ -114,7 +193,7 @@
 
     <div class="help-text" v-if="statuses.length > 0">
       <icon-info-circle /> 勾选单元格表示允许从行状态转换到列状态（针对当前选择的角色）。
-      共 {{ statuses.length }} 个状态。点击已允许的转换可配置自动化动作。
+      点击已允许的转换可配置自动化动作。hover 单元格高亮对应行列。
     </div>
 
     <!-- 动作配置面板 -->
@@ -138,14 +217,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSettings, IconInfoCircle, IconHistory } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconInfoCircle, IconHistory, IconSearch } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
 import WorkflowActivityDrawer from './WorkflowActivityDrawer.vue'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const selectedProject = ref('0')
 const selectedType = ref('*')
@@ -159,6 +238,15 @@ const projects = ref<ProjectVO[]>([])
 const roles = ref<RoleVO[]>([])
 const issueTypes = ref<string[]>([])
 
+// 矩阵工具栏状态
+const searchKeyword = ref('')
+const onlyConfigured = ref(false)
+const collapsedGroups = reactive(new Set<string>())
+
+// 行列高亮
+const highlightRow = ref<number | null>(null)
+const highlightCol = ref<number | null>(null)
+
 // 转换矩阵 Set: "fromId-toId"
 const allowedTransitions = reactive(new Set<string>())
 
@@ -171,6 +259,107 @@ const actionPanelFrom = ref('')
 const actionPanelTo = ref('')
 const actionPanelFromName = ref('')
 const actionPanelToName = ref('')
+
+// --- 分类顺序 ---
+const categoryOrder = ['open', 'in_progress', 'done', 'cancelled']
+
+// --- 筛选后的状态列表 ---
+const filteredStatuses = computed(() => {
+  let result = [...statuses.value]
+
+  // 按搜索关键词筛选
+  if (searchKeyword.value.trim()) {
+    const kw = searchKeyword.value.trim().toLowerCase()
+    result = result.filter(s => {
+      const localized = localizeStatusName(s.name).toLowerCase()
+      const original = s.name.toLowerCase()
+      return localized.includes(kw) || original.includes(kw)
+    })
+  }
+
+  // 只显示已配置转换
+  if (onlyConfigured.value) {
+    const idsWithTransitions = new Set<string>()
+    for (const key of allowedTransitions) {
+      const [from, to] = key.split('-')
+      idsWithTransitions.add(from)
+      idsWithTransitions.add(to)
+    }
+    result = result.filter(s => idsWithTransitions.has(s.id))
+  }
+
+  // 按 category 排序
+  result.sort((a, b) => {
+    const ai = categoryOrder.indexOf(a.category)
+    const bi = categoryOrder.indexOf(b.category)
+    if (ai !== bi) return ai - bi
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+  })
+
+  return result
+})
+
+// --- 分组（行和列） ---
+interface StatusGroup {
+  category: string
+  statuses: IssueStatusVO[]
+}
+
+const rowGroups = computed<StatusGroup[]>(() => {
+  return buildGroups(filteredStatuses.value)
+})
+
+const columnGroups = computed<StatusGroup[]>(() => {
+  return buildGroups(filteredStatuses.value)
+})
+
+function buildGroups(list: IssueStatusVO[]): StatusGroup[] {
+  const groups: StatusGroup[] = []
+  for (const cat of categoryOrder) {
+    const items = list.filter(s => s.category === cat)
+    if (items.length > 0) {
+      groups.push({ category: cat, statuses: items })
+    }
+  }
+  // 处理未知分类
+  const known = new Set(categoryOrder)
+  const unknown = list.filter(s => !known.has(s.category))
+  if (unknown.length > 0) {
+    groups.push({ category: 'other', statuses: unknown })
+  }
+  return groups
+}
+
+// --- 行索引（用于高亮） ---
+function getRowIndex(status: IssueStatusVO): number {
+  return filteredStatuses.value.findIndex(s => s.id === status.id)
+}
+
+// --- 分组折叠 ---
+function toggleGroupCollapse(category: string) {
+  if (collapsedGroups.has(category)) {
+    collapsedGroups.delete(category)
+  } else {
+    collapsedGroups.add(category)
+  }
+}
+
+// --- Hover 高亮 ---
+function onCellHover(fromStatus: IssueStatusVO, colIdx: number) {
+  highlightRow.value = getRowIndex(fromStatus)
+  highlightCol.value = colIdx
+}
+
+function onCellLeave() {
+  highlightRow.value = null
+  highlightCol.value = null
+}
+
+// --- 重置筛选 ---
+function resetFilters() {
+  searchKeyword.value = ''
+  onlyConfigured.value = false
+}
 
 function isAllowed(from: string, to: string) {
   return allowedTransitions.has(`${from}-${to}`)
@@ -334,7 +523,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .page-title {
@@ -349,6 +538,23 @@ onMounted(async () => {
   align-items: center;
 }
 
+/* 矩阵工具栏 */
+.matrix-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.toolbar-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
 .matrix-container {
   overflow-x: auto;
 }
@@ -361,10 +567,32 @@ onMounted(async () => {
 
 .matrix-table th,
 .matrix-table td {
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--border-color);
   text-align: center;
-  font-size: var(--font-size-sm);
+  font-size: 11px;
+}
+
+/* 分组头（列方向） */
+.group-header {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-bottom: none;
+}
+
+.group-header.group-open { border-top: 2px solid #58a6ff; }
+.group-header.group-in_progress { border-top: 2px solid #d29922; }
+.group-header.group-done { border-top: 2px solid #3fb950; }
+.group-header.group-cancelled { border-top: 2px solid #f85149; }
+
+.group-count {
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 .corner-cell {
@@ -372,10 +600,14 @@ onMounted(async () => {
   color: var(--text-secondary);
   font-weight: 500;
   text-align: left;
-  min-width: 160px;
+  min-width: 140px;
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 3;
+}
+
+.corner-cell-sub {
+  border-top: none;
 }
 
 .col-header {
@@ -384,6 +616,54 @@ onMounted(async () => {
   font-weight: 500;
   white-space: nowrap;
   font-size: 11px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 100ms ease;
+}
+
+.col-header.highlighted {
+  background: var(--bg-hover, rgba(88, 166, 255, 0.08));
+}
+
+.col-header-name {
+  display: inline-block;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+/* 行分组标题 */
+.group-row-header {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  padding: 4px 12px;
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  transition: background-color 150ms ease;
+}
+
+.group-row-header:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+.group-row-header.group-open { border-left: 3px solid #58a6ff; }
+.group-row-header.group-in_progress { border-left: 3px solid #d29922; }
+.group-row-header.group-done { border-left: 3px solid #3fb950; }
+.group-row-header.group-cancelled { border-left: 3px solid #f85149; }
+
+.group-toggle {
+  display: inline-block;
+  width: 16px;
+  font-size: 10px;
 }
 
 .row-header {
@@ -395,6 +675,11 @@ onMounted(async () => {
   position: sticky;
   left: 0;
   z-index: 1;
+  transition: background-color 100ms ease;
+}
+
+.row-header.highlighted {
+  background: var(--bg-hover, rgba(88, 166, 255, 0.08));
 }
 
 .status-dot {
@@ -407,6 +692,7 @@ onMounted(async () => {
 
 .matrix-cell {
   background: var(--bg-primary);
+  transition: background-color 100ms ease;
 }
 .matrix-cell.disabled {
   background: var(--bg-tertiary);
@@ -416,6 +702,9 @@ onMounted(async () => {
 }
 .matrix-cell.clickable:hover {
   background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+}
+.matrix-cell.highlighted {
+  background: var(--bg-hover, rgba(88, 166, 255, 0.04));
 }
 
 .cell-content {
@@ -437,14 +726,15 @@ onMounted(async () => {
 }
 
 .matrix-checkbox {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
   accent-color: var(--accent-blue);
 }
 
 .cell-dash {
   color: var(--text-muted);
+  font-size: 10px;
 }
 
 .help-text {

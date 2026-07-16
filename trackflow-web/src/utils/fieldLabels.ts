@@ -95,6 +95,26 @@ export function localizeStatusName(name?: string | null): string {
 }
 
 /**
+ * 状态分类英文 → 中文映射
+ */
+export const categoryLabelMap: Record<string, string> = {
+  open: '待处理',
+  in_progress: '进行中',
+  done: '已完成',
+  cancelled: '已取消',
+}
+
+/**
+ * 本地化状态分类名称
+ * @param category 英文分类名（如 "open"、"in_progress"）
+ * @returns 中文分类名（如 "待处理"、"进行中"），未匹配时返回原值
+ */
+export function localizeCategoryName(category?: string | null): string {
+  if (!category) return '未知'
+  return categoryLabelMap[category] || category
+}
+
+/**
  * 根据字段名，本地化字段值
  * 适用于活动记录中展示 old_value / new_value 的场景
  * @param fieldName 字段标识（如 "priority"、"status"）
