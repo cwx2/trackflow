@@ -354,14 +354,18 @@ export interface SprintBurndownVO {
   sprintName: string
   /** X 轴日期列表 (yyyy-MM-dd) */
   dates: string[]
-  /** 理想线：每天的理想剩余工单数 */
+  /** 理想线：基于 Sprint 开始时的工单数线性递减 */
   idealLine: number[]
-  /** 实际线：每天的实际剩余工单数（仅到今天） */
+  /** 实际线：每天的实际剩余工单数（scope - resolved，仅到今天） */
   actualLine: number[]
+  /** 范围线：每天的实际工单总数（追踪 scope change） */
+  scopeLine: number[]
   /** 今天在 dates 中的索引（-1 = 不在范围内） */
   todayIndex: number
-  /** Sprint 总工单数（起始值） */
+  /** Sprint 当前总工单数 */
   totalIssues: number
+  /** Sprint 开始时的工单数（理想线起点） */
+  startScopeIssues: number
   /** 日均完成速率 */
   velocity: number
   /** 预测完成日期 (yyyy-MM-dd)，null 表示速率为 0 */

@@ -10,6 +10,10 @@
           <span class="meta-label">日均速率</span>
           <span class="meta-value">{{ burndownData.velocity }} 工单/天</span>
         </span>
+        <span class="meta-item" v-if="hasScopeChange">
+          <span class="meta-label">起始/当前</span>
+          <span class="meta-value scope-change">{{ burndownData.startScopeIssues }} → {{ burndownData.totalIssues }}</span>
+        </span>
         <span class="meta-item forecast" v-if="burndownData.forecastDate && !isCompleted">
           <span class="meta-label">预计完成</span>
           <span class="meta-value" :class="{ overdue: isForecastLate }">{{ formatForecastDate(burndownData.forecastDate) }}</span>
@@ -65,6 +69,11 @@ const isForecastLate = computed(() => {
   return burndownData.value.forecastDate > props.sprintEndDate
 })
 
+const hasScopeChange = computed(() => {
+  if (!burndownData.value) return false
+  return burndownData.value.startScopeIssues !== burndownData.value.totalIssues
+})
+
 function formatForecastDate(dateStr: string): string {
   const d = new Date(dateStr)
   return `${d.getMonth() + 1}/${d.getDate()}`
@@ -73,7 +82,7 @@ function formatForecastDate(dateStr: string): string {
 const chartOption = computed(() => {
   if (!burndownData.value || burndownData.value.dates.length === 0) return {}
 
-  const { dates, idealLine, actualLine, todayIndex } = burndownData.value
+  const { dates, idealLine, actualLine, scopeLine, todayIndex } = burndownData.value
   // 短日期显示 (MM-DD)
   const shortDates = dates.map(d => d.substring(5))
 
@@ -85,7 +94,15 @@ const chartOption = computed(() => {
   const tooltipBorder = isDark ? '#3d4048' : '#e5e7eb'
   const idealColor = isDark ? '#6b7280' : '#9ca3af'
   const actualColor = isDark ? '#58a6ff' : '#0969da'
-  const todayLineColor = isDark ? '#d29922' : '#9a6700'
+  const scopeColor = isDark ? '#d29922' : '#9a6700'
+  const todayLineColor = isDark ? '#3fb950' : '#1a7f37'
+
+  // 判断是否有范围变化（scope line 不是一条直线）
+  const showScopeLine = scopeLine.length > 0 && hasScopeChange.value
+
+  const legendData = showScopeLine
+    ? ['理想进度', '实际剩余', '范围']
+    : ['理想进度', '实际剩余']
 
   const series: any[] = [
     {
@@ -132,6 +149,19 @@ const chartOption = computed(() => {
     }
   ]
 
+  // 范围线：仅在有 scope change 时显示
+  if (showScopeLine) {
+    series.push({
+      name: '范围',
+      type: 'line',
+      data: scopeLine,
+      lineStyle: { width: 1.5, color: scopeColor, type: 'dotted' },
+      itemStyle: { color: scopeColor },
+      symbol: 'none',
+      z: 1
+    })
+  }
+
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -146,9 +176,10 @@ const chartOption = computed(() => {
         let html = `<div style="font-weight:500;margin-bottom:4px">${fullDate}</div>`
         for (const p of params) {
           if (p.value !== undefined) {
+            const unit = p.seriesName === '范围' ? '工单（总范围）' : '工单'
             html += `<div style="display:flex;align-items:center;gap:6px;">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
-              <span>${p.seriesName}：<b>${p.value}</b> 工单</span>
+              <span>${p.seriesName}：<b>${p.value}</b> ${unit}</span>
             </div>`
           }
         }
@@ -156,7 +187,7 @@ const chartOption = computed(() => {
       }
     },
     legend: {
-      data: ['理想进度', '实际剩余'],
+      data: legendData,
       right: 0,
       top: 0,
       textStyle: { color: textColor, fontSize: 11 },
@@ -264,6 +295,11 @@ onMounted(() => {
 
 .meta-value.overdue {
   color: rgb(var(--danger-6));
+}
+
+.meta-value.scope-change {
+  color: var(--color-text-2);
+  font-size: 11px;
 }
 
 .chart-wrapper {

@@ -15,14 +15,18 @@ public class BurndownVO {
     private String sprintName;
     /** X 轴日期列表 (yyyy-MM-dd) */
     private List<String> dates;
-    /** 理想线：每天的理想剩余工单数 */
+    /** 理想线：基于 Sprint 开始时的工单数线性递减 */
     private List<Double> idealLine;
-    /** 实际线：每天的实际剩余工单数 */
+    /** 实际线：每天的实际剩余工单数（scope - resolved，仅到今天） */
     private List<Integer> actualLine;
+    /** 范围线：每天的实际工单总数（追踪 scope change） */
+    private List<Integer> scopeLine;
     /** 今天在 dates 数组中的索引（-1 表示不在 Sprint 范围内） */
     private int todayIndex;
-    /** Sprint 总工单数（起始值） */
+    /** Sprint 当前总工单数 */
     private int totalIssues;
+    /** Sprint 开始时的工单数（理想线起点） */
+    private int startScopeIssues;
     /** 日均完成速率 */
     private Double velocity;
     /** 按当前速率预测的完成日期 (yyyy-MM-dd)，null 表示速率为 0 */

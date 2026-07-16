@@ -9,6 +9,7 @@ import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.report.vo.*;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
+import com.trackflow.sprint.service.SprintService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class ReportStatisticsService {
     private final IssueStatusMapper statusMapper;
     private final SysUserMapper userMapper;
     private final SprintMapper sprintMapper;
+    private final SprintService sprintService;
     private final StatusCacheHelper statusCacheHelper;
 
     /**
@@ -290,51 +292,17 @@ public class ReportStatisticsService {
             return empty;
         }
 
-        List<Issue> issues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
-                .eq(Issue::getProjectId, projectId)
-                .eq(Issue::getSprintId, sprintId)
-                .isNull(Issue::getDeletedAt));
-
-        int totalIssues = issues.size();
-        LocalDate sprintStart = sprint.getStartDate();
-        LocalDate sprintEnd = sprint.getEndDate();
-        LocalDate today = LocalDate.now();
-        LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
-
-        long totalDays = sprintStart.until(sprintEnd).getDays();
-        if (totalDays <= 0) totalDays = 1;
-
-        Map<LocalDate, Long> resolvedByDay = issues.stream()
-                .filter(i -> i.getResolvedAt() != null)
-                .collect(Collectors.groupingBy(i -> i.getResolvedAt().toLocalDate(), Collectors.counting()));
-
-        List<String> dates = new ArrayList<>();
-        List<Double> ideal = new ArrayList<>();
-        List<Long> actual = new ArrayList<>();
-
-        long remaining = totalIssues;
-        double idealRemaining = totalIssues;
-        double idealDecrement = (double) totalIssues / totalDays;
-
-        LocalDate current = sprintStart;
-        while (!current.isAfter(sprintEnd)) {
-            dates.add(current.toString());
-            ideal.add(Math.max(0, Math.round(idealRemaining * 10.0) / 10.0));
-            idealRemaining -= idealDecrement;
-
-            if (!current.isAfter(endForActual)) {
-                remaining -= resolvedByDay.getOrDefault(current, 0L);
-                actual.add(Math.max(0, remaining));
-            }
-            current = current.plusDays(1);
-        }
+        // 委托给 SprintService 的 scope-aware 算法
+        var sprintBurndown = sprintService.getBurndownData(sprintId);
 
         BurndownVO vo = new BurndownVO();
-        vo.setDates(dates);
-        vo.setIdeal(ideal);
-        vo.setActual(actual);
-        vo.setSprintName(sprint.getName());
-        vo.setTotalIssues(totalIssues);
+        vo.setDates(sprintBurndown.getDates());
+        vo.setIdeal(sprintBurndown.getIdealLine());
+        vo.setActual(sprintBurndown.getActualLine().stream()
+                .map(Integer::longValue)
+                .collect(Collectors.toList()));
+        vo.setSprintName(sprintBurndown.getSprintName());
+        vo.setTotalIssues(sprintBurndown.getTotalIssues());
         return vo;
     }
 
