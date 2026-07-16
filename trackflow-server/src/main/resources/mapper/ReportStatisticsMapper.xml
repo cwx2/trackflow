@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trackflow.report.mapper.ReportStatisticsMapper">
+
+    <!-- ========== 可复用 SQL 片段 ========== -->
+
+    <!-- 项目过滤条件 -->
+    <sql id="projectFilter">
+        <if test="projectIds != null and projectIds.size() > 0">
+            <if test="projectIds.size() == 1">
+                AND i.project_id = #{projectIds[0]}
+            </if>
+            <if test="projectIds.size() > 1">
+                AND i.project_id IN
+                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+                    #{pid}
+                </foreach>
+            </if>
+        </if>
+    </sql>
+
+    <!-- Sprint 过滤条件 -->
+    <sql id="sprintFilter">
+        <if test="sprintId != null">
+            AND i.sprint_id = #{sprintId}
+        </if>
+    </sql>
+
+    <!-- ========== 状态分布 ========== -->
+    <select id="selectStatusDistribution" resultType="map">
+        SELECT s.name AS status_name,
+               s.color AS status_color,
+               s.category AS status_category,
+               s.sort_order,
+               COUNT(*) AS cnt
+        FROM issue i
+        JOIN issue_status s ON s.id = i.status_id
+        WHERE i.deleted_at IS NULL
+        <include refid="projectFilter"/>
+        <include refid="sprintFilter"/>
+        GROUP BY s.id, s.name, s.color, s.category, s.sort_order
+        ORDER BY s.sort_order
+    </select>
+
+    <!-- ========== 优先级分布 ========== -->
+    <select id="selectPriorityDistribution" resultType="map">
+        SELECT COALESCE(i.priority, 'Normal') AS priority_name,
+               COUNT(*) AS cnt
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+        <include refid="projectFilter"/>
+        <include refid="sprintFilter"/>
+        GROUP BY COALESCE(i.priority, 'Normal')
+    </select>
+
+    <!-- ========== 类型分布 ========== -->
+    <select id="selectTypeDistribution" resultType="map">
+        SELECT COALESCE(i.issue_type, 'Task') AS type_name,
+               COUNT(*) AS cnt
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+        <include refid="projectFilter"/>
+        <include refid="sprintFilter"/>
+        GROUP BY COALESCE(i.issue_type, 'Task')
+        ORDER BY cnt DESC
+    </select>
+
+    <!-- ========== 工作负载 ========== -->
+    <select id="selectWorkload" resultType="map">
+        SELECT i.assignee_id,
+               u.display_name AS assignee_name,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE i.status_id IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS done_count
+        FROM issue i
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        WHERE i.deleted_at IS NULL
+        <include refid="projectFilter"/>
+        <include refid="sprintFilter"/>
+        GROUP BY i.assignee_id, u.display_name
+        ORDER BY total DESC
+    </select>
+
+    <!-- ========== 概览统计 ========== -->
+    <select id="selectOverview" resultType="map">
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE i.status_id NOT IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS open_count,
+               COUNT(*) FILTER (WHERE i.status_id IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS closed_count,
+               COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned,
+               COUNT(*) FILTER (WHERE i.due_date IS NOT NULL
+                   AND i.due_date &lt; CAST(#{now} AS DATE)
+                   AND i.status_id NOT IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS overdue
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+        <include refid="projectFilter"/>
+        <include refid="sprintFilter"/>
+    </select>
+
+    <!-- ========== 趋势-创建 ========== -->
+    <select id="selectCreatedTrend" resultType="map">
+        SELECT CAST(i.created_at AS DATE) AS day,
+               COUNT(*) AS cnt
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+          AND i.created_at >= #{startDate}
+          AND i.created_at &lt;= #{endDate}
+        <include refid="projectFilter"/>
+        GROUP BY CAST(i.created_at AS DATE)
+        ORDER BY day
+    </select>
+
+    <!-- ========== 趋势-解决 ========== -->
+    <select id="selectResolvedTrend" resultType="map">
+        SELECT CAST(i.resolved_at AS DATE) AS day,
+               COUNT(*) AS cnt
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+          AND i.resolved_at IS NOT NULL
+          AND i.resolved_at >= #{startDate}
+          AND i.resolved_at &lt;= #{endDate}
+        <include refid="projectFilter"/>
+        GROUP BY CAST(i.resolved_at AS DATE)
+        ORDER BY day
+    </select>
+
+    <!-- ========== 跨项目对比 ========== -->
+    <select id="selectProjectComparison" resultType="map">
+        SELECT p.id AS project_id,
+               p.name AS project_name,
+               p.key AS project_key,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE i.status_id NOT IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS open_count,
+               COUNT(*) FILTER (WHERE i.status_id IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS closed_count,
+               COUNT(*) FILTER (WHERE i.due_date IS NOT NULL
+                   AND i.due_date &lt; CAST(#{now} AS DATE)
+                   AND i.status_id NOT IN
+                   <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
+                       #{sid}
+                   </foreach>
+               ) AS overdue
+        FROM issue i
+        JOIN project p ON p.id = i.project_id
+        WHERE i.deleted_at IS NULL
+        <if test="projectIds != null and projectIds.size() > 0">
+            <if test="projectIds.size() == 1">
+                AND i.project_id = #{projectIds[0]}
+            </if>
+            <if test="projectIds.size() > 1">
+                AND i.project_id IN
+                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+                    #{pid}
+                </foreach>
+            </if>
+        </if>
+        GROUP BY p.id, p.name, p.key
+        ORDER BY total DESC
+    </select>
+
+    <!-- ========== 累积流图 ========== -->
+    <!--
+        算法：利用 PostgreSQL 窗口函数重建每日状态快照
+        1. 找到每个工单在每天结束时的状态（通过 issue_activity 回放）
+        2. 使用 LATERAL + generate_series 生成日期序列
+        3. 对每天、每个状态做 COUNT
+
+        核心思路：
+        - 对每个工单，找到它在每天的"最后一次状态变更"的 new_value
+        - 如果某天没有变更，继承前一天的状态（用 LAST_VALUE OVER window）
+        - 初始状态通过 issue_activity 第一条记录的 old_value 回溯
+
+        实际实现：使用 CTE 逐步构建
+    -->
+    <select id="selectCumulativeFlow" resultType="map">
+        WITH
+        -- 日期序列
+        date_series AS (
+            SELECT d::date AS day
+            FROM generate_series(
+                #{startDate}::timestamp,
+                #{endDate}::timestamp,
+                '1 day'::interval
+            ) d
+        ),
+        -- 相关工单（在 endDate 之前创建的）
+        relevant_issues AS (
+            SELECT i.id, i.status_id, i.created_at
+            FROM issue i
+            WHERE i.deleted_at IS NULL
+              AND i.created_at &lt; (#{endDate}::timestamp + interval '1 day')
+            <include refid="projectFilter"/>
+        ),
+        -- 所有状态变更活动（按时间排序）
+        status_changes AS (
+            SELECT a.issue_id, a.old_value, a.new_value, a.created_at
+            FROM issue_activity a
+            WHERE a.field_name = 'status'
+              AND a.issue_id IN (SELECT id FROM relevant_issues)
+              AND a.created_at &lt; (#{endDate}::timestamp + interval '1 day')
+            ORDER BY a.issue_id, a.created_at
+        ),
+        -- 每个工单的初始状态（第一条活动的 old_value，或当前状态名）
+        issue_initial_status AS (
+            SELECT ri.id AS issue_id,
+                   ri.created_at,
+                   COALESCE(
+                       (SELECT sc.old_value FROM status_changes sc WHERE sc.issue_id = ri.id ORDER BY sc.created_at LIMIT 1),
+                       (SELECT s.name FROM issue_status s WHERE s.id = ri.status_id)
+                   ) AS initial_status
+            FROM relevant_issues ri
+        ),
+        -- 每个工单在每天结束时的状态
+        -- 对每天：找到该天最后一次变更的 new_value，如果没有变更则用前一个已知状态
+        daily_status AS (
+            SELECT ds.day,
+                   iis.issue_id,
+                   CASE
+                       WHEN iis.created_at >= (ds.day + interval '1 day') THEN NULL  -- 工单还未创建
+                       ELSE COALESCE(
+                           -- 截至该天结束的最后一次状态变更
+                           (SELECT sc.new_value
+                            FROM status_changes sc
+                            WHERE sc.issue_id = iis.issue_id
+                              AND sc.created_at &lt; (ds.day + interval '1 day')
+                            ORDER BY sc.created_at DESC
+                            LIMIT 1),
+                           -- 无变更则用初始状态
+                           iis.initial_status
+                       )
+                   END AS status_name
+            FROM date_series ds
+            CROSS JOIN issue_initial_status iis
+        )
+        -- 最终聚合：按天、按状态 COUNT
+        SELECT ds_agg.day::text AS day,
+               ds_agg.status_name,
+               s.color AS status_color,
+               s.sort_order,
+               COUNT(*) AS cnt
+        FROM daily_status ds_agg
+        JOIN issue_status s ON s.name = ds_agg.status_name
+        WHERE ds_agg.status_name IS NOT NULL
+        GROUP BY ds_agg.day, ds_agg.status_name, s.color, s.sort_order
+        ORDER BY ds_agg.day, s.sort_order
+    </select>
+
+    <!-- ========== 解决时间趋势 ========== -->
+    <select id="selectResolutionTimeTrend" resultType="map">
+        <if test="useWeekGrouping">
+            SELECT date_trunc('week', i.resolved_at)::date::text AS period,
+        </if>
+        <if test="!useWeekGrouping">
+            SELECT CAST(i.resolved_at AS DATE)::text AS period,
+        </if>
+               ROUND(AVG(EXTRACT(EPOCH FROM (i.resolved_at - i.created_at)) / 3600.0)::numeric, 2) AS avg_hours,
+               ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (i.resolved_at - i.created_at)) / 3600.0)::numeric, 2) AS median_hours,
+               ROUND(percentile_cont(0.9) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (i.resolved_at - i.created_at)) / 3600.0)::numeric, 2) AS p90_hours,
+               COUNT(*) AS resolved_count
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+          AND i.resolved_at IS NOT NULL
+          AND i.resolved_at >= #{startDate}
+          AND i.resolved_at &lt;= #{endDate}
+        <include refid="projectFilter"/>
+        <if test="useWeekGrouping">
+        GROUP BY date_trunc('week', i.resolved_at)
+        ORDER BY date_trunc('week', i.resolved_at)
+        </if>
+        <if test="!useWeekGrouping">
+        GROUP BY CAST(i.resolved_at AS DATE)
+        ORDER BY CAST(i.resolved_at AS DATE)
+        </if>
+    </select>
+
+    <!-- ========== 解决时间分组明细 ========== -->
+    <select id="selectResolutionTimeByGroup" resultType="map">
+        SELECT
+        <choose>
+            <when test="groupBy == 'type'">
+                COALESCE(i.issue_type, 'Task') AS group_name,
+            </when>
+            <when test="groupBy == 'priority'">
+                COALESCE(i.priority, 'Normal') AS group_name,
+            </when>
+            <when test="groupBy == 'assignee'">
+                COALESCE(u.display_name, '未分配') AS group_name,
+            </when>
+            <otherwise>
+                '全部' AS group_name,
+            </otherwise>
+        </choose>
+               ROUND(AVG(EXTRACT(EPOCH FROM (i.resolved_at - i.created_at)) / 3600.0)::numeric, 2) AS avg_hours,
+               ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (i.resolved_at - i.created_at)) / 3600.0)::numeric, 2) AS median_hours,
+               COUNT(*) AS cnt
+        FROM issue i
+        <if test="groupBy == 'assignee'">
+            LEFT JOIN sys_user u ON u.id = i.assignee_id
+        </if>
+        WHERE i.deleted_at IS NULL
+          AND i.resolved_at IS NOT NULL
+          AND i.resolved_at >= #{startDate}
+          AND i.resolved_at &lt;= #{endDate}
+        <include refid="projectFilter"/>
+        GROUP BY
+        <choose>
+            <when test="groupBy == 'type'">
+                COALESCE(i.issue_type, 'Task')
+            </when>
+            <when test="groupBy == 'priority'">
+                COALESCE(i.priority, 'Normal')
+            </when>
+            <when test="groupBy == 'assignee'">
+                COALESCE(u.display_name, '未分配')
+            </when>
+            <otherwise>
+                1
+            </otherwise>
+        </choose>
+        ORDER BY cnt DESC
+    </select>
+
+</mapper>
