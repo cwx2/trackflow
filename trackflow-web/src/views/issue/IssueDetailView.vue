@@ -430,7 +430,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
     const displayValue = stored?.displayValue || (cf.isRequired ? '设置值' : '-')
 
     // 根据字段类型确定 editType
-    let editType: 'select' | 'user-select' | 'date' | 'number' | undefined
+    let editType: 'select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | undefined
     let options: { value: string; label: string }[] | undefined
 
     switch (cf.fieldFormat) {
@@ -445,6 +445,9 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       case 'date':
         editType = 'date'
         break
+      case 'datetime':
+        editType = 'datetime'
+        break
       case 'int':
       case 'float':
         editType = 'number'
@@ -452,6 +455,9 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       case 'bool':
         editType = 'select'
         options = [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]
+        break
+      case 'text':
+        editType = 'text'
         break
       case 'string':
       default:

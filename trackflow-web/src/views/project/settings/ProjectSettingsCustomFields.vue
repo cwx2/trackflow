@@ -186,10 +186,12 @@ const detachTarget = ref<CustomFieldDefinitionVO | null>(null)
 
 // Field type display names
 const fieldTypeMap: Record<string, string> = {
-  string: '文本',
+  string: '文本(单行)',
+  text: '文本(多行)',
   int: '整数',
   float: '浮点数',
   date: '日期',
+  datetime: '日期时间',
   bool: '布尔',
   list: '列表',
   user: '用户'

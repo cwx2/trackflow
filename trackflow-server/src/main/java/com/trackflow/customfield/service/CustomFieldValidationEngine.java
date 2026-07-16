@@ -10,8 +10,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -29,7 +31,7 @@ public class CustomFieldValidationEngine {
     private final SysUserMapper userMapper;
 
     public static final Set<String> SUPPORTED_FORMATS = Set.of(
-            "string", "int", "float", "date", "bool", "list", "user"
+            "string", "text", "int", "float", "date", "datetime", "bool", "list", "user"
     );
 
     /**
@@ -52,9 +54,11 @@ public class CustomFieldValidationEngine {
         // 按类型分发验证
         switch (field.getFieldFormat()) {
             case "string" -> validateString(field, value, errors);
+            case "text" -> validateText(field, value, errors);
             case "int" -> validateInt(field, value, errors);
             case "float" -> validateFloat(field, value, errors);
             case "date" -> validateDate(field, value, errors);
+            case "datetime" -> validateDatetime(field, value, errors);
             case "bool" -> validateBool(field, value, errors);
             case "list" -> validateList(field, value, errors);
             case "user" -> validateUser(field, value, errors);
@@ -89,6 +93,17 @@ public class CustomFieldValidationEngine {
         }
     }
 
+    /**
+     * text 类型（多行富文本/Markdown）
+     * 仅做最大长度校验（可选），不做正则校验
+     */
+    private void validateText(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
+        if (field.getMaxLength() != null && field.getMaxLength() > 0 && value.length() > field.getMaxLength()) {
+            errors.add(new FieldValidationError(field.getName(),
+                    "内容长度不能超过 " + field.getMaxLength() + " 个字符"));
+        }
+    }
+
     private void validateInt(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
         try {
             Long.parseLong(value);
@@ -113,23 +128,66 @@ public class CustomFieldValidationEngine {
         }
     }
 
+    /**
+     * datetime 类型（日期+时间）
+     * 接受 ISO-8601 格式: yyyy-MM-ddTHH:mm:ss 或 yyyy-MM-ddTHH:mm
+     */
+    private void validateDatetime(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
+        try {
+            LocalDateTime.parse(value);
+        } catch (DateTimeParseException e) {
+            errors.add(new FieldValidationError(field.getName(),
+                    "值格式不正确，期望日期时间 (yyyy-MM-ddTHH:mm:ss)"));
+        }
+    }
+
     private void validateBool(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
         if (!"true".equals(value) && !"false".equals(value)) {
             errors.add(new FieldValidationError(field.getName(), "值格式不正确，期望 true 或 false"));
         }
     }
 
+    /**
+     * list 类型验证
+     * 单值模式：value 为单个选项 ID
+     * 多值模式（isMulti=true）：value 为逗号分隔的选项 ID 列表
+     */
     private void validateList(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
-        try {
-            Long optionId = Long.parseLong(value);
-            boolean exists = optionMapper.exists(new LambdaQueryWrapper<CustomFieldOption>()
-                    .eq(CustomFieldOption::getCustomFieldId, field.getId())
-                    .eq(CustomFieldOption::getId, optionId));
-            if (!exists) {
+        boolean isMulti = Boolean.TRUE.equals(field.getIsMulti());
+
+        if (isMulti) {
+            // 多值模式：逗号分隔的 ID 列表
+            String[] ids = value.split(",");
+            for (String idStr : ids) {
+                String trimmed = idStr.trim();
+                if (trimmed.isEmpty()) continue;
+                try {
+                    Long optionId = Long.parseLong(trimmed);
+                    boolean exists = optionMapper.exists(new LambdaQueryWrapper<CustomFieldOption>()
+                            .eq(CustomFieldOption::getCustomFieldId, field.getId())
+                            .eq(CustomFieldOption::getId, optionId));
+                    if (!exists) {
+                        errors.add(new FieldValidationError(field.getName(), "无效的选项值: " + trimmed));
+                        return;
+                    }
+                } catch (NumberFormatException e) {
+                    errors.add(new FieldValidationError(field.getName(), "无效的选项值: " + trimmed));
+                    return;
+                }
+            }
+        } else {
+            // 单值模式
+            try {
+                Long optionId = Long.parseLong(value);
+                boolean exists = optionMapper.exists(new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, field.getId())
+                        .eq(CustomFieldOption::getId, optionId));
+                if (!exists) {
+                    errors.add(new FieldValidationError(field.getName(), "无效的选项值"));
+                }
+            } catch (NumberFormatException e) {
                 errors.add(new FieldValidationError(field.getName(), "无效的选项值"));
             }
-        } catch (NumberFormatException e) {
-            errors.add(new FieldValidationError(field.getName(), "无效的选项值"));
         }
     }
 

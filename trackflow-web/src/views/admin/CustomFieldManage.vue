@@ -106,8 +106,20 @@
           </a-form-item>
         </template>
 
+        <!-- text 类型额外配置 -->
+        <template v-if="form.fieldFormat === 'text'">
+          <a-form-item label="最大长度">
+            <a-input-number v-model="form.maxLength" :min="0" placeholder="0 表示不限制" />
+            <div class="form-help">支持 Markdown 格式的多行文本</div>
+          </a-form-item>
+        </template>
+
         <!-- list 类型选项管理 -->
         <template v-if="form.fieldFormat === 'list'">
+          <a-form-item label="多值选择">
+            <a-switch v-model="form.isMulti" />
+            <div class="form-help">开启后允许选择多个选项值（如影响版本、标签等）</div>
+          </a-form-item>
           <a-form-item label="选项列表">
             <div class="options-list">
               <div v-for="(opt, idx) in form.options" :key="idx" class="option-row">
@@ -168,6 +180,7 @@ const form = reactive({
   fieldFormat: 'string' as string,
   isRequired: false,
   isForAll: false,
+  isMulti: false,
   defaultValue: '',
   minLength: 0,
   maxLength: 0,
@@ -178,10 +191,12 @@ const form = reactive({
 })
 
 const fieldTypeOptions = [
-  { value: 'string', label: '文本' },
+  { value: 'string', label: '文本(单行)' },
+  { value: 'text', label: '文本(多行/Markdown)' },
   { value: 'int', label: '整数' },
   { value: 'float', label: '小数' },
   { value: 'date', label: '日期' },
+  { value: 'datetime', label: '日期时间' },
   { value: 'bool', label: '布尔' },
   { value: 'list', label: '列表(枚举)' },
   { value: 'user', label: '用户' }
@@ -223,6 +238,7 @@ function resetForm() {
   form.fieldFormat = 'string'
   form.isRequired = false
   form.isForAll = false
+  form.isMulti = false
   form.defaultValue = ''
   form.minLength = 0
   form.maxLength = 0
@@ -244,6 +260,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.fieldFormat = record.fieldFormat
   form.isRequired = record.isRequired
   form.isForAll = record.isForAll
+  form.isMulti = record.isMulti || false
   form.defaultValue = record.defaultValue || ''
   form.minLength = record.minLength
   form.maxLength = record.maxLength
@@ -275,6 +292,7 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
+        isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
         options: form.fieldFormat === 'list' ? form.options : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes
@@ -290,6 +308,7 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
+        isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
         options: form.fieldFormat === 'list' ? form.options : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes

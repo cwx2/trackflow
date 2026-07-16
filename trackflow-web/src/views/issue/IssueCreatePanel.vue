@@ -114,6 +114,15 @@
                 :placeholder="cf.defaultValue || ''"
                 allow-clear
               />
+              <!-- text (多行/Markdown) -->
+              <a-textarea
+                v-else-if="cf.fieldFormat === 'text'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                :placeholder="cf.defaultValue || '输入多行文本（支持 Markdown）'"
+                :auto-size="{ minRows: 2, maxRows: 6 }"
+                allow-clear
+              />
               <!-- int -->
               <a-input-number
                 v-else-if="cf.fieldFormat === 'int'"
@@ -141,14 +150,36 @@
                 style="width: 100%"
                 placeholder="选择日期"
               />
+              <!-- datetime -->
+              <a-date-picker
+                v-else-if="cf.fieldFormat === 'datetime'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                style="width: 100%"
+                show-time
+                format="YYYY-MM-DDTHH:mm:ss"
+                placeholder="选择日期和时间"
+              />
               <!-- bool -->
               <a-switch
                 v-else-if="cf.fieldFormat === 'bool'"
                 :model-value="customFieldValues[cf.id] === 'true'"
                 size="small"
-                @change="(v: boolean) => customFieldValues[cf.id] = String(v)"
+                @change="(v: any) => customFieldValues[cf.id] = String(v)"
               />
-              <!-- list -->
+              <!-- list (多值模式) -->
+              <a-select
+                v-else-if="cf.fieldFormat === 'list' && cf.isMulti"
+                :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
+                @update:model-value="(v: any) => customFieldValues[cf.id] = (v as string[]).join(',')"
+                size="small"
+                placeholder="选择（可多选）"
+                multiple
+                allow-clear
+              >
+                <a-option v-for="opt in cf.options" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+              </a-select>
+              <!-- list (单值模式) -->
               <a-select
                 v-else-if="cf.fieldFormat === 'list'"
                 v-model="customFieldValues[cf.id]"

@@ -23,6 +23,9 @@ public class CreateCustomFieldDTO {
     private Integer maxLength = 0;
     private String regexp;
 
+    /** 列表类型是否支持多值选择（仅 list 类型有效） */
+    private Boolean isMulti = false;
+
     /** list 类型的选项值列表 */
     private List<OptionItem> options;
 

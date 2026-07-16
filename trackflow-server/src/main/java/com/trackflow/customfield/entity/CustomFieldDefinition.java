@@ -15,7 +15,7 @@ public class CustomFieldDefinition extends BaseEntity {
 
     private String name;
 
-    /** 字段类型: string, int, float, date, bool, list, user */
+    /** 字段类型: string, text, int, float, date, datetime, bool, list, user */
     private String fieldFormat;
 
     private Boolean isRequired;
@@ -36,4 +36,7 @@ public class CustomFieldDefinition extends BaseEntity {
 
     /** 排序位置 */
     private Integer position;
+
+    /** 列表类型是否支持多值选择（仅 list 类型有效） */
+    private Boolean isMulti;
 }

@@ -57,6 +57,11 @@
                 <input v-model="inputValue" type="date" class="input-field" @keyup.enter="commitInput(field)" />
                 <button class="input-btn" @click="commitInput(field)">确定</button>
               </div>
+              <!-- 日期时间输入 -->
+              <div class="dropdown-input" v-if="field.editType === 'datetime'">
+                <input v-model="inputValue" type="datetime-local" class="input-field" @keyup.enter="commitInput(field)" />
+                <button class="input-btn" @click="commitInput(field)">确定</button>
+              </div>
               <!-- 数字输入 -->
               <div class="dropdown-input" v-if="field.editType === 'number'">
                 <input v-model="inputValue" type="number" min="0" step="0.5" class="input-field" placeholder="小时数" @keyup.enter="commitInput(field)" />
@@ -106,7 +111,7 @@ export interface SidebarField {
   badgeColor?: string
   class?: string
   readonly?: boolean
-  editType?: 'select' | 'user-select' | 'date' | 'number' | 'issue-search' | 'text'
+  editType?: 'select' | 'user-select' | 'date' | 'datetime' | 'number' | 'issue-search' | 'text'
   options?: FieldOption[]
   rawValue?: string
 }

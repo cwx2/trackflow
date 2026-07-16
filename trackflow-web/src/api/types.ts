@@ -122,6 +122,37 @@ export interface ProjectActivityVO {
   targetUserName?: string
 }
 
+// ========== 项目统计 ==========
+export interface ProjectStatisticsVO {
+  totalIssues: number
+  openIssues: number
+  closedIssues: number
+  completionRate: number
+  createdThisWeek: number
+  closedThisWeek: number
+  statusDistribution: StatusDistribution[]
+  activeSprint?: ActiveSprintInfo
+}
+
+export interface StatusDistribution {
+  statusId: string
+  statusName: string
+  statusColor: string
+  category: string
+  closed: boolean
+  count: number
+}
+
+export interface ActiveSprintInfo {
+  id: string
+  name: string
+  startDate?: string
+  endDate?: string
+  totalIssues: number
+  completedIssues: number
+  remainingDays: number
+}
+
 // ========== Issue ==========
 export interface IssueVO {
   id: string
@@ -348,9 +379,10 @@ export interface SavedQueryVO {
 export interface CustomFieldDefinitionVO {
   id: string
   name: string
-  fieldFormat: 'string' | 'int' | 'float' | 'date' | 'bool' | 'list' | 'user'
+  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user'
   isRequired: boolean
   isForAll: boolean
+  isMulti: boolean
   defaultValue?: string
   minLength: number
   maxLength: number

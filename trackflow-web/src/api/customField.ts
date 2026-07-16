@@ -18,6 +18,7 @@ export const customFieldApi = {
     fieldFormat: string
     isRequired?: boolean
     isForAll?: boolean
+    isMulti?: boolean
     defaultValue?: string
     minLength?: number
     maxLength?: number
@@ -34,6 +35,7 @@ export const customFieldApi = {
     name?: string
     isRequired?: boolean
     isForAll?: boolean
+    isMulti?: boolean
     defaultValue?: string
     minLength?: number
     maxLength?: number

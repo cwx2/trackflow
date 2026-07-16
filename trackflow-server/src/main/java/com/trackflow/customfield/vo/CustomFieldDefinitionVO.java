@@ -12,6 +12,7 @@ public class CustomFieldDefinitionVO {
     private String fieldFormat;
     private Boolean isRequired;
     private Boolean isForAll;
+    private Boolean isMulti;
     private String defaultValue;
     private Integer minLength;
     private Integer maxLength;

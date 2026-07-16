@@ -56,6 +56,7 @@ public class CustomFieldService {
         entity.setMaxLength(dto.getMaxLength());
         entity.setRegexp(dto.getRegexp());
         entity.setPosition(position);
+        entity.setIsMulti("list".equals(dto.getFieldFormat()) && Boolean.TRUE.equals(dto.getIsMulti()));
         definitionMapper.insert(entity);
 
         if ("list".equals(dto.getFieldFormat()) && dto.getOptions() != null) {
@@ -116,6 +117,9 @@ public class CustomFieldService {
         if (dto.getMinLength() != null) entity.setMinLength(dto.getMinLength());
         if (dto.getMaxLength() != null) entity.setMaxLength(dto.getMaxLength());
         if (dto.getRegexp() != null) entity.setRegexp(dto.getRegexp());
+        if (dto.getIsMulti() != null && "list".equals(entity.getFieldFormat())) {
+            entity.setIsMulti(dto.getIsMulti());
+        }
         definitionMapper.updateById(entity);
 
         if ("list".equals(entity.getFieldFormat()) && dto.getOptions() != null) {
@@ -429,11 +433,28 @@ public class CustomFieldService {
         }
         return switch (fieldDef.getFieldFormat()) {
             case "list" -> {
-                try {
-                    Long optionId = Long.parseLong(rawValue);
-                    yield optionTextMap.getOrDefault(optionId, rawValue);
-                } catch (NumberFormatException e) {
-                    yield rawValue;
+                if (Boolean.TRUE.equals(fieldDef.getIsMulti())) {
+                    // 多值模式：逗号分隔的 ID 列表
+                    String[] ids = rawValue.split(",");
+                    List<String> labels = new ArrayList<>();
+                    for (String idStr : ids) {
+                        String trimmed = idStr.trim();
+                        if (trimmed.isEmpty()) continue;
+                        try {
+                            Long optionId = Long.parseLong(trimmed);
+                            labels.add(optionTextMap.getOrDefault(optionId, trimmed));
+                        } catch (NumberFormatException e) {
+                            labels.add(trimmed);
+                        }
+                    }
+                    yield String.join(", ", labels);
+                } else {
+                    try {
+                        Long optionId = Long.parseLong(rawValue);
+                        yield optionTextMap.getOrDefault(optionId, rawValue);
+                    } catch (NumberFormatException e) {
+                        yield rawValue;
+                    }
                 }
             }
             case "user" -> {
@@ -483,12 +504,30 @@ public class CustomFieldService {
         if (rawValue == null || rawValue.isBlank()) return "";
         switch (field.getFieldFormat()) {
             case "list" -> {
-                try {
-                    Long optionId = Long.parseLong(rawValue);
-                    CustomFieldOption option = optionMapper.selectById(optionId);
-                    return option != null ? option.getValue() : rawValue;
-                } catch (NumberFormatException e) {
-                    return rawValue;
+                if (Boolean.TRUE.equals(field.getIsMulti())) {
+                    // 多值模式：逗号分隔的 ID 列表
+                    String[] ids = rawValue.split(",");
+                    List<String> labels = new ArrayList<>();
+                    for (String idStr : ids) {
+                        String trimmed = idStr.trim();
+                        if (trimmed.isEmpty()) continue;
+                        try {
+                            Long optionId = Long.parseLong(trimmed);
+                            CustomFieldOption option = optionMapper.selectById(optionId);
+                            labels.add(option != null ? option.getValue() : trimmed);
+                        } catch (NumberFormatException e) {
+                            labels.add(trimmed);
+                        }
+                    }
+                    return String.join(", ", labels);
+                } else {
+                    try {
+                        Long optionId = Long.parseLong(rawValue);
+                        CustomFieldOption option = optionMapper.selectById(optionId);
+                        return option != null ? option.getValue() : rawValue;
+                    } catch (NumberFormatException e) {
+                        return rawValue;
+                    }
                 }
             }
             case "user" -> {
@@ -748,11 +787,19 @@ public class CustomFieldService {
      */
     @Transactional
     public void reorderProjectFields(Long projectId, List<Long> fieldIds) {
+        // 批量查出所有关联记录
+        List<CustomFieldProject> mappings = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .in(CustomFieldProject::getCustomFieldId, fieldIds));
+
+        // 构建 fieldId → mapping 索引
+        Map<Long, CustomFieldProject> mappingMap = mappings.stream()
+                .collect(Collectors.toMap(CustomFieldProject::getCustomFieldId, m -> m));
+
+        // 更新 position 并批量提交
         for (int i = 0; i < fieldIds.size(); i++) {
-            CustomFieldProject mapping = projectMapper.selectOne(
-                    new LambdaQueryWrapper<CustomFieldProject>()
-                            .eq(CustomFieldProject::getProjectId, projectId)
-                            .eq(CustomFieldProject::getCustomFieldId, fieldIds.get(i)));
+            CustomFieldProject mapping = mappingMap.get(fieldIds.get(i));
             if (mapping != null) {
                 mapping.setPosition(i);
                 projectMapper.updateById(mapping);

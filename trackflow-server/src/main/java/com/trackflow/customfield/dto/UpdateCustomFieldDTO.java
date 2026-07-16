@@ -20,6 +20,9 @@ public class UpdateCustomFieldDTO {
     private Integer maxLength;
     private String regexp;
 
+    /** 列表类型是否支持多值选择（仅 list 类型有效） */
+    private Boolean isMulti;
+
     /** list 类型的选项（全量替换） */
     private List<OptionItem> options;
 
