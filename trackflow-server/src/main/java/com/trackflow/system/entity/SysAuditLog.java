@@ -39,6 +39,9 @@ public class SysAuditLog implements Serializable {
     /** 操作者 IP 地址 */
     private String ipAddress;
 
+    /** 客户端 User-Agent */
+    private String userAgent;
+
     /** 创建时间 */
     private LocalDateTime createdAt;
 }

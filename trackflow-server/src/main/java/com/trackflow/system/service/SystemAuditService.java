@@ -72,13 +72,60 @@ public class SystemAuditService {
     }
 
     /**
+     * 记录认证安全事件审计日志。
+     * <p>
+     * 与 {@link #log} 不同，此方法不依赖 SecurityContext 获取 operatorId，
+     * 因为认证事件发生时 SecurityContext 可能尚未设置或认证已失败。
+     *
+     * @param action     操作类型：login, login_failed, first_login, api_key_used, api_key_failed
+     * @param userId     用户 ID（认证失败且无法识别用户时可为 null）
+     * @param ipAddress  客户端 IP 地址
+     * @param userAgent  客户端 User-Agent
+     * @param details    附加详情（如登录方式、失败原因等）
+     */
+    public void logAuthEvent(String action, Long userId, String ipAddress,
+                             String userAgent, Map<String, Object> details) {
+        SysAuditLog auditLog = new SysAuditLog();
+        auditLog.setOperatorId(userId);
+        auditLog.setAction(action);
+        auditLog.setTargetType("auth");
+        auditLog.setTargetId(userId);
+        auditLog.setIpAddress(ipAddress);
+        auditLog.setUserAgent(userAgent);
+        auditLog.setCreatedAt(LocalDateTime.now());
+
+        if (details != null && !details.isEmpty()) {
+            try {
+                auditLog.setDetails(objectMapper.writeValueAsString(details));
+            } catch (Exception e) {
+                log.error("认证审计日志序列化 details 失败", e);
+                auditLog.setDetails(null);
+            }
+        }
+
+        try {
+            auditLogMapper.insert(auditLog);
+        } catch (Exception e) {
+            // 审计日志写入失败不应阻塞认证流程
+            log.error("认证审计日志写入失败: action={}, userId={}", action, userId, e);
+        }
+    }
+
+    /**
      * 分页查询审计日志
      */
     public PageResult<AuditLogVO> list(AuditLogQuery query) {
         LambdaQueryWrapper<SysAuditLog> wrapper = new LambdaQueryWrapper<>();
 
         if (query.getAction() != null && !query.getAction().isBlank()) {
-            wrapper.eq(SysAuditLog::getAction, query.getAction());
+            // 支持逗号分隔的多 action 筛选（如 "login,login_failed,api_key_used"）
+            String[] actions = query.getAction().split(",");
+            if (actions.length == 1) {
+                wrapper.eq(SysAuditLog::getAction, actions[0].trim());
+            } else {
+                wrapper.in(SysAuditLog::getAction,
+                        java.util.Arrays.stream(actions).map(String::trim).toList());
+            }
         }
         if (query.getTargetType() != null && !query.getTargetType().isBlank()) {
             wrapper.eq(SysAuditLog::getTargetType, query.getTargetType());
@@ -100,16 +147,20 @@ public class SystemAuditService {
 
         Page<SysAuditLog> page = auditLogMapper.selectPage(query.toPage(), wrapper);
 
-        // 收集所有涉及的用户 ID 和角色 ID
+        // 收集所有涉及的用户 ID 和角色 ID（跳过 null）
         Set<Long> userIds = new HashSet<>();
         Set<Long> roleIds = new HashSet<>();
 
         for (SysAuditLog record : page.getRecords()) {
-            userIds.add(record.getOperatorId());
-            if ("user".equals(record.getTargetType())) {
+            if (record.getOperatorId() != null) {
+                userIds.add(record.getOperatorId());
+            }
+            if ("user".equals(record.getTargetType()) && record.getTargetId() != null) {
                 userIds.add(record.getTargetId());
-            } else if ("role".equals(record.getTargetType())) {
+            } else if ("role".equals(record.getTargetType()) && record.getTargetId() != null) {
                 roleIds.add(record.getTargetId());
+            } else if ("auth".equals(record.getTargetType()) && record.getTargetId() != null) {
+                userIds.add(record.getTargetId());
             }
         }
 
@@ -135,20 +186,24 @@ public class SystemAuditService {
         List<AuditLogVO> voList = page.getRecords().stream().map(record -> {
             AuditLogVO vo = new AuditLogVO();
             vo.setId(String.valueOf(record.getId()));
-            vo.setOperatorId(String.valueOf(record.getOperatorId()));
-            vo.setOperatorName(finalUserNameMap.getOrDefault(record.getOperatorId(), ""));
+            vo.setOperatorId(record.getOperatorId() != null ? String.valueOf(record.getOperatorId()) : null);
+            vo.setOperatorName(record.getOperatorId() != null
+                    ? finalUserNameMap.getOrDefault(record.getOperatorId(), "") : null);
             vo.setAction(record.getAction());
             vo.setTargetType(record.getTargetType());
-            vo.setTargetId(String.valueOf(record.getTargetId()));
+            vo.setTargetId(record.getTargetId() != null ? String.valueOf(record.getTargetId()) : null);
             vo.setDetails(record.getDetails());
             vo.setIpAddress(record.getIpAddress());
+            vo.setUserAgent(record.getUserAgent());
             vo.setCreatedAt(record.getCreatedAt());
 
             // 填充目标名称
-            if ("user".equals(record.getTargetType())) {
+            if ("user".equals(record.getTargetType()) && record.getTargetId() != null) {
                 vo.setTargetName(finalUserNameMap.getOrDefault(record.getTargetId(), ""));
-            } else if ("role".equals(record.getTargetType())) {
+            } else if ("role".equals(record.getTargetType()) && record.getTargetId() != null) {
                 vo.setTargetName(finalRoleNameMap.getOrDefault(record.getTargetId(), ""));
+            } else if ("auth".equals(record.getTargetType()) && record.getTargetId() != null) {
+                vo.setTargetName(finalUserNameMap.getOrDefault(record.getTargetId(), ""));
             }
 
             return vo;

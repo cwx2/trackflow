@@ -36,6 +36,9 @@ public class AuditLogVO {
     /** 操作者 IP */
     private String ipAddress;
 
+    /** 客户端 User-Agent */
+    private String userAgent;
+
     /** 创建时间 */
     private LocalDateTime createdAt;
 }

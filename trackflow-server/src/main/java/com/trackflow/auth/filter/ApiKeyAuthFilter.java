@@ -4,10 +4,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.security.ApiKeyAuthenticationToken;
+import com.trackflow.common.util.WebUtils;
 import com.trackflow.system.entity.ApiKey;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.ApiKeyMapper;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.service.SystemAuditService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +28,9 @@ import java.util.*;
 
 /**
  * API Key 认证过滤器
- * 识别 tf_ 前缀的 Bearer Token，走 API Key 校验逻辑
+ * 识别 tf_ 前缀的 Bearer Token，走 API Key 校验逻辑。
+ * <p>
+ * 认证成功/失败均记录审计日志。
  */
 @Slf4j
 @Component
@@ -39,6 +43,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final ApiKeyMapper apiKeyMapper;
     private final SysUserMapper sysUserMapper;
     private final ObjectMapper objectMapper;
+    private final SystemAuditService systemAuditService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -56,6 +61,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 } else {
+                    // 记录 API Key 认证失败
+                    logApiKeyFailed(request, token);
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
@@ -118,8 +125,57 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         apiKey.setLastUsedAt(LocalDateTime.now());
         apiKeyMapper.updateById(apiKey);
 
+        // 记录 API Key 认证成功审计日志
+        logApiKeyUsed(user, apiKey, request);
+
         log.debug("API Key authenticated: user={}, key={}, scope={}", user.getUsername(), prefix, scope);
         return true;
+    }
+
+    /**
+     * 记录 API Key 认证成功事件
+     */
+    private void logApiKeyUsed(SysUser user, ApiKey apiKey, HttpServletRequest request) {
+        try {
+            Map<String, Object> details = new HashMap<>();
+            details.put("method", "api_key");
+            details.put("key_prefix", apiKey.getPrefix());
+            details.put("key_name", apiKey.getName());
+
+            systemAuditService.logAuthEvent(
+                    "api_key_used",
+                    user.getId(),
+                    WebUtils.getClientIp(request),
+                    request.getHeader("User-Agent"),
+                    details
+            );
+        } catch (Exception e) {
+            log.warn("Failed to log api_key_used event: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 记录 API Key 认证失败事件
+     */
+    private void logApiKeyFailed(HttpServletRequest request, String token) {
+        try {
+            Map<String, Object> details = new HashMap<>();
+            details.put("method", "api_key");
+            // 只记录前缀，不泄露完整 token
+            if (token.length() > 11) {
+                details.put("key_prefix", token.substring(0, 11) + "...");
+            }
+
+            systemAuditService.logAuthEvent(
+                    "api_key_failed",
+                    null,
+                    WebUtils.getClientIp(request),
+                    request.getHeader("User-Agent"),
+                    details
+            );
+        } catch (Exception e) {
+            log.warn("Failed to log api_key_failed event: {}", e.getMessage());
+        }
     }
 
     /**
