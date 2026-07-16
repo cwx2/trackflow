@@ -23,29 +23,31 @@
     <!-- 用户列表 -->
     <div class="data-table">
       <div class="table-header">
-        <div class="col" style="width:60px">ID</div>
-        <div class="col" style="width:140px">用户名</div>
-        <div class="col" style="flex:1">显示名称</div>
-        <div class="col" style="width:200px">邮箱</div>
-        <div class="col" style="width:100px">状态</div>
-        <div class="col" style="width:160px">最近登录</div>
-        <div class="col" style="width:140px">操作</div>
+        <div class="col" style="width:240px">用户</div>
+        <div class="col" style="flex:1">邮箱</div>
+        <div class="col" style="width:80px">状态</div>
+        <div class="col" style="width:150px">最近登录</div>
+        <div class="col" style="width:120px">操作</div>
       </div>
       <div class="table-body">
         <div v-for="user in users" :key="user.id" class="table-row">
-          <div class="col" style="width:60px">{{ user.id }}</div>
-          <div class="col" style="width:140px">
-            <router-link :to="`/admin/users/${user.id}`" class="username-link">{{ user.username }}</router-link>
+          <div class="col user-col" style="width:240px">
+            <span class="user-avatar" :style="{ background: getAvatarColor(user.displayName || user.username) }">
+              {{ getInitial(user.displayName || user.username) }}
+            </span>
+            <div class="user-info">
+              <router-link :to="`/admin/users/${user.id}`" class="username-link">{{ user.displayName || user.username }}</router-link>
+              <span class="user-login">{{ user.username }}</span>
+            </div>
           </div>
-          <div class="col" style="flex:1">{{ user.displayName }}</div>
-          <div class="col" style="width:200px">{{ user.email || '—' }}</div>
-          <div class="col" style="width:100px">
+          <div class="col" style="flex:1">{{ user.email || '—' }}</div>
+          <div class="col" style="width:80px">
             <span class="status-tag" :class="user.status">{{ user.status === 'active' ? '启用' : '禁用' }}</span>
           </div>
-          <div class="col" style="width:160px">
+          <div class="col" style="width:150px">
             <span class="time-text">{{ formatDate(user.lastLoginAt) }}</span>
           </div>
-          <div class="col" style="width:140px">
+          <div class="col" style="width:120px">
             <button v-if="user.status === 'active'" class="btn-sm danger" @click="disableUser(user)">禁用</button>
             <button v-else class="btn-sm" @click="enableUser(user)">启用</button>
             <button class="btn-sm" @click="openRoleDialog(user)">角色</button>
@@ -549,6 +551,27 @@ function formatDate(dt: string) {
   return new Date(dt).toLocaleString('zh-CN')
 }
 
+/** 获取用户名首字母（支持中文取第一个字） */
+function getInitial(name: string): string {
+  if (!name) return '?'
+  const first = name.trim().charAt(0)
+  return first.toUpperCase()
+}
+
+/** 根据名称生成稳定的头像背景色 */
+function getAvatarColor(name: string): string {
+  const colors = [
+    '#4a9af5', '#7c5cbf', '#e06c75', '#e5a64e',
+    '#56b6c2', '#98c379', '#c678dd', '#61afef',
+    '#d19a66', '#be5046'
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
 onMounted(() => {
   loadUsers()
   loadGlobalRoles()
@@ -582,6 +605,13 @@ onMounted(() => {
 
 .username-link { color: var(--accent-blue); font-weight: 500; text-decoration: none; }
 .username-link:hover { text-decoration: underline; }
+
+/* User column with avatar */
+.user-col { display: flex; align-items: center; gap: 10px; }
+.user-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.user-info { display: flex; flex-direction: column; min-width: 0; }
+.user-info .username-link { font-size: var(--font-size-sm); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-login { font-size: 11px; color: var(--text-muted); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status-tag { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); }
 .status-tag.active { background: rgba(76,175,80,0.15); color: var(--accent-green); }
 .status-tag.disabled { background: rgba(244,67,54,0.15); color: var(--accent-red); }
