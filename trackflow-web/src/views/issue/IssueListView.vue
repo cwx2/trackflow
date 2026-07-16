@@ -263,6 +263,15 @@
         <div class="filter-left">
           <span class="current-query-name">{{ activeQueryName }}</span>
           <span class="issue-total-badge">{{ totalIssues }} 个问题</span>
+          <button
+            class="hide-resolved-toggle"
+            :class="{ active: hideResolved }"
+            :title="hideResolved ? '点击显示已解决工单' : '点击隐藏已解决工单'"
+            @click="toggleHideResolved"
+          >
+            <icon-check-circle />
+            <span class="toggle-label">{{ hideResolved ? '已隐藏已解决' : '隐藏已解决' }}</span>
+          </button>
         </div>
         <div class="filter-right">
           <a-select v-model="filterProject" placeholder="所有项目" size="small" style="width: 120px" allow-clear @change="onFilterChange">
@@ -481,7 +490,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
@@ -859,6 +868,23 @@ const filterProject = ref<string | undefined>(undefined)
 const searchKeyword = ref('')
 const globalFilterParams = ref<Record<string, any>>({})
 const initialFilterChips = ref<any[]>([])
+
+// Hide resolved toggle (persisted in localStorage)
+const HIDE_RESOLVED_KEY = 'trackflow:hide-resolved'
+const hideResolved = ref(loadHideResolved())
+
+function loadHideResolved(): boolean {
+  try {
+    return localStorage.getItem(HIDE_RESOLVED_KEY) === 'true'
+  } catch { return false }
+}
+
+function toggleHideResolved() {
+  hideResolved.value = !hideResolved.value
+  localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved.value))
+  currentPage.value = 1
+  refreshList()
+}
 
 function onGlobalSearch(keyword: string) {
   searchKeyword.value = keyword
@@ -1255,6 +1281,7 @@ function buildFilters() {
   if (filterProject.value) filters.projectId = filterProject.value
   if (activeQueryId.value) filters.queryId = activeQueryId.value
   if (searchKeyword.value.trim()) filters.keyword = searchKeyword.value.trim()
+  if (hideResolved.value) filters.hideResolved = 'true'
   // Merge global filter params (from FilterBar's filter mode)
   Object.assign(filters, globalFilterParams.value)
   return filters
@@ -1543,6 +1570,34 @@ function applyDashboardFilter() {
 .filter-left { display: flex; align-items: center; gap: 12px; }
 .current-query-name { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
 .issue-total-badge { font-size: 12px; color: var(--tf-text-tertiary); }
+
+/* Hide resolved toggle */
+.hide-resolved-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--tf-border);
+  border-radius: var(--tf-radius-md, 6px);
+  background: transparent;
+  color: var(--tf-text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.hide-resolved-toggle:hover {
+  border-color: var(--tf-accent);
+  color: var(--tf-text-secondary);
+  background: var(--tf-bg-hover);
+}
+.hide-resolved-toggle.active {
+  border-color: var(--tf-accent);
+  background: var(--tf-accent-bg);
+  color: var(--tf-accent);
+}
+.hide-resolved-toggle .toggle-label { font-size: 12px; }
 .filter-right { display: flex; gap: 8px; align-items: center; }
 
 /* Inline create */

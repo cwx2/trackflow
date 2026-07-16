@@ -195,6 +195,14 @@ public class IssueService {
         applyNegativeFilter(wrapper, "sprint_id", query.getSprintIdNot(), true);
         applyNegativeFilter(wrapper, "issue_type", query.getIssueTypeNot(), false);
 
+        // hideResolved: exclude all is_closed=true statuses
+        if ("true".equals(query.getHideResolved())) {
+            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+            if (!closedStatusIds.isEmpty()) {
+                wrapper.notIn("status_id", closedStatusIds);
+            }
+        }
+
         // Special filters: overdue, dueSoon, reportedByMe (all exclude done/cancelled statuses)
         boolean needClosedExclusion = "true".equals(query.getOverdue())
                 || "true".equals(query.getDueSoon())

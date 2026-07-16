@@ -15,7 +15,7 @@ export const issueApi = {
     projectId?: string; statusId?: string; priority?: string
     assigneeId?: string; reporterId?: string; sprintId?: string
     issueType?: string; keyword?: string; page?: number; pageSize?: number
-    sort?: string
+    sort?: string; hideResolved?: string
   }) {
     return request.get<any, R<PageResult<IssueVO>>>('/issues', { params })
   },

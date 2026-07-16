@@ -7,6 +7,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.service.StatusCacheHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,6 +34,7 @@ import java.util.regex.Pattern;
 public class QueryExecutor {
 
     private final IssueMapper issueMapper;
+    private final StatusCacheHelper statusCacheHelper;
 
     /**
      * 允许排序的字段白名单（数据库列名）
@@ -104,6 +106,15 @@ public class QueryExecutor {
      */
     public Page<Issue> executeWithProjectFilter(List<Map<String, Object>> filters, int page, int pageSize,
                                                  List<Map<String, String>> sortCriteria, List<Long> accessibleProjectIds) {
+        return executeWithProjectFilter(filters, page, pageSize, sortCriteria, accessibleProjectIds, false);
+    }
+
+    /**
+     * 执行筛选查询（带项目成员过滤 + 隐藏已解决）
+     */
+    public Page<Issue> executeWithProjectFilter(List<Map<String, Object>> filters, int page, int pageSize,
+                                                 List<Map<String, String>> sortCriteria, List<Long> accessibleProjectIds,
+                                                 boolean hideResolved) {
         Page<Issue> pageObj = new Page<>(page, pageSize);
         QueryWrapper<Issue> wrapper = buildWrapper(filters);
 
@@ -113,6 +124,14 @@ public class QueryExecutor {
                 return new Page<>(); // 没有可访问的项目，返回空
             }
             wrapper.in("project_id", accessibleProjectIds);
+        }
+
+        // 隐藏已解决工单
+        if (hideResolved) {
+            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+            if (!closedStatusIds.isEmpty()) {
+                wrapper.notIn("status_id", closedStatusIds);
+            }
         }
 
         // 排序

@@ -28,7 +28,7 @@ export const queryApi = {
   },
 
   /** 执行保存查询 */
-  executeById(id: string, params?: { page?: number; pageSize?: number }) {
+  executeById(id: string, params?: { page?: number; pageSize?: number; hideResolved?: string }) {
     return request.get<any, R<PageResult<IssueVO>>>(`/queries/${id}/results`, { params })
   },
 

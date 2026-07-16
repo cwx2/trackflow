@@ -175,7 +175,7 @@ public class SavedQueryService {
      * 执行保存查询（带项目成员过滤）
      * 查询结果自动限定在用户所属项目范围内
      */
-    public Page<Issue> executeByIdWithAccessCheck(Long id, int page, int pageSize, Long userId) {
+    public Page<Issue> executeByIdWithAccessCheck(Long id, int page, int pageSize, Long userId, boolean hideResolved) {
         SavedQuery query = queryMapper.selectById(id);
         if (query == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
@@ -186,7 +186,7 @@ public class SavedQueryService {
 
         // 注入项目成员过滤条件
         List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
-        return queryExecutor.executeWithProjectFilter(filters, page, pageSize, sortCriteria, accessibleProjectIds);
+        return queryExecutor.executeWithProjectFilter(filters, page, pageSize, sortCriteria, accessibleProjectIds, hideResolved);
     }
 
     /**
