@@ -81,8 +81,10 @@ export const dashboardApi = {
   },
 
   /** 图表数据（趋势、状态分布、工作负载） */
-  charts() {
-    return request.get<any, R<DashboardChartsVO>>('/dashboard/charts')
+  charts(projectId?: string) {
+    return request.get<any, R<DashboardChartsVO>>('/dashboard/charts', {
+      params: projectId ? { projectId } : undefined
+    })
   },
 
   /** 分配给我的工单 */

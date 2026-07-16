@@ -67,6 +67,18 @@
     </div>
 
     <!-- 图表区域 -->
+    <div class="charts-section-header">
+      <span class="charts-section-title">数据概览</span>
+      <a-select
+        v-model="selectedProjectId"
+        size="small"
+        style="width: 180px"
+        @change="handleProjectChange"
+      >
+        <a-option value="__all__">全部项目</a-option>
+        <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
+      </a-select>
+    </div>
     <div class="charts-grid">
       <!-- 工单创建/关闭趋势（14天） -->
       <div class="chart-card chart-wide">
@@ -254,9 +266,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Message } from '@arco-design/web-vue'
-import { dashboardApi } from '@/api'
+import { dashboardApi, projectApi } from '@/api'
 import type { DashboardSummaryVO, DashboardActivityVO, DashboardChartsVO } from '@/api/dashboard'
-import type { IssueVO } from '@/api/types'
+import type { IssueVO, ProjectVO } from '@/api/types'
 import { fieldLabelMap, localizeActionShort, localizeStatusName } from '@/utils/fieldLabels'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -302,6 +314,8 @@ const assignedIssues = ref<IssueVO[]>([])
 const overdueIssues = ref<IssueVO[]>([])
 const activities = ref<DashboardActivityVO[]>([])
 const chartsData = ref<DashboardChartsVO | null>(null)
+const projects = ref<ProjectVO[]>([])
+const selectedProjectId = ref<string>('__all__')
 
 // Computed
 const userName = computed(() => {
@@ -550,12 +564,26 @@ async function loadSummary() {
 async function loadCharts() {
   chartsLoading.value = true
   try {
-    const res = await dashboardApi.charts()
+    const pid = selectedProjectId.value !== '__all__' ? selectedProjectId.value : undefined
+    const res = await dashboardApi.charts(pid)
     if (res.code === 0 && res.data) {
       chartsData.value = res.data
     }
   } catch { Message.error({ content: '加载图表数据失败', duration: 3000 }) }
   finally { chartsLoading.value = false }
+}
+
+async function loadProjects() {
+  try {
+    const res = await projectApi.list({ page: 1, pageSize: 100 })
+    if (res.code === 0 && res.data) {
+      projects.value = res.data.list || []
+    }
+  } catch { /* 项目列表加载失败不影响主流程 */ }
+}
+
+function handleProjectChange() {
+  loadCharts()
 }
 
 async function loadAssigned() {
@@ -674,6 +702,7 @@ function navigateToQuery(type: string) {
 
 // Init
 onMounted(() => {
+  loadProjects()
   loadSummary()
   loadCharts()
   loadAssigned()
@@ -816,6 +845,20 @@ onMounted(() => {
 
 .role-hint-link:hover {
   text-decoration: underline;
+}
+
+/* Charts Section Header */
+.charts-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.charts-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
 }
 
 /* Charts Grid */

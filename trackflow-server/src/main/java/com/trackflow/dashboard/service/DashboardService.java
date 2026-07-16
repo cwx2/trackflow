@@ -290,31 +290,27 @@ public class DashboardService {
     }
 
     /**
-     * 工作台图表数据（跨项目聚合，用户所在所有项目范围）
+     * 工作台图表数据。
+     * @param userId 当前用户
+     * @param projectId 可选：指定项目 ID 时只统计该项目数据；为 null 时聚合用户所在所有项目。
      */
-    public DashboardChartsVO getCharts(Long userId) {
-        List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+    public DashboardChartsVO getCharts(Long userId, Long projectId) {
+        List<Long> userProjectIds;
+        if (projectId != null) {
+            // 验证用户是否是该项目的成员
+            List<Long> allUserProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+            if (!allUserProjectIds.contains(projectId)) {
+                // 不是项目成员，返回空数据
+                return buildEmptyCharts();
+            }
+            userProjectIds = List.of(projectId);
+        } else {
+            userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
+        }
         DashboardChartsVO charts = new DashboardChartsVO();
 
         if (userProjectIds.isEmpty()) {
-            // 空数据
-            DashboardChartsVO.TrendSection emptyTrend = new DashboardChartsVO.TrendSection();
-            emptyTrend.setDates(List.of());
-            emptyTrend.setCreated(List.of());
-            emptyTrend.setResolved(List.of());
-            charts.setTrend(emptyTrend);
-
-            DashboardChartsVO.StatusDistributionSection emptyStatus = new DashboardChartsVO.StatusDistributionSection();
-            emptyStatus.setItems(List.of());
-            emptyStatus.setTotal(0);
-            charts.setStatusDistribution(emptyStatus);
-
-            DashboardChartsVO.WorkloadSection emptyWorkload = new DashboardChartsVO.WorkloadSection();
-            emptyWorkload.setItems(List.of());
-            emptyWorkload.setTotal(0);
-            charts.setWorkload(emptyWorkload);
-
-            return charts;
+            return buildEmptyCharts();
         }
 
         // ─── 趋势数据（近 14 天） ─────────────────────────────
@@ -427,6 +423,31 @@ public class DashboardService {
         workloadSection.setItems(workloadItems);
         workloadSection.setTotal(allIssues.size());
         charts.setWorkload(workloadSection);
+
+        return charts;
+    }
+
+    /**
+     * 构建空图表数据（用于无项目或无权限场景）
+     */
+    private DashboardChartsVO buildEmptyCharts() {
+        DashboardChartsVO charts = new DashboardChartsVO();
+
+        DashboardChartsVO.TrendSection emptyTrend = new DashboardChartsVO.TrendSection();
+        emptyTrend.setDates(List.of());
+        emptyTrend.setCreated(List.of());
+        emptyTrend.setResolved(List.of());
+        charts.setTrend(emptyTrend);
+
+        DashboardChartsVO.StatusDistributionSection emptyStatus = new DashboardChartsVO.StatusDistributionSection();
+        emptyStatus.setItems(List.of());
+        emptyStatus.setTotal(0);
+        charts.setStatusDistribution(emptyStatus);
+
+        DashboardChartsVO.WorkloadSection emptyWorkload = new DashboardChartsVO.WorkloadSection();
+        emptyWorkload.setItems(List.of());
+        emptyWorkload.setTotal(0);
+        charts.setWorkload(emptyWorkload);
 
         return charts;
     }

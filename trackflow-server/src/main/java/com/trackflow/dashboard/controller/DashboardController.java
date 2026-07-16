@@ -32,12 +32,14 @@ public class DashboardController {
 
     /**
      * 仪表盘图表数据（趋势、状态分布、工作负载）
+     * @param projectId 可选项目筛选，传入时只查询该项目的数据
      */
     @GetMapping("/charts")
     @PreAuthorize("isAuthenticated()")
-    public R<DashboardChartsVO> charts() {
+    public R<DashboardChartsVO> charts(
+            @RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(dashboardService.getCharts(userId));
+        return R.ok(dashboardService.getCharts(userId, projectId));
     }
 
     /**
