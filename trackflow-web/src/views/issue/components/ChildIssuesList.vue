@@ -19,6 +19,7 @@
         v-for="child in children"
         :key="child.id"
         class="child-item"
+        :class="{ 'child-resolved': child.statusCategory === 'done' }"
       >
         <span class="child-status-dot" :style="{ background: child.statusColor || '#666' }"></span>
         <router-link :to="`/issues/${child.issueKey}`" class="child-key">{{ child.issueKey }}</router-link>
@@ -169,6 +170,20 @@ defineProps<{
   font-weight: 500;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+/* Resolved child issue styling */
+.child-resolved .child-key {
+  text-decoration: line-through;
+  color: var(--tf-text-tertiary);
+}
+
+.child-resolved .child-title {
+  color: var(--tf-text-tertiary);
+}
+
+.child-resolved .child-assignee {
+  color: var(--tf-text-quaternary);
 }
 
 /* Hours summary */

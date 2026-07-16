@@ -321,6 +321,7 @@
         :pagination="false"
         :row-selection="rowSelection"
         :selected-keys="selectedKeysArray"
+        :row-class="getRowClass"
         row-key="id"
         :bordered="false"
         :stripe="false"
@@ -1013,6 +1014,13 @@ function isColumnSortable(key: string): boolean {
 }
 
 // Status helpers
+function isResolved(statusId: string): boolean {
+  const s = statusCache.value.find(st => st.id === statusId)
+  return s?.isClosed === true
+}
+function getRowClass(record: TableData): string {
+  return isResolved(record.statusId as string) ? 'issue-resolved' : ''
+}
 function getStatusName(id: string) {
   const s = statusCache.value.find(st => st.id === id)
   return localizeStatusName(s?.name)
@@ -1556,6 +1564,16 @@ function applyDashboardFilter() {
 
 .issue-key { color: var(--tf-accent); font-weight: 500; font-size: 12px; }
 .issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+
+/* Resolved issue styling (YouTrack: strikethrough key + gray text) */
+.issue-table :deep(.issue-resolved) .issue-key { text-decoration: line-through; color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .issue-title-text { color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .editable-cell { color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .readonly-cell { color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .type-label { color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .reporter-name { color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .time-ago { color: var(--tf-text-quaternary); }
+.issue-table :deep(.issue-resolved) .cf-cell { color: var(--tf-text-tertiary); }
 .type-label { font-size: 12px; color: var(--tf-text-secondary); }
 .reporter-name { font-size: 12px; color: var(--tf-text-secondary); }
 
