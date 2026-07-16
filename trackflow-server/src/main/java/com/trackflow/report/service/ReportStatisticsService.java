@@ -6,6 +6,8 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.vo.*;
 import com.trackflow.sprint.entity.Sprint;
@@ -37,6 +39,7 @@ public class ReportStatisticsService {
     private final SprintService sprintService;
     private final StatusCacheHelper statusCacheHelper;
     private final ProjectService projectService;
+    private final ProjectMapper projectMapper;
 
     /**
      * 获取仪表盘全量数据（一次请求，前端缓存分发）
@@ -58,6 +61,10 @@ public class ReportStatisticsService {
             dashboard.setBurndown(buildBurndown(projectId, sprintId));
         }
         dashboard.setOverview(buildOverview(issues, closedIds));
+        // 跨项目对比：仅"全部项目"模式下（projectId == null 且有多个项目）返回
+        if (projectId == null) {
+            dashboard.setProjectComparison(buildProjectComparison(issues, projectIds, closedIds));
+        }
         return dashboard;
     }
 
@@ -326,6 +333,60 @@ public class ReportStatisticsService {
     }
 
     // ─── Private helpers ────────────────────────────────────────────────
+
+    /**
+     * 构建跨项目对比数据 — 按项目分组统计工单数、完成率等
+     */
+    private ProjectComparisonVO buildProjectComparison(List<Issue> issues, List<Long> projectIds, Set<Long> closedIds) {
+        // 按项目分组
+        Map<Long, List<Issue>> byProject = issues.stream()
+                .filter(i -> i.getProjectId() != null)
+                .collect(Collectors.groupingBy(Issue::getProjectId));
+
+        // 获取项目信息（名称、key）
+        Set<Long> allProjectIds = byProject.keySet();
+        Map<Long, Project> projectMap;
+        if (allProjectIds.isEmpty()) {
+            projectMap = Map.of();
+        } else {
+            projectMap = projectMapper.selectBatchIds(allProjectIds).stream()
+                    .collect(Collectors.toMap(Project::getId, p -> p, (a, b) -> a));
+        }
+
+        List<ProjectComparisonVO.ProjectStatItem> items = new ArrayList<>();
+        for (Map.Entry<Long, List<Issue>> entry : byProject.entrySet()) {
+            List<Issue> projectIssues = entry.getValue();
+            Project project = projectMap.get(entry.getKey());
+            if (project == null) continue;
+
+            long total = projectIssues.size();
+            long closed = projectIssues.stream()
+                    .filter(i -> closedIds.contains(i.getStatusId()))
+                    .count();
+            long open = total - closed;
+            long overdue = projectIssues.stream()
+                    .filter(i -> i.getDueDate() != null && i.getDueDate().isBefore(LocalDate.now()))
+                    .filter(i -> !closedIds.contains(i.getStatusId()))
+                    .count();
+
+            ProjectComparisonVO.ProjectStatItem item = new ProjectComparisonVO.ProjectStatItem();
+            item.setName(project.getName());
+            item.setKey(project.getKey());
+            item.setTotal(total);
+            item.setOpen(open);
+            item.setClosed(closed);
+            item.setCompletionRate(total > 0 ? Math.round(closed * 100.0 / total) : 0);
+            item.setOverdue(overdue);
+            items.add(item);
+        }
+
+        // 按工单总数降序
+        items.sort((a, b) -> Long.compare(b.getTotal(), a.getTotal()));
+
+        ProjectComparisonVO vo = new ProjectComparisonVO();
+        vo.setItems(items);
+        return vo;
+    }
 
     /**
      * 将单个 projectId 或 null 解析为可访问项目 ID 列表。

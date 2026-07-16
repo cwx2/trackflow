@@ -155,6 +155,17 @@
             <v-chart :option="burndownChartOption" autoresize class="chart-instance" />
           </div>
         </div>
+
+        <!-- 项目对比（仅"全部项目"模式且有多个项目时显示） -->
+        <div v-if="dashboardData.projectComparison && dashboardData.projectComparison.items.length > 1" class="chart-card chart-card-wide">
+          <div class="chart-card-header">
+            <h3 class="chart-title">项目对比</h3>
+            <span class="chart-subtitle">各项目工单数量与完成率对比</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="projectComparisonChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
       </div>
     </template>
   </div>
@@ -175,7 +186,7 @@ import {
 import VChart from 'vue-echarts'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
-import type { DashboardData } from '@/api/reportStatistics'
+import type { DashboardData, ProjectComparisonData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 
 // 注册 ECharts 组件
@@ -530,6 +541,82 @@ const burndownChartOption = computed(() => {
           { offset: 0, color: 'rgba(248, 81, 73, 0.12)' },
           { offset: 1, color: 'rgba(248, 81, 73, 0)' }
         ]}}
+      }
+    ]
+  }
+})
+
+const projectComparisonChartOption = computed(() => {
+  if (!dashboardData.value?.projectComparison) return {}
+  const items = dashboardData.value.projectComparison.items
+  const c = chartColors.value
+  const projectNames = items.map(i => `${i.name} (${i.key})`)
+  return {
+    backgroundColor: chartBgColor,
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText },
+      formatter: (params: any) => {
+        const idx = params[0]?.dataIndex
+        if (idx == null) return ''
+        const item = items[idx]
+        return `<strong>${item.name}</strong> (${item.key})<br/>` +
+          `工单总数: ${item.total}<br/>` +
+          `已完成: ${item.closed}<br/>` +
+          `进行中: ${item.open}<br/>` +
+          `完成率: ${item.completionRate}%<br/>` +
+          `已逾期: ${item.overdue}`
+      }
+    },
+    legend: {
+      data: ['已完成', '进行中', '已逾期'],
+      right: 20,
+      top: 0,
+      textStyle: { color: c.textColor, fontSize: 11 },
+      itemWidth: 14,
+      itemHeight: 10
+    },
+    grid: { left: 100, right: 30, top: 36, bottom: 20 },
+    xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: projectNames,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 11, width: 90, overflow: 'truncate' },
+      axisTick: { show: false }
+    },
+    series: [
+      {
+        name: '已完成',
+        type: 'bar',
+        stack: 'total',
+        barWidth: '55%',
+        data: items.map(i => i.closed),
+        itemStyle: { color: '#3fb950', borderRadius: [0, 0, 0, 0] }
+      },
+      {
+        name: '进行中',
+        type: 'bar',
+        stack: 'total',
+        barWidth: '55%',
+        data: items.map(i => i.open - i.overdue),
+        itemStyle: { color: '#58a6ff' }
+      },
+      {
+        name: '已逾期',
+        type: 'bar',
+        stack: 'total',
+        barWidth: '55%',
+        data: items.map(i => i.overdue),
+        itemStyle: { color: '#f85149', borderRadius: [0, 3, 3, 0] }
       }
     ]
   }

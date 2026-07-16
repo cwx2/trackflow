@@ -14,4 +14,6 @@ public class DashboardVO {
     private TrendVO trend;
     private BurndownVO burndown;
     private OverviewVO overview;
+    /** 跨项目对比数据（仅"全部项目"模式下返回） */
+    private ProjectComparisonVO projectComparison;
 }

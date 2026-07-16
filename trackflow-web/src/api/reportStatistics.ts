@@ -75,6 +75,20 @@ export interface BurndownData {
   totalIssues: number
 }
 
+export interface ProjectComparisonItem {
+  name: string
+  key: string
+  total: number
+  open: number
+  closed: number
+  completionRate: number
+  overdue: number
+}
+
+export interface ProjectComparisonData {
+  items: ProjectComparisonItem[]
+}
+
 export interface DashboardData {
   statusDistribution: StatusDistributionData
   priorityDistribution: PriorityDistributionData
@@ -83,6 +97,7 @@ export interface DashboardData {
   trend: TrendData
   burndown?: BurndownData
   overview: OverviewData
+  projectComparison?: ProjectComparisonData
 }
 
 // ─── API ──────────────────────────────────────────────
