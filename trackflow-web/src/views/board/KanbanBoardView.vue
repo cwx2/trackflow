@@ -253,6 +253,58 @@
                   <div class="column-empty-hint">拖拽工单到此列或创建新工单</div>
                 </template>
               </div>
+              <!-- 内联快速创建卡片 -->
+              <div
+                v-if="canCreateIssue && !isDragging"
+                class="add-card-area"
+              >
+                <div
+                  v-if="addingCardColumnId === status.id && !addingCardSwimlaneKey"
+                  class="add-card-form"
+                >
+                  <input
+                    :ref="(el) => setAddCardInputRef(el, status.id, '')"
+                    v-model="addCardTitle"
+                    class="add-card-input"
+                    placeholder="输入工单标题，回车创建"
+                    :disabled="addCardSubmitting"
+                    @keydown.enter.prevent="submitAddCard(status.id)"
+                    @keydown.escape="cancelAddCard"
+                    @blur="onAddCardBlur"
+                  />
+                  <div class="add-card-form-actions">
+                    <a-select
+                      v-model="addCardType"
+                      size="mini"
+                      style="width: 80px"
+                    >
+                      <a-option value="Task">任务</a-option>
+                      <a-option value="Bug">缺陷</a-option>
+                      <a-option value="Feature">需求</a-option>
+                    </a-select>
+                    <a-button
+                      size="mini"
+                      type="primary"
+                      :loading="addCardSubmitting"
+                      @mousedown.prevent
+                      @click="submitAddCard(status.id)"
+                    >创建</a-button>
+                    <a-button
+                      size="mini"
+                      @mousedown.prevent
+                      @click="cancelAddCard"
+                    >取消</a-button>
+                  </div>
+                </div>
+                <button
+                  v-else
+                  class="add-card-btn"
+                  @click="startAddCard(status.id)"
+                >
+                  <span class="add-card-icon">+</span>
+                  <span class="add-card-text">添加卡片</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -423,6 +475,57 @@
                     >
                       📥
                     </div>
+                    <!-- Swimlane 内联快速创建卡片 -->
+                    <div
+                      v-if="canCreateIssue && !isDragging"
+                      class="add-card-area add-card-area--swimlane"
+                    >
+                      <div
+                        v-if="addingCardColumnId === status.id && addingCardSwimlaneKey === lane.key"
+                        class="add-card-form"
+                      >
+                        <input
+                          :ref="(el) => setAddCardInputRef(el, status.id, lane.key)"
+                          v-model="addCardTitle"
+                          class="add-card-input"
+                          placeholder="输入标题，回车创建"
+                          :disabled="addCardSubmitting"
+                          @keydown.enter.prevent="submitAddCard(status.id, lane.key)"
+                          @keydown.escape="cancelAddCard"
+                          @blur="onAddCardBlur"
+                        />
+                        <div class="add-card-form-actions">
+                          <a-select
+                            v-model="addCardType"
+                            size="mini"
+                            style="width: 80px"
+                          >
+                            <a-option value="Task">任务</a-option>
+                            <a-option value="Bug">缺陷</a-option>
+                            <a-option value="Feature">需求</a-option>
+                          </a-select>
+                          <a-button
+                            size="mini"
+                            type="primary"
+                            :loading="addCardSubmitting"
+                            @mousedown.prevent
+                            @click="submitAddCard(status.id, lane.key)"
+                          >创建</a-button>
+                          <a-button
+                            size="mini"
+                            @mousedown.prevent
+                            @click="cancelAddCard"
+                          >取消</a-button>
+                        </div>
+                      </div>
+                      <button
+                        v-else
+                        class="add-card-btn add-card-btn--compact"
+                        @click="startAddCard(status.id, lane.key)"
+                      >
+                        <span class="add-card-icon">+</span>
+                      </button>
+                    </div>
                   </template>
                 </div>
               </div>
@@ -494,7 +597,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi } from '@/api'
@@ -557,7 +660,7 @@ const selectedProject = computed({
 })
 
 // 权限控制
-const { canChangeStatus } = usePermission(() => selectedProject.value)
+const { canChangeStatus, canCreateIssue } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
@@ -1501,6 +1604,130 @@ async function loadIssues() {
   issues.value = res.data?.list || []
 }
 
+// ===== 内联快速创建卡片 =====
+const addingCardColumnId = ref<string | null>(null)
+const addingCardSwimlaneKey = ref<string | null>(null)
+const addCardTitle = ref('')
+const addCardType = ref<string>('Task')
+const addCardSubmitting = ref(false)
+
+/** 存储 input refs，用于自动聚焦 */
+function setAddCardInputRef(el: any, _statusId: string, _laneKey: string) {
+  if (el) {
+    nextTick(() => el.focus())
+  }
+}
+
+/** 开始添加卡片：展开内联表单 */
+function startAddCard(statusId: string, swimlaneKey?: string) {
+  addingCardColumnId.value = statusId
+  addingCardSwimlaneKey.value = swimlaneKey || null
+  addCardTitle.value = ''
+  addCardType.value = 'Task'
+}
+
+/** 取消添加卡片 */
+function cancelAddCard() {
+  addingCardColumnId.value = null
+  addingCardSwimlaneKey.value = null
+  addCardTitle.value = ''
+  keepFormOpen = false
+}
+
+/** blur 时如果标题为空则取消——但提交后保持打开 */
+let keepFormOpen = false
+
+function onAddCardBlur() {
+  if (keepFormOpen) return
+  // 使用 setTimeout 避免点击"创建"按钮时提前关闭
+  setTimeout(() => {
+    if (!addCardTitle.value.trim() && !addCardSubmitting.value && !keepFormOpen) {
+      cancelAddCard()
+    }
+  }, 200)
+}
+
+/** 提交创建卡片 */
+async function submitAddCard(statusId: string, swimlaneKey?: string) {
+  const title = addCardTitle.value.trim()
+  if (!title || !selectedProject.value) return
+
+  addCardSubmitting.value = true
+  keepFormOpen = true
+  try {
+    // 确定 Sprint
+    const sprintId = selectedSprint.value || getActiveSprintId()
+
+    // 确定负责人（按负责人分组时预填）
+    let assigneeId: string | undefined
+    if (swimlaneGroupBy.value === 'assignee' && swimlaneKey && swimlaneKey !== '__unassigned__') {
+      assigneeId = swimlaneKey
+    }
+
+    const createData: Record<string, any> = {
+      projectId: selectedProject.value,
+      title,
+      issueType: addCardType.value,
+      sprintId: sprintId || undefined,
+      assigneeId: assigneeId || undefined
+    }
+
+    const res = await issueApi.create(createData as any)
+    const newIssue = res.data
+
+    if (newIssue) {
+      // 如果创建的 Issue 状态不是目标列的状态，需要做状态转换
+      // （初始状态通常是 default/待处理，但用户在其他列创建需要转换）
+      const defaultStatus = statuses.value.find(s => s.isDefault)
+      if (defaultStatus && defaultStatus.id !== statusId) {
+        try {
+          await issueApi.transitStatus(newIssue.id, statusId, undefined, newIssue.version)
+          // 更新本地状态
+          newIssue.statusId = statusId
+        } catch {
+          // 转换失败不影响创建，卡片将出现在默认状态列
+          Message.warning(`工单已创建，但无法自动转换到「${localizeStatusName(visibleStatuses.value.find(s => s.id === statusId)?.name)}」状态`)
+        }
+      }
+
+      // 构建本地 IssueVO 添加到看板
+      const issueVO: IssueVO = {
+        id: newIssue.id,
+        issueKey: newIssue.issueKey,
+        title: newIssue.title,
+        issueType: newIssue.issueType || addCardType.value,
+        priority: newIssue.priority || 'Normal',
+        statusId: newIssue.statusId || statusId,
+        projectId: selectedProject.value!,
+        sprintId: sprintId || undefined,
+        assigneeId: newIssue.assigneeId || assigneeId,
+        assigneeName: newIssue.assigneeName || '',
+        reporterId: newIssue.reporterId,
+        version: newIssue.version,
+        createdAt: newIssue.createdAt,
+        updatedAt: newIssue.updatedAt
+      }
+      issues.value.push(issueVO)
+
+      Message.success(`${newIssue.issueKey} 创建成功`)
+
+      // 清空标题但保持表单打开，方便连续创建
+      addCardTitle.value = ''
+      // 保持 keepFormOpen 直到下一帧，防止 blur 关闭表单
+      nextTick(() => {
+        // 延迟重置 keepFormOpen，让 blur 有时间判断
+        setTimeout(() => { keepFormOpen = false }, 250)
+      })
+    }
+  } catch (e: any) {
+    const errMsg = e.response?.data?.message || '创建失败'
+    Message.error(`创建工单失败：${errMsg}`)
+    keepFormOpen = false
+  } finally {
+    addCardSubmitting.value = false
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
   document.addEventListener('keydown', handleKeydown)
@@ -2045,6 +2272,97 @@ onUnmounted(() => {
 .column-empty-hint {
   font-size: 11px;
   color: var(--color-text-4);
+}
+
+/* ===== 内联快速创建卡片 ===== */
+.add-card-area {
+  margin-top: 4px;
+  padding: 2px 0;
+}
+
+.add-card-area--swimlane {
+  margin-top: 2px;
+}
+
+.add-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-3);
+  font-size: 12px;
+  transition: background 0.15s, color 0.15s;
+}
+.add-card-btn:hover {
+  background: var(--color-fill-2);
+  color: var(--color-text-1);
+}
+.add-card-btn:focus-visible {
+  outline: 2px solid rgb(var(--primary-6));
+  outline-offset: -1px;
+}
+
+.add-card-btn--compact {
+  width: auto;
+  padding: 4px 8px;
+  justify-content: center;
+}
+.add-card-btn--compact .add-card-text {
+  display: none;
+}
+
+.add-card-icon {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.add-card-text {
+  font-size: 12px;
+}
+
+.add-card-form {
+  background: var(--color-bg-2);
+  border: 1px solid rgb(var(--primary-6));
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-card-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-fill-1);
+  color: var(--color-text-1);
+  font-size: 13px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.add-card-input:focus {
+  border-color: rgb(var(--primary-6));
+}
+.add-card-input::placeholder {
+  color: var(--color-text-4);
+}
+.add-card-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.add-card-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ===== 页面空状态 ===== */
