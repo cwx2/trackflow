@@ -149,6 +149,39 @@ public class KeycloakAdminService {
     }
 
     /**
+     * 终止指定用户在 Keycloak 中的所有 session（强制登出）。
+     * 调用 Keycloak Admin API: DELETE /admin/realms/{realm}/users/{id}/sessions
+     * <p>
+     * 用于用户被禁用时立即切断所有活跃会话，使 refresh_token 失效。
+     *
+     * @param keycloakId 用户的 Keycloak ID
+     */
+    public void logoutUser(String keycloakId) {
+        if (keycloakId == null || keycloakId.isBlank()) {
+            log.warn("Cannot logout user: keycloakId is null or blank");
+            return;
+        }
+
+        try {
+            String token = getAdminToken();
+            String url = config.getServerUrl() + "/admin/realms/" + config.getRealm()
+                    + "/users/" + keycloakId + "/logout";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+
+            restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(headers), Void.class);
+            log.info("Keycloak sessions terminated for user: keycloakId={}", keycloakId);
+        } catch (HttpClientErrorException.NotFound e) {
+            // 用户在 Keycloak 中不存在（可能已删除），不阻断流程
+            log.warn("Keycloak user not found when trying to logout: keycloakId={}", keycloakId);
+        } catch (Exception e) {
+            // Keycloak 不可用时不阻断禁用操作，但记录警告
+            log.error("Failed to terminate Keycloak sessions for user {}: {}", keycloakId, e.getMessage());
+        }
+    }
+
+    /**
      * 为 Keycloak 用户分配 realm role
      */
     private void assignRealmRole(String keycloakUserId, String roleName, String token) {

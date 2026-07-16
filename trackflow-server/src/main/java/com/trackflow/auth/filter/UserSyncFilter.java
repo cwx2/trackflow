@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -35,6 +36,10 @@ public class UserSyncFilter extends OncePerRequestFilter {
 
     private final UserSyncService userSyncService;
     private final SystemAuditService systemAuditService;
+    private final StringRedisTemplate redisTemplate;
+
+    /** Redis 黑名单 key 前缀（与 UserService 中保持一致） */
+    private static final String DISABLED_USER_KEY_PREFIX = "auth:disabled:";
 
     /**
      * 已记录过登录事件的 JWT ID 缓存。
@@ -59,6 +64,21 @@ public class UserSyncFilter extends OncePerRequestFilter {
                 // 将本地用户 ID 设置到 details 中，供后续 SecurityUtils 获取
                 jwtAuth.setDetails(user.getId());
 
+                // Redis 黑名单快速检查：用户被禁用后即时拦截（O(1)）
+                // 放在 syncFromJwt 之后，因为需要 user.getId()；
+                // syncFromJwt 本身也会检查 DB status（双重保障）
+                if (isUserBlacklisted(user.getId())) {
+                    log.warn("Request blocked by Redis blacklist: userId={}, username={}",
+                            user.getId(), user.getUsername());
+                    logLoginFailedFromJwt(request, "user_disabled_blacklisted");
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write(
+                            "{\"code\":40100,\"message\":\"User account has been disabled\",\"data\":null}"
+                    );
+                    return;
+                }
+
                 // 仅对"新颁发"的 token 记录登录事件（jti 去重 + 时间窗口）
                 if (shouldLogLogin(jwt)) {
                     logLoginEvent(user, jwt, request);
@@ -69,10 +89,10 @@ public class UserSyncFilter extends OncePerRequestFilter {
                 if (e instanceof com.trackflow.common.exception.BusinessException) {
                     // 记录登录失败事件（用户被禁用）
                     logLoginFailedFromJwt(request, "user_disabled");
-                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
-                            "{\"code\":40301,\"message\":\"User account is disabled\",\"data\":null}"
+                            "{\"code\":40100,\"message\":\"User account has been disabled\",\"data\":null}"
                     );
                     return;
                 }
@@ -80,6 +100,20 @@ public class UserSyncFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 检查用户是否在 Redis 黑名单中（被禁用后的即时拦截）。
+     * Redis key 存在 = 用户被禁用，O(1) 快速检查。
+     */
+    private boolean isUserBlacklisted(Long userId) {
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(DISABLED_USER_KEY_PREFIX + userId));
+        } catch (Exception e) {
+            // Redis 不可用时 fallback 到 DB 检查（UserSyncService 已处理）
+            log.warn("Redis blacklist check failed, falling back to DB: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**

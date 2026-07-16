@@ -28,6 +28,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.redis.core.StringRedisTemplate;
+
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +46,12 @@ public class UserService {
 
     private static final Long SYSTEM_ADMIN_ROLE_ID = 1L;
 
+    /** Redis 黑名单 key 前缀：被禁用用户的即时拦截 */
+    private static final String DISABLED_USER_KEY_PREFIX = "auth:disabled:";
+
+    /** 黑名单 TTL：JWT 最大有效期 + 缓冲（Keycloak 默认 access_token 5分钟 + refresh_token 30分钟 + 5分钟缓冲） */
+    private static final Duration DISABLED_USER_TTL = Duration.ofMinutes(40);
+
     private final SysUserMapper userMapper;
     private final UserRoleMapper userRoleMapper;
     private final SysRoleMapper roleMapper;
@@ -54,6 +63,7 @@ public class UserService {
     private final IssueMapper issueMapper;
     private final KeycloakAdminService keycloakAdminService;
     private final ApiKeyService apiKeyService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 创建新用户（同步到 Keycloak + 本地 sys_user）
@@ -216,7 +226,14 @@ public class UserService {
         userMapper.updateById(user);
         permissionService.invalidateCache(id);
 
-        // 级联吊销用户所有 API Key（防止禁用后仍可通过已有 Key 访问）
+        // 1. 终止 Keycloak session（使 refresh_token 立即失效）
+        keycloakAdminService.logoutUser(user.getKeycloakId());
+
+        // 2. Redis 黑名单：即时拦截已签发的 JWT（O(1) 快速检查）
+        redisTemplate.opsForValue().set(
+                DISABLED_USER_KEY_PREFIX + id, "1", DISABLED_USER_TTL);
+
+        // 3. 级联吊销用户所有 API Key（防止禁用后仍可通过已有 Key 访问）
         int revokedKeys = apiKeyService.revokeAllByUser(id);
         if (revokedKeys > 0) {
             log.info("禁用用户 {} 时级联吊销 {} 个 API Key", user.getUsername(), revokedKeys);
@@ -227,6 +244,9 @@ public class UserService {
                 Map.of("username", user.getUsername(),
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
                         "revoked_api_keys", revokedKeys));
+
+        log.info("用户 {} 已禁用：Keycloak session 已终止, Redis 黑名单已写入(TTL={}min), API Key 已吊销({}个)",
+                user.getUsername(), DISABLED_USER_TTL.toMinutes(), revokedKeys);
     }
 
     /**
@@ -238,10 +258,15 @@ public class UserService {
         user.setStatus("active");
         userMapper.updateById(user);
 
+        // 清除 Redis 黑名单（允许用户重新登录）
+        redisTemplate.delete(DISABLED_USER_KEY_PREFIX + id);
+
         // 审计日志
         systemAuditService.log("enable_user", "user", id,
                 Map.of("username", user.getUsername(),
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : ""));
+
+        log.info("用户 {} 已启用：Redis 黑名单已清除", user.getUsername());
     }
 
     /**
