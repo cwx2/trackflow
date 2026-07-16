@@ -13,3 +13,31 @@
   font-size: 12px;
   color: var(--color-text-3);
 }
+
+/* ===== 打印样式（全局） ===== */
+@media print {
+  /* 隐藏侧边栏和导航 */
+  .sidebar {
+    display: none !important;
+  }
+
+  /* 隐藏标签栏 */
+  .global-tab-bar {
+    display: none !important;
+  }
+
+  /* 主内容区占满宽度 */
+  .main-area {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .app-layout {
+    display: block !important;
+  }
+}

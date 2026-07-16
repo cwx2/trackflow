@@ -38,6 +38,22 @@
           :shortcuts="dateShortcuts"
           @change="loadDashboard"
         />
+        <a-dropdown v-if="dashboardData" trigger="click">
+          <a-button size="small" type="outline">
+            <template #icon><icon-download /></template>
+            导出
+          </a-button>
+          <template #content>
+            <a-doption @click="exportCSV">
+              <template #icon><icon-file /></template>
+              导出 CSV（统计数据）
+            </a-doption>
+            <a-doption @click="printReport">
+              <template #icon><icon-printer /></template>
+              打印报表
+            </a-doption>
+          </template>
+        </a-dropdown>
       </div>
     </div>
 
@@ -181,16 +197,18 @@ import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
-  GridComponent
+  GridComponent,
+  ToolboxComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 
 // 注册 ECharts 组件
-use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
+use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, ToolboxComponent])
 
 // ─── 状态 ─────────────────────────────────────────────
 
@@ -238,6 +256,33 @@ function readThemeColors() {
 
 const chartBgColor = 'transparent'
 
+// ─── 通用 toolbox 配置（保存为图片） ────────────────────
+
+function chartToolbox(title: string) {
+  return {
+    show: true,
+    right: 8,
+    top: -4,
+    iconStyle: {
+      borderColor: chartColors.value.textColor,
+      borderWidth: 0.8
+    },
+    emphasis: {
+      iconStyle: {
+        borderColor: chartColors.value.tooltipText
+      }
+    },
+    feature: {
+      saveAsImage: {
+        type: 'png',
+        name: `TrackFlow_${title}_${new Date().toISOString().substring(0, 10)}`,
+        title: '保存为图片',
+        pixelRatio: 2
+      }
+    }
+  }
+}
+
 // ─── 图表 Options ─────────────────────────────────────────
 
 const statusChartOption = computed(() => {
@@ -246,6 +291,7 @@ const statusChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('状态分布'),
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
@@ -287,6 +333,7 @@ const priorityChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('优先级分布'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -325,6 +372,7 @@ const typeChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('类型分布'),
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
@@ -365,6 +413,7 @@ const workloadChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('团队负载'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -419,6 +468,7 @@ const trendChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('工单趋势'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -489,6 +539,7 @@ const burndownChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('Sprint燃尽图'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -553,6 +604,7 @@ const projectComparisonChartOption = computed(() => {
   const projectNames = items.map(i => `${i.name} (${i.key})`)
   return {
     backgroundColor: chartBgColor,
+    toolbox: chartToolbox('项目对比'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -710,6 +762,107 @@ function formatDate(val: any): string {
   if (typeof val === 'string') return val.substring(0, 10)
   if (val instanceof Date) return val.toISOString().substring(0, 10)
   return ''
+}
+
+// ─── 导出功能 ─────────────────────────────────────────
+
+/** 导出 CSV 统计数据 */
+function exportCSV() {
+  if (!dashboardData.value) return
+
+  const data = dashboardData.value
+  const lines: string[] = []
+  const BOM = '\uFEFF' // UTF-8 BOM for Excel compatibility
+
+  // 概览
+  lines.push('=== 概览 ===')
+  lines.push('指标,数值')
+  lines.push(`工单总数,${data.overview.total}`)
+  lines.push(`进行中,${data.overview.open}`)
+  lines.push(`已完成,${data.overview.closed}`)
+  lines.push(`完成率,${data.overview.completionRate}%`)
+  lines.push(`未分配,${data.overview.unassigned}`)
+  lines.push(`已逾期,${data.overview.overdue}`)
+  lines.push('')
+
+  // 状态分布
+  lines.push('=== 状态分布 ===')
+  lines.push('状态,数量')
+  data.statusDistribution.items.forEach(item => {
+    lines.push(`${item.name},${item.value}`)
+  })
+  lines.push('')
+
+  // 优先级分布
+  lines.push('=== 优先级分布 ===')
+  lines.push('优先级,数量')
+  data.priorityDistribution.labels.forEach((label, idx) => {
+    lines.push(`${label},${data.priorityDistribution.data[idx]}`)
+  })
+  lines.push('')
+
+  // 类型分布
+  lines.push('=== 类型分布 ===')
+  lines.push('类型,数量')
+  data.typeDistribution.items.forEach(item => {
+    lines.push(`${item.name},${item.value}`)
+  })
+  lines.push('')
+
+  // 团队负载
+  lines.push('=== 团队负载 ===')
+  lines.push('负责人,总计,已完成,进行中')
+  data.workload.items.forEach(item => {
+    lines.push(`${item.name},${item.value},${item.done},${item.inProgress}`)
+  })
+  lines.push('')
+
+  // 工单趋势
+  lines.push('=== 工单趋势 ===')
+  lines.push('日期,新建,关闭')
+  data.trend.dates.forEach((date, idx) => {
+    lines.push(`${date},${data.trend.created[idx]},${data.trend.resolved[idx]}`)
+  })
+  lines.push('')
+
+  // 燃尽图
+  if (data.burndown) {
+    lines.push(`=== Sprint 燃尽图 (${data.burndown.sprintName}) ===`)
+    lines.push('日期,理想进度,实际剩余')
+    data.burndown.dates.forEach((date, idx) => {
+      lines.push(`${date},${data.burndown!.ideal[idx]},${data.burndown!.actual[idx]}`)
+    })
+    lines.push('')
+  }
+
+  // 项目对比
+  if (data.projectComparison && data.projectComparison.items.length > 1) {
+    lines.push('=== 项目对比 ===')
+    lines.push('项目名称,项目Key,工单总数,已完成,进行中,完成率,已逾期')
+    data.projectComparison.items.forEach(item => {
+      lines.push(`${item.name},${item.key},${item.total},${item.closed},${item.open},${item.completionRate}%,${item.overdue}`)
+    })
+  }
+
+  const csvContent = BOM + lines.join('\n')
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  const projectName = selectedProjectId.value === '__all__'
+    ? '全部项目'
+    : projects.value.find(p => p.id === selectedProjectId.value)?.name || '报表'
+  link.download = `TrackFlow_报表_${projectName}_${new Date().toISOString().substring(0, 10)}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  Message.success('CSV 导出成功')
+}
+
+/** 打印报表 */
+function printReport() {
+  window.print()
 }
 </script>
 
@@ -905,6 +1058,77 @@ function formatDate(val: any): string {
   }
   .overview-cards {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .report-dashboard {
+    padding: 0;
+    overflow: visible;
+  }
+
+  .dashboard-header .header-right {
+    display: none;
+  }
+
+  .page-title {
+    color: #000 !important;
+    font-size: 18px;
+  }
+
+  .page-desc {
+    color: #555 !important;
+  }
+
+  .overview-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .stat-card {
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .stat-value {
+    color: #000 !important;
+  }
+
+  .stat-label {
+    color: #555 !important;
+  }
+
+  .chart-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .chart-card {
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .chart-card-wide {
+    grid-column: 1 / -1;
+  }
+
+  .chart-title {
+    color: #000 !important;
+  }
+
+  .chart-subtitle {
+    color: #555 !important;
+  }
+
+  .chart-instance {
+    height: 200px !important;
+  }
+
+  .chart-card-wide .chart-instance {
+    height: 240px !important;
   }
 }
 </style>
