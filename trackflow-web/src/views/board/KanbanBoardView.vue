@@ -126,6 +126,13 @@
 
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
+      <!-- 截断提示：工单数超过安全上限 -->
+      <div v-if="boardTruncated && !loading" class="board-truncated-banner">
+        <span class="truncated-icon">⚠️</span>
+        <span class="truncated-text">
+          当前项目共 {{ boardTotalCount }} 个工单，看板仅展示前 {{ issues.length }} 个。请使用搜索或筛选缩小范围。
+        </span>
+      </div>
       <div class="board-main-area">
         <!-- Backlog 面板 -->
         <BacklogPanel
@@ -1593,15 +1600,46 @@ async function loadBoard() {
   }
 }
 
+/** 看板安全上限：超过此数量的工单将截断并提示用户 */
+const BOARD_MAX_ISSUES = 500
+const boardTruncated = ref(false)
+const boardTotalCount = ref(0)
+
+/**
+ * 加载看板全量工单（自动分页循环加载）。
+ * 看板需要展示所有工单以保证 WIP 计数和 Progress Indicator 准确。
+ */
 async function loadIssues() {
-  if (!selectedProject.value) { issues.value = []; return }
-  const res = await issueApi.list({
-    projectId: selectedProject.value,
-    sprintId: selectedSprint.value || undefined,
-    keyword: keyword.value || undefined,
-    pageSize: 100
-  })
-  issues.value = res.data?.list || []
+  if (!selectedProject.value) { issues.value = []; boardTruncated.value = false; return }
+
+  const PAGE_SIZE = 100
+  let page = 1
+  let allIssues: IssueVO[] = []
+  let total = 0
+
+  // 循环加载所有页，直到获取全部工单或达到安全上限
+  while (true) {
+    const res = await issueApi.list({
+      projectId: selectedProject.value,
+      sprintId: selectedSprint.value || undefined,
+      keyword: keyword.value || undefined,
+      page,
+      pageSize: PAGE_SIZE
+    })
+    const list = res.data?.list || []
+    total = res.data?.pagination?.total || 0
+    allIssues = allIssues.concat(list)
+
+    // 已加载全部 或 到达安全上限
+    if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
+      break
+    }
+    page++
+  }
+
+  boardTotalCount.value = total
+  boardTruncated.value = allIssues.length < total
+  issues.value = allIssues
 }
 
 // ===== 内联快速创建卡片 =====
@@ -2640,5 +2678,29 @@ onUnmounted(() => {
 .slide-up-leave-to {
   transform: translateY(100%);
   opacity: 0;
+}
+
+/* ===== 截断提示横幅 ===== */
+.board-truncated-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(var(--warning-6), 0.08);
+  border: 1px solid rgba(var(--warning-6), 0.3);
+  border-radius: 6px;
+  margin: 0 16px 8px;
+  flex-shrink: 0;
+}
+
+.truncated-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.truncated-text {
+  font-size: 12px;
+  color: var(--color-text-2);
+  line-height: 1.4;
 }
 </style>
