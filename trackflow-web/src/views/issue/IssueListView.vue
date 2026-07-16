@@ -1194,18 +1194,44 @@ function formatTime(dt: string) {
   if (days < 30) return `${days}\u5929\u524D`
   return d.toLocaleDateString('zh-CN')
 }
+const QUICK_CREATE_PROJECT_KEY = 'trackflow:quick-create-project'
+
+function resolveQuickCreateProject(): string | undefined {
+  // Priority 1: current active project filter (sidebar or dropdown)
+  if (activeProjectId.value) return activeProjectId.value
+  if (filterProject.value) return filterProject.value
+
+  // Priority 2: last used project from localStorage
+  const lastUsed = localStorage.getItem(QUICK_CREATE_PROJECT_KEY)
+  if (lastUsed && projectList.value.some(p => p.id === lastUsed)) return lastUsed
+
+  // Priority 3: user only belongs to one project
+  if (projectList.value.length === 1) return projectList.value[0].id
+
+  return undefined
+}
+
 function toggleInlineCreate() {
   showInlineCreate.value = !showInlineCreate.value
-  if (showInlineCreate.value && activeProjectId.value) {
-    quickForm.projectId = activeProjectId.value
+  if (showInlineCreate.value) {
+    quickForm.projectId = resolveQuickCreateProject()
   }
 }
 async function quickCreate() {
-  if (!quickForm.projectId || !quickForm.title.trim()) return
+  if (!quickForm.projectId) {
+    Message.warning('请先选择项目')
+    return
+  }
+  if (!quickForm.title.trim()) {
+    Message.warning('请输入工单标题')
+    return
+  }
   quickCreating.value = true
   try {
     await issueApi.create({ projectId: quickForm.projectId, title: quickForm.title.trim(), issueType: quickForm.issueType, priority: quickForm.priority })
     Message.success('\u5DE5\u5355\u521B\u5EFA\u6210\u529F')
+    // Remember last used project
+    localStorage.setItem(QUICK_CREATE_PROJECT_KEY, quickForm.projectId)
     quickForm.title = ''
     refreshList()
   } catch (e: any) {

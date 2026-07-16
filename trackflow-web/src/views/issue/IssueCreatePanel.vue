@@ -370,6 +370,8 @@ async function doSubmit(): Promise<boolean> {
       customFields: getCustomFieldPayload()
     })
     Message.success('工单创建成功')
+    // Remember last used project for quick create
+    localStorage.setItem('trackflow:quick-create-project', form.projectId!)
     return true
   } catch (e: any) {
     Message.error(e.response?.data?.message || '创建失败')
