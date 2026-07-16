@@ -171,7 +171,8 @@
                   {
                     'kanban-card--dragging': draggingIssue?.id === issue.id,
                     'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                    'kanban-card--no-drag': !isCardDraggable(issue)
+                    'kanban-card--no-drag': !isCardDraggable(issue),
+                    'kanban-card--selected': selectedIds.has(issue.id)
                   }
                 ]"
                 role="button"
@@ -179,8 +180,9 @@
                 :draggable="isCardDraggable(issue)"
                 @dragstart="onDragStart($event, issue)"
                 @dragend="onDragEnd"
-                @click="openIssue(issue)"
-                @keydown.enter="openIssue(issue)"
+                @click="onCardClick($event, issue)"
+                @dblclick="onCardDblClick(issue)"
+                @keydown="onCardKeydown($event, issue)"
               >
                 <div class="card-header">
                   <span class="card-key">{{ issue.issueKey }}</span>
@@ -339,7 +341,8 @@
                       {
                         'kanban-card--dragging': draggingIssue?.id === issue.id,
                         'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                        'kanban-card--no-drag': !isCardDraggable(issue)
+                        'kanban-card--no-drag': !isCardDraggable(issue),
+                        'kanban-card--selected': selectedIds.has(issue.id)
                       }
                     ]"
                     role="button"
@@ -347,8 +350,9 @@
                     :draggable="isCardDraggable(issue)"
                     @dragstart="onDragStart($event, issue)"
                     @dragend="onDragEnd"
-                    @click="openIssue(issue)"
-                    @keydown.enter="openIssue(issue)"
+                    @click="onCardClick($event, issue)"
+                    @dblclick="onCardDblClick(issue)"
+                    @keydown="onCardKeydown($event, issue)"
                   >
                     <div class="card-header">
                       <span class="card-key">{{ issue.issueKey }}</span>
@@ -431,6 +435,22 @@
       :columns="allColumnConfigs"
       @saved="onSettingsSaved"
     />
+
+    <!-- 批量操作栏（底部固定） -->
+    <transition name="slide-up">
+      <div v-if="selectedCount > 0" class="batch-toolbar-wrapper">
+        <BatchActionToolbar
+          :selected-count="selectedCount"
+          :selected-issues="selectedIssues"
+          @deselect-all="clearSelection"
+          @batch-state="onBatchState"
+          @batch-assign="onBatchAssign"
+          @batch-sprint="onBatchSprint"
+          @batch-priority="onBatchPriority"
+          @batch-delete="onBatchDelete"
+        />
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -443,9 +463,12 @@ import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO } from '@/api/type
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
+import { useSelection } from '@/views/issue/composables/useSelection'
+import { useBatchOps } from '@/views/issue/composables/useBatchOps'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
+import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
 import { IconSettings, IconSearch, IconList } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
@@ -768,6 +791,14 @@ const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const issues = ref<IssueVO[]>([])
 
+// ===== 卡片多选 =====
+const {
+  selectedIds, selectedCount, selectedIssues,
+  toggle: toggleCardSelection, clearSelection
+} = useSelection(issues)
+
+const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchDelete } = useBatchOps()
+
 // 看板列配置
 const allColumnConfigs = ref<BoardColumnVO[]>([])
 const showSettings = ref(false)
@@ -898,6 +929,52 @@ function typeLabel(type: string): string {
 function openIssue(issue: IssueVO) {
   if (draggingIssue.value) return
   router.push({ name: 'IssueDetail', params: { id: issue.id } })
+}
+
+/**
+ * 卡片单击处理：
+ * - Ctrl/Meta + Click：切换选中状态（多选）
+ * - 无修饰键 + 已有选中：当前卡片加入/移出选中
+ * - 无修饰键 + 无选中：选中该卡片
+ */
+function onCardClick(event: MouseEvent | KeyboardEvent, issue: IssueVO) {
+  if (draggingIssue.value) return
+
+  if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey)) {
+    // Ctrl+Click: toggle this card's selection
+    toggleCardSelection(issue.id)
+  } else if (selectedCount.value > 0) {
+    // Already have selection: toggle this card
+    toggleCardSelection(issue.id)
+  } else {
+    // No selection yet: select this card
+    toggleCardSelection(issue.id)
+  }
+}
+
+/**
+ * 卡片双击：跳转详情页
+ */
+function onCardDblClick(issue: IssueVO) {
+  if (draggingIssue.value) return
+  router.push({ name: 'IssueDetail', params: { id: issue.id } })
+}
+
+/**
+ * 卡片 Enter 键：若有选中则切换选中状态，否则打开详情
+ */
+function onCardKeydown(event: KeyboardEvent, issue: IssueVO) {
+  if (event.key === 'Enter') {
+    if (selectedCount.value > 0 || event.ctrlKey || event.metaKey) {
+      toggleCardSelection(issue.id)
+    } else {
+      router.push({ name: 'IssueDetail', params: { id: issue.id } })
+    }
+  }
+  // Escape 清空选择
+  if (event.key === 'Escape' && selectedCount.value > 0) {
+    clearSelection()
+  }
 }
 
 // ===== 拖拽逻辑 =====
@@ -1114,6 +1191,69 @@ function handleKeydown(e: KeyboardEvent) {
       undoTransition(lastEntry)
     }
   }
+  // Escape 取消多选
+  if (e.key === 'Escape' && selectedCount.value > 0) {
+    clearSelection()
+  }
+}
+
+// ===== 批量操作处理 =====
+
+async function onBatchState(statusId: string) {
+  const result = await batchTransitStatus(selectedIssues.value, statusId)
+  if (result.succeeded > 0) {
+    selectedIssues.value.forEach(issue => {
+      if (!result.failures.find(f => f.issueId === issue.id)) {
+        issue.statusId = statusId
+      }
+    })
+  }
+  clearSelection()
+}
+
+async function onBatchAssign(assigneeId: string | null) {
+  await batchAssign(selectedIssues.value, assigneeId || '')
+  // 需要刷新看板数据以获取更新后的 assigneeName
+  await loadIssues()
+  clearSelection()
+}
+
+async function onBatchSprint(sprintId: string | null) {
+  const result = await batchUpdateSprint(selectedIssues.value, sprintId)
+  if (result.succeeded > 0) {
+    selectedIssues.value.forEach(issue => {
+      if (!result.failures.find(f => f.issueId === issue.id)) {
+        issue.sprintId = sprintId || undefined
+      }
+    })
+  }
+  clearSelection()
+}
+
+async function onBatchPriority(priority: string) {
+  const result = await batchUpdatePriority(selectedIssues.value, priority)
+  if (result.succeeded > 0) {
+    selectedIssues.value.forEach(issue => {
+      if (!result.failures.find(f => f.issueId === issue.id)) {
+        issue.priority = priority
+      }
+    })
+  }
+  clearSelection()
+}
+
+async function onBatchDelete() {
+  const result = await batchDelete(selectedIssues.value)
+  if (result.succeeded > 0) {
+    // 从视图中移除已删除的工单
+    const deletedIds = new Set(
+      selectedIssues.value
+        .map(i => i.id)
+        .filter(id => !result.failures.some(f => f.issueId === id))
+    )
+    issues.value = issues.value.filter(i => !deletedIds.has(i.id))
+  }
+  clearSelection()
 }
 
 // ===== 数据加载 =====
@@ -1216,6 +1356,7 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .board-toolbar {
@@ -1911,5 +2052,36 @@ onUnmounted(() => {
 
 .wip-warning.wip-under {
   color: rgb(var(--warning-6));
+}
+
+/* ===== 选中状态 ===== */
+.kanban-card--selected {
+  border-color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.06);
+  box-shadow: 0 0 0 1px rgb(var(--primary-6));
+}
+.kanban-card--selected:hover {
+  border-color: rgb(var(--primary-6));
+  box-shadow: 0 0 0 1px rgb(var(--primary-6)), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ===== 底部批量操作栏 ===== */
+.batch-toolbar-wrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
 }
 </style>
