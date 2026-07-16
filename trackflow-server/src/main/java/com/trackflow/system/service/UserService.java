@@ -53,6 +53,7 @@ public class UserService {
     private final IssueActivityMapper issueActivityMapper;
     private final IssueMapper issueMapper;
     private final KeycloakAdminService keycloakAdminService;
+    private final ApiKeyService apiKeyService;
 
     /**
      * 创建新用户（同步到 Keycloak + 本地 sys_user）
@@ -215,10 +216,17 @@ public class UserService {
         userMapper.updateById(user);
         permissionService.invalidateCache(id);
 
+        // 级联吊销用户所有 API Key（防止禁用后仍可通过已有 Key 访问）
+        int revokedKeys = apiKeyService.revokeAllByUser(id);
+        if (revokedKeys > 0) {
+            log.info("禁用用户 {} 时级联吊销 {} 个 API Key", user.getUsername(), revokedKeys);
+        }
+
         // 审计日志
         systemAuditService.log("disable_user", "user", id,
                 Map.of("username", user.getUsername(),
-                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : ""));
+                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
+                        "revoked_api_keys", revokedKeys));
     }
 
     /**

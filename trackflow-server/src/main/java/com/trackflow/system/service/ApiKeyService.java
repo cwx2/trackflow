@@ -4,23 +4,26 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.system.entity.ApiKey;
+import com.trackflow.system.entity.SysPermission;
 import com.trackflow.system.mapper.ApiKeyMapper;
+import com.trackflow.system.mapper.SysPermissionMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * API Key 管理服务
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ApiKeyService {
@@ -30,16 +33,41 @@ public class ApiKeyService {
     private static final int SECRET_LENGTH = 32;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+    /**
+     * 每用户最大 API Key 数量
+     */
+    private static final int MAX_KEYS_PER_USER = 10;
+
     private final ApiKeyMapper apiKeyMapper;
+    private final SysPermissionMapper sysPermissionMapper;
+    private final SystemAuditService systemAuditService;
     private final ObjectMapper objectMapper;
 
     /**
      * 创建 API Key
+     * <p>
+     * 安全校验：
+     * 1. 用户当前 Key 数量 < MAX_KEYS_PER_USER
+     * 2. permissions 列表中每个值必须存在于系统已定义的权限集合中
      *
      * @return 包含明文 key 的 Map（明文仅此一次返回）
      */
     @Transactional
     public Map<String, Object> create(Long userId, String name, List<String> permissions, LocalDateTime expiresAt) {
+        // 校验：Key 数量上限
+        long existingCount = apiKeyMapper.selectCount(
+                new LambdaQueryWrapper<ApiKey>().eq(ApiKey::getUserId, userId)
+        );
+        if (existingCount >= MAX_KEYS_PER_USER) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "每个用户最多创建 " + MAX_KEYS_PER_USER + " 个 API Key，当前已有 " + existingCount + " 个");
+        }
+
+        // 校验：permissions 合法性
+        if (permissions != null && !permissions.isEmpty()) {
+            validatePermissions(permissions);
+        }
+
         // 生成 key
         String prefix = generateRandomString(PREFIX_LENGTH);
         String secret = generateRandomString(SECRET_LENGTH);
@@ -66,6 +94,14 @@ public class ApiKeyService {
         }
 
         apiKeyMapper.insert(apiKey);
+
+        // 审计日志
+        Map<String, Object> auditDetails = new HashMap<>();
+        auditDetails.put("key_name", name);
+        auditDetails.put("key_prefix", apiKey.getPrefix());
+        auditDetails.put("permissions", permissions != null ? permissions : List.of());
+        auditDetails.put("expires_at", expiresAt != null ? expiresAt.toString() : "never");
+        systemAuditService.log("create_api_key", "api_key", apiKey.getId(), auditDetails);
 
         return Map.of(
                 "id", String.valueOf(apiKey.getId()),
@@ -98,6 +134,64 @@ public class ApiKeyService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "API Key not found");
         }
         apiKeyMapper.deleteById(id);
+
+        // 审计日志
+        Map<String, Object> auditDetails = new HashMap<>();
+        auditDetails.put("key_name", apiKey.getName());
+        auditDetails.put("key_prefix", apiKey.getPrefix());
+        systemAuditService.log("revoke_api_key", "api_key", id, auditDetails);
+    }
+
+    /**
+     * 批量删除用户的所有 API Key（用户被禁用时调用）
+     *
+     * @param userId 用户 ID
+     * @return 被删除的 Key 数量
+     */
+    @Transactional
+    public int revokeAllByUser(Long userId) {
+        List<ApiKey> keys = listByUser(userId);
+        if (keys.isEmpty()) {
+            return 0;
+        }
+
+        int count = apiKeyMapper.delete(
+                new LambdaQueryWrapper<ApiKey>().eq(ApiKey::getUserId, userId)
+        );
+
+        // 审计日志
+        List<String> prefixes = keys.stream().map(ApiKey::getPrefix).collect(Collectors.toList());
+        Map<String, Object> auditDetails = new HashMap<>();
+        auditDetails.put("reason", "user_disabled");
+        auditDetails.put("revoked_count", count);
+        auditDetails.put("key_prefixes", prefixes);
+        systemAuditService.log("revoke_all_api_keys", "api_key", userId, auditDetails);
+
+        log.info("用户 {} 被禁用，已批量吊销 {} 个 API Key", userId, count);
+        return count;
+    }
+
+    /**
+     * 校验 permissions 列表合法性：每个值必须存在于 sys_permission 表中
+     */
+    private void validatePermissions(List<String> permissions) {
+        // 查询所有已定义的权限 code
+        List<SysPermission> allPermissions = sysPermissionMapper.selectList(
+                new LambdaQueryWrapper<SysPermission>().eq(SysPermission::getEnabled, true)
+        );
+        Set<String> validCodes = allPermissions.stream()
+                .map(SysPermission::getCode)
+                .collect(Collectors.toSet());
+
+        // 找出非法的 permission 值
+        List<String> invalidPermissions = permissions.stream()
+                .filter(p -> !validCodes.contains(p))
+                .collect(Collectors.toList());
+
+        if (!invalidPermissions.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "以下权限代码不存在：" + String.join(", ", invalidPermissions));
+        }
     }
 
     private String generateRandomString(int length) {
