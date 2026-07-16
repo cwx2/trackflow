@@ -93,14 +93,20 @@
       <div class="modal-lg">
         <div class="modal-header">
           <h3>权限配置 — {{ permRole?.name }}</h3>
+          <span v-if="permRole?.builtin" class="builtin-badge">内置角色</span>
           <button class="btn-close" @click="showPermDialog = false">✕</button>
         </div>
         <div class="modal-body">
+          <!-- 内置角色只读提示 -->
+          <div v-if="permRole?.builtin" class="builtin-hint">
+            <span class="hint-icon">🔒</span>
+            <span class="hint-text">内置角色的权限不可修改。如需定制权限，请使用"克隆"功能创建副本后修改。</span>
+          </div>
           <div v-for="group in permissionGroups" :key="group.category" class="perm-group">
             <h4 class="perm-category">{{ CATEGORY_LABELS[group.category] || group.category }}</h4>
             <div class="perm-list">
-              <label v-for="perm in group.permissions" :key="perm.code" class="perm-item">
-                <input type="checkbox" :checked="rolePerms.includes(perm.code)" @change="togglePerm(perm.code)" />
+              <label v-for="perm in group.permissions" :key="perm.code" class="perm-item" :class="{ readonly: permRole?.builtin }">
+                <input type="checkbox" :checked="rolePerms.includes(perm.code)" @change="togglePerm(perm.code)" :disabled="permRole?.builtin" />
                 <span class="perm-name">{{ perm.name }}</span>
                 <span class="perm-code">{{ perm.code }}</span>
               </label>
@@ -108,8 +114,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-cancel" @click="showPermDialog = false">取消</button>
-          <button class="btn-submit" @click="savePermissions">保存权限</button>
+          <button class="btn-cancel" @click="showPermDialog = false">{{ permRole?.builtin ? '关闭' : '取消' }}</button>
+          <button v-if="!permRole?.builtin" class="btn-submit" @click="savePermissions">保存权限</button>
         </div>
       </div>
     </div>
@@ -418,6 +424,14 @@ onMounted(() => {
 
 /* Permission groups */
 .perm-group { margin-bottom: 16px; }
+
+/* Built-in role hint */
+.builtin-badge { font-size: var(--font-size-xs); background: rgba(255,152,0,0.15); color: var(--accent-orange); padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 500; margin-left: auto; margin-right: 8px; }
+.builtin-hint { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; margin-bottom: 14px; background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.2); border-radius: var(--radius-md); }
+.hint-icon { font-size: 14px; flex-shrink: 0; line-height: 1.5; }
+.hint-text { font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.5; }
+.perm-item.readonly { opacity: 0.6; cursor: not-allowed; }
+.perm-item.readonly input { cursor: not-allowed; }
 
 /* Clone dialog */
 .clone-hint { font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5; }

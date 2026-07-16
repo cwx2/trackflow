@@ -97,6 +97,12 @@ public class RoleService {
     @Transactional
     public SysRole update(Long id, UpdateRoleDTO dto) {
         SysRole role = getById(id);
+
+        // 内置角色不允许编辑
+        if (Boolean.TRUE.equals(role.getBuiltin())) {
+            throw new BusinessException(ErrorCode.BUILTIN_ROLE_PROTECTED);
+        }
+
         if (dto.getName() != null) {
             String trimmedName = dto.getName().trim();
             if (trimmedName.isEmpty()) {
@@ -187,6 +193,11 @@ public class RoleService {
     @Transactional
     public void replacePermissions(Long id, List<String> permissions) {
         SysRole role = getById(id); // 确保存在
+
+        // 内置角色不允许修改权限
+        if (Boolean.TRUE.equals(role.getBuiltin())) {
+            throw new BusinessException(ErrorCode.BUILTIN_ROLE_PROTECTED);
+        }
 
         // 记录旧权限（审计用）
         List<String> oldPermissions = rolePermissionMapper.selectList(
