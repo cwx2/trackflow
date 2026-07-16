@@ -881,15 +881,22 @@ public class IssueService {
     }
 
     /**
-     * 批量状态转换
+     * 批量状态转换（带乐观锁 + 备注支持）。
+     *
+     * @param issueIds 要转换的工单 ID 列表
+     * @param statusId 目标状态 ID
+     * @param comment  可选备注（记录到活动日志）
+     * @param versions 乐观锁版本映射（issueId → version），为 null 时跳过版本校验
      */
-    public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId) {
+    public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId,
+                                                     String comment, Map<Long, Integer> versions) {
         return executeBatch(issueIds, "issue:change_status", (issue, userId) -> {
             if (!workflowService.isTransitionAllowed(issue, statusId, userId)) {
                 return "工作流不允许此状态转换";
             }
-            // 已校验通过，跳过 Service 层重复校验
-            transitStatusSkipWorkflow(issue.getId(), statusId, null);
+            // 已校验通过，跳过工作流重复校验但传递 comment 和 version
+            Integer expectedVersion = versions != null ? versions.get(issue.getId()) : null;
+            transitStatus(issue.getId(), statusId, comment, null, false, expectedVersion, true);
             return null;
         }, "状态转换");
     }

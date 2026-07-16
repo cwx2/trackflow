@@ -20,9 +20,11 @@ export function useBatchOps() {
    */
   async function batchTransitStatus(
     issues: IssueVO[],
-    targetStatusId: string
+    targetStatusId: string,
+    comment?: string
   ): Promise<BatchResult> {
-    return executeBatchApi(issues, 'status', { statusId: targetStatusId }, '状态变更')
+    const versions = buildVersionMap(issues)
+    return executeBatchApi(issues, 'status', { statusId: targetStatusId, comment, versions }, '状态变更')
   }
 
   /**
@@ -105,6 +107,19 @@ export function useBatchOps() {
         return btn
       }
     })
+  }
+
+  /**
+   * 从选中的工单列表中构建乐观锁版本映射（id → version）
+   */
+  function buildVersionMap(issues: IssueVO[]): Record<string, number> {
+    const map: Record<string, number> = {}
+    for (const issue of issues.slice(0, MAX_BATCH_SIZE)) {
+      if (issue.version != null) {
+        map[issue.id] = issue.version
+      }
+    }
+    return map
   }
 
   /**

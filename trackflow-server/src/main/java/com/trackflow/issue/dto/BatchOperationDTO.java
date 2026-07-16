@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 批量操作请求 DTO
@@ -47,4 +48,17 @@ public class BatchOperationDTO {
      * 目标优先级（operation=priority 时必填）
      */
     private String priority;
+
+    /**
+     * 状态转换备注（operation=status 时可选）。
+     * 非空时会作为评论记录到活动日志。
+     */
+    private String comment;
+
+    /**
+     * 乐观锁版本号映射（issueId → version）。
+     * 用于并发冲突检测：如果某工单的 version 与数据库不一致，该工单操作失败但不影响其他工单。
+     * 为 null 时不做乐观锁校验（向后兼容）。
+     */
+    private Map<Long, Integer> versions;
 }

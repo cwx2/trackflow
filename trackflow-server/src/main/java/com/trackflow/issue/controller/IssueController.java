@@ -202,7 +202,8 @@ public class IssueController {
                 if (dto.getStatusId() == null) {
                     yield null;
                 }
-                yield issueService.batchTransitStatus(dto.getIssueIds(), dto.getStatusId());
+                yield issueService.batchTransitStatus(dto.getIssueIds(), dto.getStatusId(),
+                        dto.getComment(), dto.getVersions());
             }
             case "assign" -> {
                 if (dto.getAssigneeId() == null) {

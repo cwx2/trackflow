@@ -211,6 +211,8 @@ export const issueApi = {
     assigneeId?: string
     sprintId?: string
     priority?: string
+    comment?: string
+    versions?: Record<string, number>
   }) {
     return request.post<any, R<{
       total: number
