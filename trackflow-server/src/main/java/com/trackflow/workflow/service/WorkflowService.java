@@ -64,7 +64,7 @@ public class WorkflowService {
      * project_admin 的角色 ID（来自 V2__seed_roles.sql 种子数据，ID 固定为 2）。
      * 系统管理员无项目角色时，使用此角色的工作流规则。
      */
-    private static final String PROJECT_ADMIN_ROLE_ID = "2";
+    private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
 
     /**
      * 获取当前用户对指定 Issue 可以转换到的目标状态列表。
@@ -81,7 +81,7 @@ public class WorkflowService {
         // 系统管理员直接跳过所有权检查（由全局权限保障）
         if (permissionService.isSystemAdmin(userId)) {
             // 系统管理员使用 project_admin 的工作流规则
-            return getTransitionsForRoles(issue, PROJECT_ADMIN_ROLE_ID);
+            return getTransitionsForRoles(issue, List.of(PROJECT_ADMIN_ROLE_ID));
         }
 
         // 获取用户在项目中的角色
@@ -90,8 +90,7 @@ public class WorkflowService {
             return List.of();
         }
 
-        String roleIdsStr = roleIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-        return getTransitionsForRoles(issue, roleIdsStr);
+        return getTransitionsForRoles(issue, roleIds);
     }
 
     /**
@@ -107,16 +106,16 @@ public class WorkflowService {
     /**
      * 根据角色 ID 列表查询可用的状态转换
      */
-    private List<IssueStatus> getTransitionsForRoles(Issue issue, String roleIdsStr) {
+    private List<IssueStatus> getTransitionsForRoles(Issue issue, List<Long> roleIds) {
         // 查询允许的目标状态
         List<Long> allowedStatusIds = transitionMapper.findAllowedNewStatusIds(
-                issue.getProjectId(), issue.getIssueType(), roleIdsStr, issue.getStatusId()
+                issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId()
         );
 
         if (allowedStatusIds.isEmpty()) {
             // Fallback: 尝试不带 projectId（全局规则）
             allowedStatusIds = transitionMapper.findAllowedNewStatusIds(
-                    null, issue.getIssueType(), roleIdsStr, issue.getStatusId()
+                    null, issue.getIssueType(), roleIds, issue.getStatusId()
             );
         }
 
@@ -240,10 +239,11 @@ public class WorkflowService {
     public Set<Long> getTransitionableSourceStatuses(Long projectId, Long userId) {
         // 系统管理员：返回所有状态（使用 project_admin 规则）
         if (permissionService.isSystemAdmin(userId)) {
-            List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, PROJECT_ADMIN_ROLE_ID);
+            List<Long> adminRoleIds = List.of(PROJECT_ADMIN_ROLE_ID);
+            List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, adminRoleIds);
             if (ids.isEmpty()) {
                 // Fallback: 全局规则
-                ids = transitionMapper.findTransitionableSourceStatusIds(null, PROJECT_ADMIN_ROLE_ID);
+                ids = transitionMapper.findTransitionableSourceStatusIds(null, adminRoleIds);
             }
             return new HashSet<>(ids);
         }
@@ -254,11 +254,10 @@ public class WorkflowService {
             return Set.of();
         }
 
-        String roleIdsStr = roleIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-        List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, roleIdsStr);
+        List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, roleIds);
         if (ids.isEmpty()) {
             // Fallback: 全局规则
-            ids = transitionMapper.findTransitionableSourceStatusIds(null, roleIdsStr);
+            ids = transitionMapper.findTransitionableSourceStatusIds(null, roleIds);
         }
         return new HashSet<>(ids);
     }

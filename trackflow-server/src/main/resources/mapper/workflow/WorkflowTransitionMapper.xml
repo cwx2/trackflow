@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trackflow.workflow.mapper.WorkflowTransitionMapper">
+
+    <!-- 查找允许的状态转换目标（参数化 IN 查询，防止 SQL 注入） -->
+    <select id="findAllowedNewStatusIds" resultType="java.lang.Long">
+        SELECT DISTINCT new_status_id FROM workflow_transition
+        WHERE (project_id = #{projectId} OR project_id IS NULL)
+          AND (issue_type = #{issueType} OR issue_type = '*')
+          AND role_id IN
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
+        </foreach>
+          AND old_status_id = #{oldStatusId}
+        ORDER BY new_status_id
+    </select>
+
+    <!-- 查找可发起转换的源状态 ID（参数化 IN 查询，防止 SQL 注入） -->
+    <select id="findTransitionableSourceStatusIds" resultType="java.lang.Long">
+        SELECT DISTINCT old_status_id FROM workflow_transition
+        WHERE (project_id = #{projectId} OR project_id IS NULL)
+          AND role_id IN
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
+        </foreach>
+    </select>
+
+</mapper>
