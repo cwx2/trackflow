@@ -110,7 +110,14 @@
           >
             <div class="column-header" :style="{ borderTopColor: status.color }">
               <span class="column-title">{{ localizeStatusName(status.name) }}</span>
-              <span class="column-count">{{ getColumnIssues(status.id).length }}</span>
+              <span
+                class="column-count"
+                :class="getWipClass(status.id)"
+                :title="getWipTooltip(status.id)"
+              >{{ getColumnIssues(status.id).length }}<template v-if="getWipMax(status.id) !== null">/{{ getWipMax(status.id) }}</template></span>
+              <span v-if="getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
+                {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
+              </span>
               <button
                 v-if="getColumnIssues(status.id).length === 0 && !draggingIssue"
                 class="column-collapse-btn"
@@ -218,6 +225,14 @@
               :style="{ borderTopColor: status.color }"
             >
               <span class="column-title">{{ localizeStatusName(status.name) }}</span>
+              <span
+                class="column-count"
+                :class="getWipClass(status.id)"
+                :title="getWipTooltip(status.id)"
+              >{{ getColumnIssues(status.id).length }}<template v-if="getWipMax(status.id) !== null">/{{ getWipMax(status.id) }}</template></span>
+              <span v-if="getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
+                {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
+              </span>
             </div>
           </div>
         </div>
@@ -668,6 +683,60 @@ const UNDO_TIMEOUT = 10000
 
 function getColumnIssues(statusId: string): IssueVO[] {
   return issues.value.filter(i => i.statusId === statusId)
+}
+
+// ===== WIP 限制辅助函数 =====
+
+function getColumnConfig(statusId: string): BoardColumnVO | undefined {
+  return allColumnConfigs.value.find(c => c.statusId === statusId)
+}
+
+function getWipMin(statusId: string): number | null {
+  return getColumnConfig(statusId)?.wipMin ?? null
+}
+
+function getWipMax(statusId: string): number | null {
+  return getColumnConfig(statusId)?.wipMax ?? null
+}
+
+/**
+ * 判断列的 WIP 状态：'wip-over' | 'wip-under' | null
+ */
+function getWipWarning(statusId: string): 'wip-over' | 'wip-under' | null {
+  const config = getColumnConfig(statusId)
+  if (!config) return null
+  const count = getColumnIssues(statusId).length
+  if (config.wipMax != null && count > config.wipMax) return 'wip-over'
+  if (config.wipMin != null && count < config.wipMin) return 'wip-under'
+  return null
+}
+
+/**
+ * 列计数的 CSS class（用于颜色变化）
+ */
+function getWipClass(statusId: string): string {
+  const warning = getWipWarning(statusId)
+  if (warning === 'wip-over') return 'column-count--over'
+  if (warning === 'wip-under') return 'column-count--under'
+  return ''
+}
+
+/**
+ * WIP tooltip 文本
+ */
+function getWipTooltip(statusId: string): string {
+  const config = getColumnConfig(statusId)
+  if (!config) return ''
+  const count = getColumnIssues(statusId).length
+  const parts: string[] = []
+  if (config.wipMin != null) parts.push(`最小: ${config.wipMin}`)
+  if (config.wipMax != null) parts.push(`最大: ${config.wipMax}`)
+  if (parts.length === 0) return `${count} 个工单`
+  const warning = getWipWarning(statusId)
+  let suffix = ''
+  if (warning === 'wip-over') suffix = ' ⚠️ 超出限制'
+  if (warning === 'wip-under') suffix = ' ⚠️ 低于最小值'
+  return `${count} 个工单 (${parts.join(', ')})${suffix}`
 }
 
 function expandColumn(statusId: string) {
@@ -1496,5 +1565,32 @@ onUnmounted(() => {
 :global(.undo-btn:hover) {
   background: rgb(var(--primary-6));
   color: #fff;
+}
+
+/* ===== WIP 限制警告样式 ===== */
+.column-count--over {
+  color: rgb(var(--danger-6));
+  background: rgba(var(--danger-6), 0.1);
+  font-weight: 600;
+}
+
+.column-count--under {
+  color: rgb(var(--warning-6));
+  background: rgba(var(--warning-6), 0.1);
+  font-weight: 600;
+}
+
+.wip-warning {
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.wip-warning.wip-over {
+  color: rgb(var(--danger-6));
+}
+
+.wip-warning.wip-under {
+  color: rgb(var(--warning-6));
 }
 </style>

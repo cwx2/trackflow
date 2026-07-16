@@ -479,6 +479,8 @@ export interface BoardColumnVO {
   visible: boolean
   sortOrder: number
   collapsed: boolean
+  wipMin: number | null
+  wipMax: number | null
 }
 
 export interface BoardColumnItem {
@@ -486,6 +488,8 @@ export interface BoardColumnItem {
   visible: boolean
   sortOrder: number
   collapsed?: boolean
+  wipMin?: number | null
+  wipMax?: number | null
 }
 
 // ========== Sprint 完成预览 ==========

@@ -30,5 +30,11 @@ public class UpdateBoardColumnsDTO {
 
         /** 是否折叠 */
         private Boolean collapsed;
+
+        /** 最小在制品数量，null 表示不限制 */
+        private Integer wipMin;
+
+        /** 最大在制品数量，null 表示不限制 */
+        private Integer wipMax;
     }
 }

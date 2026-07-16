@@ -23,6 +23,8 @@ public class BoardColumnConfig implements Serializable {
     private Boolean visible;
     private Integer sortOrder;
     private Boolean collapsed;
+    private Integer wipMin;
+    private Integer wipMax;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

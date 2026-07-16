@@ -31,4 +31,10 @@ public class BoardColumnVO {
 
     /** 是否默认折叠 */
     private Boolean collapsed;
+
+    /** 最小在制品数量（低于此数时列标题显示黄色警告），null 表示不限制 */
+    private Integer wipMin;
+
+    /** 最大在制品数量（超过此数时列标题显示红色警告），null 表示不限制 */
+    private Integer wipMax;
 }

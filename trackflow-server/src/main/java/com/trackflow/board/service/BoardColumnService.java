@@ -96,6 +96,8 @@ public class BoardColumnService {
                 vo.setVisible(config.getVisible());
                 vo.setSortOrder(config.getSortOrder());
                 vo.setCollapsed(config.getCollapsed());
+                vo.setWipMin(config.getWipMin());
+                vo.setWipMax(config.getWipMax());
             } else {
                 // 新增的全局状态：如果有工单使用则可见，否则不可见
                 boolean hasIssues = usedStatusIds.contains(status.getId());
@@ -250,6 +252,8 @@ public class BoardColumnService {
             config.setVisible(item.getVisible());
             config.setSortOrder(item.getSortOrder() != null ? item.getSortOrder() : order);
             config.setCollapsed(item.getCollapsed() != null ? item.getCollapsed() : false);
+            config.setWipMin(item.getWipMin());
+            config.setWipMax(item.getWipMax());
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             configs.add(config);
