@@ -1,6 +1,8 @@
 package com.trackflow.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,6 +36,7 @@ import java.util.stream.Collectors;
 public class ReportStatisticsService {
 
     private final IssueMapper issueMapper;
+    private final IssueActivityMapper activityMapper;
     private final IssueStatusMapper statusMapper;
     private final SysUserMapper userMapper;
     private final SprintMapper sprintMapper;
@@ -65,6 +69,9 @@ public class ReportStatisticsService {
         if (projectId == null) {
             dashboard.setProjectComparison(buildProjectComparison(issues, projectIds, closedIds));
         }
+        // 累积流图和解决时间分析
+        dashboard.setCumulativeFlow(buildCumulativeFlow(projectIds, startDate, endDate));
+        dashboard.setResolutionTime(buildResolutionTime(projectIds, startDate, endDate, null));
         return dashboard;
     }
 
@@ -92,6 +99,14 @@ public class ReportStatisticsService {
 
     public BurndownVO getBurndown(Long projectId, Long sprintId) {
         return buildBurndown(projectId, sprintId);
+    }
+
+    public CumulativeFlowVO getCumulativeFlow(Long projectId, LocalDate startDate, LocalDate endDate) {
+        return buildCumulativeFlow(projectId != null ? List.of(projectId) : null, startDate, endDate);
+    }
+
+    public ResolutionTimeVO getResolutionTime(Long projectId, LocalDate startDate, LocalDate endDate, String groupBy) {
+        return buildResolutionTime(projectId != null ? List.of(projectId) : null, startDate, endDate, groupBy);
     }
 
     // ─── Internal build methods ─────────────────────────────────────────
@@ -333,6 +348,334 @@ public class ReportStatisticsService {
     }
 
     // ─── Private helpers ────────────────────────────────────────────────
+
+    /**
+     * 构建累积流图数据
+     * 算法：重建每天每个状态的工单数量快照
+     * 1. 找出时间范围内相关项目的所有工单（创建于 endDate 之前）
+     * 2. 获取所有状态变更活动记录
+     * 3. 对每一天，回放活动记录计算各状态的工单数
+     */
+    private CumulativeFlowVO buildCumulativeFlow(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
+        if (endDate == null) endDate = LocalDate.now();
+        if (startDate == null) startDate = endDate.minusDays(29);
+
+        // 获取所有非 closed 类型的状态（用于显示）+ 按 sort_order 排序
+        List<IssueStatus> allStatuses = statusMapper.selectList(new LambdaQueryWrapper<IssueStatus>()
+                .orderByAsc(IssueStatus::getSortOrder));
+        Map<String, IssueStatus> statusByName = allStatuses.stream()
+                .collect(Collectors.toMap(IssueStatus::getName, s -> s, (a, b) -> a));
+        Map<Long, IssueStatus> statusById = allStatuses.stream()
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
+        // 查询在 endDate 之前创建的、属于指定项目的工单
+        LambdaQueryWrapper<Issue> issueWrapper = new LambdaQueryWrapper<Issue>()
+                .isNull(Issue::getDeletedAt)
+                .le(Issue::getCreatedAt, endDate.plusDays(1).atStartOfDay());
+        if (projectIds != null && !projectIds.isEmpty()) {
+            if (projectIds.size() == 1) {
+                issueWrapper.eq(Issue::getProjectId, projectIds.get(0));
+            } else {
+                issueWrapper.in(Issue::getProjectId, projectIds);
+            }
+        }
+        List<Issue> issues = issueMapper.selectList(issueWrapper);
+
+        if (issues.isEmpty()) {
+            CumulativeFlowVO empty = new CumulativeFlowVO();
+            empty.setDates(List.of());
+            empty.setSeries(List.of());
+            return empty;
+        }
+
+        Set<Long> issueIds = issues.stream().map(Issue::getId).collect(Collectors.toSet());
+
+        // 查询这些工单的所有状态变更活动
+        LambdaQueryWrapper<IssueActivity> activityWrapper = new LambdaQueryWrapper<IssueActivity>()
+                .in(IssueActivity::getIssueId, issueIds)
+                .eq(IssueActivity::getFieldName, "status")
+                .le(IssueActivity::getCreatedAt, endDate.plusDays(1).atStartOfDay())
+                .orderByAsc(IssueActivity::getCreatedAt);
+        List<IssueActivity> activities = activityMapper.selectList(activityWrapper);
+
+        // 按 issueId 分组活动记录
+        Map<Long, List<IssueActivity>> activitiesByIssue = activities.stream()
+                .collect(Collectors.groupingBy(IssueActivity::getIssueId));
+
+        // 计算每天结束时各状态的工单数
+        List<String> dates = new ArrayList<>();
+        // 使用 LinkedHashMap 保持 sort_order 顺序
+        Map<String, List<Long>> seriesData = new LinkedHashMap<>();
+        // 只展示期间内实际出现过的状态
+        Set<String> appearedStatuses = new LinkedHashSet<>();
+
+        // 先确定哪些状态出现过
+        for (Issue issue : issues) {
+            IssueStatus st = statusById.get(issue.getStatusId());
+            if (st != null) appearedStatuses.add(st.getName());
+        }
+        for (IssueActivity act : activities) {
+            if (act.getOldValue() != null) appearedStatuses.add(act.getOldValue());
+            if (act.getNewValue() != null) appearedStatuses.add(act.getNewValue());
+        }
+
+        // 按 sort_order 排列状态名
+        List<String> orderedStatusNames = allStatuses.stream()
+                .map(IssueStatus::getName)
+                .filter(appearedStatuses::contains)
+                .collect(Collectors.toList());
+
+        for (String statusName : orderedStatusNames) {
+            seriesData.put(statusName, new ArrayList<>());
+        }
+
+        // 对每一天计算快照
+        LocalDate current = startDate;
+        while (!current.isAfter(endDate)) {
+            dates.add(current.toString());
+            LocalDateTime dayEnd = current.plusDays(1).atStartOfDay();
+
+            // 统计每个工单在该天结束时的状态
+            Map<String, Long> statusCounts = new HashMap<>();
+            for (String name : orderedStatusNames) {
+                statusCounts.put(name, 0L);
+            }
+
+            for (Issue issue : issues) {
+                // 工单还未创建
+                if (issue.getCreatedAt().isAfter(dayEnd)) continue;
+
+                // 确定该工单在 dayEnd 时刻的状态
+                String currentStatus = getIssueStatusAtTime(issue, activitiesByIssue.get(issue.getId()), dayEnd, statusById);
+                if (currentStatus != null && statusCounts.containsKey(currentStatus)) {
+                    statusCounts.merge(currentStatus, 1L, Long::sum);
+                }
+            }
+
+            for (String statusName : orderedStatusNames) {
+                seriesData.get(statusName).add(statusCounts.getOrDefault(statusName, 0L));
+            }
+
+            current = current.plusDays(1);
+        }
+
+        // 构建返回结果
+        List<CumulativeFlowVO.StatusSeries> seriesList = new ArrayList<>();
+        for (String statusName : orderedStatusNames) {
+            IssueStatus status = statusByName.get(statusName);
+            CumulativeFlowVO.StatusSeries series = new CumulativeFlowVO.StatusSeries();
+            series.setName(statusName);
+            series.setColor(status != null ? status.getColor() : "#6b7280");
+            series.setData(seriesData.get(statusName));
+            seriesList.add(series);
+        }
+
+        CumulativeFlowVO vo = new CumulativeFlowVO();
+        vo.setDates(dates);
+        vo.setSeries(seriesList);
+        return vo;
+    }
+
+    /**
+     * 确定某工单在给定时刻的状态
+     */
+    private String getIssueStatusAtTime(Issue issue, List<IssueActivity> issueActivities,
+                                        LocalDateTime atTime, Map<Long, IssueStatus> statusById) {
+        // 初始状态：如果没有活动记录在 atTime 之前，使用创建时的初始状态
+        // 初始状态通过回溯第一条活动的 old_value 获取，若无活动则用当前状态
+        String initialStatus;
+        if (issueActivities != null && !issueActivities.isEmpty()) {
+            initialStatus = issueActivities.get(0).getOldValue();
+        } else {
+            IssueStatus st = statusById.get(issue.getStatusId());
+            initialStatus = st != null ? st.getName() : "Open";
+        }
+
+        if (issueActivities == null || issueActivities.isEmpty()) {
+            return initialStatus;
+        }
+
+        // 回放到 atTime 为止的所有状态变更
+        String status = initialStatus;
+        for (IssueActivity act : issueActivities) {
+            if (act.getCreatedAt().isBefore(atTime)) {
+                status = act.getNewValue();
+            } else {
+                break;
+            }
+        }
+        return status;
+    }
+
+    /**
+     * 构建解决时间分析数据
+     * 计算工单从创建到解决（resolved_at）的耗时统计
+     *
+     * @param groupBy 分组方式：null（不分组）、"type"、"priority"、"assignee"
+     */
+    private ResolutionTimeVO buildResolutionTime(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy) {
+        if (endDate == null) endDate = LocalDate.now();
+        if (startDate == null) startDate = endDate.minusDays(29);
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        // 查询时间范围内已解决的工单
+        LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<Issue>()
+                .isNull(Issue::getDeletedAt)
+                .isNotNull(Issue::getResolvedAt)
+                .ge(Issue::getResolvedAt, start)
+                .le(Issue::getResolvedAt, end);
+        if (projectIds != null && !projectIds.isEmpty()) {
+            if (projectIds.size() == 1) {
+                wrapper.eq(Issue::getProjectId, projectIds.get(0));
+            } else {
+                wrapper.in(Issue::getProjectId, projectIds);
+            }
+        }
+        List<Issue> resolvedIssues = issueMapper.selectList(wrapper);
+
+        // 按周分组计算趋势
+        Map<LocalDate, List<Double>> hoursByWeek = new TreeMap<>();
+        for (Issue issue : resolvedIssues) {
+            double hours = ChronoUnit.MINUTES.between(issue.getCreatedAt(), issue.getResolvedAt()) / 60.0;
+            // 按 resolvedAt 所在周的周一分组
+            LocalDate weekStart = issue.getResolvedAt().toLocalDate()
+                    .with(java.time.DayOfWeek.MONDAY);
+            hoursByWeek.computeIfAbsent(weekStart, k -> new ArrayList<>()).add(hours);
+        }
+
+        // 如果不足 4 周数据，改为按天分组
+        boolean useDayGrouping = hoursByWeek.size() < 4;
+        List<String> dates = new ArrayList<>();
+        List<Double> avgHours = new ArrayList<>();
+        List<Double> medianHours = new ArrayList<>();
+        List<Double> p90Hours = new ArrayList<>();
+        List<Long> resolvedCount = new ArrayList<>();
+
+        if (useDayGrouping) {
+            Map<LocalDate, List<Double>> hoursByDay = new TreeMap<>();
+            for (Issue issue : resolvedIssues) {
+                double hours = ChronoUnit.MINUTES.between(issue.getCreatedAt(), issue.getResolvedAt()) / 60.0;
+                LocalDate day = issue.getResolvedAt().toLocalDate();
+                hoursByDay.computeIfAbsent(day, k -> new ArrayList<>()).add(hours);
+            }
+            // 填充所有日期（包括无数据的日子）
+            LocalDate current = startDate;
+            while (!current.isAfter(endDate)) {
+                dates.add(current.toString());
+                List<Double> dayHours = hoursByDay.getOrDefault(current, List.of());
+                if (dayHours.isEmpty()) {
+                    avgHours.add(null);
+                    medianHours.add(null);
+                    p90Hours.add(null);
+                    resolvedCount.add(0L);
+                } else {
+                    avgHours.add(round2(average(dayHours)));
+                    medianHours.add(round2(percentile(dayHours, 50)));
+                    p90Hours.add(round2(percentile(dayHours, 90)));
+                    resolvedCount.add((long) dayHours.size());
+                }
+                current = current.plusDays(1);
+            }
+        } else {
+            for (Map.Entry<LocalDate, List<Double>> entry : hoursByWeek.entrySet()) {
+                dates.add(entry.getKey().toString());
+                List<Double> weekHours = entry.getValue();
+                avgHours.add(round2(average(weekHours)));
+                medianHours.add(round2(percentile(weekHours, 50)));
+                p90Hours.add(round2(percentile(weekHours, 90)));
+                resolvedCount.add((long) weekHours.size());
+            }
+        }
+
+        // 分组明细
+        List<ResolutionTimeVO.GroupDetail> groupDetails = new ArrayList<>();
+        if (groupBy != null && !resolvedIssues.isEmpty()) {
+            groupDetails = buildResolutionGroupDetails(resolvedIssues, groupBy);
+        }
+
+        ResolutionTimeVO vo = new ResolutionTimeVO();
+        vo.setDates(dates);
+        vo.setAvgHours(avgHours);
+        vo.setMedianHours(medianHours);
+        vo.setP90Hours(p90Hours);
+        vo.setResolvedCount(resolvedCount);
+        vo.setGroupDetails(groupDetails);
+        return vo;
+    }
+
+    private List<ResolutionTimeVO.GroupDetail> buildResolutionGroupDetails(List<Issue> issues, String groupBy) {
+        Map<String, List<Double>> grouped = new LinkedHashMap<>();
+
+        Map<Long, String> assigneeNameMap = null;
+        if ("assignee".equals(groupBy)) {
+            Set<Long> assigneeIds = issues.stream()
+                    .map(Issue::getAssigneeId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!assigneeIds.isEmpty()) {
+                assigneeNameMap = userMapper.selectBatchIds(assigneeIds).stream()
+                        .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            } else {
+                assigneeNameMap = Map.of();
+            }
+        }
+
+        for (Issue issue : issues) {
+            String key;
+            switch (groupBy) {
+                case "type":
+                    key = issue.getIssueType() != null ? issue.getIssueType() : "Task";
+                    break;
+                case "priority":
+                    key = issue.getPriority() != null ? issue.getPriority() : "Normal";
+                    break;
+                case "assignee":
+                    if (issue.getAssigneeId() == null) {
+                        key = "未分配";
+                    } else {
+                        key = assigneeNameMap.getOrDefault(issue.getAssigneeId(), "未知用户");
+                    }
+                    break;
+                default:
+                    key = "全部";
+            }
+            double hours = ChronoUnit.MINUTES.between(issue.getCreatedAt(), issue.getResolvedAt()) / 60.0;
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(hours);
+        }
+
+        List<ResolutionTimeVO.GroupDetail> details = new ArrayList<>();
+        for (Map.Entry<String, List<Double>> entry : grouped.entrySet()) {
+            ResolutionTimeVO.GroupDetail detail = new ResolutionTimeVO.GroupDetail();
+            detail.setName(entry.getKey());
+            detail.setAvgHours(round2(average(entry.getValue())));
+            detail.setMedianHours(round2(percentile(entry.getValue(), 50)));
+            detail.setCount((long) entry.getValue().size());
+            details.add(detail);
+        }
+        // 按解决工单数降序
+        details.sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+        return details;
+    }
+
+    // ─── Statistics helpers ──────────────────────────────────────────────
+
+    private double average(List<Double> values) {
+        if (values.isEmpty()) return 0;
+        return values.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+    }
+
+    private double percentile(List<Double> values, int p) {
+        if (values.isEmpty()) return 0;
+        List<Double> sorted = values.stream().sorted().collect(Collectors.toList());
+        int index = (int) Math.ceil(p / 100.0 * sorted.size()) - 1;
+        return sorted.get(Math.max(0, Math.min(index, sorted.size() - 1)));
+    }
+
+    private Double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
 
     /**
      * 构建跨项目对比数据 — 按项目分组统计工单数、完成率等

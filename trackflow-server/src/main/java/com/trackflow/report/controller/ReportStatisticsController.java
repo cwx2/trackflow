@@ -119,4 +119,33 @@ public class ReportStatisticsController {
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getBurndown(projectId, sprintId));
     }
+
+    /**
+     * 获取累积流图数据（Cumulative Flow Diagram）
+     */
+    @GetMapping("/cumulative-flow")
+    @PreAuthorize("isAuthenticated()")
+    public R<CumulativeFlowVO> cumulativeFlow(
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        projectService.assertProjectMember(userId, projectId);
+        return R.ok(statisticsService.getCumulativeFlow(projectId, startDate, endDate));
+    }
+
+    /**
+     * 获取解决时间分析数据（Resolution Time）
+     */
+    @GetMapping("/resolution-time")
+    @PreAuthorize("isAuthenticated()")
+    public R<ResolutionTimeVO> resolutionTime(
+            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "groupBy", required = false) String groupBy) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        projectService.assertProjectMember(userId, projectId);
+        return R.ok(statisticsService.getResolutionTime(projectId, startDate, endDate, groupBy));
+    }
 }

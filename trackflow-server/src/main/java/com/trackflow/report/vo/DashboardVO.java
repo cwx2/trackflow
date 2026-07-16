@@ -16,4 +16,8 @@ public class DashboardVO {
     private OverviewVO overview;
     /** 跨项目对比数据（仅"全部项目"模式下返回） */
     private ProjectComparisonVO projectComparison;
+    /** 累积流图数据 */
+    private CumulativeFlowVO cumulativeFlow;
+    /** 解决时间分析数据 */
+    private ResolutionTimeVO resolutionTime;
 }

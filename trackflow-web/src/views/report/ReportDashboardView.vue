@@ -182,6 +182,64 @@
             <v-chart :option="projectComparisonChartOption" autoresize class="chart-instance" />
           </div>
         </div>
+
+        <!-- 累积流图（Cumulative Flow Diagram） -->
+        <div v-if="dashboardData.cumulativeFlow && dashboardData.cumulativeFlow.series.length > 0" class="chart-card chart-card-wide">
+          <div class="chart-card-header">
+            <h3 class="chart-title">累积流图</h3>
+            <span class="chart-subtitle">各状态工单数量随时间变化（面积越宽 = 积压越多）</span>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="cumulativeFlowChartOption" autoresize class="chart-instance" />
+          </div>
+        </div>
+
+        <!-- 解决时间分析 -->
+        <div v-if="dashboardData.resolutionTime && dashboardData.resolutionTime.dates.length > 0" class="chart-card chart-card-wide">
+          <div class="chart-card-header">
+            <div class="chart-header-left">
+              <h3 class="chart-title">解决时间分析</h3>
+              <span class="chart-subtitle">工单从创建到关闭的耗时趋势</span>
+            </div>
+            <div class="chart-header-right">
+              <a-select
+                v-model="resolutionTimeGroupBy"
+                placeholder="分组查看"
+                allow-clear
+                size="mini"
+                style="width: 100px"
+                @change="loadResolutionTimeGrouped"
+              >
+                <a-option value="type">按类型</a-option>
+                <a-option value="priority">按优先级</a-option>
+                <a-option value="assignee">按负责人</a-option>
+              </a-select>
+            </div>
+          </div>
+          <div class="chart-body">
+            <v-chart :option="resolutionTimeChartOption" autoresize class="chart-instance" />
+          </div>
+          <!-- 分组明细表格 -->
+          <div v-if="resolutionTimeGroupDetails.length > 0" class="resolution-group-details">
+            <div class="group-detail-header">
+              <span class="group-detail-title">分组明细</span>
+            </div>
+            <div class="group-detail-table">
+              <div class="group-detail-row group-detail-row-header">
+                <span class="gd-name">分组</span>
+                <span class="gd-value">平均耗时</span>
+                <span class="gd-value">中位耗时</span>
+                <span class="gd-value">工单数</span>
+              </div>
+              <div v-for="item in resolutionTimeGroupDetails" :key="item.name" class="group-detail-row">
+                <span class="gd-name">{{ item.name }}</span>
+                <span class="gd-value">{{ formatHours(item.avgHours) }}</span>
+                <span class="gd-value">{{ formatHours(item.medianHours) }}</span>
+                <span class="gd-value">{{ item.count }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
   </div>
@@ -204,7 +262,7 @@ import VChart from 'vue-echarts'
 import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
-import type { DashboardData, ProjectComparisonData } from '@/api/reportStatistics'
+import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 
@@ -677,6 +735,220 @@ const projectComparisonChartOption = computed(() => {
 
 // ─── 数据加载 ─────────────────────────────────────────
 
+// Resolution time group-by state
+const resolutionTimeGroupBy = ref<string | undefined>(undefined)
+const resolutionTimeGroupDetails = ref<{ name: string; avgHours: number; medianHours: number; count: number }[]>([])
+
+// ─── 累积流图 Option ─────────────────────────────────────
+
+const cumulativeFlowChartOption = computed(() => {
+  if (!dashboardData.value?.cumulativeFlow) return {}
+  const { dates, series } = dashboardData.value.cumulativeFlow
+  if (!series.length) return {}
+  const shortDates = dates.map(d => d.substring(5))
+  const c = chartColors.value
+  return {
+    backgroundColor: chartBgColor,
+    toolbox: chartToolbox('累积流图'),
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 },
+      formatter: (params: any) => {
+        if (!params.length) return ''
+        let html = `<strong>${params[0].axisValue}</strong><br/>`
+        let total = 0
+        for (const p of params) {
+          total += p.value || 0
+          html += `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${p.color};margin-right:4px;"></span>${p.seriesName}: <strong>${p.value}</strong><br/>`
+        }
+        html += `<br/>总计: <strong>${total}</strong>`
+        return html
+      }
+    },
+    legend: {
+      data: series.map(s => localizeStatusName(s.name)),
+      bottom: 0,
+      textStyle: { color: c.textColor, fontSize: 11 },
+      itemWidth: 12,
+      itemHeight: 10,
+      type: 'scroll'
+    },
+    grid: { left: 40, right: 20, top: 16, bottom: 40 },
+    xAxis: {
+      type: 'category',
+      data: shortDates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 10, interval: 'auto' },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+    },
+    series: series.map(s => ({
+      name: localizeStatusName(s.name),
+      type: 'line',
+      stack: 'total',
+      areaStyle: { opacity: 0.7 },
+      emphasis: { focus: 'series' },
+      symbol: 'none',
+      lineStyle: { width: 1, color: s.color },
+      itemStyle: { color: s.color },
+      data: s.data
+    }))
+  }
+})
+
+// ─── 解决时间分析 Option ─────────────────────────────────
+
+const resolutionTimeChartOption = computed(() => {
+  if (!dashboardData.value?.resolutionTime) return {}
+  const { dates, avgHours, medianHours, p90Hours, resolvedCount } = dashboardData.value.resolutionTime
+  if (!dates.length) return {}
+  const shortDates = dates.map(d => d.substring(5))
+  const c = chartColors.value
+  return {
+    backgroundColor: chartBgColor,
+    toolbox: chartToolbox('解决时间分析'),
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 },
+      formatter: (params: any) => {
+        if (!params.length) return ''
+        let html = `<strong>${params[0].axisValue}</strong><br/>`
+        for (const p of params) {
+          if (p.value == null) continue
+          const unit = p.seriesName === '解决工单数' ? '' : 'h'
+          html += `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${p.color};margin-right:4px;"></span>${p.seriesName}: <strong>${p.value}${unit}</strong><br/>`
+        }
+        return html
+      }
+    },
+    legend: {
+      data: ['平均', '中位', 'P90', '解决工单数'],
+      right: 20,
+      top: 0,
+      textStyle: { color: c.textColor, fontSize: 11 },
+      itemWidth: 14,
+      itemHeight: 3
+    },
+    grid: { left: 50, right: 50, top: 32, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: shortDates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 10, interval: 'auto' },
+      axisTick: { show: false }
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '小时',
+        nameTextStyle: { color: c.textColor, fontSize: 11 },
+        axisLine: { show: false },
+        axisLabel: { color: c.textColor, fontSize: 11 },
+        splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+      },
+      {
+        type: 'value',
+        name: '工单数',
+        nameTextStyle: { color: c.textColor, fontSize: 11 },
+        axisLine: { show: false },
+        axisLabel: { color: c.textColor, fontSize: 11 },
+        splitLine: { show: false }
+      }
+    ],
+    series: [
+      {
+        name: '平均',
+        type: 'line',
+        yAxisIndex: 0,
+        data: avgHours,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        connectNulls: true,
+        lineStyle: { width: 2, color: '#58a6ff' },
+        itemStyle: { color: '#58a6ff' }
+      },
+      {
+        name: '中位',
+        type: 'line',
+        yAxisIndex: 0,
+        data: medianHours,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        connectNulls: true,
+        lineStyle: { width: 2, color: '#3fb950' },
+        itemStyle: { color: '#3fb950' }
+      },
+      {
+        name: 'P90',
+        type: 'line',
+        yAxisIndex: 0,
+        data: p90Hours,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        connectNulls: true,
+        lineStyle: { width: 2, color: '#f85149', type: 'dashed' },
+        itemStyle: { color: '#f85149' }
+      },
+      {
+        name: '解决工单数',
+        type: 'bar',
+        yAxisIndex: 1,
+        data: resolvedCount,
+        barWidth: '40%',
+        itemStyle: { color: 'rgba(88, 166, 255, 0.2)', borderRadius: [3, 3, 0, 0] }
+      }
+    ]
+  }
+})
+
+function formatHours(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)}分钟`
+  if (hours < 24) return `${hours.toFixed(1)}小时`
+  const days = hours / 24
+  return `${days.toFixed(1)}天`
+}
+
+async function loadResolutionTimeGrouped() {
+  if (!selectedProjectId.value || selectedProjectId.value === '__all__') {
+    resolutionTimeGroupDetails.value = []
+    return
+  }
+  if (!resolutionTimeGroupBy.value) {
+    resolutionTimeGroupDetails.value = []
+    // Reload without groupBy
+    return
+  }
+  try {
+    const params: any = { projectId: selectedProjectId.value, groupBy: resolutionTimeGroupBy.value }
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.startDate = formatDate(dateRange.value[0])
+      params.endDate = formatDate(dateRange.value[1])
+    }
+    const res = await reportStatisticsApi.resolutionTime(
+      params.projectId, params.startDate, params.endDate, params.groupBy
+    )
+    resolutionTimeGroupDetails.value = res.data?.groupDetails || []
+  } catch {
+    resolutionTimeGroupDetails.value = []
+  }
+}
+
 onMounted(async () => {
   readThemeColors()
   // 监听主题变化（MutationObserver on data-theme attribute）
@@ -752,6 +1024,8 @@ async function loadDashboard() {
     }
     const res = await reportStatisticsApi.dashboard(params)
     dashboardData.value = res.data
+    // Reset group details on dashboard reload
+    resolutionTimeGroupDetails.value = res.data?.resolutionTime?.groupDetails || []
   } catch (e: any) {
     Message.error(e.response?.data?.message || '加载报表数据失败')
   } finally {
@@ -977,6 +1251,19 @@ function printReport() {
   margin-bottom: 12px;
 }
 
+.chart-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+}
+
+.chart-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .chart-title {
   font-size: 14px;
   font-weight: 500;
@@ -1050,6 +1337,60 @@ function printReport() {
   margin: 0;
   max-width: 320px;
   line-height: 1.5;
+}
+
+/* 解决时间分组明细 */
+.resolution-group-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--tf-border-light);
+  padding-top: 12px;
+}
+
+.group-detail-header {
+  margin-bottom: 8px;
+}
+
+.group-detail-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+}
+
+.group-detail-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.group-detail-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 100px 80px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--tf-text-primary);
+  border-radius: 4px;
+}
+
+.group-detail-row:hover:not(.group-detail-row-header) {
+  background: var(--tf-bg-hover);
+}
+
+.group-detail-row-header {
+  color: var(--tf-text-tertiary);
+  font-weight: 500;
+  font-size: 11px;
+  border-bottom: 1px solid var(--tf-border-light);
+  margin-bottom: 2px;
+}
+
+.gd-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gd-value {
+  text-align: right;
 }
 
 /* 响应式 */

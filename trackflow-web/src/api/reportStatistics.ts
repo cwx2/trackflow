@@ -89,6 +89,33 @@ export interface ProjectComparisonData {
   items: ProjectComparisonItem[]
 }
 
+export interface CumulativeFlowSeries {
+  name: string
+  color: string
+  data: number[]
+}
+
+export interface CumulativeFlowData {
+  dates: string[]
+  series: CumulativeFlowSeries[]
+}
+
+export interface ResolutionTimeGroupDetail {
+  name: string
+  avgHours: number
+  medianHours: number
+  count: number
+}
+
+export interface ResolutionTimeData {
+  dates: string[]
+  avgHours: (number | null)[]
+  medianHours: (number | null)[]
+  p90Hours: (number | null)[]
+  resolvedCount: number[]
+  groupDetails: ResolutionTimeGroupDetail[]
+}
+
 export interface DashboardData {
   statusDistribution: StatusDistributionData
   priorityDistribution: PriorityDistributionData
@@ -98,6 +125,8 @@ export interface DashboardData {
   burndown?: BurndownData
   overview: OverviewData
   projectComparison?: ProjectComparisonData
+  cumulativeFlow?: CumulativeFlowData
+  resolutionTime?: ResolutionTimeData
 }
 
 // ─── API ──────────────────────────────────────────────
@@ -147,6 +176,20 @@ export const reportStatisticsApi = {
   burndown(projectId: string, sprintId: string) {
     return request.get<any, R<BurndownData>>('/reports/statistics/burndown', {
       params: { projectId, sprintId }
+    })
+  },
+
+  /** 累积流图 */
+  cumulativeFlow(projectId: string, startDate?: string, endDate?: string) {
+    return request.get<any, R<CumulativeFlowData>>('/reports/statistics/cumulative-flow', {
+      params: { projectId, startDate, endDate }
+    })
+  },
+
+  /** 解决时间分析 */
+  resolutionTime(projectId: string, startDate?: string, endDate?: string, groupBy?: string) {
+    return request.get<any, R<ResolutionTimeData>>('/reports/statistics/resolution-time', {
+      params: { projectId, startDate, endDate, groupBy }
     })
   }
 }
