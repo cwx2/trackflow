@@ -9,6 +9,7 @@ import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.service.SprintService;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
+import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintVO;
 import jakarta.validation.Valid;
@@ -35,6 +36,12 @@ public class SprintController {
     @PreAuthorize("@perm.check(#projectId, 'sprint:create')")
     public R<SprintVO> create(@PathVariable Long projectId, @Valid @RequestBody CreateSprintDTO dto) {
         return R.ok(sprintConverter.toVO(sprintService.create(projectId, dto)));
+    }
+
+    @GetMapping("/api/v1/projects/{projectId}/sprints/creation-preview")
+    @PreAuthorize("@perm.check(#projectId, 'sprint:create')")
+    public R<CreationPreviewVO> creationPreview(@PathVariable Long projectId) {
+        return R.ok(sprintService.getCreationPreview(projectId));
     }
 
     @GetMapping("/api/v1/sprints/{id}")

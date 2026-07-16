@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, SprintVO, SprintBurndownVO, CompletionPreviewVO, DeletionPreviewVO } from './types'
+import type { R, SprintVO, SprintBurndownVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -14,9 +14,21 @@ export const sprintApi = {
     return request.get<any, R<SprintVO[]>>(`/projects/${projectId}/sprints`, config)
   },
 
-  /** 创建 Sprint */
-  create(projectId: string, data: { name: string; goal?: string; startDate?: string; endDate?: string }) {
+  /** 创建 Sprint（含可选的移入未完成工单 + 设为默认 Sprint） */
+  create(projectId: string, data: {
+    name: string
+    goal?: string
+    startDate?: string
+    endDate?: string
+    moveUnresolvedIssues?: boolean
+    setAsDefault?: boolean
+  }) {
     return request.post<any, R<SprintVO>>(`/projects/${projectId}/sprints`, data)
+  },
+
+  /** Sprint 创建预览（获取当前活跃 Sprint 的未完成工单信息） */
+  creationPreview(projectId: string) {
+    return request.get<any, R<CreationPreviewVO>>(`/projects/${projectId}/sprints/creation-preview`)
   },
 
   /** Sprint 详情 */

@@ -519,3 +519,17 @@ export interface DeletionPreviewTarget {
   name: string
   status: string
 }
+
+// ========== Sprint 创建预览 ==========
+export interface CreationPreviewVO {
+  /** 当前活跃 Sprint 的 ID（无活跃 Sprint 时为 null） */
+  activeSprintId?: string
+  /** 当前活跃 Sprint 的名称 */
+  activeSprintName?: string
+  /** 当前活跃 Sprint 中未关闭的工单数量 */
+  unresolvedIssueCount: number
+  /** 该项目当前是否已设置默认 Sprint */
+  hasDefaultSprint: boolean
+  /** 当前默认 Sprint 的名称（如有） */
+  defaultSprintName?: string
+}

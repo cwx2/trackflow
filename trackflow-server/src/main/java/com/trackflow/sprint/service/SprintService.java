@@ -4,7 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
@@ -15,26 +18,35 @@ import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
+import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintVO;
+import com.trackflow.project.entity.Project;
 import com.trackflow.project.service.ProjectService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SprintService {
 
     private final SprintMapper sprintMapper;
     private final IssueMapper issueMapper;
+    private final IssueActivityMapper activityMapper;
     private final ProjectService projectService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 查询项目的 Sprint 列表（带工单统计 + 状态推导）。
@@ -100,7 +112,110 @@ public class SprintService {
         sprint.setEndDate(dto.getEndDate());
         sprint.setStatus(SprintStatus.PLANNED);
         sprintMapper.insert(sprint);
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 选项1：将当前活跃 Sprint 的未完成工单移入新 Sprint
+        if (Boolean.TRUE.equals(dto.getMoveUnresolvedIssues())) {
+            moveUnresolvedIssuesToNewSprint(projectId, sprint, currentUserId);
+        }
+
+        // 选项2：将新 Sprint 设为项目默认 Sprint
+        if (Boolean.TRUE.equals(dto.getSetAsDefault())) {
+            setProjectDefaultSprint(projectId, sprint.getId());
+        }
+
         return sprint;
+    }
+
+    /**
+     * 将项目当前活跃 Sprint 中的未完成工单批量移入新 Sprint，并记录活动日志。
+     */
+    private void moveUnresolvedIssuesToNewSprint(Long projectId, Sprint newSprint, Long currentUserId) {
+        // 查找当前活跃 Sprint
+        Sprint activeSprint = sprintMapper.selectOne(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId)
+                        .eq(Sprint::getStatus, SprintStatus.ACTIVE)
+        );
+        if (activeSprint == null) {
+            log.warn("项目 {} 没有活跃 Sprint，跳过移入未完成工单", projectId);
+            return;
+        }
+
+        // 查找活跃 Sprint 中未关闭的工单
+        List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(activeSprint.getId());
+        if (openIssueIds.isEmpty()) {
+            log.info("活跃 Sprint {} 中无未完成工单，跳过", activeSprint.getName());
+            return;
+        }
+
+        // 批量更新 sprint_id
+        issueMapper.update(null,
+                new LambdaUpdateWrapper<Issue>()
+                        .in(Issue::getId, openIssueIds)
+                        .set(Issue::getSprintId, newSprint.getId())
+        );
+
+        // 为每个被移动的工单记录活动日志
+        LocalDateTime now = LocalDateTime.now();
+        for (Long issueId : openIssueIds) {
+            IssueActivity activity = new IssueActivity();
+            activity.setIssueId(issueId);
+            activity.setUserId(currentUserId);
+            activity.setAction("updated");
+            activity.setFieldName("sprint");
+            activity.setOldValue(activeSprint.getName());
+            activity.setNewValue(newSprint.getName());
+            activity.setCreatedAt(now);
+            activityMapper.insert(activity);
+        }
+
+        log.info("已将 {} 个未完成工单从 Sprint '{}' 移入新 Sprint '{}'",
+                openIssueIds.size(), activeSprint.getName(), newSprint.getName());
+    }
+
+    /**
+     * 将指定 Sprint 设为项目的默认 Sprint（新建工单自动归属）。
+     * 存储在 project.settings JSONB 的 defaultSprintId 字段中。
+     */
+    private void setProjectDefaultSprint(Long projectId, Long sprintId) {
+        projectService.updateProjectSetting(projectId, "defaultSprintId", sprintId);
+    }
+
+    /**
+     * 获取创建 Sprint 的预览信息：
+     * - 是否存在活跃 Sprint 及其未完成工单数
+     * - 是否已设置默认 Sprint
+     */
+    public CreationPreviewVO getCreationPreview(Long projectId) {
+        CreationPreviewVO vo = new CreationPreviewVO();
+
+        // 查找活跃 Sprint
+        Sprint activeSprint = sprintMapper.selectOne(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId)
+                        .eq(Sprint::getStatus, SprintStatus.ACTIVE)
+        );
+
+        if (activeSprint != null) {
+            vo.setActiveSprintId(String.valueOf(activeSprint.getId()));
+            vo.setActiveSprintName(activeSprint.getName());
+            List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(activeSprint.getId());
+            vo.setUnresolvedIssueCount(openIssueIds.size());
+        }
+
+        // 检查是否已有默认 Sprint
+        Long defaultSprintId = projectService.getProjectSettingAsLong(projectId, "defaultSprintId");
+        if (defaultSprintId != null) {
+            Sprint defaultSprint = sprintMapper.selectById(defaultSprintId);
+            if (defaultSprint != null && defaultSprint.getStatus() != SprintStatus.COMPLETED) {
+                vo.setHasDefaultSprint(true);
+                vo.setDefaultSprintName(defaultSprint.getName());
+            }
+        }
+
+        return vo;
     }
 
     @Transactional

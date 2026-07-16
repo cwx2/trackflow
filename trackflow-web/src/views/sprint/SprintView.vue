@@ -22,7 +22,7 @@
             {{ p.key }} - {{ p.name }}
           </a-option>
         </a-select>
-        <a-button v-if="canCreateSprint" type="primary" size="small" :disabled="!selectedProject" @click="showCreate = true">
+        <a-button v-if="canCreateSprint" type="primary" size="small" :disabled="!selectedProject" @click="openCreateModal">
           + 新建迭代
         </a-button>
       </div>
@@ -310,7 +310,7 @@
         <template v-else-if="canCreateSprint">创建第一个 Sprint 来规划团队工作</template>
         <template v-else>当前项目尚未创建迭代，请联系项目管理员。</template>
       </p>
-      <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="showCreate = true">
+      <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="openCreateModal">
         + 新建迭代
       </a-button>
     </div>
@@ -330,6 +330,38 @@
         <a-form-item label="结束日期">
           <a-date-picker v-model="createForm.endDate" style="width: 100%" />
         </a-form-item>
+
+        <!-- 可选操作区域 -->
+        <div class="create-options-section" v-if="creationPreview">
+          <!-- 添加当前 Sprint 未完成工单 -->
+          <div
+            class="create-option-item"
+            v-if="creationPreview.activeSprintId && creationPreview.unresolvedIssueCount > 0"
+          >
+            <a-checkbox v-model="createForm.moveUnresolvedIssues">
+              <span class="option-label">添加当前 Sprint 未完成工单</span>
+            </a-checkbox>
+            <span class="option-desc">
+              将 <strong>{{ creationPreview.activeSprintName }}</strong> 中的
+              {{ creationPreview.unresolvedIssueCount }} 个未完成工单移入新迭代
+            </span>
+          </div>
+
+          <!-- 设为默认 Sprint -->
+          <div class="create-option-item">
+            <a-checkbox v-model="createForm.setAsDefault">
+              <span class="option-label">设为默认 Sprint</span>
+            </a-checkbox>
+            <span class="option-desc">
+              <template v-if="creationPreview.hasDefaultSprint">
+                当前默认为 <strong>{{ creationPreview.defaultSprintName }}</strong>，替换后新建工单将自动归属此迭代
+              </template>
+              <template v-else>
+                启用后，该项目新创建的工单将自动分配到此迭代
+              </template>
+            </span>
+          </div>
+        </div>
       </a-form>
     </a-modal>
 
@@ -527,7 +559,7 @@ import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
-import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO } from '@/api/types'
+import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewVO } from '@/api/types'
 import SprintBurndownChart from './SprintBurndownChart.vue'
 
 const router = useRouter()
@@ -544,6 +576,7 @@ const { projects, projectLoadState, loadProjects } = useProjectList()
 const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
 const creating = ref(false)
+const creationPreview = ref<CreationPreviewVO | null>(null)
 const expandedCompletedSprints = ref<Set<string>>(new Set())
 
 // ===== 编辑迭代相关 =====
@@ -591,7 +624,9 @@ const createForm = reactive({
   name: '',
   goal: '',
   startDate: '',
-  endDate: ''
+  endDate: '',
+  moveUnresolvedIssues: false,
+  setAsDefault: false
 })
 
 const activeSprints = computed(() => sprints.value.filter(s => s.status === 'active' || s.status === 'Active'))
@@ -810,6 +845,29 @@ async function confirmDeleteSprint() {
   }
 }
 
+async function openCreateModal() {
+  // 重置表单
+  createForm.name = ''
+  createForm.goal = ''
+  createForm.startDate = ''
+  createForm.endDate = ''
+  createForm.moveUnresolvedIssues = false
+  createForm.setAsDefault = false
+  creationPreview.value = null
+  showCreate.value = true
+
+  // 加载创建预览信息（判断是否显示可选项）
+  if (selectedProject.value) {
+    try {
+      const res = await sprintApi.creationPreview(selectedProject.value)
+      creationPreview.value = res.data
+    } catch (e) {
+      // 预览加载失败不阻塞创建流程
+      creationPreview.value = null
+    }
+  }
+}
+
 async function handleCreate() {
   if (!createForm.name.trim()) {
     Message.warning('请输入迭代名称')
@@ -821,7 +879,9 @@ async function handleCreate() {
       name: createForm.name.trim(),
       goal: createForm.goal || undefined,
       startDate: createForm.startDate || undefined,
-      endDate: createForm.endDate || undefined
+      endDate: createForm.endDate || undefined,
+      moveUnresolvedIssues: createForm.moveUnresolvedIssues || undefined,
+      setAsDefault: createForm.setAsDefault || undefined
     })
     Message.success('迭代创建成功')
     showCreate.value = false
@@ -829,6 +889,8 @@ async function handleCreate() {
     createForm.goal = ''
     createForm.startDate = ''
     createForm.endDate = ''
+    createForm.moveUnresolvedIssues = false
+    createForm.setAsDefault = false
     loadSprints()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '创建失败')
@@ -1369,5 +1431,34 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ===== 创建迭代可选项 ===== */
+.create-options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.create-option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.create-option-item .option-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.create-option-item .option-desc {
+  font-size: 12px;
+  color: var(--color-text-3);
+  margin-left: 24px;
+  line-height: 1.5;
 }
 </style>

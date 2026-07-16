@@ -16,4 +16,16 @@ public class CreateSprintDTO {
     private String goal;
     private LocalDate startDate;
     private LocalDate endDate;
+
+    /**
+     * 是否将当前活跃 Sprint 中的未完成工单移入新 Sprint。
+     * 仅在项目存在 active Sprint 且其中有未关闭工单时有效。
+     */
+    private Boolean moveUnresolvedIssues;
+
+    /**
+     * 是否将新 Sprint 设为项目的默认 Sprint。
+     * 设为默认后，该项目新创建的工单自动归属此 Sprint。
+     */
+    private Boolean setAsDefault;
 }

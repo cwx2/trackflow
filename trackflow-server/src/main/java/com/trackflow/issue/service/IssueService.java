@@ -101,7 +101,21 @@ public class IssueService {
         validateAssignee(dto.getAssigneeId(), dto.getProjectId());
         issue.setAssigneeId(normalizeAssigneeId(dto.getAssigneeId()));
         issue.setReporterId(currentUserId);
-        issue.setSprintId(dto.getSprintId());
+        // 如果未指定 sprintId，尝试使用项目默认 Sprint
+        Long resolvedSprintId = dto.getSprintId();
+        if (resolvedSprintId == null) {
+            Long defaultSprintId = projectService.getProjectSettingAsLong(dto.getProjectId(), "defaultSprintId");
+            if (defaultSprintId != null) {
+                // 验证默认 Sprint 仍然有效（存在且未完成）
+                var defaultSprint = sprintMapper.selectById(defaultSprintId);
+                if (defaultSprint != null
+                        && defaultSprint.getProjectId().equals(dto.getProjectId())
+                        && defaultSprint.getStatus() != com.trackflow.sprint.entity.SprintStatus.COMPLETED) {
+                    resolvedSprintId = defaultSprintId;
+                }
+            }
+        }
+        issue.setSprintId(resolvedSprintId);
         issue.setParentId(dto.getParentId());
         // 创建时如果指定了 parentId，进行环路检测（虽然新工单没有子工单不会形成环路，但验证 parent 存在且有效）
         if (dto.getParentId() != null) {

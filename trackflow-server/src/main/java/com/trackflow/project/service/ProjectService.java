@@ -1416,4 +1416,54 @@ public class ProjectService {
 
         return vo;
     }
+
+    /**
+     * 更新项目 settings JSONB 中的指定字段。
+     */
+    @Transactional
+    public void updateProjectSetting(Long projectId, String key, Object value) {
+        Project project = getById(projectId);
+        String existingSettings = project.getSettings();
+        try {
+            var root = (existingSettings != null && !existingSettings.isBlank())
+                    ? (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(existingSettings)
+                    : objectMapper.createObjectNode();
+            if (value == null) {
+                root.remove(key);
+            } else if (value instanceof Long) {
+                root.put(key, (Long) value);
+            } else if (value instanceof Integer) {
+                root.put(key, (Integer) value);
+            } else if (value instanceof Boolean) {
+                root.put(key, (Boolean) value);
+            } else {
+                root.put(key, String.valueOf(value));
+            }
+            project.setSettings(objectMapper.writeValueAsString(root));
+        } catch (Exception e) {
+            log.warn("更新项目 settings 失败，projectId={}, key={}", projectId, key, e);
+            return;
+        }
+        projectMapper.updateById(project);
+    }
+
+    /**
+     * 从项目 settings JSONB 中读取指定 key 的 Long 值。
+     * 如果不存在或解析失败，返回 null。
+     */
+    public Long getProjectSettingAsLong(Long projectId, String key) {
+        Project project = getById(projectId);
+        String settingsJson = project.getSettings();
+        if (settingsJson == null || settingsJson.isBlank() || "{}".equals(settingsJson)) {
+            return null;
+        }
+        try {
+            var node = objectMapper.readTree(settingsJson);
+            var valueNode = node.get(key);
+            if (valueNode == null || valueNode.isNull()) return null;
+            return valueNode.asLong();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }
