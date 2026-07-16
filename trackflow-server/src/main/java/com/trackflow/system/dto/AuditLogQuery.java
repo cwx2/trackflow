@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 /**
  * 审计日志查询条件
@@ -30,4 +31,12 @@ public class AuditLogQuery extends PageQuery {
 
     /** 结束日期 */
     private LocalDate endDate;
+
+    @Override
+    protected Set<String> allowedSortFields() {
+        return Set.of(
+                "id", "action", "target_type", "operator_id",
+                "target_id", "created_at"
+        );
+    }
 }

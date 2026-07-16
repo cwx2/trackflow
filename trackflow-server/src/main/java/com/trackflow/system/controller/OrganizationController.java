@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
+
 /**
  * 组织管理接口
  */
@@ -41,7 +43,8 @@ public class OrganizationController {
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             @RequestParam(value = "sort", required = false) String sort) {
 
-        Page<Organization> pageObj = PageHelper.buildPage(page, pageSize, sort);
+        Page<Organization> pageObj = PageHelper.buildPage(page, pageSize, sort,
+                Set.of("id", "name", "code", "created_at", "updated_at"));
         Page<Organization> result = organizationService.list(pageObj, keyword);
 
         PageResult<OrgVO> pageResult = new PageResult<>(

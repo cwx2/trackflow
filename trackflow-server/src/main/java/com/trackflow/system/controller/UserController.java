@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 用户管理接口
@@ -45,7 +46,9 @@ public class UserController {
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             @RequestParam(value = "sort", required = false) String sort) {
 
-        Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort);
+        Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort,
+                Set.of("id", "username", "display_name", "email", "status",
+                        "org_id", "created_at", "updated_at", "last_login_at"));
         Page<SysUser> result = userService.list(pageObj, username, displayName, email, orgId, status);
 
         PageResult<UserVO> pageResult = new PageResult<>(

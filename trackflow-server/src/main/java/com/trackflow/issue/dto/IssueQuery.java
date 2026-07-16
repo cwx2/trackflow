@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.Set;
+
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class IssueQuery extends PageQuery {
@@ -30,4 +32,13 @@ public class IssueQuery extends PageQuery {
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
     private String reportedByMe;  // "true" = reporter_id = current user AND status not done
     private String hideResolved;  // "true" = exclude issues with is_closed=true statuses
+
+    @Override
+    protected Set<String> allowedSortFields() {
+        return Set.of(
+                "id", "issue_key", "title", "status_id", "priority",
+                "assignee_id", "reporter_id", "created_at", "updated_at",
+                "due_date", "sprint_id", "issue_type", "project_id"
+        );
+    }
 }
