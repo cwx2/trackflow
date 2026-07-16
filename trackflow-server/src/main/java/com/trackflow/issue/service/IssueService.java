@@ -743,6 +743,67 @@ public class IssueService {
     }
 
     /**
+     * 获取批量操作中每个状态的可达性信息。
+     * 对选中的所有工单，统计每个状态可被多少个工单转换到。
+     */
+    public List<BatchAvailableStatusVO> getBatchAvailableTransitions(List<Long> issueIds) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 获取所有状态
+        List<IssueStatus> allStatuses = statusMapper.selectList(
+                new LambdaQueryWrapper<IssueStatus>().orderByAsc(IssueStatus::getSortOrder));
+
+        // 获取每个工单的可用转换
+        // Key: statusId, Value: 可以转换到此状态的工单数量
+        Map<Long, Integer> reachabilityMap = new java.util.HashMap<>();
+        for (IssueStatus status : allStatuses) {
+            reachabilityMap.put(status.getId(), 0);
+        }
+
+        // 收集选中工单的当前状态（排除当前状态本身）
+        Set<Long> currentStatusIds = new java.util.HashSet<>();
+
+        for (Long issueId : issueIds) {
+            try {
+                Issue issue = getById(issueId);
+                currentStatusIds.add(issue.getStatusId());
+                List<IssueStatus> available = workflowService.getAvailableTransitions(issue, currentUserId);
+                for (IssueStatus s : available) {
+                    reachabilityMap.merge(s.getId(), 1, Integer::sum);
+                }
+            } catch (Exception e) {
+                log.warn("获取工单可用转换失败 issueId={}", issueId, e);
+                // 跳过无法访问的工单
+            }
+        }
+
+        int totalCount = issueIds.size();
+        List<BatchAvailableStatusVO> result = new java.util.ArrayList<>();
+        for (IssueStatus status : allStatuses) {
+            int reachable = reachabilityMap.getOrDefault(status.getId(), 0);
+            // 排除没有任何工单能转换到的状态（除非是当前状态，也排除）
+            if (reachable == 0 && currentStatusIds.contains(status.getId())) {
+                continue; // 当前状态不需要显示在目标列表中
+            }
+            if (reachable == 0) {
+                continue; // 完全不可达的状态不显示
+            }
+            BatchAvailableStatusVO vo = new BatchAvailableStatusVO();
+            vo.setId(String.valueOf(status.getId()));
+            vo.setName(status.getName());
+            vo.setColor(status.getColor());
+            vo.setCategory(status.getCategory());
+            vo.setIsClosed(status.getIsClosed());
+            vo.setSortOrder(status.getSortOrder());
+            vo.setReachableCount(reachable);
+            vo.setTotalCount(totalCount);
+            result.add(vo);
+        }
+
+        return result;
+    }
+
+    /**
      * 批量状态转换
      */
     public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId) {

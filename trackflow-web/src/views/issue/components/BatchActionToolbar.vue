@@ -16,7 +16,7 @@
           变更状态
         </a-button>
         <template #content>
-          <div class="batch-dropdown">
+          <div class="batch-dropdown status-dropdown">
             <div v-if="statusLoading" class="dropdown-loading">
               <a-spin :size="16" />
             </div>
@@ -25,13 +25,18 @@
                 v-for="status in allStatuses"
                 :key="status.id"
                 class="dropdown-item"
+                :class="{ 'partially-reachable': status.reachableCount < status.totalCount }"
                 @click="handleBatchState(status)"
               >
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                <span>{{ localizeStatusName(status.name) }}</span>
+                <span class="status-name">{{ localizeStatusName(status.name) }}</span>
+                <span
+                  v-if="status.totalCount > 1 && status.reachableCount < status.totalCount"
+                  class="reachable-hint"
+                >{{ status.reachableCount }}/{{ status.totalCount }}</span>
               </div>
               <div v-if="allStatuses.length === 0" class="dropdown-empty">
-                无可用状态
+                <span>当前工单无可用状态转换</span>
               </div>
             </template>
           </div>
@@ -178,7 +183,7 @@ import { ref, computed, watch } from 'vue'
 import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete } from '@arco-design/web-vue/es/icon'
 import { Modal } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi } from '@/api'
-import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
+import type { IssueVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
 
 const props = defineProps<{
@@ -198,14 +203,31 @@ const emit = defineEmits<{
 // ========== 状态下拉 ==========
 const showStatusDropdown = ref(false)
 const statusLoading = ref(false)
-const allStatuses = ref<IssueStatusVO[]>([])
+const allStatuses = ref<BatchAvailableStatusVO[]>([])
 
 watch(showStatusDropdown, async (visible) => {
   if (visible) {
     statusLoading.value = true
     try {
-      const res = await issueApi.listStatuses()
-      allStatuses.value = res.data || []
+      const issueIds = props.selectedIssues.map(i => i.id)
+      if (issueIds.length === 1) {
+        // 单选：使用单工单可用转换 API
+        const res = await issueApi.getAvailableTransitions(issueIds[0])
+        allStatuses.value = (res.data || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          color: s.color,
+          category: s.category,
+          isClosed: s.isClosed,
+          sortOrder: s.sortOrder,
+          reachableCount: 1,
+          totalCount: 1
+        }))
+      } else {
+        // 多选：使用批量可用转换 API
+        const res = await issueApi.getBatchAvailableTransitions(issueIds)
+        allStatuses.value = res.data || []
+      }
     } catch {
       allStatuses.value = []
     } finally {
@@ -214,7 +236,7 @@ watch(showStatusDropdown, async (visible) => {
   }
 })
 
-function handleBatchState(status: IssueStatusVO) {
+function handleBatchState(status: BatchAvailableStatusVO) {
   showStatusDropdown.value = false
   emit('batch-state', status.id)
 }
@@ -480,4 +502,26 @@ function confirmBatchDelete() {
 .priority-high { background: var(--tf-warning); }
 .priority-normal { background: var(--tf-accent); }
 .priority-low { background: var(--tf-text-tertiary); }
+
+/* 状态下拉 - 可达性提示 */
+.status-dropdown .dropdown-item {
+  justify-content: flex-start;
+}
+.status-dropdown .status-name {
+  flex: 1;
+}
+.status-dropdown .reachable-hint {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.status-dropdown .dropdown-item.partially-reachable {
+  opacity: 0.75;
+}
+.status-dropdown .dropdown-item.partially-reachable:hover {
+  opacity: 1;
+}
 </style>

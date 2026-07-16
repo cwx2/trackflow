@@ -2,7 +2,7 @@ import request from './request'
 import type {
   R, PageResult, IssueVO, IssueDetailVO, IssueCommentVO,
   IssueActivityVO, IssueStatusVO, IssueAttachmentVO,
-  IssueTagVO, IssueLinkVO, IssueTrashVO
+  IssueTagVO, IssueLinkVO, IssueTrashVO, BatchAvailableStatusVO
 } from './types'
 import { validateFile } from '@/utils/attachment'
 
@@ -197,6 +197,11 @@ export const issueApi = {
   },
 
   // ========== 批量操作 ==========
+
+  /** 获取批量状态转换的可用状态列表（带可达性信息） */
+  getBatchAvailableTransitions(issueIds: string[]) {
+    return request.post<any, R<BatchAvailableStatusVO[]>>('/issues/batch-available-transitions', { issueIds })
+  },
 
   /** 批量操作 */
   batch(data: {

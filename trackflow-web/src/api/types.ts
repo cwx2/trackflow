@@ -231,6 +231,20 @@ export interface IssueStatusVO {
   blockedBy?: string[]
 }
 
+/** 批量操作中每个状态的可达性信息 */
+export interface BatchAvailableStatusVO {
+  id: string
+  name: string
+  color: string
+  category: string
+  isClosed: boolean
+  sortOrder: number
+  /** 可以转换到此状态的工单数量 */
+  reachableCount: number
+  /** 选中的工单总数 */
+  totalCount: number
+}
+
 export interface IssueTrashVO {
   id: string
   projectId: string

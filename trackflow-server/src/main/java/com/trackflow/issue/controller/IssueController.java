@@ -165,6 +165,17 @@ public class IssueController {
 
     // ========== 批量操作 ==========
 
+    /**
+     * 获取批量状态转换的可用状态列表（带可达性信息）
+     */
+    @PostMapping("/batch-available-transitions")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<BatchAvailableStatusVO>> getBatchAvailableTransitions(
+            @RequestBody @Valid BatchAvailableTransitionsDTO dto) {
+        List<BatchAvailableStatusVO> result = issueService.getBatchAvailableTransitions(dto.getIssueIds());
+        return R.ok(result);
+    }
+
     @PostMapping("/batch")
     @PreAuthorize("isAuthenticated()")
     public R<BatchOperationResultVO> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
