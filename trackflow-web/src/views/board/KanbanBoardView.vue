@@ -54,6 +54,19 @@
         </a-select>
       </div>
       <div class="toolbar-right">
+        <!-- Progress Indicator (各列卡片数 mini bar chart) -->
+        <div v-if="selectedProject && visibleStatuses.length > 0" class="progress-indicator" role="img" aria-label="各列工单分布">
+          <div
+            v-for="status in visibleStatuses"
+            :key="status.id"
+            class="progress-bar"
+            :class="{ 'progress-bar--collapsed': collapsedColumns.has(status.id) }"
+            :style="{ height: getProgressBarHeight(status.id), backgroundColor: status.color || 'var(--color-fill-4)' }"
+            :title="`${localizeStatusName(status.name)}：${getColumnIssues(status.id).length} 个工单`"
+            @click="scrollToColumn(status.id)"
+          ></div>
+        </div>
+        <a-divider v-if="selectedProject && visibleStatuses.length > 0" direction="vertical" style="margin: 0 4px" />
         <!-- Card Size 选择器 -->
         <div class="card-size-group" role="group" aria-label="卡片尺寸">
           <button
@@ -130,10 +143,11 @@
         class="board-container"
       >
         <template v-for="status in visibleStatuses" :key="status.id">
-          <!-- 有工单的列 或 手动展开的空列：正常展示 -->
+          <!-- 展开状态的列（有工单/手动展开空列/非手动折叠） -->
           <div
-            v-if="getColumnIssues(status.id).length > 0 || expandedEmptyColumns.has(status.id)"
+            v-if="!isColumnCollapsed(status.id)"
             class="board-column"
+            :data-column-id="status.id"
             :class="{
               'board-column--expanded-empty': getColumnIssues(status.id).length === 0,
               'board-column--drop-target': dragOverColumnId === status.id && !dragOverSwimlaneKey,
@@ -143,7 +157,16 @@
             @dragleave="onDragLeave($event)"
             @drop="onDrop($event, status.id)"
           >
-            <div class="column-header" :style="{ borderTopColor: status.color }">
+            <div
+              class="column-header column-header--clickable"
+              :style="{ borderTopColor: status.color }"
+              role="button"
+              tabindex="0"
+              :aria-label="`折叠 ${localizeStatusName(status.name)} 列`"
+              title="点击折叠此列"
+              @click="toggleColumnCollapse(status.id)"
+              @keydown.enter="toggleColumnCollapse(status.id)"
+            >
               <span class="column-title">{{ localizeStatusName(status.name) }}</span>
               <span
                 class="column-count"
@@ -153,13 +176,6 @@
               <span v-if="getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
                 {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
               </span>
-              <button
-                v-if="getColumnIssues(status.id).length === 0 && !isDragging"
-                class="column-collapse-btn"
-                :aria-label="`折叠 ${localizeStatusName(status.name)} 列`"
-                title="折叠此列"
-                @click="collapseColumn(status.id)"
-              >✕</button>
             </div>
             <div class="column-body">
               <div
@@ -240,27 +256,28 @@
             </div>
           </div>
 
-          <!-- 空列：折叠为窄条 -->
+          <!-- 折叠的列：窄条 -->
           <div
             v-else
             class="board-column-collapsed"
+            :data-column-id="status.id"
             :class="{
               'board-column-collapsed--drop-target': dragOverColumnId === status.id && isDropAllowed(status.id),
               'board-column-collapsed--drop-forbidden': dragOverColumnId === status.id && !isDropAllowed(status.id)
             }"
             role="button"
             tabindex="0"
-            :aria-label="`${localizeStatusName(status.name)}，0 个工单，点击展开`"
-            :title="`${localizeStatusName(status.name)} (0 工单) - ${isDragging ? '释放以移动' : '点击展开'}`"
-            @click="!isDragging && expandColumn(status.id)"
-            @keydown.enter="expandColumn(status.id)"
+            :aria-label="`${localizeStatusName(status.name)}，${getColumnIssues(status.id).length} 个工单，点击展开`"
+            :title="`${localizeStatusName(status.name)} (${getColumnIssues(status.id).length} 工单) - ${isDragging ? '释放以移动' : '点击展开'}`"
+            @click="!isDragging && toggleColumnCollapse(status.id)"
+            @keydown.enter="toggleColumnCollapse(status.id)"
             @dragover="onDragOver($event, status.id)"
             @dragleave="onDragLeave($event)"
             @drop="onDrop($event, status.id)"
           >
             <div class="collapsed-indicator" :style="{ backgroundColor: status.color || 'var(--color-border)' }"></div>
             <span class="collapsed-name">{{ localizeStatusName(status.name) }}</span>
-            <span class="collapsed-count">0</span>
+            <span class="collapsed-count">{{ getColumnIssues(status.id).length }}</span>
           </div>
         </template>
       </div>
@@ -278,15 +295,26 @@
               v-for="status in visibleStatuses"
               :key="status.id"
               class="swimlane-col-header"
+              :class="{ 'swimlane-col-header--collapsed': collapsedColumns.has(status.id) }"
               :style="{ borderTopColor: status.color }"
+              role="button"
+              tabindex="0"
+              :title="collapsedColumns.has(status.id) ? '点击展开此列' : '点击折叠此列'"
+              @click="toggleColumnCollapse(status.id)"
+              @keydown.enter="toggleColumnCollapse(status.id)"
             >
               <span class="column-title">{{ localizeStatusName(status.name) }}</span>
               <span
+                v-if="!collapsedColumns.has(status.id)"
                 class="column-count"
                 :class="getWipClass(status.id)"
                 :title="getWipTooltip(status.id)"
               >{{ getColumnIssues(status.id).length }}<template v-if="getWipMax(status.id) !== null">/{{ getWipMax(status.id) }}</template></span>
-              <span v-if="getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
+              <span
+                v-else
+                class="column-count"
+              >{{ getColumnIssues(status.id).length }}</span>
+              <span v-if="!collapsedColumns.has(status.id) && getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
                 {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
               </span>
             </div>
@@ -325,6 +353,7 @@
                   :key="status.id"
                   class="swimlane-cell"
                   :class="{
+                    'swimlane-cell--collapsed': collapsedColumns.has(status.id),
                     'swimlane-cell--drop-target': dragOverColumnId === status.id && dragOverSwimlaneKey === lane.key,
                     'swimlane-cell--drop-forbidden': dragOverColumnId === status.id && dragOverSwimlaneKey === lane.key && !isDropAllowed(status.id)
                   }"
@@ -332,67 +361,69 @@
                   @dragleave="onDragLeaveSwimlane($event)"
                   @drop="onDrop($event, status.id)"
                 >
-                  <div
-                    v-for="issue in getSwimlaneColumnIssues(lane.key, status.id)"
-                    :key="issue.id"
-                    class="kanban-card"
-                    :class="[
-                      `kanban-card--${cardSize}`,
-                      {
-                        'kanban-card--dragging': draggingIssue?.id === issue.id,
-                        'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                        'kanban-card--no-drag': !isCardDraggable(issue),
-                        'kanban-card--selected': selectedIds.has(issue.id)
-                      }
-                    ]"
-                    role="button"
-                    tabindex="0"
-                    :draggable="isCardDraggable(issue)"
-                    @dragstart="onDragStart($event, issue)"
-                    @dragend="onDragEnd"
-                    @click="onCardClick($event, issue)"
-                    @dblclick="onCardDblClick(issue)"
-                    @keydown="onCardKeydown($event, issue)"
-                  >
-                    <div class="card-header">
-                      <span class="card-key">{{ issue.issueKey }}</span>
-                      <span
-                        class="card-priority"
-                        :class="issue.priority?.toLowerCase()"
-                        :title="issue.priority"
-                      >
-                        {{ priorityIcon(issue.priority) }}
-                      </span>
-                    </div>
-                    <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
-                    <!-- M/L: custom fields -->
-                    <div v-if="cardSize !== 'S' && issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0" class="card-custom-fields">
-                      <span
-                        v-for="(val, key) in getVisibleCustomFields(issue)"
-                        :key="key"
-                        class="card-cf-tag"
-                      >{{ val }}</span>
-                    </div>
-                    <div class="card-footer">
-                      <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
-                      <div class="card-assignee-avatar" v-if="issue.assigneeName" :title="issue.assigneeName">
-                        <img
-                          v-if="issue.assigneeAvatarUrl"
-                          :src="issue.assigneeAvatarUrl"
-                          :alt="issue.assigneeName"
-                          class="avatar-img"
-                        />
-                        <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                  <template v-if="!collapsedColumns.has(status.id)">
+                    <div
+                      v-for="issue in getSwimlaneColumnIssues(lane.key, status.id)"
+                      :key="issue.id"
+                      class="kanban-card"
+                      :class="[
+                        `kanban-card--${cardSize}`,
+                        {
+                          'kanban-card--dragging': draggingIssue?.id === issue.id,
+                          'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
+                          'kanban-card--no-drag': !isCardDraggable(issue),
+                          'kanban-card--selected': selectedIds.has(issue.id)
+                        }
+                      ]"
+                      role="button"
+                      tabindex="0"
+                      :draggable="isCardDraggable(issue)"
+                      @dragstart="onDragStart($event, issue)"
+                      @dragend="onDragEnd"
+                      @click="onCardClick($event, issue)"
+                      @dblclick="onCardDblClick(issue)"
+                      @keydown="onCardKeydown($event, issue)"
+                    >
+                      <div class="card-header">
+                        <span class="card-key">{{ issue.issueKey }}</span>
+                        <span
+                          class="card-priority"
+                          :class="issue.priority?.toLowerCase()"
+                          :title="issue.priority"
+                        >
+                          {{ priorityIcon(issue.priority) }}
+                        </span>
+                      </div>
+                      <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
+                      <!-- M/L: custom fields -->
+                      <div v-if="cardSize !== 'S' && issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0" class="card-custom-fields">
+                        <span
+                          v-for="(val, key) in getVisibleCustomFields(issue)"
+                          :key="key"
+                          class="card-cf-tag"
+                        >{{ val }}</span>
+                      </div>
+                      <div class="card-footer">
+                        <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
+                        <div class="card-assignee-avatar" v-if="issue.assigneeName" :title="issue.assigneeName">
+                          <img
+                            v-if="issue.assigneeAvatarUrl"
+                            :src="issue.assigneeAvatarUrl"
+                            :alt="issue.assigneeName"
+                            class="avatar-img"
+                          />
+                          <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <!-- 空单元格 drop hint -->
-                  <div
-                    v-if="getSwimlaneColumnIssues(lane.key, status.id).length === 0 && isDragging && isDropAllowed(status.id)"
-                    class="swimlane-cell-empty-hint"
-                  >
-                    📥
-                  </div>
+                    <!-- 空单元格 drop hint -->
+                    <div
+                      v-if="getSwimlaneColumnIssues(lane.key, status.id).length === 0 && isDragging && isDropAllowed(status.id)"
+                      class="swimlane-cell-empty-hint"
+                    >
+                      📥
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
@@ -825,6 +856,85 @@ const visibleStatuses = computed(() => {
 // 被手动展开的空列集合
 const expandedEmptyColumns = ref<Set<string>>(new Set())
 
+// ===== 手动折叠的列（任何列，含有工单的也可以折叠） =====
+const COLLAPSED_COLUMNS_KEY_PREFIX = 'tf_kanban_collapsed_columns'
+
+function getCollapsedColumnsKey(): string {
+  return selectedProject.value
+    ? `${COLLAPSED_COLUMNS_KEY_PREFIX}_${selectedProject.value}`
+    : COLLAPSED_COLUMNS_KEY_PREFIX
+}
+
+const collapsedColumns = ref<Set<string>>(new Set())
+
+/** 从 localStorage 加载当前项目的折叠列状态 */
+function loadCollapsedColumnsState() {
+  const key = getCollapsedColumnsKey()
+  const stored = localStorage.getItem(key)
+  collapsedColumns.value = new Set(stored ? JSON.parse(stored) : [])
+}
+
+/** 保存折叠列状态到 localStorage */
+function saveCollapsedColumnsState() {
+  const key = getCollapsedColumnsKey()
+  if (collapsedColumns.value.size === 0) {
+    localStorage.removeItem(key)
+  } else {
+    localStorage.setItem(key, JSON.stringify([...collapsedColumns.value]))
+  }
+}
+
+/** 判断列是否处于折叠状态（手动折叠或空列自动折叠） */
+function isColumnCollapsed(statusId: string): boolean {
+  // 手动折叠优先级最高
+  if (collapsedColumns.value.has(statusId)) return true
+  // 空列且未手动展开 → 自动折叠
+  if (getColumnIssues(statusId).length === 0 && !expandedEmptyColumns.value.has(statusId)) return true
+  return false
+}
+
+/** 切换列的折叠/展开状态 */
+function toggleColumnCollapse(statusId: string) {
+  if (collapsedColumns.value.has(statusId)) {
+    // 展开
+    collapsedColumns.value.delete(statusId)
+    expandedEmptyColumns.value.add(statusId) // 确保空列也被展开
+  } else {
+    // 折叠
+    collapsedColumns.value.add(statusId)
+    expandedEmptyColumns.value.delete(statusId)
+  }
+  saveCollapsedColumnsState()
+}
+
+// ===== Progress Indicator（各列卡片数 mini bar chart） =====
+
+/** 计算进度条高度（相对最大列的比例） */
+function getProgressBarHeight(statusId: string): string {
+  const count = getColumnIssues(statusId).length
+  if (count === 0) return '2px'
+  const maxCount = Math.max(...visibleStatuses.value.map(s => getColumnIssues(s.id).length), 1)
+  const height = Math.max(4, Math.round((count / maxCount) * 24))
+  return `${height}px`
+}
+
+/** 滚动到指定列 */
+function scrollToColumn(statusId: string) {
+  // 如果列被折叠，先展开
+  if (collapsedColumns.value.has(statusId)) {
+    toggleColumnCollapse(statusId)
+  }
+  // 在下一帧滚动到目标列
+  setTimeout(() => {
+    const container = document.querySelector('.board-container') || document.querySelector('.swimlane-container')
+    if (!container) return
+    const columnEl = container.querySelector(`[data-column-id="${statusId}"]`)
+    if (columnEl) {
+      columnEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    }
+  }, 50)
+}
+
 // ===== 拖拽状态 =====
 const draggingIssue = ref<IssueVO | null>(null)
 const dragOverColumnId = ref<string | null>(null)
@@ -909,11 +1019,15 @@ function getWipTooltip(statusId: string): string {
 }
 
 function expandColumn(statusId: string) {
+  collapsedColumns.value.delete(statusId)
   expandedEmptyColumns.value.add(statusId)
+  saveCollapsedColumnsState()
 }
 
 function collapseColumn(statusId: string) {
+  collapsedColumns.value.add(statusId)
   expandedEmptyColumns.value.delete(statusId)
+  saveCollapsedColumnsState()
 }
 
 function priorityIcon(priority: string): string {
@@ -1312,6 +1426,7 @@ async function loadSprints() {
 async function loadBoard() {
   if (!selectedProject.value) { issues.value = []; return }
   expandedEmptyColumns.value.clear()
+  loadCollapsedColumnsState()
   loading.value = true
   try {
     await Promise.all([loadSprints(), loadBoardColumns(), loadTransitionableStatuses()])
@@ -1412,6 +1527,35 @@ onUnmounted(() => {
   margin: 0;
 }
 
+/* ===== Progress Indicator (mini bar chart) ===== */
+.progress-indicator {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--color-fill-1);
+}
+
+.progress-bar {
+  width: 12px;
+  min-height: 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+  opacity: 0.8;
+}
+
+.progress-bar:hover {
+  opacity: 1;
+  transform: scaleY(1.15);
+}
+
+.progress-bar--collapsed {
+  opacity: 0.35;
+}
+
 .board-spin {
   flex: 1;
   display: flex;
@@ -1474,6 +1618,19 @@ onUnmounted(() => {
   padding: 12px 14px;
   border-top: 3px solid var(--color-border);
   flex-shrink: 0;
+}
+
+.column-header--clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.column-header--clickable:hover {
+  background: var(--color-fill-2);
+}
+.column-header--clickable:focus-visible {
+  outline: 2px solid rgb(var(--primary-6));
+  outline-offset: -2px;
 }
 
 .column-title {
@@ -1907,6 +2064,30 @@ onUnmounted(() => {
   background: var(--color-fill-1);
   border-radius: 6px 6px 0 0;
   text-align: center;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.swimlane-col-header:hover {
+  background: var(--color-fill-2);
+}
+.swimlane-col-header:focus-visible {
+  outline: 2px solid rgb(var(--primary-6));
+  outline-offset: -2px;
+}
+.swimlane-col-header--collapsed {
+  flex: 0 0 40px;
+  min-width: 40px;
+  padding: 8px 4px;
+  opacity: 0.6;
+}
+.swimlane-col-header--collapsed .column-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px;
+  max-height: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .swimlane-body {
@@ -1986,6 +2167,13 @@ onUnmounted(() => {
   gap: 6px;
   transition: background 0.15s, border-color 0.15s;
   border: 2px solid transparent;
+}
+
+.swimlane-cell--collapsed {
+  flex: 0 0 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 4px;
 }
 
 .swimlane-cell--drop-target {
