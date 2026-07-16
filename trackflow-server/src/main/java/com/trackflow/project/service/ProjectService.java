@@ -7,9 +7,11 @@ import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.common.service.MinioService;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueAttachmentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.integration.service.NotificationService;
@@ -30,6 +32,7 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +51,7 @@ import java.util.Set;
 /**
  * 项目管理服务
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProjectService {
@@ -64,10 +68,12 @@ public class ProjectService {
     private final StringRedisTemplate redisTemplate;
     private final IssueMapper issueMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final IssueAttachmentMapper issueAttachmentMapper;
     private final SprintMapper sprintMapper;
     private final ProjectActivityService projectActivityService;
     private final NotificationService notificationService;
     private final ProjectInitializationService projectInitializationService;
+    private final MinioService minioService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
@@ -1160,7 +1166,8 @@ public class ProjectService {
      * 流程参考 OpenProject DeleteService：
      * 1. 通知所有项目成员
      * 2. 失效所有成员的权限缓存
-     * 3. 物理删除项目（FK CASCADE 自动清理 issue/sprint/member/tag 等）
+     * 3. 清理 MinIO 中的附件物理文件（防止存储泄漏）
+     * 4. 物理删除项目（FK CASCADE 自动清理 issue/sprint/member/tag 等）
      *
      * @param projectId         项目 ID
      * @param confirmProjectKey 前端传入的项目 Key 用于二次确认
@@ -1206,8 +1213,46 @@ public class ProjectService {
             }
         }
 
-        // 4. 物理删除项目（FK CASCADE 自动删除所有关联数据）
+        // 4. 清理 MinIO 中的附件文件（必须在 DB 删除之前，因为 CASCADE 会删除 issue_attachment 记录）
+        cleanupProjectAttachments(projectId);
+
+        // 5. 物理删除项目（FK CASCADE 自动删除所有关联数据）
         projectMapper.deleteById(projectId);
+    }
+
+    /**
+     * 清理项目下所有工单附件的 MinIO 物理文件。
+     * <p>
+     * 容错策略：单个文件删除失败不阻塞整体流程，仅记录警告日志。
+     * 参考 OpenProject DeleteService#destroy_all_work_packages 的思路：
+     * 在 DB 记录被 CASCADE 删除之前，先清理外部存储资源。
+     */
+    private void cleanupProjectAttachments(Long projectId) {
+        List<String> filePaths = issueAttachmentMapper.selectFilePathsByProjectId(projectId);
+        if (filePaths == null || filePaths.isEmpty()) {
+            return;
+        }
+
+        log.info("Cleaning up {} MinIO attachments for project {}", filePaths.size(), projectId);
+
+        int successCount = 0;
+        int failCount = 0;
+        for (String filePath : filePaths) {
+            try {
+                minioService.delete(filePath);
+                successCount++;
+            } catch (Exception e) {
+                failCount++;
+                log.warn("Failed to delete MinIO object during project cleanup: {}", filePath, e);
+            }
+        }
+
+        if (failCount > 0) {
+            log.warn("Project {} attachment cleanup: {} succeeded, {} failed (orphaned in MinIO)",
+                    projectId, successCount, failCount);
+        } else {
+            log.info("Project {} attachment cleanup completed: {} files deleted", projectId, successCount);
+        }
     }
 
     /**
