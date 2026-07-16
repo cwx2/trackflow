@@ -30,7 +30,7 @@
           </div>
           <div class="col" style="width:140px">
             <button class="btn-sm" @click="editOrg(org)">编辑</button>
-            <button class="btn-sm danger" @click="deleteOrg(org.id)">删除</button>
+            <button class="btn-sm danger" @click="deleteOrg(org)">删除</button>
           </div>
         </div>
         <div v-if="organizations.length === 0" class="empty-row">暂无组织数据</div>
@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { Modal, Message } from '@arco-design/web-vue'
 import request from '@/api/request'
 
 const organizations = ref<any[]>([])
@@ -107,14 +108,23 @@ async function submitOrg() {
   loadOrgs()
 }
 
-async function deleteOrg(id: number) {
-  if (!confirm('确定删除该组织？')) return
-  try {
-    await request.delete(`/organizations/${id}`)
-    loadOrgs()
-  } catch (e: any) {
-    alert(e.response?.data?.message || '删除失败')
-  }
+async function deleteOrg(org: any) {
+  Modal.confirm({
+    title: '确认删除组织',
+    content: `确定要删除组织"${org.name}"吗？此操作不可撤销。`,
+    okText: '删除组织',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await request.delete(`/organizations/${org.id}`)
+        Message.success('组织已删除')
+        loadOrgs()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '删除失败')
+      }
+    }
+  })
 }
 
 function formatDate(dt: string) {

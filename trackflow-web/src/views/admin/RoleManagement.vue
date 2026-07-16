@@ -47,7 +47,7 @@
             <button class="btn-sm" @click="openPermDialog(role)">权限</button>
             <button class="btn-sm" @click="openCloneDialog(role)">克隆</button>
             <button class="btn-sm" @click="editRole(role)" :disabled="role.builtin">编辑</button>
-            <button class="btn-sm danger" @click="deleteRole(role.id)" :disabled="role.builtin">删除</button>
+            <button class="btn-sm danger" @click="deleteRole(role)" :disabled="role.builtin">删除</button>
           </div>
         </div>
       </div>
@@ -213,7 +213,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { Modal, Message } from '@arco-design/web-vue'
 import request from '@/api/request'
 import type { RoleUsersVO } from '@/api/types'
 
@@ -295,14 +295,23 @@ async function submitRole() {
   loadRoles()
 }
 
-async function deleteRole(id: number) {
-  if (!confirm('确定删除该角色？')) return
-  try {
-    await request.delete(`/roles/${id}`)
-    loadRoles()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
-  }
+async function deleteRole(role: any) {
+  Modal.confirm({
+    title: '确认删除角色',
+    content: `确定要删除角色"${role.name}"吗？此操作不可撤销。`,
+    okText: '删除角色',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await request.delete(`/roles/${role.id}`)
+        Message.success('角色已删除')
+        loadRoles()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '删除失败')
+      }
+    }
+  })
 }
 
 function openCloneDialog(role: any) {

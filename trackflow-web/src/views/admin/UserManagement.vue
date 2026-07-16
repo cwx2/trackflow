@@ -46,8 +46,8 @@
             <span class="time-text">{{ formatDate(user.lastLoginAt) }}</span>
           </div>
           <div class="col" style="width:140px">
-            <button v-if="user.status === 'active'" class="btn-sm danger" @click="disableUser(user.id)">禁用</button>
-            <button v-else class="btn-sm" @click="enableUser(user.id)">启用</button>
+            <button v-if="user.status === 'active'" class="btn-sm danger" @click="disableUser(user)">禁用</button>
+            <button v-else class="btn-sm" @click="enableUser(user)">启用</button>
             <button class="btn-sm" @click="openRoleDialog(user)">角色</button>
           </div>
         </div>
@@ -239,7 +239,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, h } from 'vue'
+import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import request from '@/api/request'
@@ -304,15 +305,45 @@ async function loadUsers() {
   finally { loading.value = false }
 }
 
-async function disableUser(id: string) {
-  if (!confirm('确定禁用该用户？禁用后用户将无法登录系统。')) return
-  await userApi.disable(id)
-  loadUsers()
+async function disableUser(user: any) {
+  Modal.confirm({
+    title: '确认禁用用户',
+    content: () => h('div', [
+      h('p', `确定要禁用用户 "${user.displayName}" (${user.username}) 吗？`),
+      h('p', { style: 'color: var(--tf-text-tertiary); font-size: 12px; margin-top: 8px' },
+        '禁用后该用户将无法登录系统，已有数据不会被删除。')
+    ]),
+    okText: '禁用用户',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await userApi.disable(user.id)
+        Message.success('用户已禁用')
+        loadUsers()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '禁用失败')
+      }
+    }
+  })
 }
 
-async function enableUser(id: string) {
-  await userApi.enable(id)
-  loadUsers()
+async function enableUser(user: any) {
+  Modal.confirm({
+    title: '确认启用用户',
+    content: `确定要启用用户 "${user.displayName}" (${user.username}) 吗？`,
+    okText: '启用用户',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await userApi.enable(user.id)
+        Message.success('用户已启用')
+        loadUsers()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '启用失败')
+      }
+    }
+  })
 }
 
 function closeCreateDialog() {
@@ -412,7 +443,7 @@ async function toggleRole(roleId: number) {
       userRoleIds.value.push(roleIdStr)
     }
   } catch (e: any) {
-    alert(e.response?.data?.message || '操作失败')
+    Message.error(e.response?.data?.message || '操作失败')
   }
 }
 
@@ -428,7 +459,7 @@ async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: st
     pr.roleName = newRole.name
     pr.roleCode = newRole.code
   } catch (e: any) {
-    alert(e.response?.data?.message || '修改角色失败')
+    Message.error(e.response?.data?.message || '修改角色失败')
     // 重新加载以回滚UI
     await refreshProjectRoles()
   }
@@ -437,16 +468,25 @@ async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: st
 async function removeFromProject(pr: UserProfileProjectRoleInfo) {
   const userId = selectedUser.value?.id
   if (!userId) return
-  if (!confirm(`确定将该用户从项目"${pr.projectName}"中移除？`)) return
 
-  try {
-    await projectApi.removeMember(pr.projectId, userId)
-    userProjectRoles.value = userProjectRoles.value.filter(
-      r => !(r.projectId === pr.projectId && r.roleCode === pr.roleCode)
-    )
-  } catch (e: any) {
-    alert(e.response?.data?.message || '移除失败')
-  }
+  Modal.confirm({
+    title: '确认移除成员',
+    content: `确定将该用户从项目"${pr.projectName}"中移除？`,
+    okText: '移除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await projectApi.removeMember(pr.projectId, userId)
+        userProjectRoles.value = userProjectRoles.value.filter(
+          r => !(r.projectId === pr.projectId && r.roleCode === pr.roleCode)
+        )
+        Message.success('已从项目中移除')
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '移除失败')
+      }
+    }
+  })
 }
 
 async function addToProject() {
@@ -462,7 +502,7 @@ async function addToProject() {
     await refreshProjectRoles()
     cancelAddProject()
   } catch (e: any) {
-    alert(e.response?.data?.message || '添加到项目失败')
+    Message.error(e.response?.data?.message || '添加到项目失败')
   }
 }
 

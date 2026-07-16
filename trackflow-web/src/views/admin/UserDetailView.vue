@@ -168,8 +168,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Modal, Message } from '@arco-design/web-vue'
 import { userApi } from '@/api'
 import type { UserProfileVO } from '@/api/user'
 import request from '@/api/request'
@@ -218,27 +219,53 @@ async function toggleRole(roleId: number) {
     // 重新加载档案以刷新角色列表
     await loadProfile()
   } catch (e: any) {
-    alert(e.response?.data?.message || '操作失败')
+    Message.error(e.response?.data?.message || '操作失败')
   }
 }
 
 async function handleDisable() {
-  if (!confirm('确定禁用该用户？禁用后用户将无法登录系统。')) return
-  try {
-    await userApi.disable(userId.value)
-    await loadProfile()
-  } catch (e: any) {
-    alert(e.response?.data?.message || '操作失败')
-  }
+  if (!profile.value) return
+  const user = profile.value
+  Modal.confirm({
+    title: '确认禁用用户',
+    content: () => h('div', [
+      h('p', `确定要禁用用户 "${user.displayName}" (${user.username}) 吗？`),
+      h('p', { style: 'color: var(--tf-text-tertiary); font-size: 12px; margin-top: 8px' },
+        '禁用后该用户将无法登录系统，已有数据不会被删除。')
+    ]),
+    okText: '禁用用户',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await userApi.disable(userId.value)
+        Message.success('用户已禁用')
+        await loadProfile()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '禁用失败')
+      }
+    }
+  })
 }
 
 async function handleEnable() {
-  try {
-    await userApi.enable(userId.value)
-    await loadProfile()
-  } catch (e: any) {
-    alert(e.response?.data?.message || '操作失败')
-  }
+  if (!profile.value) return
+  const user = profile.value
+  Modal.confirm({
+    title: '确认启用用户',
+    content: `确定要启用用户 "${user.displayName}" (${user.username}) 吗？`,
+    okText: '启用用户',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await userApi.enable(userId.value)
+        Message.success('用户已启用')
+        await loadProfile()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '启用失败')
+      }
+    }
+  })
 }
 
 function statusLabel(status: string) {
