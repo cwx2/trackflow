@@ -102,7 +102,7 @@
             <span class="hint-icon">🔒</span>
             <span class="hint-text">内置角色的权限不可修改。如需定制权限，请使用"克隆"功能创建副本后修改。</span>
           </div>
-          <div v-for="group in permissionGroups" :key="group.category" class="perm-group">
+          <div v-for="group in filteredPermissionGroups" :key="group.category" class="perm-group">
             <h4 class="perm-category">{{ CATEGORY_LABELS[group.category] || group.category }}</h4>
             <div class="perm-list">
               <label v-for="perm in group.permissions" :key="perm.code" class="perm-item" :class="{ readonly: permRole?.builtin }">
@@ -212,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { Modal, Message } from '@arco-design/web-vue'
 import request from '@/api/request'
 import type { RoleUsersVO } from '@/api/types'
@@ -248,6 +248,28 @@ const showPermDialog = ref(false)
 const permRole = ref<any>(null)
 const rolePerms = ref<string[]>([])
 const permissionGroups = ref<PermissionGroup[]>([])
+
+/**
+ * 根据角色类型过滤可见的权限组：
+ * - global 角色：显示 global scope 权限（系统管理权限）
+ * - project 角色：显示 project scope 权限（项目/工单/迭代等）
+ * 过滤掉空分组
+ */
+const filteredPermissionGroups = computed(() => {
+  if (!permRole.value) return permissionGroups.value
+  const roleType = permRole.value.roleType // 'global' or 'project'
+  return permissionGroups.value
+    .map(group => ({
+      ...group,
+      permissions: group.permissions.filter(p => {
+        // global 角色只看 global scope 权限
+        if (roleType === 'global') return p.scope === 'global'
+        // project 角色看 project scope + global scope 中的 project:create
+        return p.scope === 'project' || p.code === 'project:create'
+      })
+    }))
+    .filter(group => group.permissions.length > 0)
+})
 
 const showCloneDialog = ref(false)
 const cloneSource = ref<any>(null)

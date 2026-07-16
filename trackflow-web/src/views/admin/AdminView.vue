@@ -6,7 +6,7 @@
     </div>
 
     <!-- 无权限 -->
-    <div v-else-if="!isAdmin" class="admin-forbidden">
+    <div v-else-if="!hasAnyAdminPermission" class="admin-forbidden">
       <div class="forbidden-icon">🔒</div>
       <h2 class="forbidden-title">无访问权限</h2>
       <p class="forbidden-desc">你没有系统管理权限，无法访问此页面</p>
@@ -22,7 +22,7 @@
 
       <div class="admin-grid">
         <router-link
-          v-for="item in menuItems"
+          v-for="item in visibleMenuItems"
           :key="item.path"
           :to="item.path"
           class="admin-card"
@@ -46,7 +46,12 @@ import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 const loading = ref(true)
 
-const isAdmin = computed(() => authStore.hasGlobalPermission('system:admin'))
+/** 是否有任一系统管理权限 */
+const hasAnyAdminPermission = computed(() => {
+  return authStore.hasGlobalPermission('system:manage_users')
+    || authStore.hasGlobalPermission('system:manage_roles')
+    || authStore.hasGlobalPermission('system:manage_orgs')
+})
 
 onMounted(async () => {
   // 等待权限加载完毕（正常情况下路由守卫已 await，这里做兜底）
@@ -55,44 +60,64 @@ onMounted(async () => {
   }
   loading.value = false
 })
-const menuItems = [
+
+interface AdminMenuItem {
+  path: string
+  icon: string
+  title: string
+  description: string
+  permission: string // 所需的细粒度权限
+}
+
+const menuItems: AdminMenuItem[] = [
   {
     path: '/admin/users',
     icon: '👥',
     title: '用户管理',
-    description: '查看、编辑、禁用用户，管理用户角色分配'
+    description: '查看、编辑、禁用用户，管理用户角色分配',
+    permission: 'system:manage_users'
   },
   {
     path: '/admin/roles',
     icon: '🛡️',
     title: '角色管理',
-    description: '定义角色及其权限，配置全局和项目级角色'
+    description: '定义角色及其权限，配置全局和项目级角色',
+    permission: 'system:manage_roles'
   },
   {
     path: '/admin/organizations',
     icon: '🏢',
     title: '组织管理',
-    description: '管理组织结构和组织信息'
+    description: '管理组织结构和组织信息',
+    permission: 'system:manage_orgs'
   },
   {
     path: '/admin/workflow',
     icon: '🔄',
     title: '工作流',
-    description: '配置 Issue 状态转换规则和工作流程'
+    description: '配置 Issue 状态转换规则和工作流程',
+    permission: 'system:manage_roles'
   },
   {
     path: '/admin/custom-fields',
     icon: '📝',
     title: '自定义字段',
-    description: '定义和管理 Issue 自定义字段'
+    description: '定义和管理 Issue 自定义字段',
+    permission: 'system:manage_roles'
   },
   {
     path: '/admin/audit-logs',
     icon: '📜',
     title: '审计日志',
-    description: '查看系统权限变更记录，追踪管理操作历史'
+    description: '查看系统权限变更记录，追踪管理操作历史',
+    permission: 'system:manage_users'
   }
 ]
+
+/** 根据用户权限过滤可见的菜单项 */
+const visibleMenuItems = computed(() => {
+  return menuItems.filter(item => authStore.hasGlobalPermission(item.permission))
+})
 </script>
 
 <style scoped>

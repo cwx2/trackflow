@@ -106,43 +106,43 @@ const routes = [
         path: 'admin/workflow',
         name: 'WorkflowEditor',
         redirect: '/workflow',
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
         path: 'admin/users',
         name: 'UserManagement',
         component: () => import('@/views/admin/UserManagement.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
       },
       {
         path: 'admin/users/:id',
         name: 'UserDetail',
         component: () => import('@/views/admin/UserDetailView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
       },
       {
         path: 'admin/roles',
         name: 'RoleManagement',
         component: () => import('@/views/admin/RoleManagement.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
         path: 'admin/organizations',
         name: 'OrgManagement',
         component: () => import('@/views/admin/OrgManagement.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs' }
       },
       {
         path: 'admin/custom-fields',
         name: 'CustomFieldManagement',
         component: () => import('@/views/admin/CustomFieldManage.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
         path: 'admin/audit-logs',
         name: 'AuditLogs',
         component: () => import('@/views/admin/AuditLogView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
       },
       {
         path: 'settings/profile',
@@ -186,11 +186,26 @@ router.beforeEach(async (to, _from, next) => {
   // 依赖后端 API 的 @PreAuthorize 做最终权限校验（前端仅作为 UX 优化）
   const permissionCheckAvailable = authStore.permissionsLoaded
 
-  // 管理路由权限检查
+  // 管理路由权限检查：支持细粒度权限
+  // - 有 requiredPermission → 检查该具体权限（system:manage_users 等）
+  // - 无 requiredPermission（Admin 入口页）→ 有任一 system:manage_* 即可访问
   if (to.meta.requiresAdmin && permissionCheckAvailable) {
-    if (!authStore.hasGlobalPermission('system:admin')) {
-      next({ name: 'Forbidden' })
-      return
+    const requiredPerm = to.meta.requiredPermission as string | undefined
+    if (requiredPerm) {
+      // 子页面：检查具体细粒度权限
+      if (!authStore.hasGlobalPermission(requiredPerm)) {
+        next({ name: 'Forbidden' })
+        return
+      }
+    } else {
+      // 入口页：有任一管理权限即可进入
+      const hasAnyAdminPerm = authStore.hasGlobalPermission('system:manage_users')
+        || authStore.hasGlobalPermission('system:manage_roles')
+        || authStore.hasGlobalPermission('system:manage_orgs')
+      if (!hasAnyAdminPerm) {
+        next({ name: 'Forbidden' })
+        return
+      }
     }
   }
 

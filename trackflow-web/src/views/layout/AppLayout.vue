@@ -128,9 +128,11 @@ const { theme, cycleTheme } = useTheme()
 const showUserMenu = ref(false)
 
 const isAdmin = computed(() => {
-  // 主判断：后端 API 返回的全局权限（精确）
+  // 主判断：后端 API 返回的全局权限（精确）— 支持细粒度管理权限
   if (authStore.permissionsLoaded) {
-    return authStore.hasGlobalPermission('system:admin')
+    return authStore.hasGlobalPermission('system:manage_users')
+      || authStore.hasGlobalPermission('system:manage_roles')
+      || authStore.hasGlobalPermission('system:manage_orgs')
   }
   // 辅助判断：权限未加载时用 Keycloak Token 中的 realm role 做快速前置判断
   const roles: string[] = authStore.user?.roles || []
