@@ -38,6 +38,7 @@ public enum ErrorCode {
 
     // Conflict (409xx)
     CONFLICT(40900, 409, "资源冲突"),
+    DUPLICATE_RESOURCE(40906, 409, "资源已存在"),
     ORG_HAS_REFERENCES(40901, 409, "组织下仍有关联的用户或项目"),
     ORG_CODE_DUPLICATE(40902, 409, "组织编码已存在"),
     ROLE_IN_USE(40903, 409, "角色正在使用中，无法删除"),

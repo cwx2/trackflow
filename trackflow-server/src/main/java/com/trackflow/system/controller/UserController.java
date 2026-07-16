@@ -8,6 +8,7 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.PageHelper;
 import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.AssignRoleDTO;
+import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
@@ -34,6 +35,13 @@ public class UserController {
     private final UserService userService;
     private final RoleService roleService;
     private final UserConverter userConverter;
+
+    @PostMapping
+    @PreAuthorize("@perm.checkGlobal('system:manage_users')")
+    public R<UserVO> create(@Valid @RequestBody CreateUserDTO dto) {
+        SysUser user = userService.createUser(dto);
+        return R.ok(userConverter.toVO(user));
+    }
 
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")

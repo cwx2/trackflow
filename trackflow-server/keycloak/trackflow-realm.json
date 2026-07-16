@@ -41,6 +41,17 @@
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:3000/*"
       }
+    },
+    {
+      "clientId": "trackflow-backend",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "trackflow-backend-secret",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["openid", "profile", "email"]
     }
   ],
   "users": [

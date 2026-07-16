@@ -2,6 +2,7 @@ package com.trackflow.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.auth.service.KeycloakAdminService;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -13,6 +14,7 @@ import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.entity.UserRole;
@@ -21,6 +23,7 @@ import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import com.trackflow.system.vo.UserProfileVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +35,7 @@ import java.util.stream.Collectors;
 /**
  * 用户管理服务
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -47,6 +51,101 @@ public class UserService {
     private final ProjectMapper projectMapper;
     private final IssueActivityMapper issueActivityMapper;
     private final IssueMapper issueMapper;
+    private final KeycloakAdminService keycloakAdminService;
+
+    /**
+     * 创建新用户（同步到 Keycloak + 本地 sys_user）
+     * <p>
+     * 流程：
+     * 1. 检查本地是否已存在同名用户/同邮箱用户
+     * 2. 在 Keycloak 中创建用户（含临时密码）
+     * 3. 在本地 sys_user 中创建记录
+     *
+     * @return 新创建的用户实体
+     */
+    @Transactional
+    public SysUser createUser(CreateUserDTO dto) {
+        // 1. 本地重复性校验
+        Long usernameCount = userMapper.selectCount(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, dto.getUsername())
+        );
+        if (usernameCount > 0) {
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "用户名已存在: " + dto.getUsername());
+        }
+
+        Long emailCount = userMapper.selectCount(
+                new LambdaQueryWrapper<SysUser>().eq(SysUser::getEmail, dto.getEmail())
+        );
+        if (emailCount > 0) {
+            throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "邮箱已被使用: " + dto.getEmail());
+        }
+
+        // 2. 解析 displayName 为 firstName + lastName（用于 Keycloak）
+        String[] nameParts = parseDisplayName(dto.getDisplayName());
+        String firstName = nameParts[0];
+        String lastName = nameParts[1];
+
+        // 3. 在 Keycloak 中创建用户
+        String keycloakId = keycloakAdminService.createUser(
+                dto.getUsername(), dto.getEmail(), firstName, lastName, dto.getPassword()
+        );
+
+        // 4. 在本地创建 sys_user 记录
+        SysUser user = new SysUser();
+        user.setKeycloakId(keycloakId);
+        user.setUsername(dto.getUsername());
+        user.setDisplayName(dto.getDisplayName());
+        user.setEmail(dto.getEmail());
+        user.setStatus("active");
+        userMapper.insert(user);
+
+        // 5. 审计日志
+        systemAuditService.log("create_user", "user", user.getId(),
+                Map.of("username", dto.getUsername(),
+                        "displayName", dto.getDisplayName(),
+                        "email", dto.getEmail()));
+
+        log.info("User created: username={}, keycloakId={}, localId={}",
+                dto.getUsername(), keycloakId, user.getId());
+        return user;
+    }
+
+    /**
+     * 将显示名称解析为 firstName（名）和 lastName（姓）。
+     * <p>
+     * 规则：
+     * - 包含 CJK 字符：第一个字符为姓，其余为名
+     * - 西方名字：按空格分割，最后一个词为 lastName，其余为 firstName
+     * - 无空格的单词：整个作为 firstName
+     */
+    private String[] parseDisplayName(String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            return new String[]{"", ""};
+        }
+
+        // 检查是否包含 CJK 字符
+        boolean hasCjk = displayName.chars().anyMatch(c ->
+                Character.UnicodeScript.of(c) == Character.UnicodeScript.HAN);
+
+        if (hasCjk) {
+            // CJK 姓名：第一个字符为姓，其余为名
+            // 处理复姓暂不支持，按单字姓处理
+            if (displayName.length() >= 2) {
+                return new String[]{displayName.substring(1), displayName.substring(0, 1)};
+            }
+            return new String[]{displayName, ""};
+        } else {
+            // 西方姓名：按空格分割
+            String[] parts = displayName.trim().split("\\s+");
+            if (parts.length == 1) {
+                return new String[]{parts[0], ""};
+            }
+            // firstName = 除最后一个之外的所有部分，lastName = 最后一个
+            String lastName = parts[parts.length - 1];
+            String firstName = String.join(" ", java.util.Arrays.copyOfRange(parts, 0, parts.length - 1));
+            return new String[]{firstName, lastName};
+        }
+    }
 
     /**
      * 分页查询用户列表

@@ -13,6 +13,11 @@ export const userApi = {
     return request.get<any, R<PageResult<UserVO>>>('/users', { params })
   },
 
+  /** 创建用户 */
+  create(data: { username: string; email: string; displayName: string; password: string }) {
+    return request.post<any, R<UserVO>>('/users', data)
+  },
+
   /** 用户详情（含角色ID列表） */
   getById(id: string) {
     return request.get<any, R<{ user: UserVO; roleIds: string[] }>>(`/users/${id}`)
