@@ -1268,6 +1268,7 @@ public class IssueService {
 
     /**
      * 删除附件
+     * 只有附件上传者或拥有 issue:manage_attachments 权限的用户可删除
      */
     @Transactional
     public void deleteAttachment(Long issueId, Long attachmentId) {
@@ -1280,12 +1281,19 @@ public class IssueService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在");
         }
 
+        // 所有权校验：非上传者需要 issue:manage_attachments 权限
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!attachment.getUploadedBy().equals(currentUserId)) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_attachments")) {
+                throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只能删除自己上传的附件，或需要附件管理权限");
+            }
+        }
+
         // 从 MinIO 删除
         minioService.delete(attachment.getFilePath());
         // 从 DB 删除
         attachmentMapper.deleteById(attachmentId);
 
-        Long currentUserId = SecurityUtils.getCurrentUserId();
         recordActivity(issueId, currentUserId, "attachment_removed", "attachment", attachment.getFileName(), null);
     }
 

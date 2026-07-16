@@ -321,16 +321,16 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/attachments")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<IssueAttachmentVO> uploadAttachment(@PathVariable Long id,
                                                   @RequestParam("file") MultipartFile file) {
-        issueService.getByIdWithAccessCheck(id);
         IssueAttachment attachment = issueService.uploadAttachment(id, file);
         return R.ok(issueConverter.toAttachmentVO(attachment));
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> deleteAttachment(@PathVariable Long id, @PathVariable Long attachmentId) {
-        issueService.getByIdWithAccessCheck(id);
         issueService.deleteAttachment(id, attachmentId);
         return R.ok();
     }
@@ -352,15 +352,15 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/tags")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> addTag(@PathVariable Long id, @Valid @RequestBody AddTagDTO dto) {
-        issueService.getByIdWithAccessCheck(id);
         tagService.addTagToIssue(id, dto.getTagId());
         return R.ok();
     }
 
     @DeleteMapping("/{id}/tags/{tagId}")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> removeTag(@PathVariable Long id, @PathVariable Long tagId) {
-        issueService.getByIdWithAccessCheck(id);
         tagService.removeTagFromIssue(id, tagId);
         return R.ok();
     }
@@ -374,15 +374,15 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/links")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> createLink(@PathVariable Long id, @Valid @RequestBody CreateIssueLinkDTO dto) {
-        issueService.getByIdWithAccessCheck(id);
         linkService.createIssueLink(id, dto);
         return R.ok();
     }
 
     @DeleteMapping("/{id}/links/{linkId}")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> deleteLink(@PathVariable Long id, @PathVariable Long linkId) {
-        issueService.getByIdWithAccessCheck(id);
         linkService.deleteIssueLink(linkId);
         return R.ok();
     }
