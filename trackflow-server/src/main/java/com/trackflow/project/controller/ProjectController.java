@@ -99,7 +99,7 @@ public class ProjectController {
     }
 
     @PutMapping("/{id}/restore")
-    @PreAuthorize("@perm.check(#id, 'project:edit')")
+    @PreAuthorize("@perm.check(#id, 'project:delete')")
     public R<Void> restore(@PathVariable Long id) {
         projectService.restore(id);
         return R.ok();

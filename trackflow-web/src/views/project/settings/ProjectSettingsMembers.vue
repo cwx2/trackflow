@@ -283,6 +283,16 @@ function formatActivityText(act: ProjectActivityVO): string {
       const newVis = visibilityMap[detail.new_value] || detail.new_value || ''
       return `${operator} 将项目可见性从「${oldVis}」变更为「${newVis}」`
     }
+    case 'archive_project':
+    case 'project_archived': {
+      const sprintInfo = detail.suspended_sprint_count
+        ? `（${detail.suspended_sprint_count} 个活跃 Sprint 已暂停）`
+        : ''
+      return `${operator} 归档了项目${sprintInfo}`
+    }
+    case 'restore_project':
+    case 'project_restored':
+      return `${operator} 恢复了项目`
     default:
       return `${operator} ${act.action.replace(/_/g, ' ')}`
   }

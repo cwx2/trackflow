@@ -14,6 +14,7 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.AddMemberDTO;
 import com.trackflow.project.dto.CreateProjectDTO;
@@ -440,22 +441,101 @@ public class ProjectService {
 
     /**
      * 归档项目
+     * <p>
+     * 归档流程：
+     * 1. 校验项目当前状态（必须为 active）
+     * 2. 将项目状态设为 archived
+     * 3. 将项目内 ACTIVE 状态的 Sprint 自动变为 PLANNED
+     * 4. 记录项目活动日志
+     * 5. 通知所有项目成员
      */
     @Transactional
     public void archive(Long id) {
         Project project = getById(id);
+        if ("archived".equals(project.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "项目已处于归档状态");
+        }
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 1. 归档项目
         project.setStatus("archived");
         projectMapper.updateById(project);
+
+        // 2. 暂停活跃 Sprint（ACTIVE → PLANNED）
+        int suspendedSprintCount = suspendActiveSprintsForProject(id);
+
+        // 3. 记录活动日志
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        if (suspendedSprintCount > 0) {
+            detail.put("suspended_sprint_count", suspendedSprintCount);
+        }
+        projectActivityService.log(id, currentUserId, "archive_project", null,
+                detail.isEmpty() ? null : detail);
+
+        // 4. 通知所有项目成员
+        notifyAllMembers(id, currentUserId, project.getName(),
+                "项目归档通知", "项目「" + project.getName() + "」已被归档", "project_archived");
     }
 
     /**
      * 恢复项目
+     * <p>
+     * 恢复流程：
+     * 1. 校验项目当前状态（必须为 archived）
+     * 2. 将项目状态设为 active
+     * 3. 记录项目活动日志
+     * 4. 通知所有项目成员
      */
     @Transactional
     public void restore(Long id) {
         Project project = getById(id);
+        if (!"archived".equals(project.getStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能恢复归档状态的项目");
+        }
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 1. 恢复项目
         project.setStatus("active");
         projectMapper.updateById(project);
+
+        // 2. 记录活动日志
+        projectActivityService.log(id, currentUserId, "restore_project", null, null);
+
+        // 3. 通知所有项目成员
+        notifyAllMembers(id, currentUserId, project.getName(),
+                "项目恢复通知", "项目「" + project.getName() + "」已从归档状态恢复", "project_restored");
+    }
+
+    /**
+     * 暂停项目内所有活跃 Sprint（ACTIVE → PLANNED）
+     *
+     * @return 受影响的 Sprint 数量
+     */
+    private int suspendActiveSprintsForProject(Long projectId) {
+        LambdaUpdateWrapper<Sprint> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(Sprint::getProjectId, projectId)
+                .eq(Sprint::getStatus, SprintStatus.ACTIVE)
+                .set(Sprint::getStatus, SprintStatus.PLANNED)
+                .set(Sprint::getUpdatedAt, LocalDateTime.now());
+        return sprintMapper.update(null, updateWrapper);
+    }
+
+    /**
+     * 通知项目所有成员（排除操作者本人）
+     */
+    private void notifyAllMembers(Long projectId, Long operatorId, String projectName,
+                                  String title, String content, String type) {
+        List<Long> memberUserIds = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
+        ).stream().map(ProjectMember::getUserId).distinct().toList();
+
+        for (Long memberId : memberUserIds) {
+            if (!memberId.equals(operatorId)) {
+                notificationService.notify(memberId, title, content, type, "project", projectId);
+            }
+        }
     }
 
     // ========== 回收站保留策略设置 ==========
