@@ -8,9 +8,15 @@ import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Mapper
 public interface IssueMapper extends BaseMapper<Issue> {
+
+    /**
+     * 查询项目中已使用的状态 ID（DISTINCT，高性能）
+     */
+    Set<Long> selectDistinctStatusIdsByProject(@Param("projectId") Long projectId);
 
     /**
      * 一次 JOIN 查询 Issue 详情（含关联表名称）

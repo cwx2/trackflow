@@ -37,4 +37,10 @@ public class BoardColumnVO {
 
     /** 最大在制品数量（超过此数时列标题显示红色警告），null 表示不限制 */
     private Integer wipMax;
+
+    /**
+     * 该隐藏列中是否有工单存在。
+     * 仅当 visible=false 且有工单使用该状态时为 true，用于前端提示。
+     */
+    private Boolean hasHiddenIssues;
 }

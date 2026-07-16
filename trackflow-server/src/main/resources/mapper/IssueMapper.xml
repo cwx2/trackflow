@@ -25,6 +25,7 @@
             s.name AS status_name, s.code AS status_code, s.color AS status_color,
             s.category AS status_category, s.is_default AS status_is_default, s.is_closed AS status_is_closed,
             a.display_name AS assignee_name,
+            a.avatar_url AS assignee_avatar_url,
             r.display_name AS reporter_name,
             sp.name AS sprint_name,
             pi.issue_key AS parent_key
@@ -167,5 +168,13 @@
         UPDATE issue SET parent_id = NULL, updated_at = NOW()
         WHERE parent_id = #{parentId}
     </update>
+
+    <!-- 查询项目中已使用的状态 ID（DISTINCT，高性能） -->
+    <select id="selectDistinctStatusIdsByProject" resultType="java.lang.Long">
+        SELECT DISTINCT status_id
+        FROM issue
+        WHERE project_id = #{projectId}
+          AND deleted_at IS NULL
+    </select>
 
 </mapper>

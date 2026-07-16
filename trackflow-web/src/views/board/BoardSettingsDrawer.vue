@@ -136,6 +136,7 @@ const emit = defineEmits<{
 }>()
 
 const saving = ref(false)
+const initializing = ref(false)
 
 // 可编辑的列配置（深拷贝）
 const editableColumns = ref<EditableColumn[]>([])
@@ -145,8 +146,40 @@ const dragIndex = ref<number | null>(null)
 const dropIndex = ref<number | null>(null)
 const dropPosition = ref<'above' | 'below' | null>(null)
 
-// 当 drawer 打开或 columns 变化时，深拷贝
-watch(() => [props.visible, props.columns], () => {
+// 当 drawer 打开时，确保配置已初始化
+watch(() => props.visible, async (newVisible) => {
+  if (newVisible && props.projectId) {
+    // 如果已有配置，直接使用
+    if (props.columns.length > 0) {
+      editableColumns.value = props.columns.map(c => ({
+        ...c,
+        wipMin: c.wipMin ?? undefined,
+        wipMax: c.wipMax ?? undefined
+      }))
+    } else {
+      // 没有配置：调用 init 接口显式初始化
+      initializing.value = true
+      try {
+        const res = await boardApi.initializeColumns(props.projectId)
+        const initialized = res.data || []
+        editableColumns.value = initialized.map(c => ({
+          ...c,
+          wipMin: c.wipMin ?? undefined,
+          wipMax: c.wipMax ?? undefined
+        }))
+        // 通知父组件刷新列配置
+        emit('saved')
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '初始化看板列配置失败')
+      } finally {
+        initializing.value = false
+      }
+    }
+  }
+})
+
+// 当 columns prop 变化且 drawer 打开时也更新
+watch(() => props.columns, () => {
   if (props.visible && props.columns.length > 0) {
     editableColumns.value = props.columns.map(c => ({
       ...c,
@@ -154,7 +187,7 @@ watch(() => [props.visible, props.columns], () => {
       wipMax: c.wipMax ?? undefined
     }))
   }
-}, { immediate: true })
+})
 
 function categoryLabel(category: string): string {
   const map: Record<string, string> = {

@@ -133,6 +133,14 @@
           当前项目共 {{ boardTotalCount }} 个工单，看板仅展示前 {{ issues.length }} 个。请使用搜索或筛选缩小范围。
         </span>
       </div>
+      <!-- 隐藏列中有工单的提示 -->
+      <div v-if="hiddenIssueColumns.length > 0 && !loading" class="board-hidden-issues-banner">
+        <span class="hidden-issues-icon">👁️‍🗨️</span>
+        <span class="hidden-issues-text">
+          有工单存在于已隐藏的列中：{{ hiddenIssueColumns.map(c => localizeStatusName(c.statusName)).join('、') }}。
+          <a-link size="small" @click="showSettings = true">打开列设置</a-link> 查看或调整。
+        </span>
+      </div>
       <div class="board-main-area">
         <!-- Backlog 面板 -->
         <BacklogPanel
@@ -987,6 +995,11 @@ const visibleStatuses = computed(() => {
       isClosed: c.statusCategory === 'done' || c.statusCategory === 'cancelled',
       sortOrder: c.sortOrder
     } as IssueStatusVO))
+})
+
+// 隐藏列中有工单的列（用于提示 banner）
+const hiddenIssueColumns = computed(() => {
+  return allColumnConfigs.value.filter(c => !c.visible && c.hasHiddenIssues)
 })
 
 // 被手动展开的空列集合
@@ -2699,6 +2712,30 @@ onUnmounted(() => {
 }
 
 .truncated-text {
+  font-size: 12px;
+  color: var(--color-text-2);
+  line-height: 1.4;
+}
+
+/* ===== 隐藏列有工单提示横幅 ===== */
+.board-hidden-issues-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(var(--primary-6), 0.06);
+  border: 1px solid rgba(var(--primary-6), 0.2);
+  border-radius: 6px;
+  margin: 0 16px 8px;
+  flex-shrink: 0;
+}
+
+.hidden-issues-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.hidden-issues-text {
   font-size: 12px;
   color: var(--color-text-2);
   line-height: 1.4;

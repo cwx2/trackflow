@@ -168,6 +168,7 @@ export interface IssueVO {
   priority: string
   assigneeId?: string
   assigneeName?: string
+  assigneeAvatarUrl?: string
   reporterId: string
   sprintId?: string
   dueDate?: string
@@ -481,6 +482,8 @@ export interface BoardColumnVO {
   collapsed: boolean
   wipMin: number | null
   wipMax: number | null
+  /** 该隐藏列中是否有工单存在（仅 visible=false 时有意义） */
+  hasHiddenIssues: boolean | null
 }
 
 export interface BoardColumnItem {
