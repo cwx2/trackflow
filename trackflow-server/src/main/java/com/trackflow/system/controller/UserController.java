@@ -13,6 +13,7 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
 import com.trackflow.system.service.UserService;
 import com.trackflow.system.vo.UserDetailVO;
+import com.trackflow.system.vo.UserProfileVO;
 import com.trackflow.system.vo.UserVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +68,13 @@ public class UserController {
         detail.setUser(userConverter.toVO(user));
         detail.setRoleIds(roleIds.stream().map(String::valueOf).toList());
         return R.ok(detail);
+    }
+
+    @GetMapping("/{id}/profile")
+    @PreAuthorize("@perm.checkGlobal('system:manage_users')")
+    public R<UserProfileVO> getProfile(@PathVariable Long id) {
+        UserProfileVO profile = userService.getUserProfile(id);
+        return R.ok(profile);
     }
 
     @PutMapping("/{id}/disable")

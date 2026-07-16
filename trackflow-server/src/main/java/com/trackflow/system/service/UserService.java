@@ -5,18 +5,29 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.mapper.ProjectMapper;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.entity.UserRole;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
+import com.trackflow.system.vo.UserProfileVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 用户管理服务
@@ -32,6 +43,10 @@ public class UserService {
     private final SysRoleMapper roleMapper;
     private final PermissionService permissionService;
     private final SystemAuditService systemAuditService;
+    private final ProjectMemberMapper projectMemberMapper;
+    private final ProjectMapper projectMapper;
+    private final IssueActivityMapper issueActivityMapper;
+    private final IssueMapper issueMapper;
 
     /**
      * 分页查询用户列表
@@ -176,5 +191,127 @@ public class UserService {
         // 查看有多少用户拥有系统管理员角色
         List<Long> adminUserIds = userRoleMapper.selectUserIdsByRoleId(SYSTEM_ADMIN_ROLE_ID);
         return adminUserIds.size() == 1 && adminUserIds.contains(userId);
+    }
+
+    /**
+     * 获取用户完整档案（基本信息 + 全局角色 + 项目角色 + 最近活动）
+     */
+    public UserProfileVO getUserProfile(Long userId) {
+        SysUser user = getById(userId);
+
+        UserProfileVO profile = new UserProfileVO();
+        profile.setId(String.valueOf(user.getId()));
+        profile.setUsername(user.getUsername());
+        profile.setDisplayName(user.getDisplayName());
+        profile.setEmail(user.getEmail());
+        profile.setAvatarUrl(user.getAvatarUrl());
+        profile.setStatus(user.getStatus());
+        profile.setLastLoginAt(user.getLastLoginAt());
+        profile.setCreatedAt(user.getCreatedAt());
+
+        // 全局角色
+        profile.setGlobalRoles(buildGlobalRoles(userId));
+
+        // 项目角色分布
+        profile.setProjectRoles(buildProjectRoles(userId));
+
+        // 最近活动（10条）
+        profile.setRecentActivities(buildRecentActivities(userId));
+
+        return profile;
+    }
+
+    private List<UserProfileVO.RoleInfo> buildGlobalRoles(Long userId) {
+        List<Long> roleIds = getUserGlobalRoleIds(userId);
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
+        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+        return roles.stream().map(role -> {
+            UserProfileVO.RoleInfo info = new UserProfileVO.RoleInfo();
+            info.setId(String.valueOf(role.getId()));
+            info.setName(role.getName());
+            info.setCode(role.getCode());
+            return info;
+        }).toList();
+    }
+
+    private List<UserProfileVO.ProjectRoleInfo> buildProjectRoles(Long userId) {
+        // 查询用户的所有项目成员关系
+        List<ProjectMember> memberships = projectMemberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getUserId, userId)
+        );
+        if (memberships.isEmpty()) {
+            return List.of();
+        }
+
+        // 批量查询项目信息
+        List<Long> projectIds = memberships.stream().map(ProjectMember::getProjectId).distinct().toList();
+        List<Project> projects = projectMapper.selectBatchIds(projectIds);
+        Map<Long, Project> projectMap = projects.stream()
+                .collect(Collectors.toMap(Project::getId, p -> p));
+
+        // 批量查询角色信息
+        List<Long> roleIds = memberships.stream().map(ProjectMember::getRoleId).distinct().toList();
+        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+        Map<Long, SysRole> roleMap = roles.stream()
+                .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+        List<UserProfileVO.ProjectRoleInfo> result = new ArrayList<>();
+        for (ProjectMember membership : memberships) {
+            Project project = projectMap.get(membership.getProjectId());
+            SysRole role = roleMap.get(membership.getRoleId());
+            if (project == null || role == null) continue;
+
+            UserProfileVO.ProjectRoleInfo info = new UserProfileVO.ProjectRoleInfo();
+            info.setProjectId(String.valueOf(project.getId()));
+            info.setProjectName(project.getName());
+            info.setProjectKey(project.getKey());
+            info.setRoleName(role.getName());
+            info.setRoleCode(role.getCode());
+            info.setJoinedAt(membership.getJoinedAt());
+            result.add(info);
+        }
+        return result;
+    }
+
+    private List<UserProfileVO.ActivityInfo> buildRecentActivities(Long userId) {
+        // 查询最近 10 条活动
+        Page<IssueActivity> page = new Page<>(1, 10);
+        page.setSearchCount(false);
+        Page<IssueActivity> activityPage = issueActivityMapper.selectPage(page,
+                new LambdaQueryWrapper<IssueActivity>()
+                        .eq(IssueActivity::getUserId, userId)
+                        .orderByDesc(IssueActivity::getCreatedAt)
+        );
+
+        List<IssueActivity> activities = activityPage.getRecords();
+        if (activities.isEmpty()) {
+            return List.of();
+        }
+
+        // 批量查询关联的 Issue 信息
+        List<Long> issueIds = activities.stream().map(IssueActivity::getIssueId).distinct().toList();
+        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
+        Map<Long, Issue> issueMap = issues.stream()
+                .collect(Collectors.toMap(Issue::getId, i -> i));
+
+        return activities.stream().map(activity -> {
+            UserProfileVO.ActivityInfo info = new UserProfileVO.ActivityInfo();
+            info.setId(String.valueOf(activity.getId()));
+            info.setIssueId(String.valueOf(activity.getIssueId()));
+            info.setAction(activity.getAction());
+            info.setFieldName(activity.getFieldName());
+            info.setOldValue(activity.getOldValue());
+            info.setNewValue(activity.getNewValue());
+            info.setCreatedAt(activity.getCreatedAt());
+
+            Issue issue = issueMap.get(activity.getIssueId());
+            if (issue != null) {
+                info.setIssueKey(issue.getIssueKey());
+                info.setIssueTitle(issue.getTitle());
+            }
+            return info;
+        }).toList();
     }
 }

@@ -115,6 +115,12 @@ const routes = [
         meta: { requiresAdmin: true }
       },
       {
+        path: 'admin/users/:id',
+        name: 'UserDetail',
+        component: () => import('@/views/admin/UserDetailView.vue'),
+        meta: { requiresAdmin: true }
+      },
+      {
         path: 'admin/roles',
         name: 'RoleManagement',
         component: () => import('@/views/admin/RoleManagement.vue'),

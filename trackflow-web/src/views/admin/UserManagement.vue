@@ -27,7 +27,7 @@
         <div v-for="user in users" :key="user.id" class="table-row">
           <div class="col" style="width:60px">{{ user.id }}</div>
           <div class="col" style="width:140px">
-            <span class="username">{{ user.username }}</span>
+            <router-link :to="`/admin/users/${user.id}`" class="username-link">{{ user.username }}</router-link>
           </div>
           <div class="col" style="flex:1">{{ user.displayName }}</div>
           <div class="col" style="width:200px">{{ user.email || '—' }}</div>
@@ -182,7 +182,8 @@ onMounted(() => {
 .table-row:hover { background: var(--bg-hover); }
 .col { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
 
-.username { color: var(--accent-blue); font-weight: 500; }
+.username-link { color: var(--accent-blue); font-weight: 500; text-decoration: none; }
+.username-link:hover { text-decoration: underline; }
 .status-tag { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); }
 .status-tag.active { background: rgba(76,175,80,0.15); color: var(--accent-green); }
 .status-tag.disabled { background: rgba(244,67,54,0.15); color: var(--accent-red); }
