@@ -1,11 +1,14 @@
 package com.trackflow.board.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
 import com.trackflow.board.vo.BoardColumnVO;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
@@ -125,10 +128,84 @@ public class BoardColumnService {
     }
 
     /**
-     * 保存项目的看板列配置
+     * 保存项目的看板列配置。
+     * <p>
+     * 执行完整的业务校验：
+     * 1. 所有 statusId 必须存在于 issue_status 表
+     * 2. 至少有一个列为 visible=true
+     * 3. WIP 限制值必须非负，且 wipMin <= wipMax
+     * 4. 未在提交数据中出现的状态自动补全为 visible=false
      */
     @Transactional
     public void saveColumns(Long projectId, UpdateBoardColumnsDTO dto) {
+        List<UpdateBoardColumnsDTO.ColumnItem> items = dto.getColumns();
+
+        // ===== 业务校验 =====
+
+        // 1. 验证所有 statusId 存在于 issue_status 表
+        List<IssueStatus> allStatuses = issueStatusMapper.selectList(
+                Wrappers.<IssueStatus>lambdaQuery().orderByAsc(IssueStatus::getSortOrder)
+        );
+        Set<Long> validStatusIds = allStatuses.stream()
+                .map(IssueStatus::getId)
+                .collect(Collectors.toSet());
+
+        for (UpdateBoardColumnsDTO.ColumnItem item : items) {
+            if (!validStatusIds.contains(item.getStatusId())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "无效的状态 ID: " + item.getStatusId());
+            }
+        }
+
+        // 2. 验证至少有一个列为可见
+        boolean hasVisible = items.stream()
+                .anyMatch(c -> Boolean.TRUE.equals(c.getVisible()));
+        if (!hasVisible) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要一个可见的状态列");
+        }
+
+        // 3. 验证 WIP 限制逻辑
+        for (UpdateBoardColumnsDTO.ColumnItem item : items) {
+            if (item.getWipMin() != null && item.getWipMin() < 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "WIP 最小值不能为负数");
+            }
+            if (item.getWipMax() != null && item.getWipMax() < 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "WIP 最大值不能为负数");
+            }
+            if (item.getWipMin() != null && item.getWipMax() != null
+                    && item.getWipMin() > item.getWipMax()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "WIP 最小值不能大于最大值");
+            }
+        }
+
+        // ===== 补全缺失状态 =====
+
+        // 收集前端已提交的 statusId
+        Set<Long> providedIds = items.stream()
+                .map(UpdateBoardColumnsDTO.ColumnItem::getStatusId)
+                .collect(Collectors.toSet());
+
+        // 计算最大 sortOrder，用于追加缺失状态
+        int maxSortOrder = items.stream()
+                .mapToInt(c -> c.getSortOrder() != null ? c.getSortOrder() : 0)
+                .max()
+                .orElse(0);
+
+        // 对未提交的状态自动补全为 visible=false
+        List<UpdateBoardColumnsDTO.ColumnItem> supplemented = new ArrayList<>(items);
+        for (IssueStatus status : allStatuses) {
+            if (!providedIds.contains(status.getId())) {
+                UpdateBoardColumnsDTO.ColumnItem missing = new UpdateBoardColumnsDTO.ColumnItem();
+                missing.setStatusId(status.getId());
+                missing.setVisible(false);
+                missing.setSortOrder(++maxSortOrder);
+                missing.setCollapsed(false);
+                supplemented.add(missing);
+            }
+        }
+
+        // ===== 持久化 =====
+
         // 删除旧配置
         boardColumnConfigMapper.delete(
                 new LambdaQueryWrapper<BoardColumnConfig>()
@@ -139,7 +216,7 @@ public class BoardColumnService {
         LocalDateTime now = LocalDateTime.now();
         List<BoardColumnConfig> configs = new ArrayList<>();
         int order = 0;
-        for (UpdateBoardColumnsDTO.ColumnItem item : dto.getColumns()) {
+        for (UpdateBoardColumnsDTO.ColumnItem item : supplemented) {
             BoardColumnConfig config = new BoardColumnConfig();
             config.setProjectId(projectId);
             config.setStatusId(item.getStatusId());
