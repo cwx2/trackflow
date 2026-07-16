@@ -4,7 +4,7 @@ import type { R } from './types'
 // ─── 类型定义 ─────────────────────────────────────────
 
 export interface DashboardParams {
-  projectId: string
+  projectId?: string
   sprintId?: string
   startDate?: string  // ISO date string
   endDate?: string

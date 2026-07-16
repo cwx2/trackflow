@@ -25,17 +25,20 @@ public class ReportStatisticsController {
 
     /**
      * 获取仪表盘全量统计数据（一次请求获取所有图表数据）
+     * projectId 可选：不传时返回用户有权限的全部项目聚合数据
      */
     @GetMapping("/dashboard")
     @PreAuthorize("isAuthenticated()")
     public R<DashboardVO> dashboard(
-            @RequestParam("projectId") Long projectId,
+            @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
-        return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate));
+        if (projectId != null) {
+            projectService.assertProjectMember(userId, projectId);
+        }
+        return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate, userId));
     }
 
     /**

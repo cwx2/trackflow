@@ -12,11 +12,13 @@
           placeholder="选择项目"
           size="small"
           style="width: 180px"
-          @change="loadDashboard"
+          @change="handleProjectChange"
         >
+          <a-option value="__all__">全部项目</a-option>
           <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
         </a-select>
         <a-select
+          v-if="selectedProjectId !== '__all__'"
           v-model="selectedSprintId"
           placeholder="全部 Sprint"
           allow-clear
@@ -53,11 +55,11 @@
       </div>
     </div>
 
-    <!-- 空状态（未选择项目） -->
-    <div v-else-if="!selectedProjectId" class="dashboard-empty">
+    <!-- 空状态（数据为空） -->
+    <div v-else-if="!dashboardData" class="dashboard-empty">
       <div class="empty-icon">📊</div>
-      <h3 class="empty-title">选择项目查看报表</h3>
-      <p class="empty-desc">请从顶部下拉框选择一个项目，查看该项目的统计数据和可视化图表。</p>
+      <h3 class="empty-title">暂无报表数据</h3>
+      <p class="empty-desc">当前选择范围没有工单数据。请尝试切换项目或日期范围。</p>
     </div>
 
     <!-- 仪表盘主体 -->
@@ -184,7 +186,7 @@ use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipCompo
 const loading = ref(false)
 const projects = ref<ProjectVO[]>([])
 const sprints = ref<{ id: string; name: string; status: string }[]>([])
-const selectedProjectId = ref<string | undefined>(undefined)
+const selectedProjectId = ref<string>('__all__')
 const selectedSprintId = ref<string | undefined>(undefined)
 const dateRange = ref<string[] | undefined>(undefined)
 const dashboardData = ref<DashboardData | null>(null)
@@ -542,12 +544,8 @@ onMounted(async () => {
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
   await loadProjects()
-  // 自动选择第一个项目
-  if (projects.value.length > 0) {
-    selectedProjectId.value = projects.value[0].id
-    await loadSprints()
-    await loadDashboard()
-  }
+  // 默认选择"全部项目"，直接加载聚合数据
+  await loadDashboard()
 })
 
 onBeforeUnmount(() => {
@@ -557,10 +555,22 @@ onBeforeUnmount(() => {
 
 watch(selectedProjectId, async () => {
   selectedSprintId.value = undefined
-  if (selectedProjectId.value) {
+  if (selectedProjectId.value && selectedProjectId.value !== '__all__') {
     await loadSprints()
+  } else {
+    sprints.value = []
   }
 })
+
+async function handleProjectChange() {
+  selectedSprintId.value = undefined
+  if (selectedProjectId.value && selectedProjectId.value !== '__all__') {
+    await loadSprints()
+  } else {
+    sprints.value = []
+  }
+  await loadDashboard()
+}
 
 async function loadProjects() {
   try {
@@ -590,7 +600,11 @@ async function loadDashboard() {
   loading.value = true
   dashboardData.value = null
   try {
-    const params: any = { projectId: selectedProjectId.value }
+    const params: any = {}
+    // 只有选择了具体项目才传 projectId，"全部项目"时不传
+    if (selectedProjectId.value !== '__all__') {
+      params.projectId = selectedProjectId.value
+    }
     if (selectedSprintId.value) params.sprintId = selectedSprintId.value
     if (dateRange.value && dateRange.value.length === 2) {
       params.startDate = formatDate(dateRange.value[0])

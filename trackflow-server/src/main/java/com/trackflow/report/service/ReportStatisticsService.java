@@ -6,6 +6,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.vo.*;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
@@ -35,12 +36,16 @@ public class ReportStatisticsService {
     private final SprintMapper sprintMapper;
     private final SprintService sprintService;
     private final StatusCacheHelper statusCacheHelper;
+    private final ProjectService projectService;
 
     /**
      * 获取仪表盘全量数据（一次请求，前端缓存分发）
+     * @param projectId null 表示聚合用户可访问的全部项目
+     * @param userId 当前用户ID，用于确定可访问项目范围
      */
-    public DashboardVO getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
-        List<Issue> issues = queryIssues(projectId, sprintId);
+    public DashboardVO getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate, Long userId) {
+        List<Long> projectIds = resolveProjectIds(projectId, userId);
+        List<Issue> issues = queryIssues(projectIds, sprintId);
         Set<Long> closedIds = getClosedStatusIds();
 
         DashboardVO dashboard = new DashboardVO();
@@ -48,7 +53,7 @@ public class ReportStatisticsService {
         dashboard.setPriorityDistribution(buildPriorityDistribution(issues));
         dashboard.setTypeDistribution(buildTypeDistribution(issues));
         dashboard.setWorkload(buildWorkload(issues, closedIds));
-        dashboard.setTrend(buildTrend(projectId, startDate, endDate));
+        dashboard.setTrend(buildTrend(projectIds, startDate, endDate));
         if (sprintId != null) {
             dashboard.setBurndown(buildBurndown(projectId, sprintId));
         }
@@ -59,23 +64,23 @@ public class ReportStatisticsService {
     // ─── Public endpoints (single chart) ────────────────────────────────
 
     public StatusDistributionVO getStatusDistribution(Long projectId, Long sprintId) {
-        return buildStatusDistribution(queryIssues(projectId, sprintId));
+        return buildStatusDistribution(queryIssues(List.of(projectId), sprintId));
     }
 
     public PriorityDistributionVO getPriorityDistribution(Long projectId, Long sprintId) {
-        return buildPriorityDistribution(queryIssues(projectId, sprintId));
+        return buildPriorityDistribution(queryIssues(List.of(projectId), sprintId));
     }
 
     public TypeDistributionVO getTypeDistribution(Long projectId, Long sprintId) {
-        return buildTypeDistribution(queryIssues(projectId, sprintId));
+        return buildTypeDistribution(queryIssues(List.of(projectId), sprintId));
     }
 
     public WorkloadVO getWorkload(Long projectId, Long sprintId) {
-        return buildWorkload(queryIssues(projectId, sprintId), getClosedStatusIds());
+        return buildWorkload(queryIssues(List.of(projectId), sprintId), getClosedStatusIds());
     }
 
     public TrendVO getTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
-        return buildTrend(projectId, startDate, endDate);
+        return buildTrend(List.of(projectId), startDate, endDate);
     }
 
     public BurndownVO getBurndown(Long projectId, Long sprintId) {
@@ -235,25 +240,39 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private TrendVO buildTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
+    private TrendVO buildTrend(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        List<Issue> createdIssues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
-                .eq(Issue::getProjectId, projectId)
+        LambdaQueryWrapper<Issue> createdWrapper = new LambdaQueryWrapper<Issue>()
                 .isNull(Issue::getDeletedAt)
                 .ge(Issue::getCreatedAt, start)
-                .le(Issue::getCreatedAt, end));
+                .le(Issue::getCreatedAt, end);
+        if (projectIds != null && !projectIds.isEmpty()) {
+            if (projectIds.size() == 1) {
+                createdWrapper.eq(Issue::getProjectId, projectIds.get(0));
+            } else {
+                createdWrapper.in(Issue::getProjectId, projectIds);
+            }
+        }
+        List<Issue> createdIssues = issueMapper.selectList(createdWrapper);
 
-        List<Issue> resolvedIssues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
-                .eq(Issue::getProjectId, projectId)
+        LambdaQueryWrapper<Issue> resolvedWrapper = new LambdaQueryWrapper<Issue>()
                 .isNull(Issue::getDeletedAt)
                 .isNotNull(Issue::getResolvedAt)
                 .ge(Issue::getResolvedAt, start)
-                .le(Issue::getResolvedAt, end));
+                .le(Issue::getResolvedAt, end);
+        if (projectIds != null && !projectIds.isEmpty()) {
+            if (projectIds.size() == 1) {
+                resolvedWrapper.eq(Issue::getProjectId, projectIds.get(0));
+            } else {
+                resolvedWrapper.in(Issue::getProjectId, projectIds);
+            }
+        }
+        List<Issue> resolvedIssues = issueMapper.selectList(resolvedWrapper);
 
         Map<LocalDate, Long> createdByDay = createdIssues.stream()
                 .collect(Collectors.groupingBy(i -> i.getCreatedAt().toLocalDate(), Collectors.counting()));
@@ -308,9 +327,29 @@ public class ReportStatisticsService {
 
     // ─── Private helpers ────────────────────────────────────────────────
 
-    private List<Issue> queryIssues(Long projectId, Long sprintId) {
+    /**
+     * 将单个 projectId 或 null 解析为可访问项目 ID 列表。
+     * null projectId 表示"全部项目"——调用 ProjectService.getAccessibleProjectIds 获取权限范围。
+     */
+    private List<Long> resolveProjectIds(Long projectId, Long userId) {
+        if (projectId != null) {
+            return List.of(projectId);
+        }
+        // null 表示系统管理员无限制
+        List<Long> accessible = projectService.getAccessibleProjectIds(userId);
+        return accessible; // null for system admin means all projects
+    }
+
+    private List<Issue> queryIssues(List<Long> projectIds, Long sprintId) {
         LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Issue::getProjectId, projectId);
+        if (projectIds != null && !projectIds.isEmpty()) {
+            if (projectIds.size() == 1) {
+                wrapper.eq(Issue::getProjectId, projectIds.get(0));
+            } else {
+                wrapper.in(Issue::getProjectId, projectIds);
+            }
+        }
+        // projectIds == null means system admin, no project filter
         wrapper.isNull(Issue::getDeletedAt);
         if (sprintId != null) {
             wrapper.eq(Issue::getSprintId, sprintId);
