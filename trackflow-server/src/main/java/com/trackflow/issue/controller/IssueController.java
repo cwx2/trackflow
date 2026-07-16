@@ -1,6 +1,7 @@
 package com.trackflow.issue.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
@@ -27,6 +28,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,19 +63,23 @@ public class IssueController {
         Page<Issue> result = issueService.listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
 
-        // 批量填充 assigneeName
+        // 批量填充 assigneeName + assigneeAvatarUrl
         List<Long> assigneeIds = result.getRecords().stream()
                 .map(Issue::getAssigneeId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         if (!assigneeIds.isEmpty()) {
-            Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
-                    .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
+                    .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
             for (int i = 0; i < result.getRecords().size(); i++) {
                 Issue issue = result.getRecords().get(i);
                 if (issue.getAssigneeId() != null) {
-                    voList.get(i).setAssigneeName(userNameMap.get(issue.getAssigneeId()));
+                    SysUser user = userMap.get(issue.getAssigneeId());
+                    if (user != null) {
+                        voList.get(i).setAssigneeName(user.getDisplayName());
+                        voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
+                    }
                 }
             }
         }
@@ -281,16 +288,37 @@ public class IssueController {
         // 撤销操作：验证目标状态必须是上一个状态（从活动记录获取），防止任意跳转
         IssueActivity lastStatusChange = issueService.getLastStatusChange(id);
         if (lastStatusChange == null) {
-            return R.fail(ErrorCode.BAD_REQUEST, "该工单没有状态变更记录，无法撤销");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该工单没有状态变更记录，无法撤销");
+        }
+
+        // 时间窗口校验：撤销仅在 30 秒内有效
+        long elapsedSeconds = Duration.between(lastStatusChange.getCreatedAt(), LocalDateTime.now()).getSeconds();
+        if (elapsedSeconds > 30) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "撤销窗口已过期（30秒内有效）");
+        }
+
+        // 操作人校验：只能撤销自己的操作
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!currentUserId.equals(lastStatusChange.getUserId())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能撤销自己的操作");
+        }
+
+        // 并发修改检测：检查该工单在状态变更之后是否有其他人做过修改
+        Issue currentIssue = issueService.getById(id);
+        if (currentIssue.getUpdatedBy() != null && !currentUserId.equals(currentIssue.getUpdatedBy())) {
+            // 如果最后修改人不是自己，说明有人在中间做了修改
+            if (currentIssue.getUpdatedAt() != null && currentIssue.getUpdatedAt().isAfter(lastStatusChange.getCreatedAt())) {
+                throw new BusinessException(ErrorCode.CONFLICT, "工单已被其他人修改，无法撤销");
+            }
         }
 
         // 验证目标状态名称与上一次变更的旧状态一致
         IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
         if (targetStatus == null) {
-            return R.fail(ErrorCode.BAD_REQUEST, "目标状态不存在");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "目标状态不存在");
         }
         if (!targetStatus.getName().equals(lastStatusChange.getOldValue())) {
-            return R.fail(ErrorCode.BAD_REQUEST,
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "撤销操作只能回退到上一个状态（" + lastStatusChange.getOldValue() + "），不允许任意跳转");
         }
 

@@ -79,7 +79,7 @@ export const issueApi = {
     return request.post<any, R<void>>(`/issues/${id}/transitions`, { statusId, comment, version, force })
   },
 
-  /** 撤销状态流转（绕过工作流校验） */
+  /** 撤销状态流转（限 30 秒内、仅本人操作可撤销） */
   undoTransitStatus(id: string, statusId: string) {
     return request.post<any, R<void>>(`/issues/${id}/transitions/undo`, { statusId })
   },
