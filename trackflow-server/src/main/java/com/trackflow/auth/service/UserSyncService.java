@@ -20,10 +20,10 @@ import java.util.Map;
 
 /**
  * 用户同步服务：从 Keycloak JWT 同步用户信息到本地数据库
- *
+ * <p>
  * 最小权限原则：新用户首次登录仅创建 sys_user 记录，不自动分配任何全局角色。
  * 唯一例外：系统中无任何用户时（全新安装），首位用户自动成为系统管理员。
- *
+ * <p>
  * Keycloak 角色映射：JWT 中的 realm_access.roles 包含 tf_admin/tf_user 角色，
  * 用户首次创建时会根据 Keycloak 角色自动映射到 TrackFlow 内部角色。
  * 已有用户登录时，如果 Keycloak 新增了 tf_admin 角色但本地没有 system_admin，也会补充分配。

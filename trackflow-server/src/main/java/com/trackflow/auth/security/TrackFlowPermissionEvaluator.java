@@ -16,11 +16,11 @@ import java.util.Set;
 
 /**
  * 自定义权限评估器：集成到 Spring Security @PreAuthorize 中
- *
+ * <p>
  * 使用方式:
- * @PreAuthorize("@perm.check(#projectId, 'issue:create')")
- * @PreAuthorize("@perm.checkGlobal('system:manage_users')")
- *
+ * &#064;PreAuthorize("@perm.check(#projectId,  'issue:create')")
+ * &#064;PreAuthorize("@perm.checkGlobal('system:manage_users')")
+ * <p>
  * API Key scope 过滤逻辑：
  * 当请求通过 API Key 认证且 scope 非空时，实际权限 = 用户角色权限 ∩ apiKeyScope。
  * scope 为空（[]）表示不限制，保持向后兼容。

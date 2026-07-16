@@ -20,7 +20,7 @@ import java.util.Set;
 
 /**
  * 权限服务：Redis 缓存 + 数据库查询
- *
+ * <p>
  * 支持 NonMember / Anonymous 访问控制：
  * - 如果用户不是项目成员，检查项目 visibility
  * - internal 项目：已登录用户获得 NonMember 角色权限
