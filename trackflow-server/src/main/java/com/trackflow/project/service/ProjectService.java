@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
+import com.trackflow.project.vo.ProjectVO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -143,6 +144,65 @@ public class ProjectService {
 
         wrapper.orderByDesc(Project::getCreatedAt);
         return projectMapper.selectPage(page, wrapper);
+    }
+
+    /**
+     * 批量填充项目 VO 的成员摘要信息（memberCount + topMembers）。
+     * 使用两次批量查询：一次 COUNT 分组，一次 TOP N 成员查用户名。
+     */
+    public void populateMemberSummary(List<ProjectVO> voList) {
+        if (voList == null || voList.isEmpty()) return;
+
+        List<Long> projectIds = voList.stream()
+                .map(vo -> Long.valueOf(vo.getId()))
+                .toList();
+
+        // 1. 批量查每个项目的成员数量
+        List<ProjectMember> allMembers = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().in(ProjectMember::getProjectId, projectIds)
+        );
+
+        // 按 projectId 分组，同一用户去重（一人可能有多角色）
+        Map<Long, List<Long>> projectUserMap = allMembers.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        ProjectMember::getProjectId,
+                        java.util.stream.Collectors.mapping(ProjectMember::getUserId, java.util.stream.Collectors.toList())
+                ));
+
+        // 去重 userId per project
+        Map<Long, List<Long>> projectDistinctUsers = new java.util.HashMap<>();
+        projectUserMap.forEach((pid, userIds) -> {
+            projectDistinctUsers.put(pid, userIds.stream().distinct().toList());
+        });
+
+        // 2. 收集所有需要查询 displayName 的 userId（取每个项目前5）
+        Set<Long> topUserIds = new java.util.HashSet<>();
+        projectDistinctUsers.forEach((pid, userIds) -> {
+            userIds.stream().limit(5).forEach(topUserIds::add);
+        });
+
+        // 3. 批量查用户 displayName
+        Map<Long, String> userDisplayNameMap = new java.util.HashMap<>();
+        if (!topUserIds.isEmpty()) {
+            List<SysUser> users = userMapper.selectBatchIds(topUserIds);
+            users.forEach(u -> userDisplayNameMap.put(u.getId(), u.getDisplayName()));
+        }
+
+        // 4. 填充 VO
+        for (ProjectVO vo : voList) {
+            Long pid = Long.valueOf(vo.getId());
+            List<Long> distinctUsers = projectDistinctUsers.getOrDefault(pid, List.of());
+            vo.setMemberCount(distinctUsers.size());
+
+            List<String> topMembers = distinctUsers.stream()
+                    .limit(5)
+                    .map(uid -> {
+                        String name = userDisplayNameMap.get(uid);
+                        return (name != null && !name.isBlank()) ? name : "?";
+                    })
+                    .toList();
+            vo.setTopMembers(topMembers);
+        }
     }
 
     /**

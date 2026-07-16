@@ -54,6 +54,7 @@ public class ProjectController {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Project> result = projectService.list(query.toPage(), query.getKeyword(), query.getStatus(), userId);
         List<ProjectVO> voList = projectConverter.toVOList(result.getRecords());
+        projectService.populateMemberSummary(voList);
         PageResult<ProjectVO> pageResult = new PageResult<>(voList, result.getTotal(), (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
     }

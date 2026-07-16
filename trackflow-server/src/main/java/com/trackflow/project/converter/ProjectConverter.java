@@ -15,6 +15,8 @@ public interface ProjectConverter extends BaseConverter {
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "orgId", expression = "java(longToString(entity.getOrgId()))")
     @Mapping(target = "leadId", expression = "java(longToString(entity.getLeadId()))")
+    @Mapping(target = "memberCount", ignore = true)
+    @Mapping(target = "topMembers", ignore = true)
     ProjectVO toVO(Project entity);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
@@ -23,6 +25,7 @@ public interface ProjectConverter extends BaseConverter {
     @Mapping(target = "myRoleName", ignore = true)
     @Mapping(target = "myRoleCode", ignore = true)
     @Mapping(target = "memberCount", ignore = true)
+    @Mapping(target = "topMembers", ignore = true)
     @Mapping(target = "leadName", ignore = true)
     com.trackflow.project.vo.ProjectDetailVO toDetailVO(Project entity);
 

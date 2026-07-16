@@ -80,6 +80,10 @@ export interface ProjectVO {
   issueSequence: number
   createdAt: string
   updatedAt: string
+  /** 项目成员总数 */
+  memberCount?: number
+  /** 前几名成员的显示名称 */
+  topMembers?: string[]
 }
 
 export interface ProjectDetailVO extends ProjectVO {

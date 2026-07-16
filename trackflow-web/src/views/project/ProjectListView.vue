@@ -43,15 +43,20 @@
 
         <!-- 右侧：成员 + 操作 -->
         <div class="project-right">
-          <a-avatar-group :size="24" :max-count="3">
-            <a-avatar
-              v-for="(member, idx) in (project._members || []).slice(0, 4)"
-              :key="idx"
-              :style="{ backgroundColor: getMemberColor(idx) }"
-            >
-              {{ member.charAt(0) }}
-            </a-avatar>
-          </a-avatar-group>
+          <div class="member-avatars">
+            <a-avatar-group :size="24">
+              <a-avatar
+                v-for="(member, idx) in (project.topMembers || []).slice(0, 3)"
+                :key="idx"
+                :style="{ backgroundColor: getMemberColor(idx) }"
+              >
+                {{ member.charAt(0) }}
+              </a-avatar>
+            </a-avatar-group>
+            <span v-if="(project.memberCount || 0) > 3" class="member-overflow">
+              +{{ (project.memberCount || 0) - 3 }}
+            </span>
+          </div>
           <!-- 项目操作菜单（按项目级权限 project:edit / project:manage_members 控制显隐） -->
           <span v-if="canManageProject(project)" class="dropdown-wrapper">
             <a-dropdown trigger="click" @click.stop>
@@ -498,10 +503,6 @@ async function loadProjects() {
   try {
     const res = await projectApi.list({ page: page.value, pageSize })
     const list = res.data?.list || []
-    // 模拟成员数据
-    list.forEach((p: any) => {
-      p._members = ['管', '张', '李'].slice(0, Math.min(3, (p.id % 3) + 1))
-    })
     if (page.value === 1) {
       projects.value = list
     } else {
@@ -969,6 +970,18 @@ watch(projects, () => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.member-avatars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.member-overflow {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  font-weight: 500;
 }
 
 .btn-more {

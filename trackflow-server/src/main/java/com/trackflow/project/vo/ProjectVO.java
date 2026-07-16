@@ -3,6 +3,7 @@ package com.trackflow.project.vo;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class ProjectVO {
@@ -17,4 +18,9 @@ public class ProjectVO {
     private Integer issueSequence;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** 项目成员总数 */
+    private Integer memberCount;
+    /** 前几名成员的显示名称（用于头像展示） */
+    private List<String> topMembers;
 }
