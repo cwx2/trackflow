@@ -141,23 +141,97 @@
       </div>
     </div>
 
-    <!-- 角色分配弹窗 -->
+    <!-- 角色管理弹窗 -->
     <div class="modal-overlay" v-if="showRoleDialog" @click.self="showRoleDialog = false">
-      <div class="modal-sm">
+      <div class="modal-role-panel">
         <div class="modal-header">
           <h3>管理角色 — {{ selectedUser?.displayName }}</h3>
           <button class="btn-close" @click="showRoleDialog = false">×</button>
         </div>
         <div class="modal-body">
-          <div class="role-list">
-            <div v-for="role in globalRoles" :key="role.id" class="role-item">
-              <label class="role-check">
-                <input type="checkbox" :checked="userRoleIds.includes(String(role.id))" @change="toggleRole(role.id)" />
-                <span class="role-name">{{ role.name }}</span>
-                <span class="role-code">{{ role.code }}</span>
-              </label>
-            </div>
+          <!-- 加载中 -->
+          <div v-if="roleLoading" class="role-loading">
+            <div class="loading-spinner"></div>
+            <span>加载角色信息...</span>
           </div>
+
+          <template v-else>
+            <!-- 全局角色区域 -->
+            <div class="role-section">
+              <div class="role-section-header">
+                <h4 class="role-section-title">全局角色</h4>
+              </div>
+              <div class="role-list">
+                <div v-for="role in globalRoles" :key="role.id" class="role-item">
+                  <label class="role-check">
+                    <input type="checkbox" :checked="userRoleIds.includes(String(role.id))" @change="toggleRole(role.id)" />
+                    <span class="role-name">{{ role.name }}</span>
+                    <span class="role-code">{{ role.code }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 项目角色区域 -->
+            <div class="role-section">
+              <div class="role-section-header">
+                <h4 class="role-section-title">项目角色</h4>
+                <span class="role-section-count">{{ userProjectRoles.length }} 个项目</span>
+              </div>
+
+              <div v-if="userProjectRoles.length === 0" class="role-empty">
+                <span class="role-empty-icon">📁</span>
+                <span>未加入任何项目</span>
+              </div>
+
+              <div v-else class="project-role-list">
+                <div v-for="pr in userProjectRoles" :key="`${pr.projectId}-${pr.roleCode}`" class="project-role-item">
+                  <div class="project-role-info">
+                    <span class="project-role-key">{{ pr.projectKey }}</span>
+                    <span class="project-role-name">{{ pr.projectName }}</span>
+                  </div>
+                  <div class="project-role-actions">
+                    <select
+                      class="project-role-select"
+                      :value="pr.roleCode"
+                      @change="changeProjectRole(pr, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</option>
+                    </select>
+                    <button class="btn-icon-sm danger" title="移除成员" @click="removeFromProject(pr)">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 添加到项目 -->
+              <div class="add-project-section">
+                <button v-if="!showAddProject" class="btn-text-sm" @click="showAddProject = true">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
+                    <path d="M8 1a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 018 1z"/>
+                  </svg>
+                  添加到项目
+                </button>
+                <div v-else class="add-project-form">
+                  <select v-model="addProjectId" class="add-project-select">
+                    <option value="">选择项目...</option>
+                    <option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                      {{ p.key }} — {{ p.name }}
+                    </option>
+                  </select>
+                  <select v-model="addProjectRoleId" class="add-project-select">
+                    <option value="">选择角色...</option>
+                    <option v-for="r in projectRoles" :key="r.id" :value="r.id">{{ r.name }}</option>
+                  </select>
+                  <button class="btn-sm-action" :disabled="!addProjectId || !addProjectRoleId" @click="addToProject">确认</button>
+                  <button class="btn-sm-action secondary" @click="cancelAddProject">取消</button>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -166,7 +240,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { userApi } from '@/api'
+import { userApi, projectApi } from '@/api'
+import type { UserProfileProjectRoleInfo } from '@/api/user'
 import request from '@/api/request'
 
 const users = ref<any[]>([])
@@ -191,9 +266,24 @@ const createForm = reactive({
 
 // 角色管理
 const showRoleDialog = ref(false)
+const roleLoading = ref(false)
 const selectedUser = ref<any>(null)
 const userRoleIds = ref<string[]>([])
+const userProjectRoles = ref<UserProfileProjectRoleInfo[]>([])
 const globalRoles = ref<any[]>([])
+const projectRoles = ref<any[]>([])
+const allProjects = ref<any[]>([])
+
+// 添加到项目
+const showAddProject = ref(false)
+const addProjectId = ref('')
+const addProjectRoleId = ref('')
+
+/** 可添加的项目（排除用户已加入的） */
+const availableProjects = computed(() => {
+  const joinedProjectIds = new Set(userProjectRoles.value.map(pr => pr.projectId))
+  return allProjects.value.filter(p => !joinedProjectIds.has(String(p.id)) && p.status === 'active')
+})
 
 let debounceTimer: any = null
 function debounceLoad() {
@@ -291,23 +381,104 @@ async function handleCreateUser() {
 async function openRoleDialog(user: any) {
   selectedUser.value = user
   showRoleDialog.value = true
+  roleLoading.value = true
+  showAddProject.value = false
+  addProjectId.value = ''
+  addProjectRoleId.value = ''
+
   try {
-    const res = await userApi.getById(user.id)
-    userRoleIds.value = res.data?.roleIds || []
-  } catch (e) { userRoleIds.value = [] }
+    const res = await userApi.getProfile(user.id)
+    const profile = res.data
+    userRoleIds.value = profile?.globalRoles?.map((r: any) => r.id) || []
+    userProjectRoles.value = profile?.projectRoles || []
+  } catch (e) {
+    userRoleIds.value = []
+    userProjectRoles.value = []
+  } finally {
+    roleLoading.value = false
+  }
 }
 
 async function toggleRole(roleId: number) {
   const userId = selectedUser.value?.id
   if (!userId) return
   const roleIdStr = String(roleId)
-  if (userRoleIds.value.includes(roleIdStr)) {
-    await userApi.removeRole(userId, roleIdStr)
-    userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
-  } else {
-    await userApi.assignRole(userId, roleIdStr)
-    userRoleIds.value.push(roleIdStr)
+  try {
+    if (userRoleIds.value.includes(roleIdStr)) {
+      await userApi.removeRole(userId, roleIdStr)
+      userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
+    } else {
+      await userApi.assignRole(userId, roleIdStr)
+      userRoleIds.value.push(roleIdStr)
+    }
+  } catch (e: any) {
+    alert(e.response?.data?.message || '操作失败')
   }
+}
+
+async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: string) {
+  const userId = selectedUser.value?.id
+  if (!userId) return
+  const newRole = projectRoles.value.find(r => r.code === newRoleCode)
+  if (!newRole) return
+
+  try {
+    await projectApi.updateMemberRole(pr.projectId, userId, [Number(newRole.id)])
+    // 刷新项目角色数据
+    pr.roleName = newRole.name
+    pr.roleCode = newRole.code
+  } catch (e: any) {
+    alert(e.response?.data?.message || '修改角色失败')
+    // 重新加载以回滚UI
+    await refreshProjectRoles()
+  }
+}
+
+async function removeFromProject(pr: UserProfileProjectRoleInfo) {
+  const userId = selectedUser.value?.id
+  if (!userId) return
+  if (!confirm(`确定将该用户从项目"${pr.projectName}"中移除？`)) return
+
+  try {
+    await projectApi.removeMember(pr.projectId, userId)
+    userProjectRoles.value = userProjectRoles.value.filter(
+      r => !(r.projectId === pr.projectId && r.roleCode === pr.roleCode)
+    )
+  } catch (e: any) {
+    alert(e.response?.data?.message || '移除失败')
+  }
+}
+
+async function addToProject() {
+  const userId = selectedUser.value?.id
+  if (!userId || !addProjectId.value || !addProjectRoleId.value) return
+
+  try {
+    await projectApi.addMember(addProjectId.value, {
+      userId,
+      roleIds: [Number(addProjectRoleId.value)]
+    })
+    // 刷新项目角色
+    await refreshProjectRoles()
+    cancelAddProject()
+  } catch (e: any) {
+    alert(e.response?.data?.message || '添加到项目失败')
+  }
+}
+
+function cancelAddProject() {
+  showAddProject.value = false
+  addProjectId.value = ''
+  addProjectRoleId.value = ''
+}
+
+async function refreshProjectRoles() {
+  const userId = selectedUser.value?.id
+  if (!userId) return
+  try {
+    const res = await userApi.getProfile(userId)
+    userProjectRoles.value = res.data?.projectRoles || []
+  } catch (e) { /* keep current */ }
 }
 
 async function loadGlobalRoles() {
@@ -315,6 +486,22 @@ async function loadGlobalRoles() {
     const res: any = await request.get('/roles', { params: { roleType: 'global', pageSize: 50 } })
     globalRoles.value = res.data?.list || []
   } catch (e) { globalRoles.value = [] }
+}
+
+async function loadProjectRoles() {
+  try {
+    const res: any = await request.get('/roles', { params: { roleType: 'project', pageSize: 50 } })
+    const roles = res.data?.list || []
+    // 排除 non_member 和 anonymous 等不可分配的角色
+    projectRoles.value = roles.filter((r: any) => !['non_member', 'anonymous'].includes(r.code))
+  } catch (e) { projectRoles.value = [] }
+}
+
+async function loadAllProjects() {
+  try {
+    const res = await projectApi.list({ pageSize: 100 })
+    allProjects.value = res.data?.list || []
+  } catch (e) { allProjects.value = [] }
 }
 
 function formatDate(dt: string) {
@@ -325,6 +512,8 @@ function formatDate(dt: string) {
 onMounted(() => {
   loadUsers()
   loadGlobalRoles()
+  loadProjectRoles()
+  loadAllProjects()
 })
 </script>
 
@@ -396,4 +585,49 @@ onMounted(() => {
 .role-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--font-size-sm); color: var(--text-primary); }
 .role-check input { accent-color: var(--accent-blue); }
 .role-code { font-size: var(--font-size-xs); color: var(--text-muted); margin-left: auto; }
+
+/* Role Panel */
+.modal-role-panel { width: 520px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; max-height: 80vh; display: flex; flex-direction: column; }
+.modal-role-panel .modal-body { overflow-y: auto; flex: 1; padding: 0; }
+
+.role-loading { display: flex; align-items: center; gap: 10px; padding: 32px; justify-content: center; color: var(--text-secondary); font-size: var(--font-size-sm); }
+.loading-spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.role-section { padding: 16px 18px; }
+.role-section + .role-section { border-top: 1px solid var(--border-light); }
+.role-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.role-section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.role-section-count { font-size: var(--font-size-xs); color: var(--text-muted); }
+
+.role-empty { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--font-size-sm); padding: 8px 0; }
+.role-empty-icon { font-size: 14px; }
+
+/* Project Role List */
+.project-role-list { display: flex; flex-direction: column; gap: 4px; }
+.project-role-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 150ms; }
+.project-role-item:hover { background: var(--bg-hover); }
+.project-role-info { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.project-role-key { font-size: var(--font-size-xs); font-weight: 500; color: var(--accent-blue); background: rgba(88,166,255,0.08); padding: 2px 6px; border-radius: var(--radius-sm); flex-shrink: 0; }
+.project-role-name { font-size: var(--font-size-sm); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-role-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.project-role-select { height: 26px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0 6px; color: var(--text-primary); font-size: var(--font-size-xs); cursor: pointer; outline: none; }
+.project-role-select:focus { border-color: var(--accent-blue); }
+
+.btn-icon-sm { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: none; border: none; border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; transition: all 150ms; }
+.btn-icon-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+.btn-icon-sm.danger:hover { background: rgba(244,67,54,0.1); color: var(--accent-red); }
+
+/* Add to Project */
+.add-project-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+.btn-text-sm { display: flex; align-items: center; background: none; border: none; color: var(--accent-blue); font-size: var(--font-size-xs); cursor: pointer; padding: 4px 0; transition: opacity 150ms; }
+.btn-text-sm:hover { opacity: 0.8; }
+.add-project-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.add-project-select { height: 28px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0 8px; color: var(--text-primary); font-size: var(--font-size-xs); flex: 1; min-width: 120px; outline: none; }
+.add-project-select:focus { border-color: var(--accent-blue); }
+.btn-sm-action { height: 28px; padding: 0 10px; background: var(--accent-blue); border: none; border-radius: var(--radius-sm); color: #fff; font-size: var(--font-size-xs); cursor: pointer; transition: opacity 150ms; white-space: nowrap; }
+.btn-sm-action:hover { opacity: 0.9; }
+.btn-sm-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-sm-action.secondary { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); }
+.btn-sm-action.secondary:hover { background: var(--bg-hover); }
 </style>
