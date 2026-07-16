@@ -2,10 +2,6 @@ server:
   port: 8090
   servlet:
     context-path: /
-    encoding:
-      charset: UTF-8
-      enabled: true
-      force: true
 
 spring:
   application:
@@ -16,6 +12,10 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 55MB
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
