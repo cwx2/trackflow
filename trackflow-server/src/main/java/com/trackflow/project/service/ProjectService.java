@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
+import com.trackflow.project.vo.ProjectStatisticsVO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -1031,5 +1032,139 @@ public class ProjectService {
 
         // 4. 物理删除项目（FK CASCADE 自动删除所有关联数据）
         projectMapper.deleteById(projectId);
+    }
+
+    /**
+     * 获取项目概览统计数据
+     */
+    public ProjectStatisticsVO getProjectStatistics(Long projectId) {
+        var vo = new ProjectStatisticsVO();
+
+        // 1. 查询各状态工单数量（聚合查询，不加载全量数据）
+        List<IssueStatus> allStatuses = issueStatusMapper.selectList(null);
+        Map<Long, IssueStatus> statusMap = allStatuses.stream()
+                .collect(java.util.stream.Collectors.toMap(IssueStatus::getId, s -> s));
+
+        // 按状态分组统计
+        LambdaQueryWrapper<Issue> baseWrapper = new LambdaQueryWrapper<Issue>()
+                .eq(Issue::getProjectId, projectId)
+                .isNull(Issue::getDeletedAt);
+        Long totalCount = issueMapper.selectCount(baseWrapper);
+        int total = totalCount != null ? totalCount.intValue() : 0;
+
+        // 统计各状态数量（用 selectMaps 做 GROUP BY）
+        Map<Long, Integer> statusCountMap = new java.util.HashMap<>();
+        if (total > 0) {
+            var groupWrapper = new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Issue>();
+            groupWrapper.select("status_id", "count(*) as cnt")
+                        .eq("project_id", projectId)
+                        .isNull("deleted_at")
+                        .groupBy("status_id");
+            List<Map<String, Object>> groupResults = issueMapper.selectMaps(groupWrapper);
+            for (Map<String, Object> row : groupResults) {
+                Long statusId = ((Number) row.get("status_id")).longValue();
+                int cnt = ((Number) row.get("cnt")).intValue();
+                statusCountMap.put(statusId, cnt);
+            }
+        }
+
+        // 计算已关闭/未关闭
+        int closed = 0;
+        for (Map.Entry<Long, Integer> entry : statusCountMap.entrySet()) {
+            IssueStatus status = statusMap.get(entry.getKey());
+            if (status != null && Boolean.TRUE.equals(status.getIsClosed())) {
+                closed += entry.getValue();
+            }
+        }
+        int open = total - closed;
+        double completionRate = total > 0 ? Math.round((closed * 100.0 / total) * 10) / 10.0 : 0;
+
+        vo.setTotalIssues(total);
+        vo.setOpenIssues(open);
+        vo.setClosedIssues(closed);
+        vo.setCompletionRate(completionRate);
+
+        // 4. 本周新建/关闭（用 COUNT 查询）
+        LocalDateTime weekStart = java.time.LocalDate.now().with(java.time.DayOfWeek.MONDAY).atStartOfDay();
+
+        Long createdCount = issueMapper.selectCount(new LambdaQueryWrapper<Issue>()
+                .eq(Issue::getProjectId, projectId)
+                .isNull(Issue::getDeletedAt)
+                .ge(Issue::getCreatedAt, weekStart));
+        vo.setCreatedThisWeek(createdCount != null ? createdCount.intValue() : 0);
+
+        Long closedCount = issueMapper.selectCount(new LambdaQueryWrapper<Issue>()
+                .eq(Issue::getProjectId, projectId)
+                .isNull(Issue::getDeletedAt)
+                .ge(Issue::getResolvedAt, weekStart));
+        vo.setClosedThisWeek(closedCount != null ? closedCount.intValue() : 0);
+
+        // 5. 状态分布
+        List<ProjectStatisticsVO.StatusDistribution> distributions = statusCountMap.entrySet().stream()
+                .map(entry -> {
+                    IssueStatus status = statusMap.get(entry.getKey());
+                    if (status == null) return null;
+                    var dist = new ProjectStatisticsVO.StatusDistribution();
+                    dist.setStatusId(entry.getKey().toString());
+                    dist.setStatusName(status.getName());
+                    dist.setStatusColor(status.getColor());
+                    dist.setCategory(status.getCategory());
+                    dist.setClosed(Boolean.TRUE.equals(status.getIsClosed()));
+                    dist.setCount(entry.getValue());
+                    return dist;
+                })
+                .filter(Objects::nonNull)
+                .sorted((a, b) -> Integer.compare(b.getCount(), a.getCount()))
+                .toList();
+
+        vo.setStatusDistribution(distributions);
+
+        // 6. 当前活跃 Sprint
+        LambdaQueryWrapper<Sprint> sprintWrapper = new LambdaQueryWrapper<>();
+        sprintWrapper.eq(Sprint::getProjectId, projectId)
+                     .eq(Sprint::getStatus, com.trackflow.sprint.entity.SprintStatus.ACTIVE);
+        Sprint activeSprint = sprintMapper.selectOne(sprintWrapper);
+
+        if (activeSprint != null) {
+            var sprintInfo = new ProjectStatisticsVO.ActiveSprintInfo();
+            sprintInfo.setId(activeSprint.getId().toString());
+            sprintInfo.setName(activeSprint.getName());
+            sprintInfo.setStartDate(activeSprint.getStartDate() != null ? activeSprint.getStartDate().toString() : null);
+            sprintInfo.setEndDate(activeSprint.getEndDate() != null ? activeSprint.getEndDate().toString() : null);
+
+            // Sprint 中的工单统计（用 COUNT 代替 selectList）
+            Long sprintTotal = issueMapper.selectCount(new LambdaQueryWrapper<Issue>()
+                    .eq(Issue::getProjectId, projectId)
+                    .eq(Issue::getSprintId, activeSprint.getId())
+                    .isNull(Issue::getDeletedAt));
+            sprintInfo.setTotalIssues(sprintTotal != null ? sprintTotal.intValue() : 0);
+
+            // Sprint 中已关闭工单（获取所有 closed 状态 ID，用 IN 查询）
+            List<Long> closedStatusIds = allStatuses.stream()
+                    .filter(s -> Boolean.TRUE.equals(s.getIsClosed()))
+                    .map(IssueStatus::getId)
+                    .toList();
+            if (!closedStatusIds.isEmpty()) {
+                Long sprintCompleted = issueMapper.selectCount(new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .eq(Issue::getSprintId, activeSprint.getId())
+                        .isNull(Issue::getDeletedAt)
+                        .in(Issue::getStatusId, closedStatusIds));
+                sprintInfo.setCompletedIssues(sprintCompleted != null ? sprintCompleted.intValue() : 0);
+            } else {
+                sprintInfo.setCompletedIssues(0);
+            }
+
+            // 剩余天数
+            if (activeSprint.getEndDate() != null) {
+                long remaining = java.time.temporal.ChronoUnit.DAYS.between(
+                        java.time.LocalDate.now(), activeSprint.getEndDate());
+                sprintInfo.setRemainingDays((int) Math.max(0, remaining));
+            }
+
+            vo.setActiveSprint(sprintInfo);
+        }
+
+        return vo;
     }
 }

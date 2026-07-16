@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO } from './types'
+import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO, ProjectStatisticsVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -101,5 +101,10 @@ export const projectApi = {
   /** 更新项目回收站保留策略 */
   updateTrashSettings(projectId: string, data: { trashRetentionDays: number }) {
     return request.put<any, R<void>>(`/projects/${projectId}/trash-settings`, data)
+  },
+
+  /** 获取项目概览统计数据 */
+  getStatistics(projectId: string) {
+    return request.get<any, R<ProjectStatisticsVO>>(`/projects/${projectId}/statistics`)
   }
 }

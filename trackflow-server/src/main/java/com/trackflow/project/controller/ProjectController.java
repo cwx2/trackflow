@@ -21,6 +21,7 @@ import com.trackflow.project.vo.ProjectActivityVO;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
+import com.trackflow.project.vo.ProjectStatisticsVO;
 import com.trackflow.project.vo.ProjectVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -167,6 +168,14 @@ public class ProjectController {
         PageResult<ProjectActivityVO> pageResult = new PageResult<>(
                 result.getRecords(), result.getTotal(), (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
+    }
+
+    // ========== 项目统计 ==========
+
+    @GetMapping("/{id}/statistics")
+    @PreAuthorize("@perm.check(#id, 'project:view')")
+    public R<ProjectStatisticsVO> getStatistics(@PathVariable Long id) {
+        return R.ok(projectService.getProjectStatistics(id));
     }
 
     // ========== 标签 ==========
