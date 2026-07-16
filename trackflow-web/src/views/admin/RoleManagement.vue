@@ -14,7 +14,7 @@
         <div class="col" style="width:100px">类型</div>
         <div class="col" style="flex:1">描述</div>
         <div class="col" style="width:80px">内置</div>
-        <div class="col" style="width:180px">操作</div>
+        <div class="col" style="width:220px">操作</div>
       </div>
       <div class="table-body">
         <div v-for="role in roles" :key="role.id" class="table-row">
@@ -32,8 +32,9 @@
           <div class="col" style="width:80px">
             <span v-if="role.builtin" class="builtin-tag">是</span>
           </div>
-          <div class="col" style="width:180px">
+          <div class="col" style="width:220px">
             <button class="btn-sm" @click="openPermDialog(role)">权限</button>
+            <button class="btn-sm" @click="openCloneDialog(role)">克隆</button>
             <button class="btn-sm" @click="editRole(role)" :disabled="role.builtin">编辑</button>
             <button class="btn-sm danger" @click="deleteRole(role.id)" :disabled="role.builtin">删除</button>
           </div>
@@ -101,6 +102,31 @@
         </div>
       </div>
     </div>
+
+    <!-- 克隆角色弹窗 -->
+    <div class="modal-overlay" v-if="showCloneDialog" @click.self="showCloneDialog = false">
+      <div class="modal-sm">
+        <div class="modal-header">
+          <h3>克隆角色 — {{ cloneSource?.name }}</h3>
+          <button class="btn-close" @click="showCloneDialog = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="clone-hint">将创建一个新角色，自动继承原角色的全部权限配置。</div>
+          <div class="form-row">
+            <label class="form-label">新角色名称 *</label>
+            <input v-model="cloneForm.name" class="form-input" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">新角色编码 *</label>
+            <input v-model="cloneForm.code" class="form-input" placeholder="英文小写+下划线" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="showCloneDialog = false">取消</button>
+          <button class="btn-submit" @click="submitClone" :disabled="cloneLoading">{{ cloneLoading ? '克隆中...' : '克隆角色' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -140,6 +166,11 @@ const showPermDialog = ref(false)
 const permRole = ref<any>(null)
 const rolePerms = ref<string[]>([])
 const permissionGroups = ref<PermissionGroup[]>([])
+
+const showCloneDialog = ref(false)
+const cloneSource = ref<any>(null)
+const cloneForm = reactive({ name: '', code: '' })
+const cloneLoading = ref(false)
 
 async function loadRoles() {
   try {
@@ -184,6 +215,34 @@ async function deleteRole(id: number) {
     loadRoles()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '删除失败')
+  }
+}
+
+function openCloneDialog(role: any) {
+  cloneSource.value = role
+  cloneForm.name = `${role.name} (副本)`
+  cloneForm.code = `${role.code}_copy`
+  showCloneDialog.value = true
+}
+
+async function submitClone() {
+  if (!cloneForm.name.trim() || !cloneForm.code.trim()) {
+    Message.warning('名称和编码不能为空')
+    return
+  }
+  cloneLoading.value = true
+  try {
+    await request.post(`/roles/${cloneSource.value.id}/clone`, {
+      name: cloneForm.name.trim(),
+      code: cloneForm.code.trim()
+    })
+    showCloneDialog.value = false
+    Message.success('角色克隆成功')
+    loadRoles()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '克隆失败')
+  } finally {
+    cloneLoading.value = false
   }
 }
 
@@ -260,6 +319,9 @@ onMounted(() => {
 
 /* Permission groups */
 .perm-group { margin-bottom: 16px; }
+
+/* Clone dialog */
+.clone-hint { font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5; }
 .perm-category { font-size: var(--font-size-sm); color: var(--accent-blue); text-transform: capitalize; margin-bottom: 8px; font-weight: 500; }
 .perm-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .perm-item { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--text-primary); cursor: pointer; }

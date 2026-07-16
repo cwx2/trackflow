@@ -120,6 +120,53 @@ public class RoleService {
     }
 
     /**
+     * 克隆角色（复制角色定义 + 权限）
+     */
+    @Transactional
+    public SysRole clone(Long sourceId, String newName, String newCode) {
+        SysRole source = getById(sourceId);
+
+        // 检查新编码唯一性
+        Long count = roleMapper.selectCount(
+                new LambdaQueryWrapper<SysRole>().eq(SysRole::getCode, newCode)
+        );
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.ROLE_CODE_DUPLICATE);
+        }
+
+        // 创建新角色（继承类型，标记为非内置）
+        SysRole newRole = new SysRole();
+        newRole.setName(newName);
+        newRole.setCode(newCode);
+        newRole.setDescription(source.getDescription());
+        newRole.setRoleType(source.getRoleType());
+        newRole.setBuiltin(false);
+        newRole.setSortOrder(0);
+        roleMapper.insert(newRole);
+
+        // 复制权限
+        List<RolePermission> sourcePerms = rolePermissionMapper.selectList(
+                new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRoleId, sourceId)
+        );
+        for (RolePermission sp : sourcePerms) {
+            RolePermission rp = new RolePermission();
+            rp.setRoleId(newRole.getId());
+            rp.setPermission(sp.getPermission());
+            rolePermissionMapper.insert(rp);
+        }
+
+        // 审计日志
+        systemAuditService.log("clone_role", "role", newRole.getId(),
+                Map.of("sourceName", source.getName(),
+                        "sourceId", source.getId(),
+                        "newName", newName,
+                        "newCode", newCode,
+                        "permissionCount", sourcePerms.size()));
+
+        return newRole;
+    }
+
+    /**
      * 替换角色的所有权限
      */
     @Transactional

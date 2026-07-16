@@ -5,6 +5,7 @@ import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.PageHelper;
 import com.trackflow.system.converter.RoleConverter;
+import com.trackflow.system.dto.CloneRoleDTO;
 import com.trackflow.system.dto.CreateRoleDTO;
 import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.SysRole;
@@ -34,6 +35,12 @@ public class RoleController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> create(@Valid @RequestBody CreateRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.create(dto)));
+    }
+
+    @PostMapping("/{id}/clone")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<RoleVO> clone(@PathVariable Long id, @Valid @RequestBody CloneRoleDTO dto) {
+        return R.ok(roleConverter.toVO(roleService.clone(id, dto.getName(), dto.getCode())));
     }
 
     @GetMapping
