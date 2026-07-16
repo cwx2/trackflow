@@ -1356,7 +1356,15 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   allowedTargetStatuses.value.clear()
 
   try {
-    await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
+    const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
+
+    // 同步更新本地版本号（后端返回更新后的 version）
+    if (res.data != null) {
+      issue.version = res.data
+    } else {
+      // fallback: 本地递增
+      issue.version = (issue.version || 0) + 1
+    }
 
     const undoEntry: UndoEntry = {
       issueId: issue.id,
@@ -1411,8 +1419,18 @@ async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
     // Update sprint first, then change status
     await issueApi.update(issue.id, { sprintId: targetSprintId })
     // Transition status if different from current
+    let newVersion = issue.version
     if (issue.statusId !== targetStatusId) {
-      await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
+      const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
+      if (res.data != null) {
+        newVersion = res.data
+      } else {
+        // update + transitStatus = version +2 (each updateById increments version)
+        newVersion = (issue.version || 0) + 2
+      }
+    } else {
+      // Only sprint update, version +1
+      newVersion = (issue.version || 0) + 1
     }
 
     // Remove from backlog panel
@@ -1422,7 +1440,8 @@ async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
     const updatedIssue: IssueVO = {
       ...issue,
       statusId: targetStatusId,
-      sprintId: targetSprintId
+      sprintId: targetSprintId,
+      version: newVersion
     }
     issues.value.push(updatedIssue)
 
@@ -1453,7 +1472,13 @@ async function undoTransition(entry: UndoEntry) {
   transitioningIssueIds.value.add(issue.id)
 
   try {
-    await issueApi.undoTransitStatus(issue.id, entry.oldStatusId)
+    const res = await issueApi.undoTransitStatus(issue.id, entry.oldStatusId)
+    // 同步更新版本号
+    if (res.data != null) {
+      issue.version = res.data
+    } else {
+      issue.version = (issue.version || 0) + 1
+    }
     Message.success(`${entry.issueKey} 已撤销回「${localizeStatusName(entry.oldStatusName)}」`)
     undoStack.value = undoStack.value.filter(e => e !== entry)
   } catch (e: any) {
@@ -1493,6 +1518,8 @@ async function onBatchState(statusId: string) {
     selectedIssues.value.forEach(issue => {
       if (!result.failures.find(f => f.issueId === issue.id)) {
         issue.statusId = statusId
+        // 批量操作不返回单个版本号，本地递增
+        issue.version = (issue.version || 0) + 1
       }
     })
   }
@@ -1732,9 +1759,14 @@ async function submitAddCard(statusId: string, swimlaneKey?: string) {
       const defaultStatus = statuses.value.find(s => s.isDefault)
       if (defaultStatus && defaultStatus.id !== statusId) {
         try {
-          await issueApi.transitStatus(newIssue.id, statusId, undefined, newIssue.version)
-          // 更新本地状态
+          const transitRes = await issueApi.transitStatus(newIssue.id, statusId, undefined, newIssue.version)
+          // 更新本地状态和版本号
           newIssue.statusId = statusId
+          if (transitRes.data != null) {
+            newIssue.version = transitRes.data
+          } else {
+            newIssue.version = (newIssue.version || 0) + 1
+          }
         } catch {
           // 转换失败不影响创建，卡片将出现在默认状态列
           Message.warning(`工单已创建，但无法自动转换到「${localizeStatusName(visibleStatuses.value.find(s => s.id === statusId)?.name)}」状态`)

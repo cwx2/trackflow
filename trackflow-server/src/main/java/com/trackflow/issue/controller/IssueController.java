@@ -259,7 +259,7 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
-    public R<Void> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<Integer> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
@@ -279,12 +279,15 @@ public class IssueController {
         issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
                 dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
                 dto.getVersion());
-        return R.ok();
+
+        // 返回更新后的版本号，用于前端乐观锁同步
+        Issue updated = issueService.getById(id);
+        return R.ok(updated.getVersion());
     }
 
     @PostMapping("/{id}/transitions/undo")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Void> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<Integer> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 撤销操作：验证目标状态必须是上一个状态（从活动记录获取），防止任意跳转
         IssueActivity lastStatusChange = issueService.getLastStatusChange(id);
         if (lastStatusChange == null) {
@@ -324,7 +327,10 @@ public class IssueController {
 
         // 目标状态已验证为上一个状态，跳过工作流校验执行撤销
         issueService.transitStatusSkipWorkflow(id, dto.getStatusId(), "撤销状态变更");
-        return R.ok();
+
+        // 返回更新后的版本号
+        Issue updated = issueService.getById(id);
+        return R.ok(updated.getVersion());
     }
 
     @PutMapping("/{id}/assign")

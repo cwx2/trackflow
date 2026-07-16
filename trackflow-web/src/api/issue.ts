@@ -74,14 +74,14 @@ export const issueApi = {
 
   // ========== 状态 ==========
 
-  /** 状态流转 */
+  /** 状态流转（返回更新后的版本号） */
   transitStatus(id: string, statusId: string, comment?: string, version?: number, force?: boolean) {
-    return request.post<any, R<void>>(`/issues/${id}/transitions`, { statusId, comment, version, force })
+    return request.post<any, R<number>>(`/issues/${id}/transitions`, { statusId, comment, version, force })
   },
 
-  /** 撤销状态流转（限 30 秒内、仅本人操作可撤销） */
+  /** 撤销状态流转（限 30 秒内、仅本人操作可撤销，返回更新后的版本号） */
   undoTransitStatus(id: string, statusId: string) {
-    return request.post<any, R<void>>(`/issues/${id}/transitions/undo`, { statusId })
+    return request.post<any, R<number>>(`/issues/${id}/transitions/undo`, { statusId })
   },
 
   /** 获取可用状态转换 */
