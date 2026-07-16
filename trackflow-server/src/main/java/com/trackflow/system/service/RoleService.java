@@ -82,8 +82,14 @@ public class RoleService {
     @Transactional
     public SysRole update(Long id, UpdateRoleDTO dto) {
         SysRole role = getById(id);
-        if (dto.getName() != null) role.setName(dto.getName());
-        if (dto.getDescription() != null) role.setDescription(dto.getDescription());
+        if (dto.getName() != null) {
+            String trimmedName = dto.getName().trim();
+            if (trimmedName.isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "角色名称不能为空");
+            }
+            role.setName(trimmedName);
+        }
+        if (dto.getDescription() != null) role.setDescription(dto.getDescription().trim());
         if (dto.getSortOrder() != null) role.setSortOrder(dto.getSortOrder());
         roleMapper.updateById(role);
         return role;

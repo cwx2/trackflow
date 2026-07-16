@@ -76,8 +76,16 @@ public class OrganizationService {
     @Transactional
     public Organization update(Long id, UpdateOrgDTO dto) {
         Organization org = getById(id);
-        if (dto.getName() != null) org.setName(dto.getName());
-        if (dto.getDescription() != null) org.setDescription(dto.getDescription());
+        if (dto.getName() != null) {
+            String trimmedName = dto.getName().trim();
+            if (trimmedName.isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "组织名称不能为空");
+            }
+            org.setName(trimmedName);
+        }
+        if (dto.getDescription() != null) {
+            org.setDescription(dto.getDescription().trim());
+        }
         organizationMapper.updateById(org);
         return org;
     }
