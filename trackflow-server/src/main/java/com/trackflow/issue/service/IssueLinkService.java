@@ -41,6 +41,12 @@ public class IssueLinkService {
     /** 需要检测循环依赖的有向关联类型 */
     private static final Set<String> DIRECTED_LINK_TYPES = Set.of("blocks", "parent_of");
 
+    /** 所有合法的关联类型 */
+    private static final Set<String> VALID_LINK_TYPES = Set.of(
+            "blocks", "blocked_by", "duplicates", "duplicated_by",
+            "parent_of", "child_of", "relates_to"
+    );
+
     /**
      * 获取 Issue 的所有关联（包括作为 source 和 target 的）
      */
@@ -80,6 +86,12 @@ public class IssueLinkService {
      */
     @Transactional
     public void createIssueLink(Long issueId, CreateIssueLinkDTO dto) {
+        // 校验 linkType 是否为合法枚举值（防御性编程，防绕过 DTO 校验）
+        if (!VALID_LINK_TYPES.contains(dto.getLinkType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "非法的关联类型: " + dto.getLinkType() + "，允许的类型: " + VALID_LINK_TYPES);
+        }
+
         // 归档项目不允许创建关联
         Issue sourceIssue = issueMapper.selectById(issueId);
         if (sourceIssue != null) {
@@ -322,7 +334,9 @@ public class IssueLinkService {
             case "blocked_by" -> "blocks";
             case "duplicates" -> "duplicated_by";
             case "duplicated_by" -> "duplicates";
-            default -> linkType; // relates_to 是对称的
+            case "relates_to" -> "relates_to"; // 对称关联
+            default -> throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "未知的关联类型: " + linkType);
         };
     }
 
