@@ -25,6 +25,7 @@ public class ReportController {
     private final ProjectService projectService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public R<List<ReportDefinitionVO>> list(@RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
@@ -40,6 +41,7 @@ public class ReportController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public R<Void> delete(@PathVariable Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.deleteWithAccessCheck(id, userId);
@@ -47,6 +49,7 @@ public class ReportController {
     }
 
     @GetMapping("/{id}/data")
+    @PreAuthorize("isAuthenticated()")
     public R<Map<String, Object>> execute(@PathVariable Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportService.executeWithAccessCheck(id, userId));

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
@@ -33,9 +34,11 @@ public class ReportService {
     private final SysUserMapper userMapper;
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
+    private final PermissionService permissionService;
 
     /**
-     * 报表列表（带项目成员过滤）
+     * 报表列表（带项目成员过滤 + 私有报表隔离）
+     * 返回条件：自己创建的 OR shared=true，且属于用户可访问的项目范围
      */
     public List<ReportDefinition> list(Long projectId, Long userId) {
         LambdaQueryWrapper<ReportDefinition> wrapper = new LambdaQueryWrapper<>();
@@ -54,8 +57,13 @@ public class ReportService {
                             .or().isNull(ReportDefinition::getProjectId));
                 }
             }
-            // 系统管理员不加限制
+            // 系统管理员不加项目限制
         }
+
+        // 私有报表隔离：只能看到自己创建的私有报表，或共享的报表
+        wrapper.and(w -> w.eq(ReportDefinition::getShared, true)
+                .or().eq(ReportDefinition::getCreatedBy, userId));
+
         wrapper.orderByAsc(ReportDefinition::getName);
         return reportMapper.selectList(wrapper);
     }
@@ -79,26 +87,50 @@ public class ReportService {
 
     /**
      * 删除报表（带权限校验）
+     * 只有报表创建者或拥有 project:edit 权限的用户可以删除
      */
     @Transactional
     public void deleteWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
-        if (report.getProjectId() != null) {
-            projectService.assertProjectMember(userId, report.getProjectId());
+
+        // 校验所有权：创建者可删除自己的报表
+        if (!userId.equals(report.getCreatedBy())) {
+            // 非创建者需要 project:edit 权限（项目管理员可删除任意报表）
+            if (report.getProjectId() != null) {
+                if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
+                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以删除此报表");
+                }
+            } else {
+                // 全局报表（无 projectId），只有系统管理员可删除他人的
+                if (!permissionService.isSystemAdmin(userId)) {
+                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或系统管理员可以删除此报表");
+                }
+            }
         }
+
         reportMapper.deleteById(id);
     }
 
     /**
      * 执行报表（带权限校验）
+     * 共享报表：项目成员可执行
+     * 私有报表：只有创建者可执行
      */
     public Map<String, Object> executeWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+
+        // 项目成员检查
         if (report.getProjectId() != null) {
             projectService.assertProjectMember(userId, report.getProjectId());
         }
+
+        // 私有报表访问控制：非共享报表只有创建者可执行
+        if (!Boolean.TRUE.equals(report.getShared()) && !userId.equals(report.getCreatedBy())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
+        }
+
         return executeInternal(report);
     }
 
