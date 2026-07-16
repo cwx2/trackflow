@@ -12,6 +12,10 @@ spring:
     name: trackflow-server
   profiles:
     active: dev
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
 
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
@@ -41,3 +45,30 @@ logging:
   level:
     com.trackflow: INFO
     org.springframework.security: INFO
+
+# 附件上传限制
+trackflow:
+  attachment:
+    max-file-size: 52428800  # 50MB
+    max-attachments-per-issue: 50
+    blocked-extensions:
+      - exe
+      - bat
+      - cmd
+      - sh
+      - ps1
+      - vbs
+      - js
+      - msi
+      - dll
+      - com
+      - scr
+      - pif
+      - hta
+      - cpl
+      - inf
+      - reg
+      - ws
+      - wsf
+      - wsc
+      - lnk

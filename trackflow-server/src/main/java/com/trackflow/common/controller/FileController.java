@@ -37,8 +37,8 @@ public class FileController {
             String contentType = guessContentType(objectName);
             response.setContentType(contentType);
 
-            // 如果是图片/PDF，直接在浏览器预览；否则下载
-            if (contentType.startsWith("image/") || contentType.equals("application/pdf")) {
+            // 仅图片和 PDF 允许内联预览；其余全部强制下载（防止 XSS）
+            if (isInlinePreviewAllowed(contentType)) {
                 response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline");
             } else {
                 String fileName = objectName.substring(objectName.lastIndexOf('/') + 1);
@@ -53,6 +53,20 @@ public class FileController {
             log.error("File download failed: {}", objectName, e);
             response.setStatus(404);
         }
+    }
+
+    /**
+     * 判断是否允许内联预览（仅图片和 PDF）
+     * HTML/JS/SVG 等可执行内容不允许内联（防 XSS）
+     */
+    private boolean isInlinePreviewAllowed(String contentType) {
+        if (contentType == null) return false;
+        // 允许标准图片格式内联（SVG 除外，SVG 可包含脚本）
+        if (contentType.startsWith("image/") && !contentType.contains("svg")) {
+            return true;
+        }
+        // 允许 PDF 内联
+        return "application/pdf".equals(contentType);
     }
 
     private String guessContentType(String filename) {

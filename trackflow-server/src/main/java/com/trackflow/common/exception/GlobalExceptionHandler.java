@@ -14,6 +14,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
@@ -136,6 +137,17 @@ public class GlobalExceptionHandler {
                 request.getMethod(), request.getRequestURI(), ex.getContentType());
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .body(R.fail(41500, "不支持的内容类型: " + ex.getContentType()));
+    }
+
+    /**
+     * 文件上传超出大小限制（Spring multipart 配置的 max-file-size）
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<R<Void>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+                                                                         HttpServletRequest request) {
+        log.warn("File upload size exceeded on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(R.fail(ErrorCode.BAD_REQUEST, "文件大小超出服务器限制（最大 50MB）"));
     }
 
     /**

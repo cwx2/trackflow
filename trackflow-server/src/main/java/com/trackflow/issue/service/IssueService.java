@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.config.AttachmentConfig;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
@@ -60,6 +61,7 @@ public class IssueService {
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldService customFieldService;
     private final SysUserMapper sysUserMapper;
+    private final AttachmentConfig attachmentConfig;
 
     /**
      * 创建 Issue
@@ -1243,16 +1245,23 @@ public class IssueService {
         // 归档项目不允许上传附件
         projectService.assertProjectActive(issue.getProjectId());
 
+        // ===== 安全校验 =====
+        validateAttachmentFile(file);
+        validateAttachmentCount(issueId);
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 清理文件名（去除路径遍历字符和特殊字符）
+        String safeFileName = sanitizeFileName(file.getOriginalFilename());
 
         // 上传到 MinIO
         String folder = "issues/" + issueId + "/attachments";
-        String filePath = minioService.upload(folder, file.getOriginalFilename(), file);
+        String filePath = minioService.upload(folder, safeFileName, file);
 
         // 保存 DB 记录
         IssueAttachment attachment = new IssueAttachment();
         attachment.setIssueId(issueId);
-        attachment.setFileName(file.getOriginalFilename());
+        attachment.setFileName(safeFileName);
         attachment.setFilePath(filePath);
         attachment.setFileSize(file.getSize());
         attachment.setContentType(file.getContentType());
@@ -1261,9 +1270,76 @@ public class IssueService {
         attachmentMapper.insert(attachment);
 
         // 记录活动
-        recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, file.getOriginalFilename());
+        recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, safeFileName);
 
         return attachment;
+    }
+
+    /**
+     * 校验附件文件大小和类型
+     */
+    private void validateAttachmentFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "上传文件不能为空");
+        }
+
+        // 文件大小校验
+        if (file.getSize() > attachmentConfig.getMaxFileSize()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "文件大小超出限制（最大 " + attachmentConfig.getMaxFileSizeReadable() + "）");
+        }
+
+        // 文件扩展名校验（黑名单模式）
+        String extension = getFileExtension(file.getOriginalFilename());
+        if (attachmentConfig.getBlockedExtensions().contains(extension.toLowerCase())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不允许上传此类型文件: ." + extension);
+        }
+    }
+
+    /**
+     * 校验单工单附件数量限制
+     */
+    private void validateAttachmentCount(Long issueId) {
+        long count = attachmentMapper.selectCount(
+                new LambdaQueryWrapper<IssueAttachment>().eq(IssueAttachment::getIssueId, issueId));
+        if (count >= attachmentConfig.getMaxAttachmentsPerIssue()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "该工单附件数量已达上限（最多 " + attachmentConfig.getMaxAttachmentsPerIssue() + " 个）");
+        }
+    }
+
+    /**
+     * 清理文件名：去除路径分隔符、路径遍历字符和特殊字符
+     */
+    private String sanitizeFileName(String originalName) {
+        if (originalName == null || originalName.isBlank()) {
+            return "unnamed";
+        }
+        // 去除路径分隔符（取最后一段作为文件名）
+        String name = originalName;
+        int lastSlash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (lastSlash >= 0) {
+            name = name.substring(lastSlash + 1);
+        }
+        // 去除路径遍历和特殊字符
+        name = name.replaceAll("\\.\\.", "_")
+                   .replaceAll("[\\\\/:*?\"<>|]", "_");
+        // 确保不为空
+        if (name.isBlank()) {
+            return "unnamed";
+        }
+        return name;
+    }
+
+    /**
+     * 提取文件扩展名（不含点，小写）
+     */
+    private String getFileExtension(String filename) {
+        if (filename == null || !filename.contains(".")) {
+            return "";
+        }
+        return filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
     }
 
     /**

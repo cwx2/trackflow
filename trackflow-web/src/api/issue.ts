@@ -4,6 +4,7 @@ import type {
   IssueActivityVO, IssueStatusVO, IssueAttachmentVO,
   IssueTagVO, IssueLinkVO, IssueTrashVO
 } from './types'
+import { validateFile } from '@/utils/attachment'
 
 /**
  * Issue 模块 API
@@ -136,8 +137,14 @@ export const issueApi = {
     return request.get<any, R<IssueAttachmentVO[]>>(`/issues/${issueId}/attachments`)
   },
 
-  /** 上传附件 */
+  /** 上传附件（含客户端校验） */
   uploadAttachment(issueId: string, file: File, onProgress?: (percent: number) => void) {
+    // 客户端预校验（快速反馈，减少无效请求）
+    const validation = validateFile(file)
+    if (!validation.valid) {
+      return Promise.reject({ response: { data: { message: validation.message } } })
+    }
+
     const formData = new FormData()
     formData.append('file', file)
     return request.post<any, R<IssueAttachmentVO>>(`/issues/${issueId}/attachments`, formData, {
