@@ -32,6 +32,14 @@ public class Issue implements Serializable {
     private LocalDate dueDate;
     private BigDecimal estimatedHours;
     private BigDecimal spentHours;
+    /** 派生字段：自身 + 所有后代 spent_hours 总和 */
+    private BigDecimal derivedSpentHours;
+    /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
+    private BigDecimal derivedEstimatedHours;
+    /** 直接子工单总数（不含软删除） */
+    private Integer childCount;
+    /** 已关闭的直接子工单数 */
+    private Integer childClosedCount;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String customFields;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)

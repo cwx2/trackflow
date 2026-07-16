@@ -31,6 +31,7 @@ public class TimeEntryService {
     private final TimeEntryMapper timeEntryMapper;
     private final IssueActivityMapper activityMapper;
     private final IssueMapper issueMapper;
+    private final com.trackflow.issue.service.AncestorRefreshService ancestorRefreshService;
 
     /**
      * 创建工时记录
@@ -60,6 +61,9 @@ public class TimeEntryService {
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(dto.getIssueId());
+
+        // 向上刷新父工单的派生属性
+        ancestorRefreshService.refreshAncestors(dto.getIssueId());
 
         return entry;
     }
@@ -94,7 +98,12 @@ public class TimeEntryService {
         // 如果工时记录转移到了其他 Issue，旧 Issue 也需要刷新
         if (dto.getIssueId() != null && !oldIssueId.equals(dto.getIssueId())) {
             refreshIssueSpentHours(oldIssueId);
+            // 旧 Issue 的祖先也需要刷新
+            ancestorRefreshService.refreshAncestors(oldIssueId);
         }
+
+        // 向上刷新父工单的派生属性
+        ancestorRefreshService.refreshAncestors(entry.getIssueId());
 
         return entry;
     }
@@ -122,6 +131,9 @@ public class TimeEntryService {
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(issueId);
+
+        // 向上刷新父工单的派生属性
+        ancestorRefreshService.refreshAncestors(issueId);
     }
 
     /**

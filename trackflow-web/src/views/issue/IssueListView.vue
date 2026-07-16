@@ -459,6 +459,15 @@
         <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterId || '\u2014' }}</span></template>
         <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
         <template #dueDate="{ record }"><span class="time-ago">{{ record.dueDate || '\u2014' }}</span></template>
+        <template #childProgress="{ record }">
+          <span v-if="record.childCount > 0" class="child-progress-cell" :title="`${record.childClosedCount}/${record.childCount} 子任务已完成`">
+            <span class="child-progress-bar">
+              <span class="child-progress-fill" :style="{ width: Math.round(record.childClosedCount / record.childCount * 100) + '%' }"></span>
+            </span>
+            <span class="child-progress-text">{{ record.childClosedCount }}/{{ record.childCount }}</span>
+          </span>
+          <span v-else class="time-ago">&mdash;</span>
+        </template>
 
         <!-- Custom field columns (cf_ prefix) -->
         <template #customFieldCell="{ record, column }">
@@ -1647,6 +1656,12 @@ function applyDashboardFilter() {
 .priority-low { background: var(--tf-text-tertiary); }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
 .cf-cell { font-size: 12px; color: var(--tf-text-secondary); }
+
+/* Child progress cell */
+.child-progress-cell { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.child-progress-bar { width: 40px; height: 4px; border-radius: 2px; background: var(--tf-border); overflow: hidden; }
+.child-progress-fill { display: block; height: 100%; border-radius: 2px; background: var(--tf-accent); transition: width 0.2s ease; }
+.child-progress-text { color: var(--tf-text-secondary); font-variant-numeric: tabular-nums; }
 
 /* Inline dropdowns */
 .inline-dropdown { background: var(--tf-bg-elevated); border: 1px solid var(--tf-border); border-radius: 6px; padding: 4px; min-width: 150px; max-height: 240px; overflow-y: auto; }

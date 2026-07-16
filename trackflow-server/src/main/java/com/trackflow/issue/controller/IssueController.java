@@ -77,6 +77,13 @@ public class IssueController {
             }
         }
 
+        // 填充子任务进度字段（childCount / childClosedCount）
+        for (int i = 0; i < result.getRecords().size(); i++) {
+            Issue issue = result.getRecords().get(i);
+            voList.get(i).setChildCount(issue.getChildCount());
+            voList.get(i).setChildClosedCount(issue.getChildClosedCount());
+        }
+
         // 批量填充自定义字段展示值
         List<Long> issueIds = result.getRecords().stream()
                 .map(Issue::getId)

@@ -239,6 +239,7 @@ public class CustomFieldService {
         columns.add(buildStandardColumn("createdAt", "创建时间", true, true));
         columns.add(buildStandardColumn("updatedAt", "更新时间", true, true));
         columns.add(buildStandardColumn("dueDate", "截止日期", true, true));
+        columns.add(buildStandardColumn("childProgress", "子任务进度", false, true));
 
         // 所有自定义字段
         List<CustomFieldDefinition> allFields = definitionMapper.selectList(
@@ -272,6 +273,7 @@ public class CustomFieldService {
         columns.add(buildStandardColumn("createdAt", "创建时间", true, true));
         columns.add(buildStandardColumn("updatedAt", "更新时间", true, true));
         columns.add(buildStandardColumn("dueDate", "截止日期", true, true));
+        columns.add(buildStandardColumn("childProgress", "子任务进度", false, true));
 
         List<CustomFieldDefinition> fields = listByProject(projectId, null);
         for (CustomFieldDefinition field : fields) {

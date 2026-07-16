@@ -23,6 +23,11 @@ public class IssueVO {
     private LocalDateTime updatedAt;
     private Integer version;
 
+    /** 直接子工单总数 */
+    private Integer childCount;
+    /** 已关闭的直接子工单数 */
+    private Integer childClosedCount;
+
     /** 自定义字段值，key 格式为 "cf_{fieldId}"，value 为展示用文本 */
     private Map<String, String> customFieldValues;
 }

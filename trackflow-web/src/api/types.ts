@@ -170,6 +170,10 @@ export interface IssueVO {
   createdAt: string
   updatedAt: string
   version: number
+  /** 直接子工单总数 */
+  childCount?: number
+  /** 已关闭的直接子工单数 */
+  childClosedCount?: number
   /** 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本 */
   customFieldValues?: Record<string, string>
 }
@@ -185,6 +189,10 @@ export interface IssueDetailVO extends IssueVO {
   status?: IssueStatusVO
   estimatedHours?: number
   spentHours?: number
+  /** 派生字段：自身 + 所有后代 spent_hours 总和 */
+  derivedSpentHours?: number
+  /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
+  derivedEstimatedHours?: number
   customFields?: string
   /** 结构化自定义字段值（带字段名称和类型，用于前端渲染） */
   customFieldDetails?: CustomFieldValueVO[]

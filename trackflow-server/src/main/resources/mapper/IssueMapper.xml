@@ -18,6 +18,7 @@
             i.id, i.project_id, i.issue_key, i.title, i.description,
             i.issue_type, i.status_id, i.priority, i.assignee_id, i.reporter_id,
             i.sprint_id, i.parent_id, i.due_date, i.estimated_hours, i.spent_hours,
+            i.derived_spent_hours, i.derived_estimated_hours,
             i.custom_fields, i.resolved_at, i.created_at, i.updated_at, i.version,
             p.name AS project_name,
             p.status AS project_status,

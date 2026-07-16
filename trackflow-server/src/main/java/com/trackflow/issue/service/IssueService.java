@@ -67,6 +67,7 @@ public class IssueService {
     private final CustomFieldService customFieldService;
     private final SysUserMapper sysUserMapper;
     private final AttachmentConfig attachmentConfig;
+    private final AncestorRefreshService ancestorRefreshService;
 
     /**
      * 创建 Issue
@@ -141,6 +142,11 @@ public class IssueService {
 
         // 通知被分配人（若创建时指定了 assignee）
         notificationHelper.notifyCreated(issue, currentUserId);
+
+        // 如果指定了父工单，刷新祖先链的派生属性
+        if (issue.getParentId() != null && issue.getParentId() != 0) {
+            ancestorRefreshService.refreshAncestorChain(issue.getParentId());
+        }
 
         return issue;
     }
@@ -528,6 +534,7 @@ public class IssueService {
             issue.setSprintId(dto.getSprintId());
         }
         if (dto.getParentId() != null) {
+            Long oldParentId = issue.getParentId();
             String oldParentKey = null;
             if (issue.getParentId() != null) {
                 var oldParent = issueMapper.selectById(issue.getParentId());
@@ -542,6 +549,15 @@ public class IssueService {
             }
             recordActivity(id, currentUserId, "updated", "parent", oldParentKey, newParentKey);
             issue.setParentId(dto.getParentId());
+
+            // parentId 变更：刷新旧父和新父的祖先链
+            Long newParentId = dto.getParentId() == 0 ? null : dto.getParentId();
+            if (oldParentId != null && oldParentId != 0) {
+                ancestorRefreshService.refreshAncestorChain(oldParentId);
+            }
+            if (newParentId != null) {
+                ancestorRefreshService.refreshAncestorChain(newParentId);
+            }
         }
         if (dto.getDueDate() != null) {
             recordActivity(id, currentUserId, "updated", "due_date",
@@ -554,6 +570,11 @@ public class IssueService {
                     issue.getEstimatedHours() != null ? issue.getEstimatedHours() + "h" : null,
                     dto.getEstimatedHours() + "h");
             issue.setEstimatedHours(dto.getEstimatedHours());
+
+            // 预估工时变更：刷新祖先链的派生属性
+            if (issue.getParentId() != null && issue.getParentId() != 0) {
+                ancestorRefreshService.refreshAncestorChain(issue.getParentId());
+            }
         }
         if (dto.getCustomFields() != null) {
             try {
@@ -586,6 +607,8 @@ public class IssueService {
         // 归档项目不允许删除工单
         projectService.assertProjectActive(issue.getProjectId());
 
+        Long parentId = issue.getParentId();
+
         // 断开子工单的父引用（将子工单 parent_id 置为 NULL），防止产生孤儿引用
         issueMapper.clearParentId(id);
 
@@ -593,6 +616,11 @@ public class IssueService {
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
         // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
         issueMapper.deleteById(id);
+
+        // 删除后刷新父工单的派生属性
+        if (parentId != null && parentId != 0) {
+            ancestorRefreshService.refreshAncestorChain(parentId);
+        }
     }
 
     // ========== 父子关系逻辑 ==========
@@ -1026,6 +1054,11 @@ public class IssueService {
         // 调用 TransitionActionEngine 执行自动化动作（auto-assign 等）
         transitionActionEngine.execute(issue, oldStatusId, newStatusId,
                 currentUserId, assigneeId, assigneeExplicitlySet);
+
+        // 状态变更后：刷新祖先链的派生属性（影响 childClosedCount）
+        if (issue.getParentId() != null && issue.getParentId() != 0) {
+            ancestorRefreshService.refreshAncestorChain(issue.getParentId());
+        }
     }
 
     /**
@@ -1233,6 +1266,12 @@ public class IssueService {
         }
         if (row.get("spent_hours") != null) {
             vo.setSpentHours((java.math.BigDecimal) row.get("spent_hours"));
+        }
+        if (row.get("derived_estimated_hours") != null) {
+            vo.setDerivedEstimatedHours((java.math.BigDecimal) row.get("derived_estimated_hours"));
+        }
+        if (row.get("derived_spent_hours") != null) {
+            vo.setDerivedSpentHours((java.math.BigDecimal) row.get("derived_spent_hours"));
         }
 
         if (row.get("resolved_at") != null) {
@@ -1522,6 +1561,15 @@ public class IssueService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "恢复失败，工单不在回收站中");
         }
         recordActivity(id, SecurityUtils.getCurrentUserId(), "restored", null, null, null);
+
+        // 恢复后刷新父工单的派生属性
+        Object parentIdObj = row.get("parent_id");
+        if (parentIdObj != null) {
+            Long parentId = ((Number) parentIdObj).longValue();
+            if (parentId != 0) {
+                ancestorRefreshService.refreshAncestorChain(parentId);
+            }
+        }
     }
 
     /**

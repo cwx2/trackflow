@@ -8,6 +8,9 @@ import org.mapstruct.Mapping;
 
 import java.util.List;
 
+/**
+ * Issue 实体/VO 转换器 (MapStruct)
+ */
 @Mapper(componentModel = "spring")
 public interface IssueConverter extends BaseConverter {
 
