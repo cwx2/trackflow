@@ -1,22 +1,24 @@
 package com.trackflow.workflow.converter;
 
 import com.trackflow.common.converter.BaseConverter;
+import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.entity.WorkflowTransition;
+import com.trackflow.workflow.vo.WorkflowActivityVO;
 import com.trackflow.workflow.vo.WorkflowTransitionVO;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+/**
+ * 工作流模块转换器接口
+ */
 public interface WorkflowConverter extends BaseConverter {
 
-    @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
-    @Mapping(target = "projectId", expression = "java(longToString(entity.getProjectId()))")
-    @Mapping(target = "roleId", expression = "java(longToString(entity.getRoleId()))")
-    @Mapping(target = "oldStatusId", expression = "java(longToString(entity.getOldStatusId()))")
-    @Mapping(target = "newStatusId", expression = "java(longToString(entity.getNewStatusId()))")
     WorkflowTransitionVO toVO(WorkflowTransition entity);
 
     List<WorkflowTransitionVO> toVOList(List<WorkflowTransition> entities);
+
+    /**
+     * 批量转换工作流变更活动记录为 VO（含关联数据解析）
+     */
+    List<WorkflowActivityVO> toActivityVOList(List<WorkflowActivity> activities);
 }

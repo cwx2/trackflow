@@ -1,6 +1,7 @@
 package com.trackflow.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -15,6 +16,7 @@ import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.vo.RoleVO;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
+import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
@@ -23,10 +25,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -44,6 +48,7 @@ public class WorkflowService {
     private final SysRoleMapper roleMapper;
     private final RoleConverter roleConverter;
     private final PermissionService permissionService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 不再使用 ownership 限制。
@@ -164,16 +169,16 @@ public class WorkflowService {
     @Transactional
     public void updateTransitionMatrix(Long projectId, String issueType, Long roleId,
                                        List<WorkflowTransition> transitions) {
-        // 统计旧规则数量（用于审计日志）
-        LambdaQueryWrapper<WorkflowTransition> countWrapper = new LambdaQueryWrapper<>();
+        // 查询旧规则（用于 diff 计算）
+        LambdaQueryWrapper<WorkflowTransition> oldWrapper = new LambdaQueryWrapper<>();
         if (projectId != null) {
-            countWrapper.eq(WorkflowTransition::getProjectId, projectId);
+            oldWrapper.eq(WorkflowTransition::getProjectId, projectId);
         } else {
-            countWrapper.isNull(WorkflowTransition::getProjectId);
+            oldWrapper.isNull(WorkflowTransition::getProjectId);
         }
-        countWrapper.eq(WorkflowTransition::getIssueType, issueType != null ? issueType : "*");
-        countWrapper.eq(WorkflowTransition::getRoleId, roleId);
-        long oldCount = transitionMapper.selectCount(countWrapper);
+        oldWrapper.eq(WorkflowTransition::getIssueType, issueType != null ? issueType : "*");
+        oldWrapper.eq(WorkflowTransition::getRoleId, roleId);
+        List<WorkflowTransition> oldTransitions = transitionMapper.selectList(oldWrapper);
 
         // 删除旧规则
         LambdaQueryWrapper<WorkflowTransition> deleteWrapper = new LambdaQueryWrapper<>();
@@ -194,11 +199,8 @@ public class WorkflowService {
             transitionMapper.insert(t);
         }
 
-        // 记录审计日志
-        recordActivity(projectId, issueType, roleId,
-                "workflow_updated",
-                String.valueOf(oldCount) + " transitions",
-                String.valueOf(transitions.size()) + " transitions");
+        // 计算 diff 并记录审计日志
+        recordDetailedActivity(projectId, issueType, roleId, oldTransitions, transitions);
     }
 
     /**
@@ -306,25 +308,157 @@ public class WorkflowService {
     }
 
     /**
-     * 记录工作流变更审计日志
+     * 分页查询工作流变更历史
      */
-    private void recordActivity(Long projectId, String issueType, Long roleId,
-                                String action, String oldValue, String newValue) {
+    public Page<WorkflowActivity> listActivities(WorkflowActivityQuery query) {
+        LambdaQueryWrapper<WorkflowActivity> wrapper = new LambdaQueryWrapper<>();
+
+        if (query.getProjectId() != null) {
+            if (query.getProjectId() == 0L) {
+                wrapper.isNull(WorkflowActivity::getProjectId);
+            } else {
+                wrapper.eq(WorkflowActivity::getProjectId, query.getProjectId());
+            }
+        }
+
+        if (query.getUserId() != null) {
+            wrapper.eq(WorkflowActivity::getUserId, query.getUserId());
+        }
+
+        if (query.getStartDate() != null) {
+            wrapper.ge(WorkflowActivity::getCreatedAt, query.getStartDate().atStartOfDay());
+        }
+
+        if (query.getEndDate() != null) {
+            wrapper.lt(WorkflowActivity::getCreatedAt, query.getEndDate().plusDays(1).atStartOfDay());
+        }
+
+        wrapper.orderByDesc(WorkflowActivity::getCreatedAt);
+
+        return activityMapper.selectPage(query.toPage(), wrapper);
+    }
+
+    /**
+     * 记录详细的工作流变更审计日志（含 diff 明细）
+     */
+    private void recordDetailedActivity(Long projectId, String issueType, Long roleId,
+                                        List<WorkflowTransition> oldTransitions,
+                                        List<WorkflowTransition> newTransitions) {
         try {
             Long userId = SecurityUtils.getCurrentUserId();
+
+            // 计算 diff：旧的中不在新的中 = removed；新的中不在旧的中 = added
+            Set<String> oldKeys = oldTransitions.stream()
+                    .map(t -> t.getOldStatusId() + "->" + t.getNewStatusId())
+                    .collect(Collectors.toSet());
+            Set<String> newKeys = newTransitions.stream()
+                    .map(t -> t.getOldStatusId() + "->" + t.getNewStatusId())
+                    .collect(Collectors.toSet());
+
+            Set<String> addedKeys = new HashSet<>(newKeys);
+            addedKeys.removeAll(oldKeys);
+            Set<String> removedKeys = new HashSet<>(oldKeys);
+            removedKeys.removeAll(newKeys);
+
+            // 如果没有实际变更，不记录
+            if (addedKeys.isEmpty() && removedKeys.isEmpty()) {
+                return;
+            }
+
+            // 获取状态名称映射
+            Map<Long, String> statusNameMap = getStatusNameMap();
+
+            // 构建人类可读的变更明细
+            List<Map<String, String>> addedList = addedKeys.stream()
+                    .map(key -> buildTransitionItem(key, statusNameMap))
+                    .toList();
+            List<Map<String, String>> removedList = removedKeys.stream()
+                    .map(key -> buildTransitionItem(key, statusNameMap))
+                    .toList();
+
+            // 构建摘要
+            String summary = buildSummary(addedList, removedList, statusNameMap, roleId);
+
+            // 构建 JSON details
+            Map<String, Object> detailsMap = new java.util.LinkedHashMap<>();
+            if (!addedList.isEmpty()) {
+                detailsMap.put("added", addedList);
+            }
+            if (!removedList.isEmpty()) {
+                detailsMap.put("removed", removedList);
+            }
+            String detailsJson = objectMapper.writeValueAsString(detailsMap);
+
             WorkflowActivity activity = new WorkflowActivity();
             activity.setProjectId(projectId);
             activity.setIssueType(issueType != null ? issueType : "*");
             activity.setRoleId(roleId);
             activity.setUserId(userId);
-            activity.setAction(action);
-            activity.setOldValue(oldValue);
-            activity.setNewValue(newValue);
+            activity.setAction("workflow_updated");
+            activity.setOldValue(oldTransitions.size() + " transitions");
+            activity.setNewValue(newTransitions.size() + " transitions");
+            activity.setSummary(summary);
+            activity.setDetails(detailsJson);
             activity.setCreatedAt(LocalDateTime.now());
             activityMapper.insert(activity);
         } catch (Exception e) {
             // 审计日志写入失败不应中断主流程
             log.warn("Failed to record workflow activity: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 获取所有状态的 ID→名称映射
+     */
+    private Map<Long, String> getStatusNameMap() {
+        List<IssueStatus> allStatuses = statusMapper.selectList(new LambdaQueryWrapper<>());
+        return allStatuses.stream()
+                .collect(Collectors.toMap(IssueStatus::getId, IssueStatus::getName));
+    }
+
+    /**
+     * 从 "fromId->toId" 格式的 key 构建转换明细项
+     */
+    private Map<String, String> buildTransitionItem(String key, Map<Long, String> statusNameMap) {
+        String[] parts = key.split("->");
+        Long fromId = Long.parseLong(parts[0]);
+        Long toId = Long.parseLong(parts[1]);
+        Map<String, String> item = new java.util.LinkedHashMap<>();
+        item.put("fromStatusId", parts[0]);
+        item.put("toStatusId", parts[1]);
+        item.put("fromStatus", statusNameMap.getOrDefault(fromId, "Unknown"));
+        item.put("toStatus", statusNameMap.getOrDefault(toId, "Unknown"));
+        return item;
+    }
+
+    /**
+     * 构建人类可读的变更摘要
+     */
+    private String buildSummary(List<Map<String, String>> addedList,
+                                List<Map<String, String>> removedList,
+                                Map<Long, String> statusNameMap, Long roleId) {
+        StringBuilder sb = new StringBuilder();
+        if (!addedList.isEmpty()) {
+            sb.append("新增 ").append(addedList.size()).append(" 条转换");
+            if (addedList.size() <= 2) {
+                sb.append("（");
+                sb.append(addedList.stream()
+                        .map(item -> item.get("fromStatus") + "→" + item.get("toStatus"))
+                        .collect(Collectors.joining("，")));
+                sb.append("）");
+            }
+        }
+        if (!removedList.isEmpty()) {
+            if (!sb.isEmpty()) sb.append("；");
+            sb.append("删除 ").append(removedList.size()).append(" 条转换");
+            if (removedList.size() <= 2) {
+                sb.append("（");
+                sb.append(removedList.stream()
+                        .map(item -> item.get("fromStatus") + "→" + item.get("toStatus"))
+                        .collect(Collectors.joining("，")));
+                sb.append("）");
+            }
+        }
+        return sb.toString();
     }
 }

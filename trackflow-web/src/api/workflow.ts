@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, RoleVO, WorkflowTransitionVO, UpdateWorkflowDTO } from './types'
+import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowActivityVO, UpdateWorkflowDTO } from './types'
 
 /**
  * 工作流模块 API
@@ -28,5 +28,16 @@ export const workflowApi = {
   /** 获取当前用户在指定项目中可发起状态转换的源状态 ID 列表 */
   getTransitionableStatuses(projectId: string) {
     return request.get<any, R<string[]>>(`/projects/${projectId}/workflows/transitionable-statuses`)
+  },
+
+  /** 获取工作流变更历史（审计日志） */
+  listActivities(projectId: string, params?: {
+    userId?: string
+    startDate?: string
+    endDate?: string
+    page?: number
+    pageSize?: number
+  }) {
+    return request.get<any, R<PageResult<WorkflowActivityVO>>>(`/projects/${projectId}/workflow-activities`, { params })
   }
 }

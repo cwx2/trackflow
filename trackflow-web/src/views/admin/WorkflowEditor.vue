@@ -47,6 +47,10 @@
         <a-button type="primary" :loading="saving" @click="saveMatrix">
           保存工作流
         </a-button>
+        <a-button @click="showHistory = true">
+          <template #icon><icon-history /></template>
+          变更历史
+        </a-button>
       </div>
     </div>
 
@@ -124,16 +128,23 @@
       :issue-type="selectedType"
       @refresh="onActionRefresh"
     />
+
+    <!-- 变更历史抽屉 -->
+    <WorkflowActivityDrawer
+      v-model:visible="showHistory"
+      :project-id="selectedProject"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSettings, IconInfoCircle } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconInfoCircle, IconHistory } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
+import WorkflowActivityDrawer from './WorkflowActivityDrawer.vue'
 import { localizeStatusName } from '@/utils/fieldLabels'
 
 const selectedProject = ref('0')
@@ -141,6 +152,7 @@ const selectedType = ref('*')
 const selectedRole = ref('')
 const loading = ref(false)
 const saving = ref(false)
+const showHistory = ref(false)
 
 const statuses = ref<IssueStatusVO[]>([])
 const projects = ref<ProjectVO[]>([])

@@ -1,12 +1,17 @@
 package com.trackflow.workflow.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.vo.RoleVO;
 import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
+import com.trackflow.workflow.dto.WorkflowActivityQuery;
+import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.service.WorkflowService;
+import com.trackflow.workflow.vo.WorkflowActivityVO;
 import com.trackflow.workflow.vo.WorkflowTransitionVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -88,5 +93,23 @@ public class WorkflowController {
         Set<Long> statusIds = workflowService.getTransitionableSourceStatuses(projectId, userId);
         List<String> result = statusIds.stream().map(String::valueOf).toList();
         return R.ok(result);
+    }
+
+    /**
+     * 获取工作流变更历史（审计日志）
+     * projectId=0 表示全局工作流的变更历史
+     * projectId>0 表示项目级工作流的变更历史
+     * 权限：与工作流编辑相同
+     */
+    @GetMapping("/projects/{projectId}/workflow-activities")
+    @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    public R<PageResult<WorkflowActivityVO>> listWorkflowActivities(
+            @PathVariable Long projectId,
+            WorkflowActivityQuery query) {
+
+        query.setProjectId(projectId);
+        Page<WorkflowActivity> page = workflowService.listActivities(query);
+        List<WorkflowActivityVO> voList = workflowConverter.toActivityVOList(page.getRecords());
+        return R.ok(new PageResult<>(voList, page.getTotal(), (int) page.getCurrent(), (int) page.getSize()));
     }
 }

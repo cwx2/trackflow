@@ -39,5 +39,11 @@ public class WorkflowActivity implements Serializable {
     /** 新值描述 */
     private String newValue;
 
+    /** 人类可读的变更摘要 */
+    private String summary;
+
+    /** JSON 格式的变更明细（added/removed 转换列表） */
+    private String details;
+
     private LocalDateTime createdAt;
 }

@@ -470,6 +470,28 @@ export interface UpdateWorkflowDTO {
   transitions: { from: number; to: number; allowed: boolean }[]
 }
 
+/** 工作流变更历史审计日志 VO */
+export interface WorkflowActivityVO {
+  id: string
+  projectId: string
+  projectName: string
+  issueType: string
+  roleId: string
+  roleName: string
+  userId: string
+  userDisplayName: string
+  action: string
+  summary: string
+  added: TransitionChangeItem[]
+  removed: TransitionChangeItem[]
+  createdAt: string
+}
+
+export interface TransitionChangeItem {
+  fromStatus: string
+  toStatus: string
+}
+
 // ========== 看板 ==========
 export interface BoardColumnVO {
   statusId: string
