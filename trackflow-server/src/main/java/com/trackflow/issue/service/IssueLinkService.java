@@ -3,18 +3,18 @@ package com.trackflow.issue.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
-import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.CreateIssueLinkDTO;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueLink;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.vo.IssueLinkVO;
-import com.trackflow.issue.vo.IssueStatusVO;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,10 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -36,9 +33,13 @@ public class IssueLinkService {
     private final IssueLinkMapper linkMapper;
     private final IssueMapper issueMapper;
     private final IssueStatusMapper statusMapper;
+    private final IssueActivityMapper activityMapper;
     private final IssueConverter issueConverter;
     private final ProjectService projectService;
     private final StatusCacheHelper statusCacheHelper;
+
+    /** 需要检测循环依赖的有向关联类型 */
+    private static final Set<String> DIRECTED_LINK_TYPES = Set.of("blocks", "parent_of");
 
     /**
      * 获取 Issue 的所有关联（包括作为 source 和 target 的）
@@ -99,7 +100,7 @@ public class IssueLinkService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标 Issue 不存在");
         }
 
-        // 检查是否已存在相同关联
+        // 检查是否已存在相同关联（同方向同类型）
         Long exists = linkMapper.selectCount(
                 new LambdaQueryWrapper<IssueLink>()
                         .eq(IssueLink::getSourceIssueId, issueId)
@@ -110,6 +111,12 @@ public class IssueLinkService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "关联已存在");
         }
 
+        // 检查反向关系是否已存在（防止 A blocks B + B blocks A 互相阻塞）
+        validateNoReverseRelation(issueId, targetIssueId, linkType);
+
+        // 检查循环依赖（仅对有向关联类型：blocks, parent_of）
+        validateNoCircularDependency(issueId, targetIssueId, linkType);
+
         IssueLink link = new IssueLink();
         link.setSourceIssueId(issueId);
         link.setTargetIssueId(targetIssueId);
@@ -117,6 +124,15 @@ public class IssueLinkService {
         link.setCreatedBy(SecurityUtils.getCurrentUserId());
         link.setCreatedAt(LocalDateTime.now());
         linkMapper.insert(link);
+
+        // 记录双向活动日志
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        String reverseType = getReverseLinkType(linkType);
+
+        recordActivity(issueId, currentUserId, "link_added", "link",
+                null, linkType + " " + targetIssue.getIssueKey());
+        recordActivity(targetIssueId, currentUserId, "link_added", "link",
+                null, reverseType + " " + sourceIssue.getIssueKey());
     }
 
     /**
@@ -129,11 +145,26 @@ public class IssueLinkService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关联不存在");
         }
         // 归档项目不允许删除关联
-        Issue issue = issueMapper.selectById(link.getSourceIssueId());
-        if (issue != null) {
-            projectService.assertProjectActive(issue.getProjectId());
+        Issue sourceIssue = issueMapper.selectById(link.getSourceIssueId());
+        if (sourceIssue != null) {
+            projectService.assertProjectActive(sourceIssue.getProjectId());
         }
+
+        Issue targetIssue = issueMapper.selectById(link.getTargetIssueId());
         linkMapper.deleteById(linkId);
+
+        // 记录双向活动日志
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        String linkType = link.getLinkType();
+        String reverseType = getReverseLinkType(linkType);
+
+        String targetKey = targetIssue != null ? targetIssue.getIssueKey() : "unknown";
+        String sourceKey = sourceIssue != null ? sourceIssue.getIssueKey() : "unknown";
+
+        recordActivity(link.getSourceIssueId(), currentUserId, "link_removed", "link",
+                linkType + " " + targetKey, null);
+        recordActivity(link.getTargetIssueId(), currentUserId, "link_removed", "link",
+                reverseType + " " + sourceKey, null);
     }
 
     /**
@@ -171,6 +202,93 @@ public class IssueLinkService {
                 .toList();
     }
 
+    // ========== 校验方法 ==========
+
+    /**
+     * 检查反向关系是否已存在。
+     * 防止 A blocks B 的同时 B blocks A 形成互相阻塞。
+     * 对称关系（relates_to）不做此检查。
+     */
+    private void validateNoReverseRelation(Long sourceId, Long targetId, String linkType) {
+        String reverseType = getReverseLinkType(linkType);
+
+        // 对称关联（如 relates_to）的 reverse 就是自身，需要检查反方向同类型
+        // 有向关联（如 blocks/blocked_by）需要检查反方向的反义类型
+        if (linkType.equals(reverseType)) {
+            // 对称关联：检查反方向是否已存在同类型
+            Long reverseExists = linkMapper.selectCount(
+                    new LambdaQueryWrapper<IssueLink>()
+                            .eq(IssueLink::getSourceIssueId, targetId)
+                            .eq(IssueLink::getTargetIssueId, sourceId)
+                            .eq(IssueLink::getLinkType, linkType)
+            );
+            if (reverseExists > 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "反向关联已存在");
+            }
+        } else {
+            // 有向关联：检查 target→source 的反义类型是否已存在
+            // 例如 A blocks B 时，检查 B blocks A 是否存在
+            Long reverseExists = linkMapper.selectCount(
+                    new LambdaQueryWrapper<IssueLink>()
+                            .eq(IssueLink::getSourceIssueId, targetId)
+                            .eq(IssueLink::getTargetIssueId, sourceId)
+                            .eq(IssueLink::getLinkType, linkType)
+            );
+            if (reverseExists > 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "反向关联已存在，不能互相阻塞");
+            }
+
+            // 同时检查语义等价的反向记录
+            // 例如 A blocks B 时，也检查是否存在 B→A 的 blocked_by 记录
+            Long semanticReverseExists = linkMapper.selectCount(
+                    new LambdaQueryWrapper<IssueLink>()
+                            .eq(IssueLink::getSourceIssueId, targetId)
+                            .eq(IssueLink::getTargetIssueId, sourceId)
+                            .eq(IssueLink::getLinkType, reverseType)
+            );
+            if (semanticReverseExists > 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "等价的反向关联已存在");
+            }
+        }
+    }
+
+    /**
+     * 循环依赖检测（BFS）。
+     * 仅对有向关联类型（blocks, parent_of）执行。
+     * 从 targetId 出发沿同类型链遍历，如果能到达 sourceId 则说明形成循环。
+     */
+    private void validateNoCircularDependency(Long sourceId, Long targetId, String linkType) {
+        if (!DIRECTED_LINK_TYPES.contains(linkType)) {
+            return;
+        }
+
+        Set<Long> visited = new HashSet<>();
+        Queue<Long> queue = new LinkedList<>();
+        queue.add(targetId);
+
+        while (!queue.isEmpty()) {
+            Long current = queue.poll();
+            if (current.equals(sourceId)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "创建此关联会形成循环依赖");
+            }
+            if (!visited.add(current)) {
+                continue;
+            }
+            // 查询从 current 出发的同类型链接
+            List<IssueLink> outgoing = linkMapper.selectList(
+                    new LambdaQueryWrapper<IssueLink>()
+                            .eq(IssueLink::getSourceIssueId, current)
+                            .eq(IssueLink::getLinkType, linkType)
+            );
+            for (IssueLink l : outgoing) {
+                if (!visited.contains(l.getTargetIssueId())) {
+                    queue.add(l.getTargetIssueId());
+                }
+            }
+        }
+    }
+
     // ========== 私有方法 ==========
 
     private IssueLinkVO buildLinkVO(Long linkId, String linkType, Long linkedIssueId) {
@@ -196,7 +314,7 @@ public class IssueLinkService {
     /**
      * 获取反向关联类型
      */
-    private String getReverseLinkType(String linkType) {
+    String getReverseLinkType(String linkType) {
         return switch (linkType) {
             case "parent_of" -> "child_of";
             case "child_of" -> "parent_of";
@@ -206,5 +324,21 @@ public class IssueLinkService {
             case "duplicated_by" -> "duplicates";
             default -> linkType; // relates_to 是对称的
         };
+    }
+
+    /**
+     * 记录活动日志
+     */
+    private void recordActivity(Long issueId, Long userId, String action,
+                                String fieldName, String oldValue, String newValue) {
+        IssueActivity activity = new IssueActivity();
+        activity.setIssueId(issueId);
+        activity.setUserId(userId);
+        activity.setAction(action);
+        activity.setFieldName(fieldName);
+        activity.setOldValue(oldValue);
+        activity.setNewValue(newValue);
+        activity.setCreatedAt(LocalDateTime.now());
+        activityMapper.insert(activity);
     }
 }
