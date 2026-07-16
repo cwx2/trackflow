@@ -1,6 +1,7 @@
 package com.trackflow.auth.config;
 
 import com.trackflow.auth.filter.ApiKeyAuthFilter;
+import com.trackflow.auth.filter.UserSyncFilter;
 import com.trackflow.common.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,9 +34,11 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     private final ApiKeyAuthFilter apiKeyAuthFilter;
+    private final UserSyncFilter userSyncFilter;
 
-    public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter) {
+    public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter, UserSyncFilter userSyncFilter) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
+        this.userSyncFilter = userSyncFilter;
     }
 
     @Bean
@@ -58,6 +61,8 @@ public class SecurityConfig {
             )
             // API Key 过滤器：在 JWT 认证之前处理 tf_ 前缀的 token
             .addFilterBefore(apiKeyAuthFilter, BearerTokenAuthenticationFilter.class)
+            // 用户同步过滤器：在 JWT 认证之后同步用户信息到本地数据库
+            .addFilterAfter(userSyncFilter, BearerTokenAuthenticationFilter.class)
             .oauth2ResourceServer(oauth2 -> oauth2
                 // 自定义 BearerTokenResolver：跳过 tf_ 前缀的 token，让 ApiKeyAuthFilter 处理
                 .bearerTokenResolver(apiKeyAwareBearerTokenResolver())
@@ -135,6 +140,17 @@ public class SecurityConfig {
     @Bean
     public FilterRegistrationBean<ApiKeyAuthFilter> disableApiKeyFilterAutoRegistration() {
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(apiKeyAuthFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    /**
+     * 禁止 UserSyncFilter 被 Spring Boot 自动注册为 Servlet Filter。
+     * 只通过 Security Filter Chain (addFilterAfter) 调用，避免双重执行。
+     */
+    @Bean
+    public FilterRegistrationBean<UserSyncFilter> disableUserSyncFilterAutoRegistration() {
+        FilterRegistrationBean<UserSyncFilter> registration = new FilterRegistrationBean<>(userSyncFilter);
         registration.setEnabled(false);
         return registration;
     }
