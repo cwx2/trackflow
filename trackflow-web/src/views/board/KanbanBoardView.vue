@@ -467,6 +467,14 @@
       @saved="onSettingsSaved"
     />
 
+    <!-- 工单预览侧边面板 -->
+    <IssuePreviewDrawer
+      :visible="previewVisible"
+      :issue-id="previewIssueId"
+      @update:visible="previewVisible = $event"
+      @go-detail="onPreviewGoDetail"
+    />
+
     <!-- 批量操作栏（底部固定） -->
     <transition name="slide-up">
       <div v-if="selectedCount > 0" class="batch-toolbar-wrapper">
@@ -499,6 +507,7 @@ import { useBatchOps } from '@/views/issue/composables/useBatchOps'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
+import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
 import { IconSettings, IconSearch, IconList } from '@arco-design/web-vue/es/icon'
 
@@ -559,6 +568,23 @@ const BACKLOG_VISIBLE_KEY = 'tf_kanban_backlog_visible'
 const showBacklog = ref(localStorage.getItem(BACKLOG_VISIBLE_KEY) === 'true')
 const backlogPanelRef = ref<InstanceType<typeof BacklogPanel> | null>(null)
 const backlogDraggingIssue = ref<IssueVO | null>(null)
+
+// ===== 工单预览面板 =====
+const previewVisible = ref(false)
+const previewIssueId = ref<string | null>(null)
+
+function openPreview(issue: IssueVO) {
+  previewIssueId.value = issue.id
+  previewVisible.value = true
+}
+
+function closePreview() {
+  previewVisible.value = false
+}
+
+function onPreviewGoDetail(issueId: string) {
+  router.push({ name: 'IssueDetail', params: { id: issueId } })
+}
 
 function toggleBacklog() {
   showBacklog.value = !showBacklog.value
@@ -1042,52 +1068,73 @@ function typeLabel(type: string): string {
 
 function openIssue(issue: IssueVO) {
   if (draggingIssue.value) return
-  router.push({ name: 'IssueDetail', params: { id: issue.id } })
+  openPreview(issue)
 }
 
 /**
  * 卡片单击处理：
  * - Ctrl/Meta + Click：切换选中状态（多选）
- * - 无修饰键 + 已有选中：当前卡片加入/移出选中
- * - 无修饰键 + 无选中：选中该卡片
+ * - 无修饰键：延迟 200ms 打开预览（被双击取消则不打开）
  */
+let clickTimer: ReturnType<typeof setTimeout> | null = null
+
 function onCardClick(event: MouseEvent | KeyboardEvent, issue: IssueVO) {
   if (draggingIssue.value) return
 
   if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey)) {
-    // Ctrl+Click: toggle this card's selection
+    // Ctrl+Click: toggle this card's selection (batch mode)
     toggleCardSelection(issue.id)
   } else if (selectedCount.value > 0) {
-    // Already have selection: toggle this card
+    // Already have selection: toggle this card (stay in batch mode)
     toggleCardSelection(issue.id)
   } else {
-    // No selection yet: select this card
-    toggleCardSelection(issue.id)
+    // No modifier, no existing selection: delay to distinguish from double-click
+    if (clickTimer) clearTimeout(clickTimer)
+    clickTimer = setTimeout(() => {
+      openPreview(issue)
+      clickTimer = null
+    }, 200)
   }
 }
 
 /**
- * 卡片双击：跳转详情页
+ * 卡片双击：跳转详情页（取消单击的预览）
  */
 function onCardDblClick(issue: IssueVO) {
   if (draggingIssue.value) return
+  // Cancel the pending single-click preview
+  if (clickTimer) {
+    clearTimeout(clickTimer)
+    clickTimer = null
+  }
+  // Close preview if open
+  previewVisible.value = false
   router.push({ name: 'IssueDetail', params: { id: issue.id } })
 }
 
 /**
- * 卡片 Enter 键：若有选中则切换选中状态，否则打开详情
+ * 卡片 Enter 键：若有选中则切换选中状态，否则打开预览
+ * Space 键：打开预览（保持与单击一致）
  */
 function onCardKeydown(event: KeyboardEvent, issue: IssueVO) {
   if (event.key === 'Enter') {
     if (selectedCount.value > 0 || event.ctrlKey || event.metaKey) {
       toggleCardSelection(issue.id)
     } else {
-      router.push({ name: 'IssueDetail', params: { id: issue.id } })
+      openPreview(issue)
     }
   }
-  // Escape 清空选择
-  if (event.key === 'Escape' && selectedCount.value > 0) {
-    clearSelection()
+  if (event.key === ' ') {
+    event.preventDefault()
+    openPreview(issue)
+  }
+  // Escape 清空选择或关闭预览
+  if (event.key === 'Escape') {
+    if (selectedCount.value > 0) {
+      clearSelection()
+    } else if (previewVisible.value) {
+      closePreview()
+    }
   }
 }
 
@@ -1305,9 +1352,13 @@ function handleKeydown(e: KeyboardEvent) {
       undoTransition(lastEntry)
     }
   }
-  // Escape 取消多选
-  if (e.key === 'Escape' && selectedCount.value > 0) {
-    clearSelection()
+  // Escape: 优先关闭预览面板 → 然后清空选择
+  if (e.key === 'Escape') {
+    if (previewVisible.value) {
+      closePreview()
+    } else if (selectedCount.value > 0) {
+      clearSelection()
+    }
   }
 }
 
