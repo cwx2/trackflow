@@ -89,18 +89,30 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.PROJECT_KEY_DUPLICATE);
         }
 
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // leadId 校验：如果指定了 leadId，校验用户存在且状态为 active
+        Long leadId = dto.getLeadId();
+        if (leadId != null) {
+            SysUser leadUser = userMapper.selectById(leadId);
+            if (leadUser == null || !"active".equals(leadUser.getStatus())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的项目负责人用户不存在或已禁用");
+            }
+        } else {
+            leadId = currentUserId;
+        }
+
         Project project = new Project();
         project.setName(dto.getName());
         project.setKey(dto.getKey().toUpperCase());
         project.setDescription(dto.getDescription());
-        project.setLeadId(dto.getLeadId() != null ? dto.getLeadId() : SecurityUtils.getCurrentUserId());
+        project.setLeadId(leadId);
         project.setStatus("active");
         project.setVisibility("private");
         project.setIssueSequence(0);
         projectMapper.insert(project);
 
         // 自动添加创建者为项目管理员
-        Long currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId != null) {
             ProjectMember member = new ProjectMember();
             member.setProjectId(project.getId());
@@ -108,6 +120,16 @@ public class ProjectService {
             member.setRoleId(PROJECT_ADMIN_ROLE_ID);
             member.setJoinedAt(LocalDateTime.now());
             memberMapper.insert(member);
+        }
+
+        // 如果 leadId 不是创建者本人，也将 lead 添加为项目管理员
+        if (leadId != null && !leadId.equals(currentUserId)) {
+            ProjectMember leadMember = new ProjectMember();
+            leadMember.setProjectId(project.getId());
+            leadMember.setUserId(leadId);
+            leadMember.setRoleId(PROJECT_ADMIN_ROLE_ID);
+            leadMember.setJoinedAt(LocalDateTime.now());
+            memberMapper.insert(leadMember);
         }
 
         // 根据模板类型初始化项目（工作流、看板列配置等）
