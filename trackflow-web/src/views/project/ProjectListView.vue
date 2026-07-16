@@ -98,6 +98,58 @@
       <div v-if="hasMore" class="load-more" @click="loadMore">
         <a-link>显示更多项目</a-link>
       </div>
+
+      <!-- 已归档项目折叠区域（YouTrack 风格） -->
+      <div v-if="archivedCount > 0" class="archived-section">
+        <div class="archived-header" @click="toggleArchived">
+          <span class="archived-toggle-icon" :class="{ expanded: showArchived }">
+            <icon-right />
+          </span>
+          <span class="archived-title">已归档</span>
+          <span class="archived-count">{{ archivedCount }}</span>
+        </div>
+
+        <div v-if="showArchived" class="archived-list">
+          <div v-if="archivedLoading" class="archived-loading">
+            <a-spin size="16" />
+            <span>加载中...</span>
+          </div>
+          <template v-else>
+            <div
+              v-for="project in archivedProjects"
+              :key="project.id"
+              class="project-row archived-row"
+            >
+              <!-- 项目图标 -->
+              <div class="project-icon archived-icon" :style="{ background: getProjectColor(project) }">
+                <span class="icon-text">{{ getProjectAbbr(project) }}</span>
+              </div>
+
+              <!-- 项目信息 -->
+              <div class="project-info">
+                <div class="project-name-row">
+                  <span class="project-name archived-name">{{ project.name }}</span>
+                  <span class="archived-badge">已归档</span>
+                </div>
+                <span class="project-desc" v-if="project.description">{{ project.description }}</span>
+              </div>
+
+              <!-- 恢复操作 -->
+              <div class="project-right">
+                <a-button
+                  v-if="canManageProject(project)"
+                  type="outline"
+                  size="small"
+                  @click.stop="restoreProject(project)"
+                  :loading="restoringId === project.id"
+                >
+                  恢复项目
+                </a-button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
 
     <!-- 创建项目弹窗 -->
@@ -356,6 +408,7 @@ import {
   IconPlus,
   IconMore,
   IconFolder,
+  IconRight,
   IconExclamationCircleFill
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi, workflowApi } from '@/api'
@@ -566,7 +619,7 @@ function manageMembers(project: any) {
 function archiveProject(project: any) {
   Modal.warning({
     title: '归档项目',
-    content: `确定归档项目「${project.name}」？归档后可在管理中恢复。`,
+    content: `确定归档项目「${project.name}」？归档后可在项目列表底部查看并恢复。`,
     okText: '确定归档',
     cancelText: '取消',
     hideCancel: false,
@@ -575,11 +628,74 @@ function archiveProject(project: any) {
         await projectApi.archive(project.id)
         projects.value = projects.value.filter(p => p.id !== project.id)
         Message.success('项目已归档')
+        // 刷新已归档计数
+        loadArchivedCount()
+        // 如果已归档区域已展开，重新加载列表
+        if (showArchived.value) {
+          loadArchivedProjects()
+        }
       } catch (e: any) {
         Message.error(e.response?.data?.message || '归档失败')
       }
     }
   })
+}
+
+// ========== 已归档项目 ==========
+const showArchived = ref(false)
+const archivedProjects = ref<any[]>([])
+const archivedCount = ref(0)
+const archivedLoading = ref(false)
+const restoringId = ref<string | null>(null)
+
+/** 加载已归档项目计数 */
+async function loadArchivedCount() {
+  try {
+    const res = await projectApi.list({ status: 'archived', page: 1, pageSize: 1 })
+    archivedCount.value = res.data?.pagination?.total || 0
+  } catch {
+    archivedCount.value = 0
+  }
+}
+
+/** 切换已归档区域展开/收起 */
+function toggleArchived() {
+  showArchived.value = !showArchived.value
+  if (showArchived.value && archivedProjects.value.length === 0) {
+    loadArchivedProjects()
+  }
+}
+
+/** 加载已归档项目列表 */
+async function loadArchivedProjects() {
+  archivedLoading.value = true
+  try {
+    const res = await projectApi.list({ status: 'archived', page: 1, pageSize: 100 })
+    archivedProjects.value = res.data?.list || []
+  } catch {
+    archivedProjects.value = []
+  } finally {
+    archivedLoading.value = false
+  }
+}
+
+/** 恢复已归档项目 */
+async function restoreProject(project: any) {
+  restoringId.value = project.id
+  try {
+    await projectApi.restore(project.id)
+    Message.success(`项目「${project.name}」已恢复`)
+    // 从已归档列表移除
+    archivedProjects.value = archivedProjects.value.filter(p => p.id !== project.id)
+    archivedCount.value = Math.max(0, archivedCount.value - 1)
+    // 刷新活跃项目列表
+    page.value = 1
+    loadProjects()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '恢复失败')
+  } finally {
+    restoringId.value = null
+  }
 }
 
 async function confirmDeleteProject(project: any) {
@@ -847,6 +963,7 @@ function formatRelativeTime(dateStr: string): string {
 
 onMounted(() => {
   loadProjects()
+  loadArchivedCount()
 })
 
 // 项目列表变化时，加载对应项目的权限
@@ -1115,6 +1232,101 @@ watch(projects, () => {
 .activity-time {
   font-size: 11px;
   color: var(--tf-text-tertiary);
+}
+
+/* ===== 已归档项目区域 ===== */
+.archived-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--tf-border);
+  padding-top: 16px;
+}
+
+.archived-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.archived-header:hover {
+  background: var(--tf-bg-hover);
+}
+
+.archived-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--tf-text-tertiary);
+  transition: transform 0.2s;
+  font-size: 12px;
+}
+
+.archived-toggle-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.archived-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+}
+
+.archived-count {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.archived-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.archived-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--tf-text-tertiary);
+  font-size: 12px;
+}
+
+.archived-row {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.archived-row:hover {
+  opacity: 1;
+}
+
+.archived-icon {
+  opacity: 0.6;
+}
+
+.archived-name {
+  color: var(--tf-text-secondary);
+}
+
+.archived-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(156, 163, 175, 0.15);
+  color: var(--tf-text-tertiary);
+  white-space: nowrap;
 }
 
 /* 删除项目确认弹窗 */
