@@ -54,6 +54,19 @@
         </a-select>
       </div>
       <div class="toolbar-right">
+        <!-- Card Size 选择器 -->
+        <div class="card-size-group" role="group" aria-label="卡片尺寸">
+          <button
+            v-for="size in cardSizeOptions"
+            :key="size.value"
+            class="card-size-btn"
+            :class="{ 'card-size-btn--active': cardSize === size.value }"
+            :title="`卡片尺寸: ${size.label}`"
+            :aria-pressed="cardSize === size.value"
+            @click="setCardSize(size.value)"
+          >{{ size.label }}</button>
+        </div>
+        <a-divider direction="vertical" style="margin: 0 4px" />
         <div class="search-wrapper">
           <a-input
             v-model="keyword"
@@ -75,6 +88,17 @@
             </span>
           </transition>
         </div>
+        <a-tooltip :content="showBacklog ? '收起 Backlog' : '展开 Backlog'">
+          <a-button
+            size="small"
+            :type="showBacklog ? 'primary' : 'secondary'"
+            :disabled="!selectedProject"
+            @click="toggleBacklog"
+          >
+            <template #icon><icon-list /></template>
+            Backlog
+          </a-button>
+        </a-tooltip>
         <a-tooltip content="看板列设置">
           <a-button
             size="small"
@@ -89,6 +113,17 @@
 
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
+      <div class="board-main-area">
+        <!-- Backlog 面板 -->
+        <BacklogPanel
+          ref="backlogPanelRef"
+          :visible="showBacklog"
+          :project-id="selectedProject || ''"
+          @close="showBacklog = false"
+          @open-issue="openIssue"
+          @drag-start="onBacklogDragStart"
+          @drag-end="onBacklogDragEnd"
+        />
       <!-- ===== 无分组模式（原始平面看板） ===== -->
       <div
         v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && swimlaneGroupBy === 'none'"
@@ -119,7 +154,7 @@
                 {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
               </span>
               <button
-                v-if="getColumnIssues(status.id).length === 0 && !draggingIssue"
+                v-if="getColumnIssues(status.id).length === 0 && !isDragging"
                 class="column-collapse-btn"
                 :aria-label="`折叠 ${localizeStatusName(status.name)} 列`"
                 title="折叠此列"
@@ -131,11 +166,14 @@
                 v-for="issue in getColumnIssues(status.id)"
                 :key="issue.id"
                 class="kanban-card"
-                :class="{
-                  'kanban-card--dragging': draggingIssue?.id === issue.id,
-                  'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                  'kanban-card--no-drag': !isCardDraggable(issue)
-                }"
+                :class="[
+                  `kanban-card--${cardSize}`,
+                  {
+                    'kanban-card--dragging': draggingIssue?.id === issue.id,
+                    'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
+                    'kanban-card--no-drag': !isCardDraggable(issue)
+                  }
+                ]"
                 role="button"
                 tabindex="0"
                 :draggable="isCardDraggable(issue)"
@@ -154,24 +192,40 @@
                     {{ priorityIcon(issue.priority) }}
                   </span>
                 </div>
-                <div class="card-title">{{ issue.title }}</div>
+                <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
+                <!-- M/L: custom fields -->
+                <div v-if="cardSize !== 'S' && issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0" class="card-custom-fields">
+                  <span
+                    v-for="(val, key) in getVisibleCustomFields(issue)"
+                    :key="key"
+                    class="card-cf-tag"
+                  >{{ val }}</span>
+                </div>
+                <!-- L: tags (placeholder - tags not in IssueVO list, only detail) -->
                 <div class="card-footer">
                   <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
-                  <span class="card-assignee" v-if="issue.assigneeName">
-                    {{ issue.assigneeName }}
-                  </span>
+                  <!-- M/L: attachment count (via childCount as proxy - future) -->
+                  <div class="card-assignee-avatar" v-if="issue.assigneeName" :title="issue.assigneeName">
+                    <img
+                      v-if="issue.assigneeAvatarUrl"
+                      :src="issue.assigneeAvatarUrl"
+                      :alt="issue.assigneeName"
+                      class="avatar-img"
+                    />
+                    <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                  </div>
                 </div>
               </div>
               <div
                 v-if="getColumnIssues(status.id).length === 0"
                 class="column-empty-state"
-                :class="{ 'column-empty-state--drop-hint': draggingIssue && isDropAllowed(status.id) }"
+                :class="{ 'column-empty-state--drop-hint': isDragging && isDropAllowed(status.id) }"
               >
-                <template v-if="draggingIssue && isDropAllowed(status.id)">
+                <template v-if="isDragging && isDropAllowed(status.id)">
                   <div class="column-empty-icon">📥</div>
                   <div class="column-empty-text">释放以移动到此状态</div>
                 </template>
-                <template v-else-if="draggingIssue && !isDropAllowed(status.id)">
+                <template v-else-if="isDragging && !isDropAllowed(status.id)">
                   <div class="column-empty-icon">🚫</div>
                   <div class="column-empty-text">不允许转换到此状态</div>
                 </template>
@@ -195,8 +249,8 @@
             role="button"
             tabindex="0"
             :aria-label="`${localizeStatusName(status.name)}，0 个工单，点击展开`"
-            :title="`${localizeStatusName(status.name)} (0 工单) - ${draggingIssue ? '释放以移动' : '点击展开'}`"
-            @click="!draggingIssue && expandColumn(status.id)"
+            :title="`${localizeStatusName(status.name)} (0 工单) - ${isDragging ? '释放以移动' : '点击展开'}`"
+            @click="!isDragging && expandColumn(status.id)"
             @keydown.enter="expandColumn(status.id)"
             @dragover="onDragOver($event, status.id)"
             @dragleave="onDragLeave($event)"
@@ -280,11 +334,14 @@
                     v-for="issue in getSwimlaneColumnIssues(lane.key, status.id)"
                     :key="issue.id"
                     class="kanban-card"
-                    :class="{
-                      'kanban-card--dragging': draggingIssue?.id === issue.id,
-                      'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
-                      'kanban-card--no-drag': !isCardDraggable(issue)
-                    }"
+                    :class="[
+                      `kanban-card--${cardSize}`,
+                      {
+                        'kanban-card--dragging': draggingIssue?.id === issue.id,
+                        'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
+                        'kanban-card--no-drag': !isCardDraggable(issue)
+                      }
+                    ]"
                     role="button"
                     tabindex="0"
                     :draggable="isCardDraggable(issue)"
@@ -303,17 +360,31 @@
                         {{ priorityIcon(issue.priority) }}
                       </span>
                     </div>
-                    <div class="card-title">{{ issue.title }}</div>
+                    <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
+                    <!-- M/L: custom fields -->
+                    <div v-if="cardSize !== 'S' && issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0" class="card-custom-fields">
+                      <span
+                        v-for="(val, key) in getVisibleCustomFields(issue)"
+                        :key="key"
+                        class="card-cf-tag"
+                      >{{ val }}</span>
+                    </div>
                     <div class="card-footer">
                       <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
-                      <span class="card-assignee" v-if="issue.assigneeName">
-                        {{ issue.assigneeName }}
-                      </span>
+                      <div class="card-assignee-avatar" v-if="issue.assigneeName" :title="issue.assigneeName">
+                        <img
+                          v-if="issue.assigneeAvatarUrl"
+                          :src="issue.assigneeAvatarUrl"
+                          :alt="issue.assigneeName"
+                          class="avatar-img"
+                        />
+                        <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                      </div>
                     </div>
                   </div>
                   <!-- 空单元格 drop hint -->
                   <div
-                    v-if="getSwimlaneColumnIssues(lane.key, status.id).length === 0 && draggingIssue && isDropAllowed(status.id)"
+                    v-if="getSwimlaneColumnIssues(lane.key, status.id).length === 0 && isDragging && isDropAllowed(status.id)"
                     class="swimlane-cell-empty-hint"
                   >
                     📥
@@ -350,6 +421,7 @@
         <h3 class="empty-title">请选择项目</h3>
         <p class="empty-desc">从上方下拉框选择项目查看看板视图</p>
       </div>
+      </div><!-- end board-main-area -->
     </a-spin>
 
     <!-- 看板列设置 Drawer -->
@@ -373,10 +445,48 @@ import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
-import { IconSettings, IconSearch } from '@arco-design/web-vue/es/icon'
+import BacklogPanel from './BacklogPanel.vue'
+import { IconSettings, IconSearch, IconList } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const projectStore = useProjectStore()
+
+// ===== Card Size 控制 =====
+type CardSize = 'S' | 'M' | 'L'
+const CARD_SIZE_KEY = 'tf_kanban_card_size'
+const cardSize = ref<CardSize>((localStorage.getItem(CARD_SIZE_KEY) as CardSize) || 'M')
+const cardSizeOptions = [
+  { value: 'S' as const, label: 'S' },
+  { value: 'M' as const, label: 'M' },
+  { value: 'L' as const, label: 'L' }
+]
+
+function setCardSize(size: CardSize) {
+  cardSize.value = size
+  localStorage.setItem(CARD_SIZE_KEY, size)
+}
+
+/** 获取负责人姓名首字母/缩写 */
+function getInitials(name: string): string {
+  if (!name) return '?'
+  // CJK: return last 1-2 characters (family name typically)
+  const isCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(name)
+  if (isCJK) {
+    return name.length <= 2 ? name : name.slice(0, 2)
+  }
+  // Latin: first letter of first + last words
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/** 获取卡片可见的自定义字段（最多显示 3 个） */
+function getVisibleCustomFields(issue: IssueVO): Record<string, string> {
+  if (!issue.customFieldValues) return {}
+  const entries = Object.entries(issue.customFieldValues)
+  const maxFields = cardSize.value === 'L' ? 4 : 2
+  return Object.fromEntries(entries.slice(0, maxFields))
+}
 
 const selectedProject = computed({
   get: () => projectStore.selectedProjectId,
@@ -389,6 +499,31 @@ const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
 const { projects, projectLoadState, loadProjects } = useProjectList()
+
+// ===== Backlog 面板 =====
+const BACKLOG_VISIBLE_KEY = 'tf_kanban_backlog_visible'
+const showBacklog = ref(localStorage.getItem(BACKLOG_VISIBLE_KEY) === 'true')
+const backlogPanelRef = ref<InstanceType<typeof BacklogPanel> | null>(null)
+const backlogDraggingIssue = ref<IssueVO | null>(null)
+
+function toggleBacklog() {
+  showBacklog.value = !showBacklog.value
+  localStorage.setItem(BACKLOG_VISIBLE_KEY, String(showBacklog.value))
+}
+
+function onBacklogDragStart(issue: IssueVO) {
+  backlogDraggingIssue.value = issue
+  // Fetch available transitions for the backlog issue's current status
+  // For backlog items, all open statuses should be valid targets
+  allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
+}
+
+function onBacklogDragEnd() {
+  backlogDraggingIssue.value = null
+  allowedTargetStatuses.value.clear()
+  dragOverColumnId.value = null
+  dragOverSwimlaneKey.value = null
+}
 
 // ===== Swimlane 分组 =====
 type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint'
@@ -665,6 +800,9 @@ const dragOverColumnId = ref<string | null>(null)
 const allowedTargetStatuses = ref<Set<string>>(new Set())
 const transitioningIssueIds = ref<Set<string>>(new Set())
 
+// Combined dragging state (from board card or backlog)
+const isDragging = computed(() => !!draggingIssue.value || !!backlogDraggingIssue.value)
+
 // ===== 可拖拽源状态 =====
 const transitionableSourceStatuses = ref<Set<string>>(new Set())
 
@@ -819,6 +957,10 @@ function onDragLeave(event: DragEvent) {
 }
 
 function isDropAllowed(targetStatusId: string): boolean {
+  // Allow drop from backlog panel
+  if (backlogDraggingIssue.value) {
+    return allowedTargetStatuses.value.has(targetStatusId)
+  }
   if (!draggingIssue.value) return false
   if (draggingIssue.value.statusId === targetStatusId) return false
   return allowedTargetStatuses.value.has(targetStatusId)
@@ -828,6 +970,13 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   event.preventDefault()
   dragOverColumnId.value = null
   dragOverSwimlaneKey.value = null
+
+  // Check if this is a backlog drop
+  const backlogIssue = backlogDraggingIssue.value
+  if (backlogIssue) {
+    await handleBacklogDrop(backlogIssue, targetStatusId)
+    return
+  }
 
   const issue = draggingIssue.value
   if (!issue || !isDropAllowed(targetStatusId)) {
@@ -863,7 +1012,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     Notification.success({
       id: notifId,
       title: '状态变更成功',
-      content: `${issue.issueKey} 已移至「${targetStatus?.name || '目标状态'}」`,
+      content: `${issue.issueKey} 已移至「${localizeStatusName(targetStatus?.name)}」`,
       duration: UNDO_TIMEOUT,
       closable: true,
       footer: () => h('button', {
@@ -883,6 +1032,52 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   }
 }
 
+/** Handle drop from Backlog panel: assign sprint + change status */
+async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
+  backlogDraggingIssue.value = null
+  allowedTargetStatuses.value.clear()
+
+  // Determine which sprint to assign
+  const targetSprintId = selectedSprint.value || getActiveSprintId()
+  if (!targetSprintId) {
+    Message.warning('请先选择一个 Sprint 或确保项目有活跃的 Sprint')
+    return
+  }
+
+  const targetStatus = statuses.value.find(s => s.id === targetStatusId)
+
+  try {
+    // Update sprint first, then change status
+    await issueApi.update(issue.id, { sprintId: targetSprintId })
+    // Transition status if different from current
+    if (issue.statusId !== targetStatusId) {
+      await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
+    }
+
+    // Remove from backlog panel
+    backlogPanelRef.value?.removeIssue(issue.id)
+
+    // Add to board issues list
+    const updatedIssue: IssueVO = {
+      ...issue,
+      statusId: targetStatusId,
+      sprintId: targetSprintId
+    }
+    issues.value.push(updatedIssue)
+
+    Message.success(`${issue.issueKey} 已添加到看板「${localizeStatusName(targetStatus?.name)}」`)
+  } catch (e: any) {
+    const errMsg = e.response?.data?.message || '操作失败'
+    Message.error(`${issue.issueKey} 移入看板失败：${errMsg}`)
+  }
+}
+
+/** Get the active sprint ID for the current project */
+function getActiveSprintId(): string | undefined {
+  const activeSprint = sprints.value.find(s => s.status === 'active')
+  return activeSprint?.id
+}
+
 // ===== 撤销逻辑 =====
 
 async function undoTransition(entry: UndoEntry) {
@@ -898,7 +1093,7 @@ async function undoTransition(entry: UndoEntry) {
 
   try {
     await issueApi.undoTransitStatus(issue.id, entry.oldStatusId)
-    Message.success(`${entry.issueKey} 已撤销回「${entry.oldStatusName}」`)
+    Message.success(`${entry.issueKey} 已撤销回「${localizeStatusName(entry.oldStatusName)}」`)
     undoStack.value = undoStack.value.filter(e => e !== entry)
   } catch (e: any) {
     issue.statusId = currentStatusId
@@ -1083,6 +1278,12 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.board-main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
 /* ===== 平面看板（无分组） ===== */
 .board-container {
   flex: 1;
@@ -1251,6 +1452,43 @@ onUnmounted(() => {
   transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
   user-select: none;
 }
+
+/* Card Size Variants */
+.kanban-card--S {
+  padding: 6px 10px;
+}
+.kanban-card--S .card-header {
+  margin-bottom: 4px;
+}
+.kanban-card--S .card-footer {
+  margin-top: 6px;
+}
+
+.kanban-card--M {
+  padding: 10px 12px;
+}
+
+.kanban-card--L {
+  padding: 12px 14px;
+}
+.kanban-card--L .card-header {
+  margin-bottom: 8px;
+}
+.kanban-card--L .card-footer {
+  margin-top: 10px;
+}
+
+/* Card title line-clamp by size */
+.card-title--S {
+  -webkit-line-clamp: 1;
+}
+.card-title--M {
+  -webkit-line-clamp: 2;
+}
+.card-title--L {
+  -webkit-line-clamp: 3;
+}
+
 .kanban-card:hover {
   border-color: rgb(var(--primary-6));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -1341,9 +1579,89 @@ onUnmounted(() => {
   border-radius: 3px;
 }
 
-.card-assignee {
+.card-assignee-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-white);
+  background: rgb(var(--primary-6));
+  border-radius: 50%;
+}
+
+/* ===== Custom Fields on card ===== */
+.card-custom-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.card-cf-tag {
+  font-size: 10px;
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Card Size Toggle Group ===== */
+.card-size-group {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.card-size-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-3);
   font-size: 11px;
-  color: var(--color-text-2);
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+.card-size-btn:hover {
+  background: var(--color-fill-2);
+  color: var(--color-text-1);
+}
+.card-size-btn + .card-size-btn {
+  border-left: 1px solid var(--color-border);
+}
+.card-size-btn--active {
+  background: rgb(var(--primary-6));
+  color: #fff;
+}
+.card-size-btn--active:hover {
+  background: rgb(var(--primary-6));
+  color: #fff;
 }
 
 /* ===== 展开空列的空状态 ===== */
@@ -1382,6 +1700,7 @@ onUnmounted(() => {
 
 /* ===== 页面空状态 ===== */
 .empty-state {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
