@@ -48,8 +48,8 @@
             <span class="time-text">{{ formatDate(user.lastLoginAt) }}</span>
           </div>
           <div class="col" style="width:120px">
-            <button v-if="user.status === 'active'" class="btn-sm danger" @click="disableUser(user)">禁用</button>
-            <button v-else class="btn-sm" @click="enableUser(user)">启用</button>
+            <button v-if="user.status === 'active' && user.id !== currentUserId" class="btn-sm danger" @click="disableUser(user)">禁用</button>
+            <button v-else-if="user.status !== 'active'" class="btn-sm" @click="enableUser(user)">启用</button>
             <button class="btn-sm" @click="openRoleDialog(user)">角色</button>
           </div>
         </div>
@@ -246,6 +246,10 @@ import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import request from '@/api/request'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const currentUserId = computed(() => authStore.user?.userId)
 
 const users = ref<any[]>([])
 const total = ref(0)

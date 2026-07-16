@@ -6,6 +6,7 @@ import com.trackflow.auth.service.KeycloakAdminService;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
@@ -199,9 +200,15 @@ public class UserService {
     public void disable(Long id) {
         SysUser user = getById(id);
 
+        // 禁止禁用自己
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (id.equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不能禁用自己的账号");
+        }
+
         // 保护最后一个系统管理员
         if (isLastSystemAdmin(id)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Cannot disable the last system administrator");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "系统至少需要保留一个活跃管理员");
         }
 
         user.setStatus("disabled");
@@ -262,9 +269,15 @@ public class UserService {
      */
     @Transactional
     public void removeGlobalRole(Long userId, Long roleId) {
+        // 禁止移除自己的系统管理员角色
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (SYSTEM_ADMIN_ROLE_ID.equals(roleId) && userId.equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移除自己的系统管理员角色");
+        }
+
         // 保护最后一个系统管理员
         if (SYSTEM_ADMIN_ROLE_ID.equals(roleId) && isLastSystemAdmin(userId)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Cannot remove the last system administrator role");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "系统至少需要保留一个活跃管理员");
         }
 
         userRoleMapper.delete(
