@@ -40,4 +40,18 @@ public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition>
             """)
     List<Long> findTransitionableSourceStatusIds(@Param("projectId") Long projectId,
                                                  @Param("roleIds") String roleIds);
+
+    /**
+     * 检查指定状态在某个 issueType 的工作流中是否存在（作为 old_status 或 new_status）
+     * 用于类型变更后判断当前状态是否仍然合法
+     */
+    @Select("""
+            SELECT COUNT(*) FROM workflow_transition
+            WHERE (project_id = #{projectId} OR project_id IS NULL)
+              AND (issue_type = #{issueType} OR issue_type = '*')
+              AND (old_status_id = #{statusId} OR new_status_id = #{statusId})
+            """)
+    int countStatusInWorkflow(@Param("projectId") Long projectId,
+                              @Param("issueType") String issueType,
+                              @Param("statusId") Long statusId);
 }

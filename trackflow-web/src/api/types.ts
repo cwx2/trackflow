@@ -192,6 +192,8 @@ export interface IssueDetailVO extends IssueVO {
   resolvedAt?: string
   children?: ChildIssueVO[]
   childProgress?: ChildProgressVO
+  /** 类型变更导致状态自动重置时为 true（仅 update 响应中出现） */
+  statusAutoReset?: boolean
 }
 
 /** 子任务简要信息 */

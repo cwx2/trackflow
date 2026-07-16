@@ -70,6 +70,15 @@ public class StatusCacheHelper {
     }
 
     /**
+     * 获取状态名称（通过 DB 查询，不缓存名称——仅用于活动记录等低频场景）
+     */
+    public String getStatusName(Long statusId) {
+        if (statusId == null) return null;
+        IssueStatus status = statusMapper.selectById(statusId);
+        return status != null ? status.getName() : null;
+    }
+
+    /**
      * 手动失效缓存（状态表发生变更时调用）。
      */
     public void invalidate() {

@@ -288,6 +288,24 @@ public class WorkflowService {
     }
 
     /**
+     * 检查指定状态在某个 issueType 的工作流图中是否存在。
+     * 即该状态是否作为任何转换规则的 old_status 或 new_status 出现。
+     * 用于类型变更后判断当前状态在新类型下是否仍然可达。
+     */
+    public boolean isStatusInWorkflow(Long projectId, String issueType, Long statusId) {
+        int count = transitionMapper.countStatusInWorkflow(projectId, issueType, statusId);
+        return count > 0;
+    }
+
+    /**
+     * 获取系统默认状态（is_default = true 的状态）
+     */
+    public IssueStatus getDefaultStatus() {
+        return statusMapper.selectOne(
+                new LambdaQueryWrapper<IssueStatus>().eq(IssueStatus::getIsDefault, true));
+    }
+
+    /**
      * 记录工作流变更审计日志
      */
     private void recordActivity(Long projectId, String issueType, Long roleId,

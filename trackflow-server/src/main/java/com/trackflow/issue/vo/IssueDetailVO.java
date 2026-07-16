@@ -45,4 +45,7 @@ public class IssueDetailVO {
     private List<ChildIssueVO> children;
     /** 子任务进度汇总（仅当有子任务时非空） */
     private ChildProgressVO childProgress;
+
+    /** 类型变更导致状态自动重置时为 true（仅 update 响应中出现） */
+    private Boolean statusAutoReset;
 }

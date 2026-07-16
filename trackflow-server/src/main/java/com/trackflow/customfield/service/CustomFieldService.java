@@ -12,6 +12,7 @@ import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CustomFieldService {
@@ -345,6 +347,41 @@ public class CustomFieldService {
                 .eq(CustomFieldValue::getIssueId, issueId))
                 .stream()
                 .collect(Collectors.toMap(CustomFieldValue::getCustomFieldId, CustomFieldValue::getValue));
+    }
+
+    /**
+     * 删除工单中不再适用于新 issueType 的自定义字段值。
+     * 类型变更后调用，参考 OpenProject reset_custom_values! 逻辑。
+     *
+     * @return 被删除的字段 ID 列表
+     */
+    @Transactional
+    public List<Long> removeOrphanValues(Long issueId, String newIssueType, Long projectId) {
+        Map<Long, String> currentValues = getValues(issueId);
+        if (currentValues.isEmpty()) return List.of();
+
+        // 获取新类型下适用的字段集合
+        List<CustomFieldDefinition> applicableFields = listByProject(projectId, newIssueType);
+        Set<Long> applicableFieldIds = applicableFields.stream()
+                .map(CustomFieldDefinition::getId)
+                .collect(Collectors.toSet());
+
+        // 找出不再适用的字段 ID
+        List<Long> orphanFieldIds = currentValues.keySet().stream()
+                .filter(fieldId -> !applicableFieldIds.contains(fieldId))
+                .toList();
+
+        if (orphanFieldIds.isEmpty()) return List.of();
+
+        // 删除不再适用的字段值
+        valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
+                .eq(CustomFieldValue::getIssueId, issueId)
+                .in(CustomFieldValue::getCustomFieldId, orphanFieldIds));
+
+        log.info("Issue {} type changed to {}: removed {} orphan custom field values (fieldIds: {})",
+                issueId, newIssueType, orphanFieldIds.size(), orphanFieldIds);
+
+        return orphanFieldIds;
     }
 
     /**

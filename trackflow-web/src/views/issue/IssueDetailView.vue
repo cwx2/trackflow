@@ -733,7 +733,12 @@ async function onEditField(key: string, newValue: string) {
 
   try {
     if (key === 'assignee' && newValue) { await issueApi.assign(issue.value!.id, newValue) }
-    else { await issueApi.update(issue.value!.id, { [prop]: val, version: issue.value!.version }) }
+    else {
+      const res = await issueApi.update(issue.value!.id, { [prop]: val, version: issue.value!.version })
+      if (res.data?.statusAutoReset) {
+        Message.warning({ content: '类型变更导致状态与工作流不兼容，已自动重置为默认状态', duration: 5000 })
+      }
+    }
     await loadAll()
     Message.success('已更新')
   } catch (e: any) { handleUpdateError(e) }

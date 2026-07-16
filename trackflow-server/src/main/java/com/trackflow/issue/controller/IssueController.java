@@ -113,8 +113,12 @@ public class IssueController {
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<IssueDetailVO> update(@PathVariable Long id, @Valid @RequestBody UpdateIssueDTO dto) {
-        issueService.update(id, dto);
-        return R.ok(issueService.getDetail(id));
+        IssueService.UpdateResult result = issueService.update(id, dto);
+        IssueDetailVO detail = issueService.getDetail(id);
+        if (result.statusAutoReset()) {
+            detail.setStatusAutoReset(true);
+        }
+        return R.ok(detail);
     }
 
     /**

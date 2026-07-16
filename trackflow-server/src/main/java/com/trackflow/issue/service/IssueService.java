@@ -43,6 +43,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class IssueService {
 
+    /**
+     * Update 操作结果，包含更新后的实体和附加标志
+     */
+    public record UpdateResult(Issue issue, boolean statusAutoReset) {}
+
     private final IssueMapper issueMapper;
     private final IssueStatusMapper statusMapper;
     private final IssueCommentMapper commentMapper;
@@ -429,7 +434,7 @@ public class IssueService {
      * 更新 Issue
      */
     @Transactional
-    public Issue update(Long id, UpdateIssueDTO dto) {
+    public UpdateResult update(Long id, UpdateIssueDTO dto) {
         Issue issue = getById(id);
         // 归档项目不允许编辑工单
         projectService.assertProjectActive(issue.getProjectId());
@@ -441,6 +446,7 @@ public class IssueService {
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
+        boolean statusAutoReset = false;
 
         if (dto.getTitle() != null) {
             String trimmedTitle = dto.getTitle().trim();
@@ -456,9 +462,33 @@ public class IssueService {
                     dto.getDescription() != null ? "（已更新）" : null);
             issue.setDescription(dto.getDescription());
         }
-        if (dto.getIssueType() != null) {
-            recordActivity(id, currentUserId, "updated", "issue_type", issue.getIssueType(), dto.getIssueType());
-            issue.setIssueType(dto.getIssueType());
+        if (dto.getIssueType() != null && !dto.getIssueType().equals(issue.getIssueType())) {
+            String oldType = issue.getIssueType();
+            String newType = dto.getIssueType();
+
+            // 1. 工作流状态兼容性检查：当前状态在新类型的工作流图中是否仍然可达
+            boolean statusValid = workflowService.isStatusInWorkflow(
+                    issue.getProjectId(), newType, issue.getStatusId());
+            if (!statusValid) {
+                // 自动回退到系统默认状态
+                IssueStatus defaultStatus = workflowService.getDefaultStatus();
+                if (defaultStatus != null) {
+                    Long oldStatusId = issue.getStatusId();
+                    issue.setStatusId(defaultStatus.getId());
+                    String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
+                    recordActivity(id, currentUserId, "status_reset", "status",
+                            oldStatusName, defaultStatus.getName());
+                    statusAutoReset = true;
+                    log.info("Issue {} type changed from {} to {}: status auto-reset from {} to default ({})",
+                            id, oldType, newType, oldStatusName, defaultStatus.getName());
+                }
+            }
+
+            // 2. 自定义字段重新适配：删除不再适用于新类型的字段值
+            customFieldService.removeOrphanValues(issue.getId(), newType, issue.getProjectId());
+
+            recordActivity(id, currentUserId, "updated", "issue_type", oldType, newType);
+            issue.setIssueType(newType);
         }
         if (dto.getPriority() != null) {
             recordActivity(id, currentUserId, "updated", "priority", issue.getPriority(), dto.getPriority());
@@ -544,7 +574,7 @@ public class IssueService {
         }
 
         issueMapper.updateById(issue);
-        return issue;
+        return new UpdateResult(issue, statusAutoReset);
     }
 
     /**
