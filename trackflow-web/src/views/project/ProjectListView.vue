@@ -933,12 +933,17 @@ function formatActivityText(act: ProjectActivityVO): string {
   try { detail = act.detail ? JSON.parse(act.detail) : {} } catch { /* ignore */ }
 
   switch (act.action) {
-    case 'add_member':
-      return `${operator} 添加了成员 ${target}（角色：${detail.role_name || ''}）`
+    case 'add_member': {
+      const roleName = detail.role_names || detail.role_name || '未知角色'
+      return `${operator} 添加了成员 ${target}（角色：${roleName}）`
+    }
     case 'remove_member':
       return `${operator} 移除了成员 ${target}`
-    case 'change_role':
-      return `${operator} 将 ${target} 的角色从「${detail.old_role_name || ''}」变更为「${detail.new_role_name || ''}」`
+    case 'change_role': {
+      const oldRole = detail.old_role_names || detail.old_role_name || '未知角色'
+      const newRole = detail.new_role_names || detail.new_role_name || '未知角色'
+      return `${operator} 将 ${target} 的角色从「${oldRole}」变更为「${newRole}」`
+    }
     case 'change_lead':
       return `${operator} 将项目负责人从「${detail.old_lead_name || '未设置'}」变更为「${detail.new_lead_name || ''}」`
     default:

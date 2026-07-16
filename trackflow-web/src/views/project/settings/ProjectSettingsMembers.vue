@@ -239,21 +239,35 @@ function getActivityDotClass(action: string): string {
 }
 
 function formatActivityText(act: ProjectActivityVO): string {
+  const operator = act.userName || '未知用户'
+  const target = act.targetUserName || '未知用户'
+  let detail: any = {}
+  try { detail = act.detail ? JSON.parse(act.detail) : {} } catch { /* ignore */ }
+
   switch (act.action) {
     case 'member_added':
-    case 'add_member':
-      return `${act.userName} 添加了成员 ${act.targetUserName || ''}`
+    case 'add_member': {
+      const roleName = detail.role_names || detail.role_name || ''
+      return roleName
+        ? `${operator} 添加了成员 ${target}（角色：${roleName}）`
+        : `${operator} 添加了成员 ${target}`
+    }
     case 'member_removed':
     case 'remove_member':
-      return `${act.userName} 移除了成员 ${act.targetUserName || ''}`
+      return `${operator} 移除了成员 ${target}`
     case 'member_role_changed':
-    case 'change_role':
-      return `${act.userName} 变更了 ${act.targetUserName || ''} 的角色`
+    case 'change_role': {
+      const oldRole = detail.old_role_names || detail.old_role_name || '未知角色'
+      const newRole = detail.new_role_names || detail.new_role_name || '未知角色'
+      return `${operator} 将 ${target} 的角色从「${oldRole}」变更为「${newRole}」`
+    }
     case 'change_lead':
-    case 'lead_changed':
-      return `${act.userName} 将负责人变更为 ${act.targetUserName || ''}`
+    case 'lead_changed': {
+      const newLead = detail.new_lead_name || target
+      return `${operator} 将负责人变更为 ${newLead}`
+    }
     default:
-      return `${act.userName} ${act.action.replace(/_/g, ' ')}`
+      return `${operator} ${act.action.replace(/_/g, ' ')}`
   }
 }
 

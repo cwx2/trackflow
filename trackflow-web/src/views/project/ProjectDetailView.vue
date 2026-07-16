@@ -510,14 +510,24 @@ function formatActivityAction(activity: ProjectActivityVO): string {
 
   switch (action) {
     case 'member_added':
-    case 'add_member':
-      return `添加了成员 ${activity.targetUserName || ''}`
+    case 'add_member': {
+      const roleName = detail.role_names || detail.role_name || ''
+      return roleName
+        ? `添加了成员 ${activity.targetUserName || ''}（角色：${roleName}）`
+        : `添加了成员 ${activity.targetUserName || ''}`
+    }
     case 'member_removed':
     case 'remove_member':
       return `移除了成员 ${activity.targetUserName || ''}`
     case 'member_role_changed':
-    case 'change_role':
+    case 'change_role': {
+      const oldRole = detail.old_role_names || detail.old_role_name || ''
+      const newRole = detail.new_role_names || detail.new_role_name || ''
+      if (oldRole && newRole) {
+        return `将 ${activity.targetUserName || ''} 的角色从「${oldRole}」变更为「${newRole}」`
+      }
       return `变更了 ${activity.targetUserName || ''} 的角色`
+    }
     case 'project_created':
     case 'create_project':
       return '创建了项目'
