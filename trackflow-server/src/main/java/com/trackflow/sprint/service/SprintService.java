@@ -103,10 +103,35 @@ public class SprintService {
         return sprint;
     }
 
+    /**
+     * 检查同项目内 Sprint 名称唯一性（大小写不敏感）。
+     * 参考 OpenProject: validates :name, uniqueness: { scope: [:project_id], case_sensitive: false }
+     *
+     * @param projectId 项目 ID
+     * @param name      Sprint 名称
+     * @param excludeId 排除的 Sprint ID（更新时排除自身），创建时传 null
+     */
+    private void checkNameUniqueness(Long projectId, String name, Long excludeId) {
+        String trimmedName = name.trim();
+        LambdaQueryWrapper<Sprint> wrapper = new LambdaQueryWrapper<Sprint>()
+                .eq(Sprint::getProjectId, projectId)
+                .apply("LOWER(name) = LOWER({0})", trimmedName);
+        if (excludeId != null) {
+            wrapper.ne(Sprint::getId, excludeId);
+        }
+        Long count = sprintMapper.selectCount(wrapper);
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该项目已存在同名迭代：" + trimmedName);
+        }
+    }
+
     @Transactional
     public Sprint create(Long projectId, CreateSprintDTO dto) {
         // 归档项目不允许创建 Sprint
         projectService.assertProjectActive(projectId);
+
+        // 检查名称在项目内唯一
+        checkNameUniqueness(projectId, dto.getName(), null);
 
         Sprint sprint = new Sprint();
         sprint.setProjectId(projectId);
@@ -256,6 +281,8 @@ public class SprintService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "迭代名称不能为空");
             }
             if (!trimmed.equals(sprint.getName())) {
+                // 检查新名称在项目内唯一（排除自身）
+                checkNameUniqueness(sprint.getProjectId(), trimmed, id);
                 changes.add(buildFieldChange("name", sprint.getName(), trimmed));
                 sprint.setName(trimmed);
             }
