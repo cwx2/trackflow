@@ -4,10 +4,12 @@ import com.trackflow.common.model.R;
 import com.trackflow.sprint.converter.SprintConverter;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
+import com.trackflow.sprint.dto.DeleteSprintDTO;
 import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.service.SprintService;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
+import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -65,10 +67,16 @@ public class SprintController {
         return R.ok(sprintConverter.toVO(sprintService.complete(id, dto)));
     }
 
+    @GetMapping("/api/v1/sprints/{id}/deletion-preview")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:delete')")
+    public R<DeletionPreviewVO> deletionPreview(@PathVariable Long id) {
+        return R.ok(sprintService.getDeletionPreview(id));
+    }
+
     @DeleteMapping("/api/v1/sprints/{id}")
     @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:delete')")
-    public R<Void> delete(@PathVariable Long id) {
-        sprintService.delete(id);
+    public R<Void> delete(@PathVariable Long id, @RequestBody(required = false) @Valid DeleteSprintDTO dto) {
+        sprintService.delete(id, dto);
         return R.ok();
     }
 

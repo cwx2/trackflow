@@ -8,12 +8,14 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
+import com.trackflow.sprint.dto.DeleteSprintDTO;
 import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
+import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintVO;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -275,11 +277,91 @@ public class SprintService {
         return issueMapper.selectBatchIds(openIssueIds);
     }
 
+    /**
+     * 获取 Sprint 删除预览：展示受影响工单数量和可迁移目标。
+     */
+    public DeletionPreviewVO getDeletionPreview(Long sprintId) {
+        Sprint sprint = getById(sprintId);
+        projectService.assertProjectActive(sprint.getProjectId());
+
+        DeletionPreviewVO vo = new DeletionPreviewVO();
+        vo.setSprintName(sprint.getName());
+
+        // 日期范围描述
+        if (sprint.getStartDate() != null && sprint.getEndDate() != null) {
+            vo.setDateRange(sprint.getStartDate().getMonthValue() + "/" + sprint.getStartDate().getDayOfMonth()
+                    + " - " + sprint.getEndDate().getMonthValue() + "/" + sprint.getEndDate().getDayOfMonth());
+        }
+
+        // 关联工单总数（包括已完成和未完成）
+        Long issueCount = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>().eq(Issue::getSprintId, sprintId)
+        );
+        vo.setTotalIssues(issueCount.intValue());
+
+        // 查询同项目中可迁移的目标 Sprint（planned/active，排除自身）
+        List<Sprint> candidateSprints = sprintMapper.selectList(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, sprint.getProjectId())
+                        .ne(Sprint::getId, sprintId)
+                        .in(Sprint::getStatus, SprintStatus.PLANNED, SprintStatus.ACTIVE)
+                        .orderByAsc(Sprint::getCreatedAt)
+        );
+        List<DeletionPreviewVO.TargetSprintItem> targetSprints = candidateSprints.stream().map(s -> {
+            DeletionPreviewVO.TargetSprintItem item = new DeletionPreviewVO.TargetSprintItem();
+            item.setId(String.valueOf(s.getId()));
+            item.setName(s.getName());
+            item.setStatus(s.getStatus().getValue());
+            return item;
+        }).collect(Collectors.toList());
+        vo.setTargetSprints(targetSprints);
+
+        return vo;
+    }
+
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, DeleteSprintDTO dto) {
         Sprint sprint = getById(id);
         // 归档项目不允许删除 Sprint
         projectService.assertProjectActive(sprint.getProjectId());
+
+        // 查询关联工单
+        List<Issue> issues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>().eq(Issue::getSprintId, id)
+        );
+
+        // 有关联工单时必须处理
+        if (!issues.isEmpty()) {
+            if (dto == null || dto.getMoveOption() == null || dto.getMoveOption().isBlank()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "该迭代包含 " + issues.size() + " 个工单，请选择处理方式");
+            }
+
+            Long newSprintId = null;
+            if ("next_sprint".equals(dto.getMoveOption())) {
+                if (dto.getTargetSprintId() == null) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "请选择目标迭代");
+                }
+                // 验证目标 Sprint 存在且属于同一项目
+                Sprint targetSprint = sprintMapper.selectById(dto.getTargetSprintId());
+                if (targetSprint == null || !targetSprint.getProjectId().equals(sprint.getProjectId())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代不存在或不属于当前项目");
+                }
+                if (targetSprint.getStatus() == SprintStatus.COMPLETED) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代已完成，无法移入");
+                }
+                newSprintId = dto.getTargetSprintId();
+            }
+            // "backlog" 时 newSprintId 保持 null
+
+            // 批量更新工单的 sprint_id
+            List<Long> issueIds = issues.stream().map(Issue::getId).collect(Collectors.toList());
+            issueMapper.update(null,
+                    new LambdaUpdateWrapper<Issue>()
+                            .in(Issue::getId, issueIds)
+                            .set(Issue::getSprintId, newSprintId)
+            );
+        }
 
         sprintMapper.deleteById(id);
     }

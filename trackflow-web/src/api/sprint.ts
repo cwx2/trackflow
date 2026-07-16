@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, SprintVO, SprintBurndownVO, CompletionPreviewVO } from './types'
+import type { R, SprintVO, SprintBurndownVO, CompletionPreviewVO, DeletionPreviewVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -44,9 +44,14 @@ export const sprintApi = {
     return request.get<any, R<CompletionPreviewVO>>(`/sprints/${id}/completion-preview`)
   },
 
-  /** 删除 Sprint */
-  delete(id: string) {
-    return request.delete<any, R<void>>(`/sprints/${id}`)
+  /** Sprint 删除预览（获取受影响工单数量和可迁移目标） */
+  deletionPreview(id: string) {
+    return request.get<any, R<DeletionPreviewVO>>(`/sprints/${id}/deletion-preview`)
+  },
+
+  /** 删除 Sprint（含关联工单处理选项） */
+  delete(id: string, data?: { moveOption: string; targetSprintId?: string }) {
+    return request.delete<any, R<void>>(`/sprints/${id}`, { data })
   },
 
   /** 获取 Sprint 燃尽图数据 */

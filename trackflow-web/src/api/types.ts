@@ -505,3 +505,17 @@ export interface CompletionPreviewTarget {
   name: string
   status: string
 }
+
+// ========== Sprint 删除预览 ==========
+export interface DeletionPreviewVO {
+  sprintName: string
+  dateRange?: string
+  totalIssues: number
+  targetSprints: DeletionPreviewTarget[]
+}
+
+export interface DeletionPreviewTarget {
+  id: string
+  name: string
+  status: string
+}

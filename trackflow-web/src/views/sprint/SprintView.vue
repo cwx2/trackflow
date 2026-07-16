@@ -188,9 +188,7 @@
           <a-tooltip v-if="canEditSprint" :content="getActivateTooltip(sprint)">
             <a-button type="primary" size="mini" :disabled="hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
-          <a-popconfirm v-if="canDeleteSprint" content="确定删除此迭代？" @ok="deleteSprint(sprint.id)">
-            <a-button size="mini" status="danger">删除</a-button>
-          </a-popconfirm>
+          <a-button v-if="canDeleteSprint" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
         </div>
       </div>
 
@@ -435,6 +433,89 @@
         <p style="margin-top: 12px; color: var(--color-text-3);">正在获取工单信息…</p>
       </div>
     </a-modal>
+
+    <!-- 删除 Sprint 确认弹窗 -->
+    <a-modal
+      v-model:visible="showDeleteModal"
+      :title="`删除迭代：${deletingSprintName}`"
+      :width="520"
+      :ok-loading="deleting"
+      ok-text="确认删除"
+      :ok-button-props="{ status: 'danger' }"
+      @ok="confirmDeleteSprint"
+      @cancel="showDeleteModal = false"
+    >
+      <!-- 无关联工单 -->
+      <div v-if="deletionPreview && deletionPreview.totalIssues === 0" class="delete-no-issues">
+        <div class="delete-warning-banner">
+          <span class="warning-icon">⚠️</span>
+          <span class="warning-text">此操作不可撤销</span>
+        </div>
+        <p class="delete-desc">
+          确定删除迭代 <strong>{{ deletionPreview.sprintName }}</strong>
+          <template v-if="deletionPreview.dateRange"> ({{ deletionPreview.dateRange }})</template>？
+        </p>
+        <p class="delete-hint">该迭代中没有工单，删除后不会影响任何工单。</p>
+      </div>
+
+      <!-- 有关联工单 -->
+      <div v-else-if="deletionPreview" class="delete-with-issues">
+        <div class="delete-warning-banner danger">
+          <span class="warning-icon">🚨</span>
+          <span class="warning-text">此操作不可撤销</span>
+        </div>
+
+        <p class="delete-desc">
+          确定删除迭代 <strong>{{ deletionPreview.sprintName }}</strong>
+          <template v-if="deletionPreview.dateRange"> ({{ deletionPreview.dateRange }})</template>？
+        </p>
+
+        <div class="delete-impact-info">
+          <span class="impact-icon">📋</span>
+          <span>该迭代包含 <strong>{{ deletionPreview.totalIssues }}</strong> 个工单，删除后这些工单的迭代归属将被清空。</span>
+        </div>
+
+        <!-- 处理方式选择 -->
+        <div class="delete-move-section">
+          <p class="move-option-label">请选择工单处理方式：</p>
+          <a-radio-group v-model="deleteMoveOption" direction="vertical">
+            <a-radio value="backlog">
+              <span class="radio-label">移回 Backlog</span>
+              <span class="radio-desc">清空工单的迭代归属，回到待规划状态</span>
+            </a-radio>
+            <a-radio value="next_sprint" :disabled="deletionPreview.targetSprints.length === 0">
+              <span class="radio-label">移入其他迭代</span>
+              <span class="radio-desc" v-if="deletionPreview.targetSprints.length > 0">
+                将工单转移到指定的迭代中
+              </span>
+              <span class="radio-desc disabled" v-else>
+                当前项目没有其他可用迭代
+              </span>
+            </a-radio>
+          </a-radio-group>
+
+          <!-- 目标 Sprint 选择 -->
+          <div v-if="deleteMoveOption === 'next_sprint' && deletionPreview.targetSprints.length > 0" class="target-sprint-select">
+            <a-select v-model="deleteTargetSprintId" placeholder="选择目标迭代" style="width: 100%">
+              <a-option
+                v-for="target in deletionPreview.targetSprints"
+                :key="target.id"
+                :value="target.id"
+              >
+                {{ target.name }}
+                <span class="target-status-tag">{{ target.status === 'active' ? '进行中' : '计划中' }}</span>
+              </a-option>
+            </a-select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 加载中 -->
+      <div v-else class="complete-loading">
+        <a-spin :size="24" />
+        <p style="margin-top: 12px; color: var(--color-text-3);">正在获取迭代信息…</p>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -446,7 +527,7 @@ import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
-import type { SprintVO, CompletionPreviewVO } from '@/api/types'
+import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO } from '@/api/types'
 import SprintBurndownChart from './SprintBurndownChart.vue'
 
 const router = useRouter()
@@ -485,6 +566,15 @@ const completingSprintName = ref<string>('')
 const completionPreview = ref<CompletionPreviewVO | null>(null)
 const moveOption = ref<string>('backlog')
 const targetSprintId = ref<string>('')
+
+// ===== 删除迭代相关 =====
+const showDeleteModal = ref(false)
+const deleting = ref(false)
+const deletingSprintId = ref<string>('')
+const deletingSprintName = ref<string>('')
+const deletionPreview = ref<DeletionPreviewVO | null>(null)
+const deleteMoveOption = ref<string>('backlog')
+const deleteTargetSprintId = ref<string>('')
 
 /**
  * 加载状态机：
@@ -668,13 +758,55 @@ async function confirmCompleteSprint() {
   }
 }
 
-async function deleteSprint(id: string) {
+async function handleDeleteSprint(sprint: SprintVO) {
+  deletingSprintId.value = sprint.id
+  deletingSprintName.value = sprint.name
+  deletionPreview.value = null
+  deleteMoveOption.value = 'backlog'
+  deleteTargetSprintId.value = ''
+  showDeleteModal.value = true
+
   try {
-    await sprintApi.delete(id)
+    const res = await sprintApi.deletionPreview(sprint.id)
+    deletionPreview.value = res.data
+
+    // 如果有工单且有可迁移目标，默认选中第一个
+    if (res.data.totalIssues > 0 && res.data.targetSprints.length > 0) {
+      deleteTargetSprintId.value = res.data.targetSprints[0].id
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '获取预览信息失败')
+    showDeleteModal.value = false
+  }
+}
+
+async function confirmDeleteSprint() {
+  if (!deletionPreview.value) return
+
+  const hasIssues = deletionPreview.value.totalIssues > 0
+
+  // 有工单时需要验证选项
+  if (hasIssues) {
+    if (deleteMoveOption.value === 'next_sprint' && !deleteTargetSprintId.value) {
+      Message.warning('请选择目标迭代')
+      return
+    }
+  }
+
+  deleting.value = true
+  try {
+    const body = hasIssues
+      ? { moveOption: deleteMoveOption.value, targetSprintId: deleteMoveOption.value === 'next_sprint' ? deleteTargetSprintId.value : undefined }
+      : undefined
+
+    await sprintApi.delete(deletingSprintId.value, body)
     Message.success('迭代已删除')
+    showDeleteModal.value = false
     loadSprints()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '删除失败')
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -1175,5 +1307,67 @@ onMounted(async () => {
 .sprint-status-hint .hint-text {
   flex: 1;
   color: rgb(var(--primary-6));
+}
+
+/* ===== 删除迭代弹窗 ===== */
+.delete-no-issues,
+.delete-with-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.delete-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(var(--warning-6), 0.08);
+  border: 1px solid rgba(var(--warning-6), 0.2);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--warning-6));
+}
+.delete-warning-banner.danger {
+  background: rgba(var(--danger-6), 0.08);
+  border-color: rgba(var(--danger-6), 0.2);
+  color: rgb(var(--danger-6));
+}
+
+.delete-desc {
+  font-size: 14px;
+  color: var(--color-text-1);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.delete-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
+  margin: 0;
+}
+
+.delete-impact-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--color-fill-1);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-text-1);
+  line-height: 1.5;
+}
+.impact-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.delete-move-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 </style>
