@@ -266,6 +266,23 @@ function formatActivityText(act: ProjectActivityVO): string {
       const newLead = detail.new_lead_name || target
       return `${operator} 将负责人变更为 ${newLead}`
     }
+    case 'update_project':
+    case 'project_updated': {
+      const field = detail.field
+      if (field === 'name') {
+        return `${operator} 将项目名称从「${detail.old_value || ''}」变更为「${detail.new_value || ''}」`
+      } else if (field === 'description') {
+        return `${operator} 更新了项目描述`
+      }
+      return `${operator} 更新了项目设置`
+    }
+    case 'change_visibility':
+    case 'visibility_changed': {
+      const visibilityMap: Record<string, string> = { private: '私有', internal: '内部', public: '公开' }
+      const oldVis = visibilityMap[detail.old_value] || detail.old_value || ''
+      const newVis = visibilityMap[detail.new_value] || detail.new_value || ''
+      return `${operator} 将项目可见性从「${oldVis}」变更为「${newVis}」`
+    }
     default:
       return `${operator} ${act.action.replace(/_/g, ' ')}`
   }

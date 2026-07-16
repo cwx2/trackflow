@@ -532,8 +532,15 @@ function formatActivityAction(activity: ProjectActivityVO): string {
     case 'create_project':
       return '创建了项目'
     case 'project_updated':
-    case 'update_project':
-      return `更新了项目${detail.fields ? '（' + detail.fields + '）' : ''}`
+    case 'update_project': {
+      const field = detail.field
+      if (field === 'name') {
+        return `将项目名称从「${detail.old_value || ''}」变更为「${detail.new_value || ''}」`
+      } else if (field === 'description') {
+        return '更新了项目描述'
+      }
+      return `更新了项目${detail.fields ? '（' + detail.fields + '）' : '设置'}`
+    }
     case 'project_archived':
     case 'archive_project':
       return '归档了项目'
@@ -544,8 +551,11 @@ function formatActivityAction(activity: ProjectActivityVO): string {
     case 'change_lead':
       return `将负责人变更为 ${activity.targetUserName || ''}`
     case 'visibility_changed':
-    case 'change_visibility':
-      return `将可见性变更为 ${detail.visibility || ''}`
+    case 'change_visibility': {
+      const visibilityMap: Record<string, string> = { private: '私有', internal: '内部', public: '公开' }
+      const newVis = visibilityMap[detail.new_value] || detail.visibility || detail.new_value || ''
+      return `将项目可见性变更为「${newVis}」`
+    }
     default:
       return action.replace(/_/g, ' ')
   }

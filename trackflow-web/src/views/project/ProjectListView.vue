@@ -349,10 +349,12 @@
           <div v-else class="activity-list">
             <div v-for="act in activities" :key="act.id" class="activity-item">
               <div class="activity-icon">
-                <span v-if="act.action === 'add_member'">➕</span>
-                <span v-else-if="act.action === 'remove_member'">➖</span>
-                <span v-else-if="act.action === 'change_role'">🔄</span>
-                <span v-else-if="act.action === 'change_lead'">⭐</span>
+                <span v-if="act.action === 'add_member' || act.action === 'member_added'">➕</span>
+                <span v-else-if="act.action === 'remove_member' || act.action === 'member_removed'">➖</span>
+                <span v-else-if="act.action === 'change_role' || act.action === 'member_role_changed'">🔄</span>
+                <span v-else-if="act.action === 'change_lead' || act.action === 'lead_changed'">⭐</span>
+                <span v-else-if="act.action === 'update_project' || act.action === 'project_updated'">✏️</span>
+                <span v-else-if="act.action === 'change_visibility' || act.action === 'visibility_changed'">👁️</span>
                 <span v-else>📝</span>
               </div>
               <div class="activity-content">
@@ -971,19 +973,40 @@ function formatActivityText(act: ProjectActivityVO): string {
   try { detail = act.detail ? JSON.parse(act.detail) : {} } catch { /* ignore */ }
 
   switch (act.action) {
-    case 'add_member': {
+    case 'add_member':
+    case 'member_added': {
       const roleName = detail.role_names || detail.role_name || '未知角色'
       return `${operator} 添加了成员 ${target}（角色：${roleName}）`
     }
     case 'remove_member':
+    case 'member_removed':
       return `${operator} 移除了成员 ${target}`
-    case 'change_role': {
+    case 'change_role':
+    case 'member_role_changed': {
       const oldRole = detail.old_role_names || detail.old_role_name || '未知角色'
       const newRole = detail.new_role_names || detail.new_role_name || '未知角色'
       return `${operator} 将 ${target} 的角色从「${oldRole}」变更为「${newRole}」`
     }
     case 'change_lead':
+    case 'lead_changed':
       return `${operator} 将项目负责人从「${detail.old_lead_name || '未设置'}」变更为「${detail.new_lead_name || ''}」`
+    case 'update_project':
+    case 'project_updated': {
+      const field = detail.field
+      if (field === 'name') {
+        return `${operator} 将项目名称从「${detail.old_value || ''}」变更为「${detail.new_value || ''}」`
+      } else if (field === 'description') {
+        return `${operator} 更新了项目描述`
+      }
+      return `${operator} 更新了项目设置`
+    }
+    case 'change_visibility':
+    case 'visibility_changed': {
+      const visibilityMap: Record<string, string> = { private: '私有', internal: '内部', public: '公开' }
+      const oldVis = visibilityMap[detail.old_value] || detail.old_value || ''
+      const newVis = visibilityMap[detail.new_value] || detail.new_value || ''
+      return `${operator} 将项目可见性从「${oldVis}」变更为「${newVis}」`
+    }
     default:
       return `${operator} 执行了操作 ${act.action}`
   }

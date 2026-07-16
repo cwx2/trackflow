@@ -275,13 +275,40 @@ public class ProjectService {
         // 归档项目不允许修改
         assertProjectActive(id);
 
-        if (dto.getName() != null) project.setName(dto.getName());
-        if (dto.getDescription() != null) project.setDescription(dto.getDescription());
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 名称变更
+        if (dto.getName() != null && !dto.getName().equals(project.getName())) {
+            String oldName = project.getName();
+            project.setName(dto.getName());
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("field", "name");
+            detail.put("old_value", oldName);
+            detail.put("new_value", dto.getName());
+            projectActivityService.log(id, currentUserId, "update_project", null, detail);
+        }
+
+        // 描述变更
+        if (dto.getDescription() != null && !dto.getDescription().equals(project.getDescription())) {
+            String oldDesc = project.getDescription();
+            project.setDescription(dto.getDescription());
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("field", "description");
+            detail.put("old_value", oldDesc != null ? oldDesc : "");
+            detail.put("new_value", dto.getDescription());
+            projectActivityService.log(id, currentUserId, "update_project", null, detail);
+        }
 
         // 可见性变更：需要失效所有用户的 accessible_projects 缓存
         if (dto.getVisibility() != null && !dto.getVisibility().equals(project.getVisibility())) {
+            String oldVisibility = project.getVisibility();
             project.setVisibility(dto.getVisibility());
             invalidateAllAccessibleProjectsCache();
+            Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("field", "visibility");
+            detail.put("old_value", oldVisibility);
+            detail.put("new_value", dto.getVisibility());
+            projectActivityService.log(id, currentUserId, "change_visibility", null, detail);
         }
 
         // 负责人变更：需要完整的业务校验和权限联动
