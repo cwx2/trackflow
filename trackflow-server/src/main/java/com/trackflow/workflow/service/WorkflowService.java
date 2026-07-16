@@ -104,20 +104,20 @@ public class WorkflowService {
     }
 
     /**
-     * 根据角色 ID 列表查询可用的状态转换
+     * 根据角色 ID 列表查询可用的状态转换。
+     * <p>
+     * 使用 4 级优先级覆盖语义（与 ActionResolver 对齐）：
+     * <ol>
+     *   <li>project_id = X AND issue_type = 精确类型</li>
+     *   <li>project_id = X AND issue_type = '*'</li>
+     *   <li>project_id IS NULL AND issue_type = 精确类型</li>
+     *   <li>project_id IS NULL AND issue_type = '*'</li>
+     * </ol>
+     * 返回最高优先级非空层级的结果（项目级规则存在时不合并全局规则）。
      */
     private List<IssueStatus> getTransitionsForRoles(Issue issue, List<Long> roleIds) {
-        // 查询允许的目标状态
-        List<Long> allowedStatusIds = transitionMapper.findAllowedNewStatusIds(
-                issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId()
-        );
-
-        if (allowedStatusIds.isEmpty()) {
-            // Fallback: 尝试不带 projectId（全局规则）
-            allowedStatusIds = transitionMapper.findAllowedNewStatusIds(
-                    null, issue.getIssueType(), roleIds, issue.getStatusId()
-            );
-        }
+        List<Long> allowedStatusIds = resolveAllowedStatusIds(
+                issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId());
 
         if (allowedStatusIds.isEmpty()) {
             return List.of();
@@ -127,6 +127,47 @@ public class WorkflowService {
                 new LambdaQueryWrapper<IssueStatus>().in(IssueStatus::getId, allowedStatusIds)
                         .orderByAsc(IssueStatus::getSortOrder)
         );
+    }
+
+    /**
+     * 4 级优先级解析允许的目标状态 ID。
+     * 返回最高优先级非空层级的结果集。
+     */
+    private List<Long> resolveAllowedStatusIds(Long projectId, String issueType,
+                                               List<Long> roleIds, Long oldStatusId) {
+        // Level 1: project_id = X AND issue_type = 精确类型
+        List<Long> result = transitionMapper.findAllowedNewStatusIdsExact(
+                projectId, issueType, roleIds, oldStatusId);
+        if (!result.isEmpty()) {
+            log.debug("Workflow transition resolved at Level 1 (project+exactType): {} statuses", result.size());
+            return result;
+        }
+
+        // Level 2: project_id = X AND issue_type = '*'
+        result = transitionMapper.findAllowedNewStatusIdsExact(
+                projectId, "*", roleIds, oldStatusId);
+        if (!result.isEmpty()) {
+            log.debug("Workflow transition resolved at Level 2 (project+wildcard): {} statuses", result.size());
+            return result;
+        }
+
+        // Level 3: project_id IS NULL AND issue_type = 精确类型
+        result = transitionMapper.findAllowedNewStatusIdsExact(
+                null, issueType, roleIds, oldStatusId);
+        if (!result.isEmpty()) {
+            log.debug("Workflow transition resolved at Level 3 (global+exactType): {} statuses", result.size());
+            return result;
+        }
+
+        // Level 4: project_id IS NULL AND issue_type = '*'
+        result = transitionMapper.findAllowedNewStatusIdsExact(
+                null, "*", roleIds, oldStatusId);
+        if (!result.isEmpty()) {
+            log.debug("Workflow transition resolved at Level 4 (global+wildcard): {} statuses", result.size());
+            return result;
+        }
+
+        return List.of();
     }
 
     /**
@@ -235,17 +276,18 @@ public class WorkflowService {
     /**
      * 获取当前用户在指定项目中可以发起状态转换的源状态 ID 集合。
      * 用于看板等场景预判哪些卡片可拖拽（基于状态维度）。
+     * <p>
+     * 使用 2 级优先级覆盖语义：
+     * <ol>
+     *   <li>project_id = X（项目级规则）</li>
+     *   <li>project_id IS NULL（全局规则）</li>
+     * </ol>
+     * 注意：此方法不涉及 issue_type 维度（看板是项目级视图，不按类型区分）。
      */
     public Set<Long> getTransitionableSourceStatuses(Long projectId, Long userId) {
-        // 系统管理员：返回所有状态（使用 project_admin 规则）
+        // 系统管理员：使用 project_admin 规则
         if (permissionService.isSystemAdmin(userId)) {
-            List<Long> adminRoleIds = List.of(PROJECT_ADMIN_ROLE_ID);
-            List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, adminRoleIds);
-            if (ids.isEmpty()) {
-                // Fallback: 全局规则
-                ids = transitionMapper.findTransitionableSourceStatusIds(null, adminRoleIds);
-            }
-            return new HashSet<>(ids);
+            return resolveTransitionableSourceStatuses(projectId, List.of(PROJECT_ADMIN_ROLE_ID));
         }
 
         // 获取用户在项目中的角色
@@ -254,11 +296,22 @@ public class WorkflowService {
             return Set.of();
         }
 
-        List<Long> ids = transitionMapper.findTransitionableSourceStatusIds(projectId, roleIds);
-        if (ids.isEmpty()) {
-            // Fallback: 全局规则
-            ids = transitionMapper.findTransitionableSourceStatusIds(null, roleIds);
+        return resolveTransitionableSourceStatuses(projectId, roleIds);
+    }
+
+    /**
+     * 2 级优先级解析可发起转换的源状态。
+     * 有项目级规则时仅用项目级，无则 fallback 到全局。
+     */
+    private Set<Long> resolveTransitionableSourceStatuses(Long projectId, List<Long> roleIds) {
+        // Level 1: 项目级规则
+        List<Long> ids = transitionMapper.findTransitionableSourceStatusIdsExact(projectId, roleIds);
+        if (!ids.isEmpty()) {
+            return new HashSet<>(ids);
         }
+
+        // Level 2: 全局规则
+        ids = transitionMapper.findTransitionableSourceStatusIdsExact(null, roleIds);
         return new HashSet<>(ids);
     }
 

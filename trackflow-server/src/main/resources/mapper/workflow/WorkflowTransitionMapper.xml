@@ -3,11 +3,23 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.workflow.mapper.WorkflowTransitionMapper">
 
-    <!-- 查找允许的状态转换目标（参数化 IN 查询，防止 SQL 注入） -->
-    <select id="findAllowedNewStatusIds" resultType="java.lang.Long">
+    <!--
+      精确匹配查询：当 projectId 非 null 时匹配 project_id = projectId，
+      当 projectId 为 null 时匹配 project_id IS NULL。
+      issue_type 同理：精确匹配指定值。
+    -->
+    <select id="findAllowedNewStatusIdsExact" resultType="java.lang.Long">
         SELECT DISTINCT new_status_id FROM workflow_transition
-        WHERE (project_id = #{projectId} OR project_id IS NULL)
-          AND (issue_type = #{issueType} OR issue_type = '*')
+        WHERE
+        <choose>
+            <when test="projectId != null">
+                project_id = #{projectId}
+            </when>
+            <otherwise>
+                project_id IS NULL
+            </otherwise>
+        </choose>
+          AND issue_type = #{issueType}
           AND role_id IN
         <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
             #{roleId}
@@ -16,10 +28,21 @@
         ORDER BY new_status_id
     </select>
 
-    <!-- 查找可发起转换的源状态 ID（参数化 IN 查询，防止 SQL 注入） -->
-    <select id="findTransitionableSourceStatusIds" resultType="java.lang.Long">
+    <!--
+      精确匹配查询源状态：当 projectId 非 null 时匹配 project_id = projectId，
+      当 projectId 为 null 时匹配 project_id IS NULL。
+    -->
+    <select id="findTransitionableSourceStatusIdsExact" resultType="java.lang.Long">
         SELECT DISTINCT old_status_id FROM workflow_transition
-        WHERE (project_id = #{projectId} OR project_id IS NULL)
+        WHERE
+        <choose>
+            <when test="projectId != null">
+                project_id = #{projectId}
+            </when>
+            <otherwise>
+                project_id IS NULL
+            </otherwise>
+        </choose>
           AND role_id IN
         <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
             #{roleId}
