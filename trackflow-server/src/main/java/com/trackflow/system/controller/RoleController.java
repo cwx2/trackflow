@@ -11,6 +11,7 @@ import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.service.RoleService;
 import com.trackflow.system.vo.PermissionGroupVO;
+import com.trackflow.system.vo.RoleUsersVO;
 import com.trackflow.system.vo.RoleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 角色管理接口
@@ -53,8 +55,20 @@ public class RoleController {
         Page<SysRole> pageObj = PageHelper.buildPage(page, pageSize);
         Page<SysRole> result = roleService.list(pageObj, roleType);
 
+        List<RoleVO> voList = roleConverter.toVOList(result.getRecords());
+
+        // 批量填充用户计数
+        List<Long> roleIds = result.getRecords().stream()
+                .map(SysRole::getId)
+                .collect(Collectors.toList());
+        Map<Long, Integer> userCounts = roleService.getUserCountsByRoleIds(roleIds);
+        for (RoleVO vo : voList) {
+            Long roleId = Long.valueOf(vo.getId());
+            vo.setUserCount(userCounts.getOrDefault(roleId, 0));
+        }
+
         PageResult<RoleVO> pageResult = new PageResult<>(
-                roleConverter.toVOList(result.getRecords()), result.getTotal(),
+                voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
     }
@@ -89,6 +103,15 @@ public class RoleController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<List<String>> getPermissions(@PathVariable Long id) {
         return R.ok(roleService.getPermissions(id));
+    }
+
+    /**
+     * 获取角色已分配用户列表（全局角色直接列出用户，项目角色按项目分组）
+     */
+    @GetMapping("/{id}/users")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<RoleUsersVO> getRoleUsers(@PathVariable Long id) {
+        return R.ok(roleService.getRoleUsers(id));
     }
 
     @GetMapping("/all-permissions")

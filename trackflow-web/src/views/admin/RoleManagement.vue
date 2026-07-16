@@ -12,9 +12,10 @@
         <div class="col" style="width:150px">名称</div>
         <div class="col" style="width:120px">编码</div>
         <div class="col" style="width:100px">类型</div>
+        <div class="col" style="width:80px">用户数</div>
         <div class="col" style="flex:1">描述</div>
         <div class="col" style="width:80px">内置</div>
-        <div class="col" style="width:220px">操作</div>
+        <div class="col" style="width:260px">操作</div>
       </div>
       <div class="table-body">
         <div v-for="role in roles" :key="role.id" class="table-row">
@@ -28,11 +29,21 @@
           <div class="col" style="width:100px">
             <span class="type-badge" :class="role.roleType">{{ role.roleType }}</span>
           </div>
+          <div class="col" style="width:80px">
+            <span
+              class="user-count-badge"
+              :class="{ clickable: role.userCount > 0 }"
+              @click="role.userCount > 0 && openUsersDialog(role)"
+            >
+              {{ role.userCount ?? 0 }} 人
+            </span>
+          </div>
           <div class="col" style="flex:1">{{ role.description || '—' }}</div>
           <div class="col" style="width:80px">
             <span v-if="role.builtin" class="builtin-tag">是</span>
           </div>
-          <div class="col" style="width:220px">
+          <div class="col" style="width:260px">
+            <button class="btn-sm" @click="openUsersDialog(role)">用户</button>
             <button class="btn-sm" @click="openPermDialog(role)">权限</button>
             <button class="btn-sm" @click="openCloneDialog(role)">克隆</button>
             <button class="btn-sm" @click="editRole(role)" :disabled="role.builtin">编辑</button>
@@ -127,6 +138,70 @@
         </div>
       </div>
     </div>
+
+    <!-- 已分配用户弹窗 -->
+    <div class="modal-overlay" v-if="showUsersDialog" @click.self="showUsersDialog = false">
+      <div class="modal-lg">
+        <div class="modal-header">
+          <h3>已分配用户 — {{ usersData?.roleName }}</h3>
+          <span class="users-total">共 {{ usersData?.totalUserCount ?? 0 }} 人</span>
+          <button class="btn-close" @click="showUsersDialog = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="usersLoading" class="users-loading">
+            <span class="spinner"></span> 加载中...
+          </div>
+
+          <!-- 全局角色：直接显示用户列表 -->
+          <template v-else-if="usersData?.roleType === 'global'">
+            <div v-if="usersData.globalUsers.length === 0" class="users-empty">
+              <div class="empty-icon">👤</div>
+              <div class="empty-title">暂无用户</div>
+              <div class="empty-desc">该角色尚未分配给任何用户</div>
+            </div>
+            <div v-else class="users-list">
+              <div v-for="user in usersData.globalUsers" :key="user.id" class="user-item">
+                <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
+                <div class="user-info">
+                  <div class="user-name">{{ user.displayName }}</div>
+                  <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- 项目角色：按项目分组显示 -->
+          <template v-else-if="usersData?.roleType === 'project'">
+            <div v-if="usersData.projectGroups.length === 0" class="users-empty">
+              <div class="empty-icon">👤</div>
+              <div class="empty-title">暂无用户</div>
+              <div class="empty-desc">该角色尚未在任何项目中分配给用户</div>
+            </div>
+            <div v-else class="project-groups">
+              <div v-for="group in usersData.projectGroups" :key="group.projectId" class="project-group">
+                <div class="project-group-header">
+                  <span class="project-key-tag">{{ group.projectKey }}</span>
+                  <span class="project-group-name">{{ group.projectName }}</span>
+                  <span class="project-group-count">{{ group.users.length }} 人</span>
+                </div>
+                <div class="users-list">
+                  <div v-for="user in group.users" :key="user.id" class="user-item">
+                    <div class="user-avatar">{{ user.displayName?.charAt(0) || '?' }}</div>
+                    <div class="user-info">
+                      <div class="user-name">{{ user.displayName }}</div>
+                      <div class="user-meta">{{ user.username }} · {{ user.email || '—' }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="showUsersDialog = false">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -134,6 +209,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import request from '@/api/request'
+import type { RoleUsersVO } from '@/api/types'
 
 interface PermissionItem {
   code: string
@@ -171,6 +247,11 @@ const showCloneDialog = ref(false)
 const cloneSource = ref<any>(null)
 const cloneForm = reactive({ name: '', code: '' })
 const cloneLoading = ref(false)
+
+// 已分配用户弹窗状态
+const showUsersDialog = ref(false)
+const usersData = ref<RoleUsersVO | null>(null)
+const usersLoading = ref(false)
 
 async function loadRoles() {
   try {
@@ -269,6 +350,20 @@ async function savePermissions() {
   Message.success('权限保存成功')
 }
 
+async function openUsersDialog(role: any) {
+  showUsersDialog.value = true
+  usersLoading.value = true
+  usersData.value = null
+  try {
+    const res: any = await request.get(`/roles/${role.id}/users`)
+    usersData.value = res.data || null
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '获取用户列表失败')
+  } finally {
+    usersLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadRoles()
   loadPermissionDefinitions()
@@ -294,6 +389,10 @@ onMounted(() => {
 .type-badge.project { background: rgba(33,150,243,0.15); color: var(--accent-blue); }
 .builtin-tag { font-size: var(--font-size-xs); color: var(--accent-orange); }
 
+.user-count-badge { font-size: var(--font-size-xs); padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); color: var(--text-secondary); }
+.user-count-badge.clickable { cursor: pointer; color: var(--accent-blue); }
+.user-count-badge.clickable:hover { background: rgba(33,150,243,0.15); }
+
 .btn-sm { height: 24px; padding: 0 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--font-size-xs); cursor: pointer; margin-right: 4px; }
 .btn-sm:hover { background: var(--bg-hover); }
 .btn-sm.danger { color: var(--accent-red); }
@@ -303,7 +402,7 @@ onMounted(() => {
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-sm { width: 420px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; }
 .modal-lg { width: 600px; max-height: 80vh; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; display: flex; flex-direction: column; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color); gap: 12px; }
 .modal-header h3 { font-size: 15px; color: var(--text-bright); font-weight: 500; }
 .btn-close { background: none; border: none; color: var(--text-secondary); font-size: 16px; cursor: pointer; }
 .modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
@@ -328,4 +427,30 @@ onMounted(() => {
 .perm-item input { accent-color: var(--accent-blue); }
 .perm-name { color: var(--text-primary); }
 .perm-code { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-left: 2px; }
+
+/* Users dialog */
+.users-total { font-size: var(--font-size-sm); color: var(--text-secondary); margin-left: auto; }
+.users-loading { display: flex; align-items: center; gap: 8px; padding: 24px; justify-content: center; font-size: var(--font-size-sm); color: var(--text-secondary); }
+.spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.users-empty { display: flex; flex-direction: column; align-items: center; padding: 32px 16px; }
+.empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.6; }
+.empty-title { font-size: var(--font-size-md); color: var(--text-bright); font-weight: 500; margin-bottom: 4px; }
+.empty-desc { font-size: var(--font-size-sm); color: var(--text-secondary); }
+
+.users-list { display: flex; flex-direction: column; gap: 2px; }
+.user-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-md); transition: background 100ms; }
+.user-item:hover { background: var(--bg-hover); }
+.user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-blue); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+.user-info { min-width: 0; }
+.user-name { font-size: var(--font-size-sm); color: var(--text-bright); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-meta { font-size: var(--font-size-xs); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.project-groups { display: flex; flex-direction: column; gap: 16px; }
+.project-group { border: 1px solid var(--border-light); border-radius: var(--radius-md); overflow: hidden; }
+.project-group-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border-light); }
+.project-key-tag { font-size: var(--font-size-xs); background: rgba(33,150,243,0.15); color: var(--accent-blue); padding: 1px 6px; border-radius: var(--radius-sm); font-weight: 500; }
+.project-group-name { font-size: var(--font-size-sm); color: var(--text-bright); font-weight: 500; }
+.project-group-count { font-size: var(--font-size-xs); color: var(--text-secondary); margin-left: auto; }
 </style>

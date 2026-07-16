@@ -393,6 +393,23 @@ export interface RoleVO {
   roleType: string
   builtin: boolean
   sortOrder: number
+  userCount?: number
+}
+
+export interface RoleUsersVO {
+  roleId: string
+  roleName: string
+  roleType: string
+  globalUsers: UserVO[]
+  projectGroups: ProjectRoleGroup[]
+  totalUserCount: number
+}
+
+export interface ProjectRoleGroup {
+  projectId: string
+  projectName: string
+  projectKey: string
+  users: UserVO[]
 }
 
 export interface SavedQueryVO {
