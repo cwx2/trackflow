@@ -21,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.trackflow.report.vo.ReportExecuteResultVO;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -117,7 +119,7 @@ public class ReportService {
      * 共享报表：项目成员可执行
      * 私有报表：只有创建者可执行
      */
-    public Map<String, Object> executeWithAccessCheck(Long id, Long userId) {
+    public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
 
@@ -137,13 +139,13 @@ public class ReportService {
     /**
      * 执行报表：根据报表配置生成数据
      */
-    public Map<String, Object> execute(Long id) {
+    public ReportExecuteResultVO execute(Long id) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
         return executeInternal(report);
     }
 
-    private Map<String, Object> executeInternal(ReportDefinition report) {
+    private ReportExecuteResultVO executeInternal(ReportDefinition report) {
         Map<String, Object> config = parseConfig(report.getConfig());
         String groupBy = (String) config.getOrDefault("groupBy", "status");
 
@@ -163,13 +165,13 @@ public class ReportService {
         Map<String, Long> grouped = issues.stream()
                 .collect(Collectors.groupingBy(issue -> getGroupValue(issue, groupBy, nameMap), Collectors.counting()));
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("title", report.getName());
-        result.put("type", report.getType());
-        result.put("groupBy", groupBy);
-        result.put("labels", new ArrayList<>(grouped.keySet()));
-        result.put("data", new ArrayList<>(grouped.values()));
-        result.put("total", issues.size());
+        ReportExecuteResultVO result = new ReportExecuteResultVO();
+        result.setTitle(report.getName());
+        result.setType(report.getType());
+        result.setGroupBy(groupBy);
+        result.setLabels(new ArrayList<>(grouped.keySet()));
+        result.setData(new ArrayList<>(grouped.values()));
+        result.setTotal(issues.size());
         return result;
     }
 

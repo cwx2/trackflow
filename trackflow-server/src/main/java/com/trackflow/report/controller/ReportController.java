@@ -7,13 +7,13 @@ import com.trackflow.report.converter.ReportConverter;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.service.ReportService;
 import com.trackflow.report.vo.ReportDefinitionVO;
+import com.trackflow.report.vo.ReportExecuteResultVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -50,7 +50,7 @@ public class ReportController {
 
     @GetMapping("/{id}/data")
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> execute(@PathVariable Long id) {
+    public R<ReportExecuteResultVO> execute(@PathVariable Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportService.executeWithAccessCheck(id, userId));
     }
