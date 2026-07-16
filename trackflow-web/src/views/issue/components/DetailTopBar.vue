@@ -5,7 +5,7 @@
         <icon-left :size="16" />
       </button>
       <nav class="breadcrumb">
-        <a class="crumb" @click="$router.push('/')">{{ projectName }}</a>
+        <a class="crumb" @click="$router.push('/issues')">{{ projectName }}</a>
         <span class="sep">/</span>
         <span class="crumb-current">{{ issueKey }}</span>
       </nav>

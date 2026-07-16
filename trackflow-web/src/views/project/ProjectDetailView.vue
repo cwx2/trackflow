@@ -558,7 +558,7 @@ function formatRelativeTime(dateStr: string): string {
 
 // 导航
 function goToIssues() {
-  router.push({ path: '/', query: { project: project.value?.id } })
+  router.push({ path: '/issues', query: { project: project.value?.id } })
 }
 
 function goToBoard() {

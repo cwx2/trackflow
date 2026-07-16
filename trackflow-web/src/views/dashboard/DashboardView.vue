@@ -135,7 +135,7 @@
       <div class="widget-card">
         <div class="widget-header">
           <h2 class="widget-title">分配给我</h2>
-          <a-button type="text" size="mini" @click="$router.push('/')">查看全部</a-button>
+          <a-button type="text" size="mini" @click="$router.push('/issues')">查看全部</a-button>
         </div>
         <div v-if="assignedLoading" class="widget-loading">
           <a-skeleton :animation="true" v-for="i in 5" :key="i" style="margin-bottom:12px">

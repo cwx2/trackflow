@@ -574,7 +574,7 @@ function getActivateTooltip(sprint: SprintVO): string | undefined {
 
 function viewSprintIssues(sprint: SprintVO) {
   // 跳转到 Issue 列表，按 Sprint 筛选
-  router.push({ path: '/', query: { sprint: sprint.id, label: sprint.name } })
+  router.push({ path: '/issues', query: { sprint: sprint.id, label: sprint.name } })
 }
 
 function toggleCompletedBurndown(sprintId: string) {

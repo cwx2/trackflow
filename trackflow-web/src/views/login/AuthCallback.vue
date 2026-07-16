@@ -23,7 +23,7 @@ onMounted(async () => {
 
   try {
     await authStore.handleCallback(code)
-    router.push('/')
+    router.push('/issues')
   } catch (error) {
     console.error('Auth callback failed:', error)
     router.push('/login')

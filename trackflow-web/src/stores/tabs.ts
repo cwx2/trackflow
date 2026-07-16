@@ -15,7 +15,7 @@ export interface TabItem {
 
 export const useTabStore = defineStore('tabs', () => {
   const tabs = ref<TabItem[]>([
-    { id: 'issues', title: '所有工单', path: '/', icon: '📋', closable: false }
+    { id: 'issues', title: '所有工单', path: '/issues', icon: '📋', closable: false }
   ])
   const activeTabId = ref('issues')
 

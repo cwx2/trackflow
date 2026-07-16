@@ -12,7 +12,7 @@
           <span class="nav-icon">🏠</span>
           <span class="nav-label">工作台</span>
         </router-link>
-        <router-link to="/" class="nav-item" :class="{ active: $route.name === 'Issues' }">
+        <router-link to="/issues" class="nav-item" :class="{ active: $route.name === 'Issues' }">
           <span class="nav-icon">📋</span>
           <span class="nav-label">问题</span>
           <span v-if="issueBadgeCount > 0" class="nav-badge" :title="`${issueBadgeCount} 个待测试工单`">

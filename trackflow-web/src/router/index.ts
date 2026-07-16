@@ -25,6 +25,10 @@ const routes = [
       },
       {
         path: '',
+        redirect: '/issues'
+      },
+      {
+        path: 'issues',
         name: 'Issues',
         component: () => import('@/views/issue/IssueListView.vue')
       },

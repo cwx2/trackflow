@@ -555,7 +555,7 @@ function onDeleteIssue() {
       try {
         await issueApi.delete(issue.value!.id)
         Message.success('工单已删除')
-        router.push('/')
+        router.push('/issues')
       } catch (e: any) {
         Message.error(e.response?.data?.message || '删除失败')
       }
