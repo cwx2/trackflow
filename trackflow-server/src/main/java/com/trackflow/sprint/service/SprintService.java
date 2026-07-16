@@ -125,6 +125,16 @@ public class SprintService {
         }
     }
 
+    /**
+     * 校验日期范围合理性：如果两个日期都存在，开始日期必须严格早于结束日期。
+     * 参考 OpenProject: validates :finish_date, comparison: { greater_than_or_equal_to: :start_date }
+     */
+    private void validateDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate != null && endDate != null && !startDate.isBefore(endDate)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "开始日期必须早于结束日期");
+        }
+    }
+
     @Transactional
     public Sprint create(Long projectId, CreateSprintDTO dto) {
         // 归档项目不允许创建 Sprint
@@ -140,6 +150,10 @@ public class SprintService {
         sprint.setStartDate(dto.getStartDate());
         sprint.setEndDate(dto.getEndDate());
         sprint.setStatus(SprintStatus.PLANNED);
+
+        // 日期合理性校验（与 update 保持一致）
+        validateDateRange(sprint.getStartDate(), sprint.getEndDate());
+
         sprintMapper.insert(sprint);
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -310,11 +324,7 @@ public class SprintService {
         }
 
         // 日期合理性校验：如果两个日期都存在，开始必须早于结束
-        LocalDate start = sprint.getStartDate();
-        LocalDate end = sprint.getEndDate();
-        if (start != null && end != null && !start.isBefore(end)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "开始日期必须早于结束日期");
-        }
+        validateDateRange(sprint.getStartDate(), sprint.getEndDate());
 
         sprintMapper.updateById(sprint);
 

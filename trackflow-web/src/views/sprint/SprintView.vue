@@ -873,6 +873,11 @@ async function handleCreate() {
     Message.warning('请输入迭代名称')
     return
   }
+  // 前端日期顺序校验
+  if (createForm.startDate && createForm.endDate && createForm.startDate >= createForm.endDate) {
+    Message.warning('开始日期必须早于结束日期')
+    return
+  }
   creating.value = true
   try {
     await sprintApi.create(selectedProject.value!, {
