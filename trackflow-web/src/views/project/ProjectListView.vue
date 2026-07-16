@@ -161,19 +161,19 @@
       :cancel-text="'取消'"
       :ok-loading="creating"
       :ok-button-props="{ disabled: !createForm.name || !createForm.key }"
-      @ok="submitCreate"
-      @cancel="showCreateDialog = false"
+      @before-ok="handleCreateBeforeOk"
+      @close="resetCreateForm"
     >
       <a-form :model="createForm" layout="vertical">
-        <a-form-item label="项目名称" required>
-          <a-input v-model="createForm.name" placeholder="例如：后端开发" />
+        <a-form-item label="项目名称" required :validate-status="createNameError ? 'error' : undefined" :help="createNameError">
+          <a-input v-model="createForm.name" placeholder="例如：后端开发" @input="createNameError = ''" />
         </a-form-item>
-        <a-form-item label="项目标识" required extra="用于生成工单编号，如 BE-1, BE-2...">
+        <a-form-item label="项目标识" required :validate-status="createKeyError ? 'error' : undefined" :help="createKeyError" :extra="createKeyError ? undefined : '用于生成工单编号，如 BE-1, BE-2...'">
           <a-input
             v-model="createForm.key"
             placeholder="例如：BE（大写英文缩写）"
             :max-length="10"
-            @input="createForm.key = createForm.key.toUpperCase()"
+            @input="handleCreateKeyInput"
           />
         </a-form-item>
         <a-form-item label="描述">
@@ -229,12 +229,12 @@
       cancel-text="取消"
       :ok-loading="editSaving"
       :ok-button-props="{ disabled: !editForm.name }"
-      @ok="submitEdit"
-      @close="editMembers = []"
+      @before-ok="handleEditBeforeOk"
+      @close="editMembers = []; editNameError = ''"
     >
       <a-form :model="editForm" layout="vertical">
-        <a-form-item label="项目名称" required>
-          <a-input v-model="editForm.name" />
+        <a-form-item label="项目名称" required :validate-status="editNameError ? 'error' : undefined" :help="editNameError">
+          <a-input v-model="editForm.name" @input="editNameError = ''" />
         </a-form-item>
         <a-form-item label="描述">
           <a-textarea v-model="editForm.description" :auto-size="{ minRows: 2, maxRows: 5 }" />
@@ -376,7 +376,7 @@
       :cancel-text="'取消'"
       :ok-loading="deleting"
       :ok-button-props="{ disabled: deleteConfirmKey !== deleteTarget?.projectKey, status: 'danger' }"
-      @ok="submitDelete"
+      @before-ok="handleDeleteBeforeOk"
     >
       <div class="delete-confirm-content">
         <div class="delete-warning">
@@ -468,6 +468,8 @@ const loading = ref(false)
 const creating = ref(false)
 const searchKeyword = ref('')
 const showCreateDialog = ref(false)
+const createKeyError = ref('')
+const createNameError = ref('')
 const hasMore = ref(false)
 const page = ref(1)
 const pageSize = 20
@@ -712,25 +714,29 @@ async function confirmDeleteProject(project: any) {
   }
 }
 
-async function submitDelete() {
-  if (!deleteTarget.value) return
-  if (deleteConfirmKey.value !== deleteTarget.value.projectKey) return
+async function handleDeleteBeforeOk(done: (closed: boolean) => void) {
+  if (!deleteTarget.value) { done(false); return }
+  if (deleteConfirmKey.value !== deleteTarget.value.projectKey) { done(false); return }
   deleting.value = true
   try {
     await projectApi.delete(deleteTarget.value.id, deleteConfirmKey.value)
-    showDeleteDialog.value = false
     projects.value = projects.value.filter(p => p.id !== deleteTarget.value!.id)
     Message.success('项目已永久删除')
     deleteTarget.value = null
+    done(true)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '删除失败')
+    done(false)
   } finally {
     deleting.value = false
   }
 }
 
-async function submitCreate() {
-  if (!createForm.name || !createForm.key) return
+async function handleCreateBeforeOk(done: (closed: boolean) => void) {
+  if (!createForm.name || !createForm.key) {
+    done(false)
+    return
+  }
   creating.value = true
   try {
     await projectApi.create({
@@ -739,24 +745,50 @@ async function submitCreate() {
       description: createForm.description || undefined,
       template: createForm.template || 'default'
     })
-    showCreateDialog.value = false
-    createForm.name = ''
-    createForm.key = ''
-    createForm.description = ''
-    createForm.template = 'default'
+    resetCreateForm()
     Message.success('项目创建成功')
     page.value = 1
     loadProjects()
+    done(true)
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+    const code = e.response?.data?.code
+    const message = e.response?.data?.message || '创建失败'
+    if (code === 40905) {
+      // 项目标识已存在
+      createKeyError.value = '该项目标识已被占用，请使用其他标识'
+    } else if (code === 40900 && message.includes('名称')) {
+      createNameError.value = message
+    } else {
+      Message.error(message)
+    }
+    done(false)
   } finally {
     creating.value = false
   }
 }
 
+function handleCreateKeyInput() {
+  createForm.key = createForm.key.toUpperCase()
+  createKeyError.value = ''
+}
+
+function resetCreateForm() {
+  createForm.name = ''
+  createForm.key = ''
+  createForm.description = ''
+  createForm.template = 'default'
+  createKeyError.value = ''
+  createNameError.value = ''
+}
+
 // ========== 编辑项目 ==========
-async function submitEdit() {
-  if (!editForm.name) return
+const editNameError = ref('')
+
+async function handleEditBeforeOk(done: (closed: boolean) => void) {
+  if (!editForm.name) {
+    done(false)
+    return
+  }
   editSaving.value = true
   try {
     await projectApi.update(editForm.id, {
@@ -764,12 +796,18 @@ async function submitEdit() {
       description: editForm.description || undefined,
       leadId: editForm.leadId || undefined
     })
-    showEditDialog.value = false
     Message.success('项目更新成功')
     page.value = 1
     loadProjects()
+    done(true)
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+    const message = e.response?.data?.message || '更新失败'
+    if (e.response?.status === 409 || (message.includes('名称') && message.includes('已存在'))) {
+      editNameError.value = message
+    } else {
+      Message.error(message)
+    }
+    done(false)
   } finally {
     editSaving.value = false
   }
