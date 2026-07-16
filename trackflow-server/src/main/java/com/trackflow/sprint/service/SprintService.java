@@ -2,6 +2,7 @@ package com.trackflow.sprint.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -150,26 +151,31 @@ public class SprintService {
             return;
         }
 
-        // 批量更新 sprint_id
+        // 批量更新 sprint_id + updatedBy/updatedAt
+        LocalDateTime now = LocalDateTime.now();
         issueMapper.update(null,
                 new LambdaUpdateWrapper<Issue>()
                         .in(Issue::getId, openIssueIds)
                         .set(Issue::getSprintId, newSprint.getId())
+                        .set(Issue::getUpdatedBy, currentUserId)
+                        .set(Issue::getUpdatedAt, now)
         );
 
-        // 为每个被移动的工单记录活动日志
-        LocalDateTime now = LocalDateTime.now();
-        for (Long issueId : openIssueIds) {
+        // 批量记录活动日志
+        String oldName = activeSprint.getName();
+        String newName = newSprint.getName();
+        List<IssueActivity> activities = openIssueIds.stream().map(issueId -> {
             IssueActivity activity = new IssueActivity();
             activity.setIssueId(issueId);
             activity.setUserId(currentUserId);
             activity.setAction("updated");
             activity.setFieldName("sprint");
-            activity.setOldValue(activeSprint.getName());
-            activity.setNewValue(newSprint.getName());
+            activity.setOldValue(oldName);
+            activity.setNewValue(newName);
             activity.setCreatedAt(now);
-            activityMapper.insert(activity);
-        }
+            return activity;
+        }).toList();
+        Db.saveBatch(activities);
 
         log.info("已将 {} 个未完成工单从 Sprint '{}' 移入新 Sprint '{}'",
                 openIssueIds.size(), activeSprint.getName(), newSprint.getName());
@@ -319,6 +325,7 @@ public class SprintService {
             }
 
             Long newSprintId = null;
+            String newSprintName = null;
             if ("next_sprint".equals(dto.getMoveOption())) {
                 if (dto.getTargetSprintId() == null) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "请选择目标迭代");
@@ -332,16 +339,37 @@ public class SprintService {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代已完成，无法移入");
                 }
                 newSprintId = dto.getTargetSprintId();
+                newSprintName = targetSprint.getName();
             }
-            // "backlog" 时 newSprintId 保持 null
+            // "backlog" 时 newSprintId 和 newSprintName 保持 null
 
-            // 批量更新工单的 sprint_id（使用 LambdaUpdateWrapper 以支持 set null）
+            // 批量更新工单的 sprint_id + updatedBy/updatedAt
             List<Long> openIssueIds = openIssues.stream().map(Issue::getId).collect(Collectors.toList());
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            LocalDateTime now = LocalDateTime.now();
             issueMapper.update(null,
                     new LambdaUpdateWrapper<Issue>()
                             .in(Issue::getId, openIssueIds)
                             .set(Issue::getSprintId, newSprintId)
+                            .set(Issue::getUpdatedBy, currentUserId)
+                            .set(Issue::getUpdatedAt, now)
             );
+
+            // 批量记录活动日志：sprint 字段变更
+            String oldSprintName = sprint.getName();
+            String finalNewSprintName = newSprintName;
+            List<IssueActivity> activities = openIssueIds.stream().map(issueId -> {
+                IssueActivity activity = new IssueActivity();
+                activity.setIssueId(issueId);
+                activity.setUserId(currentUserId);
+                activity.setAction("updated");
+                activity.setFieldName("sprint");
+                activity.setOldValue(oldSprintName);
+                activity.setNewValue(finalNewSprintName);
+                activity.setCreatedAt(now);
+                return activity;
+            }).toList();
+            Db.saveBatch(activities);
         }
 
         // 完成 Sprint
@@ -453,6 +481,7 @@ public class SprintService {
             }
 
             Long newSprintId = null;
+            String newSprintName = null;
             if ("next_sprint".equals(dto.getMoveOption())) {
                 if (dto.getTargetSprintId() == null) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "请选择目标迭代");
@@ -466,16 +495,37 @@ public class SprintService {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代已完成，无法移入");
                 }
                 newSprintId = dto.getTargetSprintId();
+                newSprintName = targetSprint.getName();
             }
-            // "backlog" 时 newSprintId 保持 null
+            // "backlog" 时 newSprintId 和 newSprintName 保持 null
 
-            // 批量更新工单的 sprint_id
+            // 批量更新工单的 sprint_id + updatedBy/updatedAt
             List<Long> issueIds = issues.stream().map(Issue::getId).collect(Collectors.toList());
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            LocalDateTime now = LocalDateTime.now();
             issueMapper.update(null,
                     new LambdaUpdateWrapper<Issue>()
                             .in(Issue::getId, issueIds)
                             .set(Issue::getSprintId, newSprintId)
+                            .set(Issue::getUpdatedBy, currentUserId)
+                            .set(Issue::getUpdatedAt, now)
             );
+
+            // 批量记录活动日志：sprint 字段变更
+            String oldSprintName = sprint.getName();
+            String finalNewSprintName = newSprintName;
+            List<IssueActivity> activities = issueIds.stream().map(issueId -> {
+                IssueActivity activity = new IssueActivity();
+                activity.setIssueId(issueId);
+                activity.setUserId(currentUserId);
+                activity.setAction("updated");
+                activity.setFieldName("sprint");
+                activity.setOldValue(oldSprintName);
+                activity.setNewValue(finalNewSprintName);
+                activity.setCreatedAt(now);
+                return activity;
+            }).toList();
+            Db.saveBatch(activities);
         }
 
         sprintMapper.deleteById(id);
