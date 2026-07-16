@@ -27,10 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -48,13 +46,14 @@ public class WorkflowService {
     private final PermissionService permissionService;
 
     /**
-     * 需要检查工单所有权的角色 code 集合。
-     * 这些角色只能修改分配给自己或由自己创建/报告的工单状态。
-     * project_admin、tech_lead、product_manager 可修改任意工单。
-     * tester 不在此集合中——测试人员的核心职责就是验证他人开发的工单，
-     * 其权限已通过 workflow_transition 表的转换规则充分约束。
+     * 不再使用 ownership 限制。
+     * 
+     * 设计原则（对标 YouTrack）：
+     * - 拥有 issue:change_status 权限的用户可以变更项目内任意工单的状态
+     * - 可用转换路径已通过 workflow_transition 表按角色充分约束
+     * - 不需要额外的"是否是 assignee"校验
+     * - observer 角色本身在 workflow_transition 中无规则，因此天然无法转换
      */
-    private static final Set<String> OWNERSHIP_REQUIRED_ROLES = Set.of("developer");
 
     /**
      * project_admin 的角色 ID（来自 V2__seed_roles.sql 种子数据，ID 固定为 2）。
@@ -65,12 +64,13 @@ public class WorkflowService {
     /**
      * 获取当前用户对指定 Issue 可以转换到的目标状态列表。
      * 
-     * 所有权规则：
-     * - system_admin：全局权限，不受限制
-     * - project_admin / tech_lead / product_manager：可修改项目内任意工单状态
-     * - tester：可修改任意工单状态（受 workflow_transition 规则约束可用转换路径）
-     * - developer：只能修改分配给自己或由自己报告的工单状态
-     * - observer：无状态变更权限（workflow_transition 表中无对应规则）
+     * 权限模型（对标 YouTrack）：
+     * - system_admin：全局权限，使用 project_admin 的工作流规则
+     * - 项目成员：根据其角色在 workflow_transition 表中定义的规则确定可用转换
+     * - 非项目成员：无可用转换
+     * 
+     * 注意：不再对 developer 角色做 ownership 校验。
+     * 工作流规则已通过 workflow_transition 表按角色精确控制可用路径。
      */
     public List<IssueStatus> getAvailableTransitions(Issue issue, Long userId) {
         // 系统管理员直接跳过所有权检查（由全局权限保障）
@@ -85,51 +85,18 @@ public class WorkflowService {
             return List.of();
         }
 
-        // 检查用户是否需要所有权校验
-        if (requiresOwnershipCheck(roleIds)) {
-            // developer 需要是工单的 assignee 或 reporter 才能变更状态
-            if (!isIssueOwner(issue, userId)) {
-                log.debug("User {} denied status transition on issue {} - not assignee or reporter",
-                        userId, issue.getId());
-                return List.of();
-            }
-        }
-
         String roleIdsStr = roleIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         return getTransitionsForRoles(issue, roleIdsStr);
     }
 
     /**
-     * 检查用户是否为工单的"所有者"（assignee 或 reporter）
+     * 检查用户是否为工单的"所有者"（assignee 或 reporter 或创建者）
+     * 保留此方法供前端资源级权限判断使用（IssueController.getAvailableTransitions 中的 hasIssuePermission）
      */
     public boolean isIssueOwner(Issue issue, Long userId) {
         return Objects.equals(issue.getAssigneeId(), userId)
                 || Objects.equals(issue.getReporterId(), userId)
                 || Objects.equals(issue.getCreatedBy(), userId);
-    }
-
-    /**
-     * 角色 ID → code 缓存。角色 code 为静态种子数据，几乎不变，可安全缓存。
-     */
-    private final Map<Long, String> roleCodeCache = new ConcurrentHashMap<>();
-
-    /**
-     * 判断用户的角色是否需要所有权校验。
-     * 只要用户在该项目中拥有任何一个"管理级"角色（project_admin / tech_lead / product_manager），
-     * 就不需要所有权校验。
-     */
-    private boolean requiresOwnershipCheck(List<Long> roleIds) {
-        for (Long roleId : roleIds) {
-            String code = roleCodeCache.computeIfAbsent(roleId, id -> {
-                SysRole role = roleMapper.selectById(id);
-                return role != null ? role.getCode() : "";
-            });
-            if (!OWNERSHIP_REQUIRED_ROLES.contains(code)) {
-                return false;
-            }
-        }
-        // 所有角色都是需要检查所有权的角色
-        return true;
     }
 
     /**
@@ -267,10 +234,6 @@ public class WorkflowService {
     /**
      * 获取当前用户在指定项目中可以发起状态转换的源状态 ID 集合。
      * 用于看板等场景预判哪些卡片可拖拽（基于状态维度）。
-     *
-     * 注意：对于 developer 角色，还有所有权检查（只能改自己的工单），
-     * 这里仅返回工作流规则维度的判断，不考虑所有权。
-     * 前端应将此作为"必要条件"而非"充分条件"。
      */
     public Set<Long> getTransitionableSourceStatuses(Long projectId, Long userId) {
         // 系统管理员：返回所有状态（使用 project_admin 规则）

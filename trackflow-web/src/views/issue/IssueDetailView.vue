@@ -184,14 +184,10 @@ const canEditIssueEffective = computed(() => {
   return canEditIssue.value || isIssueOwner.value
 })
 
-/** 综合状态变更权限：项目级 OR 资源级（assignee 可变更状态） */
+/** 综合状态变更权限：项目级权限即可（不再要求 assignee） */
 const canChangeStatusEffective = computed(() => {
   if (isProjectArchived.value) return false
-  if (canChangeStatus.value) return true
-  // assignee 额外获得 change_status 权限
-  const dbUserId = authStore.user?.userId
-  if (!dbUserId || !issue.value) return false
-  return dbUserId === issue.value.assigneeId
+  return canChangeStatus.value
 })
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
@@ -260,9 +256,7 @@ async function loadRelatedData() {
   // 先加载权限，决定是否需要加载编辑选项
   const perms = await loadProjectPermissions(pid)
   const isAdmin = authStore.hasGlobalPermission('system:admin')
-  // 资源级权限：assignee 可变更状态（后端 hasIssuePermission 有同样逻辑）
-  const isAssignee = authStore.user?.userId === issue.value.assigneeId
-  const needTransitions = isAdmin || perms.has('issue:change_status') || isAssignee
+  const needTransitions = isAdmin || perms.has('issue:change_status')
   const needSprintOptions = isAdmin || perms.has('sprint:edit')
   const needMemberOptions = isAdmin || perms.has('issue:assign')
 

@@ -1,7 +1,6 @@
 package com.trackflow.issue.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
@@ -39,7 +38,6 @@ import java.util.stream.Collectors;
 public class IssueController {
 
     private final IssueService issueService;
-    private final PermissionService permissionService;
     private final IssueConverter issueConverter;
     private final WorkflowService workflowService;
     private final IssueLinkService linkService;
@@ -233,15 +231,9 @@ public class IssueController {
     @PostMapping("/{id}/transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<Void> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
-        // 校验项目成员权限 + 工作流规则（含所有权检查）
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
-            // 区分错误原因：所有权问题 vs 工作流规则限制
-            // 系统管理员和特权角色不受所有权限制，错误必然是工作流规则
-            if (!permissionService.isSystemAdmin(userId) && !workflowService.isIssueOwner(issue, userId)) {
-                return R.fail(ErrorCode.OWNERSHIP_REQUIRED, "只能修改分配给自己或由自己创建的工单状态");
-            }
             return R.fail(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
         }
 
