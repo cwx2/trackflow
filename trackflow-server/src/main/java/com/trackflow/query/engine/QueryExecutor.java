@@ -2,6 +2,8 @@ package com.trackflow.query.engine;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -11,6 +13,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 查询执行引擎：将 JSON 筛选条件动态转换为 SQL 查询
@@ -29,6 +33,35 @@ import java.util.Map;
 public class QueryExecutor {
 
     private final IssueMapper issueMapper;
+
+    /**
+     * 允许排序的字段白名单（数据库列名）
+     */
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "issue_key", "title", "status_id", "priority",
+            "assignee_id", "reporter_id", "created_at", "updated_at",
+            "due_date", "sprint_id", "issue_type", "project_id"
+    );
+
+    /**
+     * 自定义字段 Key 合法格式：字母或数字开头，允许字母、数字、下划线，最长 64 字符
+     * 实际存储的 key 可能是纯数字 ID（如 snowflake ID）或字母命名的字段
+     */
+    private static final Pattern CF_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9_]{0,63}$");
+
+    /**
+     * 状态 code 合法格式：小写字母、数字、下划线，最长 64 字符
+     */
+    private static final Pattern STATUS_CODE_PATTERN = Pattern.compile("^[a-z][a-z0-9_]{0,63}$");
+
+    /**
+     * 允许的筛选操作符白名单
+     */
+    private static final Set<String> ALLOWED_OPERATORS = Set.of(
+            "eq", "neq", "in", "not_in", "is_empty", "is_not_empty",
+            "contains", "gt", "gte", "lt", "lte", "between",
+            "open", "closed"
+    );
 
     /**
      * 执行筛选查询
@@ -89,12 +122,16 @@ public class QueryExecutor {
     }
 
     /**
-     * 应用排序条件
+     * 应用排序条件（白名单校验）
      */
     private void applySortCriteria(QueryWrapper<Issue> wrapper, List<Map<String, String>> sortCriteria) {
         if (sortCriteria != null && !sortCriteria.isEmpty()) {
             for (Map<String, String> sort : sortCriteria) {
                 String field = camelToSnake(sort.get("field"));
+                if (!ALLOWED_SORT_FIELDS.contains(field)) {
+                    log.warn("非法排序字段被拦截: {}", field);
+                    continue; // 忽略非法字段，不中断查询
+                }
                 String direction = sort.getOrDefault("direction", "desc");
                 if ("asc".equalsIgnoreCase(direction)) {
                     wrapper.orderByAsc(field);
@@ -126,6 +163,12 @@ public class QueryExecutor {
 
             if (field == null || operator == null) continue;
 
+            // 校验操作符合法性
+            if (!ALLOWED_OPERATORS.contains(operator)) {
+                log.warn("非法筛选操作符被拦截: {}", operator);
+                continue;
+            }
+
             // 解析动态变量
             List<String> values = resolveValues(value, currentUserId);
 
@@ -146,6 +189,8 @@ public class QueryExecutor {
                     if (field.startsWith("cf.") || field.startsWith("customField.")) {
                         String cfKey = field.contains(".") ? field.substring(field.indexOf('.') + 1) : field;
                         applyCustomFieldFilter(wrapper, cfKey, operator, values);
+                    } else {
+                        log.warn("未知的筛选字段被忽略: {}", field);
                     }
                 }
             }
@@ -184,10 +229,16 @@ public class QueryExecutor {
 
     private void applyStatusFilter(QueryWrapper<Issue> wrapper, String operator, List<String> values) {
         switch (operator) {
-            case "eq", "in" -> wrapper.inSql("status_id",
-                    "SELECT id FROM issue_status WHERE code IN (" + toSqlList(values) + ")");
-            case "not_in" -> wrapper.notInSql("status_id",
-                    "SELECT id FROM issue_status WHERE code IN (" + toSqlList(values) + ")");
+            case "eq", "in" -> {
+                validateStatusCodes(values);
+                wrapper.inSql("status_id",
+                        "SELECT id FROM issue_status WHERE code IN (" + toSafeStatusCodeList(values) + ")");
+            }
+            case "not_in" -> {
+                validateStatusCodes(values);
+                wrapper.notInSql("status_id",
+                        "SELECT id FROM issue_status WHERE code IN (" + toSafeStatusCodeList(values) + ")");
+            }
             case "open" -> wrapper.inSql("status_id",
                     "SELECT id FROM issue_status WHERE is_closed = false");
             case "closed" -> wrapper.inSql("status_id",
@@ -231,7 +282,14 @@ public class QueryExecutor {
         }
     }
 
+    /**
+     * 应用自定义字段筛选（带 Key 正则校验防注入）
+     */
     private void applyCustomFieldFilter(QueryWrapper<Issue> wrapper, String cfKey, String operator, List<String> values) {
+        if (!CF_KEY_PATTERN.matcher(cfKey).matches()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "非法的自定义字段名: " + cfKey);
+        }
+
         String jsonPath = "custom_fields->>'" + cfKey + "'";
         switch (operator) {
             case "eq" -> wrapper.apply(jsonPath + " = {0}", values.get(0));
@@ -242,8 +300,26 @@ public class QueryExecutor {
         }
     }
 
-    private String toSqlList(List<String> values) {
-        return values.stream().map(v -> "'" + v.replace("'", "''") + "'").reduce((a, b) -> a + "," + b).orElse("''");
+    /**
+     * 校验状态 code 列表，防止 SQL 注入
+     */
+    private void validateStatusCodes(List<String> values) {
+        for (String code : values) {
+            if (!STATUS_CODE_PATTERN.matcher(code).matches()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "非法的状态 code: " + code);
+            }
+        }
+    }
+
+    /**
+     * 将已校验的状态 code 列表转为安全的 SQL IN 子句
+     * 注意：调用前必须先通过 validateStatusCodes() 校验
+     */
+    private String toSafeStatusCodeList(List<String> values) {
+        return values.stream()
+                .map(v -> "'" + v + "'")
+                .reduce((a, b) -> a + "," + b)
+                .orElse("''");
     }
 
     private String camelToSnake(String camel) {
