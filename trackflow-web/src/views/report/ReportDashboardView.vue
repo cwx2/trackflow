@@ -206,6 +206,7 @@ import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData } from '@/api/reportStatistics'
 import type { ProjectVO } from '@/api/types'
+import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, ToolboxComponent])
@@ -319,7 +320,7 @@ const statusChartOption = computed(() => {
         itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
       },
       data: items.map(item => ({
-        name: item.name,
+        name: localizeStatusName(item.name),
         value: item.value,
         itemStyle: { color: item.color }
       }))
@@ -343,7 +344,7 @@ const priorityChartOption = computed(() => {
     grid: { left: 40, right: 20, top: 16, bottom: 30 },
     xAxis: {
       type: 'category',
-      data: labels,
+      data: labels.map(l => priorityLabelMap[l] || l),
       axisLine: { lineStyle: { color: c.axisColor } },
       axisLabel: { color: c.textColor, fontSize: 11 },
       axisTick: { show: false }
@@ -789,7 +790,7 @@ function exportCSV() {
   lines.push('=== 状态分布 ===')
   lines.push('状态,数量')
   data.statusDistribution.items.forEach(item => {
-    lines.push(`${item.name},${item.value}`)
+    lines.push(`${localizeStatusName(item.name)},${item.value}`)
   })
   lines.push('')
 
@@ -797,7 +798,7 @@ function exportCSV() {
   lines.push('=== 优先级分布 ===')
   lines.push('优先级,数量')
   data.priorityDistribution.labels.forEach((label, idx) => {
-    lines.push(`${label},${data.priorityDistribution.data[idx]}`)
+    lines.push(`${priorityLabelMap[label] || label},${data.priorityDistribution.data[idx]}`)
   })
   lines.push('')
 

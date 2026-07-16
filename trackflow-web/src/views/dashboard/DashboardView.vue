@@ -257,7 +257,7 @@ import { Message } from '@arco-design/web-vue'
 import { dashboardApi } from '@/api'
 import type { DashboardSummaryVO, DashboardActivityVO, DashboardChartsVO } from '@/api/dashboard'
 import type { IssueVO } from '@/api/types'
-import { fieldLabelMap, localizeActionShort } from '@/utils/fieldLabels'
+import { fieldLabelMap, localizeActionShort, localizeStatusName } from '@/utils/fieldLabels'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -463,7 +463,7 @@ const statusChartOption = computed(() => {
         label: { show: true, fontSize: 12, fontWeight: 500, color: 'var(--tf-text-primary, #e6edf3)' }
       },
       data: items.map(item => ({
-        name: item.name,
+        name: localizeStatusName(item.name),
         value: item.value,
         itemStyle: { color: item.color || '#58a6ff' }
       }))
