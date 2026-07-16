@@ -137,6 +137,8 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
   assigned: { short: '分配了', full: '修改了负责人' },
   comment: { short: '评论了', full: '添加了评论' },
   commented: { short: '评论了', full: '添加了评论' },
+  comment_updated: { short: '编辑了评论', full: '编辑了评论' },
+  comment_deleted: { short: '删除了评论', full: '删除了评论' },
   attach: { short: '添加了附件', full: '添加了附件' },
   attached: { short: '添加了附件', full: '添加了附件' },
   attachment_added: { short: '添加了附件', full: '添加了附件' },

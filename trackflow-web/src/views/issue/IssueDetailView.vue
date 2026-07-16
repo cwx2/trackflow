@@ -47,7 +47,13 @@
         @delete="onDeleteIssue"
       >
         <template #activity>
-          <ActivityStream :items="activityItems" />
+          <ActivityStream
+            :items="activityItems"
+            :current-user-id="currentUserId"
+            :can-manage-comments="canManageComments"
+            @edit-comment="onEditComment"
+            @delete-comment="onDeleteComment"
+          />
           <CommentInput v-if="canComment" @submit="onAddComment" @add-time="openTimeDialog" />
         </template>
       </DetailMainContent>
@@ -162,7 +168,7 @@ const issue = ref<IssueDetailVO | null>(null)
 const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
 
 // 权限控制（必须在 issue ref 声明之后）
-const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint } = usePermission(
+const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint, hasPermission: hasProjectPermission } = usePermission(
   () => issue.value?.projectId,
   { isProjectArchived: () => isProjectArchived.value }
 )
@@ -170,6 +176,12 @@ const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canCommen
 // 资源级权限覆盖：Issue 的 reporter/assignee 即使项目角色无 issue:edit 也可编辑
 import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
+
+/** 当前用户数据库 ID */
+const currentUserId = computed(() => authStore.user?.userId || '')
+
+/** 是否可以管理他人评论 */
+const canManageComments = computed(() => hasProjectPermission('issue:manage_comments'))
 
 /** 是否为 Issue 的创建者或负责人 */
 const isIssueOwner = computed(() => {
@@ -485,7 +497,18 @@ const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
   for (const c of comments.value) {
     const isHtml = c.content.trim().startsWith('<')
-    items.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', html: isHtml ? c.content : renderMarkdown(c.content), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime() })
+    items.push({
+      id: 'c_' + c.id,
+      type: 'comment',
+      user: c.userName || '用户',
+      userId: c.userId,
+      commentId: c.id,
+      isEdited: c.isEdited || false,
+      rawContent: c.content,
+      html: isHtml ? c.content : renderMarkdown(c.content),
+      timeAgo: timeAgo(c.createdAt),
+      ts: new Date(c.createdAt).getTime()
+    })
   }
   for (const a of activities.value) {
     if (a.action === 'commented') continue
@@ -576,6 +599,26 @@ async function onCreateTag(name: string) {
 
 async function onAddComment(content: string) {
   try { await issueApi.addComment(issue.value!.id, content); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '评论失败') }
+}
+
+async function onEditComment(commentId: string, content: string) {
+  try {
+    await issueApi.updateComment(issue.value!.id, commentId, content)
+    await loadAll()
+    Message.success('评论已更新')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '编辑评论失败')
+  }
+}
+
+async function onDeleteComment(commentId: string) {
+  try {
+    await issueApi.deleteComment(issue.value!.id, commentId)
+    await loadAll()
+    Message.success('评论已删除')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '删除评论失败')
+  }
 }
 
 async function onTransition(target: StatusInfo) {

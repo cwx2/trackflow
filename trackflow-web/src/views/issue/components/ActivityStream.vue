@@ -33,7 +33,7 @@
     </div>
 
     <div class="stream-list">
-      <div v-for="item in sorted" :key="item.id" class="stream-item">
+      <div v-for="item in sorted" :key="item.id" class="stream-item" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
         <div class="avatar" :style="{ background: avatarBg(item.user) }">
           {{ initial(item.user) }}
         </div>
@@ -41,45 +41,85 @@
           <div class="item-head">
             <strong>{{ item.user }}</strong>
             <span class="item-time">{{ item.timeAgo }}</span>
+            <span v-if="item.type === 'comment' && item.isEdited" class="edited-badge">已编辑</span>
+            <!-- Comment actions -->
+            <div v-if="item.type === 'comment' && canModifyComment(item) && hoveredId === item.id && editingCommentId !== item.commentId" class="comment-actions">
+              <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
+              <button class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
+            </div>
           </div>
-          <!-- 评论 -->
-          <div v-if="item.type === 'comment'" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
-          <div v-else class="change-text">
-            <template v-if="item.action === 'created'">创建了此工单</template>
-            <template v-else-if="item.action === 'deleted'">删除了此工单</template>
-            <template v-else-if="item.action === 'restored'">恢复了此工单</template>
-            <template v-else-if="item.action === 'time_logged'">
-              <span class="time-badge">⏱</span> 记录了工时: <span class="val-new">{{ item.to }}</span>
-            </template>
-            <template v-else-if="item.action === 'time_removed'">
-              <span class="time-badge">⏱</span> 删除了工时: <span class="val-old">{{ item.from }}</span>
-            </template>
-            <template v-else-if="item.action === 'attachment_added'">
-              添加了附件: <span class="val-new">{{ item.to }}</span>
-            </template>
-            <template v-else-if="item.action === 'attachment_removed'">
-              删除了附件: <span class="val-old">{{ item.from }}</span>
-            </template>
-            <template v-else-if="item.field">
-              修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
-            </template>
-            <template v-else>{{ localizeAction(item.action) }}</template>
+          <!-- Editing mode -->
+          <div v-if="item.type === 'comment' && editingCommentId === item.commentId" class="comment-edit">
+            <div class="edit-area">
+              <EditorContent :editor="editEditor" />
+            </div>
+            <div class="edit-actions">
+              <button class="btn-cancel" @click="cancelEdit">取消</button>
+              <button class="btn-save" :disabled="editEmpty" @click="saveEdit">保存修改</button>
+            </div>
           </div>
+          <!-- Normal display -->
+          <template v-else>
+            <!-- 评论 -->
+            <div v-if="item.type === 'comment'" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
+            <div v-else class="change-text">
+              <template v-if="item.action === 'created'">创建了此工单</template>
+              <template v-else-if="item.action === 'deleted'">删除了此工单</template>
+              <template v-else-if="item.action === 'restored'">恢复了此工单</template>
+              <template v-else-if="item.action === 'time_logged'">
+                <span class="time-badge">⏱</span> 记录了工时: <span class="val-new">{{ item.to }}</span>
+              </template>
+              <template v-else-if="item.action === 'time_removed'">
+                <span class="time-badge">⏱</span> 删除了工时: <span class="val-old">{{ item.from }}</span>
+              </template>
+              <template v-else-if="item.action === 'attachment_added'">
+                添加了附件: <span class="val-new">{{ item.to }}</span>
+              </template>
+              <template v-else-if="item.action === 'attachment_removed'">
+                删除了附件: <span class="val-old">{{ item.from }}</span>
+              </template>
+              <template v-else-if="item.field">
+                修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
+              </template>
+              <template v-else>{{ localizeAction(item.action) }}</template>
+            </div>
+          </template>
         </div>
       </div>
       <p v-if="sorted.length === 0" class="empty">暂无活动</p>
     </div>
+
+    <!-- Delete confirmation modal -->
+    <a-modal
+      v-model:visible="deleteModalVisible"
+      title="删除评论"
+      :ok-text="'删除评论'"
+      :cancel-text="'取消'"
+      :ok-button-props="{ status: 'danger' }"
+      @ok="doDelete"
+      @cancel="deleteModalVisible = false"
+    >
+      <p>确定要删除这条评论吗？此操作无法撤销。</p>
+    </a-modal>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount, nextTick } from 'vue'
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Link from '@tiptap/extension-link'
+import Placeholder from '@tiptap/extension-placeholder'
 import { localizeAction } from '@/utils/fieldLabels'
 
 export interface ActivityItem {
   id: string
   type: 'comment' | 'change'
   user: string
+  userId?: string
+  commentId?: string
+  isEdited?: boolean
+  rawContent?: string
   timeAgo: string
   html?: string
   action?: string
@@ -91,6 +131,13 @@ export interface ActivityItem {
 
 const props = defineProps<{
   items: ActivityItem[]
+  currentUserId?: string
+  canManageComments?: boolean
+}>()
+
+const emit = defineEmits<{
+  editComment: [commentId: string, content: string]
+  deleteComment: [commentId: string]
 }>()
 
 const filters = [
@@ -103,6 +150,26 @@ const current = ref('all')
 const ascending = ref(true)
 const showSettings = ref(false)
 const expandComments = ref(true)
+const hoveredId = ref('')
+
+// Edit state
+const editingCommentId = ref<string | null>(null)
+
+const editEditor = useEditor({
+  content: '',
+  extensions: [
+    StarterKit,
+    Link.configure({ openOnClick: false }),
+    Placeholder.configure({ placeholder: '编辑评论...' }),
+  ],
+  editorProps: { attributes: { class: 'tiptap-comment' } },
+})
+
+const editEmpty = computed(() => !editEditor.value || editEditor.value.isEmpty)
+
+// Delete state
+const deleteModalVisible = ref(false)
+const deletingCommentId = ref<string | null>(null)
 
 const filtered = computed(() => {
   if (current.value === 'comments') return props.items.filter(i => i.type === 'comment')
@@ -117,11 +184,63 @@ const sorted = computed(() => {
   return arr
 })
 
+function canModifyComment(item: ActivityItem): boolean {
+  if (!props.currentUserId) return false
+  // Author can always edit/delete their own comment
+  if (item.userId === props.currentUserId) return true
+  // Users with manage_comments permission can edit/delete anyone's
+  return !!props.canManageComments
+}
+
+function startEdit(item: ActivityItem) {
+  editingCommentId.value = item.commentId || null
+  nextTick(() => {
+    if (editEditor.value && item.rawContent) {
+      // If rawContent starts with '<', it's HTML; otherwise set as paragraph
+      const isHtml = item.rawContent.trim().startsWith('<')
+      if (isHtml) {
+        editEditor.value.commands.setContent(item.rawContent)
+      } else {
+        editEditor.value.commands.setContent(`<p>${item.rawContent}</p>`)
+      }
+      editEditor.value.commands.focus('end')
+    }
+  })
+}
+
+function cancelEdit() {
+  editingCommentId.value = null
+  editEditor.value?.commands.clearContent()
+}
+
+function saveEdit() {
+  if (!editingCommentId.value || !editEditor.value || editEditor.value.isEmpty) return
+  const html = editEditor.value.getHTML()
+  emit('editComment', editingCommentId.value, html)
+  editingCommentId.value = null
+  editEditor.value.commands.clearContent()
+}
+
+function confirmDelete(item: ActivityItem) {
+  deletingCommentId.value = item.commentId || null
+  deleteModalVisible.value = true
+}
+
+function doDelete() {
+  if (deletingCommentId.value) {
+    emit('deleteComment', deletingCommentId.value)
+  }
+  deleteModalVisible.value = false
+  deletingCommentId.value = null
+}
+
 function initial(name: string) { return name ? name[0].toUpperCase() : 'U' }
 function avatarBg(name: string) {
   const c = ['#5c6bc0','#26a69a','#ef5350','#ab47bc','#42a5f5','#ff7043','#66bb6a']
   return c[(name || '').charCodeAt(0) % c.length]
 }
+
+onBeforeUnmount(() => { editEditor.value?.destroy() })
 </script>
 
 <style scoped>
@@ -181,6 +300,23 @@ function avatarBg(name: string) {
 .item-head strong { font-size: 12px; color: var(--tf-text-primary); font-weight: 600; }
 .item-time { font-size: 11px; color: var(--tf-text-muted); }
 
+.edited-badge {
+  font-size: 10px;
+  color: var(--tf-text-muted);
+  font-style: italic;
+}
+
+.comment-actions {
+  display: flex; gap: 4px; margin-left: auto;
+}
+.action-btn {
+  font-size: 12px; padding: 2px 6px; border-radius: 3px;
+  background: none; border: none; color: var(--tf-text-tertiary);
+  cursor: pointer; transition: color 150ms, background 150ms;
+}
+.action-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-hover); }
+.action-btn-danger:hover { color: var(--tf-error); background: rgba(248, 81, 73, 0.1); }
+
 .comment-text { font-size: 13px; color: var(--tf-text-secondary); line-height: 1.5; margin-top: 4px; }
 .comment-text.collapsed { max-height: 60px; overflow: hidden; position: relative; }
 .comment-text.collapsed::after {
@@ -191,6 +327,45 @@ function avatarBg(name: string) {
 }
 .comment-text :deep(p) { margin: 4px 0; }
 .comment-text :deep(code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 11px; }
+
+/* Edit mode */
+.comment-edit {
+  margin-top: 8px;
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--tf-bg-body);
+}
+.edit-area {
+  min-height: 60px; max-height: 200px; overflow-y: auto; padding: 12px;
+}
+.edit-area :deep(.tiptap-comment) {
+  outline: none; font-size: 13px; line-height: 1.5; color: var(--tf-text-primary);
+}
+.edit-area :deep(.tiptap-comment p) { margin: 4px 0; }
+.edit-area :deep(.tiptap-comment code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 12px; }
+.edit-area :deep(.tiptap-comment .is-empty::before) {
+  content: attr(data-placeholder); color: var(--tf-text-muted);
+  pointer-events: none; float: left; height: 0;
+}
+.edit-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 8px; border-top: 1px solid var(--tf-border);
+  background: var(--tf-bg-elevated);
+}
+.btn-cancel {
+  font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
+  background: none; color: var(--tf-text-tertiary); cursor: pointer;
+  transition: color 150ms;
+}
+.btn-cancel:hover { color: var(--tf-text-primary); }
+.btn-save {
+  font-size: 12px; padding: 4px 16px; border-radius: 3px; border: none;
+  background: var(--tf-accent); color: #fff; font-weight: 500; cursor: pointer;
+  transition: background 150ms;
+}
+.btn-save:disabled { opacity: 0.35; cursor: default; }
+.btn-save:hover:not(:disabled) { background: var(--tf-accent-hover); }
 
 .change-text { font-size: 12px; color: var(--tf-text-tertiary); margin-top: 4px; }
 .val-old { text-decoration: line-through; color: var(--tf-text-muted); }

@@ -998,6 +998,64 @@ public class IssueService {
         return comment;
     }
 
+    @Transactional
+    public IssueComment updateComment(Long issueId, Long commentId, String newContent) {
+        // 归档项目不允许编辑评论
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
+        IssueComment comment = commentMapper.selectById(commentId);
+        if (comment == null || comment.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+        }
+        if (!comment.getIssueId().equals(issueId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+        }
+
+        // 权限校验：作者本人 OR 拥有 issue:manage_comments 权限
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!comment.getUserId().equals(currentUserId)) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权编辑他人评论");
+            }
+        }
+
+        comment.setContent(newContent);
+        comment.setUpdatedAt(LocalDateTime.now());
+        commentMapper.updateById(comment);
+
+        recordActivity(issueId, currentUserId, "comment_updated", null, null, null);
+
+        return comment;
+    }
+
+    @Transactional
+    public void deleteComment(Long issueId, Long commentId) {
+        // 归档项目不允许删除评论
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
+        IssueComment comment = commentMapper.selectById(commentId);
+        if (comment == null || comment.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+        }
+        if (!comment.getIssueId().equals(issueId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+        }
+
+        // 权限校验：作者本人 OR 拥有 issue:manage_comments 权限
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!comment.getUserId().equals(currentUserId)) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人评论");
+            }
+        }
+
+        commentMapper.deleteById(commentId);
+
+        recordActivity(issueId, currentUserId, "comment_deleted", null, null, null);
+    }
+
     // ========== 附件 ==========
 
     public List<IssueAttachment> listAttachments(Long issueId) {
@@ -1136,8 +1194,18 @@ public class IssueService {
             vo.setUserAvatar((String) row.get("user_avatar"));
             vo.setContent((String) row.get("content"));
             vo.setSource((String) row.get("source"));
-            if (row.get("created_at") != null) vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
-            if (row.get("updated_at") != null) vo.setUpdatedAt(((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime());
+            LocalDateTime createdAt = null;
+            LocalDateTime updatedAt = null;
+            if (row.get("created_at") != null) {
+                createdAt = ((java.sql.Timestamp) row.get("created_at")).toLocalDateTime();
+                vo.setCreatedAt(createdAt);
+            }
+            if (row.get("updated_at") != null) {
+                updatedAt = ((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime();
+                vo.setUpdatedAt(updatedAt);
+            }
+            // 判断是否被编辑过：updated_at 比 created_at 晚超过 1 秒
+            vo.setIsEdited(createdAt != null && updatedAt != null && updatedAt.isAfter(createdAt.plusSeconds(1)));
             return vo;
         }).toList();
     }

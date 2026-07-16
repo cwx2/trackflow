@@ -13,6 +13,7 @@ public class IssueCommentVO {
     private String userAvatar;
     private String content;
     private String source;
+    private Boolean isEdited;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

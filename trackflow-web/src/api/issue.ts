@@ -112,6 +112,16 @@ export const issueApi = {
     return request.post<any, R<IssueCommentVO>>(`/issues/${issueId}/comments`, { content })
   },
 
+  /** 编辑评论 */
+  updateComment(issueId: string, commentId: string, content: string) {
+    return request.put<any, R<IssueCommentVO>>(`/issues/${issueId}/comments/${commentId}`, { content })
+  },
+
+  /** 删除评论（软删除） */
+  deleteComment(issueId: string, commentId: string) {
+    return request.delete<any, R<void>>(`/issues/${issueId}/comments/${commentId}`)
+  },
+
   // ========== 活动记录 ==========
 
   /** 活动记录 */

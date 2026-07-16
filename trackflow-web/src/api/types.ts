@@ -251,6 +251,7 @@ export interface IssueCommentVO {
   userAvatar?: string
   content: string
   source: string
+  isEdited?: boolean
   createdAt: string
   updatedAt: string
 }

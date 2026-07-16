@@ -298,6 +298,20 @@ public class IssueController {
         return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
     }
 
+    @PutMapping("/{id}/comments/{commentId}")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
+    public R<IssueCommentVO> updateComment(@PathVariable Long id, @PathVariable Long commentId,
+                                            @Valid @RequestBody UpdateCommentDTO dto) {
+        return R.ok(issueConverter.toCommentVO(issueService.updateComment(id, commentId, dto.getContent())));
+    }
+
+    @DeleteMapping("/{id}/comments/{commentId}")
+    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
+    public R<Void> deleteComment(@PathVariable Long id, @PathVariable Long commentId) {
+        issueService.deleteComment(id, commentId);
+        return R.ok();
+    }
+
     // ========== 附件 ==========
 
     @GetMapping("/{id}/attachments")
