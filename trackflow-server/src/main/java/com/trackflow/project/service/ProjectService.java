@@ -893,6 +893,12 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
         }
 
+        // 保护项目负责人：不能将负责人从成员中移除
+        if (userId.equals(project.getLeadId())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不能移除项目负责人。请先在项目设置中转让负责人后再移除该成员。");
+        }
+
         // 保护最后一个项目管理员
         List<ProjectMember> admins = memberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>()
