@@ -1,14 +1,12 @@
 package com.trackflow.project.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
-import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMemberMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -30,12 +28,18 @@ import java.util.Set;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
-public class ProjectNotificationHelper {
+public class ProjectNotificationHelper extends AbstractNotificationHelper {
 
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
-    private final ProjectMemberMapper memberMapper;
+
+    public ProjectNotificationHelper(NotificationService notificationService,
+                                     NotificationPreferenceService preferenceService,
+                                     ProjectMemberMapper memberMapper) {
+        super(null, memberMapper); // ProjectNotificationHelper 不需要 SysUserMapper
+        this.notificationService = notificationService;
+        this.preferenceService = preferenceService;
+    }
 
     // ==================== 成员变更通知 ====================
 
@@ -176,7 +180,7 @@ public class ProjectNotificationHelper {
     public void notifyLifecycleEvent(Long projectId, Long operatorId,
                                      String title, String content, NotificationType type) {
         try {
-            List<Long> memberUserIds = getMemberUserIds(projectId);
+            List<Long> memberUserIds = getProjectMemberUserIds(projectId);
 
             // 排除操作者
             List<Long> recipients = memberUserIds.stream()
@@ -234,14 +238,4 @@ public class ProjectNotificationHelper {
         }
     }
 
-    // ==================== 私有辅助方法 ====================
-
-    /**
-     * 获取项目所有成员的 userId 列表
-     */
-    private List<Long> getMemberUserIds(Long projectId) {
-        return memberMapper.selectList(
-                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
-        ).stream().map(ProjectMember::getUserId).distinct().toList();
-    }
 }

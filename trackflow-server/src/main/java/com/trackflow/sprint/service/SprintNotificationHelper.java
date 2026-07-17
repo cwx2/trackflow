@@ -1,16 +1,13 @@
 package com.trackflow.sprint.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
-import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.sprint.entity.Sprint;
-import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -31,15 +28,21 @@ import java.util.Set;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
-public class SprintNotificationHelper {
+public class SprintNotificationHelper extends AbstractNotificationHelper {
 
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
-    private final ProjectMemberMapper projectMemberMapper;
-    private final SysUserMapper sysUserMapper;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public SprintNotificationHelper(NotificationService notificationService,
+                                    NotificationPreferenceService preferenceService,
+                                    ProjectMemberMapper projectMemberMapper,
+                                    SysUserMapper sysUserMapper) {
+        super(sysUserMapper, projectMemberMapper);
+        this.notificationService = notificationService;
+        this.preferenceService = preferenceService;
+    }
 
     /**
      * Sprint 激活通知：通知项目所有成员（排除操作者）。
@@ -136,36 +139,6 @@ public class SprintNotificationHelper {
     }
 
     // ==================== 私有辅助方法 ====================
-
-    /**
-     * 获取项目所有成员的 userId 列表
-     */
-    private List<Long> getProjectMemberUserIds(Long projectId) {
-        List<ProjectMember> members = projectMemberMapper.selectList(
-                new LambdaQueryWrapper<ProjectMember>()
-                        .eq(ProjectMember::getProjectId, projectId)
-                        .select(ProjectMember::getUserId)
-        );
-        return members.stream()
-                .map(ProjectMember::getUserId)
-                .distinct()
-                .toList();
-    }
-
-    /**
-     * 获取用户显示名称
-     */
-    private String getUserDisplayName(Long userId) {
-        if (userId == null) {
-            return "系统";
-        }
-        try {
-            SysUser user = sysUserMapper.selectById(userId);
-            return user != null && user.getDisplayName() != null ? user.getDisplayName() : String.valueOf(userId);
-        } catch (Exception e) {
-            return String.valueOf(userId);
-        }
-    }
 
     /**
      * 格式化 Sprint 日期范围

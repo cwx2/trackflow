@@ -1,6 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
@@ -12,7 +13,6 @@ import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -34,14 +34,24 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
-public class IssueNotificationHelper {
+public class IssueNotificationHelper extends AbstractNotificationHelper {
 
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
     private final IssueCommentMapper commentMapper;
     private final IssueStatusMapper statusMapper;
-    private final SysUserMapper sysUserMapper;
+
+    public IssueNotificationHelper(NotificationService notificationService,
+                                   NotificationPreferenceService preferenceService,
+                                   IssueCommentMapper commentMapper,
+                                   IssueStatusMapper statusMapper,
+                                   SysUserMapper sysUserMapper) {
+        super(sysUserMapper, null); // IssueNotificationHelper 不需要 ProjectMemberMapper
+        this.notificationService = notificationService;
+        this.preferenceService = preferenceService;
+        this.commentMapper = commentMapper;
+        this.statusMapper = statusMapper;
+    }
 
     // ==================== 公共通知方法 ====================
 
@@ -50,8 +60,14 @@ public class IssueNotificationHelper {
      */
     @Async("notificationExecutor")
     public void notifyAssigned(Issue issue, Long assigneeId, Long operatorId) {
-        if (assigneeId == null || assigneeId.equals(operatorId)) {
+        if (assigneeId == null) {
             return;
+        }
+        // 如果被分配人就是操作者自己，检查 notifyOwnChanges 偏好
+        if (assigneeId.equals(operatorId)) {
+            if (!preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId())) {
+                return;
+            }
         }
         try {
             if (!preferenceService.isEnabled(assigneeId, NotificationEventType.ISSUE_ASSIGNED, issue.getProjectId())) {
@@ -79,7 +95,10 @@ public class IssueNotificationHelper {
     @Async("notificationExecutor")
     public void notifyCommented(Issue issue, Long commenterId) {
         try {
-            Map<Long, NotificationReason> recipientReasons = collectCommentRecipientsWithReason(issue, commenterId);
+            // 根据评论者的 notifyOwnChanges 偏好决定是否排除自己
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(commenterId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? commenterId : null;
+            Map<Long, NotificationReason> recipientReasons = collectCommentRecipientsWithReason(issue, excludeUserId);
             if (recipientReasons.isEmpty()) {
                 return;
             }
@@ -107,28 +126,41 @@ public class IssueNotificationHelper {
     }
 
     /**
-     * 状态变更通知：通知报告人 + 负责人（去重，排除当前用户）。
+     * 状态变更通知：通知报告人 + 负责人（去重，根据偏好决定是否排除操作者）。
      * 每个接收者根据其角色获得对应的 reason。
      * <p>
      * 当新状态属于"已关闭"类别（isClosed=true）时，使用 ISSUE_RESOLVED 偏好检查；
      * 否则使用 ISSUE_STATUS_CHANGED 偏好检查。
+     * <p>
+     * 性能优化：所有接收者共享相同的 operatorName / statusName / eventType，
+     * 在循环外一次性查询，避免 N+1。newStatusId 只查询一次同时获取名称和 isClosed。
      */
     @Async("notificationExecutor")
     public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) {
         try {
-            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, operatorId);
+            // 根据操作者的 notifyOwnChanges 偏好决定是否排除自己
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
             if (recipientReasons.isEmpty()) {
                 return;
             }
+
+            // 循环外一次性获取所有共享数据
             String operatorName = getUserDisplayName(operatorId);
             String oldStatusName = getStatusName(oldStatusId);
-            String newStatusName = getStatusName(newStatusId);
+
+            // 一次查询 newStatus 对象，复用获取名称和 isClosed 判断（消除重复 selectById）
+            IssueStatus newStatus = statusMapper.selectById(newStatusId);
+            String newStatusName = newStatus != null ? newStatus.getLocalizedName() : String.valueOf(newStatusId);
+            boolean isClosed = newStatus != null && Boolean.TRUE.equals(newStatus.getIsClosed());
+
             String title = String.format("%s 状态变更为 %s", issue.getIssueKey(), newStatusName);
             String content = String.format("%s 将工单 [%s] %s 的状态从「%s」变更为「%s」",
                     operatorName, issue.getIssueKey(), issue.getTitle(), oldStatusName, newStatusName);
 
             // 判断新状态是否为"已关闭"类别——若是则使用 ISSUE_RESOLVED 偏好
-            NotificationEventType eventType = isClosedStatus(newStatusId)
+            NotificationEventType eventType = isClosed
                     ? NotificationEventType.ISSUE_RESOLVED
                     : NotificationEventType.ISSUE_STATUS_CHANGED;
 
@@ -151,12 +183,18 @@ public class IssueNotificationHelper {
     }
 
     /**
-     * 工单创建时通知被分配人（若指定了 assignee 且不是创建者自己）
+     * 工单创建时通知被分配人（若指定了 assignee）
      */
     @Async("notificationExecutor")
     public void notifyCreated(Issue issue, Long creatorId) {
-        if (issue.getAssigneeId() == null || issue.getAssigneeId().equals(creatorId)) {
+        if (issue.getAssigneeId() == null) {
             return;
+        }
+        // 如果被分配人就是创建者自己，检查 notifyOwnChanges 偏好
+        if (issue.getAssigneeId().equals(creatorId)) {
+            if (!preferenceService.isNotifyOwnChanges(creatorId, issue.getProjectId())) {
+                return;
+            }
         }
         try {
             if (!preferenceService.isEnabled(issue.getAssigneeId(), NotificationEventType.ISSUE_ASSIGNED, issue.getProjectId())) {
@@ -220,9 +258,11 @@ public class IssueNotificationHelper {
 
             int sent = 0;
             for (SysUser user : mentionedUsers) {
-                // 排除评论者自己
+                // 排除评论者自己（除非启用了 notifyOwnChanges）
                 if (user.getId().equals(commenterId)) {
-                    continue;
+                    if (!preferenceService.isNotifyOwnChanges(commenterId, issue.getProjectId())) {
+                        continue;
+                    }
                 }
                 // 检查 onMentioned 偏好
                 if (!preferenceService.isEnabled(user.getId(), NotificationEventType.MENTIONED, issue.getProjectId())) {
@@ -314,79 +354,6 @@ public class IssueNotificationHelper {
 
         recipients.remove(excludeUserId);
         return recipients;
-    }
-
-    /**
-     * 收集评论通知接收人：报告人 + 负责人 + 之前评论者（去重，排除评论者自己）
-     * 使用 SELECT DISTINCT user_id 优化，避免加载全量评论对象。
-     */
-    private Set<Long> collectCommentRecipients(Issue issue, Long excludeUserId) {
-        Set<Long> recipients = new HashSet<>();
-
-        // 报告人
-        if (issue.getReporterId() != null) {
-            recipients.add(issue.getReporterId());
-        }
-        // 负责人
-        if (issue.getAssigneeId() != null) {
-            recipients.add(issue.getAssigneeId());
-        }
-        // 之前的评论者（SELECT DISTINCT user_id，仅返回 Long 列表）
-        List<Long> commenterIds = commentMapper.selectDistinctCommenterIds(issue.getId());
-        if (commenterIds != null) {
-            recipients.addAll(commenterIds);
-        }
-
-        // 排除当前操作者
-        recipients.remove(excludeUserId);
-        return recipients;
-    }
-
-    /**
-     * 收集状态变更通知接收人：报告人 + 负责人（去重，排除操作者自己）
-     */
-    private Set<Long> collectStatusChangeRecipients(Issue issue, Long excludeUserId) {
-        Set<Long> recipients = new HashSet<>();
-        if (issue.getReporterId() != null) {
-            recipients.add(issue.getReporterId());
-        }
-        if (issue.getAssigneeId() != null) {
-            recipients.add(issue.getAssigneeId());
-        }
-        recipients.remove(excludeUserId);
-        return recipients;
-    }
-
-    /**
-     * 判断指定状态是否属于"已关闭"类别。
-     * 用于区分 ISSUE_RESOLVED 和 ISSUE_STATUS_CHANGED 偏好检查。
-     */
-    private boolean isClosedStatus(Long statusId) {
-        if (statusId == null) {
-            return false;
-        }
-        try {
-            IssueStatus status = statusMapper.selectById(statusId);
-            return status != null && Boolean.TRUE.equals(status.getIsClosed());
-        } catch (Exception e) {
-            log.warn("[IssueNotification] 查询状态 isClosed 失败: statusId={}", statusId);
-            return false;
-        }
-    }
-
-    /**
-     * 获取用户显示名称
-     */
-    private String getUserDisplayName(Long userId) {
-        if (userId == null) {
-            return "系统";
-        }
-        try {
-            SysUser user = sysUserMapper.selectById(userId);
-            return user != null && user.getDisplayName() != null ? user.getDisplayName() : String.valueOf(userId);
-        } catch (Exception e) {
-            return String.valueOf(userId);
-        }
     }
 
     /**
