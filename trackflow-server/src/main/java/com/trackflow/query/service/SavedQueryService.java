@@ -58,15 +58,17 @@ public class SavedQueryService {
 
         List<SavedQuery> queries = queryMapper.selectList(wrapper);
 
-        // 获取用户可访问项目列表（用于计数过滤）
-        List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+        // 计数范围：选中项目时仅统计该项目，否则统计所有可访问项目
+        List<Long> countProjectIds = (projectId != null)
+                ? Collections.singletonList(projectId)
+                : projectService.getAccessibleProjectIds(userId);
 
         // 分为 pinned 和普通
         List<QueryPanelItemVO> pinned = new ArrayList<>();
         List<QueryPanelItemVO> normal = new ArrayList<>();
 
         for (SavedQuery q : queries) {
-            long count = countForQueryWithProjectFilter(q, accessibleProjectIds);
+            long count = countForQueryWithProjectFilter(q, countProjectIds);
             QueryPanelItemVO item = QueryPanelItemVO.builder()
                     .id(String.valueOf(q.getId()))
                     .name(q.getName())
@@ -203,13 +205,16 @@ public class SavedQueryService {
     /**
      * 批量获取查询计数（带项目成员过滤）
      */
-    public Map<String, Long> batchCountWithAccessCheck(List<Long> queryIds, Long userId) {
-        List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
+    public Map<String, Long> batchCountWithAccessCheck(List<Long> queryIds, Long userId, Long projectId) {
+        // 计数范围：选中项目时仅统计该项目，否则统计所有可访问项目
+        List<Long> countProjectIds = (projectId != null)
+                ? Collections.singletonList(projectId)
+                : projectService.getAccessibleProjectIds(userId);
         Map<String, Long> result = new LinkedHashMap<>();
         for (Long queryId : queryIds) {
             SavedQuery query = queryMapper.selectById(queryId);
             if (query != null) {
-                result.put(String.valueOf(queryId), countForQueryWithProjectFilter(query, accessibleProjectIds));
+                result.put(String.valueOf(queryId), countForQueryWithProjectFilter(query, countProjectIds));
             }
         }
         return result;

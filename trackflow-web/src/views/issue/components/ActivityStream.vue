@@ -72,6 +72,9 @@
               <template v-else-if="item.action === 'time_removed'">
                 <span class="time-badge">⏱</span> 删除了工时: <span class="val-old">{{ item.from }}</span>
               </template>
+              <template v-else-if="item.action === 'time_updated'">
+                <span class="time-badge">⏱</span> 修改了工时: <span class="val-new">{{ item.to }}</span>
+              </template>
               <template v-else-if="item.action === 'attachment_added'">
                 添加了附件: <span class="val-new">{{ item.to }}</span>
               </template>
@@ -173,8 +176,8 @@ const deletingCommentId = ref<string | null>(null)
 
 const filtered = computed(() => {
   if (current.value === 'comments') return props.items.filter(i => i.type === 'comment')
-  if (current.value === 'time') return props.items.filter(i => i.action === 'time_logged' || i.action === 'time_removed')
-  if (current.value === 'changes') return props.items.filter(i => i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed')
+  if (current.value === 'time') return props.items.filter(i => i.action === 'time_logged' || i.action === 'time_removed' || i.action === 'time_updated')
+  if (current.value === 'changes') return props.items.filter(i => i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed' && i.action !== 'time_updated')
   return props.items
 })
 

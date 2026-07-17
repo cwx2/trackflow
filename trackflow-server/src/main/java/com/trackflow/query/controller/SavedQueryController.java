@@ -171,10 +171,17 @@ public class SavedQueryController {
      * 批量获取查询计数（带项目成员过滤）
      */
     @PostMapping("/counts")
-    public R<Map<String, Long>> batchCount(@RequestBody Map<String, List<Long>> body) {
+    public R<Map<String, Long>> batchCount(
+            @RequestBody Map<String, Object> body,
+            @RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        List<Long> queryIds = body.get("queryIds");
-        return R.ok(savedQueryService.batchCountWithAccessCheck(queryIds, userId));
+        if (projectId != null) {
+            projectService.assertProjectMember(userId, projectId);
+        }
+        @SuppressWarnings("unchecked")
+        List<Number> rawIds = (List<Number>) body.get("queryIds");
+        List<Long> queryIds = rawIds.stream().map(Number::longValue).toList();
+        return R.ok(savedQueryService.batchCountWithAccessCheck(queryIds, userId, projectId));
     }
 
     /**

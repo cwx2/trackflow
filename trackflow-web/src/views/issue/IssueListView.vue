@@ -1343,6 +1343,7 @@ function selectProject(p: any) {
     router.replace({ query: { ...route.query, project: p.id } })
   }
   refreshList()
+  loadPanel()
 }
 
 watch(currentPage, () => refreshList())
@@ -1351,7 +1352,7 @@ watch(sortState, () => refreshList(), { deep: true })
 // Init
 async function loadPanel() {
   try {
-    const res = await queryApi.getPanel()
+    const res = await queryApi.getPanel(activeProjectId.value || undefined)
     const data = res.data || {}
     savedQueries.value = [...(data.pinned || []), ...(data.queries || [])]
   } catch {

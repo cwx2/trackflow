@@ -192,6 +192,7 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
   attachment_removed: { short: '删除了附件', full: '删除了附件' },
   time_logged: { short: '记录了工时', full: '记录了工时' },
   time_removed: { short: '删除了工时', full: '删除了工时' },
+  time_updated: { short: '修改了工时', full: '修改了工时' },
   deleted: { short: '删除了', full: '删除了此工单' },
   restored: { short: '恢复了', full: '恢复了此工单' },
   reopened: { short: '重新打开了', full: '重新打开了此工单' },

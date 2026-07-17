@@ -127,7 +127,12 @@ public class TimeEntryService {
             assertTimeLogPermission(userId, targetIssue.getProjectId());
         }
 
+        // 保存旧值用于活动日志
         Long oldIssueId = entry.getIssueId();
+        int oldDuration = entry.getDuration();
+        LocalDate oldWorkDate = entry.getWorkDate();
+        String oldWorkType = entry.getWorkType();
+        String oldDescription = entry.getDescription();
 
         if (dto.getIssueId() != null) entry.setIssueId(dto.getIssueId());
         if (dto.getWorkDate() != null) entry.setWorkDate(LocalDate.parse(dto.getWorkDate()));
@@ -147,6 +152,13 @@ public class TimeEntryService {
             }
             workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
         }
+
+        // 记录活动日志
+        recordTimeUpdateActivity(userId, oldIssueId, entry.getIssueId(),
+                oldDuration, entry.getDuration(),
+                oldWorkDate, entry.getWorkDate(),
+                oldWorkType, entry.getWorkType(),
+                oldDescription, entry.getDescription());
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(entry.getIssueId());
@@ -356,6 +368,52 @@ public class TimeEntryService {
         if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
         if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
         return vo;
+    }
+
+    /**
+     * 记录工时更新的活动日志。
+     * - 工时跨工单转移：旧工单记录 time_removed，新工单记录 time_logged
+     * - 普通字段修改（时长、日期、工作类型、描述）：记录 time_updated
+     */
+    private void recordTimeUpdateActivity(Long userId, Long oldIssueId, Long newIssueId,
+                                          int oldDuration, int newDuration,
+                                          LocalDate oldWorkDate, LocalDate newWorkDate,
+                                          String oldWorkType, String newWorkType,
+                                          String oldDescription, String newDescription) {
+        boolean issueChanged = !oldIssueId.equals(newIssueId);
+
+        if (issueChanged) {
+            // 工时转移：旧工单记录"工时被移走"，新工单记录"工时被移入"
+            String detail = formatDuration(newDuration);
+            recordActivity(oldIssueId, userId, "time_removed", "spent_time", detail, null);
+            recordActivity(newIssueId, userId, "time_logged", "spent_time", null, detail);
+            return;
+        }
+
+        // 普通字段修改：记录 time_updated，包含变更明细
+        List<String> changes = new ArrayList<>();
+        if (oldDuration != newDuration) {
+            changes.add("时长: " + formatDuration(oldDuration) + " → " + formatDuration(newDuration));
+        }
+        if (!Objects.equals(oldWorkDate, newWorkDate)) {
+            changes.add("日期: " + oldWorkDate + " → " + newWorkDate);
+        }
+        if (!Objects.equals(oldWorkType, newWorkType)) {
+            String from = oldWorkType != null ? oldWorkType : "未设置";
+            String to = newWorkType != null ? newWorkType : "未设置";
+            changes.add("类型: " + from + " → " + to);
+        }
+        if (!Objects.equals(oldDescription, newDescription)) {
+            String from = oldDescription != null && !oldDescription.isBlank() ? oldDescription : "无";
+            String to = newDescription != null && !newDescription.isBlank() ? newDescription : "无";
+            changes.add("描述: " + from + " → " + to);
+        }
+
+        if (!changes.isEmpty()) {
+            String oldDetail = formatDuration(oldDuration);
+            String newDetail = String.join("; ", changes);
+            recordActivity(oldIssueId, userId, "time_updated", "spent_time", oldDetail, newDetail);
+        }
     }
 
     private void recordActivity(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
