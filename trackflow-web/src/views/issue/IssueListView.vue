@@ -288,6 +288,21 @@
             @toggle="toggleColumn"
             @reset="resetColumns"
           />
+          <a-dropdown trigger="click" position="br">
+            <a-button size="small" type="text" title="预览模式">
+              <template #icon><icon-eye /></template>
+            </a-button>
+            <template #content>
+              <a-doption @click="setPreviewMode('sidebar')" :class="{ 'doption-active': previewMode === 'sidebar' }">
+                <template #icon><icon-layout /></template>
+                侧边栏预览
+              </a-doption>
+              <a-doption @click="setPreviewMode('off')" :class="{ 'doption-active': previewMode === 'off' }">
+                <template #icon><icon-expand /></template>
+                关闭预览（跳转详情页）
+              </a-doption>
+            </template>
+          </a-dropdown>
         </div>
       </div>
 
@@ -336,6 +351,7 @@
         size="medium"
         :scroll="{ x: tableMinWidth }"
         @row-click="onRowClick"
+        @row-dblclick="onRowDblClick"
         @selection-change="onSelectionChange"
         @column-resize="onColumnResize"
       >
@@ -388,8 +404,8 @@
         <template #status="{ record }">
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="statusDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
-              <span class="editable-cell status-badge" :style="{ background: getStatusColor(record.statusId) }" @click="openStatusEdit(record)">
-                {{ getStatusName(record.statusId) }}
+              <span class="editable-cell status-badge" :style="{ background: getStatusColor(record.statusId, record.statusColor) }" @click="openStatusEdit(record)">
+                {{ getStatusName(record.statusId, record.statusName) }}
                 <icon-loading v-if="isCellEditing(record.id, 'statusId')" class="cell-spinner" />
               </span>
               <template #content>
@@ -404,14 +420,14 @@
                 </div>
               </template>
             </a-trigger>
-            <span v-else class="readonly-cell status-badge" :style="{ background: getStatusColor(record.statusId) }">{{ getStatusName(record.statusId) }}</span>
+            <span v-else class="readonly-cell status-badge" :style="{ background: getStatusColor(record.statusId, record.statusColor) }">{{ getStatusName(record.statusId, record.statusName) }}</span>
           </div>
         </template>
         <template #sprint="{ record }">
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="sprintDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
               <span class="editable-cell" @click="openSprintEdit(record)">
-                {{ getSprintName(record.sprintId) || '\u2014' }}
+                {{ getSprintName(record.sprintId, record.sprintName) || '\u2014' }}
                 <icon-loading v-if="isCellEditing(record.id, 'sprintId')" class="cell-spinner" />
               </span>
               <template #content>
@@ -427,7 +443,7 @@
                 </div>
               </template>
             </a-trigger>
-            <span v-else class="readonly-cell">{{ getSprintName(record.sprintId) || '\u2014' }}</span>
+            <span v-else class="readonly-cell">{{ getSprintName(record.sprintId, record.sprintName) || '\u2014' }}</span>
           </div>
         </template>
         <template #priority="{ record }">
@@ -496,13 +512,21 @@
 
     <!-- Create issue panel -->
     <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" @created="refreshList" />
+
+    <!-- Sidebar preview drawer -->
+    <IssuePreviewDrawer
+      :visible="previewVisible"
+      :issue-id="previewIssueId"
+      @update:visible="onPreviewVisibleChange"
+      @go-detail="onPreviewGoDetail"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
@@ -513,6 +537,7 @@ import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, 
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
+import IssuePreviewDrawer from '../board/IssuePreviewDrawer.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import FilterBar from './components/FilterBar.vue'
 
@@ -933,6 +958,89 @@ const quickForm = reactive({
   priority: 'Normal'
 })
 
+// ===== Preview mode (YouTrack-style Sidebar / Off) =====
+const PREVIEW_MODE_KEY = 'trackflow:preview-mode'
+type PreviewMode = 'sidebar' | 'off'
+const previewMode = ref<PreviewMode>(loadPreviewMode())
+const previewVisible = ref(false)
+const previewIssueId = ref<string | null>(null)
+const activeIssueIndex = ref<number>(-1)
+
+function loadPreviewMode(): PreviewMode {
+  try {
+    const stored = localStorage.getItem(PREVIEW_MODE_KEY)
+    if (stored === 'sidebar' || stored === 'off') return stored
+  } catch { /* ignore */ }
+  return 'off'
+}
+
+function setPreviewMode(mode: PreviewMode) {
+  previewMode.value = mode
+  localStorage.setItem(PREVIEW_MODE_KEY, mode)
+  if (mode === 'off') {
+    previewVisible.value = false
+    previewIssueId.value = null
+    activeIssueIndex.value = -1
+  }
+}
+
+function openPreview(issue: IssueVO, index: number) {
+  previewIssueId.value = issue.id
+  previewVisible.value = true
+  activeIssueIndex.value = index
+}
+
+function closePreview() {
+  previewVisible.value = false
+  activeIssueIndex.value = -1
+}
+
+function onPreviewVisibleChange(val: boolean) {
+  previewVisible.value = val
+  if (!val) {
+    activeIssueIndex.value = -1
+  }
+}
+
+function onPreviewGoDetail(issueId: string) {
+  previewVisible.value = false
+  router.push({ name: 'IssueDetail', params: { id: issueId } })
+}
+
+// Keyboard navigation for preview mode
+function handleKeyboardNav(e: KeyboardEvent) {
+  // Only handle when preview mode is sidebar and preview is visible
+  if (previewMode.value !== 'sidebar' || !previewVisible.value) return
+  // Don't intercept when focus is in an input
+  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    navigateIssue(1)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    navigateIssue(-1)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    closePreview()
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    if (previewIssueId.value) {
+      onPreviewGoDetail(previewIssueId.value)
+    }
+  }
+}
+
+function navigateIssue(direction: number) {
+  const newIndex = activeIssueIndex.value + direction
+  if (newIndex >= 0 && newIndex < issues.value.length) {
+    activeIssueIndex.value = newIndex
+    const issue = issues.value[newIndex]
+    previewIssueId.value = issue.id
+  }
+}
+
 // Status cache
 const statusCache = ref<IssueStatusVO[]>([])
 
@@ -1021,6 +1129,15 @@ const rowSelection = reactive({
 const selectedKeysArray = computed(() => [...selectedIds.value])
 
 function onRowClick(record: TableData) {
+  if (previewMode.value === 'sidebar') {
+    const index = issues.value.findIndex(i => i.id === record.id)
+    openPreview(record as unknown as IssueVO, index)
+  } else {
+    router.push(`/issues/${record.id}`)
+  }
+}
+function onRowDblClick(record: TableData) {
+  // Double-click always navigates to full detail page regardless of preview mode
   router.push(`/issues/${record.id}`)
 }
 function onSelectionChange(rowKeys: (string | number)[]) {
@@ -1067,17 +1184,25 @@ function isResolved(statusId: string): boolean {
   return s?.isClosed === true
 }
 function getRowClass(record: TableData): string {
-  return isResolved(record.statusId as string) ? 'issue-resolved' : ''
+  const classes: string[] = []
+  if (isResolved(record.statusId as string)) classes.push('issue-resolved')
+  if (previewMode.value === 'sidebar' && previewVisible.value && record.id === previewIssueId.value) {
+    classes.push('issue-previewing')
+  }
+  return classes.join(' ')
 }
-function getStatusName(id: string) {
+function getStatusName(id: string, inlineName?: string) {
+  if (inlineName) return localizeStatusName(inlineName)
   const s = statusCache.value.find(st => st.id === id)
   return localizeStatusName(s?.name)
 }
-function getStatusColor(id: string) {
+function getStatusColor(id: string, inlineColor?: string) {
+  if (inlineColor) return inlineColor
   const s = statusCache.value.find(st => st.id === id)
   return s?.color || '#666'
 }
-function getSprintName(sprintId?: string) {
+function getSprintName(sprintId?: string, inlineName?: string) {
+  if (inlineName) return inlineName
   if (!sprintId) return ''
   for (const sprints of Object.values(sprintOptionsCache)) {
     const found = (sprints as SprintVO[]).find(s => s.id === sprintId)
@@ -1549,10 +1674,14 @@ onMounted(async () => {
 
   // Listen for undo-restore events from batch delete
   window.addEventListener('trackflow:issues-restored', handleIssuesRestored)
+
+  // Keyboard navigation for preview mode
+  document.addEventListener('keydown', handleKeyboardNav)
 })
 
 onUnmounted(() => {
   window.removeEventListener('trackflow:issues-restored', handleIssuesRestored)
+  document.removeEventListener('keydown', handleKeyboardNav)
 })
 
 function handleIssuesRestored() {
@@ -1836,4 +1965,22 @@ function applyDashboardFilter() {
 
 /* Pagination */
 .pagination-bar { display: flex; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--tf-border); flex-shrink: 0; }
+
+/* Preview mode active row highlight */
+.issue-table :deep(.issue-previewing .arco-table-td) { background: var(--tf-accent-bg); }
+.issue-table :deep(.issue-previewing) { position: relative; }
+.issue-table :deep(.issue-previewing)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--tf-accent);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Preview mode toggle dropdown active item */
+.doption-active { color: var(--tf-accent) !important; font-weight: 500; }
+.doption-active::before { content: '✓ '; }
 </style>
