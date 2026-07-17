@@ -22,4 +22,5 @@ public class QueryPanelItemVO {
     private String userId;
     private long count;
     private String filters;
+    private Boolean favorited;
 }

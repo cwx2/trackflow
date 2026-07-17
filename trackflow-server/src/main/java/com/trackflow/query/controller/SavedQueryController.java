@@ -14,6 +14,7 @@ import com.trackflow.query.dto.CreateQueryDTO;
 import com.trackflow.query.dto.ExecuteQueryDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.service.SavedQueryService;
+import com.trackflow.query.vo.QueryPanelItemVO;
 import com.trackflow.query.vo.QueryPanelVO;
 import com.trackflow.query.vo.SavedQueryVO;
 import com.trackflow.system.entity.SysUser;
@@ -44,6 +45,7 @@ public class SavedQueryController {
 
     /**
      * 获取查询面板（左侧面板数据 + 实时计数）
+     * 只返回用户自己创建的 + 用户收藏的共享查询
      */
     @GetMapping("/panel")
     public R<QueryPanelVO> getPanel(@RequestParam(value = "projectId", required = false) Long projectId) {
@@ -52,6 +54,36 @@ public class SavedQueryController {
             projectService.assertProjectMember(userId, projectId);
         }
         return R.ok(savedQueryService.getPanel(userId, projectId));
+    }
+
+    /**
+     * 获取所有可用的共享查询（供"管理查询"面板使用）
+     */
+    @GetMapping("/available")
+    public R<List<QueryPanelItemVO>> getAvailableQueries(
+            @RequestParam(value = "projectId", required = false) Long projectId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(savedQueryService.getAvailableQueries(userId, projectId));
+    }
+
+    /**
+     * 收藏查询（添加到面板）
+     */
+    @PostMapping("/{id}/favorite")
+    public R<Void> addFavorite(@PathVariable("id") String id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        savedQueryService.addFavorite(userId, Long.parseLong(id));
+        return R.ok();
+    }
+
+    /**
+     * 取消收藏查询（从面板移除）
+     */
+    @DeleteMapping("/{id}/favorite")
+    public R<Void> removeFavorite(@PathVariable("id") String id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        savedQueryService.removeFavorite(userId, Long.parseLong(id));
+        return R.ok();
     }
 
     /**

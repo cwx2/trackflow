@@ -5,11 +5,28 @@ import type { R, PageResult, IssueVO, SavedQueryVO } from './types'
  * 保存查询模块 API
  */
 export const queryApi = {
-  /** 获取查询面板数据 */
+  /** 获取查询面板数据（仅返回自己创建的 + 收藏的） */
   getPanel(projectId?: string) {
     return request.get<any, R<{ pinned: any[]; queries: any[] }>>('/queries/panel', {
       params: projectId ? { projectId } : undefined
     })
+  },
+
+  /** 获取所有可用的共享查询（供管理面板使用） */
+  getAvailableQueries(projectId?: string) {
+    return request.get<any, R<any[]>>('/queries/available', {
+      params: projectId ? { projectId } : undefined
+    })
+  },
+
+  /** 收藏查询（添加到面板） */
+  addFavorite(queryId: string) {
+    return request.post<any, R<void>>(`/queries/${queryId}/favorite`)
+  },
+
+  /** 取消收藏查询（从面板移除） */
+  removeFavorite(queryId: string) {
+    return request.delete<any, R<void>>(`/queries/${queryId}/favorite`)
   },
 
   /** 创建保存查询 */

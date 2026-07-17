@@ -14,7 +14,9 @@ import com.trackflow.query.dto.ExecuteQueryDTO;
 import com.trackflow.query.dto.UpdateQueryDTO;
 import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.query.entity.SavedQuery;
+import com.trackflow.query.entity.UserQueryFavorite;
 import com.trackflow.query.mapper.SavedQueryMapper;
+import com.trackflow.query.mapper.UserQueryFavoriteMapper;
 import com.trackflow.query.vo.QueryPanelItemVO;
 import com.trackflow.query.vo.QueryPanelVO;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -31,22 +34,41 @@ import java.util.*;
 public class SavedQueryService {
 
     private final SavedQueryMapper queryMapper;
+    private final UserQueryFavoriteMapper favoriteMapper;
     private final QueryExecutor queryExecutor;
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
 
     /**
      * 获取用户的查询面板（左侧面板数据）
-     * 返回 pinned + 普通查询，包含实时计数
+     * 只返回：用户自己创建的查询 + 用户收藏的共享查询
+     * 如果用户没有任何收藏记录（首次使用），自动收藏默认查询
      */
     public QueryPanelVO getPanel(Long userId, Long projectId) {
-        // 查询用户可见的查询（自己的 + 共享的）
+        // 确保用户有收藏记录（首次使用时自动初始化）
+        ensureDefaultFavorites(userId);
+
+        // 获取用户收藏的查询 ID 集合
+        LambdaQueryWrapper<UserQueryFavorite> favWrapper = new LambdaQueryWrapper<>();
+        favWrapper.eq(UserQueryFavorite::getUserId, userId);
+        favWrapper.orderByAsc(UserQueryFavorite::getSortOrder);
+        List<UserQueryFavorite> favorites = favoriteMapper.selectList(favWrapper);
+        Set<Long> favoriteQueryIds = favorites.stream()
+                .map(UserQueryFavorite::getQueryId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        // 查询用户可见的查询：自己创建的 + 已收藏的共享查询
         LambdaQueryWrapper<SavedQuery> wrapper = new LambdaQueryWrapper<>();
-        wrapper.and(w -> w
-                .eq(SavedQuery::getUserId, userId)
-                .or()
-                .eq(SavedQuery::getShared, true)
-        );
+        if (favoriteQueryIds.isEmpty()) {
+            // 只查自己创建的
+            wrapper.eq(SavedQuery::getUserId, userId);
+        } else {
+            wrapper.and(w -> w
+                    .eq(SavedQuery::getUserId, userId)
+                    .or()
+                    .in(SavedQuery::getId, favoriteQueryIds)
+            );
+        }
         if (projectId != null) {
             wrapper.and(w -> w
                     .eq(SavedQuery::getProjectId, projectId)
@@ -68,6 +90,11 @@ public class SavedQueryService {
         List<QueryPanelItemVO> normal = new ArrayList<>();
 
         for (SavedQuery q : queries) {
+            // 只展示：用户自己的查询 OR 已收藏的查询
+            boolean isOwn = userId.equals(q.getUserId());
+            boolean isFavorited = favoriteQueryIds.contains(q.getId());
+            if (!isOwn && !isFavorited) continue;
+
             long count = countForQueryWithProjectFilter(q, countProjectIds);
             QueryPanelItemVO item = QueryPanelItemVO.builder()
                     .id(String.valueOf(q.getId()))
@@ -79,6 +106,7 @@ public class SavedQueryService {
                     .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
                     .count(count)
                     .filters(q.getFilters())
+                    .favorited(isFavorited || isOwn)
                     .build();
 
             if (Boolean.TRUE.equals(q.getPinned())) {
@@ -89,6 +117,121 @@ public class SavedQueryService {
         }
 
         return new QueryPanelVO(pinned, normal);
+    }
+
+    /**
+     * 获取所有可用的共享查询（供"管理查询"弹窗使用）
+     * 返回所有 shared=true 的查询，并标记当前用户是否已收藏
+     */
+    public List<QueryPanelItemVO> getAvailableQueries(Long userId, Long projectId) {
+        LambdaQueryWrapper<SavedQuery> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SavedQuery::getShared, true);
+        if (projectId != null) {
+            wrapper.and(w -> w
+                    .eq(SavedQuery::getProjectId, projectId)
+                    .or()
+                    .isNull(SavedQuery::getProjectId)
+            );
+        }
+        wrapper.orderByAsc(SavedQuery::getSortOrder);
+        List<SavedQuery> queries = queryMapper.selectList(wrapper);
+
+        // 获取用户已收藏的集合
+        LambdaQueryWrapper<UserQueryFavorite> favWrapper = new LambdaQueryWrapper<>();
+        favWrapper.eq(UserQueryFavorite::getUserId, userId);
+        Set<Long> favoriteIds = favoriteMapper.selectList(favWrapper).stream()
+                .map(UserQueryFavorite::getQueryId)
+                .collect(Collectors.toSet());
+
+        return queries.stream().map(q -> QueryPanelItemVO.builder()
+                .id(String.valueOf(q.getId()))
+                .name(q.getName())
+                .folder(q.getFolder())
+                .icon(q.getIcon())
+                .pinned(q.getPinned())
+                .shared(q.getShared())
+                .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
+                .count(0) // 不计数（性能考虑）
+                .filters(q.getFilters())
+                .favorited(favoriteIds.contains(q.getId()))
+                .build()
+        ).toList();
+    }
+
+    /**
+     * 收藏查询（添加到面板）
+     */
+    @Transactional
+    public void addFavorite(Long userId, Long queryId) {
+        // 验证查询存在且是共享的
+        SavedQuery query = queryMapper.selectById(queryId);
+        if (query == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "查询不存在");
+        }
+        if (!Boolean.TRUE.equals(query.getShared()) && !query.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无法收藏非共享查询");
+        }
+
+        // 检查是否已收藏
+        LambdaQueryWrapper<UserQueryFavorite> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserQueryFavorite::getUserId, userId)
+                .eq(UserQueryFavorite::getQueryId, queryId);
+        if (favoriteMapper.selectCount(wrapper) > 0) {
+            return; // 已收藏，幂等返回
+        }
+
+        // 获取当前最大 sortOrder
+        LambdaQueryWrapper<UserQueryFavorite> maxWrapper = new LambdaQueryWrapper<>();
+        maxWrapper.eq(UserQueryFavorite::getUserId, userId)
+                .orderByDesc(UserQueryFavorite::getSortOrder)
+                .last("LIMIT 1");
+        UserQueryFavorite maxFav = favoriteMapper.selectOne(maxWrapper);
+        int nextOrder = (maxFav != null) ? maxFav.getSortOrder() + 1 : 0;
+
+        UserQueryFavorite favorite = new UserQueryFavorite();
+        favorite.setUserId(userId);
+        favorite.setQueryId(queryId);
+        favorite.setSortOrder(nextOrder);
+        favorite.setCreatedAt(LocalDateTime.now());
+        favoriteMapper.insert(favorite);
+    }
+
+    /**
+     * 取消收藏查询（从面板移除）
+     */
+    @Transactional
+    public void removeFavorite(Long userId, Long queryId) {
+        LambdaQueryWrapper<UserQueryFavorite> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserQueryFavorite::getUserId, userId)
+                .eq(UserQueryFavorite::getQueryId, queryId);
+        favoriteMapper.delete(wrapper);
+    }
+
+    /**
+     * 确保用户有默认收藏（首次使用时初始化）
+     * 默认收藏 "分配给我"(id=5) 和 "我报告的"(id=6)
+     */
+    private void ensureDefaultFavorites(Long userId) {
+        LambdaQueryWrapper<UserQueryFavorite> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserQueryFavorite::getUserId, userId);
+        long count = favoriteMapper.selectCount(wrapper);
+        if (count > 0) return; // 已有收藏记录，不再初始化
+
+        // 查找默认查询（"分配给我" 和 "我报告的"）
+        List<Long> defaultQueryIds = List.of(5L, 6L);
+        LambdaQueryWrapper<SavedQuery> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.in(SavedQuery::getId, defaultQueryIds);
+        List<SavedQuery> defaultQueries = queryMapper.selectList(queryWrapper);
+
+        int order = 0;
+        for (SavedQuery q : defaultQueries) {
+            UserQueryFavorite fav = new UserQueryFavorite();
+            fav.setUserId(userId);
+            fav.setQueryId(q.getId());
+            fav.setSortOrder(order++);
+            fav.setCreatedAt(LocalDateTime.now());
+            favoriteMapper.insert(fav);
+        }
     }
 
     /**
