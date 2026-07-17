@@ -113,7 +113,7 @@
             Backlog
           </a-button>
         </a-tooltip>
-        <a-tooltip content="看板列设置">
+        <a-tooltip v-if="canEditProject" content="看板列设置">
           <a-button
             size="small"
             :disabled="!selectedProject"
@@ -139,7 +139,10 @@
         <span class="hidden-issues-icon">👁️‍🗨️</span>
         <span class="hidden-issues-text">
           有工单存在于已隐藏的列中：{{ hiddenIssueColumns.map(c => localizeStatusName(c.statusName)).join('、') }}。
-          <a-link size="small" @click="showSettings = true">打开列设置</a-link> 查看或调整。
+          <template v-if="canEditProject">
+            <a-link size="small" @click="showSettings = true">打开列设置</a-link> 查看或调整。
+          </template>
+          <span v-else>请联系项目管理员调整列配置。</span>
         </span>
       </div>
       <div class="board-main-area">
@@ -719,7 +722,7 @@ const selectedProject = computed({
 })
 
 // 权限控制
-const { canChangeStatus, canCreateIssue } = usePermission(() => selectedProject.value)
+const { canChangeStatus, canCreateIssue, canEditProject } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
