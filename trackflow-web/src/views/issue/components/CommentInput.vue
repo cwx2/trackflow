@@ -13,7 +13,12 @@
       <EditorContent :editor="editor" />
     </div>
     <div class="editor-footer">
-      <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
+      <div class="footer-actions">
+        <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
+        <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
+        <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
+        <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
+      </div>
       <button class="btn-submit" :disabled="isEmpty" @click="submit">提交评论</button>
     </div>
   </div>
@@ -28,13 +33,21 @@ import Placeholder from '@tiptap/extension-placeholder'
 
 const props = withDefaults(defineProps<{
   showAddTime?: boolean
+  timerRunning?: boolean
+  timerIssueMatch?: boolean
+  timerElapsed?: string
 }>(), {
-  showAddTime: true
+  showAddTime: true,
+  timerRunning: false,
+  timerIssueMatch: false,
+  timerElapsed: '0:00'
 })
 
 const emit = defineEmits<{
   submit: [content: string]
   addTime: []
+  startTimer: []
+  stopTimer: []
 }>()
 
 const focused = ref(false)
@@ -122,12 +135,31 @@ onBeforeUnmount(() => { editor.value?.destroy() })
   height: 40px; padding: 0 8px;
   border-top: 1px solid var(--tf-border); background: var(--tf-bg-elevated);
 }
+.footer-actions {
+  display: flex; align-items: center; gap: 4px;
+}
 .btn-add-time {
   font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
   background: none; color: var(--tf-text-tertiary); cursor: pointer;
   transition: color 150ms, background 150ms;
 }
 .btn-add-time:hover { color: var(--tf-accent); background: var(--tf-bg-hover); }
+.btn-start-timer {
+  font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
+  background: none; color: var(--tf-text-tertiary); cursor: pointer;
+  transition: color 150ms, background 150ms;
+}
+.btn-start-timer:hover { color: var(--tf-success, #3fb950); background: var(--tf-bg-hover); }
+.btn-stop-timer {
+  font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
+  background: none; color: var(--tf-success, #3fb950); cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: color 150ms, background 150ms;
+}
+.btn-stop-timer:hover { color: var(--tf-danger, #f85149); background: var(--tf-bg-hover); }
+.timer-elsewhere-hint {
+  font-size: 11px; color: var(--tf-text-muted); padding: 4px 8px;
+}
 .btn-submit {
   font-size: 12px; padding: 4px 16px; border-radius: 3px; border: none;
   background: var(--tf-accent); color: #fff; font-weight: 500; cursor: pointer;

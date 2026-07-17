@@ -23,7 +23,8 @@
             @click.stop="$emit('entryClick', entry)"
           >
             <span class="month-entry-key" :class="{ deleted: entry.issueDeleted }">{{ entry.issueDeleted ? '[已删除]' : entry.issueKey }}</span>
-            <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
+            <span v-if="entry.ongoing" class="month-entry-dur month-entry-ongoing">⏱</span>
+            <span v-else class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
           </div>
           <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
             +{{ getDayEntries(day.date).length - 2 }} 更多
@@ -59,7 +60,7 @@ function getDayEntries(dateKey: string): TimeEntryVO[] {
 }
 
 function getDayTotal(dateKey: string): number {
-  return getDayEntries(dateKey).reduce((sum, e) => sum + e.duration, 0)
+  return getDayEntries(dateKey).reduce((sum, e) => sum + (e.duration || 0), 0)
 }
 
 function isToday(dateKey: string): boolean {
@@ -100,5 +101,6 @@ function formatDuration(minutes: number): string {
 .month-entry-key { color: var(--tf-accent); font-weight: 500; }
 .month-entry-key.deleted { color: var(--tf-text-tertiary); font-style: italic; }
 .month-entry-dur { color: var(--tf-text-tertiary); }
+.month-entry-ongoing { color: var(--tf-success, #3fb950); }
 .month-entry-more { font-size: 9px; color: var(--tf-text-muted); text-align: center; padding: 1px; }
 </style>

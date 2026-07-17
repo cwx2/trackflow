@@ -54,7 +54,17 @@
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
           />
-          <CommentInput v-if="canComment" :show-add-time="projectTimeTrackingEnabled && canLogTime" @submit="onAddComment" @add-time="openTimeDialog" />
+          <CommentInput
+            v-if="canComment"
+            :show-add-time="projectTimeTrackingEnabled && canLogTime"
+            :timer-running="timerStore.isRunning"
+            :timer-issue-match="timerStore.issueId === issue?.id"
+            :timer-elapsed="timerStore.elapsedDisplay"
+            @submit="onAddComment"
+            @add-time="openTimeDialog"
+            @start-timer="handleStartTimer"
+            @stop-timer="handleStopTimerFromDetail"
+          />
         </template>
       </DetailMainContent>
 
@@ -140,6 +150,7 @@ import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
 import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useTabStore } from '@/stores/tabs'
+import { useTimerStore } from '@/stores/timer'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -154,6 +165,7 @@ import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLab
 const route = useRoute()
 const router = useRouter()
 const tabStore = useTabStore()
+const timerStore = useTimerStore()
 const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
 const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
@@ -747,6 +759,31 @@ function openTimeDialog() {
     loadIssueProjectAttributes(issue.value.projectId)
   }
   showTimeDialog.value = true
+}
+
+async function handleStartTimer() {
+  if (!issue.value) return
+  if (timerStore.isRunning) {
+    Message.warning('已有活跃计时器，请先停止当前计时器')
+    return
+  }
+  const result = await timerStore.startTimer(issue.value.id)
+  if (result.success) {
+    Message.success('计时器已启动')
+  } else {
+    Message.error(result.message || '启动计时器失败')
+  }
+}
+
+async function handleStopTimerFromDetail() {
+  const result = await timerStore.stopTimer()
+  if (result.success) {
+    Message.success('计时器已停止')
+    // Reload issue to refresh spent time
+    await loadAll()
+  } else {
+    Message.error(result.message || '停止计时器失败')
+  }
 }
 
 async function loadIssueProjectAttributes(projectId: string) {

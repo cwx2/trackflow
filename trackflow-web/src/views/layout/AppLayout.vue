@@ -71,6 +71,34 @@
           <span class="nav-label">通知</span>
         </div>
 
+        <!-- 计时器 badge -->
+        <div v-if="timerStore.isRunning" class="footer-item timer-badge" @click="showTimerPopover = !showTimerPopover">
+          <span class="nav-icon timer-icon-wrap">
+            ⏱
+            <span class="timer-pulse"></span>
+          </span>
+          <span class="nav-label timer-elapsed">{{ timerStore.elapsedDisplay }}</span>
+        </div>
+        <!-- 计时器快捷面板 -->
+        <div v-if="showTimerPopover && timerStore.isRunning" class="timer-popover">
+          <div class="timer-popover-header">
+            <span class="timer-popover-icon">⏱</span>
+            <span class="timer-popover-title">正在计时</span>
+          </div>
+          <div class="timer-popover-body">
+            <div class="timer-issue" @click="goToTimerIssue">
+              <span class="timer-issue-key">{{ timerStore.issueKey }}</span>
+              <span class="timer-issue-title">{{ timerStore.issueTitle }}</span>
+            </div>
+            <div class="timer-elapsed-large">{{ timerStore.elapsedDisplay }}</div>
+          </div>
+          <div class="timer-popover-footer">
+            <button class="timer-stop-btn" :disabled="timerStore.loading" @click="handleStopTimer">
+              ⏹ 停止计时
+            </button>
+          </div>
+        </div>
+
         <!-- 主题切换 -->
         <div class="footer-item theme-switcher" @click="cycleTheme">
           <span class="nav-icon">{{ themeIcon }}</span>
@@ -124,6 +152,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useTimerStore } from '@/stores/timer'
 import { useTheme } from '@/composables/useTheme'
 import { useNavBadge } from '@/composables/useNavBadge'
 import { useNotification } from '@/composables/useNotification'
@@ -133,6 +162,7 @@ import NotificationPanel from './NotificationPanel.vue'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const timerStore = useTimerStore()
 const { issueBadgeCount, canManageSprint, loaded: navBadgeLoaded, init: initNavBadge } = useNavBadge()
 const { unreadCount, hasUnread, togglePanel: toggleNotificationPanel, init: initNotification } = useNotification()
 
@@ -143,6 +173,7 @@ const showTabBar = computed(() => {
 })
 const { theme, cycleTheme } = useTheme()
 const showUserMenu = ref(false)
+const showTimerPopover = ref(false)
 
 const isAdmin = computed(() => {
   // 主判断：后端 API 返回的全局权限（精确）— 支持细粒度管理权限
@@ -223,6 +254,20 @@ function goNotifications() {
   router.push('/settings/notifications')
 }
 
+function goToTimerIssue() {
+  showTimerPopover.value = false
+  if (timerStore.issueId) {
+    router.push(`/issues/${timerStore.issueId}`)
+  }
+}
+
+async function handleStopTimer() {
+  const result = await timerStore.stopTimer()
+  if (result.success) {
+    showTimerPopover.value = false
+  }
+}
+
 function handleLogout() {
   showUserMenu.value = false
   authStore.logout()
@@ -234,12 +279,16 @@ function handleClickOutside(e: MouseEvent) {
   if (!target.closest('.sidebar-user') && !target.closest('.user-menu')) {
     showUserMenu.value = false
   }
+  if (!target.closest('.timer-badge') && !target.closest('.timer-popover')) {
+    showTimerPopover.value = false
+  }
 }
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   initNavBadge()
   initNotification()
+  timerStore.init()
 })
 onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
@@ -565,5 +614,139 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+
+/* ===== 计时器 Badge ===== */
+.timer-badge {
+  position: relative;
+}
+
+.timer-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-pulse {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tf-success, #3fb950);
+  animation: timer-pulse-anim 1.5s ease-in-out infinite;
+}
+
+@keyframes timer-pulse-anim {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.3); }
+}
+
+.timer-elapsed {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-success, #3fb950);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 计时器弹出面板 ===== */
+.timer-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 8px;
+  margin-bottom: 8px;
+  width: 220px;
+  background: var(--tf-bg-elevated, #2a2d33);
+  border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  z-index: 100;
+}
+
+.timer-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.timer-popover-icon {
+  font-size: 14px;
+}
+
+.timer-popover-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.timer-popover-body {
+  margin-bottom: 12px;
+}
+
+.timer-issue {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  transition: background 150ms;
+}
+
+.timer-issue:hover {
+  background: var(--tf-bg-hover, rgba(255,255,255,0.06));
+}
+
+.timer-issue-key {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-accent, #58a6ff);
+  margin-right: 6px;
+}
+
+.timer-issue-title {
+  font-size: 12px;
+  color: var(--tf-text-secondary, #9ca3af);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timer-elapsed-large {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.3px;
+}
+
+.timer-popover-footer {
+  border-top: 1px solid var(--tf-border, rgba(255,255,255,0.1));
+  padding-top: 10px;
+}
+
+.timer-stop-btn {
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--tf-danger, #f85149);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 150ms;
+}
+
+.timer-stop-btn:hover {
+  opacity: 0.9;
+}
+
+.timer-stop-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

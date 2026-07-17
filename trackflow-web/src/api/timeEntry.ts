@@ -17,10 +17,14 @@ export interface TimeEntryVO {
   userId: string
   userName?: string
   workDate: string
-  duration: number       // minutes
+  duration: number | null  // null when ongoing=true
   startTime?: number     // minutes from midnight
   /** 工单是否已被删除（软删除） */
   issueDeleted?: boolean
+  /** 是否为正在进行的计时器 */
+  ongoing?: boolean
+  /** 计时器启动时间（ISO 格式），等于 createdAt */
+  startedAt?: string
   /** 记录操作人 ID（谁输入的这条工时） */
   loggedBy?: string
   /** 记录操作人姓名（仅当 loggedBy != userId 时有值，表示代录） */
@@ -134,6 +138,23 @@ export const timeEntryApi = {
   /** 检查当前用户是否有权为他人记录工时 */
   canLogForOthers() {
     return request.get<any, R<boolean>>('/time-entries/can-log-for-others')
+  },
+
+  // ========== 计时器 API ==========
+
+  /** 启动计时器 */
+  startTimer(data: { issueId: string; description?: string; attributeValues?: Record<string, string> }) {
+    return request.post<any, R<TimeEntryVO>>('/time-entries/start', data)
+  },
+
+  /** 停止计时器 */
+  stopTimer(id: string, data?: { duration?: number; description?: string; attributeValues?: Record<string, string> }) {
+    return request.post<any, R<TimeEntryVO>>(`/time-entries/${id}/stop`, data || {})
+  },
+
+  /** 获取当前用户的活跃计时器 */
+  getActiveTimer() {
+    return request.get<any, R<TimeEntryVO | null>>('/time-entries/active')
   }
 }
 

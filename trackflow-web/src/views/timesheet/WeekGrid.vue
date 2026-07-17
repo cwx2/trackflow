@@ -23,7 +23,10 @@
             <template v-if="entry.issueDeleted">[已删除] {{ entry.issueKey || '' }}</template>
             <template v-else>{{ entry.issueKey || entry.issueId }}</template>
           </div>
-          <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
+          <div v-if="entry.ongoing" class="entry-duration entry-ongoing">
+            <span class="ongoing-dot"></span> 计时中
+          </div>
+          <div v-else class="entry-duration">{{ formatDuration(entry.duration) }}</div>
           <div v-if="entry.userName && showUser" class="entry-user">{{ entry.userName }}</div>
           <div v-if="entry.loggedByName" class="entry-logged-by">由 {{ entry.loggedByName }} 代录</div>
           <div v-if="entry.description && !showUser" class="entry-desc">{{ entry.description }}</div>
@@ -78,7 +81,7 @@ function getDayEntries(dateKey: string): TimeEntryVO[] {
 }
 
 function getDayTotal(dateKey: string): number {
-  return getDayEntries(dateKey).reduce((sum, e) => sum + e.duration, 0)
+  return getDayEntries(dateKey).reduce((sum, e) => sum + (e.duration || 0), 0)
 }
 
 function isToday(dateKey: string): boolean {
@@ -128,6 +131,9 @@ function workTypeLabel(type: string): string {
 .entry-issue.deleted { color: var(--tf-text-tertiary); font-style: italic; cursor: default; }
 .entry-issue.deleted:hover { text-decoration: none; }
 .entry-duration { font-size: 12px; font-weight: 600; color: var(--tf-text-primary); }
+.entry-ongoing { color: var(--tf-success, #3fb950); display: flex; align-items: center; gap: 4px; font-weight: 500; }
+.ongoing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tf-success, #3fb950); animation: timer-pulse-anim 1.5s ease-in-out infinite; }
+@keyframes timer-pulse-anim { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .entry-desc { font-size: 10px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry-type { font-size: 10px; color: var(--tf-text-muted); margin-top: 2px; }
 .entry-user { font-size: 10px; color: var(--tf-text-secondary); margin-top: 2px; font-weight: 500; }

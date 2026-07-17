@@ -487,12 +487,12 @@ const dateRangeLabel = computed(() => {
 })
 
 const weekTotal = computed(() => {
-  return timeEntries.value.reduce((sum, e) => sum + e.duration, 0)
+  return timeEntries.value.reduce((sum, e) => sum + (e.duration || 0), 0)
 })
 
 const projectViewTotal = computed(() => {
   if (selectedProjectId.value) {
-    return projectEntries.value.reduce((sum, e) => sum + e.duration, 0)
+    return projectEntries.value.reduce((sum, e) => sum + (e.duration || 0), 0)
   }
   return projectSummaries.value.reduce((sum, p) => sum + p.totalDuration, 0)
 })
