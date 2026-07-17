@@ -53,7 +53,7 @@ public class ReportStatisticsService {
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
         // 尝试从缓存获取
-        String cacheKey = buildCacheKey(userId, projectId, sprintId, startDate, endDate);
+        String cacheKey = buildCacheKey(projectId, sprintId, startDate, endDate);
         DashboardVO cached = getFromCache(cacheKey);
         if (cached != null) {
             return cached;
@@ -529,8 +529,18 @@ public class ReportStatisticsService {
 
     // ─── Redis cache ─────────────────────────────────────────────────────
 
-    private String buildCacheKey(Long userId, Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
-        return CACHE_PREFIX + userId + ":"
+    /**
+     * 构建缓存 key（按项目维度共享，不含 userId）。
+     * <p>
+     * 格式：report:dashboard:{projectId|all}:{sprintId|none}:{startDate}:{endDate}
+     * <p>
+     * 去掉 userId 的理由：
+     * - 相同筛选条件下不同用户看到的统计数据相同（权限过滤在 resolveProjectIds 阶段完成）
+     * - 减少 Redis 存储（N 个用户共享 1 份缓存而非各存 1 份）
+     * - 事件驱动失效时只需按 projectId 维度精准清除
+     */
+    private String buildCacheKey(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
+        return CACHE_PREFIX
                 + (projectId != null ? projectId : "all") + ":"
                 + (sprintId != null ? sprintId : "none") + ":"
                 + (startDate != null ? startDate : "null") + ":"

@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.trackflow.common.event.SprintNotificationEvent;
+import com.trackflow.common.event.ReportCacheInvalidationEvent;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -400,6 +401,9 @@ public class SprintService {
         // 通知项目成员 Sprint 已激活 — 事务提交后触发
         eventPublisher.publishEvent(new SprintNotificationEvent.Activated(sprint, currentUserId));
 
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sprint.getProjectId(), "sprint_activated"));
+
         return sprint;
     }
 
@@ -495,6 +499,9 @@ public class SprintService {
         );
         int completedIssues = (int) (totalIssuesInSprint - openIssues.size());
         eventPublisher.publishEvent(new SprintNotificationEvent.Completed(sprint, Math.max(completedIssues, 0), completeUserId));
+
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sprint.getProjectId(), "sprint_completed"));
 
         return sprint;
     }

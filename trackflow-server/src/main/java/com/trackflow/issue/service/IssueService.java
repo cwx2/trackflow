@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.trackflow.common.event.IssueNotificationEvent;
+import com.trackflow.common.event.ReportCacheInvalidationEvent;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -153,6 +154,9 @@ public class IssueService {
 
         // 通知被分配人（若创建时指定了 assignee）— 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.Created(issue, currentUserId));
+
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_created"));
 
         // 如果指定了父工单，刷新祖先链的派生属性
         if (issue.getParentId() != null && issue.getParentId() != 0) {
@@ -607,6 +611,10 @@ public class IssueService {
         }
 
         issueMapper.updateById(issue);
+
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_updated"));
+
         return new UpdateResult(issue, statusAutoReset);
     }
 
@@ -620,6 +628,7 @@ public class IssueService {
         projectService.assertProjectActive(issue.getProjectId());
 
         Long parentId = issue.getParentId();
+        Long projectId = issue.getProjectId();
 
         // 断开子工单的父引用（将子工单 parent_id 置为 NULL），防止产生孤儿引用
         issueMapper.clearParentId(id);
@@ -628,6 +637,9 @@ public class IssueService {
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
         // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
         issueMapper.deleteById(id);
+
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(projectId, "issue_deleted"));
 
         // 删除后刷新父工单的派生属性
         if (parentId != null && parentId != 0) {
@@ -1066,6 +1078,9 @@ public class IssueService {
         // 通知报告人+负责人状态已变更 — 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.StatusChanged(issue, oldStatusId, newStatusId, currentUserId));
 
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_status_changed"));
+
         // 如果带了评论，同时添加评论
         if (comment != null && !comment.isBlank()) {
             addComment(id, comment);
@@ -1115,6 +1130,9 @@ public class IssueService {
         if (normalizedAssigneeId != null) {
             eventPublisher.publishEvent(new IssueNotificationEvent.Assigned(issue, normalizedAssigneeId, currentUserId));
         }
+
+        // 失效 Dashboard 缓存（影响工作量分布） — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_assigned"));
     }
 
     // ========== 评论 ==========
