@@ -7,11 +7,13 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.mapper.NotificationMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
@@ -84,5 +86,46 @@ public class NotificationService {
                         .eq(Notification::getUserId, userId)
                         .eq(Notification::getIsRead, false)
         );
+    }
+
+    /**
+     * 删除单条通知（带所有权校验）
+     */
+    @Transactional
+    public void delete(Long id, Long userId) {
+        Notification n = notificationMapper.selectById(id);
+        if (n == null || !n.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
+        }
+        notificationMapper.deleteById(id);
+    }
+
+    /**
+     * 删除当前用户所有已读通知
+     */
+    @Transactional
+    public int deleteAllRead(Long userId) {
+        return Math.toIntExact(notificationMapper.delete(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getIsRead, true)
+        ));
+    }
+
+    /**
+     * 清理指定天数前的已读通知（定时任务调用）
+     *
+     * @param retentionDays 保留天数
+     * @return 清理数量
+     */
+    @Transactional
+    public int cleanupExpiredNotifications(int retentionDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(retentionDays);
+        long deleted = notificationMapper.delete(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getIsRead, true)
+                        .lt(Notification::getCreatedAt, cutoff)
+        );
+        return Math.toIntExact(deleted);
     }
 }

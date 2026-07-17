@@ -35,5 +35,15 @@ export const notificationApi = {
   /** 全部标记已读 */
   markAllRead() {
     return request.put<any, R<void>>('/notifications/read-all')
+  },
+
+  /** 删除单条通知 */
+  delete(id: string) {
+    return request.delete<any, R<void>>(`/notifications/${id}`)
+  },
+
+  /** 清除所有已读通知 */
+  deleteAllRead() {
+    return request.delete<any, R<{ deleted: number }>>('/notifications/read')
   }
 }

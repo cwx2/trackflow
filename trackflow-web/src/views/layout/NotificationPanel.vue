@@ -27,6 +27,16 @@
                   <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/>
                 </svg>
               </button>
+              <button
+                class="panel-action-btn"
+                title="清除所有已读通知"
+                :disabled="!hasRead"
+                @click="handleDeleteAllRead"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/>
+                </svg>
+              </button>
               <button class="panel-action-btn panel-close-btn" title="关闭" @click="closePanel">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
@@ -75,16 +85,27 @@
                   <div class="item-body">{{ item.content }}</div>
                   <div class="item-time">{{ formatTime(item.createdAt) }}</div>
                 </div>
-                <button
-                  v-if="!item.isRead"
-                  class="item-mark-btn"
-                  title="标记已读"
-                  @click.stop="handleMarkRead(item.id)"
-                >
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
-                  </svg>
-                </button>
+                <div class="item-actions">
+                  <button
+                    v-if="!item.isRead"
+                    class="item-action-btn"
+                    title="标记已读"
+                    @click.stop="handleMarkRead(item.id)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="item-action-btn item-delete-btn"
+                    title="删除通知"
+                    @click.stop="handleDelete(item.id)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -112,10 +133,13 @@ const {
   unreadOnly,
   unreadCount,
   totalCount,
+  hasRead,
   closePanel,
   toggleUnreadOnly,
   markRead,
-  markAllRead
+  markAllRead,
+  deleteNotification,
+  deleteAllRead
 } = useNotification()
 
 function getTypeIcon(type: string): string {
@@ -169,6 +193,14 @@ function handleMarkRead(id: string) {
 
 function handleMarkAllRead() {
   markAllRead()
+}
+
+function handleDelete(id: string) {
+  deleteNotification(id)
+}
+
+function handleDeleteAllRead() {
+  deleteAllRead()
 }
 </script>
 
@@ -410,7 +442,20 @@ function handleMarkAllRead() {
   margin-top: 4px;
 }
 
-.item-mark-btn {
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.notification-item:hover .item-actions {
+  opacity: 1;
+}
+
+.item-action-btn {
   width: 24px;
   height: 24px;
   display: flex;
@@ -421,17 +466,14 @@ function handleMarkAllRead() {
   border-radius: 4px;
   color: var(--tf-text-tertiary);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
-  flex-shrink: 0;
-  margin-top: 2px;
+  transition: background 0.15s, color 0.15s;
 }
-.notification-item:hover .item-mark-btn {
-  opacity: 1;
-}
-.item-mark-btn:hover {
+.item-action-btn:hover {
   background: var(--tf-bg-active);
   color: var(--tf-accent);
+}
+.item-delete-btn:hover {
+  color: var(--tf-error, #f85149);
 }
 
 /* Panel Footer */

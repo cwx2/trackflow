@@ -55,4 +55,24 @@ public class NotificationController {
         notificationService.markAllRead(userId);
         return R.ok();
     }
+
+    /**
+     * 删除单条通知（所有权校验：只能删除自己的通知）
+     */
+    @DeleteMapping("/{id}")
+    public R<Void> delete(@PathVariable Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        notificationService.delete(id, userId);
+        return R.ok();
+    }
+
+    /**
+     * 清除当前用户所有已读通知
+     */
+    @DeleteMapping("/read")
+    public R<Map<String, Integer>> deleteAllRead() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        int deleted = notificationService.deleteAllRead(userId);
+        return R.ok(Map.of("deleted", deleted));
+    }
 }

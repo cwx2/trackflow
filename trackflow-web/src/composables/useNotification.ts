@@ -28,6 +28,9 @@ export function useNotification() {
   /** 是否有未读通知 */
   const hasUnread = computed(() => unreadCount.value > 0)
 
+  /** 是否有已读通知 */
+  const hasRead = computed(() => notifications.value.some(n => n.isRead))
+
   /** 获取未读数量 */
   async function fetchUnreadCount() {
     if (!authStore.isAuthenticated) return
@@ -82,6 +85,37 @@ export function useNotification() {
       if (res.code === 0) {
         notifications.value.forEach(n => { n.isRead = true })
         unreadCount.value = 0
+      }
+    } catch {
+      // 静默失败
+    }
+  }
+
+  /** 删除单条通知 */
+  async function deleteNotification(id: string) {
+    try {
+      const res = await notificationApi.delete(id)
+      if (res.code === 0) {
+        const item = notifications.value.find(n => n.id === id)
+        if (item && !item.isRead) {
+          unreadCount.value = Math.max(0, unreadCount.value - 1)
+        }
+        notifications.value = notifications.value.filter(n => n.id !== id)
+        totalCount.value = Math.max(0, totalCount.value - 1)
+      }
+    } catch {
+      // 静默失败
+    }
+  }
+
+  /** 清除所有已读通知 */
+  async function deleteAllRead() {
+    try {
+      const res = await notificationApi.deleteAllRead()
+      if (res.code === 0) {
+        notifications.value = notifications.value.filter(n => !n.isRead)
+        // 重新拉取以更新 totalCount
+        await fetchNotifications()
       }
     } catch {
       // 静默失败
@@ -168,11 +202,14 @@ export function useNotification() {
     panelVisible,
     totalCount,
     hasUnread,
+    hasRead,
     // Actions
     fetchUnreadCount,
     fetchNotifications,
     markRead,
     markAllRead,
+    deleteNotification,
+    deleteAllRead,
     toggleUnreadOnly,
     openPanel,
     closePanel,
