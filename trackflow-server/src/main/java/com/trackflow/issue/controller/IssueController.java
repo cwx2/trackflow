@@ -330,9 +330,10 @@ public class IssueController {
             }
         }
 
+        // Controller 已完成工作流校验，传入 skipWorkflowCheck=true 避免 Service 重复校验
         issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
                 dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
-                dto.getVersion());
+                dto.getVersion(), true);
 
         // 返回更新后的版本号，用于前端乐观锁同步
         Issue updated = issueService.getById(id);
