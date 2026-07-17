@@ -69,7 +69,14 @@
         </div>
         <div class="preview-field" v-if="detail.estimatedHours">
           <span class="field-label">预估工时</span>
-          <span class="field-value">{{ detail.estimatedHours }}h</span>
+          <span class="field-value">
+            <TimeProgressIndicator
+              v-if="detail.spentHours != null || detail.estimatedHours"
+              :spent="detail.spentHours || 0"
+              :estimated="detail.estimatedHours"
+            />
+            {{ detail.estimatedHours }}h
+          </span>
         </div>
         <div class="preview-field" v-if="detail.spentHours">
           <span class="field-label">已花费</span>
@@ -152,6 +159,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { issueApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO } from '@/api/types'
+import TimeProgressIndicator from '@/views/issue/components/TimeProgressIndicator.vue'
 import { localizeStatusName, localizeIssueType } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
@@ -386,6 +394,9 @@ function renderCommentContent(content: string): string {
 .field-value {
   font-size: 13px;
   color: var(--color-text-1);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Tags */

@@ -22,6 +22,11 @@
           @update:popup-visible="v => v ? openEdit(field) : cancelEdit()"
         >
           <div class="sb-value clickable">
+            <TimeProgressIndicator
+              v-if="field.progress && field.progress.estimated > 0"
+              :spent="field.progress.spent"
+              :estimated="field.progress.estimated"
+            />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
             <span class="val-text editable">{{ field.value }}</span>
             <span class="val-chevron" aria-hidden="true">‹</span>
@@ -100,6 +105,11 @@
 
         <!-- 只读字段（无 editType 或被权限限制） -->
         <div v-else class="sb-value readonly-value">
+          <TimeProgressIndicator
+            v-if="field.progress && field.progress.estimated > 0"
+            :spent="field.progress.spent"
+            :estimated="field.progress.estimated"
+          />
           <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
           <span class="val-text">{{ field.value }}</span>
         </div>
@@ -111,12 +121,18 @@
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
+import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 export interface FieldOption {
   value: string
   label: string
   badge?: string
   badgeColor?: string
+}
+
+export interface TimeProgress {
+  spent: number
+  estimated: number
 }
 
 export interface SidebarField {
@@ -133,6 +149,8 @@ export interface SidebarField {
   rawValue?: string
   /** 多值字段：当前选中的 ID 列表 */
   rawValues?: string[]
+  /** 时间进度指示器数据（预估工时字段专用） */
+  progress?: TimeProgress
 }
 
 export interface StatusInfo {
