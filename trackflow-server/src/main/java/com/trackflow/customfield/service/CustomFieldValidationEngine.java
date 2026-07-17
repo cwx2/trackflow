@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
+import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +15,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -29,15 +30,21 @@ public class CustomFieldValidationEngine {
 
     private final CustomFieldOptionMapper optionMapper;
     private final SysUserMapper userMapper;
+    private final ProjectMemberMapper projectMemberMapper;
 
     public static final Set<String> SUPPORTED_FORMATS = Set.of(
             "string", "text", "int", "float", "date", "datetime", "bool", "list", "user"
     );
 
     /**
-     * 验证单个字段值
+     * 验证单个字段值（带项目上下文）。
+     * user 类型字段会校验用户是否为指定项目的成员。
+     *
+     * @param field     字段定义
+     * @param value     待验证的值
+     * @param projectId 工单所属项目 ID（用于 user 类型的成员校验）
      */
-    public List<FieldValidationError> validate(CustomFieldDefinition field, String value) {
+    public List<FieldValidationError> validate(CustomFieldDefinition field, String value, Long projectId) {
         List<FieldValidationError> errors = new ArrayList<>();
 
         // 必填检查
@@ -61,7 +68,7 @@ public class CustomFieldValidationEngine {
             case "datetime" -> validateDatetime(field, value, errors);
             case "bool" -> validateBool(field, value, errors);
             case "list" -> validateList(field, value, errors);
-            case "user" -> validateUser(field, value, errors);
+            case "user" -> validateUser(field, value, projectId, errors);
         }
 
         return errors;
@@ -191,11 +198,23 @@ public class CustomFieldValidationEngine {
         }
     }
 
-    private void validateUser(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
+    private void validateUser(CustomFieldDefinition field, String value, Long projectId, List<FieldValidationError> errors) {
         try {
             Long userId = Long.parseLong(value);
             if (userMapper.selectById(userId) == null) {
                 errors.add(new FieldValidationError(field.getName(), "无效的用户"));
+                return;
+            }
+            // 校验用户是否为当前项目成员（参考 OpenProject possible_users 限定范围）
+            if (projectId != null) {
+                boolean isMember = projectMemberMapper.exists(
+                        new LambdaQueryWrapper<ProjectMember>()
+                                .eq(ProjectMember::getProjectId, projectId)
+                                .eq(ProjectMember::getUserId, userId)
+                );
+                if (!isMember) {
+                    errors.add(new FieldValidationError(field.getName(), "该用户不是本项目成员"));
+                }
             }
         } catch (NumberFormatException e) {
             errors.add(new FieldValidationError(field.getName(), "无效的用户"));

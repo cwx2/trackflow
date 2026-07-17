@@ -525,7 +525,7 @@ public class CustomFieldService {
         for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
             CustomFieldDefinition field = fieldMap.get(entry.getKey());
             if (field == null) continue;
-            allErrors.addAll(validationEngine.validate(field, entry.getValue()));
+            allErrors.addAll(validationEngine.validate(field, entry.getValue(), projectId));
         }
 
         for (CustomFieldDefinition field : applicableFields) {
@@ -1045,7 +1045,7 @@ public class CustomFieldService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "字段不适用于当前工单"));
 
         // 验证值
-        List<CustomFieldValidationEngine.FieldValidationError> errors = validationEngine.validate(field, value);
+        List<CustomFieldValidationEngine.FieldValidationError> errors = validationEngine.validate(field, value, projectId);
         if (!errors.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     errors.stream().map(e -> e.getField() + ": " + e.getMessage())
