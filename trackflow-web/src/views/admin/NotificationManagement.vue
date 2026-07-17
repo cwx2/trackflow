@@ -190,6 +190,29 @@
               保存邮件配置
             </a-button>
           </div>
+
+          <!-- 发送测试邮件 -->
+          <div v-if="emailConfigStatus === 'configured'" class="test-email-section">
+            <div class="test-email-header">
+              <h3 class="test-email-title">📤 发送测试邮件</h3>
+              <p class="test-email-desc">验证 SMTP 配置是否可以正常发送邮件</p>
+            </div>
+            <div class="test-email-form">
+              <a-input
+                v-model="testEmailAddress"
+                placeholder="输入接收测试邮件的地址"
+                :style="{ flex: 1 }"
+              />
+              <a-button
+                type="outline"
+                size="small"
+                :loading="sendingTest"
+                @click="sendTestEmail"
+              >
+                发送测试邮件
+              </a-button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -330,6 +353,8 @@ import type { NotificationSettingsVO, NotificationStatsVO, EmailConfigVO } from 
 const loading = ref(true)
 const saving = ref(false)
 const savingEmail = ref(false)
+const sendingTest = ref(false)
+const testEmailAddress = ref('')
 
 const form = reactive({
   inAppEnabled: true,
@@ -520,6 +545,33 @@ async function saveEmailConfig() {
     Message.error(e.response?.data?.message || '保存邮件配置失败')
   } finally {
     savingEmail.value = false
+  }
+}
+
+async function sendTestEmail() {
+  if (!testEmailAddress.value) {
+    Message.warning('请输入接收测试邮件的地址')
+    return
+  }
+  // Simple email format check
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmailAddress.value)) {
+    Message.warning('邮件地址格式不正确')
+    return
+  }
+
+  sendingTest.value = true
+  try {
+    const res = await notificationAdminApi.sendTestEmail({ toAddress: testEmailAddress.value })
+    if (res.code === 0) {
+      Message.success(`测试邮件已发送至 ${testEmailAddress.value}`)
+    } else {
+      Message.error(res.message || '测试邮件发送失败')
+    }
+  } catch (e: any) {
+    const msg = e.response?.data?.message || '测试邮件发送失败'
+    Message.error(msg)
+  } finally {
+    sendingTest.value = false
   }
 }
 
@@ -906,6 +958,36 @@ onMounted(loadData)
 
 .email-config-actions {
   display: flex;
+  gap: 12px;
+}
+
+/* Test email section */
+.test-email-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tf-border-light);
+}
+
+.test-email-header {
+  margin-bottom: 12px;
+}
+
+.test-email-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  margin: 0 0 4px 0;
+}
+
+.test-email-desc {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
+}
+
+.test-email-form {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 </style>

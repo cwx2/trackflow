@@ -32,6 +32,8 @@ public class NotificationService {
     private final SysUserMapper sysUserMapper;
     private final NotificationConverter notificationConverter;
     private final MutedThreadService mutedThreadService;
+    private final EmailSendService emailSendService;
+    private final NotificationPreferenceService preferenceService;
 
     /**
      * 通知聚合时间窗口（分钟）。同一用户+同一类型+同一资源在此窗口内的多次通知将被合并。
@@ -45,6 +47,9 @@ public class NotificationService {
      * 聚合规则：在 aggregation-minutes 时间窗口内，若存在同一 userId + type + resourceType + resourceId
      * 的未读通知，则更新该条通知的 title/content/actorId/updatedAt，并递增 aggregationCount，
      * 重置 isRead=false。否则新建一条通知。
+     * <p>
+     * 邮件发送规则：站内通知创建/聚合后，若全局 emailEnabled 且用户偏好 emailEnabled，
+     * 异步发送邮件通知（仅新建时发送，聚合更新不重复发邮件）。
      * <p>
      * 参考 OpenProject 的 update_or_create_notification 设计。
      *
@@ -73,6 +78,7 @@ public class NotificationService {
         // 查找聚合窗口内的同类未读通知
         Notification existing = findRecentUnread(userId, typeValue, resourceType, resourceId);
 
+        boolean isNew = false;
         if (existing != null) {
             // 聚合：更新已有通知
             existing.setTitle(title);
@@ -99,7 +105,69 @@ public class NotificationService {
             n.setCreatedAt(LocalDateTime.now());
             n.setAggregationCount(1);
             notificationMapper.insert(n);
+            isNew = true;
         }
+
+        // 邮件发送（仅新建通知时触发，聚合更新不重复发送邮件）
+        if (isNew) {
+            dispatchEmail(userId, title, content);
+        }
+    }
+
+    /**
+     * 如果全局邮件通知已启用，且用户偏好中 emailEnabled=true，且用户有邮箱地址，
+     * 则异步发送通知邮件。发送失败不影响站内通知。
+     */
+    private void dispatchEmail(Long userId, String title, String content) {
+        try {
+            if (!emailSendService.isEmailAvailable()) {
+                return;
+            }
+            // 检查用户偏好是否开启了邮件
+            var pref = preferenceService.getByUserId(userId);
+            if (!Boolean.TRUE.equals(pref.getEmailEnabled())) {
+                return;
+            }
+            // 获取用户邮箱
+            SysUser user = sysUserMapper.selectById(userId);
+            if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+                return;
+            }
+            // 异步发送
+            String subject = "[TrackFlow] " + title;
+            String htmlContent = buildNotificationEmailContent(title, content);
+            emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
+        } catch (Exception e) {
+            log.warn("[Notification] 邮件分发异常（不影响站内通知）: userId={}, error={}",
+                    userId, e.getMessage());
+        }
+    }
+
+    /**
+     * 构建通知邮件 HTML 内容
+     */
+    private String buildNotificationEmailContent(String title, String content) {
+        return String.format("""
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+                  <h3 style="color: #1f2328; margin: 0 0 12px 0;">%s</h3>
+                  <p style="color: #57606a; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">%s</p>
+                  <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
+                  <p style="color: #8b949e; font-size: 12px;">
+                    此邮件由 TrackFlow 项目管理系统自动发送。您可以在个人通知偏好中关闭邮件通知。
+                  </p>
+                </div>
+                """, escapeHtml(title), escapeHtml(content));
+    }
+
+    /**
+     * 简单 HTML 转义，防止通知内容中的特殊字符破坏邮件结构
+     */
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     /**

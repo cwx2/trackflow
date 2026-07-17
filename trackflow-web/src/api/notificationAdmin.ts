@@ -67,6 +67,10 @@ export interface UpdateEmailConfigDTO {
   replyToAddress?: string
 }
 
+export interface SendTestEmailDTO {
+  toAddress: string
+}
+
 export const notificationAdminApi = {
   /** 获取全局通知设置 */
   getSettings() {
@@ -91,5 +95,10 @@ export const notificationAdminApi = {
   /** 更新邮件服务器配置 */
   updateEmailConfig(data: UpdateEmailConfigDTO) {
     return request.put<any, R<EmailConfigVO>>('/admin/notifications/email-config', data)
+  },
+
+  /** 发送测试邮件 */
+  sendTestEmail(data: SendTestEmailDTO) {
+    return request.post<any, R<void>>('/admin/notifications/email-config/test', data)
   }
 }
