@@ -148,4 +148,38 @@ public class ReportStatisticsController {
         projectService.assertProjectMember(userId, projectId);
         return R.ok(statisticsService.getResolutionTime(projectId, startDate, endDate, groupBy));
     }
+
+    /**
+     * 获取时间报表（Time Report）
+     * 按人员/项目/工作类型汇总工时，含趋势和交叉维度
+     * projectId 可选：不传时返回用户有权限的全部项目聚合数据
+     */
+    @GetMapping("/time-report")
+    @PreAuthorize("isAuthenticated()")
+    public R<TimeReportVO> timeReport(
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (projectId != null) {
+            projectService.assertProjectMember(userId, projectId);
+        }
+        return R.ok(statisticsService.getTimeReport(projectId, startDate, endDate, userId));
+    }
+
+    /**
+     * 获取预估对比报表（Estimation Report）
+     * 对比预估工时 vs 实际花费
+     * projectId 可选：不传时返回用户有权限的全部项目数据
+     */
+    @GetMapping("/estimation-report")
+    @PreAuthorize("isAuthenticated()")
+    public R<EstimationReportVO> estimationReport(
+            @RequestParam(value = "projectId", required = false) Long projectId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (projectId != null) {
+            projectService.assertProjectMember(userId, projectId);
+        }
+        return R.ok(statisticsService.getEstimationReport(projectId, userId));
+    }
 }

@@ -102,4 +102,58 @@ public interface ReportStatisticsMapper {
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             @Param("groupBy") String groupBy);
+
+    // ─── 时间报表聚合查询 ─────────────────────────────────────────
+
+    /**
+     * 按人员分组汇总工时（分钟）
+     * 返回行：(user_id, user_name, total_minutes)
+     */
+    List<Map<String, Object>> selectTimeByUser(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * 按项目分组汇总工时（分钟）
+     * 返回行：(project_id, project_name, total_minutes)
+     */
+    List<Map<String, Object>> selectTimeByProject(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * 按工作类型分组汇总工时（分钟）
+     * 返回行：(work_type, total_minutes)
+     */
+    List<Map<String, Object>> selectTimeByWorkType(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * 每日工时趋势
+     * 返回行：(work_date, total_minutes)
+     */
+    List<Map<String, Object>> selectTimeTrend(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * 交叉维度：按项目+人员分组汇总工时
+     * 返回行：(project_name, user_name, total_minutes)
+     */
+    List<Map<String, Object>> selectTimeCrossProjectUser(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * 预估对比报表：查询有预估工时的工单的 estimated_hours vs spent_hours
+     * 返回行：(issue_id, issue_key, title, project_name, assignee_name, estimated_hours, spent_hours)
+     */
+    List<Map<String, Object>> selectEstimationComparison(
+            @Param("projectIds") List<Long> projectIds);
 }

@@ -116,6 +116,58 @@ export interface ResolutionTimeData {
   groupDetails: ResolutionTimeGroupDetail[]
 }
 
+// ─── 时间报表类型 ──────────────────────────────────────
+
+export interface TimeReportGroupItem {
+  name: string
+  minutes: number
+  percentage: number
+}
+
+export interface TimeReportCrossItem {
+  projectName: string
+  userName: string
+  minutes: number
+}
+
+export interface TimeReportData {
+  totalMinutes: number
+  byUser: TimeReportGroupItem[]
+  byProject: TimeReportGroupItem[]
+  byWorkType: TimeReportGroupItem[]
+  trendDates: string[]
+  trendMinutes: number[]
+  crossProjectUser: TimeReportCrossItem[]
+}
+
+export interface EstimationIssueItem {
+  issueId: string
+  issueKey: string
+  issueTitle: string
+  projectName: string
+  assigneeName: string
+  estimatedHours: number
+  spentHours: number
+  deviationRate: number
+  deviation: 'over' | 'under' | 'on_track'
+}
+
+export interface EstimationProjectItem {
+  projectName: string
+  estimatedHours: number
+  spentHours: number
+  deviationRate: number
+  issueCount: number
+}
+
+export interface EstimationReportData {
+  totalEstimatedHours: number
+  totalSpentHours: number
+  overallDeviationRate: number
+  items: EstimationIssueItem[]
+  byProject: EstimationProjectItem[]
+}
+
 export interface DashboardData {
   statusDistribution: StatusDistributionData
   priorityDistribution: PriorityDistributionData
@@ -190,6 +242,18 @@ export const reportStatisticsApi = {
   resolutionTime(projectId: string, startDate?: string, endDate?: string, groupBy?: string) {
     return request.get<any, R<ResolutionTimeData>>('/reports/statistics/resolution-time', {
       params: { projectId, startDate, endDate, groupBy }
+    })
+  },
+
+  /** 时间报表（按人员/项目/工作类型汇总工时） */
+  timeReport(params: { projectId?: string; startDate?: string; endDate?: string }) {
+    return request.get<any, R<TimeReportData>>('/reports/statistics/time-report', { params })
+  },
+
+  /** 预估对比报表 */
+  estimationReport(projectId?: string) {
+    return request.get<any, R<EstimationReportData>>('/reports/statistics/estimation-report', {
+      params: { projectId }
     })
   }
 }

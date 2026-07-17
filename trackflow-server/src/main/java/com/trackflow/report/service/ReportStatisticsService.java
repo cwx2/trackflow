@@ -543,6 +543,143 @@ public class ReportStatisticsService {
         }
     }
 
+    // ─── 时间报表 ──────────────────────────────────────────────────────
+
+    /**
+     * 获取时间报表数据：按人员/项目/工作类型汇总工时，含趋势和交叉维度
+     */
+    public TimeReportVO getTimeReport(Long projectId, LocalDate startDate, LocalDate endDate, Long userId) {
+        List<Long> projectIds = resolveProjectIds(projectId, userId);
+
+        if (endDate == null) endDate = LocalDate.now();
+        if (startDate == null) startDate = endDate.minusDays(29);
+
+        String startStr = startDate.toString();
+        String endStr = endDate.toString();
+
+        TimeReportVO vo = new TimeReportVO();
+
+        // 按人员
+        List<Map<String, Object>> byUserRows = reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
+        int totalMinutes = byUserRows.stream().mapToInt(r -> toInt(r.get("total_minutes"))).sum();
+        vo.setTotalMinutes(totalMinutes);
+        vo.setByUser(byUserRows.stream().map(r -> {
+            TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
+            item.setName((String) r.get("user_name"));
+            item.setMinutes(toInt(r.get("total_minutes")));
+            item.setPercentage(totalMinutes > 0 ? Math.round(toInt(r.get("total_minutes")) * 1000.0 / totalMinutes) / 10.0 : 0);
+            return item;
+        }).collect(Collectors.toList()));
+
+        // 按项目
+        List<Map<String, Object>> byProjectRows = reportStatisticsMapper.selectTimeByProject(projectIds, startStr, endStr);
+        vo.setByProject(byProjectRows.stream().map(r -> {
+            TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
+            item.setName((String) r.get("project_name"));
+            item.setMinutes(toInt(r.get("total_minutes")));
+            item.setPercentage(totalMinutes > 0 ? Math.round(toInt(r.get("total_minutes")) * 1000.0 / totalMinutes) / 10.0 : 0);
+            return item;
+        }).collect(Collectors.toList()));
+
+        // 按工作类型
+        List<Map<String, Object>> byTypeRows = reportStatisticsMapper.selectTimeByWorkType(projectIds, startStr, endStr);
+        vo.setByWorkType(byTypeRows.stream().map(r -> {
+            TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
+            item.setName((String) r.get("work_type"));
+            item.setMinutes(toInt(r.get("total_minutes")));
+            item.setPercentage(totalMinutes > 0 ? Math.round(toInt(r.get("total_minutes")) * 1000.0 / totalMinutes) / 10.0 : 0);
+            return item;
+        }).collect(Collectors.toList()));
+
+        // 每日趋势
+        List<Map<String, Object>> trendRows = reportStatisticsMapper.selectTimeTrend(projectIds, startStr, endStr);
+        vo.setTrendDates(trendRows.stream().map(r -> (String) r.get("work_date")).collect(Collectors.toList()));
+        vo.setTrendMinutes(trendRows.stream().map(r -> toInt(r.get("total_minutes"))).collect(Collectors.toList()));
+
+        // 交叉维度
+        List<Map<String, Object>> crossRows = reportStatisticsMapper.selectTimeCrossProjectUser(projectIds, startStr, endStr);
+        vo.setCrossProjectUser(crossRows.stream().map(r -> {
+            TimeReportVO.CrossDimensionItem item = new TimeReportVO.CrossDimensionItem();
+            item.setProjectName((String) r.get("project_name"));
+            item.setUserName((String) r.get("user_name"));
+            item.setMinutes(toInt(r.get("total_minutes")));
+            return item;
+        }).collect(Collectors.toList()));
+
+        return vo;
+    }
+
+    /**
+     * 获取预估对比报表：estimation vs spent
+     */
+    public EstimationReportVO getEstimationReport(Long projectId, Long userId) {
+        List<Long> projectIds = resolveProjectIds(projectId, userId);
+
+        List<Map<String, Object>> rows = reportStatisticsMapper.selectEstimationComparison(projectIds);
+
+        EstimationReportVO vo = new EstimationReportVO();
+
+        double totalEstimated = 0;
+        double totalSpent = 0;
+        List<EstimationReportVO.IssueEstimationItem> items = new ArrayList<>();
+        Map<String, double[]> projectAgg = new LinkedHashMap<>();
+
+        for (Map<String, Object> row : rows) {
+            double estimated = toDouble(row.get("estimated_hours")) != null ? toDouble(row.get("estimated_hours")) : 0;
+            double spent = toDouble(row.get("spent_hours")) != null ? toDouble(row.get("spent_hours")) : 0;
+
+            totalEstimated += estimated;
+            totalSpent += spent;
+
+            EstimationReportVO.IssueEstimationItem item = new EstimationReportVO.IssueEstimationItem();
+            item.setIssueId(String.valueOf(row.get("issue_id")));
+            item.setIssueKey((String) row.get("issue_key"));
+            item.setIssueTitle((String) row.get("title"));
+            item.setProjectName((String) row.get("project_name"));
+            item.setAssigneeName((String) row.get("assignee_name"));
+            item.setEstimatedHours(Math.round(estimated * 100.0) / 100.0);
+            item.setSpentHours(Math.round(spent * 100.0) / 100.0);
+
+            double deviation = estimated > 0 ? (spent / estimated - 1) : 0;
+            item.setDeviationRate(Math.round(deviation * 1000.0) / 1000.0);
+            if (Math.abs(deviation) <= 0.1) {
+                item.setDeviation("on_track");
+            } else if (deviation > 0) {
+                item.setDeviation("over");
+            } else {
+                item.setDeviation("under");
+            }
+            items.add(item);
+
+            // 按项目聚合
+            String projName = (String) row.get("project_name");
+            projectAgg.computeIfAbsent(projName, k -> new double[3]);
+            double[] agg = projectAgg.get(projName);
+            agg[0] += estimated;
+            agg[1] += spent;
+            agg[2] += 1;
+        }
+
+        vo.setTotalEstimatedHours(Math.round(totalEstimated * 100.0) / 100.0);
+        vo.setTotalSpentHours(Math.round(totalSpent * 100.0) / 100.0);
+        vo.setOverallDeviationRate(totalEstimated > 0 ? Math.round((totalSpent / totalEstimated - 1) * 1000.0) / 1000.0 : 0);
+        vo.setItems(items);
+
+        List<EstimationReportVO.ProjectEstimationItem> byProject = new ArrayList<>();
+        for (Map.Entry<String, double[]> entry : projectAgg.entrySet()) {
+            EstimationReportVO.ProjectEstimationItem pi = new EstimationReportVO.ProjectEstimationItem();
+            pi.setProjectName(entry.getKey());
+            pi.setEstimatedHours(Math.round(entry.getValue()[0] * 100.0) / 100.0);
+            pi.setSpentHours(Math.round(entry.getValue()[1] * 100.0) / 100.0);
+            pi.setDeviationRate(entry.getValue()[0] > 0 ? Math.round((entry.getValue()[1] / entry.getValue()[0] - 1) * 1000.0) / 1000.0 : 0);
+            pi.setIssueCount((int) entry.getValue()[2]);
+            byProject.add(pi);
+        }
+        vo.setByProject(byProject);
+
+        return vo;
+    }
+
     // ─── Type conversion helpers ─────────────────────────────────────────
 
     private long toLong(Object obj) {

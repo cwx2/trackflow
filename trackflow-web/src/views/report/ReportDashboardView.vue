@@ -6,7 +6,26 @@
         <h1 class="page-title">报表</h1>
         <span class="page-desc">项目数据概览与可视化分析</span>
       </div>
-      <div class="header-right">
+    </div>
+
+    <!-- 标签页切换 -->
+    <div class="report-tabs">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.key }"
+        @click="activeTab = tab.key"
+      >
+        <span class="tab-icon">{{ tab.icon }}</span>
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- 仪表盘 Tab -->
+    <div v-show="activeTab === 'dashboard'" class="tab-content">
+      <!-- 仪表盘筛选栏 -->
+      <div class="dashboard-filters">
         <a-select
           v-model="selectedProjectId"
           placeholder="选择项目"
@@ -55,7 +74,6 @@
           </template>
         </a-dropdown>
       </div>
-    </div>
 
     <!-- 加载状态 -->
     <div v-if="loading" class="dashboard-loading">
@@ -242,6 +260,17 @@
         </div>
       </div>
     </template>
+    </div><!-- end dashboard tab-content -->
+
+    <!-- 时间报表 Tab -->
+    <div v-show="activeTab === 'time'" class="tab-content">
+      <TimeReportTab ref="timeReportRef" :projects="projects" />
+    </div>
+
+    <!-- 预估对比 Tab -->
+    <div v-show="activeTab === 'estimation'" class="tab-content">
+      <EstimationReportTab ref="estimationReportRef" :projects="projects" />
+    </div>
   </div>
 </template>
 
@@ -259,6 +288,8 @@ import {
   ToolboxComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
+import TimeReportTab from './TimeReportTab.vue'
+import EstimationReportTab from './EstimationReportTab.vue'
 import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
@@ -268,6 +299,18 @@ import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, ToolboxComponent])
+
+// ─── Tab 状态 ─────────────────────────────────────────
+
+const activeTab = ref<'dashboard' | 'time' | 'estimation'>('dashboard')
+const tabs = [
+  { key: 'dashboard', label: '仪表盘', icon: '📊' },
+  { key: 'time', label: '时间报表', icon: '⏱️' },
+  { key: 'estimation', label: '预估对比', icon: '📐' }
+] as const
+
+const timeReportRef = ref()
+const estimationReportRef = ref()
 
 // ─── 状态 ─────────────────────────────────────────────
 
@@ -1152,7 +1195,7 @@ function printReport() {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -1161,6 +1204,57 @@ function printReport() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* 标签页 */
+.report-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--tf-border-light);
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.tab-btn:hover {
+  color: var(--tf-text-primary);
+}
+
+.tab-btn.active {
+  color: var(--tf-accent);
+  border-bottom-color: var(--tf-accent);
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+.tab-content {
+  min-height: 0;
+}
+
+.dashboard-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
 }
 
 .page-title {
@@ -1174,13 +1268,6 @@ function printReport() {
 .page-desc {
   font-size: 13px;
   color: var(--tf-text-tertiary);
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 .sprint-active-badge {
@@ -1410,7 +1497,11 @@ function printReport() {
     overflow: visible;
   }
 
-  .dashboard-header .header-right {
+  .dashboard-header .dashboard-filters {
+    display: none;
+  }
+
+  .report-tabs {
     display: none;
   }
 

@@ -341,4 +341,126 @@
         ORDER BY cnt DESC
     </select>
 
+    <!-- ═══════════ 时间报表聚合查询 ═══════════ -->
+
+    <!-- 按人员分组汇总工时 -->
+    <select id="selectTimeByUser" resultType="map">
+        SELECT
+            t.user_id,
+            u.display_name AS user_name,
+            COALESCE(SUM(t.duration), 0) AS total_minutes
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        JOIN sys_user u ON u.id = t.user_id
+        WHERE i.deleted_at IS NULL
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        GROUP BY t.user_id, u.display_name
+        ORDER BY total_minutes DESC
+    </select>
+
+    <!-- 按项目分组汇总工时 -->
+    <select id="selectTimeByProject" resultType="map">
+        SELECT
+            p.id AS project_id,
+            p.name AS project_name,
+            COALESCE(SUM(t.duration), 0) AS total_minutes
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = i.project_id
+        WHERE i.deleted_at IS NULL
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        GROUP BY p.id, p.name
+        ORDER BY total_minutes DESC
+    </select>
+
+    <!-- 按工作类型分组汇总工时 -->
+    <select id="selectTimeByWorkType" resultType="map">
+        SELECT
+            COALESCE(t.work_type, '未分类') AS work_type,
+            COALESCE(SUM(t.duration), 0) AS total_minutes
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        WHERE i.deleted_at IS NULL
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        GROUP BY COALESCE(t.work_type, '未分类')
+        ORDER BY total_minutes DESC
+    </select>
+
+    <!-- 每日工时趋势 -->
+    <select id="selectTimeTrend" resultType="map">
+        SELECT
+            t.work_date::text AS work_date,
+            COALESCE(SUM(t.duration), 0) AS total_minutes
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        WHERE i.deleted_at IS NULL
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        GROUP BY t.work_date
+        ORDER BY t.work_date ASC
+    </select>
+
+    <!-- 交叉维度：按项目+人员分组 -->
+    <select id="selectTimeCrossProjectUser" resultType="map">
+        SELECT
+            p.name AS project_name,
+            u.display_name AS user_name,
+            COALESCE(SUM(t.duration), 0) AS total_minutes
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = i.project_id
+        JOIN sys_user u ON u.id = t.user_id
+        WHERE i.deleted_at IS NULL
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        GROUP BY p.name, u.display_name
+        ORDER BY p.name ASC, total_minutes DESC
+    </select>
+
+    <!-- 预估对比报表 -->
+    <select id="selectEstimationComparison" resultType="map">
+        SELECT
+            i.id AS issue_id,
+            i.issue_key,
+            i.title,
+            p.name AS project_name,
+            COALESCE(u.display_name, '未分配') AS assignee_name,
+            i.estimated_hours,
+            i.spent_hours
+        FROM issue i
+        JOIN project p ON p.id = i.project_id
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        WHERE i.deleted_at IS NULL
+          AND i.estimated_hours IS NOT NULL
+          AND i.estimated_hours > 0
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        ORDER BY (COALESCE(i.spent_hours, 0) / i.estimated_hours) DESC
+    </select>
+
 </mapper>
