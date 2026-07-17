@@ -6,7 +6,7 @@
         <span class="page-desc">查看项目统计与进度报告</span>
       </div>
       <div class="header-right" v-if="canCreateReport">
-        <a-button type="primary" size="small" @click="showCreateModal = true">
+        <a-button type="primary" size="small" @click="openCreateModal">
           <template #icon><span class="btn-icon">➕</span></template>
           创建报表
         </a-button>
@@ -41,7 +41,7 @@
       <p class="empty-desc">
         {{ canCreateReport ? '创建第一个报表来跟踪项目进度和工作统计。' : '还没有可查看的报表，请联系项目管理员创建。' }}
       </p>
-      <a-button v-if="canCreateReport" type="primary" size="small" @click="showCreateModal = true">
+      <a-button v-if="canCreateReport" type="primary" size="small" @click="openCreateModal">
         创建报表
       </a-button>
     </div>
@@ -60,6 +60,9 @@
           <a-dropdown v-if="canCreateReport" trigger="click" @click.stop>
             <span class="card-menu-btn" @click.stop>⋯</span>
             <template #content>
+              <a-doption @click="startEdit(report)">
+                编辑
+              </a-doption>
               <a-doption @click="confirmDelete(report)">
                 <span style="color: var(--tf-danger)">删除</span>
               </a-doption>
@@ -104,14 +107,14 @@
       </div>
     </div>
 
-    <!-- 创建报表弹窗 -->
+    <!-- 创建/编辑报表弹窗 -->
     <a-modal
-      v-model:visible="showCreateModal"
-      title="创建报表"
-      :ok-text="'创建报表'"
+      v-model:visible="showFormModal"
+      :title="editingReport ? '编辑报表' : '创建报表'"
+      :ok-text="editingReport ? '保存修改' : '创建报表'"
       :cancel-text="'取消'"
-      :ok-loading="creating"
-      @ok="handleCreate"
+      :ok-loading="submitting"
+      @ok="handleSubmit"
       @cancel="resetForm"
     >
       <a-form :model="form" layout="vertical">
@@ -119,9 +122,10 @@
           <a-input v-model="form.name" placeholder="例如：本周 Bug 统计" :max-length="200" />
         </a-form-item>
         <a-form-item label="所属项目" required>
-          <a-select v-model="form.projectId" placeholder="选择项目">
+          <a-select v-model="form.projectId" placeholder="选择项目" :disabled="!!editingReport">
             <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
           </a-select>
+          <span v-if="editingReport" class="form-hint">项目不可修改</span>
         </a-form-item>
         <a-form-item label="报表类型" required>
           <a-select v-model="form.type" placeholder="选择类型">
@@ -155,7 +159,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { reportApi } from '@/api/report'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
-import type { ReportDefinitionVO, ReportDataVO } from '@/api/report'
+import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 import type { ProjectVO } from '@/api/types'
 
 const authStore = useAuthStore()
@@ -167,9 +171,10 @@ const selectedProjectId = ref<string | undefined>(undefined)
 const reportData = ref<Record<string, ReportDataVO>>({})
 const executingId = ref<string | null>(null)
 
-// 创建相关
-const showCreateModal = ref(false)
-const creating = ref(false)
+// 创建/编辑相关
+const showFormModal = ref(false)
+const submitting = ref(false)
+const editingReport = ref<ReportDefinitionVO | null>(null)
 const form = reactive({
   name: '',
   projectId: '' as string,
@@ -243,12 +248,12 @@ async function executeReport(report: ReportDefinitionVO) {
   }
 }
 
-async function handleCreate() {
+async function handleSubmit() {
   if (!form.name.trim()) {
     Message.warning('请输入报表名称')
     return
   }
-  if (!form.projectId) {
+  if (!editingReport.value && !form.projectId) {
     Message.warning('请选择所属项目')
     return
   }
@@ -257,25 +262,69 @@ async function handleCreate() {
     return
   }
 
-  creating.value = true
+  submitting.value = true
   try {
     const config = JSON.stringify({ groupBy: form.groupBy })
-    await reportApi.create({
-      name: form.name.trim(),
-      projectId: form.projectId,
-      type: form.type,
-      config,
-      shared: form.shared
-    })
-    Message.success('报表创建成功')
-    showCreateModal.value = false
+
+    if (editingReport.value) {
+      // 编辑模式
+      const updateData: UpdateReportParams = {
+        name: form.name.trim(),
+        type: form.type,
+        config,
+        shared: form.shared
+      }
+      const res = await reportApi.update(editingReport.value.id, updateData)
+      Message.success('报表已更新')
+      // 替换列表中的数据
+      const idx = reports.value.findIndex(r => r.id === editingReport.value!.id)
+      if (idx !== -1 && res.data) {
+        reports.value[idx] = res.data
+      }
+    } else {
+      // 创建模式
+      await reportApi.create({
+        name: form.name.trim(),
+        projectId: form.projectId,
+        type: form.type,
+        config,
+        shared: form.shared
+      })
+      Message.success('报表创建成功')
+      await loadReports()
+    }
+
+    showFormModal.value = false
     resetForm()
-    await loadReports()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建报表失败')
+    Message.error(e.response?.data?.message || (editingReport.value ? '更新报表失败' : '创建报表失败'))
   } finally {
-    creating.value = false
+    submitting.value = false
   }
+}
+
+function openCreateModal() {
+  editingReport.value = null
+  resetForm()
+  showFormModal.value = true
+}
+
+function startEdit(report: ReportDefinitionVO) {
+  editingReport.value = report
+  form.name = report.name
+  form.projectId = report.projectId
+  form.type = report.type
+  form.shared = report.shared ?? false
+
+  // 解析 config 中的 groupBy
+  try {
+    const config = report.config ? JSON.parse(report.config) : {}
+    form.groupBy = config.groupBy || 'status'
+  } catch {
+    form.groupBy = 'status'
+  }
+
+  showFormModal.value = true
 }
 
 function confirmDelete(report: ReportDefinitionVO) {
@@ -299,6 +348,7 @@ function confirmDelete(report: ReportDefinitionVO) {
 }
 
 function resetForm() {
+  editingReport.value = null
   form.name = ''
   form.projectId = ''
   form.type = 'by_status'

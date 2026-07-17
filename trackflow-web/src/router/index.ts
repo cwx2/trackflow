@@ -97,6 +97,12 @@ const routes = [
         meta: { requiresReport: true }
       },
       {
+        path: 'reports/saved',
+        name: 'SavedReports',
+        component: () => import('@/views/report/ReportListView.vue'),
+        meta: { requiresReport: true }
+      },
+      {
         path: 'admin',
         name: 'Admin',
         component: () => import('@/views/admin/AdminView.vue'),

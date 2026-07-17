@@ -8,13 +8,22 @@ export interface ReportDefinitionVO {
   type: string
   config: string
   shared: boolean
+  createdBy: string
   createdAt: string
+  updatedAt: string
 }
 
 export interface CreateReportParams {
   name: string
   projectId: string
   type: string
+  config?: string
+  shared?: boolean
+}
+
+export interface UpdateReportParams {
+  name?: string
+  type?: string
   config?: string
   shared?: boolean
 }
@@ -41,6 +50,11 @@ export const reportApi = {
   /** 创建报表 */
   create(data: CreateReportParams) {
     return request.post<any, R<ReportDefinitionVO>>('/reports', data)
+  },
+
+  /** 更新报表 */
+  update(id: string, data: UpdateReportParams) {
+    return request.put<any, R<ReportDefinitionVO>>(`/reports/${id}`, data)
   },
 
   /** 删除报表 */

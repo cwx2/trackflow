@@ -5,6 +5,7 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.converter.ReportConverter;
 import com.trackflow.report.dto.CreateReportDTO;
+import com.trackflow.report.dto.UpdateReportDTO;
 import com.trackflow.report.service.ReportService;
 import com.trackflow.report.vo.ReportDefinitionVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
@@ -38,6 +39,13 @@ public class ReportController {
     @PreAuthorize("@perm.check(#dto.projectId, 'project:edit')")
     public R<ReportDefinitionVO> create(@Valid @RequestBody CreateReportDTO dto) {
         return R.ok(reportConverter.toVO(reportService.create(dto)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public R<ReportDefinitionVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateReportDTO dto) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(reportConverter.toVO(reportService.updateWithAccessCheck(id, dto, userId)));
     }
 
     @DeleteMapping("/{id}")

@@ -14,6 +14,7 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
+import com.trackflow.report.dto.UpdateReportDTO;
 import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.entity.ReportGroupBy;
 import com.trackflow.report.entity.ReportType;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.trackflow.report.vo.ReportExecuteResultVO;
 
 import java.util.*;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @Service
@@ -95,6 +97,70 @@ public class ReportService {
     }
 
     /**
+     * 更新报表（带权限校验）
+     * 只有报表创建者或拥有 project:edit 权限的用户可以更新
+     */
+    @Transactional
+    public ReportDefinition updateWithAccessCheck(Long id, UpdateReportDTO dto, Long userId) {
+        ReportDefinition report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+
+        // 权限校验：创建者可修改自己的报表
+        if (!userId.equals(report.getCreatedBy())) {
+            // 非创建者需要 project:edit 权限（项目管理员可修改任意报表）
+            if (report.getProjectId() != null) {
+                if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
+                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以修改此报表");
+                }
+            } else {
+                // 全局报表（无 projectId），只有系统管理员可修改他人的
+                if (!permissionService.isSystemAdmin(userId)) {
+                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或系统管理员可以修改此报表");
+                }
+            }
+        }
+
+        // 校验报表类型合法性（仅当 dto 传入了 type）
+        if (dto.getType() != null && !ReportType.isValid(dto.getType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的报表类型: " + dto.getType() + "，允许值: " + ReportType.allowedValues());
+        }
+
+        // 校验 config 合法性
+        if (dto.getConfig() != null) {
+            validateGroupByLegality(dto.getConfig());
+        }
+        // type-groupBy 一致性校验：仅在 type 发生实质变化时触发
+        boolean typeChanged = dto.getType() != null && !dto.getType().equals(report.getType());
+        if (typeChanged) {
+            String effectiveConfig = dto.getConfig() != null ? dto.getConfig() : report.getConfig();
+            validateConfig(effectiveConfig, dto.getType());
+        }
+
+        // 部分更新——只更新传入的字段
+        if (dto.getName() != null && !dto.getName().isBlank()) {
+            report.setName(dto.getName().trim());
+        }
+        if (dto.getType() != null) {
+            report.setType(dto.getType());
+        }
+        if (dto.getConfig() != null) {
+            report.setConfig(dto.getConfig());
+        }
+        if (dto.getShared() != null) {
+            report.setShared(dto.getShared());
+        }
+
+        // 显式设置 updatedAt
+        report.setUpdatedAt(LocalDateTime.now());
+
+        reportMapper.updateById(report);
+        return report;
+    }
+
+    /**
      * 校验报表配置的合法性
      * - groupBy 必须在白名单中
      * - 特定类型有固定 groupBy 要求时做一致性校验
@@ -116,6 +182,19 @@ public class ReportService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                         "报表类型 " + type + " 的分组维度必须为 " + reportType.getDefaultGroupBy());
             }
+        }
+    }
+
+    /**
+     * 仅校验 groupBy 值的合法性（不校验与 type 的一致性）
+     * 用于更新时只修改了 config 但没修改 type 的场景
+     */
+    private void validateGroupByLegality(String config) {
+        Map<String, Object> configMap = parseConfig(config);
+        String groupBy = (String) configMap.get("groupBy");
+        if (groupBy != null && !groupBy.isBlank() && !ReportGroupBy.isValid(groupBy)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的分组维度: " + groupBy + "，允许值: " + ReportGroupBy.allowedValues());
         }
     }
 
