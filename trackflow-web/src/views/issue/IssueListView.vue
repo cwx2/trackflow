@@ -47,6 +47,13 @@
           >
             <template #icon><icon-plus :size="12" /></template>
           </a-button>
+          <a-button
+            type="text" size="mini" class="group-action-btn"
+            title="管理查询收藏"
+            @click.stop="openManageQueriesModal"
+          >
+            <template #icon><icon-settings :size="12" /></template>
+          </a-button>
         </div>
         <div v-if="expandedGroups.has('saved')" class="group-items">
           <a-dropdown
@@ -65,7 +72,6 @@
               <span class="query-name">{{ q.name }}</span>
               <span class="query-count" :class="{ 'count-accent': q.icon && q.count > 0 }">{{ formatCount(q.count) }}</span>
               <span
-                v-if="q.userId"
                 class="query-action-btn"
                 title="更多操作"
                 @click.stop
@@ -74,7 +80,7 @@
               >⋯</span>
             </div>
             <template #content>
-              <template v-if="q.userId">
+              <template v-if="isOwnQuery(q)">
                 <a-doption @click="openEditQueryModal(q)">
                   <template #icon><icon-edit /></template>
                   编辑查询
@@ -96,10 +102,12 @@
                   删除
                 </a-doption>
               </template>
-              <a-doption v-else disabled>
-                <template #icon><icon-lock /></template>
-                系统预设查询（不可修改）
-              </a-doption>
+              <template v-else>
+                <a-doption @click="handleRemoveFavorite(q)">
+                  <template #icon><icon-minus-circle /></template>
+                  从面板移除
+                </a-doption>
+              </template>
             </template>
           </a-dropdown>
           <div v-if="filteredQueries.length === 0" class="empty-queries">暂无保存的搜索</div>
@@ -221,6 +229,42 @@
             <a-input v-model="renameQueryForm.name" placeholder="输入新名称" :max-length="50" @keyup.enter="handleRenameQuery" />
           </a-form-item>
         </a-form>
+      </a-modal>
+
+      <!-- Manage queries (favorites) modal -->
+      <a-modal
+        v-model:visible="showManageQueriesModal"
+        title="管理查询收藏"
+        :width="520"
+        :footer="false"
+        @cancel="showManageQueriesModal = false"
+      >
+        <div class="manage-queries-content">
+          <p class="manage-queries-hint">选择要在面板中显示的共享查询。点击星标切换收藏状态。</p>
+          <div class="manage-queries-search">
+            <a-input v-model="manageQuerySearch" placeholder="搜索查询..." size="small" allow-clear>
+              <template #prefix><icon-search /></template>
+            </a-input>
+          </div>
+          <div class="manage-queries-list">
+            <div
+              v-for="q in filteredManageQueries"
+              :key="q.id"
+              class="manage-query-item"
+              @click="toggleFavorite(q)"
+            >
+              <span class="manage-query-star" :class="{ favorited: q.favorited }">
+                {{ q.favorited ? '★' : '☆' }}
+              </span>
+              <span class="manage-query-icon" v-if="q.icon">{{ q.icon }}</span>
+              <span class="manage-query-name">{{ q.name }}</span>
+              <span class="manage-query-owner" v-if="q.userId && !isOwnQueryById(q.userId)">共享</span>
+            </div>
+            <div v-if="filteredManageQueries.length === 0" class="manage-queries-empty">
+              没有找到匹配的查询
+            </div>
+          </div>
+        </div>
       </a-modal>
     </aside>
 
@@ -451,7 +495,7 @@
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="priorityDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
               <span class="editable-cell" @click="priorityDropdowns[record.id] = true">
                 <span class="priority-dot" :class="'priority-' + (record.priority || 'normal').toLowerCase()"></span>
-                {{ record.priority || 'Normal' }}
+                {{ localizePriority(record.priority) }}
                 <icon-loading v-if="isCellEditing(record.id, 'priority')" class="cell-spinner" />
               </span>
               <template #content>
@@ -464,15 +508,20 @@
             </a-trigger>
             <span v-else class="readonly-cell">
               <span class="priority-dot" :class="'priority-' + (record.priority || 'normal').toLowerCase()"></span>
-              {{ record.priority || 'Normal' }}
+              {{ localizePriority(record.priority) }}
             </span>
           </div>
         </template>
         <template #updatedAt="{ record }"><span class="time-ago">{{ formatTime(record.updatedAt) }}</span></template>
-        <template #issueType="{ record }"><span class="type-label">{{ record.issueType }}</span></template>
+        <template #issueType="{ record }"><span class="type-label">{{ localizeIssueType(record.issueType) }}</span></template>
         <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterName || '\u2014' }}</span></template>
         <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
-        <template #dueDate="{ record }"><span class="time-ago">{{ record.dueDate || '\u2014' }}</span></template>
+        <template #dueDate="{ record }">
+          <a-tooltip v-if="record.dueDate && getDueDateStatus(record) !== 'normal'" :content="getDueDateTooltip(record)" position="top" mini>
+            <span class="due-date-cell" :class="'due-' + getDueDateStatus(record)">{{ record.dueDate }}</span>
+          </a-tooltip>
+          <span v-else class="time-ago">{{ record.dueDate || '\u2014' }}</span>
+        </template>
         <template #childProgress="{ record }">
           <span v-if="record.childCount > 0" class="child-progress-cell" :title="`${record.childClosedCount}/${record.childCount} 子任务已完成`">
             <span class="child-progress-bar">
@@ -532,7 +581,7 @@ import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap } from '@/utils/fieldLabels'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -799,6 +848,66 @@ async function toggleQueryPinned(q: any) {
   try {
     await queryApi.update(q.id, { pinned: !q.pinned })
     Message.success(q.pinned ? '已取消置顶' : '已置顶')
+    loadPanel()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+// ========== Manage query favorites ==========
+const showManageQueriesModal = ref(false)
+const manageQuerySearch = ref('')
+const availableQueries = ref<any[]>([])
+
+/** Check if a query belongs to the current user */
+function isOwnQuery(q: any): boolean {
+  const currentUserId = authStore.user?.userId || authStore.user?.id || ''
+  return q.userId === String(currentUserId)
+}
+function isOwnQueryById(userId: string): boolean {
+  const currentUserId = authStore.user?.userId || authStore.user?.id || ''
+  return userId === String(currentUserId)
+}
+
+const filteredManageQueries = computed(() => {
+  if (!manageQuerySearch.value) return availableQueries.value
+  const kw = manageQuerySearch.value.toLowerCase()
+  return availableQueries.value.filter((q: any) => q.name.toLowerCase().includes(kw))
+})
+
+async function openManageQueriesModal() {
+  showManageQueriesModal.value = true
+  manageQuerySearch.value = ''
+  try {
+    const res = await queryApi.getAvailableQueries(activeProjectId.value || undefined)
+    availableQueries.value = res.data || []
+  } catch (e: any) {
+    Message.error('加载可用查询失败')
+    availableQueries.value = []
+  }
+}
+
+async function toggleFavorite(q: any) {
+  try {
+    if (q.favorited) {
+      await queryApi.removeFavorite(q.id)
+      q.favorited = false
+      Message.success(`已从面板移除「${q.name}」`)
+    } else {
+      await queryApi.addFavorite(q.id)
+      q.favorited = true
+      Message.success(`已添加「${q.name}」到面板`)
+    }
+    loadPanel()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+async function handleRemoveFavorite(q: any) {
+  try {
+    await queryApi.removeFavorite(q.id)
+    Message.success(`已从面板移除「${q.name}」`)
     loadPanel()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
@@ -1183,6 +1292,34 @@ function isResolved(statusId: string): boolean {
   const s = statusCache.value.find(st => st.id === statusId)
   return s?.isClosed === true
 }
+
+// Due date helpers
+function getDueDateStatus(record: TableData): 'overdue' | 'due-soon' | 'normal' {
+  if (!record.dueDate) return 'normal'
+  // Closed issues don't show warning colors
+  if (isResolved(record.statusId as string)) return 'normal'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(record.dueDate as string)
+  due.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
+  if (diffDays < 0) return 'overdue'
+  if (diffDays <= 3) return 'due-soon'
+  return 'normal'
+}
+function getDueDateTooltip(record: TableData): string {
+  if (!record.dueDate) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(record.dueDate as string)
+  due.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
+  if (diffDays < 0) return `已逾期 ${Math.abs(diffDays)} 天`
+  if (diffDays === 0) return '今天到期'
+  if (diffDays === 1) return '明天到期'
+  return `${diffDays} 天后到期`
+}
+
 function getRowClass(record: TableData): string {
   const classes: string[] = []
   if (isResolved(record.statusId as string)) classes.push('issue-resolved')
@@ -1852,6 +1989,23 @@ function applyDashboardFilter() {
 .edit-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .form-help-text { font-size: 12px; color: var(--tf-text-tertiary); margin-left: 8px; }
 
+/* Manage queries modal */
+.manage-queries-content { display: flex; flex-direction: column; gap: 12px; }
+.manage-queries-hint { font-size: 12px; color: var(--tf-text-tertiary); margin: 0; }
+.manage-queries-search { margin-bottom: 4px; }
+.manage-queries-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.manage-query-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: 6px; cursor: pointer; transition: background 100ms;
+}
+.manage-query-item:hover { background: var(--tf-bg-hover); }
+.manage-query-star { font-size: 16px; color: var(--tf-text-tertiary); transition: color 100ms; flex-shrink: 0; }
+.manage-query-star.favorited { color: var(--tf-accent); }
+.manage-query-icon { font-size: 14px; flex-shrink: 0; }
+.manage-query-name { font-size: 13px; color: var(--tf-text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manage-query-owner { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; padding: 1px 6px; background: var(--tf-bg-surface); border-radius: 3px; }
+.manage-queries-empty { text-align: center; padding: 24px; font-size: 13px; color: var(--tf-text-tertiary); }
+
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
@@ -1935,6 +2089,10 @@ function applyDashboardFilter() {
 .priority-normal { background: var(--tf-accent); }
 .priority-low { background: var(--tf-text-tertiary); }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
+.due-date-cell { font-size: 11px; color: var(--tf-text-tertiary); }
+.due-date-cell.due-overdue { color: var(--tf-danger); font-weight: 500; }
+.due-date-cell.due-due-soon { color: var(--tf-warning); font-weight: 500; }
+.issue-table :deep(.issue-resolved) .due-date-cell { color: var(--tf-text-quaternary); font-weight: 400; }
 .cf-cell { font-size: 12px; color: var(--tf-text-secondary); }
 .cf-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; line-height: 1.4; }
 

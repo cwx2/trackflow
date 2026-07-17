@@ -44,7 +44,7 @@
           :style="{ backgroundColor: statusColor, color: '#fff' }"
         >{{ localizeStatusName(detail.status?.name) }}</span>
         <span class="preview-priority">
-          {{ priorityIcon(detail.priority) }} {{ detail.priority }}
+          {{ priorityIcon(detail.priority) }} {{ localizePriority(detail.priority) }}
         </span>
         <span class="preview-type">{{ typeLabel(detail.issueType) }}</span>
       </div>
@@ -160,7 +160,7 @@ import { useRouter } from 'vue-router'
 import { issueApi, projectApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO } from '@/api/types'
 import TimeProgressIndicator from '@/views/issue/components/TimeProgressIndicator.vue'
-import { localizeStatusName, localizeIssueType } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
 

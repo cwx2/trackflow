@@ -81,6 +81,16 @@ export const priorityLabelMap: Record<string, string> = {
 }
 
 /**
+ * 本地化优先级名称
+ * @param priority 英文优先级值（如 "Normal"、"High"）
+ * @returns 中文优先级名（如 "普通"、"高"），未匹配时返回原值
+ */
+export function localizePriority(priority?: string | null): string {
+  if (!priority) return '普通'
+  return priorityLabelMap[priority] || priority
+}
+
+/**
  * 状态英文名 → 中文映射
  * 覆盖 issue_status 表中的所有预置状态
  */

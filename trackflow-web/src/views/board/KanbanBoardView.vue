@@ -227,7 +227,7 @@
                     v-if="isCardFieldVisible('priority')"
                     class="card-priority"
                     :class="issue.priority?.toLowerCase()"
-                    :title="issue.priority"
+                    :title="localizePriority(issue.priority)"
                   >
                     {{ priorityIcon(issue.priority) }}
                   </span>
@@ -470,7 +470,7 @@
                           v-if="isCardFieldVisible('priority')"
                           class="card-priority"
                           :class="issue.priority?.toLowerCase()"
-                          :title="issue.priority"
+                          :title="localizePriority(issue.priority)"
                         >
                           {{ priorityIcon(issue.priority) }}
                         </span>
@@ -643,7 +643,7 @@ import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
-import { localizeStatusName, localizeIssueType } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'

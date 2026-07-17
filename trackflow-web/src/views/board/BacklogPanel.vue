@@ -74,7 +74,7 @@
               <span
                 class="backlog-card-priority"
                 :class="issue.priority?.toLowerCase()"
-                :title="issue.priority"
+                :title="localizePriority(issue.priority)"
               >
                 {{ priorityIcon(issue.priority) }}
               </span>
@@ -112,7 +112,7 @@ import { Message } from '@arco-design/web-vue'
 import { issueApi } from '@/api'
 import type { IssueVO } from '@/api/types'
 import { IconSearch, IconClose } from '@arco-design/web-vue/es/icon'
-import { localizeIssueType } from '@/utils/fieldLabels'
+import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   visible: boolean

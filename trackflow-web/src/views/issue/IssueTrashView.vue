@@ -92,9 +92,12 @@
           <template #title="{ record }">
             <span class="issue-title">{{ record.title }}</span>
           </template>
+          <template #issueType="{ record }">
+            <span class="type-label">{{ localizeIssueType(record.issueType) }}</span>
+          </template>
           <template #priority="{ record }">
             <span class="priority-tag" :class="`priority-${record.priority?.toLowerCase()}`">
-              {{ record.priority }}
+              {{ localizePriority(record.priority) }}
             </span>
           </template>
           <template #deletedAt="{ record }">
@@ -131,6 +134,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { IconUndo, IconDelete, IconSettings } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import type { IssueTrashVO } from '@/api/types'
 
 const authStore = useAuthStore()
@@ -168,7 +172,7 @@ const retentionHint = computed(() => {
 const columns = [
   { title: 'Key', dataIndex: 'issueKey', slotName: 'issueKey', width: 100 },
   { title: '标题', dataIndex: 'title', slotName: 'title', ellipsis: true },
-  { title: '类型', dataIndex: 'issueType', width: 80 },
+  { title: '类型', dataIndex: 'issueType', slotName: 'issueType', width: 80 },
   { title: '优先级', dataIndex: 'priority', slotName: 'priority', width: 80 },
   { title: '负责人', dataIndex: 'assigneeName', width: 100 },
   { title: '删除时间', dataIndex: 'deletedAt', slotName: 'deletedAt', width: 160 },

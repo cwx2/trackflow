@@ -153,7 +153,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, sprintApi, userApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, SprintVO, UserVO } from '@/api/types'
-import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
 
 // ==================== Types ====================
 
@@ -467,10 +467,10 @@ async function loadValueOptions(fieldKey: string) {
 
       case 'priority':
         valueOptions.value = [
-          { id: 'Critical', label: 'Critical', color: '#f85149' },
-          { id: 'High', label: 'High', color: '#d29922' },
-          { id: 'Normal', label: 'Normal', color: '#58a6ff' },
-          { id: 'Low', label: 'Low', color: '#6b7280' },
+          { id: 'Critical', label: priorityLabelMap['Critical'] || 'Critical', color: '#f85149' },
+          { id: 'High', label: priorityLabelMap['High'] || 'High', color: '#d29922' },
+          { id: 'Normal', label: priorityLabelMap['Normal'] || 'Normal', color: '#58a6ff' },
+          { id: 'Low', label: priorityLabelMap['Low'] || 'Low', color: '#6b7280' },
         ]
         break
 
