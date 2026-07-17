@@ -32,9 +32,12 @@ import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.trackflow.common.event.ProjectNotificationEvent;
 
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
@@ -70,10 +73,10 @@ public class ProjectService {
     private final IssueAttachmentMapper issueAttachmentMapper;
     private final SprintMapper sprintMapper;
     private final ProjectActivityService projectActivityService;
-    private final ProjectNotificationHelper projectNotificationHelper;
     private final ProjectInitializationService projectInitializationService;
     private final MinioService minioService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 创建项目
@@ -452,13 +455,13 @@ public class ProjectService {
         leadDetailMap.put("new_lead_name", newLeadName);
         projectActivityService.log(projectId, currentUserId, "change_lead", newLeadId, leadDetailMap);
 
-        // 6. 通知新负责人
-        projectNotificationHelper.notifyNewLead(newLeadId, currentUserId, projectId, project.getName());
+        // 6. 通知新负责人 — 事务提交后触发
+        eventPublisher.publishEvent(new ProjectNotificationEvent.NewLead(newLeadId, currentUserId, projectId, project.getName()));
 
-        // 7. 通知旧负责人（如果存在且不同）
+        // 7. 通知旧负责人（如果存在且不同）— 事务提交后触发
         if (oldLeadId != null && !oldLeadId.equals(currentUserId)) {
-            projectNotificationHelper.notifyOldLead(oldLeadId, currentUserId, projectId,
-                    project.getName(), newLeadName);
+            eventPublisher.publishEvent(new ProjectNotificationEvent.OldLead(oldLeadId, currentUserId, projectId,
+                    project.getName(), newLeadName));
         }
     }
 
@@ -496,9 +499,9 @@ public class ProjectService {
         projectActivityService.log(id, currentUserId, "archive_project", null,
                 detail.isEmpty() ? null : detail);
 
-        // 4. 通知所有项目成员
-        projectNotificationHelper.notifyLifecycleEvent(id, currentUserId,
-                "项目归档通知", "项目「" + project.getName() + "」已被归档", "project_archived");
+        // 4. 通知所有项目成员 — 事务提交后触发
+        eventPublisher.publishEvent(new ProjectNotificationEvent.LifecycleEvent(id, currentUserId,
+                "项目归档通知", "项目「" + project.getName() + "」已被归档", "project_archived"));
     }
 
     /**
@@ -526,9 +529,9 @@ public class ProjectService {
         // 2. 记录活动日志
         projectActivityService.log(id, currentUserId, "restore_project", null, null);
 
-        // 3. 通知所有项目成员
-        projectNotificationHelper.notifyLifecycleEvent(id, currentUserId,
-                "项目恢复通知", "项目「" + project.getName() + "」已从归档状态恢复", "project_restored");
+        // 3. 通知所有项目成员 — 事务提交后触发
+        eventPublisher.publishEvent(new ProjectNotificationEvent.LifecycleEvent(id, currentUserId,
+                "项目恢复通知", "项目「" + project.getName() + "」已从归档状态恢复", "project_restored"));
     }
 
     /**
@@ -728,9 +731,9 @@ public class ProjectService {
         projectActivityService.log(projectId, currentUserId, "add_member", dto.getUserId(),
                 Map.of("role_ids", newRoleIds, "role_names", roleNamesStr));
 
-        // 通知被添加的用户
-        projectNotificationHelper.notifyMemberAdded(dto.getUserId(), currentUserId, projectId,
-                project.getName(), roleNamesStr);
+        // 通知被添加的用户 — 事务提交后触发
+        eventPublisher.publishEvent(new ProjectNotificationEvent.MemberAdded(dto.getUserId(), currentUserId, projectId,
+                project.getName(), roleNamesStr));
     }
 
     /**
@@ -839,10 +842,10 @@ public class ProjectService {
                 Map.of("old_role_ids", oldRoleIds, "old_role_names", String.join(", ", oldRoleNames),
                        "new_role_ids", distinctRoleIds, "new_role_names", String.join(", ", newRoleNames)));
 
-        // 通知角色变更的用户
+        // 通知角色变更的用户 — 事务提交后触发
         if (!toRemove.isEmpty() || !toAdd.isEmpty()) {
-            projectNotificationHelper.notifyRoleChanged(userId, currentUserId, projectId,
-                    project.getName(), String.join(", ", newRoleNames));
+            eventPublisher.publishEvent(new ProjectNotificationEvent.RoleChanged(userId, currentUserId, projectId,
+                    project.getName(), String.join(", ", newRoleNames)));
         }
     }
 
@@ -949,8 +952,8 @@ public class ProjectService {
                 : null;
         projectActivityService.log(projectId, operatorId, "remove_member", userId, detailMap);
 
-        // 通知被移除的用户
-        projectNotificationHelper.notifyMemberRemoved(userId, operatorId, projectId, project.getName());
+        // 通知被移除的用户 — 事务提交后触发
+        eventPublisher.publishEvent(new ProjectNotificationEvent.MemberRemoved(userId, operatorId, projectId, project.getName()));
 
         return affectedCount;
     }
@@ -1177,9 +1180,9 @@ public class ProjectService {
             redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + memberId);
         }
 
-        // 3. 通知所有成员（强制通知，不受偏好控制——不可逆操作）
-        projectNotificationHelper.notifyProjectDeleted(projectId, memberUserIds, currentUserId,
-                project.getName(), project.getKey());
+        // 3. 通知所有成员（强制通知，不受偏好控制——不可逆操作）— 事务提交后触发
+        eventPublisher.publishEvent(new ProjectNotificationEvent.ProjectDeleted(projectId, memberUserIds, currentUserId,
+                project.getName(), project.getKey()));
 
         // 4. 清理 MinIO 中的附件文件（必须在 DB 删除之前，因为 CASCADE 会删除 issue_attachment 记录）
         cleanupProjectAttachments(projectId);

@@ -29,8 +29,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.trackflow.common.event.SprintNotificationEvent;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -50,8 +53,8 @@ public class SprintService {
     private final IssueActivityMapper activityMapper;
     private final ProjectService projectService;
     private final ProjectActivityService projectActivityService;
-    private final SprintNotificationHelper notificationHelper;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 查询项目的 Sprint 列表（带工单统计 + 状态推导）。
@@ -394,8 +397,8 @@ public class SprintService {
         detail.put("sprint_name", sprint.getName());
         projectActivityService.log(sprint.getProjectId(), currentUserId, "activate_sprint", null, detail);
 
-        // 通知项目成员 Sprint 已激活
-        notificationHelper.notifySprintActivated(sprint, currentUserId);
+        // 通知项目成员 Sprint 已激活 — 事务提交后触发
+        eventPublisher.publishEvent(new SprintNotificationEvent.Activated(sprint, currentUserId));
 
         return sprint;
     }
@@ -484,14 +487,14 @@ public class SprintService {
         }
         projectActivityService.log(sprint.getProjectId(), completeUserId, "complete_sprint", null, completeDetail);
 
-        // 通知项目成员 Sprint 已完成（已完成工单数 = 总工单 - 未关闭工单）
+        // 通知项目成员 Sprint 已完成（已完成工单数 = 总工单 - 未关闭工单）— 事务提交后触发
         long totalIssuesInSprint = issueMapper.selectCount(
                 new LambdaQueryWrapper<Issue>()
                         .eq(Issue::getSprintId, id)
                         .isNull(Issue::getDeletedAt)
         );
         int completedIssues = (int) (totalIssuesInSprint - openIssues.size());
-        notificationHelper.notifySprintCompleted(sprint, Math.max(completedIssues, 0), completeUserId);
+        eventPublisher.publishEvent(new SprintNotificationEvent.Completed(sprint, Math.max(completedIssues, 0), completeUserId));
 
         return sprint;
     }

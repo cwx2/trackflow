@@ -28,9 +28,12 @@ import com.trackflow.workflow.service.TransitionActionEngine;
 import com.trackflow.workflow.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.trackflow.common.event.IssueNotificationEvent;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -62,12 +65,12 @@ public class IssueService {
     private final PermissionService permissionService;
     private final TransitionActionEngine transitionActionEngine;
     private final WorkflowService workflowService;
-    private final IssueNotificationHelper notificationHelper;
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldService customFieldService;
     private final SysUserMapper sysUserMapper;
     private final AttachmentConfig attachmentConfig;
     private final AncestorRefreshService ancestorRefreshService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 创建 Issue
@@ -154,8 +157,8 @@ public class IssueService {
         // 记录活动
         recordActivity(issue.getId(), currentUserId, "created", null, null, null);
 
-        // 通知被分配人（若创建时指定了 assignee）
-        notificationHelper.notifyCreated(issue, currentUserId);
+        // 通知被分配人（若创建时指定了 assignee）— 事务提交后触发
+        eventPublisher.publishEvent(new IssueNotificationEvent.Created(issue, currentUserId));
 
         // 如果指定了父工单，刷新祖先链的派生属性
         if (issue.getParentId() != null && issue.getParentId() != 0) {
@@ -529,9 +532,9 @@ public class IssueService {
             recordActivity(id, currentUserId, "assigned", "assignee", oldAssigneeName, newAssigneeName);
             Long oldAssigneeId = issue.getAssigneeId();
             issue.setAssigneeId(normalizedAssigneeId);
-            // 通知新负责人（仅当 assignee 实际变更且不为空时）
+            // 通知新负责人（仅当 assignee 实际变更且不为空时）— 事务提交后触发
             if (normalizedAssigneeId != null && !normalizedAssigneeId.equals(oldAssigneeId)) {
-                notificationHelper.notifyAssigned(issue, normalizedAssigneeId, currentUserId);
+                eventPublisher.publishEvent(new IssueNotificationEvent.Assigned(issue, normalizedAssigneeId, currentUserId));
             }
         }
         if (dto.getSprintId() != null) {
@@ -1069,8 +1072,8 @@ public class IssueService {
                 oldStatus != null ? oldStatus.getName() : String.valueOf(oldStatusId),
                 newStatus.getName());
 
-        // 通知报告人+负责人状态已变更
-        notificationHelper.notifyStatusChanged(issue, oldStatusId, newStatusId, currentUserId);
+        // 通知报告人+负责人状态已变更 — 事务提交后触发
+        eventPublisher.publishEvent(new IssueNotificationEvent.StatusChanged(issue, oldStatusId, newStatusId, currentUserId));
 
         // 如果带了评论，同时添加评论
         if (comment != null && !comment.isBlank()) {
@@ -1117,9 +1120,9 @@ public class IssueService {
         issue.setAssigneeId(normalizedAssigneeId);
         issueMapper.updateById(issue);
 
-        // 通知被分配人（仅当实际分配给某人时）
+        // 通知被分配人（仅当实际分配给某人时）— 事务提交后触发
         if (normalizedAssigneeId != null) {
-            notificationHelper.notifyAssigned(issue, normalizedAssigneeId, currentUserId);
+            eventPublisher.publishEvent(new IssueNotificationEvent.Assigned(issue, normalizedAssigneeId, currentUserId));
         }
     }
 
@@ -1152,11 +1155,11 @@ public class IssueService {
 
         recordActivity(issueId, currentUserId, "commented", null, null, null);
 
-        // 通知报告人+负责人+之前评论者
-        notificationHelper.notifyCommented(issue, currentUserId);
+        // 通知报告人+负责人+之前评论者 — 事务提交后触发
+        eventPublisher.publishEvent(new IssueNotificationEvent.Commented(issue, currentUserId));
 
-        // 解析评论中的 @mention 并通知被提及的用户
-        notificationHelper.notifyMentioned(issue, content, currentUserId);
+        // 解析评论中的 @mention 并通知被提及的用户 — 事务提交后触发
+        eventPublisher.publishEvent(new IssueNotificationEvent.Mentioned(issue, content, currentUserId));
 
         return comment;
     }
