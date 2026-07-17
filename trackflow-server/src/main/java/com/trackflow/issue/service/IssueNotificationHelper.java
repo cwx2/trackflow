@@ -1,7 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
@@ -53,7 +53,7 @@ public class IssueNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(assigneeId, "onIssueAssigned")) {
+            if (!preferenceService.isEnabled(assigneeId, NotificationEventType.ISSUE_ASSIGNED)) {
                 return;
             }
             String operatorName = getUserDisplayName(operatorId);
@@ -86,7 +86,7 @@ public class IssueNotificationHelper {
                     commenterName, issue.getIssueKey(), issue.getTitle());
 
             for (Long recipientId : recipients) {
-                if (!isPreferenceEnabled(recipientId, "onIssueCommented")) {
+                if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_COMMENTED)) {
                     continue;
                 }
                 notificationService.notify(recipientId, commenterId, title, content,
@@ -101,7 +101,10 @@ public class IssueNotificationHelper {
     }
 
     /**
-     * 状态变更通知：通知报告人 + 负责人（去重，排除当前用户）
+     * 状态变更通知：通知报告人 + 负责人（去重，排除当前用户）。
+     * <p>
+     * 当新状态属于"已关闭"类别（isClosed=true）时，使用 ISSUE_RESOLVED 偏好检查；
+     * 否则使用 ISSUE_STATUS_CHANGED 偏好检查。
      */
     @Async("notificationExecutor")
     public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) {
@@ -117,15 +120,20 @@ public class IssueNotificationHelper {
             String content = String.format("%s 将工单 [%s] %s 的状态从「%s」变更为「%s」",
                     operatorName, issue.getIssueKey(), issue.getTitle(), oldStatusName, newStatusName);
 
+            // 判断新状态是否为"已关闭"类别——若是则使用 ISSUE_RESOLVED 偏好
+            NotificationEventType eventType = isClosedStatus(newStatusId)
+                    ? NotificationEventType.ISSUE_RESOLVED
+                    : NotificationEventType.ISSUE_STATUS_CHANGED;
+
             for (Long recipientId : recipients) {
-                if (!isPreferenceEnabled(recipientId, "onIssueStatusChanged")) {
+                if (!preferenceService.isEnabled(recipientId, eventType)) {
                     continue;
                 }
                 notificationService.notify(recipientId, operatorId, title, content,
                         NotificationType.issue_status_changed, "issue", issue.getId());
             }
-            log.debug("[IssueNotification] 已发送状态变更通知: issue={}, recipients={}",
-                    issue.getIssueKey(), recipients.size());
+            log.debug("[IssueNotification] 已发送状态变更通知: issue={}, eventType={}, recipients={}",
+                    issue.getIssueKey(), eventType, recipients.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送状态变更通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -141,7 +149,7 @@ public class IssueNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(issue.getAssigneeId(), "onIssueAssigned")) {
+            if (!preferenceService.isEnabled(issue.getAssigneeId(), NotificationEventType.ISSUE_ASSIGNED)) {
                 return;
             }
             String creatorName = getUserDisplayName(creatorId);
@@ -206,7 +214,7 @@ public class IssueNotificationHelper {
                     continue;
                 }
                 // 检查 onMentioned 偏好
-                if (!isPreferenceEnabled(user.getId(), "onMentioned")) {
+                if (!preferenceService.isEnabled(user.getId(), NotificationEventType.MENTIONED)) {
                     continue;
                 }
                 notificationService.notify(user.getId(), commenterId, title, content,
@@ -285,22 +293,19 @@ public class IssueNotificationHelper {
     }
 
     /**
-     * 检查用户的通知偏好是否启用某类事件
+     * 判断指定状态是否属于"已关闭"类别。
+     * 用于区分 ISSUE_RESOLVED 和 ISSUE_STATUS_CHANGED 偏好检查。
      */
-    private boolean isPreferenceEnabled(Long userId, String preferenceField) {
+    private boolean isClosedStatus(Long statusId) {
+        if (statusId == null) {
+            return false;
+        }
         try {
-            NotificationPreference pref = preferenceService.getByUserId(userId);
-            return switch (preferenceField) {
-                case "onIssueAssigned" -> Boolean.TRUE.equals(pref.getOnIssueAssigned());
-                case "onIssueStatusChanged" -> Boolean.TRUE.equals(pref.getOnIssueStatusChanged());
-                case "onIssueCommented" -> Boolean.TRUE.equals(pref.getOnIssueCommented());
-                case "onMentioned" -> Boolean.TRUE.equals(pref.getOnMentioned());
-                case "onIssueResolved" -> Boolean.TRUE.equals(pref.getOnIssueResolved());
-                default -> true;
-            };
+            IssueStatus status = statusMapper.selectById(statusId);
+            return status != null && Boolean.TRUE.equals(status.getIsClosed());
         } catch (Exception e) {
-            log.warn("[IssueNotification] 查询通知偏好失败: userId={}, 默认发送", userId);
-            return true; // 查询失败时默认发送
+            log.warn("[IssueNotification] 查询状态 isClosed 失败: statusId={}", statusId);
+            return false;
         }
     }
 

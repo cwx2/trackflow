@@ -1,7 +1,7 @@
 package com.trackflow.project.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
@@ -50,7 +50,7 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(userId, "onProjectMemberChanged")) {
+            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
                 return;
             }
             String title = "你已被添加到项目";
@@ -74,7 +74,7 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(userId, "onProjectMemberChanged")) {
+            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
                 return;
             }
             String title = "你的项目角色已变更";
@@ -98,7 +98,7 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(userId, "onProjectMemberChanged")) {
+            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
                 return;
             }
             String title = "你已被移出项目";
@@ -124,7 +124,7 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(newLeadId, "onProjectMemberChanged")) {
+            if (!preferenceService.isEnabled(newLeadId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
                 return;
             }
             String title = "你已成为项目负责人";
@@ -148,7 +148,7 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!isPreferenceEnabled(oldLeadId, "onProjectMemberChanged")) {
+            if (!preferenceService.isEnabled(oldLeadId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
                 return;
             }
             String title = "项目负责人已变更";
@@ -177,7 +177,7 @@ public class ProjectNotificationHelper {
                 if (memberId.equals(operatorId)) {
                     continue;
                 }
-                if (!isPreferenceEnabled(memberId, "onProjectLifecycle")) {
+                if (!preferenceService.isEnabled(memberId, NotificationEventType.PROJECT_LIFECYCLE)) {
                     continue;
                 }
                 notificationService.notify(memberId, operatorId, title, content, type, "project", projectId);
@@ -219,23 +219,6 @@ public class ProjectNotificationHelper {
     }
 
     // ==================== 私有辅助方法 ====================
-
-    /**
-     * 检查用户的项目事件通知偏好是否启用
-     */
-    private boolean isPreferenceEnabled(Long userId, String preferenceField) {
-        try {
-            NotificationPreference pref = preferenceService.getByUserId(userId);
-            return switch (preferenceField) {
-                case "onProjectMemberChanged" -> Boolean.TRUE.equals(pref.getOnProjectMemberChanged());
-                case "onProjectLifecycle" -> Boolean.TRUE.equals(pref.getOnProjectLifecycle());
-                default -> true;
-            };
-        } catch (Exception e) {
-            log.warn("[ProjectNotification] 查询通知偏好失败: userId={}, 默认发送", userId);
-            return true; // 查询失败时默认发送
-        }
-    }
 
     /**
      * 获取项目所有成员的 userId 列表

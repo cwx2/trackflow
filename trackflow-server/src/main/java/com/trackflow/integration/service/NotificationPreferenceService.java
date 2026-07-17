@@ -4,19 +4,43 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.integration.dto.UpdateNotificationPreferenceDTO;
+import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.mapper.NotificationPreferenceMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationPreferenceService {
 
     private final NotificationPreferenceMapper preferenceMapper;
+
+    /**
+     * 检查用户对指定事件类型的通知偏好是否启用。
+     * <p>
+     * 统一入口——所有 NotificationHelper 通过此方法检查偏好，
+     * 取代各自维护的字符串 switch-case 方法。
+     *
+     * @param userId    用户 ID
+     * @param eventType 通知事件类型（编译期类型安全）
+     * @return true 表示用户允许接收此类通知
+     */
+    public boolean isEnabled(Long userId, NotificationEventType eventType) {
+        try {
+            NotificationPreference pref = getByUserId(userId);
+            return eventType.isEnabled(pref);
+        } catch (Exception e) {
+            log.warn("[NotificationPreference] 查询通知偏好失败: userId={}, eventType={}, 默认发送",
+                    userId, eventType, e);
+            return true; // 查询失败时默认发送，不阻断通知
+        }
+    }
 
     /**
      * 获取用户通知偏好，若不存在则创建默认记录

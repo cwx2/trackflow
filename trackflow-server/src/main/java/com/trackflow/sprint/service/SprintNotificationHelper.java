@@ -1,7 +1,7 @@
 package com.trackflow.sprint.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
@@ -65,7 +65,7 @@ public class SprintNotificationHelper {
                 if (userId.equals(operatorId)) {
                     continue;
                 }
-                if (!isPreferenceEnabled(userId, "onSprintStarted")) {
+                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_STARTED)) {
                     continue;
                 }
                 notificationService.notify(userId, operatorId, title, content,
@@ -107,7 +107,7 @@ public class SprintNotificationHelper {
                 if (userId.equals(operatorId)) {
                     continue;
                 }
-                if (!isPreferenceEnabled(userId, "onSprintCompleted")) {
+                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_COMPLETED)) {
                     continue;
                 }
                 notificationService.notify(userId, operatorId, title, content,
@@ -139,23 +139,6 @@ public class SprintNotificationHelper {
                 .map(ProjectMember::getUserId)
                 .distinct()
                 .toList();
-    }
-
-    /**
-     * 检查用户的通知偏好是否启用某类事件
-     */
-    private boolean isPreferenceEnabled(Long userId, String preferenceField) {
-        try {
-            NotificationPreference pref = preferenceService.getByUserId(userId);
-            return switch (preferenceField) {
-                case "onSprintStarted" -> Boolean.TRUE.equals(pref.getOnSprintStarted());
-                case "onSprintCompleted" -> Boolean.TRUE.equals(pref.getOnSprintCompleted());
-                default -> true;
-            };
-        } catch (Exception e) {
-            log.warn("[SprintNotification] 查询通知偏好失败: userId={}, 默认发送", userId);
-            return true;
-        }
     }
 
     /**
