@@ -13,6 +13,14 @@ public class CreateTimeEntryDTO {
     @NotNull(message = "工单ID不能为空")
     private Long issueId;
 
+    /**
+     * 工时归属人 ID（可选）。
+     * 若不传或传 null，默认归属当前登录用户。
+     * 若传入其他用户 ID，需要当前用户拥有 time:log_for_others 权限，
+     * 且目标用户必须是工单所属项目的成员。
+     */
+    private Long forUserId;
+
     @NotNull(message = "日期不能为空")
     @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}", message = "日期格式必须为 yyyy-MM-dd")
     private String workDate;
