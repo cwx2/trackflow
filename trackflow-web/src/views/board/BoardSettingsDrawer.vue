@@ -1,8 +1,8 @@
 <template>
   <a-drawer
     :visible="visible"
-    title="看板列设置"
-    :width="480"
+    title="看板设置"
+    :width="520"
     :mask-closable="true"
     :footer="true"
     @cancel="$emit('update:visible', false)"
@@ -14,93 +14,108 @@
       </div>
     </template>
 
-    <div class="settings-content">
-      <div class="settings-hint">
-        <p>配置看板中显示的状态列、排列顺序和 WIP 限制。拖拽列项可调整顺序。</p>
-      </div>
+    <a-tabs v-model:active-key="activeTab" class="settings-tabs">
+      <!-- 列设置 标签页 -->
+      <a-tab-pane key="columns" title="列设置">
+        <div class="settings-content">
+          <div class="settings-hint">
+            <p>配置看板中显示的状态列、排列顺序和 WIP 限制。拖拽列项可调整顺序。</p>
+          </div>
 
-      <!-- 快捷操作 -->
-      <div class="quick-actions">
-        <a-button size="mini" @click="selectAll">全选</a-button>
-        <a-button size="mini" @click="selectNone">全不选</a-button>
-        <a-button size="mini" @click="selectDefault">恢复默认</a-button>
-      </div>
+          <!-- 快捷操作 -->
+          <div class="quick-actions">
+            <a-button size="mini" @click="selectAll">全选</a-button>
+            <a-button size="mini" @click="selectNone">全不选</a-button>
+            <a-button size="mini" @click="selectDefault">恢复默认</a-button>
+          </div>
 
-      <!-- 可拖拽的列配置列表 -->
-      <div class="column-list">
-        <div class="column-list-header">
-          <span class="col-h-drag"></span>
-          <span class="col-h-visible">显示</span>
-          <span class="col-h-name">状态列</span>
-          <span class="col-h-wip">WIP 限制</span>
-        </div>
-        <div
-          ref="sortableContainer"
-          class="column-list-body"
-        >
-          <div
-            v-for="(col, index) in editableColumns"
-            :key="col.statusId"
-            class="column-item"
-            :class="{
-              'column-item--disabled': !col.visible,
-              'column-item--dragging': dragIndex === index,
-              'column-item--drop-above': dropIndex === index && dropPosition === 'above',
-              'column-item--drop-below': dropIndex === index && dropPosition === 'below'
-            }"
-            :draggable="true"
-            @dragstart="onItemDragStart($event, index)"
-            @dragover="onItemDragOver($event, index)"
-            @dragleave="onItemDragLeave"
-            @drop="onItemDrop($event, index)"
-            @dragend="onItemDragEnd"
-          >
-            <span class="col-drag-handle" title="拖拽排序">⠿</span>
-            <a-checkbox v-model="col.visible" class="col-visible-check" />
-            <div class="col-name-cell">
-              <span class="column-color" :style="{ backgroundColor: col.statusColor }"></span>
-              <span class="column-name">{{ localizeStatusName(col.statusName) }}</span>
-              <span class="column-category-badge">{{ categoryLabel(col.statusCategory) }}</span>
+          <!-- 可拖拽的列配置列表 -->
+          <div class="column-list">
+            <div class="column-list-header">
+              <span class="col-h-drag"></span>
+              <span class="col-h-visible">显示</span>
+              <span class="col-h-name">状态列</span>
+              <span class="col-h-wip">WIP 限制</span>
             </div>
-            <div class="col-wip-cell">
-              <a-input-number
-                v-model="col.wipMin"
-                placeholder="Min"
-                size="mini"
-                :min="0"
-                :max="999"
-                :style="{ width: '64px' }"
-                :disabled="!col.visible"
-                hide-button
-                allow-clear
-              />
-              <span class="wip-separator">–</span>
-              <a-input-number
-                v-model="col.wipMax"
-                placeholder="Max"
-                size="mini"
-                :min="0"
-                :max="999"
-                :style="{ width: '64px' }"
-                :disabled="!col.visible"
-                hide-button
-                allow-clear
-              />
+            <div
+              ref="sortableContainer"
+              class="column-list-body"
+            >
+              <div
+                v-for="(col, index) in editableColumns"
+                :key="col.statusId"
+                class="column-item"
+                :class="{
+                  'column-item--disabled': !col.visible,
+                  'column-item--dragging': dragIndex === index,
+                  'column-item--drop-above': dropIndex === index && dropPosition === 'above',
+                  'column-item--drop-below': dropIndex === index && dropPosition === 'below'
+                }"
+                :draggable="true"
+                @dragstart="onItemDragStart($event, index)"
+                @dragover="onItemDragOver($event, index)"
+                @dragleave="onItemDragLeave"
+                @drop="onItemDrop($event, index)"
+                @dragend="onItemDragEnd"
+              >
+                <span class="col-drag-handle" title="拖拽排序">⠿</span>
+                <a-checkbox v-model="col.visible" class="col-visible-check" />
+                <div class="col-name-cell">
+                  <span class="column-color" :style="{ backgroundColor: col.statusColor }"></span>
+                  <span class="column-name">{{ localizeStatusName(col.statusName) }}</span>
+                  <span class="column-category-badge">{{ categoryLabel(col.statusCategory) }}</span>
+                </div>
+                <div class="col-wip-cell">
+                  <a-input-number
+                    v-model="col.wipMin"
+                    placeholder="Min"
+                    size="mini"
+                    :min="0"
+                    :max="999"
+                    :style="{ width: '64px' }"
+                    :disabled="!col.visible"
+                    hide-button
+                    allow-clear
+                  />
+                  <span class="wip-separator">–</span>
+                  <a-input-number
+                    v-model="col.wipMax"
+                    placeholder="Max"
+                    size="mini"
+                    :min="0"
+                    :max="999"
+                    :style="{ width: '64px' }"
+                    :disabled="!col.visible"
+                    hide-button
+                    allow-clear
+                  />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- WIP 限制说明 -->
-      <div class="wip-help">
-        <div class="wip-help-title">WIP 限制说明</div>
-        <ul class="wip-help-list">
-          <li><span class="wip-indicator wip-indicator--over">3/2</span> 卡片数超过 Max WIP 时列标题显示红色警告</li>
-          <li><span class="wip-indicator wip-indicator--under">0/2</span> 卡片数低于 Min WIP 时列标题显示黄色提示</li>
-          <li>留空表示不设置限制</li>
-        </ul>
-      </div>
-    </div>
+          <!-- WIP 限制说明 -->
+          <div class="wip-help">
+            <div class="wip-help-title">WIP 限制说明</div>
+            <ul class="wip-help-list">
+              <li><span class="wip-indicator wip-indicator--over">3/2</span> 卡片数超过 Max WIP 时列标题显示红色警告</li>
+              <li><span class="wip-indicator wip-indicator--under">0/2</span> 卡片数低于 Min WIP 时列标题显示黄色提示</li>
+              <li>留空表示不设置限制</li>
+            </ul>
+          </div>
+        </div>
+      </a-tab-pane>
+
+      <!-- 卡片设置 标签页 -->
+      <a-tab-pane key="cards" title="卡片">
+        <CardSettingsPanel
+          :visible-fields="editableCardFields"
+          :color-scheme="editableColorScheme"
+          @update:visible-fields="editableCardFields = $event"
+          @update:color-scheme="editableColorScheme = $event"
+        />
+      </a-tab-pane>
+    </a-tabs>
   </a-drawer>
 </template>
 
@@ -110,6 +125,7 @@ import { Message } from '@arco-design/web-vue'
 import { boardApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
+import CardSettingsPanel from './CardSettingsPanel.vue'
 
 interface EditableColumn {
   statusId: string
@@ -137,19 +153,24 @@ const emit = defineEmits<{
 
 const saving = ref(false)
 const initializing = ref(false)
+const activeTab = ref('columns')
 
-// 可编辑的列配置（深拷贝）
+// 列设置状态
 const editableColumns = ref<EditableColumn[]>([])
+
+// 卡片设置状态
+const editableCardFields = ref<string[]>(['assignee', 'priority', 'type'])
+const editableColorScheme = ref('none')
 
 // 拖拽排序状态
 const dragIndex = ref<number | null>(null)
 const dropIndex = ref<number | null>(null)
 const dropPosition = ref<'above' | 'below' | null>(null)
 
-// 当 drawer 打开时，确保配置已初始化
+// 当 drawer 打开时加载配置
 watch(() => props.visible, async (newVisible) => {
   if (newVisible && props.projectId) {
-    // 如果已有配置，直接使用
+    // 加载列配置
     if (props.columns.length > 0) {
       editableColumns.value = props.columns.map(c => ({
         ...c,
@@ -157,7 +178,6 @@ watch(() => props.visible, async (newVisible) => {
         wipMax: c.wipMax ?? undefined
       }))
     } else {
-      // 没有配置：调用 init 接口显式初始化
       initializing.value = true
       try {
         const res = await boardApi.initializeColumns(props.projectId)
@@ -167,13 +187,25 @@ watch(() => props.visible, async (newVisible) => {
           wipMin: c.wipMin ?? undefined,
           wipMax: c.wipMax ?? undefined
         }))
-        // 通知父组件刷新列配置
         emit('saved')
       } catch (e: any) {
         Message.error(e.response?.data?.message || '初始化看板列配置失败')
       } finally {
         initializing.value = false
       }
+    }
+
+    // 加载卡片配置
+    try {
+      const res = await boardApi.getCardConfig(props.projectId)
+      if (res.data) {
+        editableCardFields.value = res.data.visibleFields || ['assignee', 'priority', 'type']
+        editableColorScheme.value = res.data.colorScheme || 'none'
+      }
+    } catch {
+      // 使用默认值
+      editableCardFields.value = ['assignee', 'priority', 'type']
+      editableColorScheme.value = 'none'
     }
   }
 })
@@ -268,7 +300,6 @@ function onItemDrop(event: DragEvent, targetIndex: number) {
   const items = [...editableColumns.value]
   const [draggedItem] = items.splice(dragIndex.value, 1)
 
-  // 计算新插入位置
   let insertAt = targetIndex
   if (dragIndex.value < targetIndex) {
     insertAt = dropPosition.value === 'above' ? targetIndex - 1 : targetIndex
@@ -295,23 +326,24 @@ function resetDragState() {
 // ===== 保存 =====
 
 async function handleSave() {
-  // 至少选择一个列
-  const visibleCount = editableColumns.value.filter(c => c.visible).length
-  if (visibleCount === 0) {
-    Message.warning('至少需要显示一个状态列')
-    return
-  }
-
-  // 验证 WIP 限制合理性
-  for (const col of editableColumns.value) {
-    if (col.wipMin != null && col.wipMax != null && col.wipMin > col.wipMax) {
-      Message.warning(`「${localizeStatusName(col.statusName)}」的 Min WIP 不能大于 Max WIP`)
-      return
-    }
-  }
-
   saving.value = true
   try {
+    // 保存列配置
+    const visibleCount = editableColumns.value.filter(c => c.visible).length
+    if (visibleCount === 0) {
+      Message.warning('至少需要显示一个状态列')
+      saving.value = false
+      return
+    }
+
+    for (const col of editableColumns.value) {
+      if (col.wipMin != null && col.wipMax != null && col.wipMin > col.wipMax) {
+        Message.warning(`「${localizeStatusName(col.statusName)}」的 Min WIP 不能大于 Max WIP`)
+        saving.value = false
+        return
+      }
+    }
+
     const columns: BoardColumnItem[] = editableColumns.value.map((c, idx) => ({
       statusId: Number(c.statusId),
       visible: c.visible,
@@ -320,8 +352,23 @@ async function handleSave() {
       wipMin: c.wipMin != null ? c.wipMin : null,
       wipMax: c.wipMax != null ? c.wipMax : null
     }))
-    await boardApi.saveColumns(props.projectId, columns)
-    Message.success('看板列配置已保存')
+
+    // 保存卡片配置
+    if (editableCardFields.value.length === 0) {
+      Message.warning('卡片至少需要显示一个字段')
+      saving.value = false
+      return
+    }
+
+    await Promise.all([
+      boardApi.saveColumns(props.projectId, columns),
+      boardApi.saveCardConfig(props.projectId, {
+        visibleFields: editableCardFields.value,
+        colorScheme: editableColorScheme.value
+      })
+    ])
+
+    Message.success('看板设置已保存')
     emit('update:visible', false)
     emit('saved')
   } catch (e: any) {
@@ -333,6 +380,14 @@ async function handleSave() {
 </script>
 
 <style scoped>
+.settings-tabs {
+  height: 100%;
+}
+
+.settings-tabs :deep(.arco-tabs-content) {
+  padding-top: 16px;
+}
+
 .settings-content {
   display: flex;
   flex-direction: column;

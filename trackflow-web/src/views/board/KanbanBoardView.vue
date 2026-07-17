@@ -443,6 +443,7 @@
                       class="kanban-card"
                       :class="[
                         `kanban-card--${cardSize}`,
+                        getCardColorClass(issue),
                         {
                           'kanban-card--dragging': draggingIssue?.id === issue.id,
                           'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
@@ -462,6 +463,7 @@
                       <div class="card-header">
                         <span class="card-key">{{ issue.issueKey }}</span>
                         <span
+                          v-if="isCardFieldVisible('priority')"
                           class="card-priority"
                           :class="issue.priority?.toLowerCase()"
                           :title="issue.priority"
@@ -478,9 +480,15 @@
                           class="card-cf-tag"
                         >{{ val }}</span>
                       </div>
+                      <!-- Card metadata fields based on card config -->
+                      <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
+                        <span v-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
+                        <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
+                      </div>
                       <div class="card-footer">
-                        <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
-                        <div class="card-assignee-avatar" v-if="issue.assigneeName" :title="issue.assigneeName">
+                        <span v-if="isCardFieldVisible('type')" class="card-type">{{ typeLabel(issue.issueType) }}</span>
+                        <span v-else class="card-type-spacer"></span>
+                        <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
                           <img
                             v-if="issue.assigneeAvatarUrl"
                             :src="issue.assigneeAvatarUrl"
@@ -695,6 +703,12 @@ function getCardColorClass(issue: IssueVO): string {
     return `kanban-card--color-type-${t}`
   }
   return ''
+}
+
+/** 根据 sprintId 获取 Sprint 名称 */
+function getSprintName(sprintId: string): string {
+  const sprint = sprints.value.find(s => s.id === sprintId)
+  return sprint?.name || ''
 }
 
 const selectedProject = computed({
@@ -2777,6 +2791,61 @@ onUnmounted(() => {
 .slide-up-leave-to {
   transform: translateY(100%);
   opacity: 0;
+}
+
+/* ===== Card color scheme border ===== */
+.kanban-card--color-priority-critical {
+  border-left: 3px solid #ef4444;
+}
+.kanban-card--color-priority-high {
+  border-left: 3px solid #f59e0b;
+}
+.kanban-card--color-priority-normal {
+  border-left: 3px solid #3b82f6;
+}
+.kanban-card--color-priority-low {
+  border-left: 3px solid #9ca3af;
+}
+
+.kanban-card--color-type-bug {
+  border-left: 3px solid #ef4444;
+}
+.kanban-card--color-type-task {
+  border-left: 3px solid #3b82f6;
+}
+.kanban-card--color-type-feature {
+  border-left: 3px solid #10b981;
+}
+.kanban-card--color-type-story {
+  border-left: 3px solid #8b5cf6;
+}
+.kanban-card--color-type-epic {
+  border-left: 3px solid #f59e0b;
+}
+
+/* ===== Card meta fields row ===== */
+.card-meta-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.card-meta-tag {
+  font-size: 10px;
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.card-meta-tag:empty {
+  display: none;
+}
+
+.card-type-spacer {
+  flex: 1;
 }
 
 /* ===== 截断提示横幅 ===== */

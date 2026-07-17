@@ -1,7 +1,10 @@
 package com.trackflow.board.controller;
 
+import com.trackflow.board.dto.UpdateBoardCardConfigDTO;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
+import com.trackflow.board.service.BoardCardConfigService;
 import com.trackflow.board.service.BoardColumnService;
+import com.trackflow.board.vo.BoardCardConfigVO;
 import com.trackflow.board.vo.BoardColumnVO;
 import com.trackflow.common.model.R;
 import jakarta.validation.Valid;
@@ -17,6 +20,7 @@ import java.util.List;
 public class BoardController {
 
     private final BoardColumnService boardColumnService;
+    private final BoardCardConfigService boardCardConfigService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
@@ -54,6 +58,33 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardColumnsDTO dto) {
         boardColumnService.saveColumns(projectId, dto);
+        return R.ok();
+    }
+
+    // ========== 卡片配置 ==========
+
+    /**
+     * 获取项目看板卡片配置（显示字段 + 颜色方案）。
+     * 如果项目尚未配置，返回默认值。
+     * 需要项目查看权限。
+     */
+    @GetMapping("/card-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<BoardCardConfigVO> getCardConfig(@RequestParam("projectId") Long projectId) {
+        BoardCardConfigVO config = boardCardConfigService.getCardConfig(projectId);
+        return R.ok(config);
+    }
+
+    /**
+     * 保存项目看板卡片配置。
+     * 需要项目编辑权限（仅管理员/负责人可修改）。
+     */
+    @PutMapping("/card-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:edit')")
+    public R<Void> saveCardConfig(
+            @RequestParam("projectId") Long projectId,
+            @Valid @RequestBody UpdateBoardCardConfigDTO dto) {
+        boardCardConfigService.saveCardConfig(projectId, dto);
         return R.ok();
     }
 }

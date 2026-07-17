@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, BoardColumnVO, BoardColumnItem } from './types'
+import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO } from './types'
 
 /**
  * 看板模块 API
@@ -28,6 +28,20 @@ export const boardApi = {
     return request.put<any, R<void>>('/boards/columns', {
       columns
     }, {
+      params: { projectId }
+    })
+  },
+
+  /** 获取项目看板卡片配置（显示字段 + 颜色方案） */
+  getCardConfig(projectId: string) {
+    return request.get<any, R<BoardCardConfigVO>>('/boards/card-config', {
+      params: { projectId }
+    })
+  },
+
+  /** 保存项目看板卡片配置 */
+  saveCardConfig(projectId: string, data: { visibleFields: string[]; colorScheme: string }) {
+    return request.put<any, R<void>>('/boards/card-config', data, {
       params: { projectId }
     })
   }

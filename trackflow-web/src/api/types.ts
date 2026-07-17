@@ -573,6 +573,15 @@ export interface BoardColumnItem {
   wipMax?: number | null
 }
 
+// ========== 看板卡片配置 ==========
+
+export interface BoardCardConfigVO {
+  /** 卡片上显示的字段列表 */
+  visibleFields: string[]
+  /** 颜色方案：none / priority / type / project */
+  colorScheme: string
+}
+
 // ========== Sprint 完成预览 ==========
 export interface CompletionPreviewVO {
   openIssues: CompletionPreviewIssue[]
