@@ -1,7 +1,10 @@
 package com.trackflow.workflow.strategy;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.workflow.dto.ActionConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Component;
 public class PreviousAssigneeStrategy implements AssignmentStrategy {
 
     private final IssueActivityMapper issueActivityMapper;
+    private final ProjectMemberMapper projectMemberMapper;
 
     @Override
     public String getKey() {
@@ -31,12 +35,28 @@ public class PreviousAssigneeStrategy implements AssignmentStrategy {
             return null;
         }
 
+        Long previousAssigneeId;
         try {
-            return Long.parseLong(oldValue);
+            previousAssigneeId = Long.parseLong(oldValue);
         } catch (NumberFormatException e) {
             log.warn("[PreviousAssigneeStrategy] 无法解析 old_value='{}' 为用户 ID, issue={}",
                     oldValue, issue.getId());
             return null;
         }
+
+        // 验证前一任负责人是否仍为活跃项目成员
+        boolean isMember = projectMemberMapper.exists(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .eq(ProjectMember::getUserId, previousAssigneeId)
+        );
+
+        if (!isMember) {
+            log.warn("[PreviousAssigneeStrategy] 前一任负责人 {} 不再是项目 {} 的活跃成员，跳过分配",
+                    previousAssigneeId, projectId);
+            return null;
+        }
+
+        return previousAssigneeId;
     }
 }
