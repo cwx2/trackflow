@@ -46,8 +46,9 @@ export const issueApi = {
   },
 
   /** 更新单个自定义字段值（内联编辑） */
-  updateCustomFieldValue(issueId: string, fieldId: string, value: string) {
-    return request.put<any, R<IssueDetailVO>>(`/issues/${issueId}/custom-fields/${fieldId}`, { value })
+  updateCustomFieldValue(issueId: string, fieldId: string, value: string | string[]) {
+    const body = Array.isArray(value) ? { values: value } : { value }
+    return request.put<any, R<IssueDetailVO>>(`/issues/${issueId}/custom-fields/${fieldId}`, body)
   },
 
   /** 删除 Issue */

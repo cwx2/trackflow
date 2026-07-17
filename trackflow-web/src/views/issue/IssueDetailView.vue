@@ -431,26 +431,36 @@ const sidebarFields = computed<SidebarField[]>(() => {
 function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
   if (!customFieldDefs.value.length) return []
 
-  // 已存储的值 map: fieldId → value
-  const valuesMap = new Map<string, { value: string; displayValue: string }>()
+  // 已存储的值 map: fieldId → { value, values, displayValue, displayValues, isMulti }
+  const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean }>()
   if (i.customFieldDetails) {
     for (const v of i.customFieldDetails) {
-      valuesMap.set(v.customFieldId, { value: v.value || '', displayValue: v.displayValue || v.value || '' })
+      valuesMap.set(v.customFieldId, {
+        value: v.value || '',
+        values: v.values,
+        displayValue: v.displayValue || v.value || '',
+        displayValues: v.displayValues,
+        isMulti: v.isMulti
+      })
     }
   }
 
   return customFieldDefs.value.map(cf => {
     const stored = valuesMap.get(cf.id)
+    const isMulti = cf.isMulti || stored?.isMulti
     const rawValue = stored?.value || ''
-    const displayValue = stored?.displayValue || (cf.isRequired ? '设置值' : '-')
+    const rawValues = stored?.values || []
+    const displayValue = isMulti && stored?.displayValues?.length
+      ? stored.displayValues.join(', ')
+      : stored?.displayValue || (cf.isRequired ? '设置值' : '-')
 
     // 根据字段类型确定 editType
-    let editType: 'select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | undefined
+    let editType: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | undefined
     let options: { value: string; label: string }[] | undefined
 
     switch (cf.fieldFormat) {
       case 'list':
-        editType = 'select'
+        editType = isMulti ? 'multi-select' : 'select'
         // Only show active (non-archived) options in the selector;
         // if current value references an archived option, it's still displayed via displayValue
         options = (cf.options || [])
@@ -490,6 +500,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       value: displayValue,
       editType: editType as any,
       rawValue,
+      rawValues: isMulti ? rawValues : undefined,
       readonly: !canEdit,
       options
     }
@@ -716,7 +727,7 @@ function parseDurationText(text: string): number | null {
   return total > 0 ? total : null
 }
 
-async function onEditField(key: string, newValue: string) {
+async function onEditField(key: string, newValue: string | string[]) {
   // 自定义字段编辑（key 格式: cf_{fieldId}）
   if (key.startsWith('cf_')) {
     const fieldId = key.substring(3)

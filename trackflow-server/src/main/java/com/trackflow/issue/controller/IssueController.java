@@ -136,7 +136,8 @@ public class IssueController {
     }
 
     /**
-     * 更新单个自定义字段值（内联编辑）
+     * 更新单个自定义字段值（内联编辑）。
+     * 单值字段传 { "value": "xxx" }，多值字段传 { "values": ["id1","id2"] }。
      */
     @PutMapping("/{id}/custom-fields/{fieldId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
@@ -145,7 +146,14 @@ public class IssueController {
             @PathVariable Long fieldId,
             @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
         Issue issue = issueService.getById(id);
-        customFieldService.saveSingleValue(id, fieldId, dto.getValue(), issue.getIssueType(), issue.getProjectId());
+        // 多值字段使用 values 数组（逗号连接后传入 service 层解析为多行）
+        String effectiveValue;
+        if (dto.getValues() != null && !dto.getValues().isEmpty()) {
+            effectiveValue = String.join(",", dto.getValues());
+        } else {
+            effectiveValue = dto.getValue();
+        }
+        customFieldService.saveSingleValue(id, fieldId, effectiveValue, issue.getIssueType(), issue.getProjectId());
         return R.ok(issueService.getDetail(id));
     }
 

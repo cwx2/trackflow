@@ -29,7 +29,7 @@
           <template #content>
             <div class="dropdown-panel">
               <!-- 搜索框 -->
-              <div class="dropdown-search" v-if="field.editType === 'select' || field.editType === 'user-select'">
+              <div class="dropdown-search" v-if="field.editType === 'select' || field.editType === 'user-select' || field.editType === 'multi-select'">
                 <input
                   ref="searchInputRef"
                   v-model="searchText"
@@ -38,7 +38,7 @@
                   @keyup.escape="cancelEdit"
                 />
               </div>
-              <!-- 选项列表 -->
+              <!-- 单选列表 -->
               <div class="dropdown-list" v-if="field.editType === 'select' || field.editType === 'user-select'">
                 <div
                   v-for="opt in getFilteredOptions(field)"
@@ -51,6 +51,23 @@
                   <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
                 </div>
                 <div v-if="getFilteredOptions(field).length === 0" class="dropdown-empty">无匹配项</div>
+              </div>
+              <!-- 多选列表 -->
+              <div class="dropdown-list" v-if="field.editType === 'multi-select'">
+                <div
+                  v-for="opt in getFilteredOptions(field)"
+                  :key="opt.value"
+                  class="dropdown-item multi-item"
+                  :class="{ selected: multiSelectedValues.includes(opt.value) }"
+                  @click="toggleMultiOption(opt.value)"
+                >
+                  <span class="item-check">{{ multiSelectedValues.includes(opt.value) ? '✓' : '' }}</span>
+                  <span class="item-text">{{ opt.label }}</span>
+                </div>
+                <div v-if="getFilteredOptions(field).length === 0" class="dropdown-empty">无匹配项</div>
+                <div class="dropdown-actions">
+                  <button class="input-btn multi-confirm" @click="commitMultiSelect(field)">确定</button>
+                </div>
               </div>
               <!-- 日期输入 -->
               <div class="dropdown-input" v-if="field.editType === 'date'">
@@ -111,9 +128,11 @@ export interface SidebarField {
   badgeColor?: string
   class?: string
   readonly?: boolean
-  editType?: 'select' | 'user-select' | 'date' | 'datetime' | 'number' | 'issue-search' | 'text'
+  editType?: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'issue-search' | 'text'
   options?: FieldOption[]
   rawValue?: string
+  /** 多值字段：当前选中的 ID 列表 */
+  rawValues?: string[]
 }
 
 export interface StatusInfo {
@@ -132,18 +151,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   transition: [target: StatusInfo]
-  'edit-field': [fieldKey: string, newValue: string]
+  'edit-field': [fieldKey: string, newValue: string | string[]]
 }>()
 
 const editingKey = ref<string | null>(null)
 const searchText = ref('')
 const inputValue = ref('')
 const searchInputRef = ref<HTMLInputElement[]>()
+/** 多值字段编辑状态：当前选中的值列表 */
+const multiSelectedValues = ref<string[]>([])
 
 function openEdit(field: SidebarField) {
   editingKey.value = field.key
   searchText.value = ''
   inputValue.value = field.rawValue || ''
+  // 初始化多值状态
+  if (field.editType === 'multi-select') {
+    multiSelectedValues.value = [...(field.rawValues || [])]
+  }
   nextTick(() => {
     if (searchInputRef.value?.[0]) searchInputRef.value[0].focus()
   })
@@ -174,6 +199,20 @@ function selectOption(field: SidebarField, value: string) {
 
 function commitInput(field: SidebarField) {
   emit('edit-field', field.key, inputValue.value)
+  editingKey.value = null
+}
+
+function toggleMultiOption(value: string) {
+  const idx = multiSelectedValues.value.indexOf(value)
+  if (idx >= 0) {
+    multiSelectedValues.value.splice(idx, 1)
+  } else {
+    multiSelectedValues.value.push(value)
+  }
+}
+
+function commitMultiSelect(field: SidebarField) {
+  emit('edit-field', field.key, [...multiSelectedValues.value])
   editingKey.value = null
 }
 </script>
@@ -390,5 +429,39 @@ function commitInput(field: SidebarField) {
 }
 .input-btn:hover {
   background: var(--tf-accent-hover);
+}
+
+/* ===== Multi-select ===== */
+.multi-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.multi-item .item-check {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1px solid var(--tf-border);
+  font-size: 10px;
+  color: var(--tf-accent);
+  flex-shrink: 0;
+}
+.multi-item.selected .item-check {
+  background: var(--tf-accent);
+  border-color: var(--tf-accent);
+  color: #fff;
+}
+.dropdown-actions {
+  padding: 6px 8px;
+  border-top: 1px solid var(--tf-border);
+  display: flex;
+  justify-content: flex-end;
+}
+.multi-confirm {
+  padding: 4px 10px;
+  font-size: 11px;
 }
 </style>

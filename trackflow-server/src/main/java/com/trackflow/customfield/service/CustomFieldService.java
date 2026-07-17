@@ -420,43 +420,141 @@ public class CustomFieldService {
             CustomFieldDefinition field = fieldMap.get(entry.getKey());
             if (field == null) continue;
 
-            CustomFieldValue existing = valueMapper.selectOne(
-                    new LambdaQueryWrapper<CustomFieldValue>()
-                            .eq(CustomFieldValue::getIssueId, issueId)
-                            .eq(CustomFieldValue::getCustomFieldId, entry.getKey()));
+            boolean isMulti = Boolean.TRUE.equals(field.getIsMulti());
+            String rawInput = entry.getValue();
 
-            String oldValue = existing != null ? existing.getValue() : null;
-            String newValue = entry.getValue();
+            if (isMulti) {
+                // 多值字段：多行存储（先删再插）
+                List<String> oldValues = getMultiValues(issueId, entry.getKey());
+                List<String> newValues = parseMultiValueInput(rawInput);
 
-            if (existing != null) {
-                existing.setValue(newValue);
-                existing.setUpdatedAt(LocalDateTime.now());
-                valueMapper.updateById(existing);
+                // 删除旧值
+                valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getIssueId, issueId)
+                        .eq(CustomFieldValue::getCustomFieldId, entry.getKey()));
+
+                // 插入新值（每个选项一行）
+                LocalDateTime now = LocalDateTime.now();
+                for (String singleValue : newValues) {
+                    CustomFieldValue cfv = new CustomFieldValue();
+                    cfv.setIssueId(issueId);
+                    cfv.setCustomFieldId(entry.getKey());
+                    cfv.setValue(singleValue);
+                    cfv.setCreatedAt(now);
+                    cfv.setUpdatedAt(now);
+                    valueMapper.insert(cfv);
+                }
+
+                // 记录活动日志
+                if (!oldValues.equals(newValues)) {
+                    String displayOld = resolveMultiDisplayValue(field, oldValues);
+                    String displayNew = resolveMultiDisplayValue(field, newValues);
+                    recordCustomFieldActivity(issueId, field.getName(), displayOld, displayNew);
+                }
             } else {
-                CustomFieldValue cfv = new CustomFieldValue();
-                cfv.setIssueId(issueId);
-                cfv.setCustomFieldId(entry.getKey());
-                cfv.setValue(newValue);
-                cfv.setCreatedAt(LocalDateTime.now());
-                cfv.setUpdatedAt(LocalDateTime.now());
-                valueMapper.insert(cfv);
-            }
+                // 单值字段：原有逻辑
+                CustomFieldValue existing = valueMapper.selectOne(
+                        new LambdaQueryWrapper<CustomFieldValue>()
+                                .eq(CustomFieldValue::getIssueId, issueId)
+                                .eq(CustomFieldValue::getCustomFieldId, entry.getKey()));
 
-            // 记录活动日志（值有变化时）
-            String effectiveNew = (newValue == null || newValue.isBlank()) ? null : newValue;
-            if (!Objects.equals(oldValue, effectiveNew)) {
-                String displayOldValue = resolveDisplayValue(field, oldValue);
-                String displayNewValue = resolveDisplayValue(field, effectiveNew);
-                recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
+                String oldValue = existing != null ? existing.getValue() : null;
+                String newValue = rawInput;
+
+                if (existing != null) {
+                    existing.setValue(newValue);
+                    existing.setUpdatedAt(LocalDateTime.now());
+                    valueMapper.updateById(existing);
+                } else {
+                    CustomFieldValue cfv = new CustomFieldValue();
+                    cfv.setIssueId(issueId);
+                    cfv.setCustomFieldId(entry.getKey());
+                    cfv.setValue(newValue);
+                    cfv.setCreatedAt(LocalDateTime.now());
+                    cfv.setUpdatedAt(LocalDateTime.now());
+                    valueMapper.insert(cfv);
+                }
+
+                // 记录活动日志（值有变化时）
+                String effectiveNew = (newValue == null || newValue.isBlank()) ? null : newValue;
+                if (!Objects.equals(oldValue, effectiveNew)) {
+                    String displayOldValue = resolveDisplayValue(field, oldValue);
+                    String displayNewValue = resolveDisplayValue(field, effectiveNew);
+                    recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
+                }
             }
         }
     }
 
+    /**
+     * 获取单值字段值 Map。多值字段以逗号分隔聚合返回（兼容旧逻辑）。
+     */
     public Map<Long, String> getValues(Long issueId) {
+        List<CustomFieldValue> allValues = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getIssueId, issueId));
+
+        // 按 fieldId 分组，多值字段合并为逗号分隔
+        Map<Long, List<String>> grouped = allValues.stream()
+                .collect(Collectors.groupingBy(
+                        CustomFieldValue::getCustomFieldId,
+                        Collectors.mapping(CustomFieldValue::getValue, Collectors.toList())));
+
+        Map<Long, String> result = new HashMap<>();
+        for (Map.Entry<Long, List<String>> entry : grouped.entrySet()) {
+            List<String> values = entry.getValue();
+            if (values.size() == 1) {
+                result.put(entry.getKey(), values.get(0));
+            } else {
+                result.put(entry.getKey(), String.join(",", values));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取多值字段的所有值（每个值独立一行存储）
+     */
+    private List<String> getMultiValues(Long issueId, Long customFieldId) {
         return valueMapper.selectList(new LambdaQueryWrapper<CustomFieldValue>()
-                .eq(CustomFieldValue::getIssueId, issueId))
+                .eq(CustomFieldValue::getIssueId, issueId)
+                .eq(CustomFieldValue::getCustomFieldId, customFieldId)
+                .orderByAsc(CustomFieldValue::getId))
                 .stream()
-                .collect(Collectors.toMap(CustomFieldValue::getCustomFieldId, CustomFieldValue::getValue));
+                .map(CustomFieldValue::getValue)
+                .toList();
+    }
+
+    /**
+     * 解析多值输入：支持逗号分隔字符串（兼容旧格式）和空值
+     */
+    private List<String> parseMultiValueInput(String rawInput) {
+        if (rawInput == null || rawInput.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(rawInput.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * 解析多值展示值（用于活动日志）
+     */
+    private String resolveMultiDisplayValue(CustomFieldDefinition field, List<String> values) {
+        if (values == null || values.isEmpty()) return null;
+        List<String> labels = new ArrayList<>();
+        for (String idStr : values) {
+            try {
+                Long optionId = Long.parseLong(idStr);
+                CustomFieldOption option = optionMapper.selectById(optionId);
+                labels.add(option != null ? option.getValue() : idStr);
+            } catch (NumberFormatException e) {
+                labels.add(idStr);
+            }
+        }
+        return String.join(", ", labels);
     }
 
     /**
@@ -556,22 +654,50 @@ public class CustomFieldService {
             }
         }
 
-        // 5. 组装结果
-        Map<Long, Map<String, String>> result = new HashMap<>();
+        // 5. 按 (issueId, fieldId) 分组，处理多值字段
+        // 结构: Map<issueId, Map<fieldId, List<rawValue>>>
+        Map<Long, Map<Long, List<String>>> groupedByIssueAndField = new HashMap<>();
         for (CustomFieldValue cfv : allValues) {
-            CustomFieldDefinition fieldDef = fieldDefMap.get(cfv.getCustomFieldId());
-            if (fieldDef == null) continue;
+            groupedByIssueAndField
+                    .computeIfAbsent(cfv.getIssueId(), k -> new HashMap<>())
+                    .computeIfAbsent(cfv.getCustomFieldId(), k -> new ArrayList<>())
+                    .add(cfv.getValue());
+        }
 
-            String displayValue = resolveDisplayValue(cfv.getValue(), fieldDef, optionTextMap, userNameMap);
-            result.computeIfAbsent(cfv.getIssueId(), k -> new HashMap<>())
-                    .put("cf_" + cfv.getCustomFieldId(), displayValue);
+        Map<Long, Map<String, String>> result = new HashMap<>();
+        for (Map.Entry<Long, Map<Long, List<String>>> issueEntry : groupedByIssueAndField.entrySet()) {
+            Long issueId = issueEntry.getKey();
+            Map<String, String> fieldDisplayMap = new HashMap<>();
+
+            for (Map.Entry<Long, List<String>> fieldEntry : issueEntry.getValue().entrySet()) {
+                Long fieldId = fieldEntry.getKey();
+                List<String> values = fieldEntry.getValue();
+                CustomFieldDefinition fieldDef = fieldDefMap.get(fieldId);
+                if (fieldDef == null) continue;
+
+                if (Boolean.TRUE.equals(fieldDef.getIsMulti())) {
+                    // 多值字段：每行一个值，聚合展示
+                    List<String> labels = new ArrayList<>();
+                    for (String v : values) {
+                        String display = resolveDisplayValue(v, fieldDef, optionTextMap, userNameMap);
+                        if (display != null) labels.add(display);
+                    }
+                    fieldDisplayMap.put("cf_" + fieldId, String.join(", ", labels));
+                } else {
+                    // 单值字段：取第一条
+                    String displayValue = resolveDisplayValue(values.get(0), fieldDef, optionTextMap, userNameMap);
+                    fieldDisplayMap.put("cf_" + fieldId, displayValue);
+                }
+            }
+
+            result.put(issueId, fieldDisplayMap);
         }
 
         return result;
     }
 
     /**
-     * 将原始值转换为用户可读的展示值
+     * 将原始值转换为用户可读的展示值（批量版，每个 rawValue 为单个值）
      */
     private String resolveDisplayValue(String rawValue, CustomFieldDefinition fieldDef,
                                        Map<Long, String> optionTextMap, Map<Long, String> userNameMap) {
@@ -580,28 +706,12 @@ public class CustomFieldService {
         }
         return switch (fieldDef.getFieldFormat()) {
             case "list" -> {
-                if (Boolean.TRUE.equals(fieldDef.getIsMulti())) {
-                    // 多值模式：逗号分隔的 ID 列表
-                    String[] ids = rawValue.split(",");
-                    List<String> labels = new ArrayList<>();
-                    for (String idStr : ids) {
-                        String trimmed = idStr.trim();
-                        if (trimmed.isEmpty()) continue;
-                        try {
-                            Long optionId = Long.parseLong(trimmed);
-                            labels.add(optionTextMap.getOrDefault(optionId, trimmed));
-                        } catch (NumberFormatException e) {
-                            labels.add(trimmed);
-                        }
-                    }
-                    yield String.join(", ", labels);
-                } else {
-                    try {
-                        Long optionId = Long.parseLong(rawValue);
-                        yield optionTextMap.getOrDefault(optionId, rawValue);
-                    } catch (NumberFormatException e) {
-                        yield rawValue;
-                    }
+                // 每行存一个选项 ID（多值字段在外层已按行分组处理）
+                try {
+                    Long optionId = Long.parseLong(rawValue);
+                    yield optionTextMap.getOrDefault(optionId, rawValue);
+                } catch (NumberFormatException e) {
+                    yield rawValue;
                 }
             }
             case "user" -> {
@@ -621,60 +731,73 @@ public class CustomFieldService {
      * 获取 Issue 的自定义字段值（含字段名称、类型信息，用于前端展示）
      */
     public List<CustomFieldValueVO> getValuesForDisplay(Long issueId, Long projectId, String issueType) {
-        Map<Long, String> rawValues = getValues(issueId);
-        if (rawValues.isEmpty()) return List.of();
+        // 加载所有 custom_field_value 记录
+        List<CustomFieldValue> allValues = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getIssueId, issueId));
+        if (allValues.isEmpty()) return List.of();
 
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
         Map<Long, CustomFieldDefinition> fieldMap = applicableFields.stream()
                 .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
 
+        // 按 fieldId 分组
+        Map<Long, List<String>> grouped = allValues.stream()
+                .collect(Collectors.groupingBy(
+                        CustomFieldValue::getCustomFieldId,
+                        Collectors.mapping(CustomFieldValue::getValue, Collectors.toList())));
+
         List<CustomFieldValueVO> result = new ArrayList<>();
-        for (Map.Entry<Long, String> entry : rawValues.entrySet()) {
+        for (Map.Entry<Long, List<String>> entry : grouped.entrySet()) {
             CustomFieldDefinition field = fieldMap.get(entry.getKey());
             if (field == null) continue; // 字段已删除或不再适用
+
+            boolean isMulti = Boolean.TRUE.equals(field.getIsMulti());
+            List<String> values = entry.getValue();
 
             CustomFieldValueVO vo = new CustomFieldValueVO();
             vo.setCustomFieldId(String.valueOf(entry.getKey()));
             vo.setFieldName(field.getName());
             vo.setFieldFormat(field.getFieldFormat());
-            vo.setValue(entry.getValue());
-            vo.setDisplayValue(resolveDisplayValue(field, entry.getValue()));
+            vo.setIsMulti(isMulti);
+
+            if (isMulti) {
+                // 多值字段：返回 values 数组 + displayValues 数组
+                vo.setValues(values);
+                List<String> displayValues = new ArrayList<>();
+                for (String v : values) {
+                    displayValues.add(resolveDisplayValue(field, v));
+                }
+                vo.setDisplayValues(displayValues);
+                // 兼容：value/displayValue 用逗号分隔聚合
+                vo.setValue(String.join(",", values));
+                vo.setDisplayValue(String.join(", ", displayValues));
+            } else {
+                // 单值字段：原有逻辑
+                String singleValue = values.get(0);
+                vo.setValue(singleValue);
+                vo.setDisplayValue(resolveDisplayValue(field, singleValue));
+            }
             result.add(vo);
         }
         return result;
     }
 
     /**
-     * 将存储值转为前端可读展示值
+     * 将存储值转为前端可读展示值。
+     * 每个 rawValue 为单个值（多值字段的聚合展示在调用方处理）。
      */
     private String resolveDisplayValue(CustomFieldDefinition field, String rawValue) {
         if (rawValue == null || rawValue.isBlank()) return "";
         switch (field.getFieldFormat()) {
             case "list" -> {
-                if (Boolean.TRUE.equals(field.getIsMulti())) {
-                    // 多值模式：逗号分隔的 ID 列表
-                    String[] ids = rawValue.split(",");
-                    List<String> labels = new ArrayList<>();
-                    for (String idStr : ids) {
-                        String trimmed = idStr.trim();
-                        if (trimmed.isEmpty()) continue;
-                        try {
-                            Long optionId = Long.parseLong(trimmed);
-                            CustomFieldOption option = optionMapper.selectById(optionId);
-                            labels.add(option != null ? option.getValue() : trimmed);
-                        } catch (NumberFormatException e) {
-                            labels.add(trimmed);
-                        }
-                    }
-                    return String.join(", ", labels);
-                } else {
-                    try {
-                        Long optionId = Long.parseLong(rawValue);
-                        CustomFieldOption option = optionMapper.selectById(optionId);
-                        return option != null ? option.getValue() : rawValue;
-                    } catch (NumberFormatException e) {
-                        return rawValue;
-                    }
+                // 单个选项 ID → 选项文本
+                try {
+                    Long optionId = Long.parseLong(rawValue);
+                    CustomFieldOption option = optionMapper.selectById(optionId);
+                    return option != null ? option.getValue() : rawValue;
+                } catch (NumberFormatException e) {
+                    return rawValue;
                 }
             }
             case "user" -> {
@@ -692,7 +815,8 @@ public class CustomFieldService {
     }
 
     /**
-     * 保存单个自定义字段值（用于侧边栏内联编辑）
+     * 保存单个自定义字段值（用于侧边栏内联编辑）。
+     * 支持单值字段（value 为单个值）和多值字段（value 为逗号分隔的选项 ID）。
      */
     @Transactional
     public void saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId) {
@@ -711,42 +835,78 @@ public class CustomFieldService {
                             .collect(Collectors.joining("; ")));
         }
 
-        // 获取旧值用于活动记录
-        CustomFieldValue existing = valueMapper.selectOne(
-                new LambdaQueryWrapper<CustomFieldValue>()
-                        .eq(CustomFieldValue::getIssueId, issueId)
-                        .eq(CustomFieldValue::getCustomFieldId, customFieldId));
-        String oldValue = existing != null ? existing.getValue() : null;
+        boolean isMulti = Boolean.TRUE.equals(field.getIsMulti());
 
-        // Upsert
-        if (value == null || value.isBlank()) {
-            // 清空值：如果非必填，允许删除
-            if (Boolean.TRUE.equals(field.getIsRequired())) {
+        if (isMulti) {
+            // 多值字段：多行存储
+            List<String> oldValues = getMultiValues(issueId, customFieldId);
+            List<String> newValues = parseMultiValueInput(value);
+
+            // 清空值检查
+            if (newValues.isEmpty() && Boolean.TRUE.equals(field.getIsRequired())) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, field.getName() + " 为必填项，不能清空");
             }
-            if (existing != null) {
-                valueMapper.deleteById(existing.getId());
-            }
-        } else if (existing != null) {
-            existing.setValue(value);
-            existing.setUpdatedAt(LocalDateTime.now());
-            valueMapper.updateById(existing);
-        } else {
-            CustomFieldValue cfv = new CustomFieldValue();
-            cfv.setIssueId(issueId);
-            cfv.setCustomFieldId(customFieldId);
-            cfv.setValue(value);
-            cfv.setCreatedAt(LocalDateTime.now());
-            cfv.setUpdatedAt(LocalDateTime.now());
-            valueMapper.insert(cfv);
-        }
 
-        // 记录活动日志（值有变化时）
-        String newValue = (value == null || value.isBlank()) ? null : value;
-        if (!Objects.equals(oldValue, newValue)) {
-            String displayOldValue = resolveDisplayValue(field, oldValue);
-            String displayNewValue = resolveDisplayValue(field, newValue);
-            recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
+            // 删除旧值
+            valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
+                    .eq(CustomFieldValue::getIssueId, issueId)
+                    .eq(CustomFieldValue::getCustomFieldId, customFieldId));
+
+            // 插入新值（每个选项一行）
+            LocalDateTime now = LocalDateTime.now();
+            for (String singleValue : newValues) {
+                CustomFieldValue cfv = new CustomFieldValue();
+                cfv.setIssueId(issueId);
+                cfv.setCustomFieldId(customFieldId);
+                cfv.setValue(singleValue);
+                cfv.setCreatedAt(now);
+                cfv.setUpdatedAt(now);
+                valueMapper.insert(cfv);
+            }
+
+            // 记录活动日志
+            if (!oldValues.equals(newValues)) {
+                String displayOld = resolveMultiDisplayValue(field, oldValues);
+                String displayNew = resolveMultiDisplayValue(field, newValues);
+                recordCustomFieldActivity(issueId, field.getName(), displayOld, displayNew);
+            }
+        } else {
+            // 单值字段：原有逻辑
+            CustomFieldValue existing = valueMapper.selectOne(
+                    new LambdaQueryWrapper<CustomFieldValue>()
+                            .eq(CustomFieldValue::getIssueId, issueId)
+                            .eq(CustomFieldValue::getCustomFieldId, customFieldId));
+            String oldValue = existing != null ? existing.getValue() : null;
+
+            if (value == null || value.isBlank()) {
+                // 清空值：如果非必填，允许删除
+                if (Boolean.TRUE.equals(field.getIsRequired())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, field.getName() + " 为必填项，不能清空");
+                }
+                if (existing != null) {
+                    valueMapper.deleteById(existing.getId());
+                }
+            } else if (existing != null) {
+                existing.setValue(value);
+                existing.setUpdatedAt(LocalDateTime.now());
+                valueMapper.updateById(existing);
+            } else {
+                CustomFieldValue cfv = new CustomFieldValue();
+                cfv.setIssueId(issueId);
+                cfv.setCustomFieldId(customFieldId);
+                cfv.setValue(value);
+                cfv.setCreatedAt(LocalDateTime.now());
+                cfv.setUpdatedAt(LocalDateTime.now());
+                valueMapper.insert(cfv);
+            }
+
+            // 记录活动日志（值有变化时）
+            String newValue = (value == null || value.isBlank()) ? null : value;
+            if (!Objects.equals(oldValue, newValue)) {
+                String displayOldValue = resolveDisplayValue(field, oldValue);
+                String displayNewValue = resolveDisplayValue(field, newValue);
+                recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
+            }
         }
     }
 

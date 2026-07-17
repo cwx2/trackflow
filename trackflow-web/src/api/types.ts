@@ -458,8 +458,16 @@ export interface CustomFieldValueVO {
   customFieldId: string
   fieldName: string
   fieldFormat: string
+  /** 单值字段的原始值，多值字段为逗号分隔（兼容） */
   value?: string
+  /** 多值字段的原始值数组 */
+  values?: string[]
+  /** 单值字段的展示值 */
   displayValue?: string
+  /** 多值字段的展示值数组 */
+  displayValues?: string[]
+  /** 是否为多值字段 */
+  isMulti?: boolean
 }
 
 export interface AvailableColumnVO {
