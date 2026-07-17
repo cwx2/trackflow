@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO } from './types'
+import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO } from './types'
 
 /**
  * 看板模块 API
@@ -42,6 +42,48 @@ export const boardApi = {
   /** 保存项目看板卡片配置 */
   saveCardConfig(projectId: string, data: { visibleFields: string[]; colorScheme: string }) {
     return request.put<any, R<void>>('/boards/card-config', data, {
+      params: { projectId }
+    })
+  },
+
+  /** 获取项目看板泳道配置 */
+  getSwimlaneConfig(projectId: string) {
+    return request.get<any, R<BoardSwimlaneConfigVO>>('/boards/swimlane-config', {
+      params: { projectId }
+    })
+  },
+
+  /** 保存项目看板泳道配置 */
+  saveSwimlaneConfig(projectId: string, data: { groupByField: string }) {
+    return request.put<any, R<void>>('/boards/swimlane-config', data, {
+      params: { projectId }
+    })
+  },
+
+  /** 获取项目看板列合并配置 */
+  getColumnMerges(projectId: string) {
+    return request.get<any, R<BoardColumnMergeGroupVO[]>>('/boards/column-merges', {
+      params: { projectId }
+    })
+  },
+
+  /** 保存项目看板列合并配置（全量替换） */
+  saveColumnMerges(projectId: string, data: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }) {
+    return request.put<any, R<void>>('/boards/column-merges', data, {
+      params: { projectId }
+    })
+  },
+
+  /** 获取项目看板基本设置（名称 + 访问权限） */
+  getGeneralConfig(projectId: string) {
+    return request.get<any, R<BoardGeneralConfigVO>>('/boards/general-config', {
+      params: { projectId }
+    })
+  },
+
+  /** 保存项目看板基本设置 */
+  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[] }) {
+    return request.put<any, R<void>>('/boards/general-config', data, {
       params: { projectId }
     })
   }

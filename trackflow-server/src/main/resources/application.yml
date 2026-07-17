@@ -74,3 +74,5 @@ trackflow:
       - lnk
   notification:
     aggregation-minutes: 5  # 通知聚合时间窗口（分钟）
+  encryption:
+    key: dHJhY2tmbG93LWFlczI1Ni1lbmNyeXB0LWtleTAxMjM=  # Base64 encoded 32-byte key (override in production!)

@@ -1,11 +1,20 @@
 package com.trackflow.board.controller;
 
 import com.trackflow.board.dto.UpdateBoardCardConfigDTO;
+import com.trackflow.board.dto.UpdateBoardColumnMergeDTO;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
+import com.trackflow.board.dto.UpdateBoardGeneralConfigDTO;
+import com.trackflow.board.dto.UpdateBoardSwimlaneConfigDTO;
 import com.trackflow.board.service.BoardCardConfigService;
+import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
+import com.trackflow.board.service.BoardGeneralConfigService;
+import com.trackflow.board.service.BoardSwimlaneConfigService;
 import com.trackflow.board.vo.BoardCardConfigVO;
+import com.trackflow.board.vo.BoardColumnMergeGroupVO;
 import com.trackflow.board.vo.BoardColumnVO;
+import com.trackflow.board.vo.BoardGeneralConfigVO;
+import com.trackflow.board.vo.BoardSwimlaneConfigVO;
 import com.trackflow.common.model.R;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +30,9 @@ public class BoardController {
 
     private final BoardColumnService boardColumnService;
     private final BoardCardConfigService boardCardConfigService;
+    private final BoardSwimlaneConfigService boardSwimlaneConfigService;
+    private final BoardColumnMergeService boardColumnMergeService;
+    private final BoardGeneralConfigService boardGeneralConfigService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
@@ -85,6 +97,87 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardCardConfigDTO dto) {
         boardCardConfigService.saveCardConfig(projectId, dto);
+        return R.ok();
+    }
+
+    // ========== 泳道配置 ==========
+
+    /**
+     * 获取项目看板泳道配置（分组字段）。
+     * 如果项目尚未配置，返回默认值（无分组）。
+     * 需要项目查看权限。
+     */
+    @GetMapping("/swimlane-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<BoardSwimlaneConfigVO> getSwimlaneConfig(@RequestParam("projectId") Long projectId) {
+        BoardSwimlaneConfigVO config = boardSwimlaneConfigService.getSwimlaneConfig(projectId);
+        return R.ok(config);
+    }
+
+    /**
+     * 保存项目看板泳道配置。
+     * 需要项目编辑权限（仅管理员/负责人可修改）。
+     */
+    @PutMapping("/swimlane-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:edit')")
+    public R<Void> saveSwimlaneConfig(
+            @RequestParam("projectId") Long projectId,
+            @Valid @RequestBody UpdateBoardSwimlaneConfigDTO dto) {
+        boardSwimlaneConfigService.saveSwimlaneConfig(projectId, dto);
+        return R.ok();
+    }
+
+    // ========== 列合并配置 ==========
+
+    /**
+     * 获取项目看板列合并配置。
+     * 返回合并组列表（无合并则返回空列表）。
+     * 需要项目查看权限。
+     */
+    @GetMapping("/column-merges")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<List<BoardColumnMergeGroupVO>> getColumnMerges(@RequestParam("projectId") Long projectId) {
+        List<BoardColumnMergeGroupVO> merges = boardColumnMergeService.getColumnMerges(projectId);
+        return R.ok(merges);
+    }
+
+    /**
+     * 保存项目看板列合并配置（全量替换）。
+     * 需要项目编辑权限。
+     */
+    @PutMapping("/column-merges")
+    @PreAuthorize("@perm.check(#projectId, 'project:edit')")
+    public R<Void> saveColumnMerges(
+            @RequestParam("projectId") Long projectId,
+            @Valid @RequestBody UpdateBoardColumnMergeDTO dto) {
+        boardColumnMergeService.saveColumnMerges(projectId, dto);
+        return R.ok();
+    }
+
+    // ========== 基本设置 ==========
+
+    /**
+     * 获取项目看板基本设置（名称 + 访问权限）。
+     * 如果项目尚未配置，返回默认值。
+     * 需要项目查看权限。
+     */
+    @GetMapping("/general-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<BoardGeneralConfigVO> getGeneralConfig(@RequestParam("projectId") Long projectId) {
+        BoardGeneralConfigVO config = boardGeneralConfigService.getGeneralConfig(projectId);
+        return R.ok(config);
+    }
+
+    /**
+     * 保存项目看板基本设置。
+     * 需要项目编辑权限（仅管理员/负责人可修改）。
+     */
+    @PutMapping("/general-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:edit')")
+    public R<Void> saveGeneralConfig(
+            @RequestParam("projectId") Long projectId,
+            @Valid @RequestBody UpdateBoardGeneralConfigDTO dto) {
+        boardGeneralConfigService.saveGeneralConfig(projectId, dto);
         return R.ok();
     }
 }

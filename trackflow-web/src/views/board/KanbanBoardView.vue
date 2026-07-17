@@ -51,6 +51,7 @@
           <a-option value="priority">按优先级</a-option>
           <a-option value="type">按类型</a-option>
           <a-option value="sprint">按迭代</a-option>
+          <a-option value="tag">按标签</a-option>
         </a-select>
       </div>
       <div class="toolbar-right">
@@ -597,6 +598,7 @@
     <BoardSettingsDrawer
       v-model:visible="showSettings"
       :project-id="selectedProject || ''"
+      :project-name="currentProjectName"
       :columns="allColumnConfigs"
       @saved="onSettingsSaved"
     />
@@ -632,7 +634,7 @@ import { ref, computed, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi } from '@/api'
-import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO } from '@/api/types'
+import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
@@ -722,6 +724,11 @@ const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
 const { projects, projectLoadState, loadProjects } = useProjectList()
+const currentProjectName = computed(() => {
+  if (!selectedProject.value) return ''
+  const p = projects.value.find(proj => proj.id === selectedProject.value)
+  return p?.name || ''
+})
 
 // ===== Backlog 面板 =====
 const BACKLOG_VISIBLE_KEY = 'tf_kanban_backlog_visible'
@@ -766,7 +773,7 @@ function onBacklogDragEnd() {
 }
 
 // ===== Swimlane 分组 =====
-type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint'
+type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag'
 const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
 const COLLAPSED_SWIMLANES_KEY = 'tf_kanban_collapsed_swimlanes'
 
@@ -782,6 +789,12 @@ function onSwimlaneChange() {
   // 切换分组维度时清除折叠状态
   collapsedSwimlanes.value.clear()
   localStorage.removeItem(COLLAPSED_SWIMLANES_KEY)
+  // 持久化到服务端（静默保存，不阻塞 UI）
+  if (selectedProject.value) {
+    boardApi.saveSwimlaneConfig(selectedProject.value, {
+      groupByField: swimlaneGroupBy.value
+    }).catch(() => { /* 静默失败 */ })
+  }
 }
 
 function toggleSwimlane(key: string) {
@@ -817,6 +830,8 @@ const swimlanes = computed<SwimlaneRow[]>(() => {
       return groupByType(allIssues)
     case 'sprint':
       return groupBySprint(allIssues)
+    case 'tag':
+      return groupByTag(allIssues)
     default:
       return []
   }
@@ -932,6 +947,39 @@ function groupBySprint(allIssues: IssueVO[]): SwimlaneRow[] {
   return rows
 }
 
+function groupByTag(allIssues: IssueVO[]): SwimlaneRow[] {
+  const groups = new Map<string, IssueVO[]>()
+  const noTag: IssueVO[] = []
+
+  for (const issue of allIssues) {
+    const tags = (issue as any).tags as Array<{ id: string; name: string }> | undefined
+    if (!tags || tags.length === 0) {
+      noTag.push(issue)
+    } else {
+      // 工单放入第一个标签对应的泳道（与 YouTrack 行为一致）
+      const firstTag = tags[0]
+      const key = firstTag.id || firstTag.name
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(issue)
+    }
+  }
+
+  const rows: SwimlaneRow[] = [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([tagKey, issues]) => {
+      const sampleIssue = issues[0]
+      const tags = (sampleIssue as any).tags as Array<{ id: string; name: string }> | undefined
+      const tagName = tags?.find(t => (t.id || t.name) === tagKey)?.name || tagKey
+      return { key: tagKey, label: `🏷️ ${tagName}`, issues }
+    })
+
+  if (noTag.length > 0) {
+    rows.push({ key: '__no_tag__', label: '无标签', issues: noTag })
+  }
+
+  return rows
+}
+
 /** 获取某泳道中某状态列的工单 */
 function getSwimlaneColumnIssues(laneKey: string, statusId: string): IssueVO[] {
   const lane = swimlanes.value.find(l => l.key === laneKey)
@@ -1026,6 +1074,9 @@ const cardConfig = ref<BoardCardConfigVO>({
   colorScheme: 'none'
 })
 
+// 看板列合并配置
+const columnMerges = ref<BoardColumnMergeGroupVO[]>([])
+
 // 根据列配置过滤出可见的状态
 const visibleStatuses = computed(() => {
   if (allColumnConfigs.value.length === 0) {
@@ -1044,6 +1095,100 @@ const visibleStatuses = computed(() => {
       sortOrder: c.sortOrder
     } as IssueStatusVO))
 })
+
+/**
+ * 有效的看板列（考虑列合并）。
+ * 合并后的列：id 取 merge_group_id，name 取 merge_title，包含多个 statusIds。
+ * 未合并的列：保持原样，statusIds 只有自身一个。
+ */
+interface EffectiveColumn {
+  /** 列标识：合并列用 mergeGroupId，普通列用 statusId */
+  id: string
+  name: string
+  color: string
+  category: string
+  /** 该列包含的所有状态 ID */
+  statusIds: string[]
+  /** 是否为合并列 */
+  isMerged: boolean
+  sortOrder: number
+}
+
+const effectiveColumns = computed<EffectiveColumn[]>(() => {
+  const cols = visibleStatuses.value
+  const merges = columnMerges.value
+
+  if (merges.length === 0) {
+    // 无合并：每个状态独占一列
+    return cols.map(s => ({
+      id: s.id,
+      name: localizeStatusName(s.name),
+      color: s.color || '',
+      category: s.category || '',
+      statusIds: [s.id],
+      isMerged: false,
+      sortOrder: s.sortOrder
+    }))
+  }
+
+  // 构建 statusId → mergeGroup 的映射
+  const statusToGroup = new Map<string, BoardColumnMergeGroupVO>()
+  for (const group of merges) {
+    for (const sid of group.statusIds) {
+      statusToGroup.set(sid, group)
+    }
+  }
+
+  // 遍历可见状态，生成有效列（合并组只出现一次）
+  const result: EffectiveColumn[] = []
+  const processedGroups = new Set<string>()
+
+  for (const s of cols) {
+    const group = statusToGroup.get(s.id)
+    if (group) {
+      if (!processedGroups.has(group.mergeGroupId)) {
+        processedGroups.add(group.mergeGroupId)
+        // 取合并组中第一个可见状态的颜色
+        const firstVisibleStatus = cols.find(c => group.statusIds.includes(c.id))
+        result.push({
+          id: group.mergeGroupId,
+          name: group.mergeTitle,
+          color: firstVisibleStatus?.color || '',
+          category: firstVisibleStatus?.category || '',
+          statusIds: group.statusIds.filter(sid => cols.some(c => c.id === sid)),
+          isMerged: true,
+          sortOrder: s.sortOrder
+        })
+      }
+      // 跳过合并组中的后续状态
+    } else {
+      // 普通列
+      result.push({
+        id: s.id,
+        name: localizeStatusName(s.name),
+        color: s.color || '',
+        category: s.category || '',
+        statusIds: [s.id],
+        isMerged: false,
+        sortOrder: s.sortOrder
+      })
+    }
+  }
+
+  return result
+})
+
+/** 获取有效列（考虑合并）中某列的所有工单 */
+function getEffectiveColumnIssues(column: EffectiveColumn): IssueVO[] {
+  return issues.value.filter(i => column.statusIds.includes(i.statusId))
+}
+
+/** 获取 Swimlane 中某有效列的工单 */
+function getSwimlaneEffectiveColumnIssues(laneKey: string, column: EffectiveColumn): IssueVO[] {
+  const lane = swimlanes.value.find(l => l.key === laneKey)
+  if (!lane) return []
+  return lane.issues.filter(i => column.statusIds.includes(i.statusId))
+}
 
 // Comma-separated visible board status IDs for Backlog exclusion
 const boardStatusIdsForBacklog = computed(() => {
@@ -1663,6 +1808,36 @@ async function loadCardConfig() {
   }
 }
 
+async function loadSwimlaneConfig() {
+  if (!selectedProject.value) {
+    swimlaneGroupBy.value = 'none'
+    return
+  }
+  try {
+    const res = await boardApi.getSwimlaneConfig(selectedProject.value)
+    if (res.data && res.data.groupByField) {
+      swimlaneGroupBy.value = res.data.groupByField as SwimlaneGroupBy
+      // 同步到 localStorage（兼容本地快速切换）
+      localStorage.setItem(SWIMLANE_STORAGE_KEY, res.data.groupByField)
+    }
+  } catch {
+    // 保持当前 localStorage 中的值
+  }
+}
+
+async function loadColumnMerges() {
+  if (!selectedProject.value) {
+    columnMerges.value = []
+    return
+  }
+  try {
+    const res = await boardApi.getColumnMerges(selectedProject.value)
+    columnMerges.value = res.data || []
+  } catch {
+    columnMerges.value = []
+  }
+}
+
 async function loadTransitionableStatuses() {
   if (!selectedProject.value || !canChangeStatus.value) {
     transitionableSourceStatuses.value = new Set()
@@ -1679,6 +1854,8 @@ async function loadTransitionableStatuses() {
 function onSettingsSaved() {
   loadBoardColumns()
   loadCardConfig()
+  loadSwimlaneConfig()
+  loadColumnMerges()
 }
 
 async function loadSprints() {
@@ -1698,7 +1875,7 @@ async function loadBoard() {
   loadCollapsedColumnsState()
   loading.value = true
   try {
-    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadTransitionableStatuses()])
+    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses()])
     await loadIssues()
   } catch {
     issues.value = []

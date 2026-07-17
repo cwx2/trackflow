@@ -85,7 +85,111 @@
         </div>
         <div v-if="form.emailEnabled" class="email-hint">
           <span class="hint-icon">⚠️</span>
-          <span>邮件通知需要配置 SMTP 服务器连接。当前尚未对接邮件服务，启用后仅记录日志。</span>
+          <span>邮件通知需要配置 SMTP 服务器连接。请在下方填写邮件服务器信息。</span>
+        </div>
+      </div>
+
+      <!-- SMTP 邮件服务器配置（仅在邮件通知启用时显示） -->
+      <div v-if="form.emailEnabled" class="settings-section">
+        <div class="section-header">
+          <h2 class="section-title">⚙️ 邮件服务器配置</h2>
+          <p class="section-desc">配置 SMTP 服务器连接参数。密码加密存储，不会明文展示。</p>
+        </div>
+
+        <div class="email-config-form">
+          <div class="email-form-row">
+            <div class="email-form-field">
+              <label class="field-label">连接协议</label>
+              <a-select
+                v-model="emailConfig.protocol"
+                :style="{ width: '100%' }"
+                placeholder="选择协议"
+              >
+                <a-option value="plain">SMTP（明文）</a-option>
+                <a-option value="ssl">SMTPS（SSL）</a-option>
+                <a-option value="starttls">STARTTLS</a-option>
+              </a-select>
+              <p class="field-hint">推荐使用 STARTTLS 或 SSL 加密连接</p>
+            </div>
+          </div>
+
+          <div class="email-form-row email-form-row--two-col">
+            <div class="email-form-field">
+              <label class="field-label">服务器地址 <span class="required">*</span></label>
+              <a-input
+                v-model="emailConfig.host"
+                placeholder="如 smtp.company.com"
+              />
+            </div>
+            <div class="email-form-field email-form-field--port">
+              <label class="field-label">端口 <span class="required">*</span></label>
+              <a-input-number
+                v-model="emailConfig.port"
+                :min="1"
+                :max="65535"
+                :style="{ width: '100%' }"
+                placeholder="587"
+              />
+            </div>
+          </div>
+
+          <div class="email-form-row email-form-row--two-col">
+            <div class="email-form-field">
+              <label class="field-label">用户名</label>
+              <a-input
+                v-model="emailConfig.username"
+                placeholder="SMTP 认证用户名"
+              />
+            </div>
+            <div class="email-form-field">
+              <label class="field-label">密码</label>
+              <a-input-password
+                v-model="emailConfig.password"
+                :placeholder="emailConfig.passwordConfigured ? '已配置（留空不修改）' : '输入 SMTP 密码'"
+              />
+            </div>
+          </div>
+
+          <div class="email-form-row">
+            <div class="email-form-field email-form-field--switch">
+              <label class="field-label">启用 SSL 验证</label>
+              <a-switch v-model="emailConfig.sslEnabled" size="small" />
+            </div>
+          </div>
+
+          <div class="email-form-row email-form-row--two-col">
+            <div class="email-form-field">
+              <label class="field-label">发件人地址 <span class="required">*</span></label>
+              <a-input
+                v-model="emailConfig.fromAddress"
+                placeholder="noreply@company.com"
+              />
+              <p class="field-hint">邮件的 From 地址</p>
+            </div>
+            <div class="email-form-field">
+              <label class="field-label">回复地址</label>
+              <a-input
+                v-model="emailConfig.replyToAddress"
+                placeholder="support@company.com（可选）"
+              />
+              <p class="field-hint">邮件的 Reply-To 地址</p>
+            </div>
+          </div>
+
+          <div class="email-config-status">
+            <span v-if="emailConfigStatus === 'configured'" class="status-badge status-badge--ok">
+              ✓ 已配置
+            </span>
+            <span v-else class="status-badge status-badge--incomplete">
+              ○ 未完成配置
+            </span>
+          </div>
+
+          <div class="email-config-actions">
+            <a-button type="primary" size="small" :loading="savingEmail" @click="saveEmailConfig">
+              保存邮件配置
+            </a-button>
+          </div>
         </div>
       </div>
 
@@ -218,13 +322,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationAdminApi } from '@/api/notificationAdmin'
-import type { NotificationSettingsVO, NotificationStatsVO } from '@/api/notificationAdmin'
+import type { NotificationSettingsVO, NotificationStatsVO, EmailConfigVO } from '@/api/notificationAdmin'
 
 const loading = ref(true)
 const saving = ref(false)
+const savingEmail = ref(false)
 
 const form = reactive({
   inAppEnabled: true,
@@ -242,6 +347,18 @@ const form = reactive({
   defaultEmailEnabled: false
 })
 
+const emailConfig = reactive({
+  host: '',
+  port: 587,
+  protocol: 'starttls',
+  username: '',
+  password: '',
+  sslEnabled: false,
+  fromAddress: '',
+  replyToAddress: '',
+  passwordConfigured: false
+})
+
 const stats = reactive<NotificationStatsVO>({
   totalCount: 0,
   unreadCount: 0,
@@ -252,6 +369,13 @@ const stats = reactive<NotificationStatsVO>({
 })
 
 let originalSettings: NotificationSettingsVO | null = null
+
+const emailConfigStatus = computed(() => {
+  if (emailConfig.host && emailConfig.port && emailConfig.fromAddress) {
+    return 'configured'
+  }
+  return 'incomplete'
+})
 
 // 通知类型名称映射
 const typeLabels: Record<string, string> = {
@@ -292,12 +416,43 @@ async function loadData() {
     if (statsRes.code === 0 && statsRes.data) {
       Object.assign(stats, statsRes.data)
     }
+
+    // 如果邮件已启用，加载邮件配置
+    if (form.emailEnabled) {
+      await loadEmailConfig()
+    }
   } catch (e) {
     Message.error('加载通知管理设置失败')
   } finally {
     loading.value = false
   }
 }
+
+async function loadEmailConfig() {
+  try {
+    const res = await notificationAdminApi.getEmailConfig()
+    if (res.code === 0 && res.data) {
+      emailConfig.host = res.data.host || ''
+      emailConfig.port = res.data.port || 587
+      emailConfig.protocol = res.data.protocol || 'starttls'
+      emailConfig.username = res.data.username || ''
+      emailConfig.sslEnabled = res.data.sslEnabled || false
+      emailConfig.fromAddress = res.data.fromAddress || ''
+      emailConfig.replyToAddress = res.data.replyToAddress || ''
+      emailConfig.password = ''
+      emailConfig.passwordConfigured = res.data.password === '******'
+    }
+  } catch (e) {
+    // 静默失败，邮件配置可能尚未保存过
+  }
+}
+
+// 当邮件开关从关到开时，加载邮件配置
+watch(() => form.emailEnabled, (newVal, oldVal) => {
+  if (newVal && !oldVal) {
+    loadEmailConfig()
+  }
+})
 
 async function saveSettings() {
   saving.value = true
@@ -325,6 +480,46 @@ async function saveSettings() {
     Message.error(e.response?.data?.message || '保存失败')
   } finally {
     saving.value = false
+  }
+}
+
+async function saveEmailConfig() {
+  // 校验必填
+  if (!emailConfig.host) {
+    Message.warning('请填写服务器地址')
+    return
+  }
+  if (!emailConfig.fromAddress) {
+    Message.warning('请填写发件人地址')
+    return
+  }
+
+  savingEmail.value = true
+  try {
+    const dto: Record<string, any> = {
+      host: emailConfig.host,
+      port: emailConfig.port,
+      protocol: emailConfig.protocol,
+      username: emailConfig.username,
+      sslEnabled: emailConfig.sslEnabled,
+      fromAddress: emailConfig.fromAddress,
+      replyToAddress: emailConfig.replyToAddress
+    }
+    // 仅当用户输入了新密码时才发送
+    if (emailConfig.password) {
+      dto.password = emailConfig.password
+    }
+
+    const res = await notificationAdminApi.updateEmailConfig(dto)
+    if (res.code === 0 && res.data) {
+      emailConfig.password = ''
+      emailConfig.passwordConfigured = res.data.password === '******'
+      Message.success('邮件服务器配置已保存')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存邮件配置失败')
+  } finally {
+    savingEmail.value = false
   }
 }
 
@@ -637,5 +832,80 @@ onMounted(loadData)
   display: flex;
   gap: 12px;
   padding-top: 8px;
+}
+
+/* Email config form */
+.email-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.email-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.email-form-row--two-col {
+  flex-direction: row;
+  gap: 16px;
+}
+
+.email-form-row--two-col .email-form-field {
+  flex: 1;
+}
+
+.email-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.email-form-field--port {
+  max-width: 120px;
+}
+
+.email-form-field--switch {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.email-form-field .field-label {
+  margin-bottom: 0;
+}
+
+.required {
+  color: var(--color-danger-6, #f53f3f);
+}
+
+.email-config-status {
+  padding: 8px 0;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.status-badge--ok {
+  color: var(--color-success-6, #00b42a);
+  background: var(--color-success-light-1, rgba(0, 180, 42, 0.1));
+}
+
+.status-badge--incomplete {
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-surface);
+}
+
+.email-config-actions {
+  display: flex;
+  gap: 12px;
 }
 </style>

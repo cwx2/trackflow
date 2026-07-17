@@ -582,6 +582,35 @@ export interface BoardCardConfigVO {
   colorScheme: string
 }
 
+// ========== 看板泳道配置 ==========
+
+export interface BoardSwimlaneConfigVO {
+  /** 泳道分组字段：none / assignee / priority / type / sprint / tag */
+  groupByField: string
+}
+
+// ========== 看板列合并配置 ==========
+
+export interface BoardColumnMergeGroupVO {
+  /** 合并组标识 */
+  mergeGroupId: string
+  /** 合并后的列标题 */
+  mergeTitle: string
+  /** 该组中合并的状态 ID 列表 */
+  statusIds: string[]
+}
+
+// ========== 看板基本设置 ==========
+
+export interface BoardGeneralConfigVO {
+  /** 看板名称（空字符串时前端使用默认名） */
+  name: string
+  /** 可查看看板的角色代码列表 */
+  canViewRoles: string[]
+  /** 可编辑看板设置的角色代码列表 */
+  canEditRoles: string[]
+}
+
 // ========== Sprint 完成预览 ==========
 export interface CompletionPreviewVO {
   openIssues: CompletionPreviewIssue[]

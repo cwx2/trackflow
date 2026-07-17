@@ -15,6 +15,19 @@
     </template>
 
     <a-tabs v-model:active-key="activeTab" class="settings-tabs">
+      <!-- 基本设置 标签页 -->
+      <a-tab-pane key="general" title="基本设置">
+        <GeneralSettingsPanel
+          :name="editableBoardName"
+          :can-view-roles="editableCanViewRoles"
+          :can-edit-roles="editableCanEditRoles"
+          :project-name="projectName"
+          @update:name="editableBoardName = $event"
+          @update:can-view-roles="editableCanViewRoles = $event"
+          @update:can-edit-roles="editableCanEditRoles = $event"
+        />
+      </a-tab-pane>
+
       <!-- 列设置 标签页 -->
       <a-tab-pane key="columns" title="列设置">
         <div class="settings-content">
@@ -115,6 +128,17 @@
           @update:color-scheme="editableColorScheme = $event"
         />
       </a-tab-pane>
+
+      <!-- 泳道设置 标签页 -->
+      <a-tab-pane key="swimlanes" title="泳道">
+        <SwimlaneSettingsPanel
+          :group-by-field="editableSwimlaneGroupBy"
+          :merge-groups="editableMergeGroups"
+          :columns="editableColumns"
+          @update:group-by-field="editableSwimlaneGroupBy = $event"
+          @update:merge-groups="editableMergeGroups = $event"
+        />
+      </a-tab-pane>
     </a-tabs>
   </a-drawer>
 </template>
@@ -126,6 +150,8 @@ import { boardApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import CardSettingsPanel from './CardSettingsPanel.vue'
+import GeneralSettingsPanel from './GeneralSettingsPanel.vue'
+import SwimlaneSettingsPanel from './SwimlaneSettingsPanel.vue'
 
 interface EditableColumn {
   statusId: string
@@ -140,9 +166,16 @@ interface EditableColumn {
   wipMax: number | null | undefined
 }
 
+interface MergeGroupLocal {
+  mergeGroupId: string
+  mergeTitle: string
+  statusIds: string[]
+}
+
 const props = defineProps<{
   visible: boolean
   projectId: string
+  projectName: string
   columns: BoardColumnVO[]
 }>()
 
@@ -153,7 +186,7 @@ const emit = defineEmits<{
 
 const saving = ref(false)
 const initializing = ref(false)
-const activeTab = ref('columns')
+const activeTab = ref('general')
 
 // 列设置状态
 const editableColumns = ref<EditableColumn[]>([])
@@ -161,6 +194,15 @@ const editableColumns = ref<EditableColumn[]>([])
 // 卡片设置状态
 const editableCardFields = ref<string[]>(['assignee', 'priority', 'type'])
 const editableColorScheme = ref('none')
+
+// 基本设置状态
+const editableBoardName = ref('')
+const editableCanViewRoles = ref<string[]>(['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer'])
+const editableCanEditRoles = ref<string[]>(['project_admin', 'tech_lead'])
+
+// 泳道设置状态
+const editableSwimlaneGroupBy = ref('none')
+const editableMergeGroups = ref<MergeGroupLocal[]>([])
 
 // 拖拽排序状态
 const dragIndex = ref<number | null>(null)
@@ -206,6 +248,46 @@ watch(() => props.visible, async (newVisible) => {
       // 使用默认值
       editableCardFields.value = ['assignee', 'priority', 'type']
       editableColorScheme.value = 'none'
+    }
+
+    // 加载泳道配置
+    try {
+      const res = await boardApi.getSwimlaneConfig(props.projectId)
+      if (res.data) {
+        editableSwimlaneGroupBy.value = res.data.groupByField || 'none'
+      }
+    } catch {
+      editableSwimlaneGroupBy.value = 'none'
+    }
+
+    // 加载列合并配置
+    try {
+      const res = await boardApi.getColumnMerges(props.projectId)
+      if (res.data && res.data.length > 0) {
+        editableMergeGroups.value = res.data.map(g => ({
+          mergeGroupId: g.mergeGroupId,
+          mergeTitle: g.mergeTitle,
+          statusIds: g.statusIds
+        }))
+      } else {
+        editableMergeGroups.value = []
+      }
+    } catch {
+      editableMergeGroups.value = []
+    }
+
+    // 加载基本设置
+    try {
+      const res = await boardApi.getGeneralConfig(props.projectId)
+      if (res.data) {
+        editableBoardName.value = res.data.name || ''
+        editableCanViewRoles.value = res.data.canViewRoles || ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
+        editableCanEditRoles.value = res.data.canEditRoles || ['project_admin', 'tech_lead']
+      }
+    } catch {
+      editableBoardName.value = ''
+      editableCanViewRoles.value = ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
+      editableCanEditRoles.value = ['project_admin', 'tech_lead']
     }
   }
 })
@@ -360,11 +442,36 @@ async function handleSave() {
       return
     }
 
+    // 校验合并组
+    const validMergeGroups = editableMergeGroups.value.filter(g => g.statusIds.length >= 2)
+    for (const group of validMergeGroups) {
+      if (!group.mergeTitle.trim()) {
+        Message.warning('合并组标题不能为空')
+        saving.value = false
+        return
+      }
+    }
+
     await Promise.all([
       boardApi.saveColumns(props.projectId, columns),
       boardApi.saveCardConfig(props.projectId, {
         visibleFields: editableCardFields.value,
         colorScheme: editableColorScheme.value
+      }),
+      boardApi.saveSwimlaneConfig(props.projectId, {
+        groupByField: editableSwimlaneGroupBy.value
+      }),
+      boardApi.saveColumnMerges(props.projectId, {
+        mergeGroups: validMergeGroups.map(g => ({
+          mergeGroupId: g.mergeGroupId,
+          mergeTitle: g.mergeTitle.trim(),
+          statusIds: g.statusIds.map(id => Number(id))
+        }))
+      }),
+      boardApi.saveGeneralConfig(props.projectId, {
+        name: editableBoardName.value.trim(),
+        canViewRoles: editableCanViewRoles.value,
+        canEditRoles: editableCanEditRoles.value
       })
     ])
 
