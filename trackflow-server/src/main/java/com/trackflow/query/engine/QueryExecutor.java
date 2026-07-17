@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 查询执行引擎：将 JSON 筛选条件动态转换为 SQL 查询
@@ -204,7 +205,7 @@ public class QueryExecutor {
                 case "createdAt" -> applyDateFilter(wrapper, "created_at", operator, values);
                 case "updatedAt" -> applyDateFilter(wrapper, "updated_at", operator, values);
                 default -> {
-                    // 自定义字段: custom_fields->>'fieldKey'
+                    // 自定义字段筛选（通过 custom_field_value EAV 表）
                     if (field.startsWith("cf.") || field.startsWith("customField.")) {
                         String cfKey = field.contains(".") ? field.substring(field.indexOf('.') + 1) : field;
                         applyCustomFieldFilter(wrapper, cfKey, operator, values);
@@ -302,20 +303,36 @@ public class QueryExecutor {
     }
 
     /**
-     * 应用自定义字段筛选（带 Key 正则校验防注入）
+     * 应用自定义字段筛选（通过 EXISTS 子查询关联 custom_field_value EAV 表）
      */
     private void applyCustomFieldFilter(QueryWrapper<Issue> wrapper, String cfKey, String operator, List<String> values) {
         if (!CF_KEY_PATTERN.matcher(cfKey).matches()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "非法的自定义字段名: " + cfKey);
         }
 
-        String jsonPath = "custom_fields->>'" + cfKey + "'";
+        // cfKey 是字段 ID（snowflake ID），通过 EXISTS 子查询关联 custom_field_value 表
         switch (operator) {
-            case "eq" -> wrapper.apply(jsonPath + " = {0}", values.get(0));
-            case "neq" -> wrapper.apply(jsonPath + " != {0}", values.get(0));
-            case "contains" -> wrapper.apply(jsonPath + " LIKE {0}", "%" + values.get(0) + "%");
-            case "is_empty" -> wrapper.apply(jsonPath + " IS NULL");
-            case "is_not_empty" -> wrapper.apply(jsonPath + " IS NOT NULL");
+            case "eq" -> wrapper.apply(
+                    "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value = {1})",
+                    Long.parseLong(cfKey), values.get(0));
+            case "neq" -> wrapper.apply(
+                    "NOT EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value = {1})",
+                    Long.parseLong(cfKey), values.get(0));
+            case "in" -> {
+                String placeholders = values.stream().map(v -> "'" + v.replace("'", "''") + "'").collect(Collectors.joining(","));
+                wrapper.apply(
+                        "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IN (" + placeholders + "))",
+                        Long.parseLong(cfKey));
+            }
+            case "contains" -> wrapper.apply(
+                    "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value LIKE {1})",
+                    Long.parseLong(cfKey), "%" + values.get(0) + "%");
+            case "is_empty" -> wrapper.apply(
+                    "NOT EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IS NOT NULL AND cfv.value != '')",
+                    Long.parseLong(cfKey));
+            case "is_not_empty" -> wrapper.apply(
+                    "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IS NOT NULL AND cfv.value != '')",
+                    Long.parseLong(cfKey));
         }
     }
 

@@ -1,7 +1,6 @@
 package com.trackflow.issue.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.trackflow.common.handler.JsonbTypeHandler;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -10,7 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName(value = "issue", autoResultMap = true)
+@TableName(value = "issue")
 public class Issue implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)
@@ -40,8 +39,6 @@ public class Issue implements Serializable {
     private Integer childCount;
     /** 已关闭的直接子工单数 */
     private Integer childClosedCount;
-    @TableField(typeHandler = JsonbTypeHandler.class)
-    private String customFields;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime resolvedAt;
     private LocalDateTime deletedAt;

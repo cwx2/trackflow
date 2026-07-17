@@ -198,7 +198,6 @@ export interface IssueDetailVO extends IssueVO {
   derivedSpentHours?: number
   /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
   derivedEstimatedHours?: number
-  customFields?: string
   /** 结构化自定义字段值（带字段名称和类型，用于前端渲染） */
   customFieldDetails?: CustomFieldValueVO[]
   tags?: IssueTagVO[]

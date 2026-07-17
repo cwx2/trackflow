@@ -37,7 +37,6 @@ public class IssueDetailVO {
     private BigDecimal derivedSpentHours;
     /** 派生字段：自身 + 所有后代的 estimated_hours 总和 */
     private BigDecimal derivedEstimatedHours;
-    private String customFields;
     /** 结构化自定义字段值列表（EAV 表数据，用于前端渲染） */
     private List<CustomFieldValueVO> customFieldDetails;
     private List<IssueTagVO> tags;

@@ -3,8 +3,6 @@ package com.trackflow.issue.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.config.AttachmentConfig;
 import com.trackflow.common.exception.BusinessException;
@@ -58,7 +56,6 @@ public class IssueService {
     private final IssueActivityMapper activityMapper;
     private final com.trackflow.sprint.mapper.SprintMapper sprintMapper;
     private final ProjectService projectService;
-    private final ObjectMapper objectMapper;
     private final MinioService minioService;
     private final IssueConverter issueConverter;
     private final IssueTagService tagService;
@@ -130,14 +127,6 @@ public class IssueService {
         issue.setDueDate(dto.getDueDate());
         issue.setEstimatedHours(dto.getEstimatedHours());
         issue.setCreatedBy(currentUserId);
-
-        if (dto.getCustomFields() != null) {
-            try {
-                issue.setCustomFields(objectMapper.writeValueAsString(dto.getCustomFields()));
-            } catch (JsonProcessingException e) {
-                issue.setCustomFields("{}");
-            }
-        }
 
         issueMapper.insert(issue);
 
@@ -599,12 +588,7 @@ public class IssueService {
             }
         }
         if (dto.getCustomFields() != null) {
-            try {
-                issue.setCustomFields(objectMapper.writeValueAsString(dto.getCustomFields()));
-            } catch (JsonProcessingException e) {
-                // keep existing
-            }
-            // 保存自定义字段值到 EAV 表（带验证）
+            // 保存自定义字段值到 EAV 表（单一数据源）
             Map<Long, String> fieldValues = new java.util.HashMap<>();
             for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
                 try {
@@ -1289,7 +1273,6 @@ public class IssueService {
         vo.setSprintName((String) row.get("sprint_name"));
         vo.setParentId(row.get("parent_id") != null ? String.valueOf(row.get("parent_id")) : null);
         vo.setParentKey((String) row.get("parent_key"));
-        vo.setCustomFields((String) row.get("custom_fields"));
 
         if (row.get("due_date") != null) {
             vo.setDueDate(((java.sql.Date) row.get("due_date")).toLocalDate());
