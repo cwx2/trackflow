@@ -152,13 +152,19 @@ const {
 function getTypeIcon(type: string): string {
   switch (type) {
     case 'issue_assigned': return '👤'
+    case 'issue_auto_assigned': return '🤖'
     case 'issue_commented': return '💬'
     case 'issue_status_changed': return '🔄'
-    case 'issue_created': return '📋'
+    case 'mention': return '📢'
     case 'member_added': return '➕'
     case 'member_removed': return '➖'
+    case 'role_changed': return '🔑'
     case 'lead_changed': return '👑'
-    case 'mention': return '📢'
+    case 'project_archived': return '📦'
+    case 'project_restored': return '📂'
+    case 'project_deleted': return '🗑️'
+    case 'sprint_started': return '🚀'
+    case 'sprint_completed': return '🏁'
     default: return '🔔'
   }
 }

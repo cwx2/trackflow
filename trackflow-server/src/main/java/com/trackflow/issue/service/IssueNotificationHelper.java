@@ -2,6 +2,7 @@ package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.issue.entity.Issue;
@@ -61,7 +62,7 @@ public class IssueNotificationHelper {
                     operatorName, issue.getIssueKey(), issue.getTitle());
 
             notificationService.notify(assigneeId, operatorId, title, content,
-                    "issue_assigned", "issue", issue.getId());
+                    NotificationType.issue_assigned, "issue", issue.getId());
             log.debug("[IssueNotification] 已发送分配通知: issue={}, assignee={}", issue.getIssueKey(), assigneeId);
         } catch (Exception e) {
             log.error("[IssueNotification] 发送分配通知失败: issue={}, assignee={}, error={}",
@@ -89,7 +90,7 @@ public class IssueNotificationHelper {
                     continue;
                 }
                 notificationService.notify(recipientId, commenterId, title, content,
-                        "issue_commented", "issue", issue.getId());
+                        NotificationType.issue_commented, "issue", issue.getId());
             }
             log.debug("[IssueNotification] 已发送评论通知: issue={}, recipients={}",
                     issue.getIssueKey(), recipients.size());
@@ -121,7 +122,7 @@ public class IssueNotificationHelper {
                     continue;
                 }
                 notificationService.notify(recipientId, operatorId, title, content,
-                        "issue_status_changed", "issue", issue.getId());
+                        NotificationType.issue_status_changed, "issue", issue.getId());
             }
             log.debug("[IssueNotification] 已发送状态变更通知: issue={}, recipients={}",
                     issue.getIssueKey(), recipients.size());
@@ -149,7 +150,7 @@ public class IssueNotificationHelper {
                     creatorName, issue.getIssueKey(), issue.getTitle());
 
             notificationService.notify(issue.getAssigneeId(), creatorId, title, content,
-                    "issue_assigned", "issue", issue.getId());
+                    NotificationType.issue_assigned, "issue", issue.getId());
             log.debug("[IssueNotification] 已发送创建通知: issue={}, assignee={}",
                     issue.getIssueKey(), issue.getAssigneeId());
         } catch (Exception e) {
@@ -209,7 +210,7 @@ public class IssueNotificationHelper {
                     continue;
                 }
                 notificationService.notify(user.getId(), commenterId, title, content,
-                        "mention", "issue", issue.getId());
+                        NotificationType.mention, "issue", issue.getId());
                 sent++;
             }
             if (sent > 0) {

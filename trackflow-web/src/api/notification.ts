@@ -1,6 +1,25 @@
 import request from './request'
 import type { R, PageResult } from './types'
 
+/**
+ * 通知类型（与后端 NotificationType 枚举同步）
+ */
+export type NotificationType =
+  | 'issue_assigned'
+  | 'issue_auto_assigned'
+  | 'issue_commented'
+  | 'issue_status_changed'
+  | 'mention'
+  | 'member_added'
+  | 'member_removed'
+  | 'role_changed'
+  | 'lead_changed'
+  | 'project_archived'
+  | 'project_restored'
+  | 'project_deleted'
+  | 'sprint_started'
+  | 'sprint_completed'
+
 export interface NotificationVO {
   id: string
   userId: string
@@ -9,7 +28,7 @@ export interface NotificationVO {
   actorAvatar?: string
   title: string
   content: string
-  type: string
+  type: NotificationType
   resourceType?: string
   resourceId?: string
   isRead: boolean

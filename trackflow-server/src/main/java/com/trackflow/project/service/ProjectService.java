@@ -38,6 +38,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.trackflow.common.event.ProjectNotificationEvent;
+import com.trackflow.integration.entity.NotificationType;
 
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
@@ -501,7 +502,7 @@ public class ProjectService {
 
         // 4. 通知所有项目成员 — 事务提交后触发
         eventPublisher.publishEvent(new ProjectNotificationEvent.LifecycleEvent(id, currentUserId,
-                "项目归档通知", "项目「" + project.getName() + "」已被归档", "project_archived"));
+                "项目归档通知", "项目「" + project.getName() + "」已被归档", NotificationType.project_archived));
     }
 
     /**
@@ -531,7 +532,7 @@ public class ProjectService {
 
         // 3. 通知所有项目成员 — 事务提交后触发
         eventPublisher.publishEvent(new ProjectNotificationEvent.LifecycleEvent(id, currentUserId,
-                "项目恢复通知", "项目「" + project.getName() + "」已从归档状态恢复", "project_restored"));
+                "项目恢复通知", "项目「" + project.getName() + "」已从归档状态恢复", NotificationType.project_restored));
     }
 
     /**

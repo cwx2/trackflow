@@ -2,6 +2,7 @@ package com.trackflow.sprint.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.project.entity.ProjectMember;
@@ -68,7 +69,7 @@ public class SprintNotificationHelper {
                     continue;
                 }
                 notificationService.notify(userId, operatorId, title, content,
-                        "sprint_started", "sprint", sprint.getId());
+                        NotificationType.sprint_started, "sprint", sprint.getId());
                 sent++;
             }
             if (sent > 0) {
@@ -110,7 +111,7 @@ public class SprintNotificationHelper {
                     continue;
                 }
                 notificationService.notify(userId, operatorId, title, content,
-                        "sprint_completed", "sprint", sprint.getId());
+                        NotificationType.sprint_completed, "sprint", sprint.getId());
                 sent++;
             }
             if (sent > 0) {

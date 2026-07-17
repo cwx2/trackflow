@@ -2,6 +2,7 @@ package com.trackflow.project.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.project.entity.ProjectMember;
@@ -55,7 +56,7 @@ public class ProjectNotificationHelper {
             String title = "你已被添加到项目";
             String content = String.format("你已被添加到项目「%s」，角色为「%s」", projectName, roleNames);
             notificationService.notify(userId, operatorId, title, content,
-                    "member_added", "project", projectId);
+                    NotificationType.member_added, "project", projectId);
             log.debug("[ProjectNotification] 成员添加通知已发送: project={}, user={}", projectId, userId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送成员添加通知失败: project={}, user={}, error={}",
@@ -79,7 +80,7 @@ public class ProjectNotificationHelper {
             String title = "你的项目角色已变更";
             String content = String.format("你在项目「%s」中的角色已变更为「%s」", projectName, newRoleNames);
             notificationService.notify(userId, operatorId, title, content,
-                    "role_changed", "project", projectId);
+                    NotificationType.role_changed, "project", projectId);
             log.debug("[ProjectNotification] 角色变更通知已发送: project={}, user={}", projectId, userId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送角色变更通知失败: project={}, user={}, error={}",
@@ -103,7 +104,7 @@ public class ProjectNotificationHelper {
             String title = "你已被移出项目";
             String content = String.format("你已被移出项目「%s」", projectName);
             notificationService.notify(userId, operatorId, title, content,
-                    "member_removed", "project", projectId);
+                    NotificationType.member_removed, "project", projectId);
             log.debug("[ProjectNotification] 成员移除通知已发送: project={}, user={}", projectId, userId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送成员移除通知失败: project={}, user={}, error={}",
@@ -129,7 +130,7 @@ public class ProjectNotificationHelper {
             String title = "你已成为项目负责人";
             String content = String.format("你已成为项目「%s」的负责人", projectName);
             notificationService.notify(newLeadId, operatorId, title, content,
-                    "lead_changed", "project", projectId);
+                    NotificationType.lead_changed, "project", projectId);
             log.debug("[ProjectNotification] 新负责人通知已发送: project={}, newLead={}", projectId, newLeadId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送新负责人通知失败: project={}, newLead={}, error={}",
@@ -153,7 +154,7 @@ public class ProjectNotificationHelper {
             String title = "项目负责人已变更";
             String content = String.format("项目「%s」的负责人已变更为「%s」", projectName, newLeadName);
             notificationService.notify(oldLeadId, operatorId, title, content,
-                    "lead_changed", "project", projectId);
+                    NotificationType.lead_changed, "project", projectId);
             log.debug("[ProjectNotification] 旧负责人通知已发送: project={}, oldLead={}", projectId, oldLeadId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送旧负责人通知失败: project={}, oldLead={}, error={}",
@@ -168,7 +169,7 @@ public class ProjectNotificationHelper {
      */
     @Async("notificationExecutor")
     public void notifyLifecycleEvent(Long projectId, Long operatorId,
-                                     String title, String content, String type) {
+                                     String title, String content, NotificationType type) {
         try {
             List<Long> memberUserIds = getMemberUserIds(projectId);
             int sent = 0;
@@ -207,7 +208,7 @@ public class ProjectNotificationHelper {
                 }
                 // 项目删除为强制通知，不检查偏好
                 notificationService.notify(memberId, operatorId, title, content,
-                        "project_deleted", "project", projectId);
+                        NotificationType.project_deleted, "project", projectId);
                 sent++;
             }
             log.debug("[ProjectNotification] 项目删除通知已发送: project={}, sent={}", projectId, sent);

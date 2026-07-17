@@ -6,6 +6,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.integration.entity.Notification;
+import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.integration.vo.NotificationVO;
 import com.trackflow.integration.converter.NotificationConverter;
@@ -52,15 +53,16 @@ public class NotificationService {
      * @param actorId      触发者用户ID（系统自动通知时为 null）
      * @param title        通知标题
      * @param content      通知内容
-     * @param type         通知类型
+     * @param type         通知类型（枚举约束，确保前后端同步）
      * @param resourceType 关联资源类型
      * @param resourceId   关联资源ID
      */
     @Transactional
-    public void notify(Long userId, Long actorId, String title, String content, String type,
+    public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                        String resourceType, Long resourceId) {
+        String typeValue = type.name();
         // 查找聚合窗口内的同类未读通知
-        Notification existing = findRecentUnread(userId, type, resourceType, resourceId);
+        Notification existing = findRecentUnread(userId, typeValue, resourceType, resourceId);
 
         if (existing != null) {
             // 聚合：更新已有通知
@@ -73,7 +75,7 @@ public class NotificationService {
                     (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
             notificationMapper.updateById(existing);
             log.debug("[Notification] 聚合通知: id={}, userId={}, type={}, resourceId={}, count={}",
-                    existing.getId(), userId, type, resourceId, existing.getAggregationCount());
+                    existing.getId(), userId, typeValue, resourceId, existing.getAggregationCount());
         } else {
             // 新建通知
             Notification n = new Notification();
@@ -81,7 +83,7 @@ public class NotificationService {
             n.setActorId(actorId);
             n.setTitle(title);
             n.setContent(content);
-            n.setType(type);
+            n.setType(typeValue);
             n.setResourceType(resourceType);
             n.setResourceId(resourceId);
             n.setIsRead(false);

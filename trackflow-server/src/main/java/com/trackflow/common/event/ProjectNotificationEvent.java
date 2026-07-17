@@ -1,5 +1,7 @@
 package com.trackflow.common.event;
 
+import com.trackflow.integration.entity.NotificationType;
+
 import java.util.List;
 
 /**
@@ -41,7 +43,7 @@ public sealed interface ProjectNotificationEvent extends NotificationEvent {
      * 项目生命周期事件（归档/恢复）
      */
     record LifecycleEvent(Long projectId, Long operatorId,
-                          String title, String content, String type) implements ProjectNotificationEvent {}
+                          String title, String content, NotificationType type) implements ProjectNotificationEvent {}
 
     /**
      * 项目删除通知（强制，不受偏好控制）
