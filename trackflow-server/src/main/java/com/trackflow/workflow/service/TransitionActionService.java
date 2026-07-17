@@ -77,6 +77,11 @@ public class TransitionActionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "newStatusId 对应的状态不存在");
         }
 
+        // 唯一性校验：同一转换路径上不允许存在相同 action_type 的动作
+        Long effectiveProjectId = (dto.getProjectId() == 0L) ? null : dto.getProjectId();
+        checkDuplicateAction(effectiveProjectId, dto.getIssueType(),
+                dto.getOldStatusId(), dto.getNewStatusId(), dto.getActionType(), null);
+
         TransitionAction action = new TransitionAction();
         // projectId=0 表示全局，存为 null
         action.setProjectId(dto.getProjectId() == 0L ? null : dto.getProjectId());
@@ -114,6 +119,12 @@ public class TransitionActionService {
         }
 
         if (dto.getActionType() != null) {
+            // 如果 actionType 发生变化，需检查唯一性
+            if (!dto.getActionType().equals(action.getActionType())) {
+                checkDuplicateAction(action.getProjectId(), action.getIssueType(),
+                        action.getOldStatusId(), action.getNewStatusId(),
+                        dto.getActionType(), id);
+            }
             action.setActionType(dto.getActionType());
         }
         if (dto.getSortOrder() != null) {
@@ -172,6 +183,42 @@ public class TransitionActionService {
             return objectMapper.writeValueAsString(config);
         } catch (JsonProcessingException e) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "actionConfig 序列化失败");
+        }
+    }
+
+    /**
+     * 检查同一转换路径上是否已存在相同 action_type 的动作。
+     * excludeId 不为 null 时排除该 ID（用于更新场景）。
+     */
+    private void checkDuplicateAction(Long projectId, String issueType,
+                                      Long oldStatusId, Long newStatusId,
+                                      String actionType, Long excludeId) {
+        LambdaQueryWrapper<TransitionAction> wrapper = new LambdaQueryWrapper<>();
+
+        if (projectId == null) {
+            wrapper.isNull(TransitionAction::getProjectId);
+        } else {
+            wrapper.eq(TransitionAction::getProjectId, projectId);
+        }
+
+        wrapper.eq(TransitionAction::getIssueType, issueType);
+
+        if (oldStatusId == null) {
+            wrapper.isNull(TransitionAction::getOldStatusId);
+        } else {
+            wrapper.eq(TransitionAction::getOldStatusId, oldStatusId);
+        }
+
+        wrapper.eq(TransitionAction::getNewStatusId, newStatusId);
+        wrapper.eq(TransitionAction::getActionType, actionType);
+
+        if (excludeId != null) {
+            wrapper.ne(TransitionAction::getId, excludeId);
+        }
+
+        if (transitionActionMapper.selectCount(wrapper) > 0) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "该转换路径已存在相同类型的自动化动作，不允许重复创建");
         }
     }
 }
