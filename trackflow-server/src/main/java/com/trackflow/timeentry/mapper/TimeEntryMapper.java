@@ -5,6 +5,7 @@ import com.trackflow.timeentry.entity.TimeEntry;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -17,13 +18,23 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
     Integer sumDurationByIssueId(@Param("issueId") Long issueId);
 
     /**
+     * 原子更新 Issue 的 spent_hours（子查询方式，防止并发 lost update）
+     */
+    int atomicRefreshSpentHours(@Param("issueId") Long issueId);
+
+    /**
+     * 全量校准所有 issue 的 spent_hours（管理员自愈操作）
+     */
+    int recalculateAllSpentHours();
+
+    /**
      * 查询工时条目，JOIN issue 表获取 issueKey，JOIN attribute 表获取 work type
      * 支持按项目和工作类型（activityId）筛选
      */
     List<Map<String, Object>> selectEntriesWithIssueKey(
             @Param("userId") Long userId,
-            @Param("startDate") String startDate,
-            @Param("endDate") String endDate,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
             @Param("projectId") Long projectId,
             @Param("activityId") Long activityId
     );
@@ -33,8 +44,8 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      */
     List<Map<String, Object>> selectEntriesByProjectForUser(
             @Param("userId") Long userId,
-            @Param("startDate") String startDate,
-            @Param("endDate") String endDate
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
     );
 
     /**
@@ -42,7 +53,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      */
     List<Map<String, Object>> selectEntriesByProject(
             @Param("projectId") Long projectId,
-            @Param("startDate") String startDate,
-            @Param("endDate") String endDate
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
     );
 }

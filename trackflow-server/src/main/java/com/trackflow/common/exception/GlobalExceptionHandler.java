@@ -89,7 +89,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 路径变量/请求参数类型转换异常（如 Long 参数传入字符串）
+     * 路径变量/请求参数类型转换异常（如 Long 参数传入字符串、日期格式错误）
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<R<Void>> handleTypeMismatchException(MethodArgumentTypeMismatchException ex,
@@ -98,8 +98,16 @@ public class GlobalExceptionHandler {
                 request.getMethod(), request.getRequestURI(),
                 ex.getName(), ex.getValue(),
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown");
+
+        String message;
+        if (ex.getRequiredType() != null && java.time.LocalDate.class.isAssignableFrom(ex.getRequiredType())) {
+            message = String.format("参数 '%s' 日期格式无效，必须为 yyyy-MM-dd", ex.getName());
+        } else {
+            message = "请求参数格式错误";
+        }
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(R.fail(ErrorCode.VALIDATION_ERROR, "请求参数格式错误"));
+                .body(R.fail(ErrorCode.VALIDATION_ERROR, message));
     }
 
     /**

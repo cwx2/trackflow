@@ -24,8 +24,8 @@
         LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE t.user_id = #{userId}
-          AND t.work_date >= #{startDate}::date
-          AND t.work_date &lt;= #{endDate}::date
+          AND t.work_date >= #{startDate}
+          AND t.work_date &lt;= #{endDate}
           <if test="projectId != null">
               AND i.project_id = #{projectId}
           </if>
@@ -54,8 +54,8 @@
         WHERE i.project_id IN (
             SELECT pm.project_id FROM project_member pm WHERE pm.user_id = #{userId}
         )
-          AND t.work_date >= #{startDate}::date
-          AND t.work_date &lt;= #{endDate}::date
+          AND t.work_date >= #{startDate}
+          AND t.work_date &lt;= #{endDate}
         ORDER BY p.name ASC, t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 
@@ -76,8 +76,8 @@
         LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE i.project_id = #{projectId}
-          AND t.work_date >= #{startDate}::date
-          AND t.work_date &lt;= #{endDate}::date
+          AND t.work_date >= #{startDate}
+          AND t.work_date &lt;= #{endDate}
         ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 

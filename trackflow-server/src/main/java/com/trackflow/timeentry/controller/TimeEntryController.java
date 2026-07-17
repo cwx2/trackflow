@@ -15,9 +15,11 @@ import com.trackflow.timeentry.vo.TimeEntryVO;
 import com.trackflow.timeentry.vo.TimeEntryUserVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -81,8 +83,8 @@ public class TimeEntryController {
     @PreAuthorize("isAuthenticated()")
     public R<List<TimeEntryVO>> list(
             @RequestParam(value = "userId", required = false) Long userId,
-            @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate,
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "activityId", required = false) Long activityId,
             @RequestParam(value = "workType", required = false) String workType) {
@@ -123,8 +125,8 @@ public class TimeEntryController {
     @PreAuthorize("isAuthenticated()")
     public R<Integer> summary(
             @RequestParam(value = "userId", required = false) Long userId,
-            @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate) {
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
 
@@ -143,8 +145,8 @@ public class TimeEntryController {
     @GetMapping("/by-project")
     @PreAuthorize("isAuthenticated()")
     public R<List<ProjectTimeSummaryVO>> listByProject(
-            @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate) {
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         return R.ok(timeEntryService.listByProjectForUser(currentUserId, startDate, endDate));
     }
@@ -156,8 +158,8 @@ public class TimeEntryController {
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<TimeEntryVO>> listByProjectDetail(
             @PathVariable Long projectId,
-            @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate) {
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return R.ok(timeEntryService.listByProject(projectId, startDate, endDate));
     }
 

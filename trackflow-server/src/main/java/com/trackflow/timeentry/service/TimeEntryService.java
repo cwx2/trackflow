@@ -21,8 +21,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -250,7 +248,7 @@ public class TimeEntryService {
      * 查询用户在日期范围内的工时记录（带 issueKey）
      * 支持按项目和工作类型（activityId）筛选
      */
-    public List<TimeEntryVO> listByUserAndDateRange(Long userId, String startDate, String endDate,
+    public List<TimeEntryVO> listByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate,
                                                      Long projectId, Long activityId) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate, projectId, activityId);
         return rows.stream().map(this::mapRowToVO).toList();
@@ -296,7 +294,7 @@ public class TimeEntryService {
     /**
      * 汇总用户在日期范围内的总工时（分钟）
      */
-    public int sumByUserAndDateRange(Long userId, String startDate, String endDate) {
+    public int sumByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userId)
                 .ge("work_date", startDate)
@@ -308,7 +306,7 @@ public class TimeEntryService {
     /**
      * 按项目汇总工时（项目视图概览）：返回用户可见项目的工时聚合
      */
-    public List<ProjectTimeSummaryVO> listByProjectForUser(Long userId, String startDate, String endDate) {
+    public List<ProjectTimeSummaryVO> listByProjectForUser(Long userId, LocalDate startDate, LocalDate endDate) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(userId, startDate, endDate);
 
         // 按 project_id 分组
@@ -341,7 +339,7 @@ public class TimeEntryService {
     /**
      * 查询指定项目在日期范围内的工时明细（项目视图详情）
      */
-    public List<TimeEntryVO> listByProject(Long projectId, String startDate, String endDate) {
+    public List<TimeEntryVO> listByProject(Long projectId, LocalDate startDate, LocalDate endDate) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(projectId, startDate, endDate);
         return rows.stream().map(row -> {
             TimeEntryVO vo = mapRowToVO(row);
@@ -462,18 +460,22 @@ public class TimeEntryService {
     }
 
     /**
-     * 重新计算并更新 Issue 的 spent_hours 字段
-     * spent_hours = SUM(time_entry.duration) / 60，保留 2 位小数
+     * 原子更新 Issue 的 spent_hours 字段。
+     * 使用子查询方式直接在数据库层聚合，防止并发 lost update。
      */
     private void refreshIssueSpentHours(Long issueId) {
-        Integer totalMinutes = timeEntryMapper.sumDurationByIssueId(issueId);
-        BigDecimal spentHours = BigDecimal.valueOf(totalMinutes != null ? totalMinutes : 0)
-                .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+        timeEntryMapper.atomicRefreshSpentHours(issueId);
+    }
 
-        issueMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Issue>()
-                        .eq(Issue::getId, issueId)
-                        .set(Issue::getSpentHours, spentHours));
+    /**
+     * 全量校准所有 issue 的 spent_hours（管理员自愈操作）。
+     * 一次性将所有 issue.spent_hours 与 time_entry 实际数据对齐。
+     *
+     * @return 受影响的行数
+     */
+    @Transactional
+    public int recalculateAllSpentHours() {
+        return timeEntryMapper.recalculateAllSpentHours();
     }
 
     private TimeEntryVO mapRowToVO(Map<String, Object> row) {
