@@ -185,6 +185,11 @@
           </div>
         </div>
       </div>
+
+      <!-- 项目级偏好覆盖 -->
+      <div class="settings-section">
+        <ProjectNotificationPreferences />
+      </div>
     </a-spin>
 
     <!-- 底部导航提示 -->
@@ -202,6 +207,7 @@ import { Message } from '@arco-design/web-vue'
 import { notificationPreferenceApi, notificationApi } from '@/api'
 import type { NotificationPreferenceVO } from '@/api/notificationPreference'
 import type { MutedThreadVO } from '@/api/notification'
+import ProjectNotificationPreferences from './ProjectNotificationPreferences.vue'
 
 const loading = ref(true)
 const quietHoursEnabled = ref(false)

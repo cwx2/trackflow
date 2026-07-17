@@ -15,6 +15,8 @@ public class NotificationPreference implements Serializable {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
     private Long userId;
+    /** NULL 表示全局偏好，非 NULL 表示项目级偏好覆盖 */
+    private Long projectId;
 
     // Issue 事件订阅开关
     private Boolean onIssueAssigned;

@@ -6,6 +6,8 @@ import lombok.Data;
 public class NotificationPreferenceVO {
     private String id;
     private String userId;
+    /** NULL 表示全局偏好，非 NULL 表示项目级偏好 */
+    private String projectId;
 
     // Issue 事件订阅开关
     private Boolean onIssueAssigned;

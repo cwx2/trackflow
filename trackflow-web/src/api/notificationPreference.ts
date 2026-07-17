@@ -4,6 +4,7 @@ import type { R } from './types'
 export interface NotificationPreferenceVO {
   id: string
   userId: string
+  projectId: string | null
   onIssueAssigned: boolean
   onIssueStatusChanged: boolean
   onIssueCommented: boolean
@@ -34,13 +35,33 @@ export interface UpdateNotificationPreferenceDTO {
 }
 
 export const notificationPreferenceApi = {
-  /** 获取当前用户的通知偏好 */
+  /** 获取当前用户的全局通知偏好 */
   get() {
     return request.get<any, R<NotificationPreferenceVO>>('/notification-preferences')
   },
 
-  /** 更新当前用户的通知偏好 */
+  /** 更新当前用户的全局通知偏好 */
   update(data: UpdateNotificationPreferenceDTO) {
     return request.put<any, R<NotificationPreferenceVO>>('/notification-preferences', data)
+  },
+
+  /** 列出用户已配置的所有项目级偏好 */
+  listProjectPreferences() {
+    return request.get<any, R<NotificationPreferenceVO[]>>('/notification-preferences/projects')
+  },
+
+  /** 获取指定项目的偏好（可能为 null 表示使用全局设置） */
+  getProjectPreference(projectId: string) {
+    return request.get<any, R<NotificationPreferenceVO | null>>(`/notification-preferences/projects/${projectId}`)
+  },
+
+  /** 设置/更新指定项目的通知偏好 */
+  updateProjectPreference(projectId: string, data: UpdateNotificationPreferenceDTO) {
+    return request.put<any, R<NotificationPreferenceVO>>(`/notification-preferences/projects/${projectId}`, data)
+  },
+
+  /** 删除指定项目的偏好（恢复使用全局设置） */
+  deleteProjectPreference(projectId: string) {
+    return request.delete<any, R<void>>(`/notification-preferences/projects/${projectId}`)
   }
 }
