@@ -3,6 +3,7 @@ package com.trackflow.report.service;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
+import com.trackflow.report.mapper.result.*;
 import com.trackflow.report.vo.*;
 import com.trackflow.sprint.service.SprintService;
 import com.trackflow.workitemattr.service.WorkItemAttributeService;
@@ -126,17 +127,17 @@ public class ReportStatisticsService {
     // ─── Internal build methods (SQL aggregation) ────────────────────────
 
     private StatusDistributionVO buildStatusDistribution(List<Long> projectIds, Long sprintId) {
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, sprintId);
+        List<StatusDistributionRow> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, sprintId);
 
         List<StatusDistributionVO.StatusItem> items = new ArrayList<>();
         long total = 0;
-        for (Map<String, Object> row : rows) {
+        for (StatusDistributionRow row : rows) {
             StatusDistributionVO.StatusItem item = new StatusDistributionVO.StatusItem();
-            item.setName((String) row.get("status_name"));
-            long cnt = toLong(row.get("cnt"));
+            item.setName(row.getStatusName());
+            long cnt = row.getCnt() != null ? row.getCnt() : 0L;
             item.setValue(cnt);
-            item.setColor((String) row.get("status_color"));
-            item.setCategory((String) row.get("status_category"));
+            item.setColor(row.getStatusColor());
+            item.setCategory(row.getStatusCategory());
             items.add(item);
             total += cnt;
         }
@@ -148,13 +149,13 @@ public class ReportStatisticsService {
     }
 
     private PriorityDistributionVO buildPriorityDistribution(List<Long> projectIds, Long sprintId) {
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectPriorityDistribution(projectIds, sprintId);
+        List<PriorityDistributionRow> rows = reportStatisticsMapper.selectPriorityDistribution(projectIds, sprintId);
 
         Map<String, Long> grouped = new HashMap<>();
         long total = 0;
-        for (Map<String, Object> row : rows) {
-            String name = (String) row.get("priority_name");
-            long cnt = toLong(row.get("cnt"));
+        for (PriorityDistributionRow row : rows) {
+            String name = row.getPriorityName();
+            long cnt = row.getCnt() != null ? row.getCnt() : 0L;
             grouped.put(name, cnt);
             total += cnt;
         }
@@ -186,7 +187,7 @@ public class ReportStatisticsService {
     }
 
     private TypeDistributionVO buildTypeDistribution(List<Long> projectIds, Long sprintId) {
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectTypeDistribution(projectIds, sprintId);
+        List<TypeDistributionRow> rows = reportStatisticsMapper.selectTypeDistribution(projectIds, sprintId);
 
         Map<String, String> typeColors = Map.of(
                 "Bug", "#f85149",
@@ -198,10 +199,10 @@ public class ReportStatisticsService {
 
         List<TypeDistributionVO.TypeItem> items = new ArrayList<>();
         long total = 0;
-        for (Map<String, Object> row : rows) {
+        for (TypeDistributionRow row : rows) {
             TypeDistributionVO.TypeItem item = new TypeDistributionVO.TypeItem();
-            String name = (String) row.get("type_name");
-            long cnt = toLong(row.get("cnt"));
+            String name = row.getTypeName();
+            long cnt = row.getCnt() != null ? row.getCnt() : 0L;
             item.setName(name);
             item.setValue(cnt);
             item.setColor(typeColors.getOrDefault(name, "#6b7280"));
@@ -218,16 +219,16 @@ public class ReportStatisticsService {
     private WorkloadVO buildWorkload(List<Long> projectIds, Long sprintId, List<Long> closedStatusIds) {
         // 如果没有关闭状态，传一个不可能的 ID 避免 SQL 语法错误
         List<Long> safeClosedIds = closedStatusIds.isEmpty() ? List.of(-1L) : closedStatusIds;
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectWorkload(projectIds, sprintId, safeClosedIds);
+        List<WorkloadRow> rows = reportStatisticsMapper.selectWorkload(projectIds, sprintId, safeClosedIds);
 
         List<WorkloadVO.WorkloadItem> items = new ArrayList<>();
         long total = 0;
-        for (Map<String, Object> row : rows) {
+        for (WorkloadRow row : rows) {
             WorkloadVO.WorkloadItem item = new WorkloadVO.WorkloadItem();
-            Long assigneeId = toLongOrNull(row.get("assignee_id"));
-            String name = (String) row.get("assignee_name");
-            long itemTotal = toLong(row.get("total"));
-            long doneCount = toLong(row.get("done_count"));
+            Long assigneeId = row.getAssigneeId();
+            String name = row.getAssigneeName();
+            long itemTotal = row.getTotal() != null ? row.getTotal() : 0L;
+            long doneCount = row.getDoneCount() != null ? row.getDoneCount() : 0L;
 
             item.setName(assigneeId != null ? (name != null ? name : "未知用户") : "未分配");
             item.setValue(itemTotal);
@@ -245,7 +246,7 @@ public class ReportStatisticsService {
 
     private OverviewVO buildOverview(List<Long> projectIds, Long sprintId, List<Long> closedStatusIds) {
         List<Long> safeClosedIds = closedStatusIds.isEmpty() ? List.of(-1L) : closedStatusIds;
-        Map<String, Object> row = reportStatisticsMapper.selectOverview(
+        OverviewRow row = reportStatisticsMapper.selectOverview(
                 projectIds, sprintId, safeClosedIds, LocalDateTime.now());
 
         if (row == null) {
@@ -259,11 +260,11 @@ public class ReportStatisticsService {
             return vo;
         }
 
-        long total = toLong(row.get("total"));
-        long open = toLong(row.get("open_count"));
-        long closed = toLong(row.get("closed_count"));
-        long unassigned = toLong(row.get("unassigned"));
-        long overdue = toLong(row.get("overdue"));
+        long total = row.getTotal() != null ? row.getTotal() : 0L;
+        long open = row.getOpenCount() != null ? row.getOpenCount() : 0L;
+        long closed = row.getClosedCount() != null ? row.getClosedCount() : 0L;
+        long unassigned = row.getUnassigned() != null ? row.getUnassigned() : 0L;
+        long overdue = row.getOverdue() != null ? row.getOverdue() : 0L;
 
         OverviewVO vo = new OverviewVO();
         vo.setTotal(total);
@@ -282,19 +283,21 @@ public class ReportStatisticsService {
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        List<Map<String, Object>> createdRows = reportStatisticsMapper.selectCreatedTrend(projectIds, start, end);
-        List<Map<String, Object>> resolvedRows = reportStatisticsMapper.selectResolvedTrend(projectIds, start, end);
+        List<TrendRow> createdRows = reportStatisticsMapper.selectCreatedTrend(projectIds, start, end);
+        List<TrendRow> resolvedRows = reportStatisticsMapper.selectResolvedTrend(projectIds, start, end);
 
         // 转为 Map 方便按日期查找
         Map<LocalDate, Long> createdByDay = new HashMap<>();
-        for (Map<String, Object> row : createdRows) {
-            LocalDate day = toLocalDate(row.get("day"));
-            if (day != null) createdByDay.put(day, toLong(row.get("cnt")));
+        for (TrendRow row : createdRows) {
+            if (row.getDay() != null) {
+                createdByDay.put(row.getDay(), row.getCnt() != null ? row.getCnt() : 0L);
+            }
         }
         Map<LocalDate, Long> resolvedByDay = new HashMap<>();
-        for (Map<String, Object> row : resolvedRows) {
-            LocalDate day = toLocalDate(row.get("day"));
-            if (day != null) resolvedByDay.put(day, toLong(row.get("cnt")));
+        for (TrendRow row : resolvedRows) {
+            if (row.getDay() != null) {
+                resolvedByDay.put(row.getDay(), row.getCnt() != null ? row.getCnt() : 0L);
+            }
         }
 
         // 填充所有日期（含无数据的日子）
@@ -334,18 +337,18 @@ public class ReportStatisticsService {
 
     private ProjectComparisonVO buildProjectComparison(List<Long> projectIds, List<Long> closedStatusIds) {
         List<Long> safeClosedIds = closedStatusIds.isEmpty() ? List.of(-1L) : closedStatusIds;
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectProjectComparison(
+        List<ProjectComparisonRow> rows = reportStatisticsMapper.selectProjectComparison(
                 projectIds, safeClosedIds, LocalDateTime.now());
 
         List<ProjectComparisonVO.ProjectStatItem> items = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
+        for (ProjectComparisonRow row : rows) {
             ProjectComparisonVO.ProjectStatItem item = new ProjectComparisonVO.ProjectStatItem();
-            item.setName((String) row.get("project_name"));
-            item.setKey((String) row.get("project_key"));
-            long total = toLong(row.get("total"));
-            long open = toLong(row.get("open_count"));
-            long closed = toLong(row.get("closed_count"));
-            long overdue = toLong(row.get("overdue"));
+            item.setName(row.getProjectName());
+            item.setKey(row.getProjectKey());
+            long total = row.getTotal() != null ? row.getTotal() : 0L;
+            long open = row.getOpenCount() != null ? row.getOpenCount() : 0L;
+            long closed = row.getClosedCount() != null ? row.getClosedCount() : 0L;
+            long overdue = row.getOverdue() != null ? row.getOverdue() : 0L;
             item.setTotal(total);
             item.setOpen(open);
             item.setClosed(closed);
@@ -359,14 +362,24 @@ public class ReportStatisticsService {
         return vo;
     }
 
+    /**
+     * 累积流图最大查询天数（超过 90 天性能显著下降）
+     */
+    private static final int CUMULATIVE_FLOW_MAX_DAYS = 90;
+
     private CumulativeFlowVO buildCumulativeFlow(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
+        // 限制查询范围不超过 90 天，防止大数据量下查询超时
+        if (ChronoUnit.DAYS.between(startDate, endDate) > CUMULATIVE_FLOW_MAX_DAYS) {
+            startDate = endDate.minusDays(CUMULATIVE_FLOW_MAX_DAYS);
+        }
+
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectCumulativeFlow(projectIds, start, end);
+        List<CumulativeFlowRow> rows = reportStatisticsMapper.selectCumulativeFlow(projectIds, start, end);
 
         if (rows.isEmpty()) {
             CumulativeFlowVO empty = new CumulativeFlowVO();
@@ -380,12 +393,12 @@ public class ReportStatisticsService {
         Map<String, String> statusColorMap = new LinkedHashMap<>();
         Map<String, Integer> statusSortMap = new LinkedHashMap<>();
 
-        for (Map<String, Object> row : rows) {
-            String day = (String) row.get("day");
-            String statusName = (String) row.get("status_name");
-            String color = (String) row.get("status_color");
-            int sortOrder = toInt(row.get("sort_order"));
-            long cnt = toLong(row.get("cnt"));
+        for (CumulativeFlowRow row : rows) {
+            String day = row.getDay();
+            String statusName = row.getStatusName();
+            String color = row.getStatusColor();
+            int sortOrder = row.getSortOrder() != null ? row.getSortOrder() : 0;
+            long cnt = row.getCnt() != null ? row.getCnt() : 0L;
 
             dayStatusCounts.computeIfAbsent(day, k -> new LinkedHashMap<>())
                     .put(statusName, cnt);
@@ -434,7 +447,7 @@ public class ReportStatisticsService {
         long daysBetween = ChronoUnit.DAYS.between(startDate, endDate);
         boolean useWeekGrouping = daysBetween >= 28;
 
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectResolutionTimeTrend(
+        List<ResolutionTimeTrendRow> rows = reportStatisticsMapper.selectResolutionTimeTrend(
                 projectIds, start, end, useWeekGrouping);
 
         List<String> dates = new ArrayList<>();
@@ -445,21 +458,21 @@ public class ReportStatisticsService {
 
         if (!useWeekGrouping) {
             // 按天分组时填充所有日期（含无数据的日子）
-            Map<String, Map<String, Object>> rowsByDay = new LinkedHashMap<>();
-            for (Map<String, Object> row : rows) {
-                rowsByDay.put((String) row.get("period"), row);
+            Map<String, ResolutionTimeTrendRow> rowsByDay = new LinkedHashMap<>();
+            for (ResolutionTimeTrendRow row : rows) {
+                rowsByDay.put(row.getPeriod(), row);
             }
 
             LocalDate current = startDate;
             while (!current.isAfter(endDate)) {
                 String dayStr = current.toString();
                 dates.add(dayStr);
-                Map<String, Object> row = rowsByDay.get(dayStr);
+                ResolutionTimeTrendRow row = rowsByDay.get(dayStr);
                 if (row != null) {
-                    avgHours.add(toDouble(row.get("avg_hours")));
-                    medianHours.add(toDouble(row.get("median_hours")));
-                    p90Hours.add(toDouble(row.get("p90_hours")));
-                    resolvedCount.add(toLong(row.get("resolved_count")));
+                    avgHours.add(row.getAvgHours());
+                    medianHours.add(row.getMedianHours());
+                    p90Hours.add(row.getP90Hours());
+                    resolvedCount.add(row.getResolvedCount() != null ? row.getResolvedCount() : 0L);
                 } else {
                     avgHours.add(null);
                     medianHours.add(null);
@@ -470,26 +483,26 @@ public class ReportStatisticsService {
             }
         } else {
             // 按周分组直接使用 SQL 返回的结果
-            for (Map<String, Object> row : rows) {
-                dates.add((String) row.get("period"));
-                avgHours.add(toDouble(row.get("avg_hours")));
-                medianHours.add(toDouble(row.get("median_hours")));
-                p90Hours.add(toDouble(row.get("p90_hours")));
-                resolvedCount.add(toLong(row.get("resolved_count")));
+            for (ResolutionTimeTrendRow row : rows) {
+                dates.add(row.getPeriod());
+                avgHours.add(row.getAvgHours());
+                medianHours.add(row.getMedianHours());
+                p90Hours.add(row.getP90Hours());
+                resolvedCount.add(row.getResolvedCount() != null ? row.getResolvedCount() : 0L);
             }
         }
 
         // 分组明细
         List<ResolutionTimeVO.GroupDetail> groupDetails = new ArrayList<>();
         if (groupBy != null) {
-            List<Map<String, Object>> groupRows = reportStatisticsMapper.selectResolutionTimeByGroup(
+            List<ResolutionTimeGroupRow> groupRows = reportStatisticsMapper.selectResolutionTimeByGroup(
                     projectIds, start, end, groupBy);
-            for (Map<String, Object> row : groupRows) {
+            for (ResolutionTimeGroupRow row : groupRows) {
                 ResolutionTimeVO.GroupDetail detail = new ResolutionTimeVO.GroupDetail();
-                detail.setName((String) row.get("group_name"));
-                detail.setAvgHours(toDouble(row.get("avg_hours")));
-                detail.setMedianHours(toDouble(row.get("median_hours")));
-                detail.setCount(toLong(row.get("cnt")));
+                detail.setName(row.getGroupName());
+                detail.setAvgHours(row.getAvgHours());
+                detail.setMedianHours(row.getMedianHours());
+                detail.setCount(row.getCnt() != null ? row.getCnt() : 0L);
                 groupDetails.add(detail);
             }
         }
@@ -562,50 +575,53 @@ public class ReportStatisticsService {
         TimeReportVO vo = new TimeReportVO();
 
         // 按人员
-        List<Map<String, Object>> byUserRows = reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
-        int totalMinutes = byUserRows.stream().mapToInt(r -> toInt(r.get("total_minutes"))).sum();
+        List<TimeByUserRow> byUserRows = reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
+        int totalMinutes = byUserRows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
         vo.setTotalMinutes(totalMinutes);
         vo.setByUser(byUserRows.stream().map(r -> {
             TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
-            item.setName((String) r.get("user_name"));
-            item.setMinutes(toInt(r.get("total_minutes")));
-            item.setPercentage(totalMinutes > 0 ? Math.round(toInt(r.get("total_minutes")) * 1000.0 / totalMinutes) / 10.0 : 0);
+            item.setName(r.getUserName());
+            int minutes = r.getTotalMinutes() != null ? r.getTotalMinutes() : 0;
+            item.setMinutes(minutes);
+            item.setPercentage(totalMinutes > 0 ? Math.round(minutes * 1000.0 / totalMinutes) / 10.0 : 0);
             return item;
         }).collect(Collectors.toList()));
 
         // 按项目
-        List<Map<String, Object>> byProjectRows = reportStatisticsMapper.selectTimeByProject(projectIds, startStr, endStr);
+        List<TimeByProjectRow> byProjectRows = reportStatisticsMapper.selectTimeByProject(projectIds, startStr, endStr);
         vo.setByProject(byProjectRows.stream().map(r -> {
             TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
-            item.setName((String) r.get("project_name"));
-            item.setMinutes(toInt(r.get("total_minutes")));
-            item.setPercentage(totalMinutes > 0 ? Math.round(toInt(r.get("total_minutes")) * 1000.0 / totalMinutes) / 10.0 : 0);
+            item.setName(r.getProjectName());
+            int minutes = r.getTotalMinutes() != null ? r.getTotalMinutes() : 0;
+            item.setMinutes(minutes);
+            item.setPercentage(totalMinutes > 0 ? Math.round(minutes * 1000.0 / totalMinutes) / 10.0 : 0);
             return item;
         }).collect(Collectors.toList()));
 
         // 按工作类型
-        List<Map<String, Object>> byTypeRows = reportStatisticsMapper.selectTimeByWorkType(
+        List<TimeByWorkTypeRow> byTypeRows = reportStatisticsMapper.selectTimeByWorkType(
                 projectIds, startStr, endStr, workItemAttributeService.getWorkTypeAttributeId());
         vo.setByWorkType(byTypeRows.stream().map(r -> {
             TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
-            item.setName((String) r.get("work_type"));
-            item.setMinutes(toInt(r.get("total_minutes")));
-            item.setPercentage(totalMinutes > 0 ? Math.round(toInt(r.get("total_minutes")) * 1000.0 / totalMinutes) / 10.0 : 0);
+            item.setName(r.getWorkType());
+            int minutes = r.getTotalMinutes() != null ? r.getTotalMinutes() : 0;
+            item.setMinutes(minutes);
+            item.setPercentage(totalMinutes > 0 ? Math.round(minutes * 1000.0 / totalMinutes) / 10.0 : 0);
             return item;
         }).collect(Collectors.toList()));
 
         // 每日趋势
-        List<Map<String, Object>> trendRows = reportStatisticsMapper.selectTimeTrend(projectIds, startStr, endStr);
-        vo.setTrendDates(trendRows.stream().map(r -> (String) r.get("work_date")).collect(Collectors.toList()));
-        vo.setTrendMinutes(trendRows.stream().map(r -> toInt(r.get("total_minutes"))).collect(Collectors.toList()));
+        List<TimeTrendRow> trendRows = reportStatisticsMapper.selectTimeTrend(projectIds, startStr, endStr);
+        vo.setTrendDates(trendRows.stream().map(TimeTrendRow::getWorkDate).collect(Collectors.toList()));
+        vo.setTrendMinutes(trendRows.stream().map(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).collect(Collectors.toList()));
 
         // 交叉维度
-        List<Map<String, Object>> crossRows = reportStatisticsMapper.selectTimeCrossProjectUser(projectIds, startStr, endStr);
+        List<TimeCrossProjectUserRow> crossRows = reportStatisticsMapper.selectTimeCrossProjectUser(projectIds, startStr, endStr);
         vo.setCrossProjectUser(crossRows.stream().map(r -> {
             TimeReportVO.CrossDimensionItem item = new TimeReportVO.CrossDimensionItem();
-            item.setProjectName((String) r.get("project_name"));
-            item.setUserName((String) r.get("user_name"));
-            item.setMinutes(toInt(r.get("total_minutes")));
+            item.setProjectName(r.getProjectName());
+            item.setUserName(r.getUserName());
+            item.setMinutes(r.getTotalMinutes() != null ? r.getTotalMinutes() : 0);
             return item;
         }).collect(Collectors.toList()));
 
@@ -618,7 +634,7 @@ public class ReportStatisticsService {
     public EstimationReportVO getEstimationReport(Long projectId, Long userId) {
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
-        List<Map<String, Object>> rows = reportStatisticsMapper.selectEstimationComparison(projectIds);
+        List<EstimationComparisonRow> rows = reportStatisticsMapper.selectEstimationComparison(projectIds);
 
         EstimationReportVO vo = new EstimationReportVO();
 
@@ -627,19 +643,19 @@ public class ReportStatisticsService {
         List<EstimationReportVO.IssueEstimationItem> items = new ArrayList<>();
         Map<String, double[]> projectAgg = new LinkedHashMap<>();
 
-        for (Map<String, Object> row : rows) {
-            double estimated = toDouble(row.get("estimated_hours")) != null ? toDouble(row.get("estimated_hours")) : 0;
-            double spent = toDouble(row.get("spent_hours")) != null ? toDouble(row.get("spent_hours")) : 0;
+        for (EstimationComparisonRow row : rows) {
+            double estimated = row.getEstimatedHours() != null ? row.getEstimatedHours() : 0;
+            double spent = row.getSpentHours() != null ? row.getSpentHours() : 0;
 
             totalEstimated += estimated;
             totalSpent += spent;
 
             EstimationReportVO.IssueEstimationItem item = new EstimationReportVO.IssueEstimationItem();
-            item.setIssueId(String.valueOf(row.get("issue_id")));
-            item.setIssueKey((String) row.get("issue_key"));
-            item.setIssueTitle((String) row.get("title"));
-            item.setProjectName((String) row.get("project_name"));
-            item.setAssigneeName((String) row.get("assignee_name"));
+            item.setIssueId(String.valueOf(row.getIssueId()));
+            item.setIssueKey(row.getIssueKey());
+            item.setIssueTitle(row.getTitle());
+            item.setProjectName(row.getProjectName());
+            item.setAssigneeName(row.getAssigneeName());
             item.setEstimatedHours(Math.round(estimated * 100.0) / 100.0);
             item.setSpentHours(Math.round(spent * 100.0) / 100.0);
 
@@ -655,7 +671,7 @@ public class ReportStatisticsService {
             items.add(item);
 
             // 按项目聚合
-            String projName = (String) row.get("project_name");
+            String projName = row.getProjectName();
             projectAgg.computeIfAbsent(projName, k -> new double[3]);
             double[] agg = projectAgg.get(projName);
             agg[0] += estimated;
@@ -683,43 +699,5 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    // ─── Type conversion helpers ─────────────────────────────────────────
-
-    private long toLong(Object obj) {
-        if (obj == null) return 0L;
-        if (obj instanceof Long l) return l;
-        if (obj instanceof Integer i) return i.longValue();
-        if (obj instanceof Number n) return n.longValue();
-        return 0L;
-    }
-
-    private Long toLongOrNull(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof Long l) return l;
-        if (obj instanceof Integer i) return i.longValue();
-        if (obj instanceof Number n) return n.longValue();
-        return null;
-    }
-
-    private int toInt(Object obj) {
-        if (obj == null) return 0;
-        if (obj instanceof Integer i) return i;
-        if (obj instanceof Number n) return n.intValue();
-        return 0;
-    }
-
-    private Double toDouble(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof Double d) return d;
-        if (obj instanceof Number n) return n.doubleValue();
-        return null;
-    }
-
-    private LocalDate toLocalDate(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof LocalDate ld) return ld;
-        if (obj instanceof java.sql.Date sd) return sd.toLocalDate();
-        if (obj instanceof java.util.Date d) return new java.sql.Date(d.getTime()).toLocalDate();
-        return null;
-    }
 }
+

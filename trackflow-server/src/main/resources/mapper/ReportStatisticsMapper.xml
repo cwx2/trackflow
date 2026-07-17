@@ -27,7 +27,7 @@
     </sql>
 
     <!-- ========== 状态分布 ========== -->
-    <select id="selectStatusDistribution" resultType="map">
+    <select id="selectStatusDistribution" resultType="com.trackflow.report.mapper.result.StatusDistributionRow">
         SELECT s.name AS status_name,
                s.color AS status_color,
                s.category AS status_category,
@@ -43,7 +43,7 @@
     </select>
 
     <!-- ========== 优先级分布 ========== -->
-    <select id="selectPriorityDistribution" resultType="map">
+    <select id="selectPriorityDistribution" resultType="com.trackflow.report.mapper.result.PriorityDistributionRow">
         SELECT COALESCE(i.priority, 'Normal') AS priority_name,
                COUNT(*) AS cnt
         FROM issue i
@@ -54,7 +54,7 @@
     </select>
 
     <!-- ========== 类型分布 ========== -->
-    <select id="selectTypeDistribution" resultType="map">
+    <select id="selectTypeDistribution" resultType="com.trackflow.report.mapper.result.TypeDistributionRow">
         SELECT COALESCE(i.issue_type, 'Task') AS type_name,
                COUNT(*) AS cnt
         FROM issue i
@@ -66,7 +66,7 @@
     </select>
 
     <!-- ========== 工作负载 ========== -->
-    <select id="selectWorkload" resultType="map">
+    <select id="selectWorkload" resultType="com.trackflow.report.mapper.result.WorkloadRow">
         SELECT i.assignee_id,
                u.display_name AS assignee_name,
                COUNT(*) AS total,
@@ -85,7 +85,7 @@
     </select>
 
     <!-- ========== 概览统计 ========== -->
-    <select id="selectOverview" resultType="map">
+    <select id="selectOverview" resultType="com.trackflow.report.mapper.result.OverviewRow">
         SELECT COUNT(*) AS total,
                COUNT(*) FILTER (WHERE i.status_id NOT IN
                    <foreach collection="closedStatusIds" item="sid" open="(" separator="," close=")">
@@ -112,7 +112,7 @@
     </select>
 
     <!-- ========== 趋势-创建 ========== -->
-    <select id="selectCreatedTrend" resultType="map">
+    <select id="selectCreatedTrend" resultType="com.trackflow.report.mapper.result.TrendRow">
         SELECT CAST(i.created_at AS DATE) AS day,
                COUNT(*) AS cnt
         FROM issue i
@@ -125,7 +125,7 @@
     </select>
 
     <!-- ========== 趋势-解决 ========== -->
-    <select id="selectResolvedTrend" resultType="map">
+    <select id="selectResolvedTrend" resultType="com.trackflow.report.mapper.result.TrendRow">
         SELECT CAST(i.resolved_at AS DATE) AS day,
                COUNT(*) AS cnt
         FROM issue i
@@ -139,7 +139,7 @@
     </select>
 
     <!-- ========== 跨项目对比 ========== -->
-    <select id="selectProjectComparison" resultType="map">
+    <select id="selectProjectComparison" resultType="com.trackflow.report.mapper.result.ProjectComparisonRow">
         SELECT p.id AS project_id,
                p.name AS project_name,
                p.key AS project_key,
@@ -181,19 +181,17 @@
 
     <!-- ========== 累积流图 ========== -->
     <!--
-        算法：利用 PostgreSQL 窗口函数重建每日状态快照
-        1. 找到每个工单在每天结束时的状态（通过 issue_activity 回放）
-        2. 使用 LATERAL + generate_series 生成日期序列
-        3. 对每天、每个状态做 COUNT
+        算法：利用 LATERAL JOIN + 部分索引 idx_activity_status_lookup 高效回放每日状态
+        复杂度：O(N×D) 索引扫描，每次 LATERAL 命中索引的 B-tree 直接定位
+
+        索引：idx_activity_status_lookup ON issue_activity (issue_id, created_at DESC) WHERE field_name='status'
 
         核心思路：
-        - 对每个工单，找到它在每天的"最后一次状态变更"的 new_value
-        - 如果某天没有变更，继承前一天的状态（用 LAST_VALUE OVER window）
-        - 初始状态通过 issue_activity 第一条记录的 old_value 回溯
-
-        实际实现：使用 CTE 逐步构建
+        - 对每个工单×每天，通过 LATERAL JOIN 利用索引快速查找截至当天最后一次状态变更
+        - 初始状态通过 DISTINCT ON (issue_id) 取第一条活动的 old_value
+        - 查询范围在 Service 层限制为最多 90 天
     -->
-    <select id="selectCumulativeFlow" resultType="map">
+    <select id="selectCumulativeFlow" resultType="com.trackflow.report.mapper.result.CumulativeFlowRow">
         WITH
         -- 日期序列
         date_series AS (
@@ -212,46 +210,41 @@
               AND i.created_at &lt; (#{endDate}::timestamp + interval '1 day')
             <include refid="projectFilter"/>
         ),
-        -- 所有状态变更活动（按时间排序）
-        status_changes AS (
-            SELECT a.issue_id, a.old_value, a.new_value, a.created_at
+        -- 每个工单的初始状态：取第一条 status 活动的 old_value，无活动则取当前状态名
+        first_status_change AS (
+            SELECT DISTINCT ON (a.issue_id) a.issue_id, a.old_value
             FROM issue_activity a
             WHERE a.field_name = 'status'
               AND a.issue_id IN (SELECT id FROM relevant_issues)
-              AND a.created_at &lt; (#{endDate}::timestamp + interval '1 day')
             ORDER BY a.issue_id, a.created_at
         ),
-        -- 每个工单的初始状态（第一条活动的 old_value，或当前状态名）
         issue_initial_status AS (
             SELECT ri.id AS issue_id,
                    ri.created_at,
-                   COALESCE(
-                       (SELECT sc.old_value FROM status_changes sc WHERE sc.issue_id = ri.id ORDER BY sc.created_at LIMIT 1),
-                       (SELECT s.name FROM issue_status s WHERE s.id = ri.status_id)
-                   ) AS initial_status
+                   COALESCE(fsc.old_value, s.name) AS initial_status
             FROM relevant_issues ri
+            LEFT JOIN first_status_change fsc ON fsc.issue_id = ri.id
+            LEFT JOIN issue_status s ON s.id = ri.status_id
         ),
-        -- 每个工单在每天结束时的状态
-        -- 对每天：找到该天最后一次变更的 new_value，如果没有变更则用前一个已知状态
+        -- 每个工单在每天结束时的状态（LATERAL JOIN 利用索引快速定位）
         daily_status AS (
             SELECT ds.day,
                    iis.issue_id,
                    CASE
-                       WHEN iis.created_at >= (ds.day + interval '1 day') THEN NULL  -- 工单还未创建
-                       ELSE COALESCE(
-                           -- 截至该天结束的最后一次状态变更
-                           (SELECT sc.new_value
-                            FROM status_changes sc
-                            WHERE sc.issue_id = iis.issue_id
-                              AND sc.created_at &lt; (ds.day + interval '1 day')
-                            ORDER BY sc.created_at DESC
-                            LIMIT 1),
-                           -- 无变更则用初始状态
-                           iis.initial_status
-                       )
+                       WHEN iis.created_at >= (ds.day + interval '1 day') THEN NULL
+                       ELSE COALESCE(lat.new_value, iis.initial_status)
                    END AS status_name
             FROM date_series ds
             CROSS JOIN issue_initial_status iis
+            LEFT JOIN LATERAL (
+                SELECT a.new_value
+                FROM issue_activity a
+                WHERE a.field_name = 'status'
+                  AND a.issue_id = iis.issue_id
+                  AND a.created_at &lt; (ds.day + interval '1 day')
+                ORDER BY a.created_at DESC
+                LIMIT 1
+            ) lat ON true
         )
         -- 最终聚合：按天、按状态 COUNT
         SELECT ds_agg.day::text AS day,
@@ -267,7 +260,7 @@
     </select>
 
     <!-- ========== 解决时间趋势 ========== -->
-    <select id="selectResolutionTimeTrend" resultType="map">
+    <select id="selectResolutionTimeTrend" resultType="com.trackflow.report.mapper.result.ResolutionTimeTrendRow">
         <if test="useWeekGrouping">
             SELECT date_trunc('week', i.resolved_at)::date::text AS period,
         </if>
@@ -295,7 +288,7 @@
     </select>
 
     <!-- ========== 解决时间分组明细 ========== -->
-    <select id="selectResolutionTimeByGroup" resultType="map">
+    <select id="selectResolutionTimeByGroup" resultType="com.trackflow.report.mapper.result.ResolutionTimeGroupRow">
         SELECT
         <choose>
             <when test="groupBy == 'type'">
@@ -344,7 +337,7 @@
     <!-- ═══════════ 时间报表聚合查询 ═══════════ -->
 
     <!-- 按人员分组汇总工时 -->
-    <select id="selectTimeByUser" resultType="map">
+    <select id="selectTimeByUser" resultType="com.trackflow.report.mapper.result.TimeByUserRow">
         SELECT
             t.user_id,
             u.display_name AS user_name,
@@ -364,7 +357,7 @@
     </select>
 
     <!-- 按项目分组汇总工时 -->
-    <select id="selectTimeByProject" resultType="map">
+    <select id="selectTimeByProject" resultType="com.trackflow.report.mapper.result.TimeByProjectRow">
         SELECT
             p.id AS project_id,
             p.name AS project_name,
@@ -384,7 +377,7 @@
     </select>
 
     <!-- 按工作类型分组汇总工时 -->
-    <select id="selectTimeByWorkType" resultType="map">
+    <select id="selectTimeByWorkType" resultType="com.trackflow.report.mapper.result.TimeByWorkTypeRow">
         SELECT
             COALESCE(wiav.name, '未分类') AS work_type,
             COALESCE(SUM(t.duration), 0) AS total_minutes
@@ -404,7 +397,7 @@
     </select>
 
     <!-- 每日工时趋势 -->
-    <select id="selectTimeTrend" resultType="map">
+    <select id="selectTimeTrend" resultType="com.trackflow.report.mapper.result.TimeTrendRow">
         SELECT
             t.work_date::text AS work_date,
             COALESCE(SUM(t.duration), 0) AS total_minutes
@@ -422,7 +415,7 @@
     </select>
 
     <!-- 交叉维度：按项目+人员分组 -->
-    <select id="selectTimeCrossProjectUser" resultType="map">
+    <select id="selectTimeCrossProjectUser" resultType="com.trackflow.report.mapper.result.TimeCrossProjectUserRow">
         SELECT
             p.name AS project_name,
             u.display_name AS user_name,
@@ -443,7 +436,7 @@
     </select>
 
     <!-- 预估对比报表 -->
-    <select id="selectEstimationComparison" resultType="map">
+    <select id="selectEstimationComparison" resultType="com.trackflow.report.mapper.result.EstimationComparisonRow">
         SELECT
             i.id AS issue_id,
             i.issue_key,
