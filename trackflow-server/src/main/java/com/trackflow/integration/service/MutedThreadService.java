@@ -77,6 +77,29 @@ public class MutedThreadService {
     }
 
     /**
+     * 批量检查哪些用户对指定资源已静音（批量通知发送场景）。
+     *
+     * @param resourceType 资源类型
+     * @param resourceId   资源 ID
+     * @param userIds      待检查的用户 ID 集合
+     * @return 已对该资源静音的用户 ID 集合
+     */
+    public Set<Long> getMutedUserIds(String resourceType, Long resourceId, Collection<Long> userIds) {
+        if (resourceId == null || userIds == null || userIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        List<MutedThread> muted = mutedThreadMapper.selectList(
+                new LambdaQueryWrapper<MutedThread>()
+                        .eq(MutedThread::getResourceType, resourceType)
+                        .eq(MutedThread::getResourceId, resourceId)
+                        .in(MutedThread::getUserId, userIds)
+        );
+        return muted.stream()
+                .map(MutedThread::getUserId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
      * 批量检查静音状态（给前端通知列表用，避免 N+1）
      *
      * @return 已静音的 resourceId 集合

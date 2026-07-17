@@ -14,7 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -52,6 +53,63 @@ public class NotificationPreferenceService {
                     userId, eventType, projectId, e);
             return true; // 查询失败时默认发送，不阻断通知
         }
+    }
+
+    /**
+     * 批量检查哪些用户对指定事件类型的通知偏好启用（批量通知发送场景）。
+     * <p>
+     * 对每个用户执行"项目级覆盖全局"逻辑，返回允许接收通知的用户 ID 集合。
+     * 注意：查询失败的用户默认视为启用（不阻断通知）。
+     *
+     * @param userIds    待检查的用户 ID 集合
+     * @param eventType  通知事件类型
+     * @param projectId  项目 ID（可为 null）
+     * @return 允许接收此类通知的用户 ID 集合
+     */
+    public Set<Long> getEnabledUserIds(Collection<Long> userIds, NotificationEventType eventType, Long projectId) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        // 批量查询项目级偏好（如果 projectId 非空）
+        Map<Long, NotificationPreference> projectPrefMap = Collections.emptyMap();
+        if (projectId != null) {
+            List<NotificationPreference> projectPrefs = preferenceMapper.selectList(
+                    new LambdaQueryWrapper<NotificationPreference>()
+                            .in(NotificationPreference::getUserId, userIds)
+                            .eq(NotificationPreference::getProjectId, projectId)
+            );
+            projectPrefMap = projectPrefs.stream()
+                    .collect(Collectors.toMap(NotificationPreference::getUserId, p -> p));
+        }
+
+        // 批量查询全局偏好
+        List<NotificationPreference> globalPrefs = preferenceMapper.selectList(
+                new LambdaQueryWrapper<NotificationPreference>()
+                        .in(NotificationPreference::getUserId, userIds)
+                        .isNull(NotificationPreference::getProjectId)
+        );
+        Map<Long, NotificationPreference> globalPrefMap = globalPrefs.stream()
+                .collect(Collectors.toMap(NotificationPreference::getUserId, p -> p));
+
+        Set<Long> enabledUsers = new HashSet<>();
+        for (Long userId : userIds) {
+            try {
+                // 项目级优先
+                NotificationPreference pref = projectPrefMap.get(userId);
+                if (pref == null) {
+                    pref = globalPrefMap.get(userId);
+                }
+                // 无偏好记录 → 默认启用
+                if (pref == null || eventType.isEnabled(pref)) {
+                    enabledUsers.add(userId);
+                }
+            } catch (Exception e) {
+                // 查询失败默认发送
+                enabledUsers.add(userId);
+            }
+        }
+        return enabledUsers;
     }
 
     /**
@@ -105,6 +163,24 @@ public class NotificationPreferenceService {
                         .eq(NotificationPreference::getUserId, userId)
                         .isNotNull(NotificationPreference::getProjectId)
                         .orderByAsc(NotificationPreference::getCreatedAt)
+        );
+    }
+
+    /**
+     * 批量查询多个用户的全局通知偏好（批量邮件分发场景）。
+     * 不自动创建默认记录——不在列表中的用户视为使用默认配置。
+     *
+     * @param userIds 用户 ID 集合
+     * @return 全局偏好列表（仅已存在记录的用户）
+     */
+    public List<NotificationPreference> listGlobalByUserIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return preferenceMapper.selectList(
+                new LambdaQueryWrapper<NotificationPreference>()
+                        .in(NotificationPreference::getUserId, userIds)
+                        .isNull(NotificationPreference::getProjectId)
         );
     }
 

@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Sprint 通知助手：负责在 Sprint 生命周期事件后向项目成员推送站内通知。
@@ -42,6 +43,7 @@ public class SprintNotificationHelper {
 
     /**
      * Sprint 激活通知：通知项目所有成员（排除操作者）。
+     * 使用批量通知接口，N 个成员仅需 2-3 次 DB 操作。
      *
      * @param sprint     被激活的 Sprint
      * @param operatorId 执行操作的用户 ID
@@ -54,28 +56,32 @@ public class SprintNotificationHelper {
                 return;
             }
 
+            // 排除操作者
+            List<Long> recipients = memberUserIds.stream()
+                    .filter(id -> !id.equals(operatorId))
+                    .toList();
+            if (recipients.isEmpty()) {
+                return;
+            }
+
+            // 批量偏好过滤
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipients, NotificationEventType.SPRINT_STARTED, sprint.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
             String operatorName = getUserDisplayName(operatorId);
             String dateRange = formatDateRange(sprint);
             String title = String.format("Sprint「%s」已启动", sprint.getName());
             String content = String.format("%s 启动了 Sprint「%s」，周期：%s",
                     operatorName, sprint.getName(), dateRange);
 
-            int sent = 0;
-            for (Long userId : memberUserIds) {
-                if (userId.equals(operatorId)) {
-                    continue;
-                }
-                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_STARTED, sprint.getProjectId())) {
-                    continue;
-                }
-                notificationService.notify(userId, operatorId, title, content,
-                        NotificationType.sprint_started, "sprint", sprint.getId(), sprint.getProjectId());
-                sent++;
-            }
-            if (sent > 0) {
-                log.debug("[SprintNotification] 已发送Sprint激活通知: sprint={}, recipients={}",
-                        sprint.getName(), sent);
-            }
+            notificationService.notifyBatch(enabledUserIds, operatorId, title, content,
+                    NotificationType.sprint_started, "sprint", sprint.getId(), sprint.getProjectId());
+
+            log.debug("[SprintNotification] 已发送Sprint激活通知: sprint={}, recipients={}",
+                    sprint.getName(), enabledUserIds.size());
         } catch (Exception e) {
             log.error("[SprintNotification] 发送Sprint激活通知失败: sprint={}, error={}",
                     sprint.getName(), e.getMessage(), e);
@@ -84,6 +90,7 @@ public class SprintNotificationHelper {
 
     /**
      * Sprint 完成通知：通知项目所有成员（排除操作者）。
+     * 使用批量通知接口，N 个成员仅需 2-3 次 DB 操作。
      *
      * @param sprint          被完成的 Sprint
      * @param completedIssues 已完成的工单数量
@@ -97,27 +104,31 @@ public class SprintNotificationHelper {
                 return;
             }
 
+            // 排除操作者
+            List<Long> recipients = memberUserIds.stream()
+                    .filter(id -> !id.equals(operatorId))
+                    .toList();
+            if (recipients.isEmpty()) {
+                return;
+            }
+
+            // 批量偏好过滤
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipients, NotificationEventType.SPRINT_COMPLETED, sprint.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
             String operatorName = getUserDisplayName(operatorId);
             String title = String.format("Sprint「%s」已完成", sprint.getName());
             String content = String.format("%s 完成了 Sprint「%s」，共完成 %d 个工单",
                     operatorName, sprint.getName(), completedIssues);
 
-            int sent = 0;
-            for (Long userId : memberUserIds) {
-                if (userId.equals(operatorId)) {
-                    continue;
-                }
-                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_COMPLETED, sprint.getProjectId())) {
-                    continue;
-                }
-                notificationService.notify(userId, operatorId, title, content,
-                        NotificationType.sprint_completed, "sprint", sprint.getId(), sprint.getProjectId());
-                sent++;
-            }
-            if (sent > 0) {
-                log.debug("[SprintNotification] 已发送Sprint完成通知: sprint={}, recipients={}",
-                        sprint.getName(), sent);
-            }
+            notificationService.notifyBatch(enabledUserIds, operatorId, title, content,
+                    NotificationType.sprint_completed, "sprint", sprint.getId(), sprint.getProjectId());
+
+            log.debug("[SprintNotification] 已发送Sprint完成通知: sprint={}, recipients={}",
+                    sprint.getName(), enabledUserIds.size());
         } catch (Exception e) {
             log.error("[SprintNotification] 发送Sprint完成通知失败: sprint={}, error={}",
                     sprint.getName(), e.getMessage(), e);

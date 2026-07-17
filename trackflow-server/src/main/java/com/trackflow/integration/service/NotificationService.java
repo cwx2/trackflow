@@ -2,11 +2,14 @@ package com.trackflow.integration.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationCategory;
+import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.integration.vo.NotificationVO;
@@ -60,13 +63,14 @@ public class NotificationService {
      * @param title        通知标题
      * @param content      通知内容
      * @param type         通知类型（枚举约束，确保前后端同步）
+     * @param reason       通知原因（为什么通知此用户，可为 null 向后兼容）
      * @param resourceType 关联资源类型
      * @param resourceId   关联资源ID
      * @param projectId    关联项目ID（可为 null，如全局/系统通知）
      */
     @Transactional
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
-                       String resourceType, Long resourceId, Long projectId) {
+                       NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
         // 全局站内通知开关检查（管理员可通过 NotificationAdmin 设置关闭）
         if (!isInAppEnabled()) {
             log.debug("[Notification] 全局站内通知已关闭，跳过: userId={}, type={}", userId, type);
@@ -97,6 +101,7 @@ public class NotificationService {
             existing.setUpdatedAt(LocalDateTime.now());
             existing.setAggregationCount(
                     (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
+            // 聚合时不覆盖 reason（保留第一次的 reason）
             notificationMapper.updateById(existing);
             log.debug("[Notification] 聚合通知: id={}, userId={}, type={}, resourceId={}, count={}",
                     existing.getId(), userId, typeValue, resourceId, existing.getAggregationCount());
@@ -109,6 +114,7 @@ public class NotificationService {
             n.setTitle(title);
             n.setContent(content);
             n.setType(typeValue);
+            n.setReason(reason != null ? reason.name() : null);
             n.setResourceType(resourceType);
             n.setResourceId(resourceId);
             n.setIsRead(false);
@@ -125,12 +131,214 @@ public class NotificationService {
     }
 
     /**
+     * 创建通知（无 reason 的兼容重载，向后兼容旧调用方）。
+     */
+    @Transactional
+    public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
+                       String resourceType, Long resourceId, Long projectId) {
+        notify(userId, actorId, title, content, type, null, resourceType, resourceId, projectId);
+    }
+
+    /**
      * 创建通知（无 projectId 的兼容重载，用于不关联项目的系统通知）。
      */
     @Transactional
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                        String resourceType, Long resourceId) {
-        notify(userId, actorId, title, content, type, resourceType, resourceId, null);
+        notify(userId, actorId, title, content, type, null, resourceType, resourceId, null);
+    }
+
+    /**
+     * 批量创建通知（含聚合去重逻辑），将 N 次单独 DB 操作优化为 2-3 次批量操作。
+     * <p>
+     * 适用场景：Sprint 启动/完成通知全部成员、项目归档/删除通知全部成员等。
+     * <p>
+     * 处理流程：
+     * 1. 全局开关检查
+     * 2. 批量静音过滤（一次 SELECT）
+     * 3. 批量聚合窗口查询（一次 SELECT）
+     * 4. 分组为 toInsert / toUpdate
+     * 5. 批量 INSERT + 批量 UPDATE（各一次 DB 操作）
+     * 6. 批量邮件分发
+     *
+     * @param userIds      接收者用户 ID 集合（已排除操作者、已过滤偏好的最终列表）
+     * @param actorId      触发者用户 ID
+     * @param title        通知标题
+     * @param content      通知内容
+     * @param type         通知类型
+     * @param resourceType 关联资源类型
+     * @param resourceId   关联资源 ID
+     * @param projectId    关联项目 ID（可为 null）
+     */
+    @Transactional
+    public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
+                            NotificationType type, String resourceType, Long resourceId, Long projectId) {
+        notifyBatch(userIds, actorId, title, content, type, null, resourceType, resourceId, projectId);
+    }
+
+    /**
+     * 批量创建通知（含 reason），含聚合去重逻辑。
+     */
+    @Transactional
+    public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
+                            NotificationType type, NotificationReason reason,
+                            String resourceType, Long resourceId, Long projectId) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+
+        // 全局站内通知开关检查
+        if (!isInAppEnabled()) {
+            log.debug("[Notification] 全局站内通知已关闭，跳过批量通知: type={}, recipients={}", type, userIds.size());
+            return;
+        }
+
+        String typeValue = type.name();
+
+        // 批量静音过滤（@提及类型永远不被静音）
+        Set<Long> filteredUserIds;
+        if (type != NotificationType.mention && resourceId != null) {
+            Set<Long> mutedUserIds = mutedThreadService.getMutedUserIds(resourceType, resourceId, userIds);
+            filteredUserIds = userIds.stream()
+                    .filter(id -> !mutedUserIds.contains(id))
+                    .collect(Collectors.toSet());
+            if (filteredUserIds.isEmpty()) {
+                log.debug("[Notification] 所有接收者已静音，跳过: type={}, resource={}:{}", type, resourceType, resourceId);
+                return;
+            }
+        } else {
+            filteredUserIds = new HashSet<>(userIds);
+        }
+
+        // 批量查找聚合窗口内的同类未读通知
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(aggregationMinutes);
+        Map<Long, Notification> existingMap = findRecentUnreadBatch(filteredUserIds, typeValue, resourceType, resourceId, cutoff);
+
+        List<Notification> toInsert = new ArrayList<>();
+        List<Notification> toUpdate = new ArrayList<>();
+        Set<Long> newNotificationUserIds = new HashSet<>();
+
+        for (Long userId : filteredUserIds) {
+            Notification existing = existingMap.get(userId);
+            if (existing != null) {
+                // 聚合：更新已有通知
+                existing.setTitle(title);
+                existing.setContent(content);
+                existing.setActorId(actorId);
+                existing.setIsRead(false);
+                existing.setUpdatedAt(LocalDateTime.now());
+                existing.setAggregationCount(
+                        (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
+                toUpdate.add(existing);
+            } else {
+                // 新建通知
+                Notification n = new Notification();
+                n.setUserId(userId);
+                n.setActorId(actorId);
+                n.setProjectId(projectId);
+                n.setTitle(title);
+                n.setContent(content);
+                n.setType(typeValue);
+                n.setReason(reason != null ? reason.name() : null);
+                n.setResourceType(resourceType);
+                n.setResourceId(resourceId);
+                n.setIsRead(false);
+                n.setCreatedAt(LocalDateTime.now());
+                n.setAggregationCount(1);
+                toInsert.add(n);
+                newNotificationUserIds.add(userId);
+            }
+        }
+
+        // 批量 INSERT
+        if (!toInsert.isEmpty()) {
+            Db.saveBatch(toInsert);
+            log.debug("[Notification] 批量插入通知: count={}, type={}", toInsert.size(), typeValue);
+        }
+
+        // 批量 UPDATE
+        if (!toUpdate.isEmpty()) {
+            for (Notification n : toUpdate) {
+                notificationMapper.updateById(n);
+            }
+            log.debug("[Notification] 批量聚合更新通知: count={}, type={}", toUpdate.size(), typeValue);
+        }
+
+        // 批量邮件分发（仅新建通知的用户）
+        if (!newNotificationUserIds.isEmpty()) {
+            dispatchEmailBatch(newNotificationUserIds, title, content);
+        }
+    }
+
+    /**
+     * 批量查找聚合窗口内同类型同资源的未读通知（按 userId 分组）。
+     *
+     * @return Map: userId → 匹配的最近一条未读通知
+     */
+    private Map<Long, Notification> findRecentUnreadBatch(Collection<Long> userIds, String type,
+                                                          String resourceType, Long resourceId,
+                                                          LocalDateTime cutoff) {
+        if (resourceId == null || userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Notification> existing = notificationMapper.selectList(
+                new LambdaQueryWrapper<Notification>()
+                        .in(Notification::getUserId, userIds)
+                        .eq(Notification::getType, type)
+                        .eq(Notification::getResourceType, resourceType)
+                        .eq(Notification::getResourceId, resourceId)
+                        .eq(Notification::getIsRead, false)
+                        .ge(Notification::getCreatedAt, cutoff)
+                        .orderByDesc(Notification::getCreatedAt)
+        );
+        // 每个 userId 只取最近一条
+        Map<Long, Notification> result = new HashMap<>();
+        for (Notification n : existing) {
+            result.putIfAbsent(n.getUserId(), n);
+        }
+        return result;
+    }
+
+    /**
+     * 批量分发邮件通知（仅对新建通知的用户）。
+     * 批量查询用户信息和偏好，减少 DB 操作。
+     */
+    private void dispatchEmailBatch(Set<Long> userIds, String title, String content) {
+        try {
+            if (!emailSendService.isEmailAvailable()) {
+                return;
+            }
+            // 批量查询用户
+            List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
+            if (users.isEmpty()) {
+                return;
+            }
+            // 批量查询全局偏好
+            List<NotificationPreference> prefs = preferenceService.listGlobalByUserIds(userIds);
+            Set<Long> emailEnabledUserIds = prefs.stream()
+                    .filter(p -> Boolean.TRUE.equals(p.getEmailEnabled()))
+                    .map(NotificationPreference::getUserId)
+                    .collect(Collectors.toSet());
+
+            String subject = "[TrackFlow] " + title;
+            String htmlContent = buildNotificationEmailContent(title, content);
+
+            for (SysUser user : users) {
+                if (user.getEmail() == null || user.getEmail().isBlank()) {
+                    continue;
+                }
+                if (!emailEnabledUserIds.contains(user.getId())) {
+                    continue;
+                }
+                try {
+                    emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
+                } catch (Exception e) {
+                    log.warn("[Notification] 批量邮件发送异常: userId={}, error={}", user.getId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Notification] 批量邮件分发异常（不影响站内通知）: error={}", e.getMessage());
+        }
     }
 
     /**
@@ -213,10 +421,10 @@ public class NotificationService {
     }
 
     /**
-     * 获取用户通知列表（支持分类过滤和项目过滤）。
+     * 获取用户通知列表（支持分类过滤、项目过滤和原因过滤）。
      * 排序按 COALESCE(updated_at, created_at) DESC，聚合更新的通知置顶。
      */
-    public Page<Notification> list(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, Page<Notification> page) {
+    public Page<Notification> list(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, String reason, Page<Notification> page) {
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Notification::getUserId, userId);
         if (Boolean.TRUE.equals(unreadOnly)) {
@@ -225,6 +433,10 @@ public class NotificationService {
         // 项目过滤
         if (projectId != null) {
             wrapper.eq(Notification::getProjectId, projectId);
+        }
+        // 原因过滤
+        if (reason != null && !reason.isBlank()) {
+            wrapper.eq(Notification::getReason, reason);
         }
         // 分类过滤
         applyCategory(wrapper, category);
@@ -236,8 +448,8 @@ public class NotificationService {
     /**
      * 获取通知列表并填充 actor 信息（批量查询用户，避免 N+1）
      */
-    public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, Page<Notification> page) {
-        Page<Notification> result = list(userId, unreadOnly, category, projectId, page);
+    public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, String reason, Page<Notification> page) {
+        Page<Notification> result = list(userId, unreadOnly, category, projectId, reason, page);
         List<Notification> records = result.getRecords();
         if (records.isEmpty()) {
             return new PageResult<>(Collections.emptyList(), 0L,
@@ -279,6 +491,15 @@ public class NotificationService {
             }
             // 设置静音状态
             vo.setResourceMuted(record.getResourceId() != null && mutedResourceIds.contains(record.getResourceId()));
+            // 设置 reason 中文标签
+            if (record.getReason() != null && !record.getReason().isBlank()) {
+                try {
+                    NotificationReason reasonEnum = NotificationReason.valueOf(record.getReason());
+                    vo.setReasonLabel(reasonEnum.getDisplayLabel());
+                } catch (IllegalArgumentException e) {
+                    // 未知 reason 值，保留 null
+                }
+            }
         }
         return new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
