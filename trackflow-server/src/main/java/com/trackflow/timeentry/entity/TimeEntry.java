@@ -13,7 +13,9 @@ public class TimeEntry {
     private Long id;
 
     private Long issueId;
+    private Long projectId;
     private Long userId;
+    private Long loggedBy;          // who performed the logging (always current user)
     private LocalDate workDate;
     private Integer duration;       // minutes
     private Integer startTime;      // minutes from midnight (e.g. 540 = 09:00)

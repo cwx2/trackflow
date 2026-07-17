@@ -19,9 +19,13 @@
           class="time-entry"
           @click.stop="$emit('entryClick', entry)"
         >
-          <div class="entry-issue" @click.stop="$emit('issueClick', entry)">{{ entry.issueKey || entry.issueId }}</div>
+          <div class="entry-issue" :class="{ deleted: entry.issueDeleted }" @click.stop="$emit('issueClick', entry)">
+            <template v-if="entry.issueDeleted">[已删除] {{ entry.issueKey || '' }}</template>
+            <template v-else>{{ entry.issueKey || entry.issueId }}</template>
+          </div>
           <div class="entry-duration">{{ formatDuration(entry.duration) }}</div>
           <div v-if="entry.userName && showUser" class="entry-user">{{ entry.userName }}</div>
+          <div v-if="entry.loggedByName" class="entry-logged-by">由 {{ entry.loggedByName }} 代录</div>
           <div v-if="entry.description && !showUser" class="entry-desc">{{ entry.description }}</div>
           <div v-if="entry.workType" class="entry-type">{{ workTypeLabel(entry.workType) }}</div>
         </div>
@@ -121,10 +125,13 @@ function workTypeLabel(type: string): string {
 .time-entry:hover { border-color: var(--tf-accent); }
 .entry-issue { font-size: 11px; font-weight: 500; color: var(--tf-accent); margin-bottom: 2px; cursor: pointer; }
 .entry-issue:hover { text-decoration: underline; }
+.entry-issue.deleted { color: var(--tf-text-tertiary); font-style: italic; cursor: default; }
+.entry-issue.deleted:hover { text-decoration: none; }
 .entry-duration { font-size: 12px; font-weight: 600; color: var(--tf-text-primary); }
 .entry-desc { font-size: 10px; color: var(--tf-text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry-type { font-size: 10px; color: var(--tf-text-muted); margin-top: 2px; }
 .entry-user { font-size: 10px; color: var(--tf-text-secondary); margin-top: 2px; font-weight: 500; }
+.entry-logged-by { font-size: 10px; color: var(--tf-text-tertiary); margin-top: 2px; font-style: italic; }
 .day-footer { padding: 6px 10px; border-top: 1px solid var(--tf-border-light); flex-shrink: 0; }
 .day-total { font-size: 11px; color: var(--tf-text-tertiary); }
 .day-total.insufficient { color: var(--tf-warning); font-weight: 500; }

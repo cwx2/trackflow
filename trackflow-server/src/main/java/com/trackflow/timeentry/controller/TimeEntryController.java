@@ -30,6 +30,7 @@ public class TimeEntryController {
 
     private static final String PERM_VIEW_OTHERS = "time:view_others";
     private static final String PERM_EDIT_ALL = "time:edit_all";
+    private static final String PERM_LOG_FOR_OTHERS = "time:log_for_others";
 
     private final TimeEntryService timeEntryService;
     private final IssueService issueService;
@@ -218,17 +219,38 @@ public class TimeEntryController {
     }
 
     /**
+     * 检查当前用户是否有权为他人记录工时
+     * 返回布尔值供前端判断是否显示用户选择器
+     */
+    @GetMapping("/can-log-for-others")
+    @PreAuthorize("isAuthenticated()")
+    public R<Boolean> checkCanLogForOthers() {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(permissionService.hasPermissionInAnyProject(currentUserId, PERM_LOG_FOR_OTHERS));
+    }
+
+    /**
      * 构建 TimeEntryVO（含属性值）
      */
     private TimeEntryVO buildEntryVO(TimeEntry entry) {
         TimeEntryVO vo = new TimeEntryVO();
         vo.setId(String.valueOf(entry.getId()));
         vo.setIssueId(String.valueOf(entry.getIssueId()));
+        vo.setProjectId(String.valueOf(entry.getProjectId()));
         vo.setUserId(String.valueOf(entry.getUserId()));
         vo.setWorkDate(entry.getWorkDate().toString());
         vo.setDuration(entry.getDuration());
         vo.setStartTime(entry.getStartTime());
         vo.setDescription(entry.getDescription());
+
+        // loggedBy 信息
+        if (entry.getLoggedBy() != null) {
+            vo.setLoggedBy(String.valueOf(entry.getLoggedBy()));
+            if (!entry.getLoggedBy().equals(entry.getUserId())) {
+                // 代录场景：查询操作人姓名
+                vo.setLoggedByName(timeEntryService.getUserDisplayNamePublic(entry.getLoggedBy()));
+            }
+        }
 
         // 加载属性值
         Map<String, Map<String, String>> attrValues = workItemAttributeService.getTimeEntryAttributeValues(entry.getId());

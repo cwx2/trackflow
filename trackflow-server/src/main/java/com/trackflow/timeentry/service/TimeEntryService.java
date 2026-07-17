@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public class TimeEntryService {
 
     private static final String PERM_TIME_LOG = "time:log";
+    private static final String PERM_TIME_LOG_FOR_OTHERS = "time:log_for_others";
     private static final String PERM_TIME_EDIT_ALL = "time:edit_all";
     private static final String PERM_TIME_DELETE_ALL = "time:delete_all";
 
@@ -50,18 +51,25 @@ public class TimeEntryService {
 
     /**
      * 创建工时记录
-     * 权限校验：用户必须是工单所属项目的成员且拥有 time:log 权限
+     * 权限校验：
+     * - 当前用户必须拥有 time:log 权限
+     * - 若 forUserId 指定了其他用户，还需要 time:log_for_others 权限，
+     *   且目标用户必须是工单所属项目的成员
+     *
+     * @param currentUserId 当前登录用户 ID（操作执行人）
+     * @param dto 创建参数（可含 forUserId 指定工时归属人）
      */
     @Transactional
-    public TimeEntry create(Long userId, CreateTimeEntryDTO dto) {
+    public TimeEntry create(Long currentUserId, CreateTimeEntryDTO dto) {
         // 1. 校验工单存在且未软删除
         Issue issue = getActiveIssueOrThrow(dto.getIssueId());
 
-        // 2. 校验用户为项目成员
-        projectService.assertProjectMember(userId, issue.getProjectId());
+        // 2. 确定工时归属人（targetUserId）和操作执行人（loggedBy = currentUserId）
+        Long targetUserId = resolveTargetUser(currentUserId, dto.getForUserId(), issue.getProjectId());
 
-        // 3. 校验用户拥有 time:log 权限
-        assertTimeLogPermission(userId, issue.getProjectId());
+        // 3. 校验当前用户为项目成员且有 time:log 权限
+        projectService.assertProjectMember(currentUserId, issue.getProjectId());
+        assertTimeLogPermission(currentUserId, issue.getProjectId());
 
         // 4. 校验项目是否启用了时间追踪
         if (!projectService.isTimeTrackingEnabled(issue.getProjectId())) {
@@ -76,7 +84,9 @@ public class TimeEntryService {
 
         TimeEntry entry = new TimeEntry();
         entry.setIssueId(dto.getIssueId());
-        entry.setUserId(userId);
+        entry.setProjectId(issue.getProjectId());
+        entry.setUserId(targetUserId);
+        entry.setLoggedBy(currentUserId);
         entry.setWorkDate(workDate);
         entry.setDuration(dto.getDuration());
         entry.setStartTime(dto.getStartTime());
@@ -97,13 +107,17 @@ public class TimeEntryService {
 
         // 记录活动：花费了 X 时间
         String durationStr = formatDuration(dto.getDuration());
-        // 解析 work type 名称用于活动日志
         String workTypeName = resolveWorkTypeName(dto.getAttributeValues());
         String detail = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
         if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
             detail += " | " + dto.getDescription();
         }
-        recordActivity(dto.getIssueId(), userId, "time_logged", "spent_time", null, detail);
+        // 如果是代录，活动日志中标注
+        if (!targetUserId.equals(currentUserId)) {
+            String loggerName = getUserDisplayName(currentUserId);
+            detail += " (由 " + loggerName + " 代录)";
+        }
+        recordActivity(dto.getIssueId(), targetUserId, "time_logged", "spent_time", null, detail);
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(dto.getIssueId());
@@ -115,10 +129,35 @@ public class TimeEntryService {
     }
 
     /**
+     * 解析工时归属人。
+     * 若 forUserId 为空或等于当前用户，归属当前用户（自己记录）。
+     * 若 forUserId 指定了其他用户，需要校验：
+     *   1. 当前用户拥有 time:log_for_others 权限
+     *   2. 目标用户是项目成员
+     */
+    private Long resolveTargetUser(Long currentUserId, Long forUserId, Long projectId) {
+        if (forUserId == null || forUserId.equals(currentUserId)) {
+            return currentUserId;
+        }
+        // 校验当前用户有代录权限
+        if (!permissionService.hasPermission(currentUserId, projectId, PERM_TIME_LOG_FOR_OTHERS)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权为他人记录工时");
+        }
+        // 校验目标用户是项目成员
+        projectService.assertProjectMember(forUserId, projectId);
+        // 校验目标用户存在
+        if (sysUserMapper.selectById(forUserId) == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标用户不存在");
+        }
+        return forUserId;
+    }
+
+    /**
      * 更新工时记录
      * 权限校验：
      * - 本人工时：需要 time:log 权限
      * - 他人工时：需要 time:edit_all 权限（管理员/技术负责人）
+     * 支持孤立工时（工单已删除）的编辑：使用 time_entry.project_id 做权限判断
      */
     @Transactional
     public TimeEntry update(Long id, Long userId, UpdateTimeEntryDTO dto) {
@@ -127,19 +166,17 @@ public class TimeEntryService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
         }
 
-        // 校验原工单所属项目
-        Issue originalIssue = getActiveIssueOrThrow(entry.getIssueId());
+        // 使用 time_entry 自身的 project_id 做权限判断（解耦 issue 存在性）
+        Long entryProjectId = entry.getProjectId();
         boolean isOwnEntry = entry.getUserId().equals(userId);
 
         if (!isOwnEntry) {
-            // 非本人工时 → 需要 time:edit_all 权限
-            assertEditAllPermission(userId, originalIssue.getProjectId());
+            assertEditAllPermission(userId, entryProjectId);
         } else {
-            // 本人工时 → 需要 time:log 权限
-            assertTimeLogPermission(userId, originalIssue.getProjectId());
+            assertTimeLogPermission(userId, entryProjectId);
         }
 
-        // 如果要转移到另一个工单，校验目标工单权限
+        // 如果要转移到另一个工单，校验目标工单权限（目标工单必须活跃）
         if (dto.getIssueId() != null && !dto.getIssueId().equals(entry.getIssueId())) {
             Issue targetIssue = getActiveIssueOrThrow(dto.getIssueId());
             projectService.assertProjectMember(userId, targetIssue.getProjectId());
@@ -156,7 +193,12 @@ public class TimeEntryService {
         LocalDate oldWorkDate = entry.getWorkDate();
         String oldDescription = entry.getDescription();
 
-        if (dto.getIssueId() != null) entry.setIssueId(dto.getIssueId());
+        if (dto.getIssueId() != null) {
+            entry.setIssueId(dto.getIssueId());
+            // 转移工单时同步更新 project_id
+            Issue targetIssue = getActiveIssueOrThrow(dto.getIssueId());
+            entry.setProjectId(targetIssue.getProjectId());
+        }
         if (dto.getWorkDate() != null) entry.setWorkDate(parseAndValidateWorkDate(dto.getWorkDate()));
         if (dto.getDuration() != null) entry.setDuration(dto.getDuration());
         if (dto.getStartTime() != null) entry.setStartTime(dto.getStartTime());
@@ -178,17 +220,17 @@ public class TimeEntryService {
             workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
         }
 
-        // 记录活动日志
+        // 记录活动日志（仅在工单未删除时记录）
         recordTimeUpdateActivity(userId, oldIssueId, entry.getIssueId(),
                 oldDuration, entry.getDuration(),
                 oldWorkDate, entry.getWorkDate(),
                 oldDescription, entry.getDescription());
 
-        // 同步更新 issue.spent_hours
-        refreshIssueSpentHours(entry.getIssueId());
+        // 同步更新 issue.spent_hours（仅在工单未删除时）
+        refreshIssueSpentHoursSafe(entry.getIssueId());
         // 如果工时记录转移到了其他 Issue，旧 Issue 也需要刷新
         if (dto.getIssueId() != null && !oldIssueId.equals(dto.getIssueId())) {
-            refreshIssueSpentHours(oldIssueId);
+            refreshIssueSpentHoursSafe(oldIssueId);
             // 旧 Issue 的祖先也需要刷新
             ancestorRefreshService.refreshAncestors(oldIssueId);
         }
@@ -204,6 +246,7 @@ public class TimeEntryService {
      * 权限校验：
      * - 本人工时：需要 time:log 权限
      * - 他人工时：需要 time:delete_all 权限（管理员/技术负责人）
+     * 支持孤立工时（工单已删除）的删除：使用 time_entry.project_id 做权限判断
      */
     @Transactional
     public void delete(Long id, Long userId) {
@@ -212,33 +255,29 @@ public class TimeEntryService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
         }
 
-        // 校验工单所属项目的权限
-        Issue issue = issueMapper.selectById(entry.getIssueId());
+        // 使用 time_entry 自身的 project_id 做权限判断（解耦 issue 存在性）
+        Long entryProjectId = entry.getProjectId();
         boolean isOwnEntry = entry.getUserId().equals(userId);
 
-        if (issue != null) {
-            if (!isOwnEntry) {
-                assertDeleteAllPermission(userId, issue.getProjectId());
-            } else {
-                assertTimeLogPermission(userId, issue.getProjectId());
-            }
-        } else if (!isOwnEntry) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
+        if (!isOwnEntry) {
+            assertDeleteAllPermission(userId, entryProjectId);
+        } else {
+            assertTimeLogPermission(userId, entryProjectId);
         }
 
         Long issueId = entry.getIssueId();
 
-        // 记录活动：删除了工时
+        // 记录活动：删除了工时（仅在工单仍活跃时记录）
         String durationStr = formatDuration(entry.getDuration());
-        recordActivity(issueId, userId, "time_removed", "spent_time", durationStr, null);
+        recordActivitySafe(issueId, userId, "time_removed", "spent_time", durationStr, null);
 
         // 删除属性值关联
         workItemAttributeService.deleteTimeEntryAttributeValues(entry.getId());
 
         timeEntryMapper.deleteById(id);
 
-        // 同步更新 issue.spent_hours
-        refreshIssueSpentHours(issueId);
+        // 同步更新 issue.spent_hours（仅在工单未删除时）
+        refreshIssueSpentHoursSafe(issueId);
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(issueId);
@@ -271,6 +310,7 @@ public class TimeEntryService {
             TimeEntryVO vo = new TimeEntryVO();
             vo.setId(String.valueOf(e.getId()));
             vo.setIssueId(String.valueOf(e.getIssueId()));
+            vo.setProjectId(String.valueOf(e.getProjectId()));
             vo.setUserId(String.valueOf(e.getUserId()));
             vo.setWorkDate(e.getWorkDate() != null ? e.getWorkDate().toString() : null);
             vo.setDuration(e.getDuration());
@@ -278,6 +318,14 @@ public class TimeEntryService {
             vo.setDescription(e.getDescription());
             if (e.getCreatedAt() != null) vo.setCreatedAt(e.getCreatedAt().toString());
             if (e.getUpdatedAt() != null) vo.setUpdatedAt(e.getUpdatedAt().toString());
+
+            // loggedBy info
+            if (e.getLoggedBy() != null) {
+                vo.setLoggedBy(String.valueOf(e.getLoggedBy()));
+                if (!e.getLoggedBy().equals(e.getUserId())) {
+                    vo.setLoggedByName(getUserDisplayName(e.getLoggedBy()));
+                }
+            }
 
             // Set work type from attribute values
             Map<String, String> wtInfo = attrByEntry.get(e.getId());
@@ -468,6 +516,29 @@ public class TimeEntryService {
     }
 
     /**
+     * 安全版本：仅在 issue 未被软删除时刷新 spent_hours。
+     * 用于工时编辑/删除场景——工单已删除时无需更新其 spent_hours。
+     */
+    private void refreshIssueSpentHoursSafe(Long issueId) {
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            // selectById 受逻辑删除过滤，能查到说明 issue 未删除
+            timeEntryMapper.atomicRefreshSpentHours(issueId);
+        }
+    }
+
+    /**
+     * 安全版本：仅在 issue 未被软删除时记录活动日志。
+     * 工单已删除时无法写入活动记录（外键约束或逻辑无意义）。
+     */
+    private void recordActivitySafe(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            recordActivity(issueId, userId, action, fieldName, oldValue, newValue);
+        }
+    }
+
+    /**
      * 全量校准所有 issue 的 spent_hours（管理员自愈操作）。
      * 一次性将所有 issue.spent_hours 与 time_entry 实际数据对齐。
      *
@@ -484,6 +555,7 @@ public class TimeEntryService {
         vo.setIssueId(String.valueOf(row.get("issue_id")));
         vo.setIssueKey((String) row.get("issue_key"));
         vo.setIssueTitle((String) row.get("issue_title"));
+        if (row.get("project_id") != null) vo.setProjectId(String.valueOf(row.get("project_id")));
         vo.setUserId(String.valueOf(row.get("user_id")));
         if (row.get("work_date") != null) vo.setWorkDate(row.get("work_date").toString());
         if (row.get("duration") != null) vo.setDuration((Integer) row.get("duration"));
@@ -491,6 +563,23 @@ public class TimeEntryService {
         vo.setDescription((String) row.get("description"));
         if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
         if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
+
+        // logged_by info
+        if (row.get("logged_by") != null) {
+            vo.setLoggedBy(String.valueOf(row.get("logged_by")));
+            // logged_by_name is only populated when logged_by != user_id (via LEFT JOIN condition)
+            if (row.get("logged_by_name") != null) {
+                vo.setLoggedByName((String) row.get("logged_by_name"));
+            }
+        }
+
+        // Issue deleted flag
+        Object issueDeletedObj = row.get("issue_deleted");
+        if (issueDeletedObj instanceof Boolean b) {
+            vo.setIssueDeleted(b);
+        } else if (issueDeletedObj != null) {
+            vo.setIssueDeleted(Boolean.parseBoolean(issueDeletedObj.toString()));
+        }
 
         // Work type from JOIN
         vo.setWorkType((String) row.get("work_type"));
@@ -514,8 +603,8 @@ public class TimeEntryService {
         if (issueChanged) {
             // 工时转移：旧工单记录"工时被移走"，新工单记录"工时被移入"
             String detail = formatDuration(newDuration);
-            recordActivity(oldIssueId, userId, "time_removed", "spent_time", detail, null);
-            recordActivity(newIssueId, userId, "time_logged", "spent_time", null, detail);
+            recordActivitySafe(oldIssueId, userId, "time_removed", "spent_time", detail, null);
+            recordActivitySafe(newIssueId, userId, "time_logged", "spent_time", null, detail);
             return;
         }
 
@@ -536,7 +625,7 @@ public class TimeEntryService {
         if (!changes.isEmpty()) {
             String oldDetail = formatDuration(oldDuration);
             String newDetail = String.join("; ", changes);
-            recordActivity(oldIssueId, userId, "time_updated", "spent_time", oldDetail, newDetail);
+            recordActivitySafe(oldIssueId, userId, "time_updated", "spent_time", oldDetail, newDetail);
         }
     }
 
@@ -603,5 +692,21 @@ public class TimeEntryService {
         if (!permissionService.hasPermission(userId, projectId, PERM_TIME_DELETE_ALL)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
         }
+    }
+
+    /**
+     * 获取用户显示名称，用于日志记录
+     */
+    private String getUserDisplayName(Long userId) {
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) return "未知用户";
+        return user.getDisplayName() != null ? user.getDisplayName() : user.getUsername();
+    }
+
+    /**
+     * 获取用户显示名称（供 Controller 构建 VO 使用）
+     */
+    public String getUserDisplayNamePublic(Long userId) {
+        return getUserDisplayName(userId);
     }
 }

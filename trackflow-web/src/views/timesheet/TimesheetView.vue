@@ -108,7 +108,7 @@
         :quota-text="quotaText()"
         @day-click="openAddDialog"
         @entry-click="openEditDialog"
-        @issue-click="(entry) => $router.push(`/issues/${entry.issueId}`)"
+        @issue-click="(entry) => { if (!entry.issueDeleted) $router.push(`/issues/${entry.issueId}`) }"
       />
 
       <!-- Month View -->
@@ -250,10 +250,31 @@
         <!-- 作者 -->
         <div class="dialog-field">
           <label class="dialog-label">作者</label>
-          <div class="author-display">
-            <span class="author-avatar">{{ currentUserName.charAt(0) }}</span>
-            <span class="author-name">{{ currentUserName }}</span>
-          </div>
+          <template v-if="canLogForOthers && !editingEntry">
+            <a-select
+              v-model="form.forUserId"
+              placeholder="选择用户（默认为自己）"
+              allow-search
+              allow-clear
+              :filter-option="false"
+              @search="searchUsersForDialog"
+              @clear="form.forUserId = undefined"
+            >
+              <a-option v-for="u in dialogSelectableUsers" :key="u.id" :value="u.id" :label="u.displayName || u.username">
+                <div class="user-option">
+                  <span class="user-option-avatar">{{ (u.displayName || u.username).charAt(0) }}</span>
+                  <span class="user-option-name">{{ u.displayName || u.username }}</span>
+                  <span v-if="u.id === authStore.user?.id" class="user-option-self">(我)</span>
+                </div>
+              </a-option>
+            </a-select>
+          </template>
+          <template v-else>
+            <div class="author-display">
+              <span class="author-avatar">{{ currentUserName.charAt(0) }}</span>
+              <span class="author-name">{{ currentUserName }}</span>
+            </div>
+          </template>
         </div>
 
         <!-- 单一日期 / 日期范围 切换 -->
@@ -364,8 +385,11 @@ const issueOptions = ref<{ value: string; label: string }[]>([])
 // User selector state
 const canViewOthers = ref(false)
 const canEditOthers = ref(false)
+const canLogForOthers = ref(false)
 const selectableUsers = ref<TimeEntryUserVO[]>([])
 const selectedUserId = ref<string | undefined>(undefined)
+// Dialog user selector state (for log-for-others)
+const dialogSelectableUsers = ref<TimeEntryUserVO[]>([])
 
 // Project view state
 const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
@@ -390,7 +414,8 @@ const form = ref({
   dateRange: undefined as [string, string] | undefined,
   durationText: '',
   startTimeStr: undefined as string | undefined,
-  description: ''
+  description: '',
+  forUserId: undefined as string | undefined
 })
 
 // Computed
@@ -572,6 +597,15 @@ async function loadCanEditOthers() {
   } catch { /* silent */ }
 }
 
+async function loadCanLogForOthers() {
+  try {
+    const res = await timeEntryApi.canLogForOthers()
+    if (res.code === 0) {
+      canLogForOthers.value = res.data === true
+    }
+  } catch { /* silent */ }
+}
+
 async function loadSelectableUsers(keyword?: string) {
   try {
     const params = keyword ? { keyword } : undefined
@@ -584,6 +618,16 @@ async function loadSelectableUsers(keyword?: string) {
 
 function searchUsers(keyword: string) {
   loadSelectableUsers(keyword)
+}
+
+async function searchUsersForDialog(keyword: string) {
+  try {
+    const params = keyword ? { keyword } : undefined
+    const res = await timeEntryApi.listSelectableUsers(params)
+    if (res.code === 0 && res.data) {
+      dialogSelectableUsers.value = res.data
+    }
+  } catch { /* silent */ }
 }
 
 function onUserChange(val: string | undefined) {
@@ -745,10 +789,15 @@ function openAddDialog(date?: string) {
     dateRange: undefined,
     durationText: '',
     startTimeStr: undefined,
-    description: ''
+    description: '',
+    forUserId: undefined
   }
   showDialog.value = true
   searchIssues('')
+  // Pre-load dialog selectable users if user can log for others
+  if (canLogForOthers.value && dialogSelectableUsers.value.length === 0) {
+    searchUsersForDialog('')
+  }
 }
 
 function addAnotherRecord() {
@@ -785,7 +834,16 @@ function openEditDialog(entry: TimeEntryVO) {
   if (entry.issueKey) {
     const existing = issueOptions.value.find(o => o.value === entry.issueId)
     if (!existing) {
-      issueOptions.value = [{ value: entry.issueId, label: `${entry.issueKey} - ${entry.issueTitle || ''}` }, ...issueOptions.value]
+      const label = entry.issueDeleted
+        ? `[已删除] ${entry.issueKey} - ${entry.issueTitle || ''}`
+        : `${entry.issueKey} - ${entry.issueTitle || ''}`
+      issueOptions.value = [{ value: entry.issueId, label }, ...issueOptions.value]
+    }
+  } else if (entry.issueDeleted) {
+    // Issue key is null (issue fully deleted), show placeholder
+    const existing = issueOptions.value.find(o => o.value === entry.issueId)
+    if (!existing) {
+      issueOptions.value = [{ value: entry.issueId, label: '[已删除工单]' }, ...issueOptions.value]
     }
   }
   // Load attributes for the issue's project
@@ -833,6 +891,7 @@ async function saveEntry() {
         duration,
         startTime,
         description: form.value.description || undefined,
+        forUserId: form.value.forUserId || undefined,
         attributeValues: Object.keys(formAttributeValues.value).length > 0
           ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
           : undefined
@@ -962,7 +1021,7 @@ onMounted(async () => {
   // Load time tracking settings first (needed for parseDuration + quota)
   await loadTTSettings()
   // Check if user can view/edit others' time entries
-  await Promise.all([loadCanViewOthers(), loadCanEditOthers()])
+  await Promise.all([loadCanViewOthers(), loadCanEditOthers(), loadCanLogForOthers()])
   if (canViewOthers.value) {
     await loadSelectableUsers()
   }

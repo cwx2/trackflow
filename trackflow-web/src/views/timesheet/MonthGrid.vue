@@ -22,7 +22,7 @@
             class="month-entry"
             @click.stop="$emit('entryClick', entry)"
           >
-            <span class="month-entry-key">{{ entry.issueKey }}</span>
+            <span class="month-entry-key" :class="{ deleted: entry.issueDeleted }">{{ entry.issueDeleted ? '[已删除]' : entry.issueKey }}</span>
             <span class="month-entry-dur">{{ formatDuration(entry.duration) }}</span>
           </div>
           <div v-if="getDayEntries(day.date).length > 2" class="month-entry-more">
@@ -98,6 +98,7 @@ function formatDuration(minutes: number): string {
 .month-entry { display: flex; justify-content: space-between; padding: 1px 4px; border-radius: 2px; margin-bottom: 1px; font-size: 10px; cursor: pointer; }
 .month-entry:hover { background: var(--tf-bg-hover); }
 .month-entry-key { color: var(--tf-accent); font-weight: 500; }
+.month-entry-key.deleted { color: var(--tf-text-tertiary); font-style: italic; }
 .month-entry-dur { color: var(--tf-text-tertiary); }
 .month-entry-more { font-size: 9px; color: var(--tf-text-muted); text-align: center; padding: 1px; }
 </style>

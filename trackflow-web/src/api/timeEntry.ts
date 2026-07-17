@@ -13,11 +13,18 @@ export interface TimeEntryVO {
   issueId: string
   issueKey?: string
   issueTitle?: string
+  projectId?: string
   userId: string
   userName?: string
   workDate: string
   duration: number       // minutes
   startTime?: number     // minutes from midnight
+  /** 工单是否已被删除（软删除） */
+  issueDeleted?: boolean
+  /** 记录操作人 ID（谁输入的这条工时） */
+  loggedBy?: string
+  /** 记录操作人姓名（仅当 loggedBy != userId 时有值，表示代录） */
+  loggedByName?: string
   /** 工作类型名称（从 attribute 系统解析） */
   workType?: string
   /** 工作类型属性值 ID（用于筛选） */
@@ -75,7 +82,7 @@ export const timeEntryApi = {
   },
 
   /** 创建工时记录 */
-  create(data: { issueId: string; workDate: string; duration: number; startTime?: number; description?: string; attributeValues?: Record<string, string> }) {
+  create(data: { issueId: string; workDate: string; duration: number; startTime?: number; description?: string; forUserId?: string; attributeValues?: Record<string, string> }) {
     return request.post<any, R<TimeEntryVO>>('/time-entries', data)
   },
 
@@ -122,6 +129,11 @@ export const timeEntryApi = {
   /** 检查当前用户是否有权编辑/删除他人工时 */
   canEditOthers() {
     return request.get<any, R<boolean>>('/time-entries/can-edit-others')
+  },
+
+  /** 检查当前用户是否有权为他人记录工时 */
+  canLogForOthers() {
+    return request.get<any, R<boolean>>('/time-entries/can-log-for-others')
   }
 }
 
