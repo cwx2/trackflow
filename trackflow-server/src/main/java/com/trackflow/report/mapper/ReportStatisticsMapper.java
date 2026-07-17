@@ -130,7 +130,8 @@ public interface ReportStatisticsMapper {
     List<Map<String, Object>> selectTimeByWorkType(
             @Param("projectIds") List<Long> projectIds,
             @Param("startDate") String startDate,
-            @Param("endDate") String endDate);
+            @Param("endDate") String endDate,
+            @Param("workTypeAttributeId") Long workTypeAttributeId);
 
     /**
      * 每日工时趋势

@@ -3,6 +3,7 @@ package com.trackflow.workitemattr.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.workitemattr.BuiltinAttributeCode;
 import com.trackflow.workitemattr.dto.CreateWorkItemAttributeDTO;
 import com.trackflow.workitemattr.dto.ManageAttributeProjectsDTO;
 import com.trackflow.workitemattr.dto.UpdateWorkItemAttributeDTO;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +39,40 @@ public class WorkItemAttributeService {
     private final WorkItemAttributeValueMapper valueMapper;
     private final WorkItemAttributeProjectMapper projectMapper;
     private final TimeEntryAttributeValueMapper entryValueMapper;
+
+    /**
+     * 内建属性 code → id 缓存（应用级缓存，应用启动后首次查询时填充）
+     */
+    private final ConcurrentHashMap<String, Long> builtinAttributeIdCache = new ConcurrentHashMap<>();
+
+    /**
+     * 根据系统代码获取内建属性的 ID。
+     * 使用应用级缓存，首次调用时从数据库查询并缓存。
+     *
+     * @param code 内建属性代码（如 {@link BuiltinAttributeCode#WORK_TYPE}）
+     * @return 属性 ID
+     * @throws BusinessException 如果指定 code 的属性不存在
+     */
+    public Long getBuiltinAttributeId(String code) {
+        return builtinAttributeIdCache.computeIfAbsent(code, c -> {
+            WorkItemAttribute attr = attributeMapper.selectOne(
+                    new QueryWrapper<WorkItemAttribute>()
+                            .eq("code", c)
+                            .eq("is_builtin", true));
+            if (attr == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                        "内建属性未找到: code=" + c);
+            }
+            return attr.getId();
+        });
+    }
+
+    /**
+     * 获取 Work Type 内建属性的 ID（快捷方法）
+     */
+    public Long getWorkTypeAttributeId() {
+        return getBuiltinAttributeId(BuiltinAttributeCode.WORK_TYPE);
+    }
 
     /**
      * 列出所有工作项属性（含值列表和项目分配）
@@ -416,20 +452,22 @@ public class WorkItemAttributeService {
      */
     public Long findWorkTypeValueIdByName(String name) {
         if (name == null || name.isBlank()) return null;
+        Long workTypeAttrId = getWorkTypeAttributeId();
         WorkItemAttributeValue val = valueMapper.selectOne(
                 new QueryWrapper<WorkItemAttributeValue>()
-                        .eq("attribute_id", 1)
+                        .eq("attribute_id", workTypeAttrId)
                         .eq("name", name.trim()));
         return val != null ? val.getId() : null;
     }
 
     /**
-     * 批量查询工时记录的 Work type 属性值（attribute_id=1）
+     * 批量查询工时记录的 Work type 属性值
      * 返回行：(time_entry_id, value_id, value_name, value_color)
      */
     public List<Map<String, Object>> getWorkTypeForEntries(String timeEntryIds) {
         if (timeEntryIds == null || timeEntryIds.isBlank()) return List.of();
-        return entryValueMapper.selectWorkTypeForEntries(timeEntryIds);
+        Long workTypeAttrId = getWorkTypeAttributeId();
+        return entryValueMapper.selectWorkTypeForEntries(workTypeAttrId, timeEntryIds);
     }
 
     /**

@@ -15,6 +15,7 @@ public class WorkItemAttribute {
     private Long id;
 
     private String name;
+    private String code;
     private Boolean isBuiltin;
     private Integer position;
 

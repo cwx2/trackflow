@@ -289,7 +289,8 @@ public class TimeEntryService {
      */
     public List<TimeEntryVO> listByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate,
                                                      Long projectId, Long activityId) {
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate, projectId, activityId);
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(
+                userId, startDate, endDate, projectId, activityId, workItemAttributeService.getWorkTypeAttributeId());
         return rows.stream().map(this::mapRowToVO).toList();
     }
 
@@ -355,7 +356,8 @@ public class TimeEntryService {
      * 按项目汇总工时（项目视图概览）：返回用户可见项目的工时聚合
      */
     public List<ProjectTimeSummaryVO> listByProjectForUser(Long userId, LocalDate startDate, LocalDate endDate) {
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(userId, startDate, endDate);
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(
+                userId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId());
 
         // 按 project_id 分组
         Map<String, List<Map<String, Object>>> grouped = rows.stream()
@@ -388,7 +390,8 @@ public class TimeEntryService {
      * 查询指定项目在日期范围内的工时明细（项目视图详情）
      */
     public List<TimeEntryVO> listByProject(Long projectId, LocalDate startDate, LocalDate endDate) {
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(projectId, startDate, endDate);
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(
+                projectId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId());
         return rows.stream().map(row -> {
             TimeEntryVO vo = mapRowToVO(row);
             vo.setUserName((String) row.get("user_name"));
@@ -472,11 +475,12 @@ public class TimeEntryService {
     }
 
     /**
-     * 从 attributeValues 中解析 Work type 名称（attribute_id=1 为内建 Work type）
+     * 从 attributeValues 中解析 Work type 名称
      */
     private String resolveWorkTypeName(Map<String, String> attributeValues) {
         if (attributeValues == null || attributeValues.isEmpty()) return null;
-        String valueIdStr = attributeValues.get("1"); // "1" is the built-in Work type attribute ID
+        String workTypeAttrId = String.valueOf(workItemAttributeService.getWorkTypeAttributeId());
+        String valueIdStr = attributeValues.get(workTypeAttrId);
         if (valueIdStr == null) return null;
         try {
             return workItemAttributeService.getAttributeValueName(Long.parseLong(valueIdStr));

@@ -261,8 +261,9 @@ public class TimeEntryController {
                 return item;
             }).toList());
 
-            // Extract Work type specifically (attribute id "1")
-            Map<String, String> workTypeInfo = attrValues.get("1");
+            // Extract Work type specifically using dynamic attribute ID
+            String workTypeAttrId = String.valueOf(workItemAttributeService.getWorkTypeAttributeId());
+            Map<String, String> workTypeInfo = attrValues.get(workTypeAttrId);
             if (workTypeInfo != null) {
                 vo.setWorkType(workTypeInfo.get("valueName"));
                 vo.setWorkTypeId(workTypeInfo.get("valueId"));

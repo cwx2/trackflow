@@ -46,7 +46,7 @@
         FROM time_entry t
         LEFT JOIN issue i ON i.id = t.issue_id
         LEFT JOIN sys_user lb ON lb.id = t.logged_by AND t.logged_by != t.user_id
-        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE t.user_id = #{userId}
           AND t.work_date >= #{startDate}
@@ -77,7 +77,7 @@
         JOIN project p ON p.id = t.project_id
         LEFT JOIN issue i ON i.id = t.issue_id
         LEFT JOIN sys_user lb ON lb.id = t.logged_by AND t.logged_by != t.user_id
-        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE t.project_id IN (
             SELECT pm.project_id FROM project_member pm WHERE pm.user_id = #{userId}
@@ -104,7 +104,7 @@
         LEFT JOIN issue i ON i.id = t.issue_id
         JOIN sys_user u ON u.id = t.user_id
         LEFT JOIN sys_user lb ON lb.id = t.logged_by AND t.logged_by != t.user_id
-        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE t.project_id = #{projectId}
           AND t.work_date >= #{startDate}

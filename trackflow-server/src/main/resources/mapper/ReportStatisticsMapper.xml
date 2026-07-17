@@ -390,7 +390,7 @@
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
         JOIN issue i ON i.id = t.issue_id
-        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE i.deleted_at IS NULL
           AND t.work_date >= #{startDate}::date

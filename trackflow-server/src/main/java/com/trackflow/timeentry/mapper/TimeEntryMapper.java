@@ -36,7 +36,8 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             @Param("projectId") Long projectId,
-            @Param("activityId") Long activityId
+            @Param("activityId") Long activityId,
+            @Param("workTypeAttributeId") Long workTypeAttributeId
     );
 
     /**
@@ -45,7 +46,8 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
     List<Map<String, Object>> selectEntriesByProjectForUser(
             @Param("userId") Long userId,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate
+            @Param("endDate") LocalDate endDate,
+            @Param("workTypeAttributeId") Long workTypeAttributeId
     );
 
     /**
@@ -54,6 +56,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
     List<Map<String, Object>> selectEntriesByProject(
             @Param("projectId") Long projectId,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate
+            @Param("endDate") LocalDate endDate,
+            @Param("workTypeAttributeId") Long workTypeAttributeId
     );
 }

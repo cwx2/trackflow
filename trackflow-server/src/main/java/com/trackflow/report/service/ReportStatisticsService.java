@@ -5,6 +5,7 @@ import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.vo.*;
 import com.trackflow.sprint.service.SprintService;
+import com.trackflow.workitemattr.service.WorkItemAttributeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -34,6 +35,7 @@ public class ReportStatisticsService {
     private final SprintService sprintService;
     private final StatusCacheHelper statusCacheHelper;
     private final ProjectService projectService;
+    private final WorkItemAttributeService workItemAttributeService;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -582,7 +584,8 @@ public class ReportStatisticsService {
         }).collect(Collectors.toList()));
 
         // 按工作类型
-        List<Map<String, Object>> byTypeRows = reportStatisticsMapper.selectTimeByWorkType(projectIds, startStr, endStr);
+        List<Map<String, Object>> byTypeRows = reportStatisticsMapper.selectTimeByWorkType(
+                projectIds, startStr, endStr, workItemAttributeService.getWorkTypeAttributeId());
         vo.setByWorkType(byTypeRows.stream().map(r -> {
             TimeReportVO.GroupItem item = new TimeReportVO.GroupItem();
             item.setName((String) r.get("work_type"));
