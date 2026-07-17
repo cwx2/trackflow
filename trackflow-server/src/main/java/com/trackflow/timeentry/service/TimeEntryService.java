@@ -11,6 +11,8 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
+import com.trackflow.timeentry.dto.StartTimerDTO;
+import com.trackflow.timeentry.dto.StopTimerDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
@@ -91,6 +93,7 @@ public class TimeEntryService {
         entry.setDuration(dto.getDuration());
         entry.setStartTime(dto.getStartTime());
         entry.setDescription(dto.getDescription());
+        entry.setOngoing(false);
         entry.setCreatedAt(LocalDateTime.now());
         entry.setUpdatedAt(LocalDateTime.now());
 
@@ -164,6 +167,11 @@ public class TimeEntryService {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
+        }
+
+        // 不允许通过标准更新 API 修改正在计时的记录，请使用停止计时器 API
+        if (Boolean.TRUE.equals(entry.getOngoing())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "正在计时的记录请使用停止计时器功能");
         }
 
         // 使用 time_entry 自身的 project_id 做权限判断（解耦 issue 存在性）
@@ -268,8 +276,11 @@ public class TimeEntryService {
         Long issueId = entry.getIssueId();
 
         // 记录活动：删除了工时（仅在工单仍活跃时记录）
-        String durationStr = formatDuration(entry.getDuration());
-        recordActivitySafe(issueId, userId, "time_removed", "spent_time", durationStr, null);
+        // ongoing 记录被删除时（丢弃计时器），不记录活动日志（因为没有实际工时被记录）
+        if (!Boolean.TRUE.equals(entry.getOngoing())) {
+            String durationStr = formatDuration(entry.getDuration());
+            recordActivitySafe(issueId, userId, "time_removed", "spent_time", durationStr, null);
+        }
 
         // 删除属性值关联
         workItemAttributeService.deleteTimeEntryAttributeValues(entry.getId());
@@ -317,6 +328,10 @@ public class TimeEntryService {
             vo.setDuration(e.getDuration());
             vo.setStartTime(e.getStartTime());
             vo.setDescription(e.getDescription());
+            vo.setOngoing(e.getOngoing());
+            if (Boolean.TRUE.equals(e.getOngoing()) && e.getCreatedAt() != null) {
+                vo.setStartedAt(e.getCreatedAt().toString());
+            }
             if (e.getCreatedAt() != null) vo.setCreatedAt(e.getCreatedAt().toString());
             if (e.getUpdatedAt() != null) vo.setUpdatedAt(e.getUpdatedAt().toString());
 
@@ -342,14 +357,16 @@ public class TimeEntryService {
 
     /**
      * 汇总用户在日期范围内的总工时（分钟）
+     * 排除 ongoing=true 的记录（仍在计时中，duration 为 NULL）
      */
     public int sumByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userId)
+                .eq("ongoing", false)
                 .ge("work_date", startDate)
                 .le("work_date", endDate);
         List<TimeEntry> entries = timeEntryMapper.selectList(wrapper.select("duration"));
-        return entries.stream().mapToInt(TimeEntry::getDuration).sum();
+        return entries.stream().mapToInt(e -> e.getDuration() != null ? e.getDuration() : 0).sum();
     }
 
     /**
@@ -379,7 +396,7 @@ public class TimeEntryService {
 
             List<TimeEntryVO> entries = projectRows.stream().map(this::mapRowToVO).toList();
             vo.setEntries(entries);
-            vo.setTotalDuration(entries.stream().mapToInt(TimeEntryVO::getDuration).sum());
+            vo.setTotalDuration(entries.stream().mapToInt(e -> e.getDuration() != null ? e.getDuration() : 0).sum());
 
             result.add(vo);
         }
@@ -543,6 +560,208 @@ public class TimeEntryService {
     }
 
     /**
+     * 启动计时器。
+     * 创建一条 ongoing=true 的 time_entry 记录，duration 为 NULL。
+     * 系统根据 created_at 实时计算已用时间。
+     *
+     * 约束：每个用户同时只能有一个活跃计时器（数据库 UNIQUE 部分索引保证）。
+     *
+     * @param currentUserId 当前用户 ID
+     * @param dto 启动参数（issueId 必填）
+     * @return 创建的计时器 time_entry 记录
+     */
+    @Transactional
+    public TimeEntry startTimer(Long currentUserId, StartTimerDTO dto) {
+        // 1. 校验工单存在且未软删除
+        Issue issue = getActiveIssueOrThrow(dto.getIssueId());
+
+        // 2. 校验当前用户为项目成员且有 time:log 权限
+        projectService.assertProjectMember(currentUserId, issue.getProjectId());
+        assertTimeLogPermission(currentUserId, issue.getProjectId());
+
+        // 3. 校验项目是否启用了时间追踪
+        if (!projectService.isTimeTrackingEnabled(issue.getProjectId())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "该项目未启用时间追踪功能");
+        }
+
+        // 4. 检查是否已有活跃计时器
+        TimeEntry activeTimer = getActiveTimerForUser(currentUserId);
+        if (activeTimer != null) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "已有一个正在运行的计时器，请先停止后再启动新的");
+        }
+
+        // 5. 创建 ongoing time_entry
+        TimeEntry entry = new TimeEntry();
+        entry.setIssueId(dto.getIssueId());
+        entry.setProjectId(issue.getProjectId());
+        entry.setUserId(currentUserId);
+        entry.setLoggedBy(currentUserId);
+        entry.setWorkDate(LocalDate.now());
+        entry.setDuration(null);   // ongoing 时无 duration
+        entry.setStartTime(minutesFromMidnight()); // 记录启动时刻
+        entry.setDescription(dto.getDescription());
+        entry.setOngoing(true);
+        entry.setCreatedAt(LocalDateTime.now());
+        entry.setUpdatedAt(LocalDateTime.now());
+
+        timeEntryMapper.insert(entry);
+
+        // 保存工作项属性值
+        if (dto.getAttributeValues() != null && !dto.getAttributeValues().isEmpty()) {
+            Map<Long, Long> attrValueMap = new HashMap<>();
+            for (Map.Entry<String, String> av : dto.getAttributeValues().entrySet()) {
+                attrValueMap.put(Long.parseLong(av.getKey()), Long.parseLong(av.getValue()));
+            }
+            workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
+        }
+
+        return entry;
+    }
+
+    /**
+     * 停止计时器。
+     * 计算 duration = now - createdAt（分钟），设置 ongoing=false，保存。
+     *
+     * @param currentUserId 当前用户 ID
+     * @param timeEntryId 要停止的计时器 ID
+     * @param dto 停止参数（可选的 duration 覆盖、description、attributeValues）
+     * @return 更新后的 time_entry 记录
+     */
+    @Transactional
+    public TimeEntry stopTimer(Long currentUserId, Long timeEntryId, StopTimerDTO dto) {
+        TimeEntry entry = timeEntryMapper.selectById(timeEntryId);
+        if (entry == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
+        }
+
+        // 校验是自己的计时器
+        if (!entry.getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只能停止自己的计时器");
+        }
+
+        // 校验确实是 ongoing 状态
+        if (!Boolean.TRUE.equals(entry.getOngoing())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "该工时记录不是正在计时的状态");
+        }
+
+        // 计算 duration
+        int calculatedDuration = calculateElapsedMinutes(entry.getCreatedAt());
+        int finalDuration;
+        if (dto != null && dto.getDuration() != null) {
+            // 用户手动覆盖
+            finalDuration = dto.getDuration();
+        } else {
+            finalDuration = Math.max(1, calculatedDuration); // 至少 1 分钟
+        }
+
+        // 停止计时器时，work_date 更新为当前日期（处理跨天情况）
+        entry.setWorkDate(LocalDate.now());
+        entry.setDuration(finalDuration);
+        entry.setOngoing(false);
+        entry.setUpdatedAt(LocalDateTime.now());
+
+        // 可选更新描述和属性
+        if (dto != null) {
+            if (dto.getDescription() != null) {
+                entry.setDescription(dto.getDescription());
+            }
+            if (dto.getAttributeValues() != null && !dto.getAttributeValues().isEmpty()) {
+                Map<Long, Long> attrValueMap = new HashMap<>();
+                for (Map.Entry<String, String> av : dto.getAttributeValues().entrySet()) {
+                    attrValueMap.put(Long.parseLong(av.getKey()), Long.parseLong(av.getValue()));
+                }
+                workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
+            }
+        }
+
+        timeEntryMapper.updateById(entry);
+
+        // 记录活动日志
+        String durationStr = formatDuration(finalDuration);
+        String workTypeName = null;
+        if (dto != null && dto.getAttributeValues() != null) {
+            workTypeName = resolveWorkTypeName(dto.getAttributeValues());
+        }
+        String detail = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
+        if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
+            detail += " | " + entry.getDescription();
+        }
+        detail += " (计时器)";
+        recordActivity(entry.getIssueId(), currentUserId, "time_logged", "spent_time", null, detail);
+
+        // 同步更新 issue.spent_hours
+        refreshIssueSpentHours(entry.getIssueId());
+
+        // 向上刷新父工单的派生属性
+        ancestorRefreshService.refreshAncestors(entry.getIssueId());
+
+        return entry;
+    }
+
+    /**
+     * 获取当前用户的活跃计时器。
+     * 每个用户最多一个（数据库 UNIQUE 索引保证）。
+     *
+     * @param userId 用户 ID
+     * @return 活跃的 time_entry，或 null 如果没有
+     */
+    public TimeEntry getActiveTimerForUser(Long userId) {
+        QueryWrapper<TimeEntry> wrapper = new QueryWrapper<>();
+        wrapper.eq("user_id", userId).eq("ongoing", true);
+        return timeEntryMapper.selectOne(wrapper);
+    }
+
+    /**
+     * 获取活跃计时器的 VO（含 issue 信息），供前端展示。
+     */
+    public TimeEntryVO getActiveTimerVO(Long userId) {
+        TimeEntry entry = getActiveTimerForUser(userId);
+        if (entry == null) return null;
+
+        TimeEntryVO vo = new TimeEntryVO();
+        vo.setId(String.valueOf(entry.getId()));
+        vo.setIssueId(String.valueOf(entry.getIssueId()));
+        vo.setProjectId(String.valueOf(entry.getProjectId()));
+        vo.setUserId(String.valueOf(entry.getUserId()));
+        vo.setWorkDate(entry.getWorkDate() != null ? entry.getWorkDate().toString() : null);
+        vo.setDuration(null);
+        vo.setStartTime(entry.getStartTime());
+        vo.setDescription(entry.getDescription());
+        vo.setOngoing(true);
+        vo.setCreatedAt(entry.getCreatedAt() != null ? entry.getCreatedAt().toString() : null);
+        vo.setStartedAt(entry.getCreatedAt() != null ? entry.getCreatedAt().toString() : null);
+        vo.setUpdatedAt(entry.getUpdatedAt() != null ? entry.getUpdatedAt().toString() : null);
+
+        // Enrich with issue info
+        Issue issue = issueMapper.selectById(entry.getIssueId());
+        if (issue != null) {
+            vo.setIssueKey(issue.getIssueKey());
+            vo.setIssueTitle(issue.getTitle());
+        }
+
+        return vo;
+    }
+
+    /**
+     * 计算从 createdAt 到现在经过的分钟数。
+     * 参考 OpenProject: ((Time.zone.now.to_i - created_at.to_i) / 3600.0).round(2)
+     */
+    private int calculateElapsedMinutes(LocalDateTime createdAt) {
+        if (createdAt == null) return 0;
+        long seconds = java.time.Duration.between(createdAt, LocalDateTime.now()).getSeconds();
+        return (int) (seconds / 60);
+    }
+
+    /**
+     * 获取当前时刻距离午夜的分钟数，用作 startTime。
+     */
+    private int minutesFromMidnight() {
+        java.time.LocalTime now = java.time.LocalTime.now();
+        return now.getHour() * 60 + now.getMinute();
+    }
+
+    /**
      * 全量校准所有 issue 的 spent_hours（管理员自愈操作）。
      * 一次性将所有 issue.spent_hours 与 time_entry 实际数据对齐。
      *
@@ -567,6 +786,21 @@ public class TimeEntryService {
         vo.setDescription((String) row.get("description"));
         if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
         if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
+
+        // ongoing field
+        Object ongoingObj = row.get("ongoing");
+        if (ongoingObj instanceof Boolean b) {
+            vo.setOngoing(b);
+            if (b && row.get("created_at") != null) {
+                vo.setStartedAt(row.get("created_at").toString());
+            }
+        } else if (ongoingObj != null) {
+            boolean isOngoing = Boolean.parseBoolean(ongoingObj.toString());
+            vo.setOngoing(isOngoing);
+            if (isOngoing && row.get("created_at") != null) {
+                vo.setStartedAt(row.get("created_at").toString());
+            }
+        }
 
         // logged_by info
         if (row.get("logged_by") != null) {

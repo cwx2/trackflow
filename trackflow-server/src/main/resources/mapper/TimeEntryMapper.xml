@@ -2,30 +2,32 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.timeentry.mapper.TimeEntryMapper">
 
-    <!-- 汇总指定 Issue 的工时总分钟数 -->
+    <!-- 汇总指定 Issue 的工时总分钟数（排除正在计时的记录） -->
     <select id="sumDurationByIssueId" resultType="java.lang.Integer">
         SELECT COALESCE(SUM(duration), 0)
         FROM time_entry
         WHERE issue_id = #{issueId}
+          AND ongoing = false
     </select>
 
-    <!-- 原子更新 Issue 的 spent_hours（子查询方式，防止并发 lost update） -->
+    <!-- 原子更新 Issue 的 spent_hours（子查询方式，防止并发 lost update，排除 ongoing 记录） -->
     <update id="atomicRefreshSpentHours">
         UPDATE issue
         SET spent_hours = COALESCE(
-            (SELECT ROUND(SUM(duration) / 60.0, 2) FROM time_entry WHERE issue_id = #{issueId}),
+            (SELECT ROUND(SUM(duration) / 60.0, 2) FROM time_entry WHERE issue_id = #{issueId} AND ongoing = false),
             0
         )
         WHERE id = #{issueId}
     </update>
 
-    <!-- 全量校准所有 issue 的 spent_hours -->
+    <!-- 全量校准所有 issue 的 spent_hours（排除 ongoing 记录） -->
     <update id="recalculateAllSpentHours">
         UPDATE issue i
         SET spent_hours = COALESCE(
             (SELECT ROUND(SUM(te.duration) / 60.0, 2)
              FROM time_entry te
-             WHERE te.issue_id = i.id),
+             WHERE te.issue_id = i.id
+               AND te.ongoing = false),
             0
         )
         WHERE i.deleted_at IS NULL
@@ -35,7 +37,7 @@
     <select id="selectEntriesWithIssueKey" resultType="map">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
-            t.start_time, t.description,
+            t.start_time, t.description, t.ongoing,
             t.created_at, t.updated_at,
             i.issue_key, i.title AS issue_title,
             CASE WHEN i.deleted_at IS NOT NULL THEN true ELSE false END AS issue_deleted,
@@ -64,7 +66,7 @@
     <select id="selectEntriesByProjectForUser" resultType="map">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
-            t.start_time, t.description,
+            t.start_time, t.description, t.ongoing,
             t.created_at, t.updated_at,
             i.issue_key, i.title AS issue_title,
             CASE WHEN i.id IS NULL OR i.deleted_at IS NOT NULL THEN true ELSE false END AS issue_deleted,
@@ -91,7 +93,7 @@
     <select id="selectEntriesByProject" resultType="map">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
-            t.start_time, t.description,
+            t.start_time, t.description, t.ongoing,
             t.created_at, t.updated_at,
             i.issue_key, i.title AS issue_title,
             CASE WHEN i.id IS NULL OR i.deleted_at IS NOT NULL THEN true ELSE false END AS issue_deleted,

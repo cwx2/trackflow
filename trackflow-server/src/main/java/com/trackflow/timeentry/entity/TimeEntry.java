@@ -17,9 +17,10 @@ public class TimeEntry {
     private Long userId;
     private Long loggedBy;          // who performed the logging (always current user)
     private LocalDate workDate;
-    private Integer duration;       // minutes
+    private Integer duration;       // minutes (NULL when ongoing=true)
     private Integer startTime;      // minutes from midnight (e.g. 540 = 09:00)
     private String description;
+    private Boolean ongoing;        // true = timer is running, duration is NULL
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

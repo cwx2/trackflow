@@ -15,11 +15,24 @@ public class TimeEntryVO {
     private String userId;
     private String userName;
     private String workDate;
-    private Integer duration;       // minutes
+    private Integer duration;       // minutes (null when ongoing=true)
     private Integer startTime;      // minutes from midnight
     private String description;
     private String createdAt;
     private String updatedAt;
+
+    /**
+     * 是否正在计时。
+     * 为 true 时 duration 为 null，前端应根据 startedAt 实时计算已经过时间。
+     */
+    private Boolean ongoing;
+
+    /**
+     * 计时器启动时间（ISO 格式）。
+     * 仅当 ongoing=true 时有意义，前端用 (now - startedAt) 显示实时时长。
+     * 值等于 createdAt。
+     */
+    private String startedAt;
 
     /**
      * 记录操作人 ID（谁输入的这条工时）。

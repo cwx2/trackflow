@@ -7,6 +7,8 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
+import com.trackflow.timeentry.dto.StartTimerDTO;
+import com.trackflow.timeentry.dto.StopTimerDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.service.TimeEntryService;
@@ -36,6 +38,44 @@ public class TimeEntryController {
     private final IssueService issueService;
     private final PermissionService permissionService;
     private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
+
+    // ========== 计时器 API ==========
+
+    /**
+     * 启动计时器（创建 ongoing 工时记录）
+     */
+    @PostMapping("/start")
+    @PreAuthorize("isAuthenticated()")
+    public R<TimeEntryVO> startTimer(@Valid @RequestBody StartTimerDTO dto) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        TimeEntry entry = timeEntryService.startTimer(userId, dto);
+        TimeEntryVO vo = buildEntryVO(entry);
+        vo.setOngoing(true);
+        return R.ok(vo);
+    }
+
+    /**
+     * 停止计时器
+     */
+    @PostMapping("/{id}/stop")
+    @PreAuthorize("isAuthenticated()")
+    public R<TimeEntryVO> stopTimer(@PathVariable("id") Long id, @RequestBody(required = false) StopTimerDTO dto) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        TimeEntry entry = timeEntryService.stopTimer(userId, id, dto);
+        TimeEntryVO vo = buildEntryVO(entry);
+        return R.ok(vo);
+    }
+
+    /**
+     * 获取当前用户的活跃计时器
+     */
+    @GetMapping("/active")
+    @PreAuthorize("isAuthenticated()")
+    public R<TimeEntryVO> getActiveTimer() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        TimeEntryVO vo = timeEntryService.getActiveTimerVO(userId);
+        return R.ok(vo);
+    }
 
     /**
      * 创建工时记录
@@ -200,6 +240,8 @@ public class TimeEntryController {
         return R.ok(canEditOthersTime(currentUserId));
     }
 
+    // ========== 计时器 API ==========
+
     // ========== 内部方法 ==========
 
     /**
@@ -238,10 +280,16 @@ public class TimeEntryController {
         vo.setIssueId(String.valueOf(entry.getIssueId()));
         vo.setProjectId(String.valueOf(entry.getProjectId()));
         vo.setUserId(String.valueOf(entry.getUserId()));
-        vo.setWorkDate(entry.getWorkDate().toString());
+        vo.setWorkDate(entry.getWorkDate() != null ? entry.getWorkDate().toString() : null);
         vo.setDuration(entry.getDuration());
         vo.setStartTime(entry.getStartTime());
         vo.setDescription(entry.getDescription());
+        vo.setOngoing(entry.getOngoing());
+        if (Boolean.TRUE.equals(entry.getOngoing()) && entry.getCreatedAt() != null) {
+            vo.setStartedAt(entry.getCreatedAt().toString());
+        }
+        vo.setCreatedAt(entry.getCreatedAt() != null ? entry.getCreatedAt().toString() : null);
+        vo.setUpdatedAt(entry.getUpdatedAt() != null ? entry.getUpdatedAt().toString() : null);
 
         // loggedBy 信息
         if (entry.getLoggedBy() != null) {
