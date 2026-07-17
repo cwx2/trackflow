@@ -7,6 +7,7 @@ import com.trackflow.integration.dto.UpdateNotificationPreferenceDTO;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.mapper.NotificationPreferenceMapper;
+import com.trackflow.system.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 public class NotificationPreferenceService {
 
     private final NotificationPreferenceMapper preferenceMapper;
+    private final SystemSettingService systemSettingService;
 
     /**
      * 检查用户对指定事件类型的通知偏好是否启用。
@@ -110,24 +112,29 @@ public class NotificationPreferenceService {
     }
 
     /**
-     * 创建默认偏好记录
+     * 创建默认偏好记录（使用全局通知管理中配置的默认值）
      */
     private NotificationPreference createDefault(Long userId) {
         NotificationPreference pref = new NotificationPreference();
         pref.setUserId(userId);
-        pref.setOnIssueAssigned(true);
-        pref.setOnIssueStatusChanged(true);
-        pref.setOnIssueCommented(true);
-        pref.setOnMentioned(true);
-        pref.setOnIssueResolved(true);
-        pref.setOnSprintStarted(false);
-        pref.setOnSprintCompleted(false);
-        pref.setOnProjectMemberChanged(true);
-        pref.setOnProjectLifecycle(true);
-        pref.setEmailEnabled(false);
+        pref.setOnIssueAssigned(getDefaultBool("notification.default_on_issue_assigned", true));
+        pref.setOnIssueStatusChanged(getDefaultBool("notification.default_on_issue_status_changed", true));
+        pref.setOnIssueCommented(getDefaultBool("notification.default_on_issue_commented", true));
+        pref.setOnMentioned(getDefaultBool("notification.default_on_mentioned", true));
+        pref.setOnIssueResolved(getDefaultBool("notification.default_on_issue_resolved", true));
+        pref.setOnSprintStarted(getDefaultBool("notification.default_on_sprint_started", false));
+        pref.setOnSprintCompleted(getDefaultBool("notification.default_on_sprint_completed", false));
+        pref.setOnProjectMemberChanged(getDefaultBool("notification.default_on_project_member_changed", true));
+        pref.setOnProjectLifecycle(getDefaultBool("notification.default_on_project_lifecycle", true));
+        pref.setEmailEnabled(getDefaultBool("notification.default_email_enabled", false));
         pref.setCreatedAt(LocalDateTime.now());
         pref.setUpdatedAt(LocalDateTime.now());
         preferenceMapper.insert(pref);
         return pref;
+    }
+
+    private boolean getDefaultBool(String key, boolean fallback) {
+        String value = systemSettingService.getSettingValue(key, String.valueOf(fallback));
+        return Boolean.parseBoolean(value);
     }
 }

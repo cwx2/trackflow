@@ -25,6 +25,7 @@ export { transitionActionApi } from './transitionAction'
 export { notificationApi } from './notification'
 export { auditLogApi } from './auditLog'
 export { systemSettingApi } from './systemSetting'
+export { notificationAdminApi } from './notificationAdmin'
 
 // 类型导出
 export type * from './types'

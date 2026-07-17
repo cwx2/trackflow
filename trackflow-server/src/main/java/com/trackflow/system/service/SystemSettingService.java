@@ -90,7 +90,7 @@ public class SystemSettingService {
         return setting != null ? setting.getValue() : defaultValue;
     }
 
-    private void upsertSetting(String key, String value, String description, String category) {
+    public void upsertSetting(String key, String value, String description, String category) {
         SystemSetting existing = settingMapper.selectByKey(key);
         if (existing != null) {
             existing.setValue(value);

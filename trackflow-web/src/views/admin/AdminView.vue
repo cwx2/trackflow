@@ -125,6 +125,13 @@ const menuItems: AdminMenuItem[] = [
     title: '工作项属性',
     description: '管理工时记录的分类属性和值列表',
     permission: 'system:manage_roles'
+  },
+  {
+    path: '/admin/notifications',
+    icon: '🔔',
+    title: '通知管理',
+    description: '配置全局通知策略、默认偏好和保留策略',
+    permission: 'system:manage_roles'
   }
 ]
 
