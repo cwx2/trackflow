@@ -26,6 +26,9 @@ public class CustomFieldOption implements Serializable {
 
     private Boolean isDefault;
 
+    /** 是否已归档（归档选项不出现在新值选择列表中，但已引用的值仍可正确展示） */
+    private Boolean isArchived;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

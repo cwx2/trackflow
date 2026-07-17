@@ -451,6 +451,7 @@ export interface CustomFieldOptionVO {
   value: string
   position: number
   isDefault: boolean
+  isArchived?: boolean
 }
 
 export interface CustomFieldValueVO {

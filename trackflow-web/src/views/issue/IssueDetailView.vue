@@ -451,7 +451,11 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
     switch (cf.fieldFormat) {
       case 'list':
         editType = 'select'
-        options = (cf.options || []).map(o => ({ value: o.id, label: o.value }))
+        // Only show active (non-archived) options in the selector;
+        // if current value references an archived option, it's still displayed via displayValue
+        options = (cf.options || [])
+          .filter(o => !o.isArchived)
+          .map(o => ({ value: o.id, label: o.value }))
         break
       case 'user':
         editType = 'user-select'

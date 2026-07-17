@@ -174,7 +174,7 @@
                 multiple
                 allow-clear
               >
-                <a-option v-for="opt in cf.options" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
               </a-select>
               <!-- list (单值模式) -->
               <a-select
@@ -184,7 +184,7 @@
                 placeholder="选择"
                 allow-clear
               >
-                <a-option v-for="opt in cf.options" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
               </a-select>
               <!-- user -->
               <a-select

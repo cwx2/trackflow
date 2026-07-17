@@ -23,6 +23,7 @@ public interface CustomFieldConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "customFieldId", expression = "java(longToString(entity.getCustomFieldId()))")
+    @Mapping(target = "isArchived", source = "isArchived")
     CustomFieldOptionVO toOptionVO(CustomFieldOption entity);
 
     List<CustomFieldOptionVO> toOptionVOList(List<CustomFieldOption> entities);

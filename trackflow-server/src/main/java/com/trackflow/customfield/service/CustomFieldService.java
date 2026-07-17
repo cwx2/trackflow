@@ -129,19 +129,7 @@ public class CustomFieldService {
         definitionMapper.updateById(entity);
 
         if ("list".equals(entity.getFieldFormat()) && dto.getOptions() != null) {
-            optionMapper.delete(new LambdaQueryWrapper<CustomFieldOption>()
-                    .eq(CustomFieldOption::getCustomFieldId, id));
-            for (int i = 0; i < dto.getOptions().size(); i++) {
-                UpdateCustomFieldDTO.OptionItem opt = dto.getOptions().get(i);
-                CustomFieldOption option = new CustomFieldOption();
-                option.setCustomFieldId(id);
-                option.setValue(opt.getValue());
-                option.setPosition(i);
-                option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
-                option.setCreatedAt(LocalDateTime.now());
-                option.setUpdatedAt(LocalDateTime.now());
-                optionMapper.insert(option);
-            }
+            updateListOptions(id, dto.getOptions());
         }
 
         if (dto.getProjectIds() != null) {
@@ -185,6 +173,110 @@ public class CustomFieldService {
             entity.setPosition(i);
             definitionMapper.updateById(entity);
         }
+    }
+
+    /**
+     * 更新列表类型字段的选项（保持选项 ID 稳定性）。
+     * <p>
+     * 策略：
+     * - DTO 中有 id 的选项 → UPDATE（更新 value/position/isDefault）
+     * - DTO 中无 id 的选项 → INSERT（新增）
+     * - DB 中存在但 DTO 中不存在的选项 → 检查是否被引用：有引用则归档，无引用则物理删除
+     * <p>
+     * 参考 OpenProject: app/models/custom_field.rb#possible_values=
+     */
+    private void updateListOptions(Long customFieldId, List<UpdateCustomFieldDTO.OptionItem> dtoOptions) {
+        // 1. 加载当前数据库中所有选项
+        List<CustomFieldOption> existingOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, customFieldId));
+        Map<Long, CustomFieldOption> existingMap = existingOptions.stream()
+                .collect(Collectors.toMap(CustomFieldOption::getId, o -> o));
+
+        // 2. 收集 DTO 中引用了已有 ID 的集合
+        Set<Long> dtoReferencedIds = dtoOptions.stream()
+                .map(UpdateCustomFieldDTO.OptionItem::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // 3. 处理 DTO 中的每个选项
+        for (int i = 0; i < dtoOptions.size(); i++) {
+            UpdateCustomFieldDTO.OptionItem opt = dtoOptions.get(i);
+            if (opt.getId() != null) {
+                // 已有选项 → UPDATE
+                CustomFieldOption existing = existingMap.get(opt.getId());
+                if (existing == null) {
+                    // ID 无效，当作新增处理
+                    insertNewOption(customFieldId, opt, i);
+                } else {
+                    existing.setValue(opt.getValue());
+                    existing.setPosition(i);
+                    existing.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+                    existing.setIsArchived(false); // 如果之前被归档，恢复
+                    existing.setUpdatedAt(LocalDateTime.now());
+                    optionMapper.updateById(existing);
+                }
+            } else {
+                // 新选项 → INSERT
+                insertNewOption(customFieldId, opt, i);
+            }
+        }
+
+        // 4. 处理 DB 中存在但 DTO 中不存在的选项（被移除的）
+        Set<Long> removedIds = existingMap.keySet().stream()
+                .filter(id -> !dtoReferencedIds.contains(id))
+                .collect(Collectors.toSet());
+
+        for (Long removedId : removedIds) {
+            // 检查该选项是否被工单引用
+            boolean isReferenced = isOptionReferenced(customFieldId, removedId);
+            if (isReferenced) {
+                // 有引用 → 归档（保留数据，标记为不可选）
+                CustomFieldOption archived = existingMap.get(removedId);
+                archived.setIsArchived(true);
+                archived.setPosition(Integer.MAX_VALUE); // 归档选项排最后
+                archived.setUpdatedAt(LocalDateTime.now());
+                optionMapper.updateById(archived);
+                log.info("Custom field option {} archived (referenced by issues), fieldId={}", removedId, customFieldId);
+            } else {
+                // 无引用 → 物理删除
+                optionMapper.deleteById(removedId);
+            }
+        }
+    }
+
+    /**
+     * 插入新的选项记录
+     */
+    private void insertNewOption(Long customFieldId, UpdateCustomFieldDTO.OptionItem opt, int position) {
+        CustomFieldOption option = new CustomFieldOption();
+        option.setCustomFieldId(customFieldId);
+        option.setValue(opt.getValue());
+        option.setPosition(position);
+        option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+        option.setIsArchived(false);
+        option.setCreatedAt(LocalDateTime.now());
+        option.setUpdatedAt(LocalDateTime.now());
+        optionMapper.insert(option);
+    }
+
+    /**
+     * 检查指定选项 ID 是否被任何工单的 custom_field_value 引用。
+     * list 字段值存储方式：单选存 option ID 字符串，多选存逗号分隔的 ID 列表。
+     */
+    private boolean isOptionReferenced(Long customFieldId, Long optionId) {
+        String idStr = String.valueOf(optionId);
+        // 精确匹配单选值，或者作为多选中的一部分
+        // 用 SQL LIKE 检查：value = 'id' OR value LIKE 'id,%' OR value LIKE '%,id,%' OR value LIKE '%,id'
+        Long count = valueMapper.selectCount(new LambdaQueryWrapper<CustomFieldValue>()
+                .eq(CustomFieldValue::getCustomFieldId, customFieldId)
+                .and(w -> w
+                        .eq(CustomFieldValue::getValue, idStr)
+                        .or().likeRight(CustomFieldValue::getValue, idStr + ",")
+                        .or().like(CustomFieldValue::getValue, "," + idStr + ",")
+                        .or().likeLeft(CustomFieldValue::getValue, "," + idStr)
+                ));
+        return count != null && count > 0;
     }
 
     public List<CustomFieldDefinition> listByProject(Long projectId, String issueType) {

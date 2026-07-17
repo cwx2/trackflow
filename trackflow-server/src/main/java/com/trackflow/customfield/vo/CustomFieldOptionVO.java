@@ -9,4 +9,5 @@ public class CustomFieldOptionVO {
     private String value;
     private Integer position;
     private Boolean isDefault;
+    private Boolean isArchived;
 }

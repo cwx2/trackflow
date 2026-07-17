@@ -185,7 +185,7 @@ const form = reactive({
   minLength: 0,
   maxLength: 0,
   regexp: '',
-  options: [] as Array<{ value: string; isDefault: boolean }>,
+  options: [] as Array<{ id?: string; value: string; isDefault: boolean }>,
   projectIds: [] as string[],
   issueTypes: [] as string[]
 })
@@ -281,7 +281,9 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.minLength = record.minLength
   form.maxLength = record.maxLength
   form.regexp = record.regexp || ''
-  form.options = (record.options || []).map(o => ({ value: o.value, isDefault: o.isDefault }))
+  form.options = (record.options || [])
+    .filter(o => !o.isArchived)
+    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
   drawerVisible.value = true
@@ -309,7 +311,9 @@ async function handleSave() {
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
-        options: form.fieldFormat === 'list' ? form.options : undefined,
+        options: form.fieldFormat === 'list'
+          ? form.options.map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault }))
+          : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes
       })
@@ -325,7 +329,9 @@ async function handleSave() {
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
-        options: form.fieldFormat === 'list' ? form.options : undefined,
+        options: form.fieldFormat === 'list'
+          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault }))
+          : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes
       })
