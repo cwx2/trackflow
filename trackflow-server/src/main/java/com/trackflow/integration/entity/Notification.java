@@ -23,4 +23,6 @@ public class Notification implements Serializable {
     private Long resourceId;
     private Boolean isRead;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Integer aggregationCount;
 }

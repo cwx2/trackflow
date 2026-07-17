@@ -14,6 +14,8 @@ export interface NotificationVO {
   resourceId?: string
   isRead: boolean
   createdAt: string
+  updatedAt?: string
+  aggregationCount?: number
 }
 
 /**

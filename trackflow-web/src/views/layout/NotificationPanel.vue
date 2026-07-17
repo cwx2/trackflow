@@ -83,9 +83,14 @@
                   <span v-else>{{ getTypeIcon(item.type) }}</span>
                 </div>
                 <div class="item-content">
-                  <div class="item-title">{{ item.title }}</div>
+                  <div class="item-title">
+                    {{ item.title }}
+                    <span v-if="item.aggregationCount && item.aggregationCount > 1" class="aggregation-badge">
+                      {{ item.aggregationCount }}次变更
+                    </span>
+                  </div>
                   <div class="item-body">{{ item.content }}</div>
-                  <div class="item-time">{{ formatTime(item.createdAt) }}</div>
+                  <div class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</div>
                 </div>
                 <div class="item-actions">
                   <button
@@ -445,6 +450,22 @@ function handleDeleteAllRead() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aggregation-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tf-accent);
+  background: var(--tf-accent-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.4;
 }
 
 .item-body {

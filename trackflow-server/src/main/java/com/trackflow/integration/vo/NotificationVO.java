@@ -16,4 +16,6 @@ public class NotificationVO {
     private String resourceId;
     private Boolean isRead;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Integer aggregationCount;
 }

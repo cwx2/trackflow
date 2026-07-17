@@ -72,3 +72,5 @@ trackflow:
       - wsf
       - wsc
       - lnk
+  notification:
+    aggregation-minutes: 5  # 通知聚合时间窗口（分钟）

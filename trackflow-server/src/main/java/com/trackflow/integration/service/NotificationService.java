@@ -13,6 +13,7 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +34,19 @@ public class NotificationService {
     private final NotificationConverter notificationConverter;
 
     /**
-     * 创建通知（含触发者信息）
+     * 通知聚合时间窗口（分钟）。同一用户+同一类型+同一资源在此窗口内的多次通知将被合并。
+     */
+    @Value("${trackflow.notification.aggregation-minutes:5}")
+    private int aggregationMinutes;
+
+    /**
+     * 创建通知（含聚合去重逻辑）。
+     * <p>
+     * 聚合规则：在 aggregation-minutes 时间窗口内，若存在同一 userId + type + resourceType + resourceId
+     * 的未读通知，则更新该条通知的 title/content/actorId/updatedAt，并递增 aggregationCount，
+     * 重置 isRead=false。否则新建一条通知。
+     * <p>
+     * 参考 OpenProject 的 update_or_create_notification 设计。
      *
      * @param userId       接收者用户ID
      * @param actorId      触发者用户ID（系统自动通知时为 null）
@@ -43,23 +56,67 @@ public class NotificationService {
      * @param resourceType 关联资源类型
      * @param resourceId   关联资源ID
      */
+    @Transactional
     public void notify(Long userId, Long actorId, String title, String content, String type,
                        String resourceType, Long resourceId) {
-        Notification n = new Notification();
-        n.setUserId(userId);
-        n.setActorId(actorId);
-        n.setTitle(title);
-        n.setContent(content);
-        n.setType(type);
-        n.setResourceType(resourceType);
-        n.setResourceId(resourceId);
-        n.setIsRead(false);
-        n.setCreatedAt(LocalDateTime.now());
-        notificationMapper.insert(n);
+        // 查找聚合窗口内的同类未读通知
+        Notification existing = findRecentUnread(userId, type, resourceType, resourceId);
+
+        if (existing != null) {
+            // 聚合：更新已有通知
+            existing.setTitle(title);
+            existing.setContent(content);
+            existing.setActorId(actorId);
+            existing.setIsRead(false);
+            existing.setUpdatedAt(LocalDateTime.now());
+            existing.setAggregationCount(
+                    (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
+            notificationMapper.updateById(existing);
+            log.debug("[Notification] 聚合通知: id={}, userId={}, type={}, resourceId={}, count={}",
+                    existing.getId(), userId, type, resourceId, existing.getAggregationCount());
+        } else {
+            // 新建通知
+            Notification n = new Notification();
+            n.setUserId(userId);
+            n.setActorId(actorId);
+            n.setTitle(title);
+            n.setContent(content);
+            n.setType(type);
+            n.setResourceType(resourceType);
+            n.setResourceId(resourceId);
+            n.setIsRead(false);
+            n.setCreatedAt(LocalDateTime.now());
+            n.setAggregationCount(1);
+            notificationMapper.insert(n);
+        }
     }
 
     /**
-     * 获取用户通知列表（含触发者信息）
+     * 查找聚合时间窗口内同类型同资源的未读通知。
+     *
+     * @return 匹配的最近一条未读通知，不存在返回 null
+     */
+    private Notification findRecentUnread(Long userId, String type, String resourceType, Long resourceId) {
+        if (resourceId == null) {
+            return null;
+        }
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(aggregationMinutes);
+        return notificationMapper.selectOne(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getType, type)
+                        .eq(Notification::getResourceType, resourceType)
+                        .eq(Notification::getResourceId, resourceId)
+                        .eq(Notification::getIsRead, false)
+                        .ge(Notification::getCreatedAt, cutoff)
+                        .orderByDesc(Notification::getCreatedAt)
+                        .last("LIMIT 1")
+        );
+    }
+
+    /**
+     * 获取用户通知列表（含触发者信息）。
+     * 排序按 COALESCE(updated_at, created_at) DESC，聚合更新的通知置顶。
      */
     public Page<Notification> list(Long userId, Boolean unreadOnly, Page<Notification> page) {
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
@@ -67,7 +124,8 @@ public class NotificationService {
         if (Boolean.TRUE.equals(unreadOnly)) {
             wrapper.eq(Notification::getIsRead, false);
         }
-        wrapper.orderByDesc(Notification::getCreatedAt);
+        // 使用 apply 自定义排序：聚合更新的通知优先
+        wrapper.last("ORDER BY COALESCE(updated_at, created_at) DESC");
         return notificationMapper.selectPage(page, wrapper);
     }
 
