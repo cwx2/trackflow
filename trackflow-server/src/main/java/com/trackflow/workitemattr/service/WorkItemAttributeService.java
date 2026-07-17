@@ -401,4 +401,43 @@ public class WorkItemAttributeService {
         vo.setPosition(val.getPosition());
         return vo;
     }
+
+    /**
+     * 获取属性值的名称（通过 ID）
+     */
+    public String getAttributeValueName(Long valueId) {
+        WorkItemAttributeValue val = valueMapper.selectById(valueId);
+        return val != null ? val.getName() : null;
+    }
+
+    /**
+     * 按名称查找内建 Work type 属性值的 ID
+     * 用于向下兼容前端传递名称字符串的场景
+     */
+    public Long findWorkTypeValueIdByName(String name) {
+        if (name == null || name.isBlank()) return null;
+        WorkItemAttributeValue val = valueMapper.selectOne(
+                new QueryWrapper<WorkItemAttributeValue>()
+                        .eq("attribute_id", 1)
+                        .eq("name", name.trim()));
+        return val != null ? val.getId() : null;
+    }
+
+    /**
+     * 批量查询工时记录的 Work type 属性值（attribute_id=1）
+     * 返回行：(time_entry_id, value_id, value_name, value_color)
+     */
+    public List<Map<String, Object>> getWorkTypeForEntries(String timeEntryIds) {
+        if (timeEntryIds == null || timeEntryIds.isBlank()) return List.of();
+        return entryValueMapper.selectWorkTypeForEntries(timeEntryIds);
+    }
+
+    /**
+     * 删除工时记录的所有属性值关联
+     */
+    @Transactional
+    public void deleteTimeEntryAttributeValues(Long timeEntryId) {
+        entryValueMapper.delete(
+                new QueryWrapper<TimeEntryAttributeValue>().eq("time_entry_id", timeEntryId));
+    }
 }

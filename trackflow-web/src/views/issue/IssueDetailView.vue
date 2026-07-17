@@ -101,14 +101,14 @@
         </a-input>
       </a-form-item>
       <a-form-item label="工作类型">
-        <a-select v-model="timeForm.workType" placeholder="选择工作类型" allow-clear>
-          <a-option v-for="val in issueWorkTypeValues" :key="val.id" :value="val.name">
+        <a-select v-model="timeFormAttrValues['1']" placeholder="选择工作类型" allow-clear>
+          <a-option v-for="val in issueWorkTypeValues" :key="val.id" :value="val.id">
             <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
             {{ val.name }}
           </a-option>
         </a-select>
       </a-form-item>
-      <!-- Dynamic work item attributes -->
+      <!-- Dynamic work item attributes (excluding built-in Work type) -->
       <a-form-item v-for="attr in issueExtraAttributes" :key="attr.id" :label="attr.name">
         <a-select v-model="timeFormAttrValues[attr.id]" :placeholder="`选择${attr.name}`" allow-clear>
           <a-option v-for="val in attr.values" :key="val.id" :value="val.id">
@@ -163,7 +163,6 @@ const timeSaving = ref(false)
 const timeForm = ref({
   workDate: new Date().toISOString().slice(0, 10),
   durationText: '',
-  workType: undefined as string | undefined,
   description: ''
 })
 const timeFormAttrValues = ref<Record<string, string>>({})
@@ -713,7 +712,6 @@ function openTimeDialog() {
   timeForm.value = {
     workDate: new Date().toISOString().slice(0, 10),
     durationText: '',
-    workType: undefined,
     description: ''
   }
   timeFormAttrValues.value = {}
@@ -755,7 +753,6 @@ async function submitTimeEntry() {
       issueId: issue.value!.id,
       workDate: timeForm.value.workDate,
       duration,
-      workType: timeForm.value.workType || undefined,
       description: timeForm.value.description || undefined,
       attributeValues: attrVals
     })

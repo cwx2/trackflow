@@ -26,4 +26,18 @@ public interface TimeEntryAttributeValueMapper extends BaseMapper<TimeEntryAttri
         ORDER BY wia.position, wiav.position
     """)
     List<Map<String, Object>> selectAttributeValuesForEntries(@Param("timeEntryIds") String timeEntryIds);
+
+    /**
+     * 批量查询工时记录的 Work type 属性值（attribute_id=1）
+     * 用于列表视图快速获取工作类型
+     */
+    @Select("""
+        SELECT teav.time_entry_id, teav.value_id,
+               wiav.name AS value_name, wiav.color AS value_color
+        FROM time_entry_attribute_value teav
+        JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
+        WHERE teav.attribute_id = 1
+          AND teav.time_entry_id IN (${timeEntryIds})
+    """)
+    List<Map<String, Object>> selectWorkTypeForEntries(@Param("timeEntryIds") String timeEntryIds);
 }

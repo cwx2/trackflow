@@ -386,10 +386,12 @@
     <!-- 按工作类型分组汇总工时 -->
     <select id="selectTimeByWorkType" resultType="map">
         SELECT
-            COALESCE(t.work_type, '未分类') AS work_type,
+            COALESCE(wiav.name, '未分类') AS work_type,
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
         JOIN issue i ON i.id = t.issue_id
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = 1
+        LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
         WHERE i.deleted_at IS NULL
           AND t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
@@ -397,7 +399,7 @@
               AND i.project_id IN
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
-        GROUP BY COALESCE(t.work_type, '未分类')
+        GROUP BY COALESCE(wiav.name, '未分类')
         ORDER BY total_minutes DESC
     </select>
 

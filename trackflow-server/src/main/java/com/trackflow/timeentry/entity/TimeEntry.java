@@ -17,7 +17,6 @@ public class TimeEntry {
     private LocalDate workDate;
     private Integer duration;       // minutes
     private Integer startTime;      // minutes from midnight (e.g. 540 = 09:00)
-    private String workType;
     private String description;
 
     @TableField(fill = FieldFill.INSERT)
