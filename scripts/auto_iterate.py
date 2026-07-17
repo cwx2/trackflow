@@ -12,6 +12,17 @@ TrackFlow 自动迭代调度脚本（生产者-消费者模型）
   审核者（从 review/ 取 → 通过移到 develop/，拦截移到 rejected/）
   消费者（从 develop/ 取 → 开发完移到 implement/）
 
+Skill 依赖声明（脚本依赖以下 skill，prompt 中显式引用）：
+  - write-requirement  → 生产者：以用户视角操作系统找问题
+  - tech-requirement   → 生产者：以架构师视角审计代码
+  - review-requirement → 审核者：验证需求真实性，通过/拆解/拒绝
+  - fix-requirement    → 消费者：读需求→改代码→测试→提交
+
+重要原则：
+  - 脚本的 prompt 必须与 SKILL.md 中的规则保持一致，不得矛盾
+  - prompt 中显式声明使用哪个 skill，确保每次运行行为一致
+  - 修改 SKILL.md 后脚本自动适用新规则（kiro-cli 每次实时读取 SKILL 文件）
+
 用法：
   python scripts/auto_iterate.py [--max-rounds 20] [--dry-run]
 """
@@ -22,6 +33,7 @@ import logging
 import argparse
 import re
 import os
+import random
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -46,6 +58,31 @@ TIMEOUT_SECONDS = 2400      # 单次 kiro-cli 执行超时（40分钟，夜间�
 MAX_ROUNDS_PER_DAY = 50     # 每日最大消费轮次（夜间跑设大一些）
 COOLDOWN_SECONDS = 10       # 两轮之间冷却时间
 MAX_CONSECUTIVE_FAILURES = 5  # 连续失败次数达到此值时跳过当前需求，但不停止脚本
+
+# Skill/Agent 显式声明（脚本使用的所有 skill 和 agent 必须在此注册）
+# prompt 中必须包含触发关键词以确保 skill 被激活
+SKILLS = {
+    "write-requirement": {
+        "path": ".kiro/skills/write-requirement/SKILL.md",
+        "trigger_keywords": ["找一下需求", "找到需求", "写需求", "找问题"],
+        "description": "以真实用户视角操作系统，发现产品问题，撰写需求文档",
+    },
+    "tech-requirement": {
+        "path": ".kiro/skills/tech-requirement/SKILL.md",
+        "trigger_keywords": ["技术需求", "技术审计", "审计模块", "数据流分析"],
+        "description": "从技术架构角度审计代码，发现逻辑缺失/架构缺陷",
+    },
+    "review-requirement": {
+        "path": ".kiro/skills/review-requirement/SKILL.md",
+        "trigger_keywords": ["审核需求", "筛选需求", "review requirement"],
+        "description": "审核需求的真实性和价值，通过/拆解/拒绝",
+    },
+    "fix-requirement": {
+        "path": ".kiro/skills/fix-requirement/SKILL.md",
+        "trigger_keywords": ["修需求", "处理需求", "fix requirement", "修复需求"],
+        "description": "读取需求文件，定位代码，修复问题，测试验证，提交代码",
+    },
+}
 
 # 生产者配置：skill + 角色 + 模块轮询
 # 产品需求（write-requirement）覆盖所有角色 × 关键模块
@@ -110,15 +147,50 @@ def count_files(directory: Path) -> int:
 
 
 def list_files(directory: Path) -> list[Path]:
-    """列出目录中的需求文件，按编号排序"""
+    """列出目录中的需求文件，按编号排序（子需求排在父需求后面，按子序号升序）"""
     files = list(directory.glob("requirement-*.md"))
-    files.sort(key=lambda f: extract_number(f.name))
+    files.sort(key=lambda f: _sort_key(f.name))
     return files
+
+
+def _sort_key(filename: str) -> tuple[int, int]:
+    """
+    生成排序 key：(父编号, 子序号)
+    - requirement-72.md → (72, 0)
+    - requirement-160.md → (160, 0)
+    - requirement-160-1.md → (160, 1)
+    - requirement-160-2.md → (160, 2)
+    父需求(子序号=0)排在同编号的子需求前面。
+    """
+    # 先尝试匹配子需求：requirement-{parent}-{sub}.md
+    match = re.match(r"requirement-(\d+)-(\d+)\.md", filename)
+    if match:
+        return (int(match.group(1)), int(match.group(2)))
+    # 普通需求：requirement-{number}.md
+    match = re.match(r"requirement-(\d+)\.md", filename)
+    if match:
+        return (int(match.group(1)), 0)
+    return (0, 0)
 
 
 def extract_number(filename: str) -> int:
     match = re.search(r"requirement-(\d+)", filename)
     return int(match.group(1)) if match else 0
+
+
+def is_sub_requirement(filepath: Path) -> bool:
+    """判断是否为子需求文件（requirement-{parent}-{sub}.md）"""
+    return bool(re.match(r"requirement-\d+-\d+\.md", filepath.name))
+
+
+def is_parent_of_subs(filepath: Path, directory: Path) -> bool:
+    """判断该文件是否是已拆解的父需求（同目录中存在对应的子需求文件）"""
+    number = extract_number(filepath.name)
+    # 检查是否有子需求文件存在于任何目录
+    for dir_path in [directory, REVIEW_DIR, DEVELOP_DIR, IMPLEMENT_DIR, REJECTED_DIR]:
+        if list(dir_path.glob(f"requirement-{number}-*.md")):
+            return True
+    return False
 
 
 def extract_title(filepath: Path) -> str:
@@ -154,6 +226,15 @@ def run_kiro(prompt: str, timeout: int = TIMEOUT_SECONDS) -> tuple[bool, str]:
     start = time.time()
     output_lines = []
 
+    # 环境变量：抑制子进程中命令的交互式行为
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"     # git 不弹认证提示
+    env["GIT_EDITOR"] = "true"           # git commit 无编辑器（兜底）
+    env["EDITOR"] = "true"               # 通用编辑器指向 true（立即退出）
+    env["VISUAL"] = "true"
+    env["CI"] = "true"                   # 很多工具检测 CI 环境跳过交互
+    env["NPM_CONFIG_YES"] = "true"       # npm 自动 yes
+
     try:
         process = subprocess.Popen(
             cmd,
@@ -163,6 +244,7 @@ def run_kiro(prompt: str, timeout: int = TIMEOUT_SECONDS) -> tuple[bool, str]:
             cwd=str(WORKSPACE),
             encoding="utf-8",
             errors="replace",
+            env=env,
         )
 
         # 实时读取并打印输出
@@ -199,11 +281,20 @@ def run_kiro(prompt: str, timeout: int = TIMEOUT_SECONDS) -> tuple[bool, str]:
 
 
 def run_producer(skill_index: int) -> bool:
-    """运行生产者：按轮询配置找需求（不同 skill + 不同角色 + 不同模块）"""
-    config = PRODUCER_CONFIGS[skill_index % len(PRODUCER_CONFIGS)]
-    log.info(f"[生产者] 第 {skill_index + 1}/{len(PRODUCER_CONFIGS)} 项: {config['skill']} — {config['prompt'][:40]}...")
+    """运行生产者：随机选择配置找需求（不同 skill + 不同角色 + 不同模块）"""
+    config = random.choice(PRODUCER_CONFIGS)
+    skill_name = config["skill"]
+    skill_info = SKILLS[skill_name]
+    log.info(f"[生产者] 随机选择: {skill_name} — {config['prompt'][:50]}...")
 
-    success, output = run_kiro(config["prompt"])
+    # 显式在 prompt 开头声明使用哪个 skill，确保激活
+    explicit_prompt = (
+        f"[使用 skill: {skill_name}] "
+        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+        f"{config['prompt']}"
+    )
+
+    success, output = run_kiro(explicit_prompt)
     return success
 
 
@@ -217,12 +308,14 @@ def run_reviewer() -> int:
         log.info("[审核] review/ 目录为空，无需审核")
         return count_files(DEVELOP_DIR)
 
+    skill_name = "review-requirement"
+    skill_info = SKILLS[skill_name]
     req_list = ", ".join([f"requirement-{extract_number(f.name)}.md" for f in review_files])
     prompt = (
+        f"[使用 skill: {skill_name}] "
+        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
         f"审核需求：请审核 requirements/review/ 中的以下需求文件：{req_list}。"
         f"文件路径格式为 requirements/review/requirement-XX.md。"
-        f"读代码验证问题是否真实存在，对标 OpenProject 源码和 YouTrack 文档确认。"
-        f"通过的用 MCP 工具 move_requirement 移动到 develop，拦截的移动到 rejected。"
     )
 
     log.info(f"[审核] 审核 {len(review_files)} 个需求...")
@@ -241,9 +334,15 @@ def run_consumer(req_file: Path, attempt: int = 1) -> bool:
     """运行消费者：处理一个需求"""
     number = extract_number(req_file.name)
     title = extract_title(req_file)
+    skill_name = "fix-requirement"
+    skill_info = SKILLS[skill_name]
     log.info(f"[消费者] 处理 requirement-{number}：{title} (尝试 {attempt}/{MAX_RETRIES})")
 
-    prompt = f"修需求 requirement-{number}，需求文件位于 requirements/develop/requirement-{number}.md"
+    prompt = (
+        f"[使用 skill: {skill_name}] "
+        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+        f"修需求 requirement-{number}，需求文件位于 requirements/develop/requirement-{number}.md"
+    )
     success, output = run_kiro(prompt)
 
     if success:
@@ -267,7 +366,6 @@ def run_consumer(req_file: Path, attempt: int = 1) -> bool:
 def main_loop(max_rounds: int, dry_run: bool = False):
     """主循环：生产者-消费者交替"""
     consume_count = 0       # 消费轮次计数（仅计消费者）
-    skill_index = 0
     failure_streak = 0
     retry_map: dict[int, int] = {}  # req_number -> attempt count
 
@@ -300,8 +398,7 @@ def main_loop(max_rounds: int, dry_run: bool = False):
 
             # 还不够，找新需求直到达标
             while count_files(DEVELOP_DIR) < MIN_DEVELOP_QUEUE:
-                run_producer(skill_index)
-                skill_index += 1
+                run_producer(0)  # 参数保留兼容签名，内部随机选择
                 time.sleep(COOLDOWN_SECONDS)
 
                 # 找完后审核
@@ -319,6 +416,14 @@ def main_loop(max_rounds: int, dry_run: bool = False):
             continue
 
         req_file = develop_files[0]
+
+        # 跳过已拆解的父需求（有子需求存在则不直接处理父需求）
+        if not is_sub_requirement(req_file) and is_parent_of_subs(req_file, DEVELOP_DIR):
+            log.info(f"[调度] {req_file.name} 是已拆解的父需求，移到 implement/ 归档")
+            dest = IMPLEMENT_DIR / req_file.name
+            shutil.move(str(req_file), str(dest))
+            continue
+
         number = extract_number(req_file.name)
         attempt = retry_map.get(number, 0) + 1
 

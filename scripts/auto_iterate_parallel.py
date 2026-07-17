@@ -1,0 +1,482 @@
+"""
+TrackFlow 并行迭代脚本（永不停止）
+
+多个 worker 并行找需求 + 并行消费需求，审核单线程保证去重。
+脚本永远运行，只能通过 Ctrl+C 手动停止。
+
+流程循环（无限）：
+  1. develop/ 队列不足 → 多代理并行找需求（生产）
+  2. review/ 有文件 → 单代理审核（串行，保证去重）
+  3. develop/ 有文件 → 多代理并行消费（修需求）
+  4. 失败的需求重试 3 次后跳过（移到 rejected/），继续下一个
+  5. 全部消费完 → 回到 1 继续生产
+
+防冲突：
+  - 消费阶段：worker 通过"领取"机制（原子 rename 到 working/）防止重复处理
+  - 生产阶段：各 worker 随机选不同配置，产出的需求文件编号由 MCP 工具保证唯一
+  - 审核阶段：单线程，天然无冲突
+
+用法：
+  python scripts/auto_iterate_parallel.py                # 2 worker 并行，永不停止
+  python scripts/auto_iterate_parallel.py --workers 3    # 3 worker 并行
+  python scripts/auto_iterate_parallel.py --skip-produce # 只消费不生产
+  python scripts/auto_iterate_parallel.py --workers 3 --max-rounds 5
+  python scripts/auto_iterate_parallel.py --workers 2 --skip-produce  # 只消费不生产
+"""
+
+import subprocess
+import time
+import logging
+import argparse
+import re
+import os
+import random
+import shutil
+import threading
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, wait
+from datetime import datetime
+
+# ============ 配置 ============
+
+WORKSPACE = Path(__file__).parent.parent
+REQUIREMENTS_BASE = WORKSPACE / "requirements"
+REVIEW_DIR = REQUIREMENTS_BASE / "review"
+DEVELOP_DIR = REQUIREMENTS_BASE / "develop"
+IMPLEMENT_DIR = REQUIREMENTS_BASE / "implement"
+REJECTED_DIR = REQUIREMENTS_BASE / "rejected"
+WORKING_DIR = REQUIREMENTS_BASE / "working"
+KIRO_CLI = "kiro-cli"
+
+for d in [REVIEW_DIR, DEVELOP_DIR, IMPLEMENT_DIR, REJECTED_DIR, WORKING_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
+
+# 阈值
+MIN_DEVELOP_QUEUE = 6       # develop 低于此数时触发生产
+TIMEOUT_SECONDS = 2400      # 单次 kiro-cli 超时（40分钟）
+MAX_RETRIES = 3
+COOLDOWN_SECONDS = 5
+
+# 领取锁
+_claim_lock = threading.Lock()
+
+# Skill 声明
+SKILLS = {
+    "write-requirement": {"path": ".kiro/skills/write-requirement/SKILL.md"},
+    "tech-requirement": {"path": ".kiro/skills/tech-requirement/SKILL.md"},
+    "review-requirement": {"path": ".kiro/skills/review-requirement/SKILL.md"},
+    "fix-requirement": {"path": ".kiro/skills/fix-requirement/SKILL.md"},
+}
+
+# 生产者配置池
+PRODUCER_CONFIGS = [
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下工单管理的完整流程，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计工单（Issue）模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下项目管理功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计项目管理模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下Sprint管理功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计 Sprint 模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下看板功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计看板模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下工作流配置功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计工作流引擎模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下用户与角色管理功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计权限与认证模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下报表与仪表盘功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计报表模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下通知系统功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计通知模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下自定义字段功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计自定义字段模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下时间追踪与工时功能，找到需求"},
+    {"skill": "tech-requirement", "prompt": "技术需求：审计时间追踪模块的完整数据流"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个开发人员的使用者，用 wangqiang 账号登录系统，研究工单列表和详情功能，找到需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个开发人员的使用者，用 wangqiang 账号登录系统，研究看板和Sprint功能，找到需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个测试人员的使用者，用 zhaojing 账号登录系统，研究工单状态变更和测试流程，找到需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个产品经理的使用者，用 sunlei 账号登录系统，研究工单创建和Sprint规划功能，找到需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个观察者的使用者，用 huanglei 账号登录系统，研究只读访问和评论功能，找到需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个技术负责人的使用者，用 zhangwei 账号登录系统，研究Sprint管理和工单分配功能，找到需求"},
+]
+
+# ============ 日志 ============
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(WORKSPACE / "scripts" / "auto_iterate_parallel.log", encoding="utf-8"),
+    ]
+)
+log = logging.getLogger(__name__)
+
+# ============ 工具函数 ============
+
+
+def _sort_key(filename: str) -> tuple:
+    match = re.match(r"requirement-(\d+)-(\d+)\.md", filename)
+    if match:
+        return (int(match.group(1)), int(match.group(2)))
+    match = re.match(r"requirement-(\d+)\.md", filename)
+    if match:
+        return (int(match.group(1)), 0)
+    return (0, 0)
+
+
+def extract_number(filename: str) -> int:
+    match = re.search(r"requirement-(\d+)", filename)
+    return int(match.group(1)) if match else 0
+
+
+def is_sub_requirement(filepath: Path) -> bool:
+    return bool(re.match(r"requirement-\d+-\d+\.md", filepath.name))
+
+
+def has_sub_requirements(number: int) -> bool:
+    for dir_path in [DEVELOP_DIR, WORKING_DIR, IMPLEMENT_DIR, REJECTED_DIR]:
+        if list(dir_path.glob(f"requirement-{number}-*.md")):
+            return True
+    return False
+
+
+def list_available(directory: Path) -> list[Path]:
+    """列出可消费的需求文件（排除已拆解父需求）"""
+    files = list(directory.glob("requirement-*.md"))
+    files.sort(key=lambda f: _sort_key(f.name))
+    result = []
+    for f in files:
+        if not is_sub_requirement(f):
+            number = extract_number(f.name)
+            if has_sub_requirements(number):
+                continue
+        result.append(f)
+    return result
+
+
+def count_develop() -> int:
+    return len(list_available(DEVELOP_DIR))
+
+
+def extract_title(filepath: Path) -> str:
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("#"):
+                    return line.strip().lstrip("#").strip()
+    except Exception:
+        pass
+    return filepath.name
+
+
+# ============ Kiro CLI ============
+
+
+def run_kiro(prompt: str, label: str) -> tuple[bool, str]:
+    cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools", prompt]
+    start = time.time()
+    output_lines = []
+
+    # 环境变量：抑制子进程中命令的交互式行为
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"     # git 不弹认证提示
+    env["GIT_EDITOR"] = "true"           # git commit 无编辑器（兜底）
+    env["EDITOR"] = "true"               # 通用编辑器指向 true（立即退出）
+    env["VISUAL"] = "true"
+    env["CI"] = "true"                   # 很多工具检测 CI 环境跳过交互
+    env["NPM_CONFIG_YES"] = "true"       # npm 自动 yes
+    env["DEBIAN_FRONTEND"] = "noninteractive"  # apt 等不提问
+
+    try:
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, cwd=str(WORKSPACE), encoding="utf-8", errors="replace",
+            env=env,
+        )
+        for line in process.stdout:
+            line_stripped = line.rstrip("\n")
+            print(f"  [{label}] {line_stripped}")
+            output_lines.append(line_stripped)
+        process.wait(timeout=TIMEOUT_SECONDS)
+        elapsed = time.time() - start
+        success = process.returncode == 0
+        level = "INFO" if success else "WARNING"
+        log.log(logging.getLevelName(level), f"[{label}] {'完成' if success else '失败'} ({elapsed:.0f}s)")
+        return success, "\n".join(output_lines)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        log.error(f"[{label}] 超时")
+        return False, "TIMEOUT"
+    except Exception as e:
+        log.error(f"[{label}] 异常: {e}")
+        return False, str(e)
+
+
+# ============ 阶段一：并行生产 ============
+
+
+def produce_one(worker_id: str) -> bool:
+    """单个生产者：随机选配置，找一个需求"""
+    config = random.choice(PRODUCER_CONFIGS)
+    skill_name = config["skill"]
+    skill_info = SKILLS[skill_name]
+
+    prompt = (
+        f"[使用 skill: {skill_name}] "
+        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+        f"{config['prompt']}"
+    )
+
+    log.info(f"[{worker_id}] 生产: {config['prompt'][:50]}...")
+    success, _ = run_kiro(prompt, worker_id)
+    return success
+
+
+def run_produce_phase(num_workers: int):
+    """并行生产阶段：多个 worker 同时找需求"""
+    log.info(f"[生产] 启动 {num_workers} 个 worker 并行找需求...")
+
+    with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="producer") as executor:
+        futures = []
+        for i in range(num_workers):
+            futures.append(executor.submit(produce_one, f"producer-{i+1}"))
+        wait(futures)
+
+    new_review = len(list(REVIEW_DIR.glob("requirement-*.md")))
+    log.info(f"[生产] 完成，review/ 当前 {new_review} 个")
+
+
+# ============ 阶段二：串行审核 ============
+
+
+def run_review_phase():
+    """单线程审核：保证去重一致性"""
+    review_files = sorted(REVIEW_DIR.glob("requirement-*.md"))
+    if not review_files:
+        log.info("[审核] review/ 为空，跳过")
+        return
+
+    skill_info = SKILLS["review-requirement"]
+    req_list = ", ".join([f.name for f in review_files])
+
+    prompt = (
+        f"[使用 skill: review-requirement] "
+        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+        f"审核需求：请审核 requirements/review/ 中的以下需求文件：{req_list}。"
+        f"文件路径格式为 requirements/review/requirement-XX.md。"
+    )
+
+    log.info(f"[审核] 审核 {len(review_files)} 个需求（串行）...")
+    run_kiro(prompt, "reviewer")
+    log.info(f"[审核] 完成，develop/ 当前 {count_develop()} 个")
+
+
+# ============ 阶段三：并行消费 ============
+
+
+def claim_requirement(worker_id: str) -> Path | None:
+    """原子领取一个需求"""
+    worker_dir = WORKING_DIR / worker_id
+    worker_dir.mkdir(parents=True, exist_ok=True)
+
+    with _claim_lock:
+        available = list_available(DEVELOP_DIR)
+        if not available:
+            return None
+        source = available[0]
+        dest = worker_dir / source.name
+        try:
+            source.rename(dest)
+            return dest
+        except (OSError, FileNotFoundError):
+            return None
+
+
+def consume_one(worker_id: str) -> str | None:
+    """单个 worker 领取并处理一个需求，返回文件名（成功）或 None（无可领取）"""
+    req_file = claim_requirement(worker_id)
+    if req_file is None:
+        return None
+
+    skill_info = SKILLS["fix-requirement"]
+    actual_path = f"requirements/working/{worker_id}/{req_file.name}"
+
+    prompt = (
+        f"[使用 skill: fix-requirement] "
+        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+        f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
+    )
+
+    title = extract_title(req_file)
+    log.info(f"[{worker_id}] 消费: {req_file.name} ({title})")
+    success, _ = run_kiro(prompt, worker_id)
+
+    if success:
+        if req_file.exists():
+            shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
+        log.info(f"[{worker_id}] ✅ {req_file.name}")
+        return req_file.name
+    else:
+        # 失败放回 develop（让下次重试或被跳过）
+        if req_file.exists():
+            shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
+        log.warning(f"[{worker_id}] ❌ {req_file.name} 失败，放回 develop/")
+        return None
+
+
+def run_consume_phase(num_workers: int) -> int:
+    """
+    并行消费阶段：多个 worker 同时处理需求，直到 develop/ 空。
+    失败的需求会被跳过（移到队尾），不会卡住流程。
+    """
+    total_done = 0
+    retry_counts: dict[str, int] = {}  # filename -> 连续失败次数
+
+    while True:
+        available = list_available(DEVELOP_DIR)
+        if not available:
+            break
+
+        # 检查队首文件是否已多次失败，是则跳过
+        first = available[0]
+        retries = retry_counts.get(first.name, 0)
+        if retries >= MAX_RETRIES:
+            log.warning(f"[消费] {first.name} 已失败 {retries} 次，移到 rejected/")
+            shutil.move(str(first), str(REJECTED_DIR / first.name))
+            del retry_counts[first.name]
+            continue
+
+        # 启动 min(workers, available) 个并发任务
+        batch_size = min(num_workers, len(available))
+
+        with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="consumer") as executor:
+            futures = []
+            for i in range(batch_size):
+                futures.append(executor.submit(consume_one, f"consumer-{i+1}"))
+            wait(futures)
+
+            for f in futures:
+                try:
+                    result = f.result()
+                    if result:
+                        total_done += 1
+                        # 成功的重置重试计数
+                        retry_counts.pop(result, None)
+                except Exception:
+                    pass
+
+        # 统计本批失败的文件（回到 develop/ 的）
+        current_available = {f.name for f in list_available(DEVELOP_DIR)}
+        for name in current_available:
+            if name in retry_counts:
+                # 已知的，说明又失败了一次
+                pass
+            # 检查是否是刚放回来的（之前不在 develop 但现在在）
+        # 简单策略：每轮对 develop/ 里的文件如果和上轮一样，计数+1
+        for f in list_available(DEVELOP_DIR):
+            if f.name in retry_counts:
+                retry_counts[f.name] += 1
+            else:
+                retry_counts[f.name] = 0
+
+        time.sleep(COOLDOWN_SECONDS)
+
+    return total_done
+
+
+# ============ 清理 ============
+
+
+def cleanup_working():
+    """清理 working/ 残留文件"""
+    for worker_dir in WORKING_DIR.iterdir():
+        if worker_dir.is_dir():
+            for f in worker_dir.glob("requirement-*.md"):
+                shutil.move(str(f), str(DEVELOP_DIR / f.name))
+                log.info(f"[清理] {f.name} → develop/")
+            try:
+                worker_dir.rmdir()
+            except OSError:
+                pass
+
+
+def archive_decomposed_parents():
+    """归档已拆解的父需求"""
+    for f in list(DEVELOP_DIR.glob("requirement-*.md")):
+        if not is_sub_requirement(f):
+            number = extract_number(f.name)
+            if has_sub_requirements(number):
+                shutil.move(str(f), str(IMPLEMENT_DIR / f.name))
+                log.info(f"[归档] 父需求 {f.name} → implement/")
+
+
+# ============ 主循环 ============
+
+
+def main_loop(num_workers: int, skip_produce: bool):
+    """
+    主循环：永远不停。
+      develop 不够 → 并行生产 → 串行审核 → 并行消费 → 循环
+      失败的需求重试 3 次后跳过（rejected），继续下一个
+    """
+    round_num = 0
+    total_consumed = 0
+
+    while True:
+        round_num += 1
+        log.info(f"\n{'='*60}")
+        log.info(f"第 {round_num} 轮 | develop={count_develop()} review={len(list(REVIEW_DIR.glob('*.md')))}")
+        log.info(f"{'='*60}")
+
+        # 归档已拆解父需求
+        archive_decomposed_parents()
+
+        # 生产补货（develop 不够时）
+        if not skip_produce and count_develop() < MIN_DEVELOP_QUEUE:
+            # 先审核 review/ 中已有的
+            run_review_phase()
+
+            # 还不够？并行生产 + 审核，循环直到够
+            while count_develop() < MIN_DEVELOP_QUEUE:
+                run_produce_phase(num_workers)
+                run_review_phase()
+                time.sleep(COOLDOWN_SECONDS)
+
+        # 消费阶段
+        if count_develop() > 0:
+            consumed = run_consume_phase(num_workers)
+            total_consumed += consumed
+            log.info(f"[消费] 本轮完成 {consumed} 个，累计 {total_consumed} 个")
+        else:
+            log.info("[消费] develop/ 为空，等待后继续...")
+
+        time.sleep(COOLDOWN_SECONDS)
+
+
+# ============ 入口 ============
+
+
+def main():
+    parser = argparse.ArgumentParser(description="TrackFlow 并行迭代脚本（永不停止）")
+    parser.add_argument("--workers", type=int, default=2,
+                        help="并行 worker 数量（默认 2）")
+    parser.add_argument("--skip-produce", action="store_true",
+                        help="跳过生产阶段，只消费 develop/ 中的现有需求（consume 完也会继续等待）")
+    args = parser.parse_args()
+
+    log.info("=" * 60)
+    log.info(f"TrackFlow 并行迭代 | workers={args.workers} | 模式={'仅消费' if args.skip_produce else '完整循环'}")
+    log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
+             f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
+    log.info("永不停止，Ctrl+C 手动终止")
+    log.info("=" * 60)
+
+    cleanup_working()
+    main_loop(args.workers, args.skip_produce)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        log.info("\n[中断] 用户手动停止")
+        cleanup_working()
