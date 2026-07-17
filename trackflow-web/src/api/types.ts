@@ -170,6 +170,7 @@ export interface IssueVO {
   assigneeName?: string
   assigneeAvatarUrl?: string
   reporterId: string
+  reporterName?: string
   sprintId?: string
   dueDate?: string
   createdAt: string

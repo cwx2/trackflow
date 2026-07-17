@@ -22,6 +22,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "sprintId", expression = "java(longToString(entity.getSprintId()))")
     @Mapping(target = "assigneeName", ignore = true)
     @Mapping(target = "assigneeAvatarUrl", ignore = true)
+    @Mapping(target = "reporterName", ignore = true)
     @Mapping(target = "customFieldValues", ignore = true)
     IssueVO toVO(Issue entity);
 

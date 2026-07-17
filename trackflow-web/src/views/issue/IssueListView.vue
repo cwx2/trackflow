@@ -454,7 +454,7 @@
         </template>
         <template #updatedAt="{ record }"><span class="time-ago">{{ formatTime(record.updatedAt) }}</span></template>
         <template #issueType="{ record }"><span class="type-label">{{ record.issueType }}</span></template>
-        <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterId || '\u2014' }}</span></template>
+        <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterName || '\u2014' }}</span></template>
         <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
         <template #dueDate="{ record }"><span class="time-ago">{{ record.dueDate || '\u2014' }}</span></template>
         <template #childProgress="{ record }">

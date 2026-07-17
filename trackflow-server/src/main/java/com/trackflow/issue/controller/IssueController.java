@@ -30,10 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -64,14 +61,14 @@ public class IssueController {
         Page<Issue> result = issueService.listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
 
-        // 批量填充 assigneeName + assigneeAvatarUrl
-        List<Long> assigneeIds = result.getRecords().stream()
-                .map(Issue::getAssigneeId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        if (!assigneeIds.isEmpty()) {
-            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
+        // 批量填充 assigneeName + assigneeAvatarUrl + reporterName（合并一次查询）
+        Set<Long> userIds = new HashSet<>();
+        for (Issue issue : result.getRecords()) {
+            if (issue.getAssigneeId() != null) userIds.add(issue.getAssigneeId());
+            if (issue.getReporterId() != null) userIds.add(issue.getReporterId());
+        }
+        if (!userIds.isEmpty()) {
+            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(userIds).stream()
                     .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
             for (int i = 0; i < result.getRecords().size(); i++) {
                 Issue issue = result.getRecords().get(i);
@@ -80,6 +77,12 @@ public class IssueController {
                     if (user != null) {
                         voList.get(i).setAssigneeName(user.getDisplayName());
                         voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
+                    }
+                }
+                if (issue.getReporterId() != null) {
+                    SysUser user = userMap.get(issue.getReporterId());
+                    if (user != null) {
+                        voList.get(i).setReporterName(user.getDisplayName());
                     }
                 }
             }
