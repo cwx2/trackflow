@@ -68,7 +68,7 @@ public class ApiKeyController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public R<Void> revoke(@PathVariable Long id) {
+    public R<Void> revoke(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         apiKeyService.revoke(id, userId);
         return R.ok();

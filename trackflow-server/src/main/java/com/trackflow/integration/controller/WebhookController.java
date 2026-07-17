@@ -56,7 +56,7 @@ public class WebhookController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         // 查询 webhook 确认归属项目，然后校验用户是该项目成员且有 webhook:manage 权限
         Webhook webhook = webhookService.getById(id);

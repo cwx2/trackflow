@@ -61,79 +61,79 @@ public class ProjectController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<ProjectVO> getById(@PathVariable Long id) {
+    public R<ProjectVO> getById(@PathVariable("id") Long id) {
         return R.ok(projectConverter.toVO(projectService.getById(id)));
     }
 
     @GetMapping("/{id}/detail")
     @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<ProjectDetailVO> getDetail(@PathVariable Long id) {
+    public R<ProjectDetailVO> getDetail(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(projectService.getProjectDetail(id, userId));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.check(#id, 'project:edit')")
-    public R<ProjectVO> update(@PathVariable Long id, @Valid @RequestBody UpdateProjectDTO dto) {
+    public R<ProjectVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateProjectDTO dto) {
         return R.ok(projectConverter.toVO(projectService.update(id, dto)));
     }
 
     @PutMapping("/{id}/archive")
     @PreAuthorize("@perm.check(#id, 'project:edit')")
-    public R<Void> archive(@PathVariable Long id) {
+    public R<Void> archive(@PathVariable("id") Long id) {
         projectService.archive(id);
         return R.ok();
     }
 
     @GetMapping("/{id}/trash-settings")
     @PreAuthorize("@perm.check(#id, 'project:edit')")
-    public R<Map<String, Object>> getTrashSettings(@PathVariable Long id) {
+    public R<Map<String, Object>> getTrashSettings(@PathVariable("id") Long id) {
         return R.ok(projectService.getTrashSettings(id));
     }
 
     @PutMapping("/{id}/trash-settings")
     @PreAuthorize("@perm.check(#id, 'project:edit')")
-    public R<Void> updateTrashSettings(@PathVariable Long id, @Valid @RequestBody UpdateTrashSettingsDTO dto) {
+    public R<Void> updateTrashSettings(@PathVariable("id") Long id, @Valid @RequestBody UpdateTrashSettingsDTO dto) {
         projectService.updateTrashSettings(id, dto.getTrashRetentionDays());
         return R.ok();
     }
 
     @PutMapping("/{id}/restore")
     @PreAuthorize("@perm.check(#id, 'project:delete')")
-    public R<Void> restore(@PathVariable Long id) {
+    public R<Void> restore(@PathVariable("id") Long id) {
         projectService.restore(id);
         return R.ok();
     }
 
     @GetMapping("/{id}/delete-precheck")
     @PreAuthorize("@perm.check(#id, 'project:delete')")
-    public R<ProjectDeletePreCheckVO> deletePreCheck(@PathVariable Long id) {
+    public R<ProjectDeletePreCheckVO> deletePreCheck(@PathVariable("id") Long id) {
         return R.ok(projectService.preCheckDelete(id));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.check(#id, 'project:delete')")
-    public R<Void> delete(@PathVariable Long id, @RequestParam("confirmKey") String confirmKey) {
+    public R<Void> delete(@PathVariable("id") Long id, @RequestParam("confirmKey") String confirmKey) {
         projectService.deleteProject(id, confirmKey);
         return R.ok();
     }
 
     @GetMapping("/{id}/members")
     @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<List<ProjectMemberVO>> listMembers(@PathVariable Long id) {
+    public R<List<ProjectMemberVO>> listMembers(@PathVariable("id") Long id) {
         return R.ok(projectService.listMembersVO(id));
     }
 
     @PostMapping("/{id}/members")
     @PreAuthorize("@perm.check(#id, 'project:manage_members')")
-    public R<Void> addMember(@PathVariable Long id, @Valid @RequestBody AddMemberDTO dto) {
+    public R<Void> addMember(@PathVariable("id") Long id, @Valid @RequestBody AddMemberDTO dto) {
         projectService.addMember(id, dto);
         return R.ok();
     }
 
     @PutMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.check(#id, 'project:manage_members')")
-    public R<Void> updateMemberRole(@PathVariable Long id, @PathVariable Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
+    public R<Void> updateMemberRole(@PathVariable("id") Long id, @PathVariable("userId") Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
         List<Long> effectiveRoleIds = dto.getEffectiveRoleIds();
         if (effectiveRoleIds.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
@@ -144,14 +144,14 @@ public class ProjectController {
 
     @DeleteMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.check(#id, 'project:manage_members')")
-    public R<Map<String, Object>> removeMember(@PathVariable Long id, @PathVariable Long userId) {
+    public R<Map<String, Object>> removeMember(@PathVariable("id") Long id, @PathVariable("userId") Long userId) {
         int affectedCount = projectService.removeMember(id, userId);
         return R.ok(Map.of("affectedIssueCount", affectedCount));
     }
 
     @GetMapping("/{id}/members/{userId}/assigned-issue-count")
     @PreAuthorize("@perm.check(#id, 'project:manage_members')")
-    public R<Map<String, Object>> getAssignedIssueCount(@PathVariable Long id, @PathVariable Long userId) {
+    public R<Map<String, Object>> getAssignedIssueCount(@PathVariable("id") Long id, @PathVariable("userId") Long userId) {
         int count = projectService.countAssignedIssues(id, userId);
         return R.ok(Map.of("count", count));
     }
@@ -161,7 +161,7 @@ public class ProjectController {
     @GetMapping("/{id}/activities")
     @PreAuthorize("@perm.check(#id, 'project:view')")
     public R<PageResult<ProjectActivityVO>> listActivities(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Page<ProjectActivity> pageObj = new Page<>(page, pageSize);
@@ -175,7 +175,7 @@ public class ProjectController {
 
     @GetMapping("/{id}/statistics")
     @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<ProjectStatisticsVO> getStatistics(@PathVariable Long id) {
+    public R<ProjectStatisticsVO> getStatistics(@PathVariable("id") Long id) {
         return R.ok(projectService.getProjectStatistics(id));
     }
 
@@ -183,13 +183,13 @@ public class ProjectController {
 
     @GetMapping("/{id}/tags")
     @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<List<IssueTagVO>> listProjectTags(@PathVariable Long id) {
+    public R<List<IssueTagVO>> listProjectTags(@PathVariable("id") Long id) {
         return R.ok(issueConverter.toTagVOList(tagService.listProjectTags(id)));
     }
 
     @PostMapping("/{id}/tags")
     @PreAuthorize("@perm.check(#id, 'issue:create')")
-    public R<IssueTagVO> createProjectTag(@PathVariable Long id, @Valid @RequestBody CreateTagDTO dto) {
+    public R<IssueTagVO> createProjectTag(@PathVariable("id") Long id, @Valid @RequestBody CreateTagDTO dto) {
         IssueTag tag = tagService.createTag(id, dto);
         return R.ok(issueConverter.toTagVO(tag));
     }
@@ -198,7 +198,7 @@ public class ProjectController {
 
     @GetMapping("/{id}/time-tracking-settings")
     @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> getTimeTrackingSettings(@PathVariable Long id) {
+    public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> getTimeTrackingSettings(@PathVariable("id") Long id) {
         var vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
         vo.setEnabled(projectService.isTimeTrackingEnabled(id));
         return R.ok(vo);
@@ -207,7 +207,7 @@ public class ProjectController {
     @PutMapping("/{id}/time-tracking-settings")
     @PreAuthorize("@perm.check(#id, 'project:edit')")
     public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> updateTimeTrackingSettings(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody com.trackflow.project.dto.UpdateTimeTrackingSettingsDTO dto) {
         if (dto.getEnabled() != null) {
             projectService.updateTimeTrackingEnabled(id, dto.getEnabled());

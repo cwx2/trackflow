@@ -58,7 +58,7 @@ public class TransitionActionController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("@perm.check(@transitionActionService.getProjectId(#id), 'workflow:manage')")
-    public R<TransitionActionVO> update(@PathVariable Long id,
+    public R<TransitionActionVO> update(@PathVariable("id") Long id,
                                         @RequestBody @Valid UpdateTransitionActionDTO dto) {
         TransitionAction action = transitionActionService.update(id, dto);
         return R.ok(transitionActionConverter.toVO(action));
@@ -69,7 +69,7 @@ public class TransitionActionController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.check(@transitionActionService.getProjectId(#id), 'workflow:manage')")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         transitionActionService.delete(id);
         return R.ok();
     }
@@ -79,7 +79,7 @@ public class TransitionActionController {
      */
     @PatchMapping("/{id}/toggle")
     @PreAuthorize("@perm.check(@transitionActionService.getProjectId(#id), 'workflow:manage')")
-    public R<Void> toggleEnabled(@PathVariable Long id) {
+    public R<Void> toggleEnabled(@PathVariable("id") Long id) {
         transitionActionService.toggleEnabled(id);
         return R.ok();
     }

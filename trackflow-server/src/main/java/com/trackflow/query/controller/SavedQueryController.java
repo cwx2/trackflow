@@ -70,7 +70,7 @@ public class SavedQueryController {
      * 更新保存查询
      */
     @PutMapping("/{id}")
-    public R<SavedQueryVO> update(@PathVariable String id, @Valid @RequestBody UpdateQueryDTO dto) {
+    public R<SavedQueryVO> update(@PathVariable("id") String id, @Valid @RequestBody UpdateQueryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(savedQueryConverter.toVO(savedQueryService.update(Long.parseLong(id), userId, dto)));
     }
@@ -79,7 +79,7 @@ public class SavedQueryController {
      * 删除保存查询
      */
     @DeleteMapping("/{id}")
-    public R<Void> delete(@PathVariable String id) {
+    public R<Void> delete(@PathVariable("id") String id) {
         Long userId = SecurityUtils.getCurrentUserId();
         savedQueryService.delete(Long.parseLong(id), userId);
         return R.ok();
@@ -91,7 +91,7 @@ public class SavedQueryController {
      */
     @GetMapping("/{id}/results")
     public R<PageResult<IssueVO>> executeById(
-            @PathVariable String id,
+            @PathVariable("id") String id,
             @RequestParam(value = "page", defaultValue = "1") Integer page,
             @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize,
             @RequestParam(value = "hideResolved", required = false) String hideResolved) {

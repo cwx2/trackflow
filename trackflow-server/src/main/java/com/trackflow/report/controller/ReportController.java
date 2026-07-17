@@ -42,7 +42,7 @@ public class ReportController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.deleteWithAccessCheck(id, userId);
         return R.ok();
@@ -50,7 +50,7 @@ public class ReportController {
 
     @GetMapping("/{id}/data")
     @PreAuthorize("isAuthenticated()")
-    public R<ReportExecuteResultVO> execute(@PathVariable Long id) {
+    public R<ReportExecuteResultVO> execute(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportService.executeWithAccessCheck(id, userId));
     }

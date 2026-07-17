@@ -68,7 +68,7 @@ public class UserController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<UserDetailVO> getById(@PathVariable Long id) {
+    public R<UserDetailVO> getById(@PathVariable("id") Long id) {
         SysUser user = userService.getById(id);
         List<Long> roleIds = userService.getUserGlobalRoleIds(id);
 
@@ -80,28 +80,28 @@ public class UserController {
 
     @GetMapping("/{id}/profile")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<UserProfileVO> getProfile(@PathVariable Long id) {
+    public R<UserProfileVO> getProfile(@PathVariable("id") Long id) {
         UserProfileVO profile = userService.getUserProfile(id);
         return R.ok(profile);
     }
 
     @PutMapping("/{id}/disable")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<Void> disable(@PathVariable Long id) {
+    public R<Void> disable(@PathVariable("id") Long id) {
         userService.disable(id);
         return R.ok();
     }
 
     @PutMapping("/{id}/enable")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<Void> enable(@PathVariable Long id) {
+    public R<Void> enable(@PathVariable("id") Long id) {
         userService.enable(id);
         return R.ok();
     }
 
     @PostMapping("/{id}/roles")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<Void> assignRole(@PathVariable Long id, @Valid @RequestBody AssignRoleDTO dto) {
+    public R<Void> assignRole(@PathVariable("id") Long id, @Valid @RequestBody AssignRoleDTO dto) {
         Long roleId = dto.getRoleId();
 
         // 检查角色类型必须是 global
@@ -117,7 +117,7 @@ public class UserController {
 
     @DeleteMapping("/{id}/roles/{roleId}")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<Void> removeRole(@PathVariable Long id, @PathVariable Long roleId) {
+    public R<Void> removeRole(@PathVariable("id") Long id, @PathVariable("roleId") Long roleId) {
         userService.removeGlobalRole(id, roleId);
         return R.ok();
     }

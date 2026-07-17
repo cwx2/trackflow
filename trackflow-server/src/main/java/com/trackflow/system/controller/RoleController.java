@@ -41,7 +41,7 @@ public class RoleController {
 
     @PostMapping("/{id}/clone")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<RoleVO> clone(@PathVariable Long id, @Valid @RequestBody CloneRoleDTO dto) {
+    public R<RoleVO> clone(@PathVariable("id") Long id, @Valid @RequestBody CloneRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.clone(id, dto.getName(), dto.getCode())));
     }
 
@@ -75,33 +75,33 @@ public class RoleController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<RoleVO> getById(@PathVariable Long id) {
+    public R<RoleVO> getById(@PathVariable("id") Long id) {
         return R.ok(roleConverter.toVO(roleService.getById(id)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<RoleVO> update(@PathVariable Long id, @Valid @RequestBody UpdateRoleDTO dto) {
+    public R<RoleVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.update(id, dto)));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         roleService.delete(id);
         return R.ok();
     }
 
     @PutMapping("/{id}/permissions")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<Void> replacePermissions(@PathVariable Long id, @RequestBody List<String> permissions) {
+    public R<Void> replacePermissions(@PathVariable("id") Long id, @RequestBody List<String> permissions) {
         roleService.replacePermissions(id, permissions);
         return R.ok();
     }
 
     @GetMapping("/{id}/permissions")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<List<String>> getPermissions(@PathVariable Long id) {
+    public R<List<String>> getPermissions(@PathVariable("id") Long id) {
         return R.ok(roleService.getPermissions(id));
     }
 
@@ -110,7 +110,7 @@ public class RoleController {
      */
     @GetMapping("/{id}/users")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<RoleUsersVO> getRoleUsers(@PathVariable Long id) {
+    public R<RoleUsersVO> getRoleUsers(@PathVariable("id") Long id) {
         return R.ok(roleService.getRoleUsers(id));
     }
 

@@ -53,7 +53,7 @@ public class TimeEntryController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public R<TimeEntryVO> update(@PathVariable Long id, @Valid @RequestBody UpdateTimeEntryDTO dto) {
+    public R<TimeEntryVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateTimeEntryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         TimeEntry entry = timeEntryService.update(id, userId, dto);
         TimeEntryVO vo = buildEntryVO(entry);
@@ -65,7 +65,7 @@ public class TimeEntryController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         timeEntryService.delete(id, userId);
         return R.ok();
@@ -112,7 +112,7 @@ public class TimeEntryController {
      */
     @GetMapping("/issue/{issueId}")
     @PreAuthorize("isAuthenticated()")
-    public R<List<TimeEntryVO>> listByIssue(@PathVariable Long issueId) {
+    public R<List<TimeEntryVO>> listByIssue(@PathVariable("issueId") Long issueId) {
         // 校验当前用户是否有权访问该工单所属的项目
         issueService.getByIdWithAccessCheck(issueId);
         return R.ok(timeEntryService.listByIssue(issueId));
@@ -157,7 +157,7 @@ public class TimeEntryController {
     @GetMapping("/by-project/{projectId}")
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<TimeEntryVO>> listByProjectDetail(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return R.ok(timeEntryService.listByProject(projectId, startDate, endDate));

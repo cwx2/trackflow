@@ -118,13 +118,13 @@ public class IssueController {
     }
 
     @GetMapping("/{id}")
-    public R<IssueDetailVO> getById(@PathVariable Long id) {
+    public R<IssueDetailVO> getById(@PathVariable("id") Long id) {
         // 校验项目成员权限并获取详情
         return R.ok(issueService.getDetailWithAccessCheck(id));
     }
 
     @GetMapping("/key/{issueKey}")
-    public R<IssueDetailVO> getByKey(@PathVariable String issueKey) {
+    public R<IssueDetailVO> getByKey(@PathVariable("issueKey") String issueKey) {
         // 先校验项目成员权限
         Issue issue = issueService.getByKeyWithAccessCheck(issueKey);
         return R.ok(issueService.getDetail(issue.getId()));
@@ -132,7 +132,7 @@ public class IssueController {
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<IssueDetailVO> update(@PathVariable Long id, @Valid @RequestBody UpdateIssueDTO dto) {
+    public R<IssueDetailVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateIssueDTO dto) {
         IssueService.UpdateResult result = issueService.update(id, dto);
         IssueDetailVO detail = issueService.getDetail(id);
         if (result.statusAutoReset()) {
@@ -148,8 +148,8 @@ public class IssueController {
     @PutMapping("/{id}/custom-fields/{fieldId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<IssueDetailVO> updateCustomFieldValue(
-            @PathVariable Long id,
-            @PathVariable Long fieldId,
+            @PathVariable("id") Long id,
+            @PathVariable("fieldId") Long fieldId,
             @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
         Issue issue = issueService.getById(id);
         // 多值字段使用 values 数组（逗号连接后传入 service 层解析为多行）
@@ -165,7 +165,7 @@ public class IssueController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:delete')")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         issueService.delete(id);
         return R.ok();
     }
@@ -183,14 +183,14 @@ public class IssueController {
 
     @PostMapping("/{id}/restore")
     @PreAuthorize("@perm.check(@issueService.getDeletedIssueProjectId(#id), 'issue:delete')")
-    public R<Void> restore(@PathVariable Long id) {
+    public R<Void> restore(@PathVariable("id") Long id) {
         issueService.restore(id);
         return R.ok();
     }
 
     @DeleteMapping("/{id}/permanent")
     @PreAuthorize("@perm.check(@issueService.getDeletedIssueProjectId(#id), 'project:admin')")
-    public R<Void> permanentDelete(@PathVariable Long id) {
+    public R<Void> permanentDelete(@PathVariable("id") Long id) {
         issueService.permanentDelete(id);
         return R.ok();
     }
@@ -252,7 +252,7 @@ public class IssueController {
 
     @GetMapping("/{id}/available-transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
-    public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable Long id) {
+    public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable("id") Long id) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         List<IssueStatus> statuses = workflowService.getAvailableTransitions(issue, userId);
@@ -274,7 +274,7 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
-    public R<Integer> transitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<Integer> transitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
@@ -302,7 +302,7 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions/undo")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Integer> undoTransitStatus(@PathVariable Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<Integer> undoTransitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 撤销操作：验证目标状态必须是上一个状态（从活动记录获取），防止任意跳转
         IssueActivity lastStatusChange = issueService.getLastStatusChange(id);
         if (lastStatusChange == null) {
@@ -350,7 +350,7 @@ public class IssueController {
 
     @PutMapping("/{id}/assign")
     @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:assign')")
-    public R<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignIssueDTO dto) {
+    public R<Void> assign(@PathVariable("id") Long id, @Valid @RequestBody AssignIssueDTO dto) {
         issueService.assign(id, dto.getAssigneeId());
         return R.ok();
     }
@@ -358,27 +358,27 @@ public class IssueController {
     // ========== 评论 ==========
 
     @GetMapping("/{id}/comments")
-    public R<List<IssueCommentVO>> listComments(@PathVariable Long id) {
+    public R<List<IssueCommentVO>> listComments(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
         return R.ok(issueService.listCommentsWithUser(id));
     }
 
     @PostMapping("/{id}/comments")
     @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
-    public R<IssueCommentVO> addComment(@PathVariable Long id, @Valid @RequestBody AddCommentDTO dto) {
+    public R<IssueCommentVO> addComment(@PathVariable("id") Long id, @Valid @RequestBody AddCommentDTO dto) {
         return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
     }
 
     @PutMapping("/{id}/comments/{commentId}")
     @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
-    public R<IssueCommentVO> updateComment(@PathVariable Long id, @PathVariable Long commentId,
+    public R<IssueCommentVO> updateComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId,
                                             @Valid @RequestBody UpdateCommentDTO dto) {
         return R.ok(issueConverter.toCommentVO(issueService.updateComment(id, commentId, dto.getContent())));
     }
 
     @DeleteMapping("/{id}/comments/{commentId}")
     @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
-    public R<Void> deleteComment(@PathVariable Long id, @PathVariable Long commentId) {
+    public R<Void> deleteComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
         issueService.deleteComment(id, commentId);
         return R.ok();
     }
@@ -386,14 +386,14 @@ public class IssueController {
     // ========== 附件 ==========
 
     @GetMapping("/{id}/attachments")
-    public R<List<IssueAttachmentVO>> listAttachments(@PathVariable Long id) {
+    public R<List<IssueAttachmentVO>> listAttachments(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toAttachmentVOList(issueService.listAttachments(id)));
     }
 
     @PostMapping("/{id}/attachments")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<IssueAttachmentVO> uploadAttachment(@PathVariable Long id,
+    public R<IssueAttachmentVO> uploadAttachment(@PathVariable("id") Long id,
                                                   @RequestParam("file") MultipartFile file) {
         IssueAttachment attachment = issueService.uploadAttachment(id, file);
         return R.ok(issueConverter.toAttachmentVO(attachment));
@@ -401,7 +401,7 @@ public class IssueController {
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Void> deleteAttachment(@PathVariable Long id, @PathVariable Long attachmentId) {
+    public R<Void> deleteAttachment(@PathVariable("id") Long id, @PathVariable("attachmentId") Long attachmentId) {
         issueService.deleteAttachment(id, attachmentId);
         return R.ok();
     }
@@ -409,7 +409,7 @@ public class IssueController {
     // ========== 活动记录 ==========
 
     @GetMapping("/{id}/activities")
-    public R<List<IssueActivityVO>> listActivities(@PathVariable Long id) {
+    public R<List<IssueActivityVO>> listActivities(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
         return R.ok(issueService.listActivitiesWithUser(id));
     }
@@ -417,21 +417,21 @@ public class IssueController {
     // ========== 标签 ==========
 
     @GetMapping("/{id}/tags")
-    public R<List<IssueTagVO>> listIssueTags(@PathVariable Long id) {
+    public R<List<IssueTagVO>> listIssueTags(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
         return R.ok(issueConverter.toTagVOList(tagService.listIssueTags(id)));
     }
 
     @PostMapping("/{id}/tags")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Void> addTag(@PathVariable Long id, @Valid @RequestBody AddTagDTO dto) {
+    public R<Void> addTag(@PathVariable("id") Long id, @Valid @RequestBody AddTagDTO dto) {
         tagService.addTagToIssue(id, dto.getTagId());
         return R.ok();
     }
 
     @DeleteMapping("/{id}/tags/{tagId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Void> removeTag(@PathVariable Long id, @PathVariable Long tagId) {
+    public R<Void> removeTag(@PathVariable("id") Long id, @PathVariable("tagId") Long tagId) {
         tagService.removeTagFromIssue(id, tagId);
         return R.ok();
     }
@@ -439,21 +439,21 @@ public class IssueController {
     // ========== 关联 ==========
 
     @GetMapping("/{id}/links")
-    public R<List<IssueLinkVO>> listLinks(@PathVariable Long id) {
+    public R<List<IssueLinkVO>> listLinks(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
         return R.ok(linkService.listIssueLinks(id));
     }
 
     @PostMapping("/{id}/links")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Void> createLink(@PathVariable Long id, @Valid @RequestBody CreateIssueLinkDTO dto) {
+    public R<Void> createLink(@PathVariable("id") Long id, @Valid @RequestBody CreateIssueLinkDTO dto) {
         linkService.createIssueLink(id, dto);
         return R.ok();
     }
 
     @DeleteMapping("/{id}/links/{linkId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Void> deleteLink(@PathVariable Long id, @PathVariable Long linkId) {
+    public R<Void> deleteLink(@PathVariable("id") Long id, @PathVariable("linkId") Long linkId) {
         linkService.deleteIssueLink(linkId);
         return R.ok();
     }

@@ -39,7 +39,7 @@ public class WorkflowController {
     @GetMapping("/projects/{projectId}/workflows")
     @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<WorkflowMatrixVO> getTransitionMatrix(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType,
             @RequestParam(value = "roleId", required = false) Long roleId,
             @RequestParam(value = "author", required = false) Boolean author,
@@ -59,7 +59,7 @@ public class WorkflowController {
     @PutMapping("/projects/{projectId}/workflows")
     @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<Void> updateTransitionMatrix(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @Valid @RequestBody UpdateWorkflowDTO dto) {
 
         Long effectiveProjectId = (projectId == 0L) ? null : projectId;
@@ -93,7 +93,7 @@ public class WorkflowController {
      */
     @GetMapping("/projects/{projectId}/workflows/transitionable-statuses")
     @PreAuthorize("@perm.check(#projectId, 'issue:change_status')")
-    public R<List<String>> getTransitionableStatuses(@PathVariable Long projectId) {
+    public R<List<String>> getTransitionableStatuses(@PathVariable("projectId") Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         Set<Long> statusIds = workflowService.getTransitionableSourceStatuses(projectId, userId);
         List<String> result = statusIds.stream().map(String::valueOf).toList();
@@ -109,7 +109,7 @@ public class WorkflowController {
     @GetMapping("/projects/{projectId}/workflow-activities")
     @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<PageResult<WorkflowActivityVO>> listWorkflowActivities(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             WorkflowActivityQuery query) {
 
         query.setProjectId(projectId);

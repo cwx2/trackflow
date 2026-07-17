@@ -53,7 +53,7 @@ public class NotificationController {
     }
 
     @PutMapping("/{id}/read")
-    public R<Void> markRead(@PathVariable Long id) {
+    public R<Void> markRead(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         notificationService.markRead(id, userId);
         return R.ok();
@@ -70,7 +70,7 @@ public class NotificationController {
      * 删除单条通知（所有权校验：只能删除自己的通知）
      */
     @DeleteMapping("/{id}")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         notificationService.delete(id, userId);
         return R.ok();

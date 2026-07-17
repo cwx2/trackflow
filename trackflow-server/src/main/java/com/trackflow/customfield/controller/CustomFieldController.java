@@ -83,7 +83,7 @@ public class CustomFieldController {
 
     @DeleteMapping("/admin/custom-fields/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
-    public R<Void> delete(@PathVariable Long id,
+    public R<Void> delete(@PathVariable("id") Long id,
                           @RequestParam(defaultValue = "false") boolean confirm) {
         customFieldService.delete(id, confirm);
         return R.ok();
@@ -91,7 +91,7 @@ public class CustomFieldController {
 
     @GetMapping("/admin/custom-fields/{id}/usage")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
-    public R<CustomFieldUsageVO> getUsage(@PathVariable Long id) {
+    public R<CustomFieldUsageVO> getUsage(@PathVariable("id") Long id) {
         return R.ok(customFieldService.getUsage(id));
     }
 
@@ -106,7 +106,7 @@ public class CustomFieldController {
 
     @GetMapping("/projects/{projectId}/custom-fields")
     public R<List<CustomFieldDefinitionVO>> listByProject(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType) {
         List<CustomFieldDefinition> fields = customFieldService.listByProject(projectId, issueType);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
@@ -127,7 +127,7 @@ public class CustomFieldController {
     }
 
     @GetMapping("/projects/{projectId}/available-columns")
-    public R<List<AvailableColumnVO>> availableColumnsByProject(@PathVariable Long projectId) {
+    public R<List<AvailableColumnVO>> availableColumnsByProject(@PathVariable("projectId") Long projectId) {
         return R.ok(customFieldService.getAvailableColumns(projectId));
     }
 
@@ -143,7 +143,7 @@ public class CustomFieldController {
      */
     @GetMapping("/projects/{projectId}/settings/custom-fields")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
-    public R<List<CustomFieldDefinitionVO>> listProjectSettingsFields(@PathVariable Long projectId) {
+    public R<List<CustomFieldDefinitionVO>> listProjectSettingsFields(@PathVariable("projectId") Long projectId) {
         List<CustomFieldDefinition> fields = customFieldService.listProjectFields(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
@@ -169,7 +169,7 @@ public class CustomFieldController {
      */
     @GetMapping("/projects/{projectId}/settings/custom-fields/available")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
-    public R<List<CustomFieldDefinitionVO>> listAvailableForProject(@PathVariable Long projectId) {
+    public R<List<CustomFieldDefinitionVO>> listAvailableForProject(@PathVariable("projectId") Long projectId) {
         List<CustomFieldDefinition> fields = customFieldService.listAvailableFieldsForProject(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         for (int i = 0; i < fields.size(); i++) {
@@ -184,7 +184,7 @@ public class CustomFieldController {
      */
     @PostMapping("/projects/{projectId}/settings/custom-fields/{fieldId}")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
-    public R<Void> attachField(@PathVariable Long projectId, @PathVariable Long fieldId) {
+    public R<Void> attachField(@PathVariable("projectId") Long projectId, @PathVariable("fieldId") Long fieldId) {
         customFieldService.attachFieldToProject(projectId, fieldId);
         return R.ok();
     }
@@ -194,7 +194,7 @@ public class CustomFieldController {
      */
     @DeleteMapping("/projects/{projectId}/settings/custom-fields/{fieldId}")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
-    public R<Void> detachField(@PathVariable Long projectId, @PathVariable Long fieldId) {
+    public R<Void> detachField(@PathVariable("projectId") Long projectId, @PathVariable("fieldId") Long fieldId) {
         customFieldService.detachFieldFromProject(projectId, fieldId);
         return R.ok();
     }
@@ -205,7 +205,7 @@ public class CustomFieldController {
     @PutMapping("/projects/{projectId}/settings/custom-fields/reorder")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
     public R<Void> reorderProjectFields(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @Valid @RequestBody ReorderProjectFieldsDTO dto) {
         customFieldService.reorderProjectFields(projectId, dto.getFieldIds());
         return R.ok();
@@ -219,8 +219,8 @@ public class CustomFieldController {
     @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/condition")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
     public R<Void> setFieldCondition(
-            @PathVariable Long projectId,
-            @PathVariable Long fieldId,
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
             @Valid @RequestBody SetFieldConditionDTO dto) {
         customFieldService.setFieldCondition(projectId, fieldId, dto.getConditionFieldId(), dto.getConditionValues());
         return R.ok();
@@ -232,8 +232,8 @@ public class CustomFieldController {
     @PostMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/clear-hidden-values")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
     public R<Integer> clearHiddenValues(
-            @PathVariable Long projectId,
-            @PathVariable Long fieldId) {
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId) {
         int cleared = customFieldService.clearHiddenValues(projectId, fieldId);
         return R.ok(cleared);
     }

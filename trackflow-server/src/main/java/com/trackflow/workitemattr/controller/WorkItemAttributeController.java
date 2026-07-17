@@ -39,7 +39,7 @@ public class WorkItemAttributeController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<WorkItemAttributeVO> getById(@PathVariable Long id) {
+    public R<WorkItemAttributeVO> getById(@PathVariable("id") Long id) {
         return R.ok(attributeService.getById(id));
     }
 
@@ -57,7 +57,7 @@ public class WorkItemAttributeController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<WorkItemAttributeVO> update(@PathVariable Long id, @Valid @RequestBody UpdateWorkItemAttributeDTO dto) {
+    public R<WorkItemAttributeVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateWorkItemAttributeDTO dto) {
         return R.ok(attributeService.update(id, dto));
     }
 
@@ -66,7 +66,7 @@ public class WorkItemAttributeController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         attributeService.delete(id);
         return R.ok();
     }
@@ -76,7 +76,7 @@ public class WorkItemAttributeController {
      */
     @PutMapping("/{id}/projects")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<WorkItemAttributeVO> manageProjects(@PathVariable Long id, @Valid @RequestBody ManageAttributeProjectsDTO dto) {
+    public R<WorkItemAttributeVO> manageProjects(@PathVariable("id") Long id, @Valid @RequestBody ManageAttributeProjectsDTO dto) {
         return R.ok(attributeService.manageProjects(id, dto));
     }
 
@@ -85,7 +85,7 @@ public class WorkItemAttributeController {
      */
     @GetMapping("/by-project/{projectId}")
     @PreAuthorize("isAuthenticated()")
-    public R<List<WorkItemAttributeVO>> listByProject(@PathVariable Long projectId) {
+    public R<List<WorkItemAttributeVO>> listByProject(@PathVariable("projectId") Long projectId) {
         return R.ok(attributeService.listByProject(projectId));
     }
 
@@ -94,7 +94,7 @@ public class WorkItemAttributeController {
      */
     @GetMapping("/{id}/usage")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<Integer> getUsage(@PathVariable Long id) {
+    public R<Integer> getUsage(@PathVariable("id") Long id) {
         return R.ok(attributeService.getUsageCount(id));
     }
 }

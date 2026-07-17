@@ -55,19 +55,19 @@ public class OrganizationController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
-    public R<OrgVO> getById(@PathVariable Long id) {
+    public R<OrgVO> getById(@PathVariable("id") Long id) {
         return R.ok(orgConverter.toVO(organizationService.getById(id)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
-    public R<OrgVO> update(@PathVariable Long id, @Valid @RequestBody UpdateOrgDTO dto) {
+    public R<OrgVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateOrgDTO dto) {
         return R.ok(orgConverter.toVO(organizationService.update(id, dto)));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_orgs')")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         organizationService.delete(id);
         return R.ok();
     }
