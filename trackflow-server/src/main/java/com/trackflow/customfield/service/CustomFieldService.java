@@ -1,5 +1,4 @@
 package com.trackflow.customfield.service;
-
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
@@ -77,6 +76,7 @@ public class CustomFieldService {
                 option.setValue(opt.getValue());
                 option.setPosition(i);
                 option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+                option.setColor(opt.getColor());
                 option.setCreatedAt(LocalDateTime.now());
                 option.setUpdatedAt(LocalDateTime.now());
                 optionMapper.insert(option);
@@ -338,6 +338,7 @@ public class CustomFieldService {
                     existing.setValue(opt.getValue());
                     existing.setPosition(i);
                     existing.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+                    existing.setColor(opt.getColor());
                     existing.setIsArchived(false); // 如果之前被归档，恢复
                     existing.setUpdatedAt(LocalDateTime.now());
                     optionMapper.updateById(existing);
@@ -380,6 +381,7 @@ public class CustomFieldService {
         option.setValue(opt.getValue());
         option.setPosition(position);
         option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+        option.setColor(opt.getColor());
         option.setIsArchived(false);
         option.setCreatedAt(LocalDateTime.now());
         option.setUpdatedAt(LocalDateTime.now());
@@ -719,15 +721,24 @@ public class CustomFieldService {
     }
 
     /**
+     * 批量获取多个 Issue 的自定义字段展示值（不含颜色）
+     */
+    public Map<Long, Map<String, String>> getBatchDisplayValues(List<Long> issueIds) {
+        return getBatchDisplayValues(issueIds, null);
+    }
+
+    /**
      * 批量获取多个 Issue 的自定义字段展示值
      * 返回 Map<issueId, Map<"cf_{fieldId}", displayValue>>
      * list 类型解析为选项文本，user 类型解析为用户名
      *
      * 仅返回对每个 issue 所在项目适用的字段值（过滤孤立数据）。
+     *
+     * @param colorOutMap 可选参数，非 null 时填充颜色数据 Map<issueId, Map<"cf_{fieldId}", hex>>
      */
-    public Map<Long, Map<String, String>> getBatchDisplayValues(List<Long> issueIds) {
+    public Map<Long, Map<String, String>> getBatchDisplayValues(List<Long> issueIds, Map<Long, Map<String, String>> colorOutMap) {
         if (issueIds == null || issueIds.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
 
         // 1. 批量加载所有相关 custom_field_value 记录
@@ -735,7 +746,7 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldValue>()
                         .in(CustomFieldValue::getIssueId, issueIds));
         if (allValues.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
 
         // 2. 收集涉及的 fieldId，加载字段定义
@@ -791,21 +802,25 @@ public class CustomFieldService {
                 .toList();
 
         if (applicableValues.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
 
-        // 5. 预加载 list 类型字段的选项映射 (optionId → optionValue)
+        // 5. 预加载 list 类型字段的选项映射 (optionId → optionValue) 和 (optionId → color)
         Set<Long> listFieldIds = fieldDefMap.values().stream()
                 .filter(f -> "list".equals(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
         Map<Long, String> optionTextMap = new HashMap<>();
+        Map<Long, String> optionColorMap = new HashMap<>();
         if (!listFieldIds.isEmpty()) {
             List<CustomFieldOption> options = optionMapper.selectList(
                     new LambdaQueryWrapper<CustomFieldOption>()
                             .in(CustomFieldOption::getCustomFieldId, listFieldIds));
             for (CustomFieldOption opt : options) {
                 optionTextMap.put(opt.getId(), opt.getValue());
+                if (opt.getColor() != null) {
+                    optionColorMap.put(opt.getId(), opt.getColor());
+                }
             }
         }
 
@@ -844,6 +859,7 @@ public class CustomFieldService {
         for (Map.Entry<Long, Map<Long, List<String>>> issueEntry : groupedByIssueAndField.entrySet()) {
             Long issueId = issueEntry.getKey();
             Map<String, String> fieldDisplayMap = new HashMap<>();
+            Map<String, String> fieldColorMap = new HashMap<>();
 
             for (Map.Entry<Long, List<String>> fieldEntry : issueEntry.getValue().entrySet()) {
                 Long fieldId = fieldEntry.getKey();
@@ -851,6 +867,7 @@ public class CustomFieldService {
                 CustomFieldDefinition fieldDef = fieldDefMap.get(fieldId);
                 if (fieldDef == null) continue;
 
+                String cfKey = "cf_" + fieldId;
                 if (Boolean.TRUE.equals(fieldDef.getIsMulti())) {
                     // 多值字段：每行一个值，聚合展示
                     List<String> labels = new ArrayList<>();
@@ -858,15 +875,35 @@ public class CustomFieldService {
                         String display = resolveDisplayValue(v, fieldDef, optionTextMap, userNameMap);
                         if (display != null) labels.add(display);
                     }
-                    fieldDisplayMap.put("cf_" + fieldId, String.join(", ", labels));
+                    fieldDisplayMap.put(cfKey, String.join(", ", labels));
+                    // 多值字段颜色：取第一个有颜色的（列表视图空间有限）
+                    if ("list".equals(fieldDef.getFieldFormat())) {
+                        for (String v : values) {
+                            String color = resolveOptionColor(v, fieldDef, optionColorMap);
+                            if (color != null) {
+                                fieldColorMap.put(cfKey, color);
+                                break;
+                            }
+                        }
+                    }
                 } else {
                     // 单值字段：取第一条
                     String displayValue = resolveDisplayValue(values.get(0), fieldDef, optionTextMap, userNameMap);
-                    fieldDisplayMap.put("cf_" + fieldId, displayValue);
+                    fieldDisplayMap.put(cfKey, displayValue);
+                    // 颜色
+                    if ("list".equals(fieldDef.getFieldFormat())) {
+                        String color = resolveOptionColor(values.get(0), fieldDef, optionColorMap);
+                        if (color != null) {
+                            fieldColorMap.put(cfKey, color);
+                        }
+                    }
                 }
             }
 
             result.put(issueId, fieldDisplayMap);
+            if (colorOutMap != null && !fieldColorMap.isEmpty()) {
+                colorOutMap.put(issueId, fieldColorMap);
+            }
         }
 
         return result;
@@ -904,6 +941,21 @@ public class CustomFieldService {
     }
 
     /**
+     * 解析选项颜色：仅 list 类型字段有效，返回选项配置的颜色值（HEX），无颜色时返回 null。
+     */
+    private String resolveOptionColor(String rawValue, CustomFieldDefinition fieldDef, Map<Long, String> optionColorMap) {
+        if (rawValue == null || rawValue.isBlank() || !"list".equals(fieldDef.getFieldFormat())) {
+            return null;
+        }
+        try {
+            Long optionId = Long.parseLong(rawValue);
+            return optionColorMap.get(optionId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
      * 获取 Issue 的自定义字段值（含字段名称、类型信息，用于前端展示）
      */
     public List<CustomFieldValueVO> getValuesForDisplay(Long issueId, Long projectId, String issueType) {
@@ -923,18 +975,22 @@ public class CustomFieldService {
                         CustomFieldValue::getCustomFieldId,
                         Collectors.mapping(CustomFieldValue::getValue, Collectors.toList())));
 
-        // 批量预加载 list 类型字段的选项映射 (optionId → optionValue)
+        // 批量预加载 list 类型字段的选项映射 (optionId → optionValue) 和 (optionId → color)
         Set<Long> listFieldIds = fieldMap.values().stream()
                 .filter(f -> "list".equals(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
         Map<Long, String> optionTextMap = new HashMap<>();
+        Map<Long, String> optionColorMap = new HashMap<>();
         if (!listFieldIds.isEmpty()) {
             List<CustomFieldOption> options = optionMapper.selectList(
                     new LambdaQueryWrapper<CustomFieldOption>()
                             .in(CustomFieldOption::getCustomFieldId, listFieldIds));
             for (CustomFieldOption opt : options) {
                 optionTextMap.put(opt.getId(), opt.getValue());
+                if (opt.getColor() != null) {
+                    optionColorMap.put(opt.getId(), opt.getColor());
+                }
             }
         }
 
@@ -980,11 +1036,20 @@ public class CustomFieldService {
                 // 多值字段：返回 values 数组 + displayValues 数组
                 vo.setValues(values);
                 List<String> displayValues = new ArrayList<>();
+                List<String> colors = new ArrayList<>();
+                boolean hasAnyColor = false;
                 for (String v : values) {
                     String display = resolveDisplayValue(v, field, optionTextMap, userNameMap);
                     displayValues.add(display != null ? display : "");
+                    // 解析颜色（仅 list 类型）
+                    String color = resolveOptionColor(v, field, optionColorMap);
+                    colors.add(color);
+                    if (color != null) hasAnyColor = true;
                 }
                 vo.setDisplayValues(displayValues);
+                if (hasAnyColor) {
+                    vo.setColors(colors);
+                }
                 // 兼容：value/displayValue 用逗号分隔聚合
                 vo.setValue(String.join(",", values));
                 vo.setDisplayValue(String.join(", ", displayValues));
@@ -994,6 +1059,9 @@ public class CustomFieldService {
                 vo.setValue(singleValue);
                 String display = resolveDisplayValue(singleValue, field, optionTextMap, userNameMap);
                 vo.setDisplayValue(display != null ? display : "");
+                // 解析颜色（仅 list 类型）
+                String color = resolveOptionColor(singleValue, field, optionColorMap);
+                vo.setColor(color);
             }
             result.add(vo);
         }
@@ -1354,5 +1422,216 @@ public class CustomFieldService {
         activity.setNewValue(newValue != null && newValue.isEmpty() ? null : newValue);
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
+    }
+
+    // ========== 条件显示（Conditional Custom Fields） ==========
+
+    /**
+     * 获取项目中字段的条件配置 map: fieldId → CustomFieldProject（含条件数据）
+     */
+    public Map<Long, CustomFieldProject> getProjectFieldConditions(Long projectId) {
+        List<CustomFieldProject> mappings = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        return mappings.stream()
+                .collect(Collectors.toMap(CustomFieldProject::getCustomFieldId, m -> m, (a, b) -> a));
+    }
+
+    /**
+     * 设置字段条件显示规则（项目级）
+     * @param projectId 项目 ID
+     * @param fieldId 要设置条件的字段 ID
+     * @param conditionFieldId 条件源字段 ID（null 表示清除条件）
+     * @param conditionValues 触发显示的选项 ID 列表
+     */
+    @Transactional
+    public void setFieldCondition(Long projectId, Long fieldId, Long conditionFieldId, List<String> conditionValues) {
+        // 1. 验证目标字段存在且已附加到项目（或为全局字段）
+        CustomFieldDefinition targetField = definitionMapper.selectById(fieldId);
+        if (targetField == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在");
+        }
+
+        // 查找或创建项目关联记录
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+
+        // 全局字段可能没有 custom_field_project 记录，需要创建一条用于存储条件
+        if (mapping == null) {
+            if (!Boolean.TRUE.equals(targetField.getIsForAll())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "该字段未附加到本项目");
+            }
+            // 全局字段：创建一条 mapping 记录用于存放条件
+            mapping = new CustomFieldProject();
+            mapping.setCustomFieldId(fieldId);
+            mapping.setProjectId(projectId);
+            mapping.setPosition(0);
+        }
+
+        // 2. 清除条件
+        if (conditionFieldId == null) {
+            mapping.setConditionFieldId(null);
+            mapping.setConditionValues(null);
+            if (mapping.getId() != null) {
+                projectMapper.updateById(mapping);
+            } else {
+                // 全局字段无需创建无条件的 mapping
+                // 不插入
+            }
+            return;
+        }
+
+        // 3. 验证条件源字段
+        CustomFieldDefinition condField = definitionMapper.selectById(conditionFieldId);
+        if (condField == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "条件源字段不存在");
+        }
+
+        // 条件源字段必须是枚举类型（list）且为单值
+        if (!"list".equals(condField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "条件源字段必须是列表(枚举)类型");
+        }
+        if (Boolean.TRUE.equals(condField.getIsMulti())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "条件源字段必须是单值选择（不支持多值字段作为条件源）");
+        }
+
+        // 条件源字段不能是自身
+        if (conditionFieldId.equals(fieldId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "字段不能以自身作为条件源");
+        }
+
+        // 验证条件源字段也在同一项目中可用
+        List<CustomFieldDefinition> projectFields = listByProject(projectId, null);
+        boolean condFieldInProject = projectFields.stream()
+                .anyMatch(f -> f.getId().equals(conditionFieldId));
+        if (!condFieldInProject) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "条件源字段未在本项目中启用");
+        }
+
+        // 禁止链式依赖：条件源字段本身不能也有条件
+        CustomFieldProject condMapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, conditionFieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        if (condMapping != null && condMapping.getConditionFieldId() != null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持链式条件依赖（条件源字段本身已有条件）");
+        }
+
+        // 4. 验证 conditionValues 中的选项 ID 确实属于条件源字段
+        if (conditionValues == null || conditionValues.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "必须至少指定一个触发值");
+        }
+
+        List<CustomFieldOption> condOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, conditionFieldId));
+        Set<String> validOptionIds = condOptions.stream()
+                .map(o -> String.valueOf(o.getId()))
+                .collect(Collectors.toSet());
+
+        for (String val : conditionValues) {
+            if (!validOptionIds.contains(val)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "无效的条件值: " + val);
+            }
+        }
+
+        // 5. 保存条件
+        mapping.setConditionFieldId(conditionFieldId);
+        mapping.setConditionValues(toJsonArray(conditionValues));
+        if (mapping.getId() != null) {
+            projectMapper.updateById(mapping);
+        } else {
+            projectMapper.insert(mapping);
+        }
+    }
+
+    /**
+     * 清除项目中某字段被条件隐藏的 issue 上的值
+     * 即：找到该字段有值、但条件不满足的 issue，清空其值
+     */
+    @Transactional
+    public int clearHiddenValues(Long projectId, Long fieldId) {
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+
+        if (mapping == null || mapping.getConditionFieldId() == null) {
+            return 0; // 无条件，无需清除
+        }
+
+        Long condFieldId = mapping.getConditionFieldId();
+        List<String> condValues = parseJsonArray(mapping.getConditionValues());
+
+        // 查找项目中所有 issue 的条件字段值
+        // 只需要关注目标字段有值的 issue
+        List<CustomFieldValue> targetValues = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getCustomFieldId, fieldId)
+                        .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0})", projectId));
+
+        if (targetValues.isEmpty()) return 0;
+
+        Set<Long> targetIssueIds = targetValues.stream()
+                .map(CustomFieldValue::getIssueId)
+                .collect(Collectors.toSet());
+
+        // 获取这些 issue 对应的条件字段当前值
+        Map<Long, String> condFieldValuesByIssue = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getCustomFieldId, condFieldId)
+                        .in(CustomFieldValue::getIssueId, targetIssueIds))
+                .stream()
+                .collect(Collectors.toMap(CustomFieldValue::getIssueId, CustomFieldValue::getValue, (a, b) -> a));
+
+        // 筛选条件不满足的 issue（条件字段值不在 condValues 列表中）
+        int cleared = 0;
+        for (CustomFieldValue tv : targetValues) {
+            String currentCondValue = condFieldValuesByIssue.get(tv.getIssueId());
+            if (currentCondValue == null || !condValues.contains(currentCondValue)) {
+                // 条件不满足 → 清除值
+                valueMapper.deleteById(tv.getId());
+                cleared++;
+            }
+        }
+        return cleared;
+    }
+
+    // ===== JSON 数组辅助 =====
+
+    private String toJsonArray(List<String> values) {
+        if (values == null || values.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(values.get(i).replace("\"", "\\\"")).append("\"");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    /**
+     * 解析 JSON 数组字符串为 List<String>
+     */
+    public List<String> parseJsonArray(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        // 简单解析 ["a","b","c"] 格式
+        String trimmed = json.trim();
+        if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return List.of();
+        String inner = trimmed.substring(1, trimmed.length() - 1).trim();
+        if (inner.isEmpty()) return List.of();
+        List<String> result = new ArrayList<>();
+        for (String part : inner.split(",")) {
+            String val = part.trim();
+            if (val.startsWith("\"") && val.endsWith("\"")) {
+                val = val.substring(1, val.length() - 1);
+            }
+            if (!val.isEmpty()) {
+                result.add(val);
+            }
+        }
+        return result;
     }
 }

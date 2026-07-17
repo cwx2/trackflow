@@ -8,8 +8,10 @@ import com.trackflow.customfield.dto.CreateCustomFieldDTO;
 import com.trackflow.customfield.dto.CustomFieldQuery;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
 import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
+import com.trackflow.customfield.dto.SetFieldConditionDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.entity.CustomFieldProject;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
@@ -20,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 自定义字段控制器
@@ -67,7 +70,7 @@ public class CustomFieldController {
 
     @PutMapping("/admin/custom-fields/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
-    public R<CustomFieldDefinitionVO> update(@PathVariable Long id,
+    public R<CustomFieldDefinitionVO> update(@PathVariable("id") Long id,
                                               @Valid @RequestBody UpdateCustomFieldDTO dto) {
         CustomFieldDefinition entity = customFieldService.update(id, dto);
         CustomFieldDefinitionVO vo = converter.toVO(entity);
@@ -107,9 +110,18 @@ public class CustomFieldController {
             @RequestParam(value = "issueType", required = false) String issueType) {
         List<CustomFieldDefinition> fields = customFieldService.listByProject(projectId, issueType);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
+        Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
         for (int i = 0; i < fields.size(); i++) {
-            voList.get(i).setOptions(converter.toOptionVOList(
-                    customFieldService.getOptions(fields.get(i).getId())));
+            CustomFieldDefinition entity = fields.get(i);
+            CustomFieldDefinitionVO vo = voList.get(i);
+            vo.setOptions(converter.toOptionVOList(
+                    customFieldService.getOptions(entity.getId())));
+            // 填充条件信息
+            CustomFieldProject mapping = conditionsMap.get(entity.getId());
+            if (mapping != null && mapping.getConditionFieldId() != null) {
+                vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
+                vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
+            }
         }
         return R.ok(voList);
     }
@@ -134,6 +146,7 @@ public class CustomFieldController {
     public R<List<CustomFieldDefinitionVO>> listProjectSettingsFields(@PathVariable Long projectId) {
         List<CustomFieldDefinition> fields = customFieldService.listProjectFields(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
+        Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
         for (int i = 0; i < fields.size(); i++) {
             CustomFieldDefinition entity = fields.get(i);
             CustomFieldDefinitionVO vo = voList.get(i);
@@ -141,6 +154,12 @@ public class CustomFieldController {
             vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
                     .map(String::valueOf).toList());
             vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
+            // 填充条件信息
+            CustomFieldProject mapping = conditionsMap.get(entity.getId());
+            if (mapping != null && mapping.getConditionFieldId() != null) {
+                vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
+                vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
+            }
         }
         return R.ok(voList);
     }
@@ -190,5 +209,32 @@ public class CustomFieldController {
             @Valid @RequestBody ReorderProjectFieldsDTO dto) {
         customFieldService.reorderProjectFields(projectId, dto.getFieldIds());
         return R.ok();
+    }
+
+    // ========== 条件显示配置端点 ==========
+
+    /**
+     * 设置字段的条件显示规则（项目级）
+     */
+    @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/condition")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Void> setFieldCondition(
+            @PathVariable Long projectId,
+            @PathVariable Long fieldId,
+            @Valid @RequestBody SetFieldConditionDTO dto) {
+        customFieldService.setFieldCondition(projectId, fieldId, dto.getConditionFieldId(), dto.getConditionValues());
+        return R.ok();
+    }
+
+    /**
+     * 清除项目中字段被条件隐藏的 issue 值
+     */
+    @PostMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/clear-hidden-values")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Integer> clearHiddenValues(
+            @PathVariable Long projectId,
+            @PathVariable Long fieldId) {
+        int cleared = customFieldService.clearHiddenValues(projectId, fieldId);
+        return R.ok(cleared);
     }
 }

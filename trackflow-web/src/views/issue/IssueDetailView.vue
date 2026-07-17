@@ -466,12 +466,13 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
 /**
  * 将自定义字段定义 + 已存储的值转为 SidebarField 数组
+ * 支持条件显示：根据条件源字段的当前值动态过滤
  */
 function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
   if (!customFieldDefs.value.length) return []
 
-  // 已存储的值 map: fieldId → { value, values, displayValue, displayValues, isMulti }
-  const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean }>()
+  // 已存储的值 map: fieldId → { value, values, displayValue, displayValues, isMulti, color, colors }
+  const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>()
   if (i.customFieldDetails) {
     for (const v of i.customFieldDetails) {
       valuesMap.set(v.customFieldId, {
@@ -479,12 +480,26 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
         values: v.values,
         displayValue: v.displayValue || v.value || '',
         displayValues: v.displayValues,
-        isMulti: v.isMulti
+        isMulti: v.isMulti,
+        color: v.color,
+        colors: v.colors
       })
     }
   }
 
-  return customFieldDefs.value.map(cf => {
+  // 条件过滤：只显示条件满足的字段
+  const visibleDefs = customFieldDefs.value.filter(cf => {
+    if (!cf.conditionFieldId || !cf.conditionValues || cf.conditionValues.length === 0) {
+      return true // 无条件，始终显示
+    }
+    // 查找条件源字段的当前值
+    const condStored = valuesMap.get(cf.conditionFieldId)
+    const condValue = condStored?.value || ''
+    if (!condValue) return false // 条件源字段无值 → 隐藏
+    return cf.conditionValues.includes(condValue)
+  })
+
+  return visibleDefs.map(cf => {
     const stored = valuesMap.get(cf.id)
     const isMulti = cf.isMulti || stored?.isMulti
     const rawValue = stored?.value || ''
@@ -533,10 +548,22 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
         break
     }
 
+    // 确定颜色（仅 list 类型且有颜色配置时）
+    let fieldColor: string | undefined
+    if (cf.fieldFormat === 'list' && stored) {
+      if (isMulti && stored.colors?.length) {
+        // 多值：取第一个有颜色的
+        fieldColor = stored.colors.find(c => c != null) || undefined
+      } else if (stored.color) {
+        fieldColor = stored.color
+      }
+    }
+
     return {
       key: `cf_${cf.id}`,
       label: cf.name,
       value: displayValue,
+      dot: fieldColor,
       editType: editType as any,
       rawValue,
       rawValues: isMulti ? rawValues : undefined,

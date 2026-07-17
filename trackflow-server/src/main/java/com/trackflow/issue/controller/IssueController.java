@@ -30,6 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -96,12 +97,17 @@ public class IssueController {
                 .map(Issue::getId)
                 .toList();
         if (!issueIds.isEmpty()) {
-            Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds);
+            Map<Long, Map<String, String>> cfColorsMap = new HashMap<>();
+            Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds, cfColorsMap);
             for (int i = 0; i < result.getRecords().size(); i++) {
                 Long issueId = result.getRecords().get(i).getId();
                 Map<String, String> cfValues = cfValuesMap.get(issueId);
                 if (cfValues != null && !cfValues.isEmpty()) {
                     voList.get(i).setCustomFieldValues(cfValues);
+                }
+                Map<String, String> cfColors = cfColorsMap.get(issueId);
+                if (cfColors != null && !cfColors.isEmpty()) {
+                    voList.get(i).setCustomFieldColors(cfColors);
                 }
             }
         }

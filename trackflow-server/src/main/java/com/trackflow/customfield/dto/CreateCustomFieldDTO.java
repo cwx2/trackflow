@@ -41,5 +41,8 @@ public class CreateCustomFieldDTO {
         @Size(max = 256)
         private String value;
         private Boolean isDefault = false;
+        /** 选项颜色（HEX 格式如 #4CAF50），null 表示无颜色 */
+        @Size(max = 20)
+        private String color;
     }
 }

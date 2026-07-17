@@ -24,4 +24,10 @@ public class CustomFieldValueVO {
 
     /** 是否为多值字段 */
     private Boolean isMulti;
+
+    /** 单值字段的选项颜色（仅 list 类型，HEX 格式），null 表示无颜色 */
+    private String color;
+
+    /** 多值字段的选项颜色列表（仅 list 类型），与 displayValues 一一对应 */
+    private List<String> colors;
 }

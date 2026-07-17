@@ -181,6 +181,8 @@ export interface IssueVO {
   childClosedCount?: number
   /** 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本 */
   customFieldValues?: Record<string, string>
+  /** 自定义字段颜色值，key 格式 "cf_{fieldId}"，value 为 HEX 颜色（仅有颜色的 list 类型字段） */
+  customFieldColors?: Record<string, string>
 }
 
 export interface IssueDetailVO extends IssueVO {
@@ -443,6 +445,10 @@ export interface CustomFieldDefinitionVO {
   issueTypes?: string[]
   createdAt: string
   updatedAt: string
+  /** 条件源字段 ID（项目级配置，null 表示无条件始终显示） */
+  conditionFieldId?: string | null
+  /** 触发显示的选项 ID 列表 */
+  conditionValues?: string[] | null
 }
 
 export interface CustomFieldOptionVO {
@@ -452,6 +458,8 @@ export interface CustomFieldOptionVO {
   position: number
   isDefault: boolean
   isArchived?: boolean
+  /** 选项颜色（HEX 格式如 #4CAF50），null 表示无颜色 */
+  color?: string | null
 }
 
 export interface CustomFieldUsageVO {
@@ -476,6 +484,10 @@ export interface CustomFieldValueVO {
   displayValues?: string[]
   /** 是否为多值字段 */
   isMulti?: boolean
+  /** 单值字段的选项颜色（仅 list 类型，HEX），null 表示无颜色 */
+  color?: string | null
+  /** 多值字段的选项颜色列表（仅 list 类型），与 displayValues 对应 */
+  colors?: (string | null)[]
 }
 
 export interface AvailableColumnVO {

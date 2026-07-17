@@ -122,6 +122,31 @@
             <div class="options-list">
               <div v-for="(opt, idx) in form.options" :key="idx" class="option-row">
                 <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" />
+                <a-trigger trigger="click" :popup-translate="[0, 4]">
+                  <span
+                    class="color-swatch"
+                    :style="{ background: opt.color || 'transparent', border: opt.color ? 'none' : '1px dashed var(--tf-border)' }"
+                    title="设置颜色"
+                  ></span>
+                  <template #content>
+                    <div class="color-palette">
+                      <span
+                        v-for="c in presetColors"
+                        :key="c"
+                        class="color-palette-item"
+                        :class="{ active: opt.color === c }"
+                        :style="{ background: c }"
+                        @click="opt.color = c"
+                      ></span>
+                      <span
+                        class="color-palette-item color-palette-clear"
+                        :class="{ active: !opt.color }"
+                        @click="opt.color = undefined"
+                        title="无颜色"
+                      >✕</span>
+                    </div>
+                  </template>
+                </a-trigger>
                 <a-checkbox v-model="opt.isDefault" size="small">默认</a-checkbox>
                 <a-button type="text" size="mini" status="danger" @click="form.options.splice(idx, 1)">
                   <icon-delete />
@@ -183,10 +208,18 @@ const form = reactive({
   minLength: 0,
   maxLength: 0,
   regexp: '',
-  options: [] as Array<{ id?: string; value: string; isDefault: boolean }>,
+  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string }>,
   projectIds: [] as string[],
   issueTypes: [] as string[]
 })
+
+/** 预定义颜色方案（14 种） */
+const presetColors = [
+  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800',
+  '#F44336', '#00BCD4', '#607D8B', '#E91E63',
+  '#8BC34A', '#3F51B5', '#FF5722', '#009688',
+  '#795548', '#FFC107'
+]
 
 const fieldTypeOptions = [
   { value: 'string', label: '文本(单行)' },
@@ -281,7 +314,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.regexp = record.regexp || ''
   form.options = (record.options || [])
     .filter(o => !o.isArchived)
-    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault }))
+    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
   drawerVisible.value = true
@@ -310,7 +343,7 @@ async function handleSave() {
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
         options: form.fieldFormat === 'list'
-          ? form.options.map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault }))
+          ? form.options.map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
           : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes
@@ -328,7 +361,7 @@ async function handleSave() {
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
         options: form.fieldFormat === 'list'
-          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault }))
+          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
           : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes
@@ -441,5 +474,65 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 150ms;
+}
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-palette {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 8px;
+  background: var(--tf-bg-elevated);
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.color-palette-item {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 100ms;
+  position: relative;
+}
+.color-palette-item:hover {
+  transform: scale(1.2);
+}
+.color-palette-item.active::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+.color-palette-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  border: 1px dashed var(--tf-border);
+}
+.color-palette-clear.active {
+  border-color: var(--tf-accent);
+  color: var(--tf-accent);
 }
 </style>

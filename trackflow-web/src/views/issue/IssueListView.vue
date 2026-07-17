@@ -469,7 +469,12 @@
 
         <!-- Custom field columns (cf_ prefix) -->
         <template #customFieldCell="{ record, column }">
-          <span class="cf-cell">{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
+          <span
+            v-if="record.customFieldColors?.[column.dataIndex]"
+            class="cf-cell cf-badge"
+            :style="{ background: record.customFieldColors[column.dataIndex], color: '#fff' }"
+          >{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
+          <span v-else class="cf-cell">{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
         </template>
 
         <!-- empty -->
@@ -1802,6 +1807,7 @@ function applyDashboardFilter() {
 .priority-low { background: var(--tf-text-tertiary); }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
 .cf-cell { font-size: 12px; color: var(--tf-text-secondary); }
+.cf-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; line-height: 1.4; }
 
 /* Child progress cell */
 .child-progress-cell { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }

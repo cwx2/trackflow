@@ -23,7 +23,7 @@ export const customFieldApi = {
     minLength?: number
     maxLength?: number
     regexp?: string
-    options?: Array<{ value: string; isDefault?: boolean }>
+    options?: Array<{ value: string; isDefault?: boolean; color?: string }>
     projectIds?: string[]
     issueTypes?: string[]
   }) {
@@ -40,7 +40,7 @@ export const customFieldApi = {
     minLength?: number
     maxLength?: number
     regexp?: string
-    options?: Array<{ id?: string; value: string; isDefault?: boolean }>
+    options?: Array<{ id?: string; value: string; isDefault?: boolean; color?: string }>
     projectIds?: string[]
     issueTypes?: string[]
   }) {
@@ -104,5 +104,20 @@ export const customFieldApi = {
   /** 调整字段在项目中的排序 */
   reorderProjectFields(projectId: string, fieldIds: string[]) {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/reorder`, { fieldIds })
+  },
+
+  // ========== 条件显示 ==========
+
+  /** 设置字段条件显示规则（项目级） */
+  setFieldCondition(projectId: string, fieldId: string, data: {
+    conditionFieldId: string | null
+    conditionValues: string[] | null
+  }) {
+    return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/condition`, data)
+  },
+
+  /** 清除项目中字段被条件隐藏的 issue 值 */
+  clearHiddenValues(projectId: string, fieldId: string) {
+    return request.post<any, R<number>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/clear-hidden-values`)
   }
 }
