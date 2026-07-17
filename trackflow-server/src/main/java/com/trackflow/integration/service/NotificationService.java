@@ -13,6 +13,7 @@ import com.trackflow.integration.vo.NotificationVO;
 import com.trackflow.integration.converter.NotificationConverter;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,7 @@ public class NotificationService {
     private final MutedThreadService mutedThreadService;
     private final EmailSendService emailSendService;
     private final NotificationPreferenceService preferenceService;
+    private final SystemSettingService systemSettingService;
 
     /**
      * 通知聚合时间窗口（分钟）。同一用户+同一类型+同一资源在此窗口内的多次通知将被合并。
@@ -65,6 +67,12 @@ public class NotificationService {
     @Transactional
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                        String resourceType, Long resourceId, Long projectId) {
+        // 全局站内通知开关检查（管理员可通过 NotificationAdmin 设置关闭）
+        if (!isInAppEnabled()) {
+            log.debug("[Notification] 全局站内通知已关闭，跳过: userId={}, type={}", userId, type);
+            return;
+        }
+
         String typeValue = type.name();
 
         // 静音检查：@提及类型永远不被静音
@@ -383,5 +391,14 @@ public class NotificationService {
         if (!typeNames.isEmpty()) {
             wrapper.in(Notification::getType, typeNames);
         }
+    }
+
+    /**
+     * 检查全局站内通知是否启用。
+     * 读取 system_setting 表中 key="notification.in_app_enabled" 的值，默认为 true。
+     */
+    private boolean isInAppEnabled() {
+        String value = systemSettingService.getSettingValue("notification.in_app_enabled", "true");
+        return Boolean.parseBoolean(value);
     }
 }
