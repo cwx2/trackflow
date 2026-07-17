@@ -147,6 +147,7 @@
           ref="backlogPanelRef"
           :visible="showBacklog"
           :project-id="selectedProject || ''"
+          :board-status-ids="boardStatusIdsForBacklog"
           @close="showBacklog = false"
           @open-issue="openIssue"
           @drag-start="onBacklogDragStart"
@@ -199,6 +200,7 @@
                 class="kanban-card"
                 :class="[
                   `kanban-card--${cardSize}`,
+                  getCardColorClass(issue),
                   {
                     'kanban-card--dragging': draggingIssue?.id === issue.id,
                     'kanban-card--transitioning': transitioningIssueIds.has(issue.id),
@@ -218,6 +220,7 @@
                 <div class="card-header">
                   <span class="card-key">{{ issue.issueKey }}</span>
                   <span
+                    v-if="isCardFieldVisible('priority')"
                     class="card-priority"
                     :class="issue.priority?.toLowerCase()"
                     :title="issue.priority"
@@ -234,11 +237,16 @@
                     class="card-cf-tag"
                   >{{ val }}</span>
                 </div>
-                <!-- L: tags (placeholder - tags not in IssueVO list, only detail) -->
+                <!-- Card metadata fields based on card config -->
+                <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
+                  <span v-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
+                  <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
+                  <span v-if="isCardFieldVisible('estimatedHours')" class="card-meta-tag"><!-- placeholder for future --></span>
+                </div>
                 <div class="card-footer">
-                  <span class="card-type">{{ typeLabel(issue.issueType) }}</span>
-                  <!-- M/L: attachment count (via childCount as proxy - future) -->
-                  <div class="card-assignee-avatar" v-if="issue.assigneeName" :title="issue.assigneeName">
+                  <span v-if="isCardFieldVisible('type')" class="card-type">{{ typeLabel(issue.issueType) }}</span>
+                  <span v-else class="card-type-spacer"></span>
+                  <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
                     <img
                       v-if="issue.assigneeAvatarUrl"
                       :src="issue.assigneeAvatarUrl"
@@ -616,7 +624,7 @@ import { ref, computed, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi } from '@/api'
-import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO } from '@/api/types'
+import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
@@ -667,6 +675,26 @@ function getVisibleCustomFields(issue: IssueVO): Record<string, string> {
   const entries = Object.entries(issue.customFieldValues)
   const maxFields = cardSize.value === 'L' ? 4 : 2
   return Object.fromEntries(entries.slice(0, maxFields))
+}
+
+/** 判断卡片上是否应展示某个字段（基于 cardConfig） */
+function isCardFieldVisible(field: string): boolean {
+  return cardConfig.value.visibleFields.includes(field)
+}
+
+/** 获取卡片的颜色方案 CSS class */
+function getCardColorClass(issue: IssueVO): string {
+  const scheme = cardConfig.value.colorScheme
+  if (scheme === 'none') return ''
+  if (scheme === 'priority') {
+    const p = (issue.priority || 'Normal').toLowerCase()
+    return `kanban-card--color-priority-${p}`
+  }
+  if (scheme === 'type') {
+    const t = (issue.issueType || 'task').toLowerCase()
+    return `kanban-card--color-type-${t}`
+  }
+  return ''
 }
 
 const selectedProject = computed({
@@ -978,6 +1006,12 @@ const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority,
 const allColumnConfigs = ref<BoardColumnVO[]>([])
 const showSettings = ref(false)
 
+// 看板卡片配置（字段显示 + 颜色方案）
+const cardConfig = ref<BoardCardConfigVO>({
+  visibleFields: ['assignee', 'priority', 'type'],
+  colorScheme: 'none'
+})
+
 // 根据列配置过滤出可见的状态
 const visibleStatuses = computed(() => {
   if (allColumnConfigs.value.length === 0) {
@@ -995,6 +1029,11 @@ const visibleStatuses = computed(() => {
       isClosed: c.statusCategory === 'done' || c.statusCategory === 'cancelled',
       sortOrder: c.sortOrder
     } as IssueStatusVO))
+})
+
+// Comma-separated visible board status IDs for Backlog exclusion
+const boardStatusIdsForBacklog = computed(() => {
+  return visibleStatuses.value.map(s => s.id).join(',')
 })
 
 // 隐藏列中有工单的列（用于提示 banner）
@@ -1595,6 +1634,21 @@ async function loadBoardColumns() {
   }
 }
 
+async function loadCardConfig() {
+  if (!selectedProject.value) {
+    cardConfig.value = { visibleFields: ['assignee', 'priority', 'type'], colorScheme: 'none' }
+    return
+  }
+  try {
+    const res = await boardApi.getCardConfig(selectedProject.value)
+    if (res.data) {
+      cardConfig.value = res.data
+    }
+  } catch {
+    cardConfig.value = { visibleFields: ['assignee', 'priority', 'type'], colorScheme: 'none' }
+  }
+}
+
 async function loadTransitionableStatuses() {
   if (!selectedProject.value || !canChangeStatus.value) {
     transitionableSourceStatuses.value = new Set()
@@ -1610,6 +1664,7 @@ async function loadTransitionableStatuses() {
 
 function onSettingsSaved() {
   loadBoardColumns()
+  loadCardConfig()
 }
 
 async function loadSprints() {
@@ -1629,7 +1684,7 @@ async function loadBoard() {
   loadCollapsedColumnsState()
   loading.value = true
   try {
-    await Promise.all([loadSprints(), loadBoardColumns(), loadTransitionableStatuses()])
+    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadTransitionableStatuses()])
     await loadIssues()
   } catch {
     issues.value = []

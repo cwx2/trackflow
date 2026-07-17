@@ -97,7 +97,7 @@
             <div class="backlog-empty-desc">
               {{ searchKeyword || filterType || filterPriority
                 ? '尝试调整筛选条件'
-                : '所有工单都已分配到 Sprint' }}
+                : '所有工单都已在看板中' }}
             </div>
           </div>
         </div>
@@ -117,6 +117,8 @@ import { localizeIssueType } from '@/utils/fieldLabels'
 const props = defineProps<{
   visible: boolean
   projectId: string
+  /** Comma-separated status IDs currently shown on the board (to exclude from Backlog) */
+  boardStatusIds: string
 }>()
 
 const emit = defineEmits<{
@@ -148,7 +150,7 @@ const filteredIssues = computed(() => {
 
 // Watch visibility and project changes to load data
 watch(
-  () => [props.visible, props.projectId],
+  () => [props.visible, props.projectId, props.boardStatusIds],
   ([visible, projectId]) => {
     if (visible && projectId) {
       loadBacklog()
@@ -165,12 +167,13 @@ async function loadBacklog() {
     let page = 1
     let allIssues: IssueVO[] = []
 
-    // 循环加载所有未规划工单（Backlog 通常量不大，但也需处理超 100 的情况）
+    // Backlog = issues whose status does NOT match any visible board column
+    // This ensures no overlap between board and Backlog
     while (true) {
       const res = await issueApi.list({
         projectId: props.projectId,
-        sprintId: 'none',
         hideResolved: 'true',
+        statusIdNot: props.boardStatusIds || undefined,
         keyword: searchKeyword.value || undefined,
         page,
         pageSize: PAGE_SIZE
