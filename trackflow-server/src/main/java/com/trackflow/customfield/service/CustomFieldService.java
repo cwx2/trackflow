@@ -12,8 +12,10 @@ import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,7 @@ public class CustomFieldService {
     private final CustomFieldValidationEngine validationEngine;
     private final SysUserMapper userMapper;
     private final IssueActivityMapper activityMapper;
+    private final IssueMapper issueMapper;
 
     @Transactional
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
@@ -108,6 +111,9 @@ public class CustomFieldService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
 
+        // 记录 isForAll 变更前状态，用于检测 true→false 转换
+        boolean wasForAll = Boolean.TRUE.equals(entity.getIsForAll());
+
         if (dto.getName() != null && !dto.getName().isBlank()) {
             boolean exists = definitionMapper.exists(new LambdaQueryWrapper<CustomFieldDefinition>()
                     .apply("LOWER(name) = LOWER({0})", dto.getName())
@@ -155,7 +161,72 @@ public class CustomFieldService {
             }
         }
 
+        // isForAll 从 true→false 时，清理不再适用项目中的孤立字段值
+        boolean isNowForAll = Boolean.TRUE.equals(entity.getIsForAll());
+        if (wasForAll && !isNowForAll) {
+            // 确定当前保留的项目列表：
+            // - 如果 dto 提供了 projectIds，使用它（已在上面更新到数据库）
+            // - 如果 dto 未提供，则从数据库读取当前关联
+            List<Long> retainedProjectIds;
+            if (dto.getProjectIds() != null) {
+                retainedProjectIds = dto.getProjectIds();
+            } else {
+                retainedProjectIds = projectMapper.selectList(
+                        new LambdaQueryWrapper<CustomFieldProject>()
+                                .eq(CustomFieldProject::getCustomFieldId, id))
+                        .stream()
+                        .map(CustomFieldProject::getProjectId)
+                        .toList();
+            }
+            cleanOrphanValuesForScopeReduction(id, retainedProjectIds);
+        }
+
         return entity;
+    }
+
+    /**
+     * 当字段从全局（isForAll=true）收缩为项目专属（isForAll=false）时，
+     * 清理不再适用项目中工单的字段值。
+     *
+     * @param customFieldId 自定义字段 ID
+     * @param retainedProjectIds 仍然关联的项目 ID 列表
+     */
+    private void cleanOrphanValuesForScopeReduction(Long customFieldId, List<Long> retainedProjectIds) {
+        // 查出当前有该字段值的所有 issue ID
+        List<CustomFieldValue> existingValues = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .select(CustomFieldValue::getId, CustomFieldValue::getIssueId)
+                        .eq(CustomFieldValue::getCustomFieldId, customFieldId));
+        if (existingValues.isEmpty()) return;
+
+        // 获取涉及的 issue 对应的 projectId
+        Set<Long> issueIds = existingValues.stream()
+                .map(CustomFieldValue::getIssueId)
+                .collect(Collectors.toSet());
+        List<Issue> issues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getId, Issue::getProjectId)
+                        .in(Issue::getId, issueIds));
+        Map<Long, Long> issueProjectMap = issues.stream()
+                .collect(Collectors.toMap(Issue::getId, Issue::getProjectId));
+
+        // 找出属于"不再适用"项目的字段值记录 ID
+        Set<Long> retainedSet = new HashSet<>(retainedProjectIds);
+        List<Long> orphanValueIds = existingValues.stream()
+                .filter(v -> {
+                    Long projectId = issueProjectMap.get(v.getIssueId());
+                    return projectId != null && !retainedSet.contains(projectId);
+                })
+                .map(CustomFieldValue::getId)
+                .toList();
+
+        if (orphanValueIds.isEmpty()) return;
+
+        // 批量删除孤立值
+        valueMapper.deleteByIds(orphanValueIds);
+
+        log.info("Custom field {} scope reduced (isForAll: true→false): removed {} orphan values from {} issues in non-retained projects",
+                customFieldId, orphanValueIds.size(), orphanValueIds.size());
     }
 
     /**
@@ -651,6 +722,8 @@ public class CustomFieldService {
      * 批量获取多个 Issue 的自定义字段展示值
      * 返回 Map<issueId, Map<"cf_{fieldId}", displayValue>>
      * list 类型解析为选项文本，user 类型解析为用户名
+     *
+     * 仅返回对每个 issue 所在项目适用的字段值（过滤孤立数据）。
      */
     public Map<Long, Map<String, String>> getBatchDisplayValues(List<Long> issueIds) {
         if (issueIds == null || issueIds.isEmpty()) {
@@ -673,7 +746,55 @@ public class CustomFieldService {
                 .stream()
                 .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
 
-        // 3. 预加载 list 类型字段的选项映射 (optionId → optionValue)
+        // 3. 构建字段适用性过滤：确定哪些字段对哪些项目适用
+        //    - isForAll=true 的字段对所有项目适用
+        //    - isForAll=false 的字段只对关联项目适用
+        Set<Long> nonGlobalFieldIds = fieldDefMap.values().stream()
+                .filter(f -> !Boolean.TRUE.equals(f.getIsForAll()))
+                .map(CustomFieldDefinition::getId)
+                .collect(Collectors.toSet());
+
+        // 加载非全局字段的项目关联
+        Map<Long, Set<Long>> fieldToProjectIds = new HashMap<>();
+        if (!nonGlobalFieldIds.isEmpty()) {
+            List<CustomFieldProject> cfProjects = projectMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .in(CustomFieldProject::getCustomFieldId, nonGlobalFieldIds));
+            for (CustomFieldProject cfp : cfProjects) {
+                fieldToProjectIds
+                        .computeIfAbsent(cfp.getCustomFieldId(), k -> new HashSet<>())
+                        .add(cfp.getProjectId());
+            }
+        }
+
+        // 查询 issue→projectId 映射（用于适用性过滤）
+        List<Issue> issues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getId, Issue::getProjectId)
+                        .in(Issue::getId, issueIds));
+        Map<Long, Long> issueProjectMap = issues.stream()
+                .collect(Collectors.toMap(Issue::getId, Issue::getProjectId));
+
+        // 4. 过滤掉不适用的字段值
+        List<CustomFieldValue> applicableValues = allValues.stream()
+                .filter(v -> {
+                    CustomFieldDefinition fieldDef = fieldDefMap.get(v.getCustomFieldId());
+                    if (fieldDef == null) return false;
+                    // 全局字段对所有项目适用
+                    if (Boolean.TRUE.equals(fieldDef.getIsForAll())) return true;
+                    // 非全局字段需检查项目关联
+                    Long projectId = issueProjectMap.get(v.getIssueId());
+                    if (projectId == null) return false;
+                    Set<Long> allowedProjects = fieldToProjectIds.get(v.getCustomFieldId());
+                    return allowedProjects != null && allowedProjects.contains(projectId);
+                })
+                .toList();
+
+        if (applicableValues.isEmpty()) {
+            return Map.of();
+        }
+
+        // 5. 预加载 list 类型字段的选项映射 (optionId → optionValue)
         Set<Long> listFieldIds = fieldDefMap.values().stream()
                 .filter(f -> "list".equals(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
@@ -688,14 +809,14 @@ public class CustomFieldService {
             }
         }
 
-        // 4. 预加载 user 类型字段引用的用户名
+        // 6. 预加载 user 类型字段引用的用户名
         Set<Long> userFieldIds = fieldDefMap.values().stream()
                 .filter(f -> "user".equals(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
         Map<Long, String> userNameMap = new HashMap<>();
         if (!userFieldIds.isEmpty()) {
-            Set<Long> userIds = allValues.stream()
+            Set<Long> userIds = applicableValues.stream()
                     .filter(v -> userFieldIds.contains(v.getCustomFieldId()) && v.getValue() != null)
                     .map(v -> {
                         try { return Long.parseLong(v.getValue()); }
@@ -709,10 +830,10 @@ public class CustomFieldService {
             }
         }
 
-        // 5. 按 (issueId, fieldId) 分组，处理多值字段
+        // 7. 按 (issueId, fieldId) 分组，处理多值字段
         // 结构: Map<issueId, Map<fieldId, List<rawValue>>>
         Map<Long, Map<Long, List<String>>> groupedByIssueAndField = new HashMap<>();
-        for (CustomFieldValue cfv : allValues) {
+        for (CustomFieldValue cfv : applicableValues) {
             groupedByIssueAndField
                     .computeIfAbsent(cfv.getIssueId(), k -> new HashMap<>())
                     .computeIfAbsent(cfv.getCustomFieldId(), k -> new ArrayList<>())
