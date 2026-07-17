@@ -27,6 +27,7 @@ import java.util.Map;
 public class TimeEntryController {
 
     private static final String PERM_VIEW_OTHERS = "time:view_others";
+    private static final String PERM_EDIT_ALL = "time:edit_all";
 
     private final TimeEntryService timeEntryService;
     private final IssueService issueService;
@@ -71,7 +72,10 @@ public class TimeEntryController {
     /**
      * 查询用户在日期范围内的工时记录
      * 管理员（拥有 time:view_others 权限）可查看他人工时
-     * 支持按项目和工作类型筛选
+     * 支持按项目和工作类型（activityId）筛选
+     *
+     * @param activityId 工作类型属性值 ID（对应 work_item_attribute_value.id）
+     * @param workType   已废弃参数，为向下兼容保留但不再使用（前端应迁移到 activityId）
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -80,6 +84,7 @@ public class TimeEntryController {
             @RequestParam("startDate") String startDate,
             @RequestParam("endDate") String endDate,
             @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "activityId", required = false) Long activityId,
             @RequestParam(value = "workType", required = false) String workType) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
@@ -90,7 +95,14 @@ public class TimeEntryController {
                 throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
             }
         }
-        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, startDate, endDate, projectId, workType));
+
+        // 向下兼容：如果前端传了 workType (name) 但没传 activityId，尝试按名称匹配
+        Long resolvedActivityId = activityId;
+        if (resolvedActivityId == null && workType != null && !workType.isBlank()) {
+            resolvedActivityId = workItemAttributeService.findWorkTypeValueIdByName(workType);
+        }
+
+        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, startDate, endDate, projectId, resolvedActivityId));
     }
 
     /**
@@ -174,6 +186,17 @@ public class TimeEntryController {
         return R.ok(canViewOthersTime(currentUserId));
     }
 
+    /**
+     * 检查当前用户是否有权编辑/删除他人工时
+     * 返回布尔值供前端判断是否对他人工时显示编辑/删除按钮
+     */
+    @GetMapping("/can-edit-others")
+    @PreAuthorize("isAuthenticated()")
+    public R<Boolean> checkCanEditOthers() {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(canEditOthersTime(currentUserId));
+    }
+
     // ========== 内部方法 ==========
 
     /**
@@ -182,6 +205,14 @@ public class TimeEntryController {
      */
     private boolean canViewOthersTime(Long userId) {
         return permissionService.hasPermissionInAnyProject(userId, PERM_VIEW_OTHERS);
+    }
+
+    /**
+     * 判断用户是否有权编辑/删除他人工时
+     * 系统管理员（system:admin）或在任何项目中拥有 time:edit_all 的用户
+     */
+    private boolean canEditOthersTime(Long userId) {
+        return permissionService.hasPermissionInAnyProject(userId, PERM_EDIT_ALL);
     }
 
     /**
@@ -195,7 +226,6 @@ public class TimeEntryController {
         vo.setWorkDate(entry.getWorkDate().toString());
         vo.setDuration(entry.getDuration());
         vo.setStartTime(entry.getStartTime());
-        vo.setWorkType(entry.getWorkType());
         vo.setDescription(entry.getDescription());
 
         // 加载属性值
@@ -206,6 +236,14 @@ public class TimeEntryController {
                 item.put("attributeId", e.getKey());
                 return item;
             }).toList());
+
+            // Extract Work type specifically (attribute id "1")
+            Map<String, String> workTypeInfo = attrValues.get("1");
+            if (workTypeInfo != null) {
+                vo.setWorkType(workTypeInfo.get("valueName"));
+                vo.setWorkTypeId(workTypeInfo.get("valueId"));
+                vo.setWorkTypeColor(workTypeInfo.get("valueColor"));
+            }
         }
 
         return vo;

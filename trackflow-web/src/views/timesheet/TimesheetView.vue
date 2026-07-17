@@ -70,7 +70,7 @@
               size="small"
               @change="onFilterChange"
             >
-              <a-option v-for="wt in filterWorkTypes" :key="wt.id" :value="wt.name">
+              <a-option v-for="wt in filterWorkTypes" :key="wt.id" :value="wt.id">
                 <span v-if="wt.color" class="attr-value-dot" :style="{ background: wt.color }"></span>
                 {{ wt.name }}
               </a-option>
@@ -363,6 +363,7 @@ const issueOptions = ref<{ value: string; label: string }[]>([])
 
 // User selector state
 const canViewOthers = ref(false)
+const canEditOthers = ref(false)
 const selectableUsers = ref<TimeEntryUserVO[]>([])
 const selectedUserId = ref<string | undefined>(undefined)
 
@@ -389,7 +390,6 @@ const form = ref({
   dateRange: undefined as [string, string] | undefined,
   durationText: '',
   startTimeStr: undefined as string | undefined,
-  workType: undefined as string | undefined,
   description: ''
 })
 
@@ -490,7 +490,7 @@ async function loadEntries() {
   loading.value = true
   try {
     const { startDate, endDate } = getDateRange()
-    const params: { userId?: string; startDate: string; endDate: string; projectId?: string; workType?: string } = { startDate, endDate }
+    const params: { userId?: string; startDate: string; endDate: string; projectId?: string; activityId?: string } = { startDate, endDate }
     if (selectedUserId.value) {
       params.userId = selectedUserId.value
     }
@@ -498,7 +498,8 @@ async function loadEntries() {
       params.projectId = filterProjectId.value
     }
     if (filterWorkType.value) {
-      params.workType = filterWorkType.value
+      // filterWorkType now holds the attribute value ID (not name)
+      params.activityId = filterWorkType.value
     }
     const res = await timeEntryApi.list(params)
     if (res.code === 0 && res.data) {
@@ -562,6 +563,15 @@ async function loadCanViewOthers() {
   } catch { /* silent */ }
 }
 
+async function loadCanEditOthers() {
+  try {
+    const res = await timeEntryApi.canEditOthers()
+    if (res.code === 0) {
+      canEditOthers.value = res.data === true
+    }
+  } catch { /* silent */ }
+}
+
 async function loadSelectableUsers(keyword?: string) {
   try {
     const params = keyword ? { keyword } : undefined
@@ -592,10 +602,12 @@ function onFilterChange() {
     delete query.projectId
   }
   if (filterWorkType.value) {
-    query.workType = filterWorkType.value
+    query.activityId = filterWorkType.value
   } else {
-    delete query.workType
+    delete query.activityId
   }
+  // Clean up legacy param
+  delete query.workType
   router.replace({ query })
 }
 
@@ -733,7 +745,6 @@ function openAddDialog(date?: string) {
     dateRange: undefined,
     durationText: '',
     startTimeStr: undefined,
-    workType: undefined,
     description: ''
   }
   showDialog.value = true
@@ -745,6 +756,13 @@ function addAnotherRecord() {
 }
 
 function openEditDialog(entry: TimeEntryVO) {
+  // Check if this is someone else's entry and whether user has edit permission
+  const isOwnEntry = entry.userId === authStore.user?.id
+  if (!isOwnEntry && !canEditOthers.value) {
+    Message.warning('无权编辑他人工时记录')
+    return
+  }
+
   editingEntry.value = entry
   dateMode.value = 'single'
   extraRecords.value = []
@@ -761,7 +779,6 @@ function openEditDialog(entry: TimeEntryVO) {
     dateRange: undefined,
     durationText: formatDurationInput(entry.duration),
     startTimeStr: entry.startTime != null ? `${String(Math.floor(entry.startTime / 60)).padStart(2, '0')}:${String(entry.startTime % 60).padStart(2, '0')}` : undefined,
-    workType: entry.workType || undefined,
     description: entry.description || ''
   }
   // Ensure current issue is in options
@@ -803,7 +820,6 @@ async function saveEntry() {
         workDate: form.value.workDate,
         duration,
         startTime,
-        workType: form.value.workType || undefined,
         description: form.value.description || undefined,
         attributeValues: Object.keys(formAttributeValues.value).length > 0
           ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
@@ -816,7 +832,6 @@ async function saveEntry() {
         workDate: form.value.workDate,
         duration,
         startTime,
-        workType: form.value.workType || undefined,
         description: form.value.description || undefined,
         attributeValues: Object.keys(formAttributeValues.value).length > 0
           ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
@@ -946,8 +961,8 @@ watch(() => form.value.issueId, (newId) => {
 onMounted(async () => {
   // Load time tracking settings first (needed for parseDuration + quota)
   await loadTTSettings()
-  // Check if user can view others' time entries (for user selector)
-  await loadCanViewOthers()
+  // Check if user can view/edit others' time entries
+  await Promise.all([loadCanViewOthers(), loadCanEditOthers()])
   if (canViewOthers.value) {
     await loadSelectableUsers()
   }
@@ -958,8 +973,13 @@ onMounted(async () => {
   if (route.query.projectId) {
     filterProjectId.value = route.query.projectId as string
   }
-  if (route.query.workType) {
-    filterWorkType.value = route.query.workType as string
+  if (route.query.activityId) {
+    filterWorkType.value = route.query.activityId as string
+  } else if (route.query.workType) {
+    // Legacy compat: old URL had workType name, try to find matching ID
+    const legacyName = route.query.workType as string
+    const match = filterWorkTypes.value.find(wt => wt.name === legacyName)
+    if (match) filterWorkType.value = match.id
   }
   // Load data for the currently active tab (may be restored from URL)
   if (activeTab.value === 'projects') {

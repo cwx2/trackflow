@@ -18,7 +18,12 @@ export interface TimeEntryVO {
   workDate: string
   duration: number       // minutes
   startTime?: number     // minutes from midnight
+  /** 工作类型名称（从 attribute 系统解析） */
   workType?: string
+  /** 工作类型属性值 ID（用于筛选） */
+  workTypeId?: string
+  /** 工作类型颜色 */
+  workTypeColor?: string
   description?: string
   createdAt?: string
   updatedAt?: string
@@ -60,18 +65,22 @@ export interface WorkItemAttributeVO {
 }
 
 export const timeEntryApi = {
-  /** 查询用户在日期范围内的工时 */
-  list(params: { userId?: string; startDate: string; endDate: string; projectId?: string; workType?: string }) {
+  /**
+   * 查询用户在日期范围内的工时
+   * @param activityId 工作类型属性值 ID（优先使用）
+   * @param workType 工作类型名称（向下兼容，后端按名称匹配转为 activityId）
+   */
+  list(params: { userId?: string; startDate: string; endDate: string; projectId?: string; activityId?: string; workType?: string }) {
     return request.get<any, R<TimeEntryVO[]>>('/time-entries', { params })
   },
 
   /** 创建工时记录 */
-  create(data: { issueId: string; workDate: string; duration: number; startTime?: number; workType?: string; description?: string; attributeValues?: Record<string, string> }) {
+  create(data: { issueId: string; workDate: string; duration: number; startTime?: number; description?: string; attributeValues?: Record<string, string> }) {
     return request.post<any, R<TimeEntryVO>>('/time-entries', data)
   },
 
   /** 更新工时记录 */
-  update(id: string, data: { issueId?: string; workDate?: string; duration?: number; startTime?: number; workType?: string; description?: string; attributeValues?: Record<string, string> }) {
+  update(id: string, data: { issueId?: string; workDate?: string; duration?: number; startTime?: number; description?: string; attributeValues?: Record<string, string> }) {
     return request.put<any, R<TimeEntryVO>>(`/time-entries/${id}`, data)
   },
 
@@ -108,6 +117,11 @@ export const timeEntryApi = {
   /** 检查当前用户是否有权查看他人工时 */
   canViewOthers() {
     return request.get<any, R<boolean>>('/time-entries/can-view-others')
+  },
+
+  /** 检查当前用户是否有权编辑/删除他人工时 */
+  canEditOthers() {
+    return request.get<any, R<boolean>>('/time-entries/can-edit-others')
   }
 }
 

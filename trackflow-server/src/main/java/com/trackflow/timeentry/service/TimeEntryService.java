@@ -33,6 +33,13 @@ import java.util.stream.Collectors;
 public class TimeEntryService {
 
     private static final String PERM_TIME_LOG = "time:log";
+    private static final String PERM_TIME_EDIT_ALL = "time:edit_all";
+    private static final String PERM_TIME_DELETE_ALL = "time:delete_all";
+
+    /** 单条工时最大分钟数（24小时） */
+    private static final int MAX_DURATION_MINUTES = 1440;
+    /** 工作日期最大回溯天数 */
+    private static final int MAX_PAST_DAYS = 365;
 
     private final TimeEntryMapper timeEntryMapper;
     private final IssueActivityMapper activityMapper;
@@ -63,20 +70,25 @@ public class TimeEntryService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "该项目未启用时间追踪功能");
         }
 
+        // 5. 校验工作日期合理性
+        LocalDate workDate = parseAndValidateWorkDate(dto.getWorkDate());
+
+        // 6. 校验 startTime + duration 不溢出一天
+        validateStartTimeDurationCombination(dto.getStartTime(), dto.getDuration());
+
         TimeEntry entry = new TimeEntry();
         entry.setIssueId(dto.getIssueId());
         entry.setUserId(userId);
-        entry.setWorkDate(LocalDate.parse(dto.getWorkDate()));
+        entry.setWorkDate(workDate);
         entry.setDuration(dto.getDuration());
         entry.setStartTime(dto.getStartTime());
-        entry.setWorkType(dto.getWorkType());
         entry.setDescription(dto.getDescription());
         entry.setCreatedAt(LocalDateTime.now());
         entry.setUpdatedAt(LocalDateTime.now());
 
         timeEntryMapper.insert(entry);
 
-        // 保存工作项属性值
+        // 保存工作项属性值（Work type 也通过此系统传递）
         if (dto.getAttributeValues() != null && !dto.getAttributeValues().isEmpty()) {
             Map<Long, Long> attrValueMap = new HashMap<>();
             for (Map.Entry<String, String> av : dto.getAttributeValues().entrySet()) {
@@ -87,7 +99,9 @@ public class TimeEntryService {
 
         // 记录活动：花费了 X 时间
         String durationStr = formatDuration(dto.getDuration());
-        String detail = dto.getWorkType() != null ? durationStr + " | " + dto.getWorkType() : durationStr;
+        // 解析 work type 名称用于活动日志
+        String workTypeName = resolveWorkTypeName(dto.getAttributeValues());
+        String detail = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
         if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
             detail += " | " + dto.getDescription();
         }
@@ -104,7 +118,9 @@ public class TimeEntryService {
 
     /**
      * 更新工时记录
-     * 权限校验：只能修改自己的工时 + 用户必须拥有 time:log 权限
+     * 权限校验：
+     * - 本人工时：需要 time:log 权限
+     * - 他人工时：需要 time:edit_all 权限（管理员/技术负责人）
      */
     @Transactional
     public TimeEntry update(Long id, Long userId, UpdateTimeEntryDTO dto) {
@@ -112,34 +128,45 @@ public class TimeEntryService {
         if (entry == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
         }
-        if (!entry.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权修改他人工时记录");
-        }
 
-        // 校验原工单所属项目的 time:log 权限
+        // 校验原工单所属项目
         Issue originalIssue = getActiveIssueOrThrow(entry.getIssueId());
-        assertTimeLogPermission(userId, originalIssue.getProjectId());
+        boolean isOwnEntry = entry.getUserId().equals(userId);
+
+        if (!isOwnEntry) {
+            // 非本人工时 → 需要 time:edit_all 权限
+            assertEditAllPermission(userId, originalIssue.getProjectId());
+        } else {
+            // 本人工时 → 需要 time:log 权限
+            assertTimeLogPermission(userId, originalIssue.getProjectId());
+        }
 
         // 如果要转移到另一个工单，校验目标工单权限
         if (dto.getIssueId() != null && !dto.getIssueId().equals(entry.getIssueId())) {
             Issue targetIssue = getActiveIssueOrThrow(dto.getIssueId());
             projectService.assertProjectMember(userId, targetIssue.getProjectId());
-            assertTimeLogPermission(userId, targetIssue.getProjectId());
+            if (isOwnEntry) {
+                assertTimeLogPermission(userId, targetIssue.getProjectId());
+            } else {
+                assertEditAllPermission(userId, targetIssue.getProjectId());
+            }
         }
 
         // 保存旧值用于活动日志
         Long oldIssueId = entry.getIssueId();
         int oldDuration = entry.getDuration();
         LocalDate oldWorkDate = entry.getWorkDate();
-        String oldWorkType = entry.getWorkType();
         String oldDescription = entry.getDescription();
 
         if (dto.getIssueId() != null) entry.setIssueId(dto.getIssueId());
-        if (dto.getWorkDate() != null) entry.setWorkDate(LocalDate.parse(dto.getWorkDate()));
+        if (dto.getWorkDate() != null) entry.setWorkDate(parseAndValidateWorkDate(dto.getWorkDate()));
         if (dto.getDuration() != null) entry.setDuration(dto.getDuration());
         if (dto.getStartTime() != null) entry.setStartTime(dto.getStartTime());
-        if (dto.getWorkType() != null) entry.setWorkType(dto.getWorkType());
         if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
+
+        // 校验 startTime + duration 组合（使用更新后的值）
+        validateStartTimeDurationCombination(entry.getStartTime(), entry.getDuration());
+
         entry.setUpdatedAt(LocalDateTime.now());
 
         timeEntryMapper.updateById(entry);
@@ -157,7 +184,6 @@ public class TimeEntryService {
         recordTimeUpdateActivity(userId, oldIssueId, entry.getIssueId(),
                 oldDuration, entry.getDuration(),
                 oldWorkDate, entry.getWorkDate(),
-                oldWorkType, entry.getWorkType(),
                 oldDescription, entry.getDescription());
 
         // 同步更新 issue.spent_hours
@@ -177,7 +203,9 @@ public class TimeEntryService {
 
     /**
      * 删除工时记录
-     * 权限校验：只能删除自己的工时 + 用户必须拥有 time:log 权限
+     * 权限校验：
+     * - 本人工时：需要 time:log 权限
+     * - 他人工时：需要 time:delete_all 权限（管理员/技术负责人）
      */
     @Transactional
     public void delete(Long id, Long userId) {
@@ -185,14 +213,19 @@ public class TimeEntryService {
         if (entry == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工时记录不存在");
         }
-        if (!entry.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
-        }
 
-        // 校验工单所属项目的 time:log 权限
+        // 校验工单所属项目的权限
         Issue issue = issueMapper.selectById(entry.getIssueId());
+        boolean isOwnEntry = entry.getUserId().equals(userId);
+
         if (issue != null) {
-            assertTimeLogPermission(userId, issue.getProjectId());
+            if (!isOwnEntry) {
+                assertDeleteAllPermission(userId, issue.getProjectId());
+            } else {
+                assertTimeLogPermission(userId, issue.getProjectId());
+            }
+        } else if (!isOwnEntry) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
         }
 
         Long issueId = entry.getIssueId();
@@ -200,6 +233,9 @@ public class TimeEntryService {
         // 记录活动：删除了工时
         String durationStr = formatDuration(entry.getDuration());
         recordActivity(issueId, userId, "time_removed", "spent_time", durationStr, null);
+
+        // 删除属性值关联
+        workItemAttributeService.deleteTimeEntryAttributeValues(entry.getId());
 
         timeEntryMapper.deleteById(id);
 
@@ -212,11 +248,11 @@ public class TimeEntryService {
 
     /**
      * 查询用户在日期范围内的工时记录（带 issueKey）
-     * 支持按项目和工作类型筛选
+     * 支持按项目和工作类型（activityId）筛选
      */
     public List<TimeEntryVO> listByUserAndDateRange(Long userId, String startDate, String endDate,
-                                                     Long projectId, String workType) {
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate, projectId, workType);
+                                                     Long projectId, Long activityId) {
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate, projectId, activityId);
         return rows.stream().map(this::mapRowToVO).toList();
     }
 
@@ -227,6 +263,12 @@ public class TimeEntryService {
         List<TimeEntry> entries = timeEntryMapper.selectList(
                 new QueryWrapper<TimeEntry>().eq("issue_id", issueId).orderByDesc("work_date", "created_at")
         );
+        if (entries.isEmpty()) return List.of();
+
+        // 批量加载属性值
+        String ids = entries.stream().map(e -> String.valueOf(e.getId())).collect(Collectors.joining(","));
+        Map<Long, Map<String, String>> attrByEntry = loadWorkTypeForEntries(ids);
+
         return entries.stream().map(e -> {
             TimeEntryVO vo = new TimeEntryVO();
             vo.setId(String.valueOf(e.getId()));
@@ -235,10 +277,18 @@ public class TimeEntryService {
             vo.setWorkDate(e.getWorkDate() != null ? e.getWorkDate().toString() : null);
             vo.setDuration(e.getDuration());
             vo.setStartTime(e.getStartTime());
-            vo.setWorkType(e.getWorkType());
             vo.setDescription(e.getDescription());
             if (e.getCreatedAt() != null) vo.setCreatedAt(e.getCreatedAt().toString());
             if (e.getUpdatedAt() != null) vo.setUpdatedAt(e.getUpdatedAt().toString());
+
+            // Set work type from attribute values
+            Map<String, String> wtInfo = attrByEntry.get(e.getId());
+            if (wtInfo != null) {
+                vo.setWorkType(wtInfo.get("name"));
+                vo.setWorkTypeId(wtInfo.get("id"));
+                vo.setWorkTypeColor(wtInfo.get("color"));
+            }
+
             return vo;
         }).toList();
     }
@@ -339,6 +389,79 @@ public class TimeEntryService {
     // ========== 内部方法 ==========
 
     /**
+     * 解析并校验工作日期：
+     * - 格式必须为 yyyy-MM-dd（DTO 层 @Pattern 已兜底，此处做二次防御）
+     * - 不允许未来日期
+     * - 不允许超过 MAX_PAST_DAYS 天前的日期
+     */
+    private LocalDate parseAndValidateWorkDate(String workDateStr) {
+        LocalDate workDate;
+        try {
+            workDate = LocalDate.parse(workDateStr);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "日期格式无效，请使用 yyyy-MM-dd 格式");
+        }
+
+        LocalDate today = LocalDate.now();
+        if (workDate.isAfter(today)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "不允许记录未来日期的工时");
+        }
+        if (workDate.isBefore(today.minusDays(MAX_PAST_DAYS))) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "不允许记录超过" + MAX_PAST_DAYS + "天前的工时");
+        }
+        return workDate;
+    }
+
+    /**
+     * 校验 startTime + duration 组合不超出一天范围。
+     * 仅在 startTime 非 null 时校验。
+     */
+    private void validateStartTimeDurationCombination(Integer startTime, Integer duration) {
+        if (startTime != null && duration != null) {
+            if (startTime + duration > MAX_DURATION_MINUTES) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "开始时间 + 时长不能超过1440分钟（一天），当前：" + startTime + " + " + duration + " = " + (startTime + duration));
+            }
+        }
+    }
+
+    /**
+     * 从 attributeValues 中解析 Work type 名称（attribute_id=1 为内建 Work type）
+     */
+    private String resolveWorkTypeName(Map<String, String> attributeValues) {
+        if (attributeValues == null || attributeValues.isEmpty()) return null;
+        String valueIdStr = attributeValues.get("1"); // "1" is the built-in Work type attribute ID
+        if (valueIdStr == null) return null;
+        try {
+            return workItemAttributeService.getAttributeValueName(Long.parseLong(valueIdStr));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 批量加载工时记录的 Work type 属性信息
+     * 返回 Map<timeEntryId, Map<"id"/"name"/"color", value>>
+     */
+    private Map<Long, Map<String, String>> loadWorkTypeForEntries(String timeEntryIds) {
+        Map<Long, Map<String, String>> result = new HashMap<>();
+        try {
+            var rows = workItemAttributeService.getWorkTypeForEntries(timeEntryIds);
+            for (Map<String, Object> row : rows) {
+                Long entryId = ((Number) row.get("time_entry_id")).longValue();
+                Map<String, String> info = new HashMap<>();
+                info.put("id", String.valueOf(row.get("value_id")));
+                info.put("name", (String) row.get("value_name"));
+                info.put("color", (String) row.get("value_color"));
+                result.put(entryId, info);
+            }
+        } catch (Exception ignored) {
+            // Graceful degradation: if attribute lookup fails, entries just won't have work type info
+        }
+        return result;
+    }
+
+    /**
      * 重新计算并更新 Issue 的 spent_hours 字段
      * spent_hours = SUM(time_entry.duration) / 60，保留 2 位小数
      */
@@ -363,22 +486,26 @@ public class TimeEntryService {
         if (row.get("work_date") != null) vo.setWorkDate(row.get("work_date").toString());
         if (row.get("duration") != null) vo.setDuration((Integer) row.get("duration"));
         if (row.get("start_time") != null) vo.setStartTime((Integer) row.get("start_time"));
-        vo.setWorkType((String) row.get("work_type"));
         vo.setDescription((String) row.get("description"));
         if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
         if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
+
+        // Work type from JOIN
+        vo.setWorkType((String) row.get("work_type"));
+        if (row.get("work_type_id") != null) vo.setWorkTypeId(String.valueOf(row.get("work_type_id")));
+        vo.setWorkTypeColor((String) row.get("work_type_color"));
+
         return vo;
     }
 
     /**
      * 记录工时更新的活动日志。
      * - 工时跨工单转移：旧工单记录 time_removed，新工单记录 time_logged
-     * - 普通字段修改（时长、日期、工作类型、描述）：记录 time_updated
+     * - 普通字段修改（时长、日期、描述）：记录 time_updated
      */
     private void recordTimeUpdateActivity(Long userId, Long oldIssueId, Long newIssueId,
                                           int oldDuration, int newDuration,
                                           LocalDate oldWorkDate, LocalDate newWorkDate,
-                                          String oldWorkType, String newWorkType,
                                           String oldDescription, String newDescription) {
         boolean issueChanged = !oldIssueId.equals(newIssueId);
 
@@ -397,11 +524,6 @@ public class TimeEntryService {
         }
         if (!Objects.equals(oldWorkDate, newWorkDate)) {
             changes.add("日期: " + oldWorkDate + " → " + newWorkDate);
-        }
-        if (!Objects.equals(oldWorkType, newWorkType)) {
-            String from = oldWorkType != null ? oldWorkType : "未设置";
-            String to = newWorkType != null ? newWorkType : "未设置";
-            changes.add("类型: " + from + " → " + to);
         }
         if (!Objects.equals(oldDescription, newDescription)) {
             String from = oldDescription != null && !oldDescription.isBlank() ? oldDescription : "无";
@@ -458,6 +580,26 @@ public class TimeEntryService {
     private void assertTimeLogPermission(Long userId, Long projectId) {
         if (!permissionService.hasPermission(userId, projectId, PERM_TIME_LOG)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权记录工时");
+        }
+    }
+
+    /**
+     * 校验用户是否拥有 time:edit_all 权限（项目级）
+     * 用于管理员编辑他人工时记录
+     */
+    private void assertEditAllPermission(Long userId, Long projectId) {
+        if (!permissionService.hasPermission(userId, projectId, PERM_TIME_EDIT_ALL)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权修改他人工时记录");
+        }
+    }
+
+    /**
+     * 校验用户是否拥有 time:delete_all 权限（项目级）
+     * 用于管理员删除他人工时记录
+     */
+    private void assertDeleteAllPermission(Long userId, Long projectId) {
+        if (!permissionService.hasPermission(userId, projectId, PERM_TIME_DELETE_ALL)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
         }
     }
 }
