@@ -4,12 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.customfield.dto.CreateCustomFieldDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.*;
 import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +35,7 @@ public class CustomFieldService {
     private final CustomFieldIssueTypeMapper issueTypeMapper;
     private final CustomFieldValidationEngine validationEngine;
     private final SysUserMapper userMapper;
+    private final IssueActivityMapper activityMapper;
 
     @Transactional
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
@@ -321,25 +325,37 @@ public class CustomFieldService {
         }
 
         for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
-            if (!fieldMap.containsKey(entry.getKey())) continue;
+            CustomFieldDefinition field = fieldMap.get(entry.getKey());
+            if (field == null) continue;
 
             CustomFieldValue existing = valueMapper.selectOne(
                     new LambdaQueryWrapper<CustomFieldValue>()
                             .eq(CustomFieldValue::getIssueId, issueId)
                             .eq(CustomFieldValue::getCustomFieldId, entry.getKey()));
 
+            String oldValue = existing != null ? existing.getValue() : null;
+            String newValue = entry.getValue();
+
             if (existing != null) {
-                existing.setValue(entry.getValue());
+                existing.setValue(newValue);
                 existing.setUpdatedAt(LocalDateTime.now());
                 valueMapper.updateById(existing);
             } else {
                 CustomFieldValue cfv = new CustomFieldValue();
                 cfv.setIssueId(issueId);
                 cfv.setCustomFieldId(entry.getKey());
-                cfv.setValue(entry.getValue());
+                cfv.setValue(newValue);
                 cfv.setCreatedAt(LocalDateTime.now());
                 cfv.setUpdatedAt(LocalDateTime.now());
                 valueMapper.insert(cfv);
+            }
+
+            // 记录活动日志（值有变化时）
+            String effectiveNew = (newValue == null || newValue.isBlank()) ? null : newValue;
+            if (!Objects.equals(oldValue, effectiveNew)) {
+                String displayOldValue = resolveDisplayValue(field, oldValue);
+                String displayNewValue = resolveDisplayValue(field, effectiveNew);
+                recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
             }
         }
     }
@@ -603,12 +619,14 @@ public class CustomFieldService {
                             .collect(Collectors.joining("; ")));
         }
 
-        // Upsert
+        // 获取旧值用于活动记录
         CustomFieldValue existing = valueMapper.selectOne(
                 new LambdaQueryWrapper<CustomFieldValue>()
                         .eq(CustomFieldValue::getIssueId, issueId)
                         .eq(CustomFieldValue::getCustomFieldId, customFieldId));
+        String oldValue = existing != null ? existing.getValue() : null;
 
+        // Upsert
         if (value == null || value.isBlank()) {
             // 清空值：如果非必填，允许删除
             if (Boolean.TRUE.equals(field.getIsRequired())) {
@@ -629,6 +647,14 @@ public class CustomFieldService {
             cfv.setCreatedAt(LocalDateTime.now());
             cfv.setUpdatedAt(LocalDateTime.now());
             valueMapper.insert(cfv);
+        }
+
+        // 记录活动日志（值有变化时）
+        String newValue = (value == null || value.isBlank()) ? null : value;
+        if (!Objects.equals(oldValue, newValue)) {
+            String displayOldValue = resolveDisplayValue(field, oldValue);
+            String displayNewValue = resolveDisplayValue(field, newValue);
+            recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
         }
     }
 
@@ -844,5 +870,23 @@ public class CustomFieldService {
                 projectMapper.updateById(mapping);
             }
         }
+    }
+
+    // ========== 活动记录辅助方法 ==========
+
+    /**
+     * 记录自定义字段变更的活动日志
+     */
+    private void recordCustomFieldActivity(Long issueId, String fieldName, String oldValue, String newValue) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        IssueActivity activity = new IssueActivity();
+        activity.setIssueId(issueId);
+        activity.setUserId(currentUserId);
+        activity.setAction("updated");
+        activity.setFieldName(fieldName);
+        activity.setOldValue(oldValue != null && oldValue.isEmpty() ? null : oldValue);
+        activity.setNewValue(newValue != null && newValue.isEmpty() ? null : newValue);
+        activity.setCreatedAt(LocalDateTime.now());
+        activityMapper.insert(activity);
     }
 }
