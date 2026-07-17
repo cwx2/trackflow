@@ -1090,13 +1090,10 @@ public class CustomFieldService {
         // 删除关联
         projectMapper.deleteById(mapping.getId());
 
-        // 清除该项目所有工单中该字段的值
-        // 获取项目中所有 issue 的 ID
-        // 注意：这里直接用 SQL 删除更高效
+        // 清除该项目所有工单中该字段的值（参数化子查询，避免 SQL 拼接）
         valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
                 .eq(CustomFieldValue::getCustomFieldId, customFieldId)
-                .inSql(CustomFieldValue::getIssueId,
-                        "SELECT id FROM issue WHERE project_id = " + projectId));
+                .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0})", projectId));
     }
 
     /**
