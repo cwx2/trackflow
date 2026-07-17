@@ -896,6 +896,11 @@ function toggleHideResolved() {
 function onGlobalSearch(keyword: string) {
   searchKeyword.value = keyword
   globalFilterParams.value = {}
+  // If user types in search while a saved query is active, switch to ad-hoc mode
+  if (activeQueryId.value) {
+    activeQueryId.value = null
+    activeQueryName.value = '所有工单'
+  }
   currentPage.value = 1
   refreshList()
 }
@@ -903,6 +908,11 @@ function onGlobalSearch(keyword: string) {
 function onGlobalFilter(filters: Record<string, any>) {
   searchKeyword.value = ''
   globalFilterParams.value = filters
+  // If user modifies filters while a saved query is active, switch to ad-hoc mode
+  if (activeQueryId.value) {
+    activeQueryId.value = null
+    activeQueryName.value = '所有工单'
+  }
   currentPage.value = 1
   refreshList()
 }
@@ -1325,10 +1335,147 @@ function onFilterChange() {
   }
   refreshList()
 }
+
+/**
+ * 将 Saved Query 的 filters JSON 转换为 FilterBar 可展示的 InitialFilter[] 格式
+ * 处理: 字段名映射、值名称解析、特殊操作符（open）、${currentUser} 替换
+ */
+function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): any[] {
+  if (!filtersRaw) return []
+
+  let filters: any[]
+  if (typeof filtersRaw === 'string') {
+    try { filters = JSON.parse(filtersRaw) } catch { return [] }
+  } else {
+    filters = filtersRaw
+  }
+  if (!Array.isArray(filters) || filters.length === 0) return []
+
+  // Field name mapping: DB filter field → FilterBar fieldKey
+  const fieldMap: Record<string, string> = {
+    type: 'issueType',
+    status: 'status',
+    sprint: 'sprint',
+    assignee: 'assignee',
+    priority: 'priority',
+    project: 'project',
+    reporter: 'reporter',
+  }
+
+  // Operator mapping: DB operator → FilterBar operator
+  const operatorMap: Record<string, string> = {
+    eq: 'is',
+    neq: 'is_not',
+    in: 'any_of',
+    not_in: 'none_of',
+    contains: 'is',
+    open: 'any_of',  // "open" means all non-closed statuses
+  }
+
+  const currentUserId = authStore.user?.userId || authStore.user?.id || ''
+
+  const chips: any[] = []
+
+  for (const f of filters) {
+    const fieldKey = fieldMap[f.field]
+    if (!fieldKey) continue  // Skip unknown fields (like 'keyword', 'reporter')
+
+    // Skip reporter field — FilterBar doesn't have it
+    if (fieldKey === 'reporter') continue
+
+    const operator = operatorMap[f.operator] || 'is'
+    let values: string[] = []
+    let valueLabels: string[] = []
+
+    // Handle special operator "open" = all non-closed statuses
+    if (f.field === 'status' && f.operator === 'open') {
+      // "open" is a semantic operator meaning "all non-closed"
+      // Show a single summarized chip instead of listing all open statuses
+      const openStatuses = statusCache.value.filter(s => !s.isClosed)
+      values = openStatuses.map(s => s.id)
+      valueLabels = ['未关闭']
+    } else {
+      // Normal values
+      const rawValues: string[] = f.value || []
+      for (const v of rawValues) {
+        // Replace ${currentUser}
+        const resolvedValue = v === '${currentUser}' ? currentUserId : v
+
+        switch (fieldKey) {
+          case 'status': {
+            // Values are status codes — resolve to IDs and labels
+            const status = statusCache.value.find(s => s.code === resolvedValue || s.id === resolvedValue)
+            if (status) {
+              values.push(status.id)
+              valueLabels.push(localizeStatusName(status.name))
+            } else {
+              values.push(resolvedValue)
+              valueLabels.push(resolvedValue)
+            }
+            break
+          }
+          case 'issueType': {
+            values.push(resolvedValue)
+            valueLabels.push(issueTypeLabelMap[resolvedValue] || resolvedValue)
+            break
+          }
+          case 'priority': {
+            values.push(resolvedValue)
+            const priorityLabels: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
+            valueLabels.push(priorityLabels[resolvedValue] || resolvedValue)
+            break
+          }
+          case 'sprint': {
+            values.push(resolvedValue)
+            // Try to resolve sprint name from cache
+            let sprintLabel = `Sprint #${resolvedValue}`
+            for (const sprints of Object.values(sprintOptionsCache)) {
+              const matched = sprints.find(s => s.id === resolvedValue)
+              if (matched) { sprintLabel = matched.name; break }
+            }
+            valueLabels.push(sprintLabel)
+            break
+          }
+          case 'assignee': {
+            values.push(resolvedValue)
+            if (v === '${currentUser}') {
+              valueLabels.push('我')
+            } else {
+              valueLabels.push(resolvedValue)
+            }
+            break
+          }
+          case 'project': {
+            values.push(resolvedValue)
+            const proj = projectList.value.find(p => p.id === resolvedValue)
+            valueLabels.push(proj ? proj.name : resolvedValue)
+            break
+          }
+          default: {
+            values.push(resolvedValue)
+            valueLabels.push(resolvedValue)
+          }
+        }
+      }
+    }
+
+    if (values.length > 0) {
+      chips.push({ fieldKey, operator, values, valueLabels })
+    }
+  }
+
+  return chips
+}
+
 function selectQuery(q: any) {
-  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; filterBarRef.value?.clearAll(); currentPage.value = 1
+  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
+
+  // Parse saved query filters and display them in FilterBar
+  const chips = parseSavedQueryFilters(q.filters)
+  filterBarRef.value?.setFilters(chips)
+
   refreshList()
 }
 function selectProject(p: any) {

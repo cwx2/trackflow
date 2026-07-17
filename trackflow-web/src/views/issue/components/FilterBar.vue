@@ -719,7 +719,23 @@ function clearAll() {
   activeFilters.value = []
 }
 
-defineExpose({ clearAll })
+/**
+ * 程序化设置过滤条件（供 Saved Query 回填使用）
+ * 切换到 filter 模式并展示 chips，不触发 @filter 事件
+ */
+function setFilters(filters: InitialFilter[]) {
+  if (filters.length > 0) {
+    applyInitialFilters(filters)
+  } else {
+    // No filters — clear and stay in search mode
+    activeFilters.value = []
+    suppressEmit = true
+    mode.value = 'search'
+    nextTick(() => { suppressEmit = false })
+  }
+}
+
+defineExpose({ clearAll, setFilters })
 </script>
 
 <style scoped>
