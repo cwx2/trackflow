@@ -3,7 +3,6 @@ package com.trackflow.workflow.strategy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.issue.entity.Issue;
-import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.entity.ProjectMember;
@@ -11,8 +10,10 @@ import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.workflow.dto.ActionConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,21 +24,27 @@ import java.util.stream.Collectors;
 /**
  * 基于角色的分配策略 —— 从指定角色的项目成员中选择一位分配。
  * 支持 round_robin（轮转）、least_loaded（最少负载）和 weighted_round_robin（加权轮转）三种模式。
+ *
+ * 轮转计数器持久化到 Redis（INCR 原子递增），确保：
+ * 1. 服务重启后计数不丢失
+ * 2. 多实例部署时全局一致
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RoleBasedStrategy implements AssignmentStrategy {
 
+    private static final String REDIS_KEY_PREFIX = "workflow:rr:";
+    private static final Duration COUNTER_TTL = Duration.ofDays(30);
+
     private final ProjectMemberMapper projectMemberMapper;
     private final IssueMapper issueMapper;
     private final IssueStatusMapper issueStatusMapper;
     private final StatusCacheHelper statusCacheHelper;
+    private final StringRedisTemplate redisTemplate;
 
-    /** 轮转计数器：key = "projectId:roleId"
-     * TODO: 多实例部署时应改为 Redis 原子计数器（INCR），确保分布式环境下计数一致
-     */
-    private final ConcurrentHashMap<String, AtomicLong> roundRobinCounters = new ConcurrentHashMap<>();
+    /** 降级用内存计数器：仅在 Redis 不可用时启用 */
+    private final ConcurrentHashMap<String, AtomicLong> fallbackCounters = new ConcurrentHashMap<>();
 
     @Override
     public String getKey() {
@@ -79,13 +86,13 @@ public class RoleBasedStrategy implements AssignmentStrategy {
     }
 
     /**
-     * 轮转模式：使用原子计数器在候选人间轮转
+     * 轮转模式：使用 Redis INCR 原子计数器在候选人间轮转。
+     * Redis 不可用时降级为 JVM 内存计数器。
      */
     private Long resolveRoundRobin(List<Long> candidates, Long projectId, Long roleId) {
-        String key = projectId + ":" + roleId;
-        AtomicLong counter = roundRobinCounters.computeIfAbsent(key, k -> new AtomicLong(0));
-        int index = (int) (counter.getAndIncrement() % candidates.size());
-        // 处理 long 溢出后取模可能为负数的情况
+        String redisKey = REDIS_KEY_PREFIX + projectId + ":" + roleId;
+        long counter = incrementCounter(redisKey);
+        int index = (int) (counter % candidates.size());
         if (index < 0) {
             index += candidates.size();
         }
@@ -154,13 +161,42 @@ public class RoleBasedStrategy implements AssignmentStrategy {
             return candidates.get(0);
         }
 
-        // 使用与 round_robin 相同的计数器机制，但基于加权列表
-        String key = projectId + ":" + roleId + ":weighted";
-        AtomicLong counter = roundRobinCounters.computeIfAbsent(key, k -> new AtomicLong(0));
-        int index = (int) (counter.getAndIncrement() % weightedList.size());
+        // 使用 Redis 计数器，基于加权列表
+        String redisKey = REDIS_KEY_PREFIX + projectId + ":" + roleId + ":weighted";
+        long counter = incrementCounter(redisKey);
+        int index = (int) (counter % weightedList.size());
         if (index < 0) {
             index += weightedList.size();
         }
         return weightedList.get(index);
+    }
+
+    /**
+     * 获取递增计数值。优先使用 Redis INCR（原子、持久化、多实例一致），
+     * Redis 不可用时降级为 JVM 内存 AtomicLong。
+     *
+     * @param redisKey Redis key（如 "workflow:rr:1:3"）
+     * @return 递增后的值（从 1 开始）
+     */
+    private long incrementCounter(String redisKey) {
+        try {
+            Long value = redisTemplate.opsForValue().increment(redisKey);
+            if (value != null) {
+                // 首次创建时设置 TTL，避免废弃项目的 key 永久占用
+                if (value == 1L) {
+                    redisTemplate.expire(redisKey, COUNTER_TTL);
+                }
+                // 每 1000 次刷新 TTL，防止活跃 key 过期
+                else if (value % 1000 == 0) {
+                    redisTemplate.expire(redisKey, COUNTER_TTL);
+                }
+                return value;
+            }
+        } catch (Exception e) {
+            log.warn("[RoleBasedStrategy] Redis 不可用，降级为内存计数器: {}", e.getMessage());
+        }
+        // 降级：使用内存计数器
+        AtomicLong fallback = fallbackCounters.computeIfAbsent(redisKey, k -> new AtomicLong(0));
+        return fallback.incrementAndGet();
     }
 }
