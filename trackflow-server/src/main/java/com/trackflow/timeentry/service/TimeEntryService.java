@@ -161,9 +161,11 @@ public class TimeEntryService {
 
     /**
      * 查询用户在日期范围内的工时记录（带 issueKey）
+     * 支持按项目和工作类型筛选
      */
-    public List<TimeEntryVO> listByUserAndDateRange(Long userId, String startDate, String endDate) {
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate);
+    public List<TimeEntryVO> listByUserAndDateRange(Long userId, String startDate, String endDate,
+                                                     Long projectId, String workType) {
+        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(userId, startDate, endDate, projectId, workType);
         return rows.stream().map(this::mapRowToVO).toList();
     }
 

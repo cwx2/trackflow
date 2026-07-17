@@ -61,7 +61,7 @@ export interface WorkItemAttributeVO {
 
 export const timeEntryApi = {
   /** 查询用户在日期范围内的工时 */
-  list(params: { userId?: string; startDate: string; endDate: string }) {
+  list(params: { userId?: string; startDate: string; endDate: string; projectId?: string; workType?: string }) {
     return request.get<any, R<TimeEntryVO[]>>('/time-entries', { params })
   },
 

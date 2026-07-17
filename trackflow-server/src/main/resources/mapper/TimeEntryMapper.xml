@@ -20,6 +20,12 @@
         WHERE t.user_id = #{userId}
           AND t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
+          <if test="projectId != null">
+              AND i.project_id = #{projectId}
+          </if>
+          <if test="workType != null and workType != ''">
+              AND t.work_type = #{workType}
+          </if>
         ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 

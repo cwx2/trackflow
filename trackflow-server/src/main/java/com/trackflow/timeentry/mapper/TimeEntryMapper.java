@@ -18,11 +18,14 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
 
     /**
      * 查询工时条目，JOIN issue 表获取 issueKey
+     * 支持按项目和工作类型筛选
      */
     List<Map<String, Object>> selectEntriesWithIssueKey(
             @Param("userId") Long userId,
             @Param("startDate") String startDate,
-            @Param("endDate") String endDate
+            @Param("endDate") String endDate,
+            @Param("projectId") Long projectId,
+            @Param("workType") String workType
     );
 
     /**

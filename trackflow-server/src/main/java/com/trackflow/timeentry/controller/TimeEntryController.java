@@ -71,13 +71,16 @@ public class TimeEntryController {
     /**
      * 查询用户在日期范围内的工时记录
      * 管理员（拥有 time:view_others 权限）可查看他人工时
+     * 支持按项目和工作类型筛选
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public R<List<TimeEntryVO>> list(
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam("startDate") String startDate,
-            @RequestParam("endDate") String endDate) {
+            @RequestParam("endDate") String endDate,
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "workType", required = false) String workType) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
 
@@ -87,7 +90,7 @@ public class TimeEntryController {
                 throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
             }
         }
-        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, startDate, endDate));
+        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, startDate, endDate, projectId, workType));
     }
 
     /**

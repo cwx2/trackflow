@@ -48,9 +48,34 @@
           </div>
           <div class="filters">
             <span class="filter-label">项目:</span>
-            <span class="filter-value">全部</span>
+            <a-select
+              v-model="filterProjectId"
+              placeholder="全部"
+              allow-clear
+              allow-search
+              :style="{ width: '160px' }"
+              size="small"
+              @change="onFilterChange"
+            >
+              <a-option v-for="p in filterProjects" :key="p.id" :value="p.id">
+                {{ p.key }} - {{ p.name }}
+              </a-option>
+            </a-select>
             <span class="filter-label">工作类型:</span>
-            <span class="filter-value">全部</span>
+            <a-select
+              v-model="filterWorkType"
+              placeholder="全部"
+              allow-clear
+              :style="{ width: '140px' }"
+              size="small"
+              @change="onFilterChange"
+            >
+              <a-option v-for="wt in filterWorkTypes" :key="wt.id" :value="wt.name">
+                <span v-if="wt.color" class="attr-value-dot" :style="{ background: wt.color }"></span>
+                {{ wt.name }}
+              </a-option>
+            </a-select>
+            <a v-if="filterProjectId || filterWorkType" class="filter-reset" @click="resetFilters">重置</a>
           </div>
         </div>
       </div>
@@ -311,7 +336,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
-import { timeEntryApi, issueApi } from '@/api'
+import { timeEntryApi, issueApi, projectApi } from '@/api'
 import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, WorkItemAttributeVO } from '@/api/timeEntry'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
@@ -346,6 +371,11 @@ const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
 const projectEntries = ref<TimeEntryVO[]>([])
 
+// Filter state (people view)
+const filterProjectId = ref<string | undefined>(undefined)
+const filterWorkType = ref<string | undefined>(undefined)
+const filterProjects = ref<{ id: string; name: string; key: string }[]>([])
+const filterWorkTypes = ref<{ id: string; name: string; color?: string }[]>([])
 // Work item attributes (dynamically loaded per project)
 const projectAttributes = ref<WorkItemAttributeVO[]>([])
 const formAttributeValues = ref<Record<string, string>>({})
@@ -460,9 +490,15 @@ async function loadEntries() {
   loading.value = true
   try {
     const { startDate, endDate } = getDateRange()
-    const params: { userId?: string; startDate: string; endDate: string } = { startDate, endDate }
+    const params: { userId?: string; startDate: string; endDate: string; projectId?: string; workType?: string } = { startDate, endDate }
     if (selectedUserId.value) {
       params.userId = selectedUserId.value
+    }
+    if (filterProjectId.value) {
+      params.projectId = filterProjectId.value
+    }
+    if (filterWorkType.value) {
+      params.workType = filterWorkType.value
     }
     const res = await timeEntryApi.list(params)
     if (res.code === 0 && res.data) {
@@ -543,6 +579,60 @@ function searchUsers(keyword: string) {
 function onUserChange(val: string | undefined) {
   selectedUserId.value = val || undefined
   loadEntries()
+}
+
+// Filter functions
+function onFilterChange() {
+  loadEntries()
+  // Persist filters to URL
+  const query: Record<string, string> = { ...route.query as Record<string, string> }
+  if (filterProjectId.value) {
+    query.projectId = filterProjectId.value
+  } else {
+    delete query.projectId
+  }
+  if (filterWorkType.value) {
+    query.workType = filterWorkType.value
+  } else {
+    delete query.workType
+  }
+  router.replace({ query })
+}
+
+function resetFilters() {
+  filterProjectId.value = undefined
+  filterWorkType.value = undefined
+  onFilterChange()
+}
+
+async function loadFilterProjects() {
+  try {
+    const res = await projectApi.list({ pageSize: 100 })
+    if (res.code === 0 && res.data) {
+      filterProjects.value = res.data.list.map(p => ({
+        id: p.id,
+        name: p.name,
+        key: p.key
+      }))
+    }
+  } catch { /* silent */ }
+}
+
+async function loadFilterWorkTypes() {
+  try {
+    const res = await workItemAttributeApi.list()
+    if (res.code === 0 && res.data) {
+      // Find the "Work type" attribute and use its values
+      const workTypeAttr = res.data.find(a => a.name === 'Work type' || a.name === '工作类型')
+      if (workTypeAttr && workTypeAttr.values) {
+        filterWorkTypes.value = workTypeAttr.values.map(v => ({
+          id: v.id,
+          name: v.name,
+          color: v.color
+        }))
+      }
+    }
+  } catch { /* silent */ }
 }
 
 function getDateRange(): { startDate: string; endDate: string } {
@@ -861,6 +951,16 @@ onMounted(async () => {
   if (canViewOthers.value) {
     await loadSelectableUsers()
   }
+  // Load filter options
+  loadFilterProjects()
+  loadFilterWorkTypes()
+  // Restore filters from URL query
+  if (route.query.projectId) {
+    filterProjectId.value = route.query.projectId as string
+  }
+  if (route.query.workType) {
+    filterWorkType.value = route.query.workType as string
+  }
   // Load data for the currently active tab (may be restored from URL)
   if (activeTab.value === 'projects') {
     loadProjectSummaries()
@@ -897,9 +997,11 @@ onMounted(async () => {
 .user-option-name { font-size: 13px; color: var(--tf-text-primary); }
 .user-option-self { font-size: 11px; color: var(--tf-text-tertiary); }
 .project-selector { display: flex; align-items: center; gap: 8px; }
-.filters { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 4px; }
-.filter-label { color: var(--tf-text-tertiary); }
+.filters { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 4px; }
+.filter-label { color: var(--tf-text-tertiary); white-space: nowrap; }
 .filter-value { color: var(--tf-text-secondary); }
+.filter-reset { font-size: 12px; color: var(--tf-accent); cursor: pointer; white-space: nowrap; margin-left: 4px; text-decoration: none; }
+.filter-reset:hover { text-decoration: underline; }
 
 /* Date bar */
 .timesheet-datebar { padding: 8px 24px 12px; display: flex; align-items: center; justify-content: space-between; }
