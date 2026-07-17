@@ -9,10 +9,9 @@ import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.entity.WorkflowActivity;
-import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.WorkflowActivityVO;
-import com.trackflow.workflow.vo.WorkflowTransitionVO;
+import com.trackflow.workflow.vo.WorkflowMatrixVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,7 +29,7 @@ public class WorkflowController {
     private final WorkflowConverter workflowConverter;
 
     /**
-     * 获取工作流转换矩阵
+     * 获取工作流转换矩阵（含版本号，用于乐观锁）
      * projectId=0 表示全局工作流，需要系统管理员权限
      * projectId>0 表示项目级工作流，需要项目 manage_workflow 权限
      *
@@ -39,7 +38,7 @@ public class WorkflowController {
      */
     @GetMapping("/projects/{projectId}/workflows")
     @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
-    public R<List<WorkflowTransitionVO>> getTransitionMatrix(
+    public R<WorkflowMatrixVO> getTransitionMatrix(
             @PathVariable Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType,
             @RequestParam(value = "roleId", required = false) Long roleId,
@@ -47,9 +46,9 @@ public class WorkflowController {
             @RequestParam(value = "assignee", required = false) Boolean assignee) {
 
         Long effectiveProjectId = (projectId == 0L) ? null : projectId;
-        List<WorkflowTransition> transitions = workflowService.getTransitionMatrix(
+        WorkflowMatrixVO matrix = workflowService.getTransitionMatrixWithVersion(
                 effectiveProjectId, issueType, roleId, author, assignee);
-        return R.ok(workflowConverter.toVOList(transitions));
+        return R.ok(matrix);
     }
 
     /**

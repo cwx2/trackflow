@@ -504,7 +504,14 @@ export interface UpdateWorkflowDTO {
   roleId: number
   author?: boolean
   assignee?: boolean
+  version?: number
   transitions: { from: number; to: number; allowed: boolean }[]
+}
+
+/** 工作流矩阵响应（含版本号，用于乐观锁并发控制） */
+export interface WorkflowMatrixVO {
+  transitions: WorkflowTransitionVO[]
+  version: number | null
 }
 
 /** 工作流变更历史审计日志 VO */

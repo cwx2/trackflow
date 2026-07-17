@@ -1,18 +1,18 @@
 import request from './request'
-import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowActivityVO, UpdateWorkflowDTO } from './types'
+import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO } from './types'
 
 /**
  * 工作流模块 API
  */
 export const workflowApi = {
-  /** 获取工作流转换矩阵 */
+  /** 获取工作流转换矩阵（含版本号，用于乐观锁） */
   getTransitionMatrix(projectId: string, params?: {
     issueType?: string
     roleId?: string
     author?: boolean
     assignee?: boolean
   }) {
-    return request.get<any, R<WorkflowTransitionVO[]>>(`/projects/${projectId}/workflows`, { params })
+    return request.get<any, R<WorkflowMatrixVO>>(`/projects/${projectId}/workflows`, { params })
   },
 
   /** 更新工作流转换矩阵 */

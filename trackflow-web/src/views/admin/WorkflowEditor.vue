@@ -290,6 +290,9 @@ const highlightCol = ref<number | null>(null)
 // 转换矩阵 Set: "fromId-toId"
 const allowedTransitions = reactive(new Set<string>())
 
+// 乐观锁版本号（从 GET 接口获取，保存时回传）
+const matrixVersion = ref<number | null>(null)
+
 // 动作指示器: "fromId-toId" 有配置动作的转换路径
 const actionPaths = reactive(new Set<string>())
 
@@ -513,14 +516,19 @@ async function loadMatrix() {
     const projectId = selectedProject.value || '0'
 
     const res = await workflowApi.getTransitionMatrix(projectId, params)
-    const transitions = res.data || []
+    const matrix = res.data
+    const transitions = matrix?.transitions || []
 
     allowedTransitions.clear()
     for (const t of transitions) {
       allowedTransitions.add(`${t.oldStatusId}-${t.newStatusId}`)
     }
+
+    // 记录版本号用于乐观锁
+    matrixVersion.value = matrix?.version ?? null
   } catch {
     allowedTransitions.clear()
+    matrixVersion.value = null
     Message.error('加载工作流数据失败')
   } finally {
     loading.value = false
@@ -550,11 +558,28 @@ async function saveMatrix() {
           roleId: Number(selectedRole.value),
           author: selectedMode.value === 'author' ? true : false,
           assignee: selectedMode.value === 'assignee' ? true : false,
+          version: matrixVersion.value ?? undefined,
           transitions
         })
         Message.success('工作流已保存')
-      } catch {
-        Message.error('保存失败，请检查权限或重试')
+        // 保存成功后重新加载以获取最新版本号
+        await loadMatrix()
+      } catch (e: any) {
+        const code = e.response?.data?.code
+        if (code === 40911) {
+          // 乐观锁冲突：工作流已被其他人修改
+          Modal.warning({
+            title: '保存失败',
+            content: '工作流已被其他人修改，请刷新后重试。点击"刷新"获取最新数据。',
+            okText: '刷新',
+            async onOk() {
+              await loadMatrix()
+              Message.info('已刷新为最新数据，请重新编辑后保存')
+            }
+          })
+        } else {
+          Message.error(e.response?.data?.message || '保存失败，请检查权限或重试')
+        }
       } finally {
         saving.value = false
       }

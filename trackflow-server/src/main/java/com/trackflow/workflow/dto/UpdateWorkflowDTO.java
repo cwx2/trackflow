@@ -23,6 +23,12 @@ public class UpdateWorkflowDTO {
     private Boolean author;
     private Boolean assignee;
 
+    /**
+     * 乐观锁版本号。从 GET 接口获取，PUT 时回传用于并发冲突检测。
+     * null 表示客户端未传版本号（向后兼容，不做校验）。
+     */
+    private Integer version;
+
     @NotNull
     @Valid
     private List<TransitionItem> transitions;

@@ -15,12 +15,17 @@ import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.vo.RoleVO;
+import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.entity.WorkflowTransition;
+import com.trackflow.workflow.entity.WorkflowVersion;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
+import com.trackflow.workflow.mapper.WorkflowVersionMapper;
+import com.trackflow.workflow.vo.WorkflowMatrixVO;
+import com.trackflow.workflow.vo.WorkflowTransitionVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +47,8 @@ public class WorkflowService {
 
     private final WorkflowTransitionMapper transitionMapper;
     private final WorkflowActivityMapper activityMapper;
+    private final WorkflowVersionMapper versionMapper;
+    private final WorkflowConverter workflowConverter;
     private final IssueStatusMapper statusMapper;
     private final IssueMapper issueMapper;
     private final ProjectMemberMapper memberMapper;
@@ -238,6 +245,49 @@ public class WorkflowService {
     }
 
     /**
+     * 获取工作流转换矩阵 + 版本号（用于编辑器，支持乐观锁）
+     */
+    public WorkflowMatrixVO getTransitionMatrixWithVersion(Long projectId, String issueType,
+                                                           Long roleId, Boolean author, Boolean assignee) {
+        List<WorkflowTransition> transitions = getTransitionMatrix(projectId, issueType, roleId, author, assignee);
+        List<WorkflowTransitionVO> voList = workflowConverter.toVOList(transitions);
+
+        // 获取版本号（仅当明确了 roleId + author/assignee 模式时才有意义）
+        Integer version = null;
+        if (roleId != null && author != null && assignee != null) {
+            boolean effectiveAuthor = Boolean.TRUE.equals(author);
+            boolean effectiveAssignee = Boolean.TRUE.equals(assignee);
+            String effectiveIssueType = (issueType != null && !issueType.isBlank()) ? issueType : "*";
+            version = getVersionNumber(projectId, effectiveIssueType, roleId, effectiveAuthor, effectiveAssignee);
+        }
+
+        WorkflowMatrixVO matrix = new WorkflowMatrixVO();
+        matrix.setTransitions(voList);
+        matrix.setVersion(version);
+        return matrix;
+    }
+
+    /**
+     * 查询当前版本号
+     */
+    private Integer getVersionNumber(Long projectId, String issueType, Long roleId,
+                                     boolean author, boolean assignee) {
+        LambdaQueryWrapper<WorkflowVersion> wrapper = new LambdaQueryWrapper<>();
+        if (projectId != null) {
+            wrapper.eq(WorkflowVersion::getProjectId, projectId);
+        } else {
+            wrapper.isNull(WorkflowVersion::getProjectId);
+        }
+        wrapper.eq(WorkflowVersion::getIssueType, issueType);
+        wrapper.eq(WorkflowVersion::getRoleId, roleId);
+        wrapper.eq(WorkflowVersion::getAuthor, author);
+        wrapper.eq(WorkflowVersion::getAssignee, assignee);
+
+        WorkflowVersion record = versionMapper.selectOne(wrapper);
+        return record != null ? record.getVersion() : null;
+    }
+
+    /**
      * 批量更新工作流转换矩阵（替换指定项目+类型+角色+模式的所有规则）
      * 
      * @param author  规则的 author 标记（Normal模式=false, Author模式=true）
@@ -295,10 +345,24 @@ public class WorkflowService {
     }
 
     /**
-     * 从 DTO 批量更新工作流转换矩阵
+     * 从 DTO 批量更新工作流转换矩阵（含乐观锁版本校验）
      */
     @Transactional
     public void updateTransitionMatrix(Long projectId, UpdateWorkflowDTO dto) {
+        boolean effectiveAuthor = Boolean.TRUE.equals(dto.getAuthor());
+        boolean effectiveAssignee = Boolean.TRUE.equals(dto.getAssignee());
+        String effectiveIssueType = dto.getIssueType() != null ? dto.getIssueType() : "*";
+
+        // 乐观锁版本校验
+        if (dto.getVersion() != null) {
+            checkAndIncrementVersion(projectId, effectiveIssueType, dto.getRoleId(),
+                    effectiveAuthor, effectiveAssignee, dto.getVersion());
+        } else {
+            // 客户端未传 version（向后兼容旧客户端），仅递增版本号不做校验
+            ensureAndIncrementVersion(projectId, effectiveIssueType, dto.getRoleId(),
+                    effectiveAuthor, effectiveAssignee);
+        }
+
         List<WorkflowTransition> transitions = dto.getTransitions().stream()
                 .filter(t -> Boolean.TRUE.equals(t.getAllowed()))
                 .map(t -> {
@@ -311,6 +375,66 @@ public class WorkflowService {
 
         updateTransitionMatrix(projectId, dto.getIssueType(), dto.getRoleId(),
                 dto.getAuthor(), dto.getAssignee(), transitions);
+    }
+
+    /**
+     * 乐观锁校验：CAS 更新版本号，失败则说明有并发冲突
+     */
+    private void checkAndIncrementVersion(Long projectId, String issueType, Long roleId,
+                                          boolean author, boolean assignee,
+                                          Integer expectedVersion) {
+        WorkflowVersion versionRecord = findOrCreateVersionRecord(projectId, issueType, roleId, author, assignee);
+
+        int updated = versionMapper.incrementVersionCAS(
+                versionRecord.getId(), expectedVersion, SecurityUtils.getCurrentUserId());
+
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.WORKFLOW_VERSION_CONFLICT,
+                    "工作流已被其他人修改（当前版本: " + versionRecord.getVersion()
+                            + "，期望版本: " + expectedVersion + "），请刷新后重试");
+        }
+    }
+
+    /**
+     * 向后兼容：客户端未传版本号时，直接递增版本（不做冲突检测）
+     */
+    private void ensureAndIncrementVersion(Long projectId, String issueType, Long roleId,
+                                           boolean author, boolean assignee) {
+        WorkflowVersion versionRecord = findOrCreateVersionRecord(projectId, issueType, roleId, author, assignee);
+        versionMapper.incrementVersionCAS(
+                versionRecord.getId(), versionRecord.getVersion(), SecurityUtils.getCurrentUserId());
+    }
+
+    /**
+     * 查找版本记录，不存在则创建（初始版本=1）
+     */
+    private WorkflowVersion findOrCreateVersionRecord(Long projectId, String issueType,
+                                                      Long roleId, boolean author, boolean assignee) {
+        LambdaQueryWrapper<WorkflowVersion> wrapper = new LambdaQueryWrapper<>();
+        if (projectId != null) {
+            wrapper.eq(WorkflowVersion::getProjectId, projectId);
+        } else {
+            wrapper.isNull(WorkflowVersion::getProjectId);
+        }
+        wrapper.eq(WorkflowVersion::getIssueType, issueType);
+        wrapper.eq(WorkflowVersion::getRoleId, roleId);
+        wrapper.eq(WorkflowVersion::getAuthor, author);
+        wrapper.eq(WorkflowVersion::getAssignee, assignee);
+
+        WorkflowVersion record = versionMapper.selectOne(wrapper);
+        if (record == null) {
+            record = new WorkflowVersion();
+            record.setProjectId(projectId);
+            record.setIssueType(issueType);
+            record.setRoleId(roleId);
+            record.setAuthor(author);
+            record.setAssignee(assignee);
+            record.setVersion(1);
+            record.setUpdatedAt(LocalDateTime.now());
+            record.setUpdatedBy(SecurityUtils.getCurrentUserId());
+            versionMapper.insert(record);
+        }
+        return record;
     }
 
     /**
