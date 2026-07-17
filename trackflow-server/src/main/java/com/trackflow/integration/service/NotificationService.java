@@ -31,6 +31,7 @@ public class NotificationService {
     private final NotificationMapper notificationMapper;
     private final SysUserMapper sysUserMapper;
     private final NotificationConverter notificationConverter;
+    private final MutedThreadService mutedThreadService;
 
     /**
      * 通知聚合时间窗口（分钟）。同一用户+同一类型+同一资源在此窗口内的多次通知将被合并。
@@ -59,6 +60,16 @@ public class NotificationService {
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                        String resourceType, Long resourceId) {
         String typeValue = type.name();
+
+        // 静音检查：@提及类型永远不被静音
+        if (type != NotificationType.mention && resourceId != null) {
+            if (mutedThreadService.isMuted(userId, resourceType, resourceId)) {
+                log.debug("[Notification] 跳过已静音线程: userId={}, resourceType={}, resourceId={}",
+                        userId, resourceType, resourceId);
+                return;
+            }
+        }
+
         // 查找聚合窗口内的同类未读通知
         Notification existing = findRecentUnread(userId, typeValue, resourceType, resourceId);
 
@@ -155,11 +166,19 @@ public class NotificationService {
             userMap = users.stream().collect(Collectors.toMap(SysUser::getId, u -> u));
         }
 
-        // 转换为 VO 并填充 actor 信息
+        // 批量查询静音状态
+        Set<Long> resourceIds = records.stream()
+                .map(Notification::getResourceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> mutedResourceIds = mutedThreadService.getMutedResourceIds(userId, "issue", resourceIds);
+
+        // 转换为 VO 并填充 actor 信息和静音状态
         List<NotificationVO> voList = notificationConverter.toVOList(records);
         for (int i = 0; i < voList.size(); i++) {
             NotificationVO vo = voList.get(i);
-            Long actorId = records.get(i).getActorId();
+            Notification record = records.get(i);
+            Long actorId = record.getActorId();
             if (actorId != null) {
                 SysUser actor = userMap.get(actorId);
                 if (actor != null) {
@@ -167,6 +186,8 @@ public class NotificationService {
                     vo.setActorAvatar(actor.getAvatarUrl());
                 }
             }
+            // 设置静音状态
+            vo.setResourceMuted(record.getResourceId() != null && mutedResourceIds.contains(record.getResourceId()));
         }
         return new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());

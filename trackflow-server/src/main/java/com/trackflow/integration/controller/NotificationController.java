@@ -9,9 +9,12 @@ import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationCategory;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.integration.vo.NotificationVO;
+import com.trackflow.integration.service.MutedThreadService;
+import com.trackflow.integration.vo.MutedThreadVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -20,6 +23,7 @@ import java.util.Map;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final MutedThreadService mutedThreadService;
 
     @GetMapping
     public R<PageResult<NotificationVO>> list(
@@ -80,5 +84,46 @@ public class NotificationController {
         Long userId = SecurityUtils.getCurrentUserId();
         int deleted = notificationService.deleteAllRead(userId);
         return R.ok(Map.of("deleted", deleted));
+    }
+
+    // ===== 线程静音 API =====
+
+    /**
+     * 静音指定资源的通知（静音后不再收到该资源的更新通知，@提及除外）
+     */
+    @PostMapping("/mute")
+    public R<Void> muteThread(@RequestParam String resourceType, @RequestParam Long resourceId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        mutedThreadService.mute(userId, resourceType, resourceId);
+        return R.ok();
+    }
+
+    /**
+     * 取消静音
+     */
+    @DeleteMapping("/mute")
+    public R<Void> unmuteThread(@RequestParam String resourceType, @RequestParam Long resourceId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        mutedThreadService.unmute(userId, resourceType, resourceId);
+        return R.ok();
+    }
+
+    /**
+     * 检查指定资源是否已静音
+     */
+    @GetMapping("/mute/check")
+    public R<Map<String, Boolean>> checkMuted(@RequestParam String resourceType, @RequestParam Long resourceId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        boolean muted = mutedThreadService.isMuted(userId, resourceType, resourceId);
+        return R.ok(Map.of("muted", muted));
+    }
+
+    /**
+     * 获取当前用户所有已静音线程列表
+     */
+    @GetMapping("/muted-threads")
+    public R<List<MutedThreadVO>> listMutedThreads() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(mutedThreadService.listMutedThreads(userId));
     }
 }

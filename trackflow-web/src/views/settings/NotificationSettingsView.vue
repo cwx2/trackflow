@@ -161,6 +161,30 @@
           </div>
         </div>
       </div>
+
+      <!-- 已静音的工单 -->
+      <div class="settings-section">
+        <h3 class="section-title">已静音的工单</h3>
+        <p class="section-desc">你不会收到这些工单的通知（@提及除外）。取消静音后恢复正常通知推送。</p>
+
+        <div v-if="mutedThreadsLoading" class="muted-loading">
+          <a-spin size="small" />
+          <span>加载中...</span>
+        </div>
+        <div v-else-if="mutedThreads.length === 0" class="muted-empty">
+          <span class="muted-empty-icon">🔔</span>
+          <span class="muted-empty-text">暂无静音的工单</span>
+        </div>
+        <div v-else class="muted-list">
+          <div v-for="thread in mutedThreads" :key="thread.id" class="muted-item">
+            <div class="muted-item-info">
+              <span class="muted-item-title">{{ thread.resourceTitle }}</span>
+              <span class="muted-item-time">{{ formatMutedTime(thread.createdAt) }}</span>
+            </div>
+            <button class="muted-item-unmute" @click="handleUnmute(thread)">取消静音</button>
+          </div>
+        </div>
+      </div>
     </a-spin>
 
     <!-- 底部导航提示 -->
@@ -175,8 +199,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { notificationPreferenceApi } from '@/api'
+import { notificationPreferenceApi, notificationApi } from '@/api'
 import type { NotificationPreferenceVO } from '@/api/notificationPreference'
+import type { MutedThreadVO } from '@/api/notification'
 
 const loading = ref(true)
 const quietHoursEnabled = ref(false)
@@ -198,8 +223,13 @@ const form = reactive({
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
 
+// Muted threads state
+const mutedThreads = ref<MutedThreadVO[]>([])
+const mutedThreadsLoading = ref(false)
+
 onMounted(async () => {
   await loadPreference()
+  await loadMutedThreads()
 })
 
 async function loadPreference() {
@@ -266,6 +296,37 @@ function handleSave() {
       Message.error('保存失败，请重试')
     }
   }, 500)
+}
+
+async function loadMutedThreads() {
+  mutedThreadsLoading.value = true
+  try {
+    const res = await notificationApi.listMutedThreads()
+    if (res.code === 0 && res.data) {
+      mutedThreads.value = res.data
+    }
+  } catch {
+    // 静默失败
+  } finally {
+    mutedThreadsLoading.value = false
+  }
+}
+
+async function handleUnmute(thread: MutedThreadVO) {
+  try {
+    const res = await notificationApi.unmuteThread(thread.resourceType, thread.resourceId)
+    if (res.code === 0) {
+      mutedThreads.value = mutedThreads.value.filter(t => t.id !== thread.id)
+      Message.success('已取消静音')
+    }
+  } catch {
+    Message.error('操作失败')
+  }
+}
+
+function formatMutedTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) + ' 静音'
 }
 </script>
 
@@ -460,5 +521,89 @@ function handleSave() {
 
 .footer-link:hover {
   opacity: 0.8;
+}
+
+/* 已静音工单 */
+.muted-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.muted-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.muted-empty-icon {
+  font-size: 16px;
+  opacity: 0.5;
+}
+
+.muted-empty-text {
+  color: var(--tf-text-tertiary);
+}
+
+.muted-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.muted-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.muted-item:hover {
+  background: var(--tf-bg-hover);
+}
+
+.muted-item + .muted-item {
+  border-top: 1px solid var(--tf-border-subtle, rgba(255,255,255,0.04));
+}
+
+.muted-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.muted-item-title {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  font-weight: 500;
+}
+
+.muted-item-time {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.muted-item-unmute {
+  padding: 4px 10px;
+  border: 1px solid var(--tf-border);
+  background: transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--tf-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.muted-item-unmute:hover {
+  background: var(--tf-bg-hover);
+  border-color: var(--tf-accent);
+  color: var(--tf-accent);
 }
 </style>

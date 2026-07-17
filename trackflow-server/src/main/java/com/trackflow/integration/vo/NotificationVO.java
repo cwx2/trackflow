@@ -18,4 +18,6 @@ public class NotificationVO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer aggregationCount;
+    /** 该通知对应的资源是否已被当前用户静音 */
+    private Boolean resourceMuted;
 }

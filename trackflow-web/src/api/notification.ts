@@ -40,6 +40,8 @@ export interface NotificationVO {
   createdAt: string
   updatedAt?: string
   aggregationCount?: number
+  /** 该通知对应的资源是否已被当前用户静音 */
+  resourceMuted?: boolean
 }
 
 /**
@@ -50,6 +52,18 @@ export interface CategoryUnreadCounts {
   mention: number
   subscription: number
   system: number
+}
+
+/**
+ * 已静音线程 VO
+ */
+export interface MutedThreadVO {
+  id: string
+  userId: string
+  resourceType: string
+  resourceId: string
+  resourceTitle: string
+  createdAt: string
 }
 
 /**
@@ -89,5 +103,25 @@ export const notificationApi = {
   /** 清除所有已读通知 */
   deleteAllRead() {
     return request.delete<any, R<{ deleted: number }>>('/notifications/read')
+  },
+
+  /** 静音指定资源的通知 */
+  muteThread(resourceType: string, resourceId: string) {
+    return request.post<any, R<void>>('/notifications/mute', null, { params: { resourceType, resourceId } })
+  },
+
+  /** 取消静音 */
+  unmuteThread(resourceType: string, resourceId: string) {
+    return request.delete<any, R<void>>('/notifications/mute', { params: { resourceType, resourceId } })
+  },
+
+  /** 检查指定资源是否已静音 */
+  checkMuted(resourceType: string, resourceId: string) {
+    return request.get<any, R<{ muted: boolean }>>('/notifications/mute/check', { params: { resourceType, resourceId } })
+  },
+
+  /** 获取已静音线程列表 */
+  listMutedThreads() {
+    return request.get<any, R<MutedThreadVO[]>>('/notifications/muted-threads')
   }
 }
