@@ -1,5 +1,6 @@
 package com.trackflow.issue.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
@@ -15,6 +16,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Issue 通知助手：负责在 Issue 关键操作后向相关人员推送站内通知。
@@ -153,6 +156,88 @@ public class IssueNotificationHelper {
             log.error("[IssueNotification] 发送创建通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
         }
+    }
+
+    // ==================== @Mention 通知 ====================
+
+    /**
+     * 匹配评论内容中 @username 模式的正则：
+     * - @后面跟用户名（字母/数字/下划线/点/连字符）
+     * - 支持 HTML 标签之间的 @mention（Tiptap 输出的 HTML 格式）
+     */
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([a-zA-Z][a-zA-Z0-9._-]{1,49})");
+
+    /**
+     * 评论中 @mention 通知：解析评论内容中的 @username，通知被提及的用户。
+     * <p>
+     * 规则：
+     * - 从 HTML 内容中提取纯文本后匹配 @username
+     * - 排除评论者自己（不通知自己提及自己）
+     * - 排除已经通过评论通知收到通知的用户（由调用方决定是否去重）
+     * - 尊重 onMentioned 偏好开关
+     */
+    @Async("notificationExecutor")
+    public void notifyMentioned(Issue issue, String commentContent, Long commenterId) {
+        try {
+            Set<String> mentionedUsernames = extractMentions(commentContent);
+            if (mentionedUsernames.isEmpty()) {
+                return;
+            }
+
+            // 批量查询被提及的用户
+            List<SysUser> mentionedUsers = sysUserMapper.selectList(
+                    new LambdaQueryWrapper<SysUser>()
+                            .in(SysUser::getUsername, mentionedUsernames)
+            );
+            if (mentionedUsers.isEmpty()) {
+                return;
+            }
+
+            String commenterName = getUserDisplayName(commenterId);
+            String title = String.format("%s 在评论中提到了你", commenterName);
+            String content = String.format("%s 在工单 [%s] %s 的评论中提到了你",
+                    commenterName, issue.getIssueKey(), issue.getTitle());
+
+            int sent = 0;
+            for (SysUser user : mentionedUsers) {
+                // 排除评论者自己
+                if (user.getId().equals(commenterId)) {
+                    continue;
+                }
+                // 检查 onMentioned 偏好
+                if (!isPreferenceEnabled(user.getId(), "onMentioned")) {
+                    continue;
+                }
+                notificationService.notify(user.getId(), title, content,
+                        "mention", "issue", issue.getId());
+                sent++;
+            }
+            if (sent > 0) {
+                log.debug("[IssueNotification] 已发送@提及通知: issue={}, mentionedUsers={}",
+                        issue.getIssueKey(), sent);
+            }
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送@提及通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 从 HTML 内容中提取 @username 列表。
+     * 先去除 HTML 标签得到纯文本，再用正则匹配。
+     */
+    private Set<String> extractMentions(String htmlContent) {
+        if (htmlContent == null || htmlContent.isBlank()) {
+            return Collections.emptySet();
+        }
+        // 去除 HTML 标签，保留纯文本
+        String plainText = htmlContent.replaceAll("<[^>]+>", " ");
+        Set<String> usernames = new LinkedHashSet<>();
+        Matcher matcher = MENTION_PATTERN.matcher(plainText);
+        while (matcher.find()) {
+            usernames.add(matcher.group(1));
+        }
+        return usernames;
     }
 
     // ==================== 私有辅助方法 ====================

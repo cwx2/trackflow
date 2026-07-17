@@ -50,6 +50,7 @@ public class SprintService {
     private final IssueActivityMapper activityMapper;
     private final ProjectService projectService;
     private final ProjectActivityService projectActivityService;
+    private final SprintNotificationHelper notificationHelper;
     private final ObjectMapper objectMapper;
 
     /**
@@ -393,6 +394,9 @@ public class SprintService {
         detail.put("sprint_name", sprint.getName());
         projectActivityService.log(sprint.getProjectId(), currentUserId, "activate_sprint", null, detail);
 
+        // 通知项目成员 Sprint 已激活
+        notificationHelper.notifySprintActivated(sprint, currentUserId);
+
         return sprint;
     }
 
@@ -479,6 +483,15 @@ public class SprintService {
             completeDetail.put("move_option", dto != null ? dto.getMoveOption() : "none");
         }
         projectActivityService.log(sprint.getProjectId(), completeUserId, "complete_sprint", null, completeDetail);
+
+        // 通知项目成员 Sprint 已完成（已完成工单数 = 总工单 - 未关闭工单）
+        long totalIssuesInSprint = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getSprintId, id)
+                        .isNull(Issue::getDeletedAt)
+        );
+        int completedIssues = (int) (totalIssuesInSprint - openIssues.size());
+        notificationHelper.notifySprintCompleted(sprint, Math.max(completedIssues, 0), completeUserId);
 
         return sprint;
     }

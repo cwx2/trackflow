@@ -1155,6 +1155,9 @@ public class IssueService {
         // 通知报告人+负责人+之前评论者
         notificationHelper.notifyCommented(issue, currentUserId);
 
+        // 解析评论中的 @mention 并通知被提及的用户
+        notificationHelper.notifyMentioned(issue, content, currentUserId);
+
         return comment;
     }
 
