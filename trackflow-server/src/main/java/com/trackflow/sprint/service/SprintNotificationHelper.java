@@ -65,11 +65,11 @@ public class SprintNotificationHelper {
                 if (userId.equals(operatorId)) {
                     continue;
                 }
-                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_STARTED)) {
+                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_STARTED, sprint.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(userId, operatorId, title, content,
-                        NotificationType.sprint_started, "sprint", sprint.getId());
+                        NotificationType.sprint_started, "sprint", sprint.getId(), sprint.getProjectId());
                 sent++;
             }
             if (sent > 0) {
@@ -107,11 +107,11 @@ public class SprintNotificationHelper {
                 if (userId.equals(operatorId)) {
                     continue;
                 }
-                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_COMPLETED)) {
+                if (!preferenceService.isEnabled(userId, NotificationEventType.SPRINT_COMPLETED, sprint.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(userId, operatorId, title, content,
-                        NotificationType.sprint_completed, "sprint", sprint.getId());
+                        NotificationType.sprint_completed, "sprint", sprint.getId(), sprint.getProjectId());
                 sent++;
             }
             if (sent > 0) {

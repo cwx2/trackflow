@@ -337,7 +337,8 @@ public class TransitionActionEngine {
                     content,
                     NotificationType.issue_auto_assigned,
                     "issue",
-                    issue.getId()
+                    issue.getId(),
+                    issue.getProjectId()
             );
 
             log.debug("[TransitionActionEngine] 已发送自动分配通知: issueId={}, assigneeId={}",

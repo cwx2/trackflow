@@ -29,6 +29,7 @@ public class NotificationConverterManual implements NotificationConverter {
         vo.setId(longToString(entity.getId()));
         vo.setUserId(longToString(entity.getUserId()));
         vo.setActorId(longToString(entity.getActorId()));
+        vo.setProjectId(longToString(entity.getProjectId()));
         vo.setResourceId(longToString(entity.getResourceId()));
         vo.setTitle(entity.getTitle());
         vo.setContent(entity.getContent());

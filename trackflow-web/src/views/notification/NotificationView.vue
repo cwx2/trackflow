@@ -7,6 +7,18 @@
         <span class="page-subtitle">{{ totalCount }} 条通知</span>
       </div>
       <div class="header-actions">
+        <!-- 项目筛选 -->
+        <a-select
+          v-model="selectedProjectId"
+          placeholder="全部项目"
+          allow-clear
+          size="small"
+          class="project-filter-select"
+          @change="handleProjectChange"
+          @clear="handleProjectClear"
+        >
+          <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
+        </a-select>
         <button
           class="action-btn"
           :class="{ active: unreadOnly }"
@@ -175,6 +187,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
+import { projectApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
 
 const router = useRouter()
@@ -186,10 +199,12 @@ const {
   totalCount,
   hasRead,
   activeCategory,
+  activeProjectId,
   categoryUnreadCounts,
   isSystemAdmin,
   toggleUnreadOnly,
   setCategory,
+  setProjectFilter,
   markRead,
   markAllRead,
   deleteNotification,
@@ -203,6 +218,32 @@ const pageSize = 50
 const currentPage = ref(1)
 
 const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
+
+/** 用户所属项目列表（用于过滤下拉） */
+const projects = ref<{ id: string; name: string }[]>([])
+const selectedProjectId = ref<string | undefined>(activeProjectId.value || undefined)
+
+/** 加载项目列表 */
+async function loadProjects() {
+  try {
+    const res = await projectApi.list({ page: 1, pageSize: 200 })
+    if (res.code === 0 && res.data) {
+      projects.value = res.data.list.map(p => ({ id: p.id, name: p.name }))
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
+function handleProjectChange(value: string | undefined) {
+  currentPage.value = 1
+  setProjectFilter(value || null)
+}
+
+function handleProjectClear() {
+  currentPage.value = 1
+  setProjectFilter(null)
+}
 
 /** 标签页配置 */
 interface TabConfig {
@@ -345,6 +386,7 @@ onMounted(() => {
   // Load data for full page view
   fetchNotifications(1, pageSize)
   fetchCategoryUnreadCounts()
+  loadProjects()
 })
 </script>
 
@@ -390,6 +432,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.project-filter-select {
+  width: 160px;
 }
 
 .action-btn {

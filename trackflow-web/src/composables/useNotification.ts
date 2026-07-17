@@ -21,6 +21,7 @@ const unreadOnly = ref(false)
 const panelVisible = ref(false)
 const totalCount = ref(0)
 const activeCategory = ref<NotificationCategory>(restoreCategory())
+const activeProjectId = ref<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let initialized = false
@@ -89,12 +90,12 @@ export function useNotification() {
     }
   }
 
-  /** 获取通知列表（含分类过滤） */
+  /** 获取通知列表（含分类过滤和项目过滤） */
   async function fetchNotifications(page?: number, size?: number) {
     if (!authStore.isAuthenticated) return
     loading.value = true
     try {
-      const params: { unreadOnly?: boolean; category?: NotificationCategory; page?: number; pageSize?: number } = {
+      const params: { unreadOnly?: boolean; category?: NotificationCategory; projectId?: string; page?: number; pageSize?: number } = {
         unreadOnly: unreadOnly.value,
         page: page || 1,
         pageSize: size || 50
@@ -102,6 +103,10 @@ export function useNotification() {
       // 只在非"全部"时传 category 参数
       if (activeCategory.value !== 'all') {
         params.category = activeCategory.value
+      }
+      // 项目过滤
+      if (activeProjectId.value) {
+        params.projectId = activeProjectId.value
       }
       const res = await notificationApi.list(params)
       if (res.code === 0 && res.data) {
@@ -119,6 +124,12 @@ export function useNotification() {
   function setCategory(category: NotificationCategory) {
     activeCategory.value = category
     persistCategory(category)
+    fetchNotifications()
+  }
+
+  /** 设置项目过滤（传 null 清除过滤） */
+  function setProjectFilter(projectId: string | null) {
+    activeProjectId.value = projectId
     fetchNotifications()
   }
 
@@ -328,12 +339,14 @@ export function useNotification() {
     hasUnread,
     hasRead,
     activeCategory,
+    activeProjectId,
     isSystemAdmin,
     // Actions
     fetchUnreadCount,
     fetchCategoryUnreadCounts,
     fetchNotifications,
     setCategory,
+    setProjectFilter,
     markRead,
     markAllRead,
     deleteNotification,

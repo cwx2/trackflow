@@ -16,6 +16,7 @@ public class Notification implements Serializable {
     private Long id;
     private Long userId;
     private Long actorId;
+    private Long projectId;
     private String title;
     private String content;
     private String type;

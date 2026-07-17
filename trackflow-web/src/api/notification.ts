@@ -31,6 +31,7 @@ export interface NotificationVO {
   actorId?: string
   actorName?: string
   actorAvatar?: string
+  projectId?: string
   title: string
   content: string
   type: NotificationType
@@ -71,7 +72,7 @@ export interface MutedThreadVO {
  */
 export const notificationApi = {
   /** 获取通知列表 */
-  list(params?: { unreadOnly?: boolean; category?: NotificationCategory; page?: number; pageSize?: number }) {
+  list(params?: { unreadOnly?: boolean; category?: NotificationCategory; projectId?: string; page?: number; pageSize?: number }) {
     return request.get<any, R<PageResult<NotificationVO>>>('/notifications', { params })
   },
 

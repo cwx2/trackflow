@@ -9,6 +9,7 @@ public class NotificationVO {
     private String actorId;
     private String actorName;
     private String actorAvatar;
+    private String projectId;
     private String title;
     private String content;
     private String type;

@@ -53,7 +53,7 @@ public class IssueNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(assigneeId, NotificationEventType.ISSUE_ASSIGNED)) {
+            if (!preferenceService.isEnabled(assigneeId, NotificationEventType.ISSUE_ASSIGNED, issue.getProjectId())) {
                 return;
             }
             String operatorName = getUserDisplayName(operatorId);
@@ -62,7 +62,7 @@ public class IssueNotificationHelper {
                     operatorName, issue.getIssueKey(), issue.getTitle());
 
             notificationService.notify(assigneeId, operatorId, title, content,
-                    NotificationType.issue_assigned, "issue", issue.getId());
+                    NotificationType.issue_assigned, "issue", issue.getId(), issue.getProjectId());
             log.debug("[IssueNotification] 已发送分配通知: issue={}, assignee={}", issue.getIssueKey(), assigneeId);
         } catch (Exception e) {
             log.error("[IssueNotification] 发送分配通知失败: issue={}, assignee={}, error={}",
@@ -86,11 +86,11 @@ public class IssueNotificationHelper {
                     commenterName, issue.getIssueKey(), issue.getTitle());
 
             for (Long recipientId : recipients) {
-                if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_COMMENTED)) {
+                if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_COMMENTED, issue.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(recipientId, commenterId, title, content,
-                        NotificationType.issue_commented, "issue", issue.getId());
+                        NotificationType.issue_commented, "issue", issue.getId(), issue.getProjectId());
             }
             log.debug("[IssueNotification] 已发送评论通知: issue={}, recipients={}",
                     issue.getIssueKey(), recipients.size());
@@ -126,11 +126,11 @@ public class IssueNotificationHelper {
                     : NotificationEventType.ISSUE_STATUS_CHANGED;
 
             for (Long recipientId : recipients) {
-                if (!preferenceService.isEnabled(recipientId, eventType)) {
+                if (!preferenceService.isEnabled(recipientId, eventType, issue.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(recipientId, operatorId, title, content,
-                        NotificationType.issue_status_changed, "issue", issue.getId());
+                        NotificationType.issue_status_changed, "issue", issue.getId(), issue.getProjectId());
             }
             log.debug("[IssueNotification] 已发送状态变更通知: issue={}, eventType={}, recipients={}",
                     issue.getIssueKey(), eventType, recipients.size());
@@ -149,7 +149,7 @@ public class IssueNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(issue.getAssigneeId(), NotificationEventType.ISSUE_ASSIGNED)) {
+            if (!preferenceService.isEnabled(issue.getAssigneeId(), NotificationEventType.ISSUE_ASSIGNED, issue.getProjectId())) {
                 return;
             }
             String creatorName = getUserDisplayName(creatorId);
@@ -158,7 +158,7 @@ public class IssueNotificationHelper {
                     creatorName, issue.getIssueKey(), issue.getTitle());
 
             notificationService.notify(issue.getAssigneeId(), creatorId, title, content,
-                    NotificationType.issue_assigned, "issue", issue.getId());
+                    NotificationType.issue_assigned, "issue", issue.getId(), issue.getProjectId());
             log.debug("[IssueNotification] 已发送创建通知: issue={}, assignee={}",
                     issue.getIssueKey(), issue.getAssigneeId());
         } catch (Exception e) {
@@ -214,11 +214,11 @@ public class IssueNotificationHelper {
                     continue;
                 }
                 // 检查 onMentioned 偏好
-                if (!preferenceService.isEnabled(user.getId(), NotificationEventType.MENTIONED)) {
+                if (!preferenceService.isEnabled(user.getId(), NotificationEventType.MENTIONED, issue.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(user.getId(), commenterId, title, content,
-                        NotificationType.mention, "issue", issue.getId());
+                        NotificationType.mention, "issue", issue.getId(), issue.getProjectId());
                 sent++;
             }
             if (sent > 0) {

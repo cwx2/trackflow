@@ -60,10 +60,11 @@ public class NotificationService {
      * @param type         通知类型（枚举约束，确保前后端同步）
      * @param resourceType 关联资源类型
      * @param resourceId   关联资源ID
+     * @param projectId    关联项目ID（可为 null，如全局/系统通知）
      */
     @Transactional
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
-                       String resourceType, Long resourceId) {
+                       String resourceType, Long resourceId, Long projectId) {
         String typeValue = type.name();
 
         // 静音检查：@提及类型永远不被静音
@@ -96,6 +97,7 @@ public class NotificationService {
             Notification n = new Notification();
             n.setUserId(userId);
             n.setActorId(actorId);
+            n.setProjectId(projectId);
             n.setTitle(title);
             n.setContent(content);
             n.setType(typeValue);
@@ -112,6 +114,15 @@ public class NotificationService {
         if (isNew) {
             dispatchEmail(userId, title, content);
         }
+    }
+
+    /**
+     * 创建通知（无 projectId 的兼容重载，用于不关联项目的系统通知）。
+     */
+    @Transactional
+    public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
+                       String resourceType, Long resourceId) {
+        notify(userId, actorId, title, content, type, resourceType, resourceId, null);
     }
 
     /**
@@ -194,14 +205,18 @@ public class NotificationService {
     }
 
     /**
-     * 获取用户通知列表（支持分类过滤）。
+     * 获取用户通知列表（支持分类过滤和项目过滤）。
      * 排序按 COALESCE(updated_at, created_at) DESC，聚合更新的通知置顶。
      */
-    public Page<Notification> list(Long userId, Boolean unreadOnly, NotificationCategory category, Page<Notification> page) {
+    public Page<Notification> list(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, Page<Notification> page) {
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Notification::getUserId, userId);
         if (Boolean.TRUE.equals(unreadOnly)) {
             wrapper.eq(Notification::getIsRead, false);
+        }
+        // 项目过滤
+        if (projectId != null) {
+            wrapper.eq(Notification::getProjectId, projectId);
         }
         // 分类过滤
         applyCategory(wrapper, category);
@@ -213,8 +228,8 @@ public class NotificationService {
     /**
      * 获取通知列表并填充 actor 信息（批量查询用户，避免 N+1）
      */
-    public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, NotificationCategory category, Page<Notification> page) {
-        Page<Notification> result = list(userId, unreadOnly, category, page);
+    public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, Page<Notification> page) {
+        Page<Notification> result = list(userId, unreadOnly, category, projectId, page);
         List<Notification> records = result.getRecords();
         if (records.isEmpty()) {
             return new PageResult<>(Collections.emptyList(), 0L,

@@ -50,13 +50,13 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
+            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED, projectId)) {
                 return;
             }
             String title = "你已被添加到项目";
             String content = String.format("你已被添加到项目「%s」，角色为「%s」", projectName, roleNames);
             notificationService.notify(userId, operatorId, title, content,
-                    NotificationType.member_added, "project", projectId);
+                    NotificationType.member_added, "project", projectId, projectId);
             log.debug("[ProjectNotification] 成员添加通知已发送: project={}, user={}", projectId, userId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送成员添加通知失败: project={}, user={}, error={}",
@@ -74,13 +74,13 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
+            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED, projectId)) {
                 return;
             }
             String title = "你的项目角色已变更";
             String content = String.format("你在项目「%s」中的角色已变更为「%s」", projectName, newRoleNames);
             notificationService.notify(userId, operatorId, title, content,
-                    NotificationType.role_changed, "project", projectId);
+                    NotificationType.role_changed, "project", projectId, projectId);
             log.debug("[ProjectNotification] 角色变更通知已发送: project={}, user={}", projectId, userId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送角色变更通知失败: project={}, user={}, error={}",
@@ -98,13 +98,13 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
+            if (!preferenceService.isEnabled(userId, NotificationEventType.PROJECT_MEMBER_CHANGED, projectId)) {
                 return;
             }
             String title = "你已被移出项目";
             String content = String.format("你已被移出项目「%s」", projectName);
             notificationService.notify(userId, operatorId, title, content,
-                    NotificationType.member_removed, "project", projectId);
+                    NotificationType.member_removed, "project", projectId, projectId);
             log.debug("[ProjectNotification] 成员移除通知已发送: project={}, user={}", projectId, userId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送成员移除通知失败: project={}, user={}, error={}",
@@ -124,13 +124,13 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(newLeadId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
+            if (!preferenceService.isEnabled(newLeadId, NotificationEventType.PROJECT_MEMBER_CHANGED, projectId)) {
                 return;
             }
             String title = "你已成为项目负责人";
             String content = String.format("你已成为项目「%s」的负责人", projectName);
             notificationService.notify(newLeadId, operatorId, title, content,
-                    NotificationType.lead_changed, "project", projectId);
+                    NotificationType.lead_changed, "project", projectId, projectId);
             log.debug("[ProjectNotification] 新负责人通知已发送: project={}, newLead={}", projectId, newLeadId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送新负责人通知失败: project={}, newLead={}, error={}",
@@ -148,13 +148,13 @@ public class ProjectNotificationHelper {
             return;
         }
         try {
-            if (!preferenceService.isEnabled(oldLeadId, NotificationEventType.PROJECT_MEMBER_CHANGED)) {
+            if (!preferenceService.isEnabled(oldLeadId, NotificationEventType.PROJECT_MEMBER_CHANGED, projectId)) {
                 return;
             }
             String title = "项目负责人已变更";
             String content = String.format("项目「%s」的负责人已变更为「%s」", projectName, newLeadName);
             notificationService.notify(oldLeadId, operatorId, title, content,
-                    NotificationType.lead_changed, "project", projectId);
+                    NotificationType.lead_changed, "project", projectId, projectId);
             log.debug("[ProjectNotification] 旧负责人通知已发送: project={}, oldLead={}", projectId, oldLeadId);
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送旧负责人通知失败: project={}, oldLead={}, error={}",
@@ -177,10 +177,10 @@ public class ProjectNotificationHelper {
                 if (memberId.equals(operatorId)) {
                     continue;
                 }
-                if (!preferenceService.isEnabled(memberId, NotificationEventType.PROJECT_LIFECYCLE)) {
+                if (!preferenceService.isEnabled(memberId, NotificationEventType.PROJECT_LIFECYCLE, projectId)) {
                     continue;
                 }
-                notificationService.notify(memberId, operatorId, title, content, type, "project", projectId);
+                notificationService.notify(memberId, operatorId, title, content, type, "project", projectId, projectId);
                 sent++;
             }
             log.debug("[ProjectNotification] 生命周期通知已发送: project={}, type={}, sent={}",
@@ -208,7 +208,7 @@ public class ProjectNotificationHelper {
                 }
                 // 项目删除为强制通知，不检查偏好
                 notificationService.notify(memberId, operatorId, title, content,
-                        NotificationType.project_deleted, "project", projectId);
+                        NotificationType.project_deleted, "project", projectId, projectId);
                 sent++;
             }
             log.debug("[ProjectNotification] 项目删除通知已发送: project={}, sent={}", projectId, sent);
