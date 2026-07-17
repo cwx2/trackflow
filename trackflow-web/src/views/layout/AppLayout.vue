@@ -60,6 +60,17 @@
           <span class="nav-label">创建</span>
         </router-link>
 
+        <!-- 通知铃铛 -->
+        <div class="footer-item notification-trigger" @click="toggleNotificationPanel">
+          <span class="nav-icon notification-icon-wrap">
+            🔔
+            <span v-if="hasUnread" class="notification-badge">
+              {{ unreadCount > 99 ? '99+' : unreadCount }}
+            </span>
+          </span>
+          <span class="nav-label">通知</span>
+        </div>
+
         <!-- 主题切换 -->
         <div class="footer-item theme-switcher" @click="cycleTheme">
           <span class="nav-icon">{{ themeIcon }}</span>
@@ -103,6 +114,9 @@
         <router-view />
       </div>
     </div>
+
+    <!-- 通知面板 -->
+    <NotificationPanel />
   </div>
 </template>
 
@@ -112,12 +126,15 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import { useNavBadge } from '@/composables/useNavBadge'
+import { useNotification } from '@/composables/useNotification'
 import TabBar from './TabBar.vue'
+import NotificationPanel from './NotificationPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const { issueBadgeCount, canManageSprint, loaded: navBadgeLoaded, init: initNavBadge } = useNavBadge()
+const { unreadCount, hasUnread, togglePanel: toggleNotificationPanel, init: initNotification } = useNotification()
 
 // TabBar 仅在 Issue 相关路由显示（Issue 列表、Issue 详情）
 const showTabBar = computed(() => {
@@ -222,6 +239,7 @@ function handleClickOutside(e: MouseEvent) {
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   initNavBadge()
+  initNotification()
 })
 onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
@@ -517,5 +535,35 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .main-content {
   flex: 1;
   overflow: hidden;
+}
+
+/* ===== 通知铃铛 ===== */
+.notification-trigger {
+  position: relative;
+}
+
+.notification-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--tf-danger, #f85149);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 </style>
