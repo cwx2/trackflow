@@ -10,6 +10,7 @@ import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.*;
 import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
+import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
@@ -157,11 +158,65 @@ public class CustomFieldService {
         return entity;
     }
 
-    @Transactional
-    public void delete(Long id) {
+    /**
+     * 获取自定义字段的使用情况统计。
+     * 用于删除前展示影响范围。
+     */
+    public CustomFieldUsageVO getUsage(Long id) {
         if (definitionMapper.selectById(id) == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
+
+        CustomFieldUsageVO usage = new CustomFieldUsageVO();
+
+        // 有值记录的工单数量（通过 distinct issue_id 统计）
+        List<Object> issueIds = valueMapper.selectObjs(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .select(CustomFieldValue::getIssueId)
+                        .eq(CustomFieldValue::getCustomFieldId, id)
+                        .groupBy(CustomFieldValue::getIssueId));
+        usage.setIssueCount(issueIds.size());
+
+        usage.setValueCount(valueMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getCustomFieldId, id)));
+
+        usage.setProjectCount(projectMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, id)));
+
+        usage.setIssueTypeCount(issueTypeMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldIssueType>()
+                        .eq(CustomFieldIssueType::getCustomFieldId, id)));
+
+        usage.setOptionCount(optionMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, id)));
+
+        return usage;
+    }
+
+    /**
+     * 删除自定义字段。
+     * 如果有工单引用且未确认（confirm=false），抛出业务异常返回影响数据。
+     * confirm=true 时强制删除。
+     */
+    @Transactional
+    public void delete(Long id, boolean confirm) {
+        if (definitionMapper.selectById(id) == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+
+        if (!confirm) {
+            long valueCount = valueMapper.selectCount(
+                    new LambdaQueryWrapper<CustomFieldValue>()
+                            .eq(CustomFieldValue::getCustomFieldId, id));
+            if (valueCount > 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "此字段被工单引用，请使用 confirm=true 确认删除");
+            }
+        }
+
         definitionMapper.deleteById(id);
     }
 

@@ -454,6 +454,14 @@ export interface CustomFieldOptionVO {
   isArchived?: boolean
 }
 
+export interface CustomFieldUsageVO {
+  issueCount: number
+  valueCount: number
+  projectCount: number
+  issueTypeCount: number
+  optionCount: number
+}
+
 export interface CustomFieldValueVO {
   customFieldId: string
   fieldName: string

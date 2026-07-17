@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, CustomFieldDefinitionVO, AvailableColumnVO } from './types'
+import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO } from './types'
 
 /**
  * 自定义字段模块 API
@@ -48,8 +48,13 @@ export const customFieldApi = {
   },
 
   /** 删除自定义字段 */
-  delete(id: string) {
-    return request.delete<any, R<void>>(`/admin/custom-fields/${id}`)
+  delete(id: string, confirm = false) {
+    return request.delete<any, R<void>>(`/admin/custom-fields/${id}`, { params: { confirm } })
+  },
+
+  /** 获取字段使用情况（删除前影响分析） */
+  getUsage(id: string) {
+    return request.get<any, R<CustomFieldUsageVO>>(`/admin/custom-fields/${id}/usage`)
   },
 
   /** 排序自定义字段 */

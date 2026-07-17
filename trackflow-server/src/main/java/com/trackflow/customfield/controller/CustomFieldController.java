@@ -13,6 +13,7 @@ import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
+import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -79,9 +80,16 @@ public class CustomFieldController {
 
     @DeleteMapping("/admin/custom-fields/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
-    public R<Void> delete(@PathVariable Long id) {
-        customFieldService.delete(id);
+    public R<Void> delete(@PathVariable Long id,
+                          @RequestParam(defaultValue = "false") boolean confirm) {
+        customFieldService.delete(id, confirm);
         return R.ok();
+    }
+
+    @GetMapping("/admin/custom-fields/{id}/usage")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<CustomFieldUsageVO> getUsage(@PathVariable Long id) {
+        return R.ok(customFieldService.getUsage(id));
     }
 
     @PutMapping("/admin/custom-fields/reorder")

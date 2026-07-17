@@ -50,9 +50,7 @@
           <a-table-column title="操作" :width="120" align="center">
             <template #cell="{ record }">
               <a-button type="text" size="mini" @click="openEdit(record)">编辑</a-button>
-              <a-popconfirm content="删除后所有关联数据将永久移除，确定删除？" @ok="handleDelete(record.id)">
-                <a-button type="text" size="mini" status="danger">删除</a-button>
-              </a-popconfirm>
+              <a-button type="text" size="mini" status="danger" @click="confirmDelete(record)">删除</a-button>
             </template>
           </a-table-column>
         </template>
@@ -159,7 +157,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { IconPlus, IconDelete, IconCheck } from '@arco-design/web-vue/es/icon'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
@@ -346,9 +344,41 @@ async function handleSave() {
   }
 }
 
+async function confirmDelete(record: CustomFieldDefinitionVO) {
+  try {
+    const res = await customFieldApi.getUsage(record.id)
+    const usage = res.data
+    if (!usage) return
+
+    if (usage.issueCount === 0) {
+      // 无引用——简单确认
+      Modal.warning({
+        title: '确认删除',
+        content: `确定要删除自定义字段「${record.name}」？此操作不可撤销。`,
+        okText: '删除字段',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => handleDelete(record.id)
+      })
+    } else {
+      // 有工单引用——危险确认
+      Modal.error({
+        title: '⚠️ 删除将导致数据丢失',
+        content: `字段「${record.name}」当前被 ${usage.issueCount} 个工单使用（共 ${usage.valueCount} 条值记录）。删除后这些数据将永久丢失且不可恢复。`,
+        okText: `确认删除（影响 ${usage.issueCount} 个工单）`,
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => handleDelete(record.id)
+      })
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '获取使用情况失败')
+  }
+}
+
 async function handleDelete(id: string) {
   try {
-    await customFieldApi.delete(id)
+    await customFieldApi.delete(id, true)
     Message.success('删除成功')
     loadList()
   } catch (e: any) {
