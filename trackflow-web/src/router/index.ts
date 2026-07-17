@@ -157,6 +157,11 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/notification/NotificationView.vue')
+      },
+      {
         path: 'settings/profile',
         name: 'Profile',
         component: () => import('@/views/settings/ProfileView.vue')

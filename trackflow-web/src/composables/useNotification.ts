@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { notificationApi, type NotificationVO, type NotificationCategory, type CategoryUnreadCounts } from '@/api/notification'
+import { notificationApi, type NotificationVO, type NotificationCategory, type CategoryUnreadCounts, type MutedThreadVO } from '@/api/notification'
 
 /**
  * 通知中心 composable
@@ -90,14 +90,14 @@ export function useNotification() {
   }
 
   /** 获取通知列表（含分类过滤） */
-  async function fetchNotifications() {
+  async function fetchNotifications(page?: number, size?: number) {
     if (!authStore.isAuthenticated) return
     loading.value = true
     try {
       const params: { unreadOnly?: boolean; category?: NotificationCategory; page?: number; pageSize?: number } = {
         unreadOnly: unreadOnly.value,
-        page: 1,
-        pageSize: 50
+        page: page || 1,
+        pageSize: size || 50
       }
       // 只在非"全部"时传 category 参数
       if (activeCategory.value !== 'all') {
@@ -267,6 +267,39 @@ export function useNotification() {
     }
   }
 
+  /** 静音指定工单的通知 */
+  async function muteThread(resourceType: string, resourceId: string) {
+    try {
+      const res = await notificationApi.muteThread(resourceType, resourceId)
+      if (res.code === 0) {
+        // 更新本地通知列表中该资源的 resourceMuted 状态
+        notifications.value.forEach(n => {
+          if (n.resourceType === resourceType && n.resourceId === resourceId) {
+            n.resourceMuted = true
+          }
+        })
+      }
+    } catch {
+      // 静默失败
+    }
+  }
+
+  /** 取消静音 */
+  async function unmuteThread(resourceType: string, resourceId: string) {
+    try {
+      const res = await notificationApi.unmuteThread(resourceType, resourceId)
+      if (res.code === 0) {
+        notifications.value.forEach(n => {
+          if (n.resourceType === resourceType && n.resourceId === resourceId) {
+            n.resourceMuted = false
+          }
+        })
+      }
+    } catch {
+      // 静默失败
+    }
+  }
+
   /**
    * 根据通知类型递减对应分类的未读计数
    */
@@ -310,6 +343,8 @@ export function useNotification() {
     closePanel,
     togglePanel,
     init,
-    refresh
+    refresh,
+    muteThread,
+    unmuteThread
   }
 }

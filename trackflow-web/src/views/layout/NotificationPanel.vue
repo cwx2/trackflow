@@ -5,8 +5,18 @@
         <div class="notification-panel">
           <!-- 面板头部 -->
           <div class="panel-header">
-            <h3 class="panel-title">通知</h3>
+            <h3 class="panel-title panel-title-link" title="在全页面中打开通知中心" @click="openFullPage">通知</h3>
             <div class="panel-actions">
+              <button
+                class="panel-action-btn"
+                title="展开为全页面"
+                @click="openFullPage"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h4.5a.75.75 0 0 1 0 1.5H3a.001.001 0 0 0 0 0v9.5a.001.001 0 0 0 0 0h9.5V8.75a.75.75 0 0 1 1.5 0V13a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 13V3.5Z"/>
+                  <path d="M10 1.75a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V3.56L9.28 7.78a.75.75 0 0 1-1.06-1.06l4.22-4.22h-1.69a.75.75 0 0 1-.75-.75Z"/>
+                </svg>
+              </button>
               <button
                 class="panel-action-btn"
                 :class="{ active: unreadOnly }"
@@ -82,54 +92,108 @@
               <div class="empty-desc">{{ getEmptyDesc() }}</div>
             </div>
 
-            <!-- 通知列表 -->
+            <!-- 通知列表（按工单分组） -->
             <div v-else class="notification-list">
               <div
-                v-for="item in notifications"
-                :key="item.id"
-                class="notification-item"
-                :class="{ unread: !item.isRead }"
-                @click="handleItemClick(item)"
+                v-for="group in groupedNotifications"
+                :key="`${group.resourceType}:${group.resourceId}`"
+                class="notification-group"
+                :class="{ 'has-multiple': group.items.length > 1 }"
               >
-                <div class="item-indicator">
-                  <span v-if="!item.isRead" class="unread-dot"></span>
+                <!-- 分组头部（多条通知时显示） -->
+                <div v-if="group.items.length > 1 && group.resourceType" class="group-header">
+                  <span class="group-title">{{ group.resourceTitle }}</span>
+                  <span class="group-count">{{ group.items.length }} 条通知</span>
+                  <button
+                    v-if="group.resourceType === 'issue'"
+                    class="group-mute-btn"
+                    :class="{ muted: group.resourceMuted }"
+                    :title="group.resourceMuted ? '取消静音' : '静音此工单'"
+                    @click.stop="handleMuteToggle(group)"
+                  >
+                    {{ group.resourceMuted ? '🔇' : '🔔' }}
+                  </button>
                 </div>
-                <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
-                  <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
-                  <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
-                  <span v-else>{{ getTypeIcon(item.type) }}</span>
-                </div>
-                <div class="item-content">
-                  <div class="item-title">
-                    {{ item.title }}
-                    <span v-if="item.aggregationCount && item.aggregationCount > 1" class="aggregation-badge">
-                      {{ item.aggregationCount }}次变更
-                    </span>
+
+                <!-- 通知项 -->
+                <div
+                  v-for="item in getVisibleItems(group)"
+                  :key="item.id"
+                  class="notification-item"
+                  :class="{ unread: !item.isRead }"
+                  @click="handleItemClick(item)"
+                >
+                  <div class="item-indicator">
+                    <span v-if="!item.isRead" class="unread-dot"></span>
                   </div>
-                  <div class="item-body">{{ item.content }}</div>
-                  <div class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</div>
+                  <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
+                    <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
+                    <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
+                    <span v-else>{{ getTypeIcon(item.type) }}</span>
+                  </div>
+                  <div class="item-content">
+                    <div class="item-title">
+                      {{ item.title }}
+                      <span v-if="item.aggregationCount && item.aggregationCount > 1" class="aggregation-badge">
+                        {{ item.aggregationCount }}次变更
+                      </span>
+                    </div>
+                    <div class="item-body">{{ item.content }}</div>
+                    <div class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</div>
+                  </div>
+                  <div class="item-actions">
+                    <button
+                      v-if="!item.isRead"
+                      class="item-action-btn"
+                      title="标记已读"
+                      @click.stop="handleMarkRead(item.id)"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
+                      </svg>
+                    </button>
+                    <!-- 单条通知的静音按钮（仅单条分组时显示） -->
+                    <button
+                      v-if="group.items.length === 1 && item.resourceType === 'issue' && item.resourceId"
+                      class="item-action-btn"
+                      :class="{ 'muted-active': item.resourceMuted }"
+                      :title="item.resourceMuted ? '取消静音此工单' : '静音此工单'"
+                      @click.stop="handleMuteToggle(group)"
+                    >
+                      <svg v-if="!item.resourceMuted" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 2a1.5 1.5 0 0 0-1.5 1.5v5a1.5 1.5 0 0 0 3 0v-5A1.5 1.5 0 0 0 8 2zM6.5 12.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0z"/>
+                      </svg>
+                      <svg v-else width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M1.5 1.5l13 13M8 2a1.5 1.5 0 0 0-1.5 1.5v3l3 3v-6A1.5 1.5 0 0 0 8 2z"/>
+                      </svg>
+                    </button>
+                    <button
+                      class="item-action-btn item-delete-btn"
+                      title="删除通知"
+                      @click.stop="handleDelete(item.id)"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <div class="item-actions">
-                  <button
-                    v-if="!item.isRead"
-                    class="item-action-btn"
-                    title="标记已读"
-                    @click.stop="handleMarkRead(item.id)"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
-                    </svg>
-                  </button>
-                  <button
-                    class="item-action-btn item-delete-btn"
-                    title="删除通知"
-                    @click.stop="handleDelete(item.id)"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
-                    </svg>
-                  </button>
-                </div>
+
+                <!-- 展开/收起按钮 -->
+                <button
+                  v-if="getHiddenCount(group) > 0"
+                  class="group-expand-btn"
+                  @click="toggleGroupExpanded(`${group.resourceType}:${group.resourceId}`)"
+                >
+                  显示更多 ({{ getHiddenCount(group) }} 条)
+                </button>
+                <button
+                  v-else-if="group.items.length > DEFAULT_VISIBLE && isGroupExpanded(`${group.resourceType}:${group.resourceId}`)"
+                  class="group-expand-btn"
+                  @click="toggleGroupExpanded(`${group.resourceType}:${group.resourceId}`)"
+                >
+                  收起
+                </button>
               </div>
             </div>
           </div>
@@ -137,6 +201,7 @@
           <!-- 面板底部 -->
           <div v-if="notifications.length > 0" class="panel-footer">
             <span class="footer-count">共 {{ totalCount }} 条通知</span>
+            <button class="footer-link" @click="openFullPage">查看全部 →</button>
           </div>
         </div>
       </div>
@@ -145,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
@@ -168,7 +233,9 @@ const {
   markRead,
   markAllRead,
   deleteNotification,
-  deleteAllRead
+  deleteAllRead,
+  muteThread,
+  unmuteThread
 } = useNotification()
 
 /** 标签页配置 */
@@ -193,6 +260,120 @@ const visibleTabs = computed(() => {
 /** 获取指定分类的未读计数 */
 function getCategoryCount(category: NotificationCategory): number {
   return categoryUnreadCounts.value[category] || 0
+}
+
+// ===== 分组逻辑 =====
+
+interface NotificationGroup {
+  resourceId: string
+  resourceType: string
+  resourceTitle: string
+  items: NotificationVO[]
+  latestTime: string
+  unreadCount: number
+  resourceMuted: boolean
+}
+
+/** 按工单分组后的通知列表 */
+const groupedNotifications = computed<NotificationGroup[]>(() => {
+  const items = notifications.value
+  if (items.length === 0) return []
+
+  const groupMap = new Map<string, NotificationGroup>()
+  const ungrouped: NotificationGroup[] = []
+
+  for (const item of items) {
+    const key = item.resourceType && item.resourceId
+      ? `${item.resourceType}:${item.resourceId}`
+      : null
+
+    if (key) {
+      let group = groupMap.get(key)
+      if (!group) {
+        group = {
+          resourceId: item.resourceId!,
+          resourceType: item.resourceType!,
+          resourceTitle: extractResourceTitle(item),
+          items: [],
+          latestTime: item.updatedAt || item.createdAt,
+          unreadCount: 0,
+          resourceMuted: item.resourceMuted || false
+        }
+        groupMap.set(key, group)
+      }
+      group.items.push(item)
+      if (!item.isRead) group.unreadCount++
+      const itemTime = item.updatedAt || item.createdAt
+      if (itemTime > group.latestTime) group.latestTime = itemTime
+    } else {
+      ungrouped.push({
+        resourceId: item.id,
+        resourceType: '',
+        resourceTitle: '',
+        items: [item],
+        latestTime: item.updatedAt || item.createdAt,
+        unreadCount: item.isRead ? 0 : 1,
+        resourceMuted: false
+      })
+    }
+  }
+
+  const groups = [...groupMap.values(), ...ungrouped]
+  groups.sort((a, b) => b.latestTime.localeCompare(a.latestTime))
+  return groups
+})
+
+/** 从通知标题中提取资源标识 */
+function extractResourceTitle(item: NotificationVO): string {
+  const match = item.title.match(/^([A-Z0-9]+-\d+)/)
+  return match ? match[1] : item.title.split(' ')[0]
+}
+
+/** 每个分组默认展示的通知数量 */
+const DEFAULT_VISIBLE = 3
+
+/** 跟踪哪些分组已展开 */
+const expandedGroups = ref<Set<string>>(new Set())
+
+function isGroupExpanded(groupKey: string): boolean {
+  return expandedGroups.value.has(groupKey)
+}
+
+function toggleGroupExpanded(groupKey: string) {
+  const newSet = new Set(expandedGroups.value)
+  if (newSet.has(groupKey)) {
+    newSet.delete(groupKey)
+  } else {
+    newSet.add(groupKey)
+  }
+  expandedGroups.value = newSet
+}
+
+function getVisibleItems(group: NotificationGroup): NotificationVO[] {
+  const key = `${group.resourceType}:${group.resourceId}`
+  if (group.items.length <= DEFAULT_VISIBLE || isGroupExpanded(key)) {
+    return group.items
+  }
+  return group.items.slice(0, DEFAULT_VISIBLE)
+}
+
+function getHiddenCount(group: NotificationGroup): number {
+  if (group.items.length <= DEFAULT_VISIBLE) return 0
+  const key = `${group.resourceType}:${group.resourceId}`
+  if (isGroupExpanded(key)) return 0
+  return group.items.length - DEFAULT_VISIBLE
+}
+
+// ===== 静音操作 =====
+
+function handleMuteToggle(group: NotificationGroup) {
+  if (group.resourceMuted) {
+    unmuteThread(group.resourceType, group.resourceId)
+    group.resourceMuted = false
+  } else {
+    muteThread(group.resourceType, group.resourceId)
+    group.resourceMuted = true
+  }
 }
 
 /** 分类相关的空状态 */
@@ -276,6 +457,11 @@ function handleItemClick(item: NotificationVO) {
   }
 }
 
+function openFullPage() {
+  closePanel()
+  router.push('/notifications')
+}
+
 function handleMarkRead(id: string) {
   markRead(id)
 }
@@ -331,6 +517,14 @@ function handleDeleteAllRead() {
   font-weight: 600;
   color: var(--tf-text-primary);
   margin: 0;
+}
+
+.panel-title-link {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.panel-title-link:hover {
+  color: var(--tf-accent);
 }
 
 .panel-actions {
@@ -517,6 +711,71 @@ function handleDeleteAllRead() {
   padding: 4px 0;
 }
 
+.notification-group {
+  border-bottom: 1px solid var(--tf-border-light);
+}
+.notification-group:last-child {
+  border-bottom: none;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 4px;
+  font-size: 11px;
+}
+
+.group-title {
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.group-count {
+  color: var(--tf-text-tertiary);
+}
+
+.group-mute-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+  opacity: 0.6;
+}
+.group-mute-btn:hover {
+  background: var(--tf-bg-hover);
+  opacity: 1;
+}
+.group-mute-btn.muted {
+  opacity: 1;
+  color: var(--tf-text-tertiary);
+}
+
+.group-expand-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: var(--tf-accent);
+  cursor: pointer;
+  text-align: left;
+  padding-left: 52px;
+  transition: background 0.15s;
+}
+.group-expand-btn:hover {
+  background: var(--tf-bg-hover);
+}
+
 .notification-item {
   display: flex;
   align-items: flex-start;
@@ -658,6 +917,10 @@ function handleDeleteAllRead() {
   background: var(--tf-bg-active);
   color: var(--tf-accent);
 }
+.item-action-btn.muted-active {
+  color: var(--tf-text-tertiary);
+  opacity: 0.8;
+}
 .item-delete-btn:hover {
   color: var(--tf-error, #f85149);
 }
@@ -667,11 +930,28 @@ function handleDeleteAllRead() {
   padding: 8px 16px;
   border-top: 1px solid var(--tf-border-light);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .footer-count {
   font-size: 11px;
   color: var(--tf-text-tertiary);
+}
+
+.footer-link {
+  font-size: 11px;
+  color: var(--tf-accent);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.footer-link:hover {
+  background: var(--tf-accent-bg);
 }
 
 /* Transition */
