@@ -227,6 +227,7 @@ public class TransitionActionEngine {
 
             notificationService.notify(
                     newAssigneeId,
+                    triggeredBy,
                     title,
                     content,
                     "issue_auto_assigned",

@@ -60,7 +60,7 @@ public class IssueNotificationHelper {
             String content = String.format("%s 将工单 [%s] %s 分配给了你",
                     operatorName, issue.getIssueKey(), issue.getTitle());
 
-            notificationService.notify(assigneeId, title, content,
+            notificationService.notify(assigneeId, operatorId, title, content,
                     "issue_assigned", "issue", issue.getId());
             log.debug("[IssueNotification] 已发送分配通知: issue={}, assignee={}", issue.getIssueKey(), assigneeId);
         } catch (Exception e) {
@@ -88,7 +88,7 @@ public class IssueNotificationHelper {
                 if (!isPreferenceEnabled(recipientId, "onIssueCommented")) {
                     continue;
                 }
-                notificationService.notify(recipientId, title, content,
+                notificationService.notify(recipientId, commenterId, title, content,
                         "issue_commented", "issue", issue.getId());
             }
             log.debug("[IssueNotification] 已发送评论通知: issue={}, recipients={}",
@@ -120,7 +120,7 @@ public class IssueNotificationHelper {
                 if (!isPreferenceEnabled(recipientId, "onIssueStatusChanged")) {
                     continue;
                 }
-                notificationService.notify(recipientId, title, content,
+                notificationService.notify(recipientId, operatorId, title, content,
                         "issue_status_changed", "issue", issue.getId());
             }
             log.debug("[IssueNotification] 已发送状态变更通知: issue={}, recipients={}",
@@ -148,7 +148,7 @@ public class IssueNotificationHelper {
             String content = String.format("%s 创建了工单 [%s] %s 并分配给了你",
                     creatorName, issue.getIssueKey(), issue.getTitle());
 
-            notificationService.notify(issue.getAssigneeId(), title, content,
+            notificationService.notify(issue.getAssigneeId(), creatorId, title, content,
                     "issue_assigned", "issue", issue.getId());
             log.debug("[IssueNotification] 已发送创建通知: issue={}, assignee={}",
                     issue.getIssueKey(), issue.getAssigneeId());
@@ -208,7 +208,7 @@ public class IssueNotificationHelper {
                 if (!isPreferenceEnabled(user.getId(), "onMentioned")) {
                     continue;
                 }
-                notificationService.notify(user.getId(), title, content,
+                notificationService.notify(user.getId(), commenterId, title, content,
                         "mention", "issue", issue.getId());
                 sent++;
             }

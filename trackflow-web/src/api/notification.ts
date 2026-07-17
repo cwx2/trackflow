@@ -4,6 +4,9 @@ import type { R, PageResult } from './types'
 export interface NotificationVO {
   id: string
   userId: string
+  actorId?: string
+  actorName?: string
+  actorAvatar?: string
   title: string
   content: string
   type: string

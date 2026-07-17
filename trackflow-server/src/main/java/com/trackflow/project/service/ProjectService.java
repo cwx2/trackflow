@@ -456,6 +456,7 @@ public class ProjectService {
         // 6. 通知新负责人
         notificationService.notify(
                 newLeadId,
+                currentUserId,
                 "你已成为项目负责人",
                 String.format("你已成为项目「%s」的负责人", project.getName()),
                 "lead_changed",
@@ -467,6 +468,7 @@ public class ProjectService {
         if (oldLeadId != null && !oldLeadId.equals(currentUserId)) {
             notificationService.notify(
                     oldLeadId,
+                    currentUserId,
                     "项目负责人已变更",
                     String.format("项目「%s」的负责人已变更为「%s」", project.getName(), newLeadName),
                     "lead_changed",
@@ -570,7 +572,7 @@ public class ProjectService {
 
         for (Long memberId : memberUserIds) {
             if (!memberId.equals(operatorId)) {
-                notificationService.notify(memberId, title, content, type, "project", projectId);
+                notificationService.notify(memberId, operatorId, title, content, type, "project", projectId);
             }
         }
     }
@@ -761,6 +763,7 @@ public class ProjectService {
         // 通知被添加的用户
         notificationService.notify(
                 dto.getUserId(),
+                currentUserId,
                 "你已被添加到项目",
                 String.format("你已被添加到项目「%s」，角色为「%s」", project.getName(), roleNamesStr),
                 "member_added",
@@ -879,6 +882,7 @@ public class ProjectService {
         if (!toRemove.isEmpty() || !toAdd.isEmpty()) {
             notificationService.notify(
                     userId,
+                    currentUserId,
                     "你的项目角色已变更",
                     String.format("你在项目「%s」中的角色已变更为「%s」",
                             project.getName(), String.join(", ", newRoleNames)),
@@ -995,6 +999,7 @@ public class ProjectService {
         // 通知被移除的用户
         notificationService.notify(
                 userId,
+                operatorId,
                 "你已被移出项目",
                 String.format("你已被移出项目「%s」", project.getName()),
                 "member_removed",
@@ -1232,6 +1237,7 @@ public class ProjectService {
             if (!memberId.equals(currentUserId)) {
                 notificationService.notify(
                         memberId,
+                        currentUserId,
                         "项目已被删除",
                         String.format("项目「%s」(%s) 已被删除，相关工单和数据已清除。", project.getName(), project.getKey()),
                         "project_deleted",

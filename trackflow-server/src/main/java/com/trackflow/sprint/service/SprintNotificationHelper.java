@@ -67,7 +67,7 @@ public class SprintNotificationHelper {
                 if (!isPreferenceEnabled(userId, "onSprintStarted")) {
                     continue;
                 }
-                notificationService.notify(userId, title, content,
+                notificationService.notify(userId, operatorId, title, content,
                         "sprint_started", "sprint", sprint.getId());
                 sent++;
             }
@@ -109,7 +109,7 @@ public class SprintNotificationHelper {
                 if (!isPreferenceEnabled(userId, "onSprintCompleted")) {
                     continue;
                 }
-                notificationService.notify(userId, title, content,
+                notificationService.notify(userId, operatorId, title, content,
                         "sprint_completed", "sprint", sprint.getId());
                 sent++;
             }

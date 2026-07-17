@@ -15,6 +15,7 @@ public class Notification implements Serializable {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
     private Long userId;
+    private Long actorId;
     private String title;
     private String content;
     private String type;

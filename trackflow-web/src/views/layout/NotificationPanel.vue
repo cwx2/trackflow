@@ -77,8 +77,10 @@
                 <div class="item-indicator">
                   <span v-if="!item.isRead" class="unread-dot"></span>
                 </div>
-                <div class="item-icon">
-                  {{ getTypeIcon(item.type) }}
+                <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
+                  <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
+                  <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
+                  <span v-else>{{ getTypeIcon(item.type) }}</span>
                 </div>
                 <div class="item-content">
                   <div class="item-title">{{ item.title }}</div>
@@ -409,6 +411,25 @@ function handleDeleteAllRead() {
   justify-content: center;
   font-size: 13px;
   flex-shrink: 0;
+}
+.item-icon.has-avatar {
+  border-radius: 50%;
+  background: transparent;
+  overflow: hidden;
+}
+
+.actor-avatar {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.actor-initial {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+  text-transform: uppercase;
 }
 
 .item-content {

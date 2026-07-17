@@ -5,7 +5,6 @@ import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.PageHelper;
 import com.trackflow.common.util.SecurityUtils;
-import com.trackflow.integration.converter.NotificationConverter;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.integration.vo.NotificationVO;
@@ -20,7 +19,6 @@ import java.util.Map;
 public class NotificationController {
 
     private final NotificationService notificationService;
-    private final NotificationConverter notificationConverter;
 
     @GetMapping
     public R<PageResult<NotificationVO>> list(
@@ -29,10 +27,7 @@ public class NotificationController {
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Notification> pageObj = PageHelper.buildPage(page, pageSize);
-        Page<Notification> result = notificationService.list(userId, unreadOnly, pageObj);
-        PageResult<NotificationVO> pageResult = new PageResult<>(
-                notificationConverter.toVOList(result.getRecords()), result.getTotal(),
-                (int) result.getCurrent(), (int) result.getSize());
+        PageResult<NotificationVO> pageResult = notificationService.listWithActor(userId, unreadOnly, pageObj);
         return R.ok(pageResult);
     }
 

@@ -6,6 +6,9 @@ import java.time.LocalDateTime;
 public class NotificationVO {
     private String id;
     private String userId;
+    private String actorId;
+    private String actorName;
+    private String actorAvatar;
     private String title;
     private String content;
     private String type;
