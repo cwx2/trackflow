@@ -7,14 +7,20 @@ import lombok.Data;
 @Data
 public class UpdateNotificationPreferenceDTO {
 
-    // 事件订阅开关
+    // Issue 事件订阅开关
     private Boolean onIssueAssigned;
     private Boolean onIssueStatusChanged;
     private Boolean onIssueCommented;
     private Boolean onMentioned;
     private Boolean onIssueResolved;
+
+    // Sprint 事件订阅开关
     private Boolean onSprintStarted;
     private Boolean onSprintCompleted;
+
+    // 项目事件订阅开关
+    private Boolean onProjectMemberChanged;
+    private Boolean onProjectLifecycle;
 
     // 邮件通知渠道
     private Boolean emailEnabled;

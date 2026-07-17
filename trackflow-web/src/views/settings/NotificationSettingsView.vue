@@ -71,6 +71,33 @@
             </div>
           </div>
         </div>
+
+        <div class="event-group">
+          <div class="event-group-title">项目事件</div>
+          <div class="event-items">
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">成员变更</span>
+                <span class="event-desc">你被添加/移出项目、角色变更、负责人变更时通知</span>
+              </div>
+              <a-switch v-model="form.onProjectMemberChanged" size="small" @change="handleSave" />
+            </div>
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">项目归档/恢复</span>
+                <span class="event-desc">你所在项目被归档或恢复时通知</span>
+              </div>
+              <a-switch v-model="form.onProjectLifecycle" size="small" @change="handleSave" />
+            </div>
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">项目删除</span>
+                <span class="event-desc">你所在项目被删除时通知（不可关闭）</span>
+              </div>
+              <a-switch :model-value="true" size="small" disabled />
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 通知渠道 -->
@@ -162,6 +189,8 @@ const form = reactive({
   onIssueResolved: true,
   onSprintStarted: false,
   onSprintCompleted: false,
+  onProjectMemberChanged: true,
+  onProjectLifecycle: true,
   emailEnabled: false,
   quietHoursStart: null as string | null,
   quietHoursEnd: null as string | null
@@ -195,6 +224,8 @@ function applyData(data: NotificationPreferenceVO) {
   form.onIssueResolved = data.onIssueResolved
   form.onSprintStarted = data.onSprintStarted
   form.onSprintCompleted = data.onSprintCompleted
+  form.onProjectMemberChanged = data.onProjectMemberChanged
+  form.onProjectLifecycle = data.onProjectLifecycle
   form.emailEnabled = data.emailEnabled
   form.quietHoursStart = data.quietHoursStart
   form.quietHoursEnd = data.quietHoursEnd
@@ -222,6 +253,8 @@ function handleSave() {
         onIssueResolved: form.onIssueResolved,
         onSprintStarted: form.onSprintStarted,
         onSprintCompleted: form.onSprintCompleted,
+        onProjectMemberChanged: form.onProjectMemberChanged,
+        onProjectLifecycle: form.onProjectLifecycle,
         emailEnabled: form.emailEnabled,
         quietHoursStart: form.quietHoursStart,
         quietHoursEnd: form.quietHoursEnd

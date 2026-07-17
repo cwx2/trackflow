@@ -14,7 +14,6 @@ import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueAttachmentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
-import com.trackflow.integration.service.NotificationService;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.project.converter.ProjectConverter;
@@ -71,7 +70,7 @@ public class ProjectService {
     private final IssueAttachmentMapper issueAttachmentMapper;
     private final SprintMapper sprintMapper;
     private final ProjectActivityService projectActivityService;
-    private final NotificationService notificationService;
+    private final ProjectNotificationHelper projectNotificationHelper;
     private final ProjectInitializationService projectInitializationService;
     private final MinioService minioService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
@@ -454,27 +453,12 @@ public class ProjectService {
         projectActivityService.log(projectId, currentUserId, "change_lead", newLeadId, leadDetailMap);
 
         // 6. 通知新负责人
-        notificationService.notify(
-                newLeadId,
-                currentUserId,
-                "你已成为项目负责人",
-                String.format("你已成为项目「%s」的负责人", project.getName()),
-                "lead_changed",
-                "project",
-                projectId
-        );
+        projectNotificationHelper.notifyNewLead(newLeadId, currentUserId, projectId, project.getName());
 
         // 7. 通知旧负责人（如果存在且不同）
         if (oldLeadId != null && !oldLeadId.equals(currentUserId)) {
-            notificationService.notify(
-                    oldLeadId,
-                    currentUserId,
-                    "项目负责人已变更",
-                    String.format("项目「%s」的负责人已变更为「%s」", project.getName(), newLeadName),
-                    "lead_changed",
-                    "project",
-                    projectId
-            );
+            projectNotificationHelper.notifyOldLead(oldLeadId, currentUserId, projectId,
+                    project.getName(), newLeadName);
         }
     }
 
@@ -513,7 +497,7 @@ public class ProjectService {
                 detail.isEmpty() ? null : detail);
 
         // 4. 通知所有项目成员
-        notifyAllMembers(id, currentUserId, project.getName(),
+        projectNotificationHelper.notifyLifecycleEvent(id, currentUserId,
                 "项目归档通知", "项目「" + project.getName() + "」已被归档", "project_archived");
     }
 
@@ -543,7 +527,7 @@ public class ProjectService {
         projectActivityService.log(id, currentUserId, "restore_project", null, null);
 
         // 3. 通知所有项目成员
-        notifyAllMembers(id, currentUserId, project.getName(),
+        projectNotificationHelper.notifyLifecycleEvent(id, currentUserId,
                 "项目恢复通知", "项目「" + project.getName() + "」已从归档状态恢复", "project_restored");
     }
 
@@ -559,22 +543,6 @@ public class ProjectService {
                 .set(Sprint::getStatus, SprintStatus.PLANNED)
                 .set(Sprint::getUpdatedAt, LocalDateTime.now());
         return sprintMapper.update(null, updateWrapper);
-    }
-
-    /**
-     * 通知项目所有成员（排除操作者本人）
-     */
-    private void notifyAllMembers(Long projectId, Long operatorId, String projectName,
-                                  String title, String content, String type) {
-        List<Long> memberUserIds = memberMapper.selectList(
-                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
-        ).stream().map(ProjectMember::getUserId).distinct().toList();
-
-        for (Long memberId : memberUserIds) {
-            if (!memberId.equals(operatorId)) {
-                notificationService.notify(memberId, operatorId, title, content, type, "project", projectId);
-            }
-        }
     }
 
     // ========== 回收站保留策略设置 ==========
@@ -761,15 +729,8 @@ public class ProjectService {
                 Map.of("role_ids", newRoleIds, "role_names", roleNamesStr));
 
         // 通知被添加的用户
-        notificationService.notify(
-                dto.getUserId(),
-                currentUserId,
-                "你已被添加到项目",
-                String.format("你已被添加到项目「%s」，角色为「%s」", project.getName(), roleNamesStr),
-                "member_added",
-                "project",
-                projectId
-        );
+        projectNotificationHelper.notifyMemberAdded(dto.getUserId(), currentUserId, projectId,
+                project.getName(), roleNamesStr);
     }
 
     /**
@@ -880,16 +841,8 @@ public class ProjectService {
 
         // 通知角色变更的用户
         if (!toRemove.isEmpty() || !toAdd.isEmpty()) {
-            notificationService.notify(
-                    userId,
-                    currentUserId,
-                    "你的项目角色已变更",
-                    String.format("你在项目「%s」中的角色已变更为「%s」",
-                            project.getName(), String.join(", ", newRoleNames)),
-                    "role_changed",
-                    "project",
-                    projectId
-            );
+            projectNotificationHelper.notifyRoleChanged(userId, currentUserId, projectId,
+                    project.getName(), String.join(", ", newRoleNames));
         }
     }
 
@@ -997,15 +950,7 @@ public class ProjectService {
         projectActivityService.log(projectId, operatorId, "remove_member", userId, detailMap);
 
         // 通知被移除的用户
-        notificationService.notify(
-                userId,
-                operatorId,
-                "你已被移出项目",
-                String.format("你已被移出项目「%s」", project.getName()),
-                "member_removed",
-                "project",
-                projectId
-        );
+        projectNotificationHelper.notifyMemberRemoved(userId, operatorId, projectId, project.getName());
 
         return affectedCount;
     }
@@ -1232,20 +1177,9 @@ public class ProjectService {
             redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + memberId);
         }
 
-        // 3. 通知所有成员（排除执行者自己）
-        for (Long memberId : memberUserIds) {
-            if (!memberId.equals(currentUserId)) {
-                notificationService.notify(
-                        memberId,
-                        currentUserId,
-                        "项目已被删除",
-                        String.format("项目「%s」(%s) 已被删除，相关工单和数据已清除。", project.getName(), project.getKey()),
-                        "project_deleted",
-                        "project",
-                        projectId
-                );
-            }
-        }
+        // 3. 通知所有成员（强制通知，不受偏好控制——不可逆操作）
+        projectNotificationHelper.notifyProjectDeleted(projectId, memberUserIds, currentUserId,
+                project.getName(), project.getKey());
 
         // 4. 清理 MinIO 中的附件文件（必须在 DB 删除之前，因为 CASCADE 会删除 issue_attachment 记录）
         cleanupProjectAttachments(projectId);

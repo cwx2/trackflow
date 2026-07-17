@@ -7,14 +7,20 @@ public class NotificationPreferenceVO {
     private String id;
     private String userId;
 
-    // 事件订阅开关
+    // Issue 事件订阅开关
     private Boolean onIssueAssigned;
     private Boolean onIssueStatusChanged;
     private Boolean onIssueCommented;
     private Boolean onMentioned;
     private Boolean onIssueResolved;
+
+    // Sprint 事件订阅开关
     private Boolean onSprintStarted;
     private Boolean onSprintCompleted;
+
+    // 项目事件订阅开关
+    private Boolean onProjectMemberChanged;
+    private Boolean onProjectLifecycle;
 
     // 邮件通知渠道
     private Boolean emailEnabled;

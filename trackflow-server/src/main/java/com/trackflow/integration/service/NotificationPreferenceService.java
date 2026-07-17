@@ -67,6 +67,12 @@ public class NotificationPreferenceService {
         if (dto.getOnSprintCompleted() != null) {
             pref.setOnSprintCompleted(dto.getOnSprintCompleted());
         }
+        if (dto.getOnProjectMemberChanged() != null) {
+            pref.setOnProjectMemberChanged(dto.getOnProjectMemberChanged());
+        }
+        if (dto.getOnProjectLifecycle() != null) {
+            pref.setOnProjectLifecycle(dto.getOnProjectLifecycle());
+        }
         if (dto.getEmailEnabled() != null) {
             pref.setEmailEnabled(dto.getEmailEnabled());
         }
@@ -92,6 +98,8 @@ public class NotificationPreferenceService {
         pref.setOnIssueResolved(true);
         pref.setOnSprintStarted(false);
         pref.setOnSprintCompleted(false);
+        pref.setOnProjectMemberChanged(true);
+        pref.setOnProjectLifecycle(true);
         pref.setEmailEnabled(false);
         pref.setCreatedAt(LocalDateTime.now());
         pref.setUpdatedAt(LocalDateTime.now());
