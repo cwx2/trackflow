@@ -923,6 +923,45 @@ public class CustomFieldService {
                         CustomFieldValue::getCustomFieldId,
                         Collectors.mapping(CustomFieldValue::getValue, Collectors.toList())));
 
+        // 批量预加载 list 类型字段的选项映射 (optionId → optionValue)
+        Set<Long> listFieldIds = fieldMap.values().stream()
+                .filter(f -> "list".equals(f.getFieldFormat()))
+                .map(CustomFieldDefinition::getId)
+                .collect(Collectors.toSet());
+        Map<Long, String> optionTextMap = new HashMap<>();
+        if (!listFieldIds.isEmpty()) {
+            List<CustomFieldOption> options = optionMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldOption>()
+                            .in(CustomFieldOption::getCustomFieldId, listFieldIds));
+            for (CustomFieldOption opt : options) {
+                optionTextMap.put(opt.getId(), opt.getValue());
+            }
+        }
+
+        // 批量预加载 user 类型字段引用的用户名
+        Set<Long> userFieldIds = fieldMap.values().stream()
+                .filter(f -> "user".equals(f.getFieldFormat()))
+                .map(CustomFieldDefinition::getId)
+                .collect(Collectors.toSet());
+        Map<Long, String> userNameMap = new HashMap<>();
+        if (!userFieldIds.isEmpty()) {
+            Set<Long> userIds = grouped.entrySet().stream()
+                    .filter(e -> userFieldIds.contains(e.getKey()))
+                    .flatMap(e -> e.getValue().stream())
+                    .filter(v -> v != null && !v.isBlank())
+                    .map(v -> {
+                        try { return Long.parseLong(v); }
+                        catch (NumberFormatException e) { return null; }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!userIds.isEmpty()) {
+                userMapper.selectBatchIds(userIds).forEach(u ->
+                        userNameMap.put(u.getId(), u.getDisplayName()));
+            }
+        }
+
+        // 组装结果，使用预加载的 Map 解析展示值
         List<CustomFieldValueVO> result = new ArrayList<>();
         for (Map.Entry<Long, List<String>> entry : grouped.entrySet()) {
             CustomFieldDefinition field = fieldMap.get(entry.getKey());
@@ -942,17 +981,19 @@ public class CustomFieldService {
                 vo.setValues(values);
                 List<String> displayValues = new ArrayList<>();
                 for (String v : values) {
-                    displayValues.add(resolveDisplayValue(field, v));
+                    String display = resolveDisplayValue(v, field, optionTextMap, userNameMap);
+                    displayValues.add(display != null ? display : "");
                 }
                 vo.setDisplayValues(displayValues);
                 // 兼容：value/displayValue 用逗号分隔聚合
                 vo.setValue(String.join(",", values));
                 vo.setDisplayValue(String.join(", ", displayValues));
             } else {
-                // 单值字段：原有逻辑
+                // 单值字段
                 String singleValue = values.get(0);
                 vo.setValue(singleValue);
-                vo.setDisplayValue(resolveDisplayValue(field, singleValue));
+                String display = resolveDisplayValue(singleValue, field, optionTextMap, userNameMap);
+                vo.setDisplayValue(display != null ? display : "");
             }
             result.add(vo);
         }
