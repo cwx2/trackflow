@@ -6,6 +6,7 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.PageHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.integration.entity.Notification;
+import com.trackflow.integration.entity.NotificationCategory;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.integration.vo.NotificationVO;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +24,12 @@ public class NotificationController {
     @GetMapping
     public R<PageResult<NotificationVO>> list(
             @RequestParam(value = "unreadOnly", required = false, defaultValue = "false") Boolean unreadOnly,
+            @RequestParam(value = "category", required = false) NotificationCategory category,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Notification> pageObj = PageHelper.buildPage(page, pageSize);
-        PageResult<NotificationVO> pageResult = notificationService.listWithActor(userId, unreadOnly, pageObj);
+        PageResult<NotificationVO> pageResult = notificationService.listWithActor(userId, unreadOnly, category, pageObj);
         return R.ok(pageResult);
     }
 
@@ -35,6 +37,15 @@ public class NotificationController {
     public R<Map<String, Long>> unreadCount() {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(Map.of("count", notificationService.unreadCount(userId)));
+    }
+
+    /**
+     * 获取各分类的未读计数（用于标签页 badge 展示）
+     */
+    @GetMapping("/unread-count-by-category")
+    public R<Map<String, Long>> unreadCountByCategory() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(notificationService.unreadCountByCategory(userId));
     }
 
     @PutMapping("/{id}/read")

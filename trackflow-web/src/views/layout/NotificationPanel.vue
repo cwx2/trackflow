@@ -45,6 +45,23 @@
             </div>
           </div>
 
+          <!-- 分类标签页 -->
+          <div class="panel-tabs">
+            <button
+              v-for="tab in visibleTabs"
+              :key="tab.key"
+              class="tab-item"
+              :class="{ active: activeCategory === tab.key }"
+              @click="setCategory(tab.key)"
+            >
+              <span class="tab-label">{{ tab.label }}</span>
+              <span
+                v-if="getCategoryCount(tab.key) > 0"
+                class="tab-badge"
+              >{{ getCategoryCount(tab.key) }}</span>
+            </button>
+          </div>
+
           <!-- 面板内容 -->
           <div class="panel-body">
             <!-- 加载状态 -->
@@ -60,9 +77,9 @@
 
             <!-- 空状态 -->
             <div v-else-if="notifications.length === 0" class="panel-empty">
-              <div class="empty-icon">🔔</div>
-              <div class="empty-title">{{ unreadOnly ? '没有未读通知' : '暂无新通知' }}</div>
-              <div class="empty-desc">{{ unreadOnly ? '所有通知都已阅读' : '当有新的工单分配、评论或状态变更时，通知会出现在这里' }}</div>
+              <div class="empty-icon">{{ getEmptyIcon() }}</div>
+              <div class="empty-title">{{ getEmptyTitle() }}</div>
+              <div class="empty-desc">{{ getEmptyDesc() }}</div>
             </div>
 
             <!-- 通知列表 -->
@@ -128,9 +145,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
-import type { NotificationVO } from '@/api/notification'
+import type { NotificationVO, NotificationCategory } from '@/api/notification'
 
 const router = useRouter()
 const {
@@ -141,13 +159,71 @@ const {
   unreadCount,
   totalCount,
   hasRead,
+  activeCategory,
+  categoryUnreadCounts,
+  isSystemAdmin,
   closePanel,
   toggleUnreadOnly,
+  setCategory,
   markRead,
   markAllRead,
   deleteNotification,
   deleteAllRead
 } = useNotification()
+
+/** 标签页配置 */
+interface TabConfig {
+  key: NotificationCategory
+  label: string
+  adminOnly?: boolean
+}
+
+const allTabs: TabConfig[] = [
+  { key: 'all', label: '全部' },
+  { key: 'mention', label: '@提及' },
+  { key: 'subscription', label: '订阅更新' },
+  { key: 'system', label: '系统', adminOnly: true }
+]
+
+/** 当前用户可见的标签页 */
+const visibleTabs = computed(() => {
+  return allTabs.filter(tab => !tab.adminOnly || isSystemAdmin.value)
+})
+
+/** 获取指定分类的未读计数 */
+function getCategoryCount(category: NotificationCategory): number {
+  return categoryUnreadCounts.value[category] || 0
+}
+
+/** 分类相关的空状态 */
+function getEmptyIcon(): string {
+  switch (activeCategory.value) {
+    case 'mention': return '📢'
+    case 'subscription': return '🔔'
+    case 'system': return '⚙️'
+    default: return '🔔'
+  }
+}
+
+function getEmptyTitle(): string {
+  if (unreadOnly.value) return '没有未读通知'
+  switch (activeCategory.value) {
+    case 'mention': return '暂无@提及'
+    case 'subscription': return '暂无订阅更新'
+    case 'system': return '暂无系统通知'
+    default: return '暂无新通知'
+  }
+}
+
+function getEmptyDesc(): string {
+  if (unreadOnly.value) return '所有通知都已阅读'
+  switch (activeCategory.value) {
+    case 'mention': return '当其他人在评论中@你时，通知会出现在这里'
+    case 'subscription': return '当你关注的工单有状态变更、评论或分配时，通知会出现在这里'
+    case 'system': return '项目成员变更、归档等系统级事件会出现在这里'
+    default: return '当有新的工单分配、评论或状态变更时，通知会出现在这里'
+  }
+}
 
 function getTypeIcon(type: string): string {
   switch (type) {
@@ -229,7 +305,7 @@ function handleDeleteAllRead() {
   left: var(--tf-sidebar-width, 200px);
   bottom: 60px;
   width: 380px;
-  max-height: 520px;
+  max-height: 560px;
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
   border-radius: 10px;
@@ -291,6 +367,68 @@ function handleDeleteAllRead() {
 .panel-action-btn:disabled:hover {
   background: transparent;
   color: var(--tf-text-tertiary);
+}
+
+/* Category Tabs */
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--tf-border-light);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  transition: color 0.15s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab-item:hover {
+  color: var(--tf-text-primary);
+}
+
+.tab-item.active {
+  color: var(--tf-accent);
+  border-bottom-color: var(--tf-accent);
+}
+
+.tab-label {
+  line-height: 1;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--tf-text-on-accent, #fff);
+  background: var(--tf-accent);
+  border-radius: 8px;
+}
+
+.tab-item:not(.active) .tab-badge {
+  background: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  opacity: 0.7;
 }
 
 /* Panel Body */

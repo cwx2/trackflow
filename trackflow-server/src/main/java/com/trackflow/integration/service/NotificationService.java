@@ -6,6 +6,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.integration.entity.Notification;
+import com.trackflow.integration.entity.NotificationCategory;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.integration.vo.NotificationVO;
@@ -19,10 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -117,15 +115,17 @@ public class NotificationService {
     }
 
     /**
-     * 获取用户通知列表（含触发者信息）。
+     * 获取用户通知列表（支持分类过滤）。
      * 排序按 COALESCE(updated_at, created_at) DESC，聚合更新的通知置顶。
      */
-    public Page<Notification> list(Long userId, Boolean unreadOnly, Page<Notification> page) {
+    public Page<Notification> list(Long userId, Boolean unreadOnly, NotificationCategory category, Page<Notification> page) {
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Notification::getUserId, userId);
         if (Boolean.TRUE.equals(unreadOnly)) {
             wrapper.eq(Notification::getIsRead, false);
         }
+        // 分类过滤
+        applyCategory(wrapper, category);
         // 使用 apply 自定义排序：聚合更新的通知优先
         wrapper.last("ORDER BY COALESCE(updated_at, created_at) DESC");
         return notificationMapper.selectPage(page, wrapper);
@@ -134,8 +134,8 @@ public class NotificationService {
     /**
      * 获取通知列表并填充 actor 信息（批量查询用户，避免 N+1）
      */
-    public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, Page<Notification> page) {
-        Page<Notification> result = list(userId, unreadOnly, page);
+    public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, NotificationCategory category, Page<Notification> page) {
+        Page<Notification> result = list(userId, unreadOnly, category, page);
         List<Notification> records = result.getRecords();
         if (records.isEmpty()) {
             return new PageResult<>(Collections.emptyList(), 0L,
@@ -145,7 +145,7 @@ public class NotificationService {
         // 收集所有 actorId（去空去重）
         Set<Long> actorIds = records.stream()
                 .map(Notification::getActorId)
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         // 批量查询用户信息
@@ -170,6 +170,22 @@ public class NotificationService {
         }
         return new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
+    }
+
+    /**
+     * 获取各分类的未读计数。
+     * 返回 Map: { "all": N, "mention": N, "subscription": N, "system": N }
+     */
+    public Map<String, Long> unreadCountByCategory(Long userId) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (NotificationCategory cat : NotificationCategory.values()) {
+            LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(Notification::getUserId, userId)
+                    .eq(Notification::getIsRead, false);
+            applyCategory(wrapper, cat);
+            counts.put(cat.name(), notificationMapper.selectCount(wrapper));
+        }
+        return counts;
     }
 
     /**
@@ -249,5 +265,19 @@ public class NotificationService {
                         .lt(Notification::getCreatedAt, cutoff)
         );
         return Math.toIntExact(deleted);
+    }
+
+    /**
+     * 将分类条件应用到查询 wrapper 上。
+     * all 分类不加任何类型过滤条件。
+     */
+    private void applyCategory(LambdaQueryWrapper<Notification> wrapper, NotificationCategory category) {
+        if (category == null || category == NotificationCategory.all) {
+            return;
+        }
+        Set<String> typeNames = category.getTypeNames();
+        if (!typeNames.isEmpty()) {
+            wrapper.in(Notification::getType, typeNames);
+        }
     }
 }

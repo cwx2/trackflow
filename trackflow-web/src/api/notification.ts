@@ -20,6 +20,11 @@ export type NotificationType =
   | 'sprint_started'
   | 'sprint_completed'
 
+/**
+ * 通知分类（与后端 NotificationCategory 枚举同步）
+ */
+export type NotificationCategory = 'all' | 'mention' | 'subscription' | 'system'
+
 export interface NotificationVO {
   id: string
   userId: string
@@ -38,17 +43,32 @@ export interface NotificationVO {
 }
 
 /**
+ * 各分类未读计数
+ */
+export interface CategoryUnreadCounts {
+  all: number
+  mention: number
+  subscription: number
+  system: number
+}
+
+/**
  * 通知模块 API
  */
 export const notificationApi = {
   /** 获取通知列表 */
-  list(params?: { unreadOnly?: boolean; page?: number; pageSize?: number }) {
+  list(params?: { unreadOnly?: boolean; category?: NotificationCategory; page?: number; pageSize?: number }) {
     return request.get<any, R<PageResult<NotificationVO>>>('/notifications', { params })
   },
 
   /** 获取未读数量 */
   unreadCount() {
     return request.get<any, R<{ count: number }>>('/notifications/unread-count')
+  },
+
+  /** 获取各分类的未读计数 */
+  unreadCountByCategory() {
+    return request.get<any, R<CategoryUnreadCounts>>('/notifications/unread-count-by-category')
   },
 
   /** 标记单条已读 */
