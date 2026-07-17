@@ -246,6 +246,19 @@
         </div>
 
         <div class="pref-group">
+          <h3 class="pref-group-title">通知行为</h3>
+          <div class="pref-list">
+            <div class="pref-item">
+              <div class="pref-info">
+                <span class="pref-name">自己的操作也通知我</span>
+                <span class="pref-desc">是否默认接收自己操作产生的通知（通常建议关闭）</span>
+              </div>
+              <a-switch v-model="form.defaultNotifyOwnChanges" size="small" />
+            </div>
+          </div>
+        </div>
+
+        <div class="pref-group">
           <h3 class="pref-group-title">工单事件</h3>
           <div class="pref-list">
             <div class="pref-item">
@@ -369,6 +382,7 @@ const form = reactive({
   defaultOnSprintCompleted: false,
   defaultOnProjectMemberChanged: true,
   defaultOnProjectLifecycle: true,
+  defaultNotifyOwnChanges: false,
   defaultEmailEnabled: false
 })
 
@@ -500,6 +514,7 @@ async function saveSettings() {
       defaultOnSprintCompleted: form.defaultOnSprintCompleted,
       defaultOnProjectMemberChanged: form.defaultOnProjectMemberChanged,
       defaultOnProjectLifecycle: form.defaultOnProjectLifecycle,
+      defaultNotifyOwnChanges: form.defaultNotifyOwnChanges,
       defaultEmailEnabled: form.defaultEmailEnabled
     })
     if (res.code === 0 && res.data) {

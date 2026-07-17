@@ -33,6 +33,9 @@ public class NotificationPreference implements Serializable {
     private Boolean onProjectMemberChanged;
     private Boolean onProjectLifecycle;
 
+    // 自己的操作是否通知自己（默认 false，与 YouTrack "Changes applied by me" 一致）
+    private Boolean notifyOwnChanges;
+
     // 邮件通知渠道
     private Boolean emailEnabled;
 

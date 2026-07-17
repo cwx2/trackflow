@@ -11,6 +11,15 @@
         <h3 class="section-title">事件订阅</h3>
         <p class="section-desc">选择哪些事件会向你发送站内通知。</p>
 
+        <!-- 全局行为开关 -->
+        <div class="global-toggle">
+          <div class="global-toggle-info">
+            <span class="global-toggle-label">自己的操作也通知我</span>
+            <span class="global-toggle-desc">启用后，你对工单的操作（状态变更、评论、分配等）也会生成通知发送给你自己。默认关闭，因为通常不需要被自己的操作通知。</span>
+          </div>
+          <a-switch v-model="form.notifyOwnChanges" size="small" @change="handleSave" />
+        </div>
+
         <div class="event-group">
           <div class="event-group-title">参与中的工单</div>
           <div class="event-items">
@@ -222,6 +231,7 @@ const form = reactive({
   onSprintCompleted: false,
   onProjectMemberChanged: true,
   onProjectLifecycle: true,
+  notifyOwnChanges: false,
   emailEnabled: false,
   quietHoursStart: null as string | null,
   quietHoursEnd: null as string | null
@@ -262,6 +272,7 @@ function applyData(data: NotificationPreferenceVO) {
   form.onSprintCompleted = data.onSprintCompleted
   form.onProjectMemberChanged = data.onProjectMemberChanged
   form.onProjectLifecycle = data.onProjectLifecycle
+  form.notifyOwnChanges = data.notifyOwnChanges
   form.emailEnabled = data.emailEnabled
   form.quietHoursStart = data.quietHoursStart
   form.quietHoursEnd = data.quietHoursEnd
@@ -291,6 +302,7 @@ function handleSave() {
         onSprintCompleted: form.onSprintCompleted,
         onProjectMemberChanged: form.onProjectMemberChanged,
         onProjectLifecycle: form.onProjectLifecycle,
+        notifyOwnChanges: form.notifyOwnChanges,
         emailEnabled: form.emailEnabled,
         quietHoursStart: form.quietHoursStart,
         quietHoursEnd: form.quietHoursEnd
@@ -384,6 +396,36 @@ function formatMutedTime(dateStr: string): string {
 
 .event-group {
   margin-bottom: 20px;
+}
+
+.global-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: var(--tf-bg-surface, #22252a);
+  border-radius: 6px;
+  border: 1px solid var(--tf-border-light);
+}
+
+.global-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+}
+
+.global-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.global-toggle-desc {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  line-height: 1.4;
 }
 
 .event-group-title {

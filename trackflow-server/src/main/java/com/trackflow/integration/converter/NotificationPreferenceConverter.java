@@ -9,7 +9,8 @@ import org.mapstruct.Mapping;
 import java.util.List;
 
 /**
- * 通知偏好 Entity → VO 转换器
+ * 通知偏好 Entity → VO 转换器。
+ * 自动映射同名字段（包含 notifyOwnChanges 等布尔开关字段）。
  */
 @Mapper(componentModel = "spring")
 public interface NotificationPreferenceConverter extends BaseConverter {

@@ -25,5 +25,6 @@ public class UpdateNotificationSettingsDTO {
     private Boolean defaultOnSprintCompleted;
     private Boolean defaultOnProjectMemberChanged;
     private Boolean defaultOnProjectLifecycle;
+    private Boolean defaultNotifyOwnChanges;
     private Boolean defaultEmailEnabled;
 }

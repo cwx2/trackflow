@@ -52,6 +52,7 @@ public class NotificationAdminService {
         vo.setDefaultOnSprintCompleted(getBoolSetting("default_on_sprint_completed", false));
         vo.setDefaultOnProjectMemberChanged(getBoolSetting("default_on_project_member_changed", true));
         vo.setDefaultOnProjectLifecycle(getBoolSetting("default_on_project_lifecycle", true));
+        vo.setDefaultNotifyOwnChanges(getBoolSetting("default_notify_own_changes", false));
         vo.setDefaultEmailEnabled(getBoolSetting("default_email_enabled", false));
 
         return vo;
@@ -114,6 +115,10 @@ public class NotificationAdminService {
         if (dto.getDefaultOnProjectLifecycle() != null) {
             upsertSetting("default_on_project_lifecycle", String.valueOf(dto.getDefaultOnProjectLifecycle()),
                     "新用户默认偏好：项目生命周期变更时通知");
+        }
+        if (dto.getDefaultNotifyOwnChanges() != null) {
+            upsertSetting("default_notify_own_changes", String.valueOf(dto.getDefaultNotifyOwnChanges()),
+                    "新用户默认偏好：是否接收自己操作产生的通知");
         }
         if (dto.getDefaultEmailEnabled() != null) {
             upsertSetting("default_email_enabled", String.valueOf(dto.getDefaultEmailEnabled()),

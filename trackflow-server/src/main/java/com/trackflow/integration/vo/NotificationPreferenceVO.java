@@ -24,6 +24,9 @@ public class NotificationPreferenceVO {
     private Boolean onProjectMemberChanged;
     private Boolean onProjectLifecycle;
 
+    // 自己的操作是否通知自己
+    private Boolean notifyOwnChanges;
+
     // 邮件通知渠道
     private Boolean emailEnabled;
 

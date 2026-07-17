@@ -16,6 +16,7 @@ export interface NotificationSettingsVO {
   defaultOnSprintCompleted: boolean
   defaultOnProjectMemberChanged: boolean
   defaultOnProjectLifecycle: boolean
+  defaultNotifyOwnChanges: boolean
   defaultEmailEnabled: boolean
 }
 
@@ -32,6 +33,7 @@ export interface UpdateNotificationSettingsDTO {
   defaultOnSprintCompleted?: boolean
   defaultOnProjectMemberChanged?: boolean
   defaultOnProjectLifecycle?: boolean
+  defaultNotifyOwnChanges?: boolean
   defaultEmailEnabled?: boolean
 }
 

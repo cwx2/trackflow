@@ -33,6 +33,28 @@ public class NotificationPreferenceService {
     }
 
     /**
+     * 检查用户是否希望接收自己操作触发的通知。
+     * <p>
+     * 支持"项目级覆盖全局"逻辑：
+     * 1. 若 projectId 非空且存在项目级偏好记录 → 使用项目级偏好
+     * 2. 否则 → 使用全局偏好
+     *
+     * @param userId    用户 ID
+     * @param projectId 项目 ID（可选，NULL 表示使用全局偏好）
+     * @return true 表示用户希望接收自己操作产生的通知
+     */
+    public boolean isNotifyOwnChanges(Long userId, Long projectId) {
+        try {
+            NotificationPreference pref = getApplicable(userId, projectId);
+            return Boolean.TRUE.equals(pref.getNotifyOwnChanges());
+        } catch (Exception e) {
+            log.warn("[NotificationPreference] 查询 notifyOwnChanges 失败: userId={}, projectId={}, 默认不通知",
+                    userId, projectId, e);
+            return false; // 查询失败时默认不通知自己（保守策略）
+        }
+    }
+
+    /**
      * 检查用户对指定事件类型的通知偏好是否启用。
      * <p>
      * 实现"项目级覆盖全局"逻辑（参考 OpenProject applicable scope）：
@@ -275,6 +297,9 @@ public class NotificationPreferenceService {
         if (dto.getOnProjectLifecycle() != null) {
             pref.setOnProjectLifecycle(dto.getOnProjectLifecycle());
         }
+        if (dto.getNotifyOwnChanges() != null) {
+            pref.setNotifyOwnChanges(dto.getNotifyOwnChanges());
+        }
         if (dto.getEmailEnabled() != null) {
             pref.setEmailEnabled(dto.getEmailEnabled());
         }
@@ -299,6 +324,7 @@ public class NotificationPreferenceService {
         pref.setOnSprintCompleted(getDefaultBool("notification.default_on_sprint_completed", false));
         pref.setOnProjectMemberChanged(getDefaultBool("notification.default_on_project_member_changed", true));
         pref.setOnProjectLifecycle(getDefaultBool("notification.default_on_project_lifecycle", true));
+        pref.setNotifyOwnChanges(getDefaultBool("notification.default_notify_own_changes", false));
         pref.setEmailEnabled(getDefaultBool("notification.default_email_enabled", false));
         pref.setCreatedAt(LocalDateTime.now());
         pref.setUpdatedAt(LocalDateTime.now());
