@@ -1,7 +1,9 @@
 package com.trackflow.timeentry.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.util.Map;
@@ -12,19 +14,23 @@ public class CreateTimeEntryDTO {
     private Long issueId;
 
     @NotNull(message = "日期不能为空")
+    @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}", message = "日期格式必须为 yyyy-MM-dd")
     private String workDate;
 
     @NotNull(message = "时长不能为空")
     @Min(value = 1, message = "时长至少1分钟")
+    @Max(value = 1440, message = "单条工时不能超过1440分钟（24小时）")
     private Integer duration;   // minutes
 
+    @Min(value = 0, message = "开始时间不能为负数")
+    @Max(value = 1439, message = "开始时间不能超过1439（23:59）")
     private Integer startTime;  // minutes from midnight
-    private String workType;
+
     private String description;
 
     /**
      * 工作项属性值：key=attributeId, value=valueId
-     * 前端传入格式：{"1234": "5678"} 表示属性 1234 选择了值 5678
+     * 前端传入格式：{"1": "5"} 表示 Work type 属性选择了值 id=5 (Review)
      */
     private Map<String, String> attributeValues;
 }
