@@ -30,11 +30,12 @@ public class NotificationController {
             @RequestParam(value = "unreadOnly", required = false, defaultValue = "false") Boolean unreadOnly,
             @RequestParam(value = "category", required = false) NotificationCategory category,
             @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "reason", required = false) String reason,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Notification> pageObj = PageHelper.buildPage(page, pageSize);
-        PageResult<NotificationVO> pageResult = notificationService.listWithActor(userId, unreadOnly, category, projectId, pageObj);
+        PageResult<NotificationVO> pageResult = notificationService.listWithActor(userId, unreadOnly, category, projectId, reason, pageObj);
         return R.ok(pageResult);
     }
 

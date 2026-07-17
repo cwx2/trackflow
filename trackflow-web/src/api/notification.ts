@@ -25,6 +25,18 @@ export type NotificationType =
  */
 export type NotificationCategory = 'all' | 'mention' | 'subscription' | 'system'
 
+/**
+ * 通知接收原因（与后端 NotificationReason 枚举同步）
+ */
+export type NotificationReason =
+  | 'assigned'
+  | 'reporter'
+  | 'commenter'
+  | 'mentioned'
+  | 'member'
+  | 'watched'
+  | 'auto_assigned'
+
 export interface NotificationVO {
   id: string
   userId: string
@@ -35,6 +47,8 @@ export interface NotificationVO {
   title: string
   content: string
   type: NotificationType
+  reason?: NotificationReason
+  reasonLabel?: string
   resourceType?: string
   resourceId?: string
   isRead: boolean
@@ -72,7 +86,7 @@ export interface MutedThreadVO {
  */
 export const notificationApi = {
   /** 获取通知列表 */
-  list(params?: { unreadOnly?: boolean; category?: NotificationCategory; projectId?: string; page?: number; pageSize?: number }) {
+  list(params?: { unreadOnly?: boolean; category?: NotificationCategory; projectId?: string; reason?: NotificationReason; page?: number; pageSize?: number }) {
     return request.get<any, R<PageResult<NotificationVO>>>('/notifications', { params })
   },
 

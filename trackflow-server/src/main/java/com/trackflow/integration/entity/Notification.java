@@ -22,6 +22,7 @@ public class Notification implements Serializable {
     private String type;
     private String resourceType;
     private Long resourceId;
+    private String reason;
     private Boolean isRead;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

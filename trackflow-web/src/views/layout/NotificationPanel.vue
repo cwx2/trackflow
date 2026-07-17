@@ -139,7 +139,10 @@
                       </span>
                     </div>
                     <div class="item-body">{{ item.content }}</div>
-                    <div class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</div>
+                    <div class="item-footer">
+                      <span v-if="item.reasonLabel" class="item-reason">{{ item.reasonLabel }}</span>
+                      <span class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</span>
+                    </div>
                   </div>
                   <div class="item-actions">
                     <button
@@ -881,10 +884,28 @@ function handleDeleteAllRead() {
   overflow: hidden;
 }
 
+.item-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.item-reason {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
 .item-time {
   font-size: 11px;
   color: var(--tf-text-tertiary);
-  margin-top: 4px;
 }
 
 .item-actions {

@@ -2,6 +2,7 @@ package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.integration.entity.NotificationEventType;
+import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
@@ -62,7 +63,8 @@ public class IssueNotificationHelper {
                     operatorName, issue.getIssueKey(), issue.getTitle());
 
             notificationService.notify(assigneeId, operatorId, title, content,
-                    NotificationType.issue_assigned, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_assigned, NotificationReason.assigned,
+                    "issue", issue.getId(), issue.getProjectId());
             log.debug("[IssueNotification] 已发送分配通知: issue={}, assignee={}", issue.getIssueKey(), assigneeId);
         } catch (Exception e) {
             log.error("[IssueNotification] 发送分配通知失败: issue={}, assignee={}, error={}",
@@ -71,13 +73,14 @@ public class IssueNotificationHelper {
     }
 
     /**
-     * 新评论通知：通知报告人 + 负责人 + 之前评论者（去重，排除当前用户）
+     * 新评论通知：通知报告人 + 负责人 + 之前评论者（去重，排除当前用户）。
+     * 每个接收者根据其角色获得对应的 reason。
      */
     @Async("notificationExecutor")
     public void notifyCommented(Issue issue, Long commenterId) {
         try {
-            Set<Long> recipients = collectCommentRecipients(issue, commenterId);
-            if (recipients.isEmpty()) {
+            Map<Long, NotificationReason> recipientReasons = collectCommentRecipientsWithReason(issue, commenterId);
+            if (recipientReasons.isEmpty()) {
                 return;
             }
             String commenterName = getUserDisplayName(commenterId);
@@ -85,15 +88,18 @@ public class IssueNotificationHelper {
             String content = String.format("%s 在工单 [%s] %s 中添加了评论",
                     commenterName, issue.getIssueKey(), issue.getTitle());
 
-            for (Long recipientId : recipients) {
+            for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
+                Long recipientId = entry.getKey();
+                NotificationReason reason = entry.getValue();
                 if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_COMMENTED, issue.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(recipientId, commenterId, title, content,
-                        NotificationType.issue_commented, "issue", issue.getId(), issue.getProjectId());
+                        NotificationType.issue_commented, reason,
+                        "issue", issue.getId(), issue.getProjectId());
             }
             log.debug("[IssueNotification] 已发送评论通知: issue={}, recipients={}",
-                    issue.getIssueKey(), recipients.size());
+                    issue.getIssueKey(), recipientReasons.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送评论通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -102,6 +108,7 @@ public class IssueNotificationHelper {
 
     /**
      * 状态变更通知：通知报告人 + 负责人（去重，排除当前用户）。
+     * 每个接收者根据其角色获得对应的 reason。
      * <p>
      * 当新状态属于"已关闭"类别（isClosed=true）时，使用 ISSUE_RESOLVED 偏好检查；
      * 否则使用 ISSUE_STATUS_CHANGED 偏好检查。
@@ -109,8 +116,8 @@ public class IssueNotificationHelper {
     @Async("notificationExecutor")
     public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) {
         try {
-            Set<Long> recipients = collectStatusChangeRecipients(issue, operatorId);
-            if (recipients.isEmpty()) {
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, operatorId);
+            if (recipientReasons.isEmpty()) {
                 return;
             }
             String operatorName = getUserDisplayName(operatorId);
@@ -125,15 +132,18 @@ public class IssueNotificationHelper {
                     ? NotificationEventType.ISSUE_RESOLVED
                     : NotificationEventType.ISSUE_STATUS_CHANGED;
 
-            for (Long recipientId : recipients) {
+            for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
+                Long recipientId = entry.getKey();
+                NotificationReason reason = entry.getValue();
                 if (!preferenceService.isEnabled(recipientId, eventType, issue.getProjectId())) {
                     continue;
                 }
                 notificationService.notify(recipientId, operatorId, title, content,
-                        NotificationType.issue_status_changed, "issue", issue.getId(), issue.getProjectId());
+                        NotificationType.issue_status_changed, reason,
+                        "issue", issue.getId(), issue.getProjectId());
             }
             log.debug("[IssueNotification] 已发送状态变更通知: issue={}, eventType={}, recipients={}",
-                    issue.getIssueKey(), eventType, recipients.size());
+                    issue.getIssueKey(), eventType, recipientReasons.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送状态变更通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -158,7 +168,8 @@ public class IssueNotificationHelper {
                     creatorName, issue.getIssueKey(), issue.getTitle());
 
             notificationService.notify(issue.getAssigneeId(), creatorId, title, content,
-                    NotificationType.issue_assigned, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_assigned, NotificationReason.assigned,
+                    "issue", issue.getId(), issue.getProjectId());
             log.debug("[IssueNotification] 已发送创建通知: issue={}, assignee={}",
                     issue.getIssueKey(), issue.getAssigneeId());
         } catch (Exception e) {
@@ -218,7 +229,8 @@ public class IssueNotificationHelper {
                     continue;
                 }
                 notificationService.notify(user.getId(), commenterId, title, content,
-                        NotificationType.mention, "issue", issue.getId(), issue.getProjectId());
+                        NotificationType.mention, NotificationReason.mentioned,
+                        "issue", issue.getId(), issue.getProjectId());
                 sent++;
             }
             if (sent > 0) {
@@ -250,6 +262,59 @@ public class IssueNotificationHelper {
     }
 
     // ==================== 私有辅助方法 ====================
+
+    /**
+     * 收集评论通知接收人及其 reason：
+     * - 报告人 → reporter
+     * - 负责人 → assigned
+     * - 之前评论者 → commenter
+     * 去重，排除评论者自己。若一人有多个角色，优先级：assigned > reporter > commenter。
+     */
+    private Map<Long, NotificationReason> collectCommentRecipientsWithReason(Issue issue, Long excludeUserId) {
+        Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
+
+        // 之前的评论者优先级最低，先加入（后续会被更高优先级覆盖）
+        List<Long> commenterIds = commentMapper.selectDistinctCommenterIds(issue.getId());
+        if (commenterIds != null) {
+            for (Long id : commenterIds) {
+                recipients.put(id, NotificationReason.commenter);
+            }
+        }
+
+        // 报告人优先级中等
+        if (issue.getReporterId() != null) {
+            recipients.put(issue.getReporterId(), NotificationReason.reporter);
+        }
+
+        // 负责人优先级最高
+        if (issue.getAssigneeId() != null) {
+            recipients.put(issue.getAssigneeId(), NotificationReason.assigned);
+        }
+
+        // 排除当前操作者
+        recipients.remove(excludeUserId);
+        return recipients;
+    }
+
+    /**
+     * 收集状态变更通知接收人及其 reason：
+     * - 报告人 → reporter
+     * - 负责人 → assigned
+     * 去重，排除操作者自己。
+     */
+    private Map<Long, NotificationReason> collectStatusChangeRecipientsWithReason(Issue issue, Long excludeUserId) {
+        Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
+
+        if (issue.getReporterId() != null) {
+            recipients.put(issue.getReporterId(), NotificationReason.reporter);
+        }
+        if (issue.getAssigneeId() != null) {
+            recipients.put(issue.getAssigneeId(), NotificationReason.assigned);
+        }
+
+        recipients.remove(excludeUserId);
+        return recipients;
+    }
 
     /**
      * 收集评论通知接收人：报告人 + 负责人 + 之前评论者（去重，排除评论者自己）

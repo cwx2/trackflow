@@ -1,5 +1,6 @@
 package com.trackflow.workflow.service;
 
+import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.issue.entity.Issue;
@@ -336,6 +337,7 @@ public class TransitionActionEngine {
                     title,
                     content,
                     NotificationType.issue_auto_assigned,
+                    NotificationReason.auto_assigned,
                     "issue",
                     issue.getId(),
                     issue.getProjectId()

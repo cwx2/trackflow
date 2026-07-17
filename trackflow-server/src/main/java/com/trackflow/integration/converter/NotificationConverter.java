@@ -15,6 +15,7 @@ public interface NotificationConverter extends BaseConverter {
     @Mapping(target = "resourceId", expression = "java(longToString(entity.getResourceId()))")
     @Mapping(target = "actorName", ignore = true)
     @Mapping(target = "actorAvatar", ignore = true)
+    @Mapping(target = "reasonLabel", ignore = true)
     // updatedAt + aggregationCount auto-mapped by name
     NotificationVO toVO(Notification entity);
     List<NotificationVO> toVOList(List<Notification> entities);

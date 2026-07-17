@@ -34,6 +34,7 @@ public class NotificationConverterManual implements NotificationConverter {
         vo.setTitle(entity.getTitle());
         vo.setContent(entity.getContent());
         vo.setType(entity.getType());
+        vo.setReason(entity.getReason());
         vo.setResourceType(entity.getResourceType());
         vo.setIsRead(entity.getIsRead());
         vo.setCreatedAt(entity.getCreatedAt());

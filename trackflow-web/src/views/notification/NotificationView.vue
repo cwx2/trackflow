@@ -119,6 +119,7 @@
             </div>
             <div class="item-body">{{ item.content }}</div>
             <div class="item-meta">
+              <span v-if="item.reasonLabel" class="item-reason">{{ item.reasonLabel }}</span>
               <span class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</span>
               <span v-if="item.resourceType === 'issue' && item.resourceId" class="item-link">
                 查看工单 →
@@ -730,6 +731,18 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.item-reason {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 2px 6px;
+  border-radius: 3px;
+  line-height: 1.4;
 }
 
 .item-time {

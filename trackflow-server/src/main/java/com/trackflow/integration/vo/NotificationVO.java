@@ -13,6 +13,8 @@ public class NotificationVO {
     private String title;
     private String content;
     private String type;
+    private String reason;
+    private String reasonLabel;
     private String resourceType;
     private String resourceId;
     private Boolean isRead;
