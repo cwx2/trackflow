@@ -47,6 +47,13 @@
             :is-archived="isArchived"
           />
         </a-tab-pane>
+        <a-tab-pane key="time-tracking" title="时间追踪">
+          <ProjectSettingsTimeTracking
+            :project="project"
+            :can-manage="canEditProject"
+            :is-archived="isArchived"
+          />
+        </a-tab-pane>
       </a-tabs>
     </template>
 
@@ -71,6 +78,7 @@ import type { ProjectDetailVO } from '@/api/types'
 import ProjectSettingsGeneral from './ProjectSettingsGeneral.vue'
 import ProjectSettingsMembers from './ProjectSettingsMembers.vue'
 import ProjectSettingsCustomFields from './ProjectSettingsCustomFields.vue'
+import ProjectSettingsTimeTracking from './ProjectSettingsTimeTracking.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -84,7 +92,7 @@ const projectPerms = ref<Set<string>>(new Set())
 // Active tab from route query or default
 const activeTab = computed(() => {
   const tab = route.query.tab as string
-  return ['general', 'members', 'custom-fields'].includes(tab) ? tab : 'general'
+  return ['general', 'members', 'custom-fields', 'time-tracking'].includes(tab) ? tab : 'general'
 })
 
 // Permissions

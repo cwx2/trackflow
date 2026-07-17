@@ -1410,4 +1410,32 @@ public class ProjectService {
             return null;
         }
     }
+
+    /**
+     * 检查项目是否启用了时间追踪功能。
+     * 默认启用（兼容已有项目）。
+     */
+    public boolean isTimeTrackingEnabled(Long projectId) {
+        Project project = getById(projectId);
+        String settingsJson = project.getSettings();
+        if (settingsJson == null || settingsJson.isBlank() || "{}".equals(settingsJson)) {
+            return true; // 默认启用
+        }
+        try {
+            var node = objectMapper.readTree(settingsJson);
+            var enabledNode = node.get("timeTrackingEnabled");
+            if (enabledNode == null || enabledNode.isNull()) return true;
+            return enabledNode.asBoolean(true);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /**
+     * 更新项目时间追踪启用/禁用设置。
+     */
+    @Transactional
+    public void updateTimeTrackingEnabled(Long projectId, boolean enabled) {
+        updateProjectSetting(projectId, "timeTrackingEnabled", enabled);
+    }
 }

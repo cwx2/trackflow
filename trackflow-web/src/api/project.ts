@@ -106,5 +106,15 @@ export const projectApi = {
   /** 获取项目概览统计数据 */
   getStatistics(projectId: string) {
     return request.get<any, R<ProjectStatisticsVO>>(`/projects/${projectId}/statistics`)
+  },
+
+  /** 获取项目时间追踪设置 */
+  getTimeTrackingSettings(projectId: string) {
+    return request.get<any, R<{ enabled: boolean }>>(`/projects/${projectId}/time-tracking-settings`)
+  },
+
+  /** 更新项目时间追踪设置 */
+  updateTimeTrackingSettings(projectId: string, data: { enabled: boolean }) {
+    return request.put<any, R<{ enabled: boolean }>>(`/projects/${projectId}/time-tracking-settings`, data)
   }
 }

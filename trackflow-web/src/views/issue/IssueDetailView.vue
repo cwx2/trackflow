@@ -54,7 +54,7 @@
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
           />
-          <CommentInput v-if="canComment" @submit="onAddComment" @add-time="openTimeDialog" />
+          <CommentInput v-if="canComment" :show-add-time="projectTimeTrackingEnabled" @submit="onAddComment" @add-time="openTimeDialog" />
         </template>
       </DetailMainContent>
 
@@ -168,6 +168,7 @@ const timeForm = ref({
 })
 const timeFormAttrValues = ref<Record<string, string>>({})
 const issueProjectAttributes = ref<WorkItemAttributeVO[]>([])
+const projectTimeTrackingEnabled = ref(true)
 const issueWorkTypeValues = computed(() => {
   // Find the "Work type" built-in attribute values
   const wt = issueProjectAttributes.value.find(a => a.name === 'Work type' || a.isBuiltin)
@@ -298,6 +299,16 @@ async function loadRelatedData() {
   const needTransitions = isAdmin || perms.has('issue:change_status')
   const needSprintOptions = isAdmin || perms.has('sprint:edit')
   const needMemberOptions = isAdmin || perms.has('issue:assign')
+
+  // 加载项目时间追踪开关
+  try {
+    const ttRes = await projectApi.getTimeTrackingSettings(pid)
+    if (ttRes.code === 0 && ttRes.data) {
+      projectTimeTrackingEnabled.value = ttRes.data.enabled
+    }
+  } catch {
+    projectTimeTrackingEnabled.value = true // 默认启用
+  }
 
   // 无状态变更权限时清空 transitions（确保 UI 渲染为只读）
   if (!needTransitions) {
@@ -440,10 +451,12 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
     { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit },
-    { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit, progress: i.estimatedHours ? { spent: i.spentHours || 0, estimated: i.estimatedHours } : undefined },
-    { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
-    ...(i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true }] : []),
-    ...(i.derivedSpentHours != null ? [{ key: 'derivedSpentHours', label: '总花费时间', value: `${i.derivedSpentHours}h`, readonly: true }] : []),
+    ...(projectTimeTrackingEnabled.value ? [
+      { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit, progress: i.estimatedHours ? { spent: i.spentHours || 0, estimated: i.estimatedHours } : undefined },
+      { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
+    ] : []),
+    ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true }] : []),
+    ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [{ key: 'derivedSpentHours', label: '总花费时间', value: `${i.derivedSpentHours}h`, readonly: true }] : []),
     // 自定义字段
     ...buildCustomFieldSidebarEntries(i, canEdit),
     { key: '_sep', label: '', value: '', readonly: true },

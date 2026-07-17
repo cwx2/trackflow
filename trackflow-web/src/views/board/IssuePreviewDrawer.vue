@@ -67,7 +67,7 @@
           <span class="field-label">截止日期</span>
           <span class="field-value">{{ detail.dueDate }}</span>
         </div>
-        <div class="preview-field" v-if="detail.estimatedHours">
+        <div class="preview-field" v-if="timeTrackingEnabled && detail.estimatedHours">
           <span class="field-label">预估工时</span>
           <span class="field-value">
             <TimeProgressIndicator
@@ -78,7 +78,7 @@
             {{ detail.estimatedHours }}h
           </span>
         </div>
-        <div class="preview-field" v-if="detail.spentHours">
+        <div class="preview-field" v-if="timeTrackingEnabled && detail.spentHours">
           <span class="field-label">已花费</span>
           <span class="field-value">{{ detail.spentHours }}h</span>
         </div>
@@ -157,7 +157,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { issueApi } from '@/api'
+import { issueApi, projectApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO } from '@/api/types'
 import TimeProgressIndicator from '@/views/issue/components/TimeProgressIndicator.vue'
 import { localizeStatusName, localizeIssueType } from '@/utils/fieldLabels'
@@ -180,6 +180,7 @@ const loading = ref(false)
 const loadError = ref<string | null>(null)
 const detail = ref<IssueDetailVO | null>(null)
 const comments = ref<IssueCommentVO[]>([])
+const timeTrackingEnabled = ref(true)
 
 const statusColor = computed(() => detail.value?.status?.color || 'var(--color-fill-4)')
 
@@ -226,6 +227,16 @@ async function loadDetail() {
     ])
     detail.value = detailRes.data
     comments.value = commentsRes.data || []
+
+    // Load time tracking settings for the project
+    if (detail.value?.projectId) {
+      try {
+        const ttRes = await projectApi.getTimeTrackingSettings(detail.value.projectId)
+        timeTrackingEnabled.value = ttRes.code === 0 && ttRes.data ? ttRes.data.enabled : true
+      } catch {
+        timeTrackingEnabled.value = true
+      }
+    }
   } catch (e: any) {
     loadError.value = e.response?.data?.message || '加载工单详情失败'
   } finally {

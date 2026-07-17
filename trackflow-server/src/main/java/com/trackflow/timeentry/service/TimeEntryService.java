@@ -37,12 +37,22 @@ public class TimeEntryService {
     private final SysUserMapper sysUserMapper;
     private final com.trackflow.issue.service.AncestorRefreshService ancestorRefreshService;
     private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
+    private final com.trackflow.project.service.ProjectService projectService;
 
     /**
      * 创建工时记录
      */
     @Transactional
     public TimeEntry create(Long userId, CreateTimeEntryDTO dto) {
+        // 校验项目是否启用了时间追踪
+        Issue issue = issueMapper.selectById(dto.getIssueId());
+        if (issue == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        }
+        if (!projectService.isTimeTrackingEnabled(issue.getProjectId())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "该项目未启用时间追踪功能");
+        }
+
         TimeEntry entry = new TimeEntry();
         entry.setIssueId(dto.getIssueId());
         entry.setUserId(userId);

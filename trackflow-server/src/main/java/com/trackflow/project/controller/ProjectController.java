@@ -193,4 +193,27 @@ public class ProjectController {
         IssueTag tag = tagService.createTag(id, dto);
         return R.ok(issueConverter.toTagVO(tag));
     }
+
+    // ========== 时间追踪设置 ==========
+
+    @GetMapping("/{id}/time-tracking-settings")
+    @PreAuthorize("@perm.check(#id, 'project:view')")
+    public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> getTimeTrackingSettings(@PathVariable Long id) {
+        var vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
+        vo.setEnabled(projectService.isTimeTrackingEnabled(id));
+        return R.ok(vo);
+    }
+
+    @PutMapping("/{id}/time-tracking-settings")
+    @PreAuthorize("@perm.check(#id, 'project:edit')")
+    public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> updateTimeTrackingSettings(
+            @PathVariable Long id,
+            @Valid @RequestBody com.trackflow.project.dto.UpdateTimeTrackingSettingsDTO dto) {
+        if (dto.getEnabled() != null) {
+            projectService.updateTimeTrackingEnabled(id, dto.getEnabled());
+        }
+        var vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
+        vo.setEnabled(projectService.isTimeTrackingEnabled(id));
+        return R.ok(vo);
+    }
 }

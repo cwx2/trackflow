@@ -13,7 +13,7 @@
       <EditorContent :editor="editor" />
     </div>
     <div class="editor-footer">
-      <button class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
+      <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
       <button class="btn-submit" :disabled="isEmpty" @click="submit">提交评论</button>
     </div>
   </div>
@@ -25,6 +25,12 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
+
+const props = withDefaults(defineProps<{
+  showAddTime?: boolean
+}>(), {
+  showAddTime: true
+})
 
 const emit = defineEmits<{
   submit: [content: string]
