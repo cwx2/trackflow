@@ -55,6 +55,8 @@
         :week-days="weekDays"
         :entries="timeEntries"
         :show-quota="true"
+        :quota-minutes="minutesPerDay()"
+        :quota-text="quotaText()"
         @day-click="openAddDialog"
         @entry-click="openEditDialog"
         @issue-click="(entry) => $router.push(`/issues/${entry.issueId}`)"
@@ -290,12 +292,14 @@ import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import { timeEntryApi, issueApi } from '@/api'
 import type { TimeEntryVO, ProjectTimeSummaryVO } from '@/api/timeEntry'
+import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
 import WeekGrid from './WeekGrid.vue'
 import MonthGrid from './MonthGrid.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
+const { settings: ttSettings, loadSettings: loadTTSettings, minutesPerDay, minutesPerWeek, isWorkingDay, quotaText } = useTimeTrackingSettings()
 
 // State
 const activeTab = ref<'people' | 'projects' | 'workgroups'>((route.query.view as any) || 'people')
@@ -338,11 +342,14 @@ const weekDays = computed(() => {
   for (let i = 0; i < 7; i++) {
     const d = new Date(start)
     d.setDate(start.getDate() + i)
+    // Convert JS getDay() (0=Sun, 6=Sat) to ISO day-of-week (1=Mon, 7=Sun)
+    const jsDow = d.getDay()
+    const isoDow = jsDow === 0 ? 7 : jsDow
     days.push({
       date: formatDateKey(d),
       dateNum: d.getDate(),
       dayName: dayNames[d.getDay()],
-      isWeekend: d.getDay() === 0 || d.getDay() === 6
+      isWeekend: !isWorkingDay(isoDow)
     })
   }
   return days
@@ -362,10 +369,12 @@ const monthDays = computed(() => {
   const current = new Date(startDate)
   // Generate 6 weeks (42 days) to cover all months
   for (let i = 0; i < 42; i++) {
+    const jsDow = current.getDay()
+    const isoDow = jsDow === 0 ? 7 : jsDow
     days.push({
       date: formatDateKey(current),
       dateNum: current.getDate(),
-      isWeekend: current.getDay() === 0 || current.getDay() === 6,
+      isWeekend: !isWorkingDay(isoDow),
       currentMonth: current.getMonth() === month - 1
     })
     current.setDate(current.getDate() + 1)
@@ -680,8 +689,11 @@ function parseDuration(text: string): number | null {
   const hourMatch = cleaned.match(/(\d+)\s*h/)
   const minMatch = cleaned.match(/(\d+)\s*m/)
 
-  if (weekMatch) total += parseInt(weekMatch[1]) * 5 * 8 * 60
-  if (dayMatch) total += parseInt(dayMatch[1]) * 8 * 60
+  const mPerDay = minutesPerDay()
+  const mPerWeek = minutesPerWeek()
+
+  if (weekMatch) total += parseInt(weekMatch[1]) * mPerWeek
+  if (dayMatch) total += parseInt(dayMatch[1]) * mPerDay
   if (hourMatch) total += parseInt(hourMatch[1]) * 60
   if (minMatch) total += parseInt(minMatch[1])
 
@@ -725,7 +737,9 @@ watch(currentWeekStart, () => { if (viewMode.value === 'week') reloadCurrentTab(
 watch(currentMonthDate, () => { if (viewMode.value === 'month') reloadCurrentTab() })
 
 // Init
-onMounted(() => {
+onMounted(async () => {
+  // Load time tracking settings first (needed for parseDuration + quota)
+  await loadTTSettings()
   // Load data for the currently active tab (may be restored from URL)
   if (activeTab.value === 'projects') {
     loadProjectSummaries()

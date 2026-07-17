@@ -29,9 +29,9 @@
       <div class="day-footer">
         <span
           class="day-total"
-          :class="{ insufficient: showQuota && getDayTotal(day.date) > 0 && getDayTotal(day.date) < 480 && !day.isWeekend }"
+          :class="{ insufficient: showQuota && getDayTotal(day.date) > 0 && getDayTotal(day.date) < quotaMinutes && !day.isWeekend }"
         >
-          {{ formatDuration(getDayTotal(day.date)) }}{{ showQuota ? ' / 8h' : '' }}
+          {{ formatDuration(getDayTotal(day.date)) }}{{ showQuota && !day.isWeekend ? ` / ${quotaLabel}` : '' }}
         </span>
       </div>
     </div>
@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { TimeEntryVO } from '@/api/timeEntry'
 
 interface DayInfo {
@@ -53,7 +54,14 @@ const props = defineProps<{
   entries: TimeEntryVO[]
   showUser?: boolean
   showQuota?: boolean
+  quotaMinutes?: number
+  quotaText?: string
 }>()
+
+/** 每日配额分钟数（默认 480 = 8h） */
+const quotaMinutes = computed(() => props.quotaMinutes ?? 480)
+/** 配额文字标签（默认 "8h"） */
+const quotaLabel = computed(() => props.quotaText ?? `${Math.round(quotaMinutes.value / 60)}h`)
 
 defineEmits<{
   dayClick: [date: string]

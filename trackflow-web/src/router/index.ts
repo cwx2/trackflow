@@ -145,6 +145,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
       },
       {
+        path: 'admin/time-tracking',
+        name: 'TimeTrackingSettings',
+        component: () => import('@/views/admin/TimeTrackingSettings.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+      },
+      {
         path: 'settings/profile',
         name: 'Profile',
         component: () => import('@/views/settings/ProfileView.vue')

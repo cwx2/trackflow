@@ -111,6 +111,13 @@ const menuItems: AdminMenuItem[] = [
     title: '审计日志',
     description: '查看系统权限变更记录，追踪管理操作历史',
     permission: 'system:manage_users'
+  },
+  {
+    path: '/admin/time-tracking',
+    icon: '⏱',
+    title: '时间追踪',
+    description: '配置每日工作时长和每周工作日',
+    permission: 'system:manage_roles'
   }
 ]
 
