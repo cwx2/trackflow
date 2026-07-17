@@ -402,17 +402,22 @@ const emailConfigStatus = computed(() => {
   return 'incomplete'
 })
 
-// 通知类型名称映射
+// 通知类型名称映射（与后端 NotificationType 枚举同步）
 const typeLabels: Record<string, string> = {
   issue_assigned: '工单分配',
-  issue_status_changed: '状态变更',
+  issue_auto_assigned: '工单自动分配',
   issue_commented: '工单评论',
+  issue_status_changed: '状态变更',
   mention: '@ 提及',
-  issue_resolved: '工单解决',
+  member_added: '成员添加',
+  member_removed: '成员移除',
+  role_changed: '角色变更',
+  lead_changed: '负责人变更',
+  project_archived: '项目归档',
+  project_restored: '项目恢复',
+  project_deleted: '项目删除',
   sprint_started: 'Sprint 开始',
-  sprint_completed: 'Sprint 完成',
-  project_member_changed: '成员变更',
-  project_lifecycle: '项目生命周期'
+  sprint_completed: 'Sprint 完成'
 }
 
 function formatType(type: string): string {
