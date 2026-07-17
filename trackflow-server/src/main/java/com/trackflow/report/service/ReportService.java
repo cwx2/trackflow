@@ -3,6 +3,7 @@ package com.trackflow.report.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
@@ -14,6 +15,8 @@ import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.entity.ReportDefinition;
+import com.trackflow.report.entity.ReportGroupBy;
+import com.trackflow.report.entity.ReportType;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -72,6 +75,15 @@ public class ReportService {
 
     @Transactional
     public ReportDefinition create(CreateReportDTO dto) {
+        // 校验报表类型合法性
+        if (!ReportType.isValid(dto.getType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的报表类型: " + dto.getType() + "，允许值: " + ReportType.allowedValues());
+        }
+
+        // 校验 config 中 groupBy 的合法性
+        validateConfig(dto.getConfig(), dto.getType());
+
         ReportDefinition report = new ReportDefinition();
         report.setName(dto.getName());
         report.setProjectId(dto.getProjectId());
@@ -80,6 +92,31 @@ public class ReportService {
         report.setShared(dto.getShared() != null ? dto.getShared() : false);
         reportMapper.insert(report);
         return report;
+    }
+
+    /**
+     * 校验报表配置的合法性
+     * - groupBy 必须在白名单中
+     * - 特定类型有固定 groupBy 要求时做一致性校验
+     */
+    private void validateConfig(String config, String type) {
+        Map<String, Object> configMap = parseConfig(config);
+        String groupBy = (String) configMap.get("groupBy");
+
+        // 如果指定了 groupBy，必须合法
+        if (groupBy != null && !groupBy.isBlank() && !ReportGroupBy.isValid(groupBy)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的分组维度: " + groupBy + "，允许值: " + ReportGroupBy.allowedValues());
+        }
+
+        // 类型与 groupBy 的一致性校验（有默认 groupBy 的类型不允许冲突）
+        ReportType reportType = ReportType.fromValue(type);
+        if (reportType != null && reportType.getDefaultGroupBy() != null) {
+            if (groupBy != null && !groupBy.isBlank() && !groupBy.equals(reportType.getDefaultGroupBy())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "报表类型 " + type + " 的分组维度必须为 " + reportType.getDefaultGroupBy());
+            }
+        }
     }
 
     @Transactional
@@ -147,7 +184,10 @@ public class ReportService {
 
     private ReportExecuteResultVO executeInternal(ReportDefinition report) {
         Map<String, Object> config = parseConfig(report.getConfig());
-        String groupBy = (String) config.getOrDefault("groupBy", "status");
+        String rawGroupBy = (String) config.getOrDefault("groupBy", "status");
+
+        // 执行时校验 groupBy 合法性（防御已存在的脏数据）
+        final String groupBy = ReportGroupBy.isValid(rawGroupBy) ? rawGroupBy : "status";
 
         // 构建查询条件
         LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();

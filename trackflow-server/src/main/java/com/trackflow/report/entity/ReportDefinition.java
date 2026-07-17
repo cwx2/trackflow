@@ -7,6 +7,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+
 @Data
 @TableName(value = "report_definition", autoResultMap = true)
 public class ReportDefinition implements Serializable {
@@ -15,10 +16,10 @@ public class ReportDefinition implements Serializable {
     private Long id;
     private String name;
     private Long projectId;
-    private String type;       // issue_count / burndown / by_assignee / by_status / custom
+    private String type;       // @see ReportType 枚举
 
     @TableField(typeHandler = JsonbTypeHandler.class)
-    private String config;     // JSON: filters + groupBy + chartType
+    private String config;     // JSON: groupBy + filters + chartType，@see ReportGroupBy
 
     private Boolean shared;
 

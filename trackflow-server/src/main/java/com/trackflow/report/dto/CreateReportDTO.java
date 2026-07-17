@@ -18,10 +18,20 @@ public class CreateReportDTO {
     @NotNull(message = "项目ID不能为空")
     private Long projectId;
 
+    /**
+     * 报表类型，允许值：issue_count / by_status / by_assignee / by_priority / by_type / burndown / custom
+     * @see com.trackflow.report.entity.ReportType
+     */
     @NotBlank(message = "报表类型不能为空")
-    private String type;       // issue_count / burndown / by_assignee / by_status / custom
+    private String type;
 
-    private String config;     // JSON: filters + groupBy + chartType
+    /**
+     * 报表配置（JSON），包含 groupBy（分组维度）等参数。
+     * groupBy 允许值：status / assignee / priority / type
+     * @see com.trackflow.report.entity.ReportGroupBy
+     */
+    private String config;
 
     private Boolean shared;
 }
+
