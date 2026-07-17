@@ -25,6 +25,13 @@ export interface ProjectTimeSummaryVO {
   entries: TimeEntryVO[]
 }
 
+export interface TimeEntryUserVO {
+  id: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+}
+
 export const timeEntryApi = {
   /** 查询用户在日期范围内的工时 */
   list(params: { userId?: string; startDate: string; endDate: string }) {
@@ -64,5 +71,15 @@ export const timeEntryApi = {
   /** 查询指定项目在日期范围内的工时明细 */
   listByProjectDetail(projectId: string, params: { startDate: string; endDate: string }) {
     return request.get<any, R<TimeEntryVO[]>>(`/time-entries/by-project/${projectId}`, { params })
+  },
+
+  /** 获取可选择的用户列表（用于人员视图选择器） */
+  listSelectableUsers(params?: { keyword?: string }) {
+    return request.get<any, R<TimeEntryUserVO[]>>('/time-entries/users', { params })
+  },
+
+  /** 检查当前用户是否有权查看他人工时 */
+  canViewOthers() {
+    return request.get<any, R<boolean>>('/time-entries/can-view-others')
   }
 }

@@ -7,11 +7,14 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
 import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
+import com.trackflow.timeentry.vo.TimeEntryUserVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,7 @@ public class TimeEntryService {
     private final TimeEntryMapper timeEntryMapper;
     private final IssueActivityMapper activityMapper;
     private final IssueMapper issueMapper;
+    private final SysUserMapper sysUserMapper;
     private final com.trackflow.issue.service.AncestorRefreshService ancestorRefreshService;
 
     /**
@@ -222,6 +226,42 @@ public class TimeEntryService {
             vo.setUserName((String) row.get("user_name"));
             return vo;
         }).toList();
+    }
+
+    /**
+     * 获取可选择的用户列表
+     * - canViewOthers=true: 返回所有活跃用户（支持关键字搜索）
+     * - canViewOthers=false: 仅返回当前用户自身
+     */
+    public List<TimeEntryUserVO> listSelectableUsers(Long currentUserId, boolean canViewOthers, String keyword) {
+        if (!canViewOthers) {
+            // 普通用户仅返回自身
+            SysUser self = sysUserMapper.selectById(currentUserId);
+            if (self == null) return List.of();
+            return List.of(toUserVO(self));
+        }
+
+        // 管理员查看所有活跃用户
+        QueryWrapper<SysUser> wrapper = new QueryWrapper<>();
+        wrapper.eq("status", "active");
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = "%" + keyword.trim() + "%";
+            wrapper.and(w -> w.like("display_name", kw).or().like("username", kw));
+        }
+        wrapper.orderByAsc("display_name");
+        wrapper.last("LIMIT 50");
+
+        List<SysUser> users = sysUserMapper.selectList(wrapper);
+        return users.stream().map(this::toUserVO).toList();
+    }
+
+    private TimeEntryUserVO toUserVO(SysUser user) {
+        TimeEntryUserVO vo = new TimeEntryUserVO();
+        vo.setId(String.valueOf(user.getId()));
+        vo.setUsername(user.getUsername());
+        vo.setDisplayName(user.getDisplayName());
+        vo.setAvatarUrl(user.getAvatarUrl());
+        return vo;
     }
 
     // ========== 内部方法 ==========

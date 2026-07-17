@@ -1,5 +1,8 @@
 package com.trackflow.timeentry.controller;
 
+import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.service.IssueService;
@@ -9,6 +12,7 @@ import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.service.TimeEntryService;
 import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
+import com.trackflow.timeentry.vo.TimeEntryUserVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,8 +25,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TimeEntryController {
 
+    private static final String PERM_VIEW_OTHERS = "time:view_others";
+
     private final TimeEntryService timeEntryService;
     private final IssueService issueService;
+    private final PermissionService permissionService;
 
     /**
      * 创建工时记录
@@ -78,6 +85,7 @@ public class TimeEntryController {
 
     /**
      * 查询用户在日期范围内的工时记录
+     * 管理员（拥有 time:view_others 权限）可查看他人工时
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -86,11 +94,13 @@ public class TimeEntryController {
             @RequestParam("startDate") String startDate,
             @RequestParam("endDate") String endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        // 普通用户只能查自己的工时
         Long targetUserId = (userId != null) ? userId : currentUserId;
+
         if (!targetUserId.equals(currentUserId)) {
-            // TODO: 后续添加管理员权限允许查看他人
-            targetUserId = currentUserId;
+            // 校验当前用户是否有权查看他人工时
+            if (!canViewOthersTime(currentUserId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
+            }
         }
         return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, startDate, endDate));
     }
@@ -117,8 +127,11 @@ public class TimeEntryController {
             @RequestParam("endDate") String endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
+
         if (!targetUserId.equals(currentUserId)) {
-            targetUserId = currentUserId;
+            if (!canViewOthersTime(currentUserId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
+            }
         }
         return R.ok(timeEntryService.sumByUserAndDateRange(targetUserId, startDate, endDate));
     }
@@ -146,5 +159,40 @@ public class TimeEntryController {
             @RequestParam("startDate") String startDate,
             @RequestParam("endDate") String endDate) {
         return R.ok(timeEntryService.listByProject(projectId, startDate, endDate));
+    }
+
+    /**
+     * 获取可选择的用户列表（用于人员视图的用户选择器）
+     * 仅拥有 time:view_others 权限的用户可获取完整列表
+     * 普通用户仅返回自身信息
+     */
+    @GetMapping("/users")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<TimeEntryUserVO>> listSelectableUsers(
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        boolean canViewOthers = canViewOthersTime(currentUserId);
+        return R.ok(timeEntryService.listSelectableUsers(currentUserId, canViewOthers, keyword));
+    }
+
+    /**
+     * 检查当前用户是否有权查看他人工时
+     * 返回布尔值供前端判断是否显示用户选择器
+     */
+    @GetMapping("/can-view-others")
+    @PreAuthorize("isAuthenticated()")
+    public R<Boolean> checkCanViewOthers() {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(canViewOthersTime(currentUserId));
+    }
+
+    // ========== 内部方法 ==========
+
+    /**
+     * 判断用户是否有权查看他人工时
+     * 系统管理员（system:admin）或在任何项目中拥有 time:view_others 的用户
+     */
+    private boolean canViewOthersTime(Long userId) {
+        return permissionService.hasPermissionInAnyProject(userId, PERM_VIEW_OTHERS);
     }
 }

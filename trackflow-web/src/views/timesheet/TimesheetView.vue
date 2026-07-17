@@ -17,10 +17,34 @@
       <!-- User selector & filters -->
       <div class="timesheet-controls">
         <div class="controls-left">
-          <div class="user-selector">
-            <span class="user-avatar-dot"></span>
-            <span class="user-name">{{ currentUserName }}</span>
-            <span class="selector-arrow">▾</span>
+          <div class="user-selector-area">
+            <template v-if="canViewOthers">
+              <a-select
+                v-model="selectedUserId"
+                placeholder="选择用户"
+                allow-search
+                allow-clear
+                style="width: 220px"
+                :filter-option="false"
+                @search="searchUsers"
+                @change="onUserChange"
+                @clear="onUserChange(undefined)"
+              >
+                <a-option v-for="u in selectableUsers" :key="u.id" :value="u.id" :label="u.displayName || u.username">
+                  <div class="user-option">
+                    <span class="user-option-avatar">{{ (u.displayName || u.username).charAt(0) }}</span>
+                    <span class="user-option-name">{{ u.displayName || u.username }}</span>
+                    <span v-if="u.id === authStore.user?.id" class="user-option-self">(我)</span>
+                  </div>
+                </a-option>
+              </a-select>
+            </template>
+            <template v-else>
+              <div class="user-selector-static">
+                <span class="user-avatar-dot"></span>
+                <span class="user-name">{{ currentUserName }}</span>
+              </div>
+            </template>
           </div>
           <div class="filters">
             <span class="filter-label">项目:</span>
@@ -35,7 +59,7 @@
       <div class="timesheet-datebar">
         <div class="date-info">
           <span class="date-range">{{ dateRangeLabel }}</span>
-          <span class="total-time">总已用时间: {{ formatDuration(weekTotal) }}</span>
+          <span class="total-time">{{ selectedUserDisplayName }} 总已用时间: {{ formatDuration(weekTotal) }}</span>
         </div>
         <div class="date-nav">
           <button class="nav-btn" @click="navigate(-1)">←</button>
@@ -291,7 +315,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import { timeEntryApi, issueApi } from '@/api'
-import type { TimeEntryVO, ProjectTimeSummaryVO } from '@/api/timeEntry'
+import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
 import WeekGrid from './WeekGrid.vue'
 import MonthGrid from './MonthGrid.vue'
@@ -314,6 +338,11 @@ const deleting = ref(false)
 const timeEntries = ref<TimeEntryVO[]>([])
 const issueOptions = ref<{ value: string; label: string }[]>([])
 
+// User selector state
+const canViewOthers = ref(false)
+const selectableUsers = ref<TimeEntryUserVO[]>([])
+const selectedUserId = ref<string | undefined>(undefined)
+
 // Project view state
 const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
@@ -334,6 +363,12 @@ const form = ref({
 
 // Computed
 const currentUserName = computed(() => authStore.user?.displayName || authStore.user?.username || 'Test User')
+
+const selectedUserDisplayName = computed(() => {
+  if (!selectedUserId.value) return currentUserName.value
+  const user = selectableUsers.value.find(u => u.id === selectedUserId.value)
+  return user?.displayName || currentUserName.value
+})
 
 const weekDays = computed(() => {
   const days = []
@@ -423,7 +458,11 @@ async function loadEntries() {
   loading.value = true
   try {
     const { startDate, endDate } = getDateRange()
-    const res = await timeEntryApi.list({ startDate, endDate })
+    const params: { userId?: string; startDate: string; endDate: string } = { startDate, endDate }
+    if (selectedUserId.value) {
+      params.userId = selectedUserId.value
+    }
+    const res = await timeEntryApi.list(params)
     if (res.code === 0 && res.data) {
       timeEntries.value = res.data
     }
@@ -473,6 +512,35 @@ function onProjectChange(val: string | undefined) {
     projectEntries.value = []
     loadProjectSummaries()
   }
+}
+
+// User selector functions
+async function loadCanViewOthers() {
+  try {
+    const res = await timeEntryApi.canViewOthers()
+    if (res.code === 0) {
+      canViewOthers.value = res.data === true
+    }
+  } catch { /* silent */ }
+}
+
+async function loadSelectableUsers(keyword?: string) {
+  try {
+    const params = keyword ? { keyword } : undefined
+    const res = await timeEntryApi.listSelectableUsers(params)
+    if (res.code === 0 && res.data) {
+      selectableUsers.value = res.data
+    }
+  } catch { /* silent */ }
+}
+
+function searchUsers(keyword: string) {
+  loadSelectableUsers(keyword)
+}
+
+function onUserChange(val: string | undefined) {
+  selectedUserId.value = val || undefined
+  loadEntries()
 }
 
 function getDateRange(): { startDate: string; endDate: string } {
@@ -740,6 +808,11 @@ watch(currentMonthDate, () => { if (viewMode.value === 'month') reloadCurrentTab
 onMounted(async () => {
   // Load time tracking settings first (needed for parseDuration + quota)
   await loadTTSettings()
+  // Check if user can view others' time entries (for user selector)
+  await loadCanViewOthers()
+  if (canViewOthers.value) {
+    await loadSelectableUsers()
+  }
   // Load data for the currently active tab (may be restored from URL)
   if (activeTab.value === 'projects') {
     loadProjectSummaries()
@@ -765,9 +838,13 @@ onMounted(async () => {
 /* Controls */
 .timesheet-controls { padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
 .controls-left { display: flex; flex-direction: column; gap: 6px; }
-.user-selector { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
+.user-selector-area { display: flex; align-items: center; }
+.user-selector-static { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
 .user-avatar-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--tf-accent); }
-.selector-arrow { font-size: 10px; color: var(--tf-text-tertiary); }
+.user-option { display: flex; align-items: center; gap: 8px; }
+.user-option-avatar { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, var(--tf-accent), #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 600; flex-shrink: 0; }
+.user-option-name { font-size: 13px; color: var(--tf-text-primary); }
+.user-option-self { font-size: 11px; color: var(--tf-text-tertiary); }
 .project-selector { display: flex; align-items: center; gap: 8px; }
 .filters { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 4px; }
 .filter-label { color: var(--tf-text-tertiary); }
