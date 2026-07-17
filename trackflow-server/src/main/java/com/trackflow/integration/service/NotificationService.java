@@ -2,6 +2,8 @@ package com.trackflow.integration.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.mapper.NotificationMapper;
 import lombok.RequiredArgsConstructor;
@@ -47,15 +49,16 @@ public class NotificationService {
     }
 
     /**
-     * 标记已读
+     * 标记已读（带所有权校验）
      */
     @Transactional
-    public void markRead(Long id) {
+    public void markRead(Long id, Long userId) {
         Notification n = notificationMapper.selectById(id);
-        if (n != null) {
-            n.setIsRead(true);
-            notificationMapper.updateById(n);
+        if (n == null || !n.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
         }
+        n.setIsRead(true);
+        notificationMapper.updateById(n);
     }
 
     /**
