@@ -54,7 +54,7 @@
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
           />
-          <CommentInput v-if="canComment" :show-add-time="projectTimeTrackingEnabled" @submit="onAddComment" @add-time="openTimeDialog" />
+          <CommentInput v-if="canComment" :show-add-time="projectTimeTrackingEnabled && canLogTime" @submit="onAddComment" @add-time="openTimeDialog" />
         </template>
       </DetailMainContent>
 
@@ -196,7 +196,7 @@ const issue = ref<IssueDetailVO | null>(null)
 const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
 
 // 权限控制（必须在 issue ref 声明之后）
-const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint, hasPermission: hasProjectPermission } = usePermission(
+const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint, canLogTime, hasPermission: hasProjectPermission } = usePermission(
   () => issue.value?.projectId,
   { isProjectArchived: () => isProjectArchived.value }
 )

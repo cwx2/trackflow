@@ -1,6 +1,7 @@
 package com.trackflow.timeentry.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
@@ -31,6 +32,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TimeEntryService {
 
+    private static final String PERM_TIME_LOG = "time:log";
+
     private final TimeEntryMapper timeEntryMapper;
     private final IssueActivityMapper activityMapper;
     private final IssueMapper issueMapper;
@@ -38,17 +41,24 @@ public class TimeEntryService {
     private final com.trackflow.issue.service.AncestorRefreshService ancestorRefreshService;
     private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
     private final com.trackflow.project.service.ProjectService projectService;
+    private final PermissionService permissionService;
 
     /**
      * 创建工时记录
+     * 权限校验：用户必须是工单所属项目的成员且拥有 time:log 权限
      */
     @Transactional
     public TimeEntry create(Long userId, CreateTimeEntryDTO dto) {
-        // 校验项目是否启用了时间追踪
-        Issue issue = issueMapper.selectById(dto.getIssueId());
-        if (issue == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
-        }
+        // 1. 校验工单存在且未软删除
+        Issue issue = getActiveIssueOrThrow(dto.getIssueId());
+
+        // 2. 校验用户为项目成员
+        projectService.assertProjectMember(userId, issue.getProjectId());
+
+        // 3. 校验用户拥有 time:log 权限
+        assertTimeLogPermission(userId, issue.getProjectId());
+
+        // 4. 校验项目是否启用了时间追踪
         if (!projectService.isTimeTrackingEnabled(issue.getProjectId())) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "该项目未启用时间追踪功能");
         }
@@ -94,6 +104,7 @@ public class TimeEntryService {
 
     /**
      * 更新工时记录
+     * 权限校验：只能修改自己的工时 + 用户必须拥有 time:log 权限
      */
     @Transactional
     public TimeEntry update(Long id, Long userId, UpdateTimeEntryDTO dto) {
@@ -103,6 +114,17 @@ public class TimeEntryService {
         }
         if (!entry.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权修改他人工时记录");
+        }
+
+        // 校验原工单所属项目的 time:log 权限
+        Issue originalIssue = getActiveIssueOrThrow(entry.getIssueId());
+        assertTimeLogPermission(userId, originalIssue.getProjectId());
+
+        // 如果要转移到另一个工单，校验目标工单权限
+        if (dto.getIssueId() != null && !dto.getIssueId().equals(entry.getIssueId())) {
+            Issue targetIssue = getActiveIssueOrThrow(dto.getIssueId());
+            projectService.assertProjectMember(userId, targetIssue.getProjectId());
+            assertTimeLogPermission(userId, targetIssue.getProjectId());
         }
 
         Long oldIssueId = entry.getIssueId();
@@ -143,6 +165,7 @@ public class TimeEntryService {
 
     /**
      * 删除工时记录
+     * 权限校验：只能删除自己的工时 + 用户必须拥有 time:log 权限
      */
     @Transactional
     public void delete(Long id, Long userId) {
@@ -152,6 +175,12 @@ public class TimeEntryService {
         }
         if (!entry.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权删除他人工时记录");
+        }
+
+        // 校验工单所属项目的 time:log 权限
+        Issue issue = issueMapper.selectById(entry.getIssueId());
+        if (issue != null) {
+            assertTimeLogPermission(userId, issue.getProjectId());
         }
 
         Long issueId = entry.getIssueId();
@@ -347,5 +376,30 @@ public class TimeEntryService {
         if (h == 0) return m + "m";
         if (m == 0) return h + "h";
         return h + "h" + m + "m";
+    }
+
+    /**
+     * 获取活跃的 Issue（未软删除），不存在或已删除则抛异常
+     */
+    private Issue getActiveIssueOrThrow(Long issueId) {
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null) {
+            // selectById 受逻辑删除过滤，再查一次确认是不存在还是已软删除
+            Map<String, Object> raw = issueMapper.selectByIdIgnoreDeleted(issueId);
+            if (raw != null && raw.get("deleted_at") != null) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "工单已删除，无法操作工时");
+            }
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        }
+        return issue;
+    }
+
+    /**
+     * 校验用户是否拥有 time:log 权限（项目级）
+     */
+    private void assertTimeLogPermission(Long userId, Long projectId) {
+        if (!permissionService.hasPermission(userId, projectId, PERM_TIME_LOG)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权记录工时");
+        }
     }
 }

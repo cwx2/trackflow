@@ -179,6 +179,9 @@ export function usePermission(
   /** 是否可以编辑项目 */
   const canEditProject = computed(() => hasWritePermission('project:edit'))
 
+  /** 是否可以记录工时 */
+  const canLogTime = computed(() => hasWritePermission('time:log'))
+
   return {
     permissions,
     loading,
@@ -195,6 +198,7 @@ export function usePermission(
     canViewSprint,
     canManageWorkflow,
     canManageMembers,
-    canEditProject
+    canEditProject,
+    canLogTime
   }
 }
