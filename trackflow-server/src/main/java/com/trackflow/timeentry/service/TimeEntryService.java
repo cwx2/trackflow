@@ -36,6 +36,7 @@ public class TimeEntryService {
     private final IssueMapper issueMapper;
     private final SysUserMapper sysUserMapper;
     private final com.trackflow.issue.service.AncestorRefreshService ancestorRefreshService;
+    private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
 
     /**
      * 创建工时记录
@@ -54,6 +55,15 @@ public class TimeEntryService {
         entry.setUpdatedAt(LocalDateTime.now());
 
         timeEntryMapper.insert(entry);
+
+        // 保存工作项属性值
+        if (dto.getAttributeValues() != null && !dto.getAttributeValues().isEmpty()) {
+            Map<Long, Long> attrValueMap = new HashMap<>();
+            for (Map.Entry<String, String> av : dto.getAttributeValues().entrySet()) {
+                attrValueMap.put(Long.parseLong(av.getKey()), Long.parseLong(av.getValue()));
+            }
+            workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
+        }
 
         // 记录活动：花费了 X 时间
         String durationStr = formatDuration(dto.getDuration());
@@ -96,6 +106,15 @@ public class TimeEntryService {
         entry.setUpdatedAt(LocalDateTime.now());
 
         timeEntryMapper.updateById(entry);
+
+        // 更新工作项属性值
+        if (dto.getAttributeValues() != null) {
+            Map<Long, Long> attrValueMap = new HashMap<>();
+            for (Map.Entry<String, String> av : dto.getAttributeValues().entrySet()) {
+                attrValueMap.put(Long.parseLong(av.getKey()), Long.parseLong(av.getValue()));
+            }
+            workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
+        }
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(entry.getIssueId());

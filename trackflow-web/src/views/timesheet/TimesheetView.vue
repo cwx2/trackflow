@@ -268,17 +268,14 @@
           </div>
         </div>
 
-        <!-- 类型 -->
-        <div class="dialog-field">
-          <label class="dialog-label">类型</label>
-          <a-select v-model="form.workType" placeholder="Select an option" allow-clear>
-            <a-option value="Development">开发</a-option>
-            <a-option value="Testing">测试</a-option>
-            <a-option value="Documentation">文档</a-option>
-            <a-option value="Design">设计</a-option>
-            <a-option value="Review">代码审查</a-option>
-            <a-option value="Meeting">会议</a-option>
-            <a-option value="Other">其他</a-option>
+        <!-- 工作项属性（动态加载） -->
+        <div v-for="attr in projectAttributes" :key="attr.id" class="dialog-field">
+          <label class="dialog-label">{{ attr.name }}</label>
+          <a-select v-model="formAttributeValues[attr.id]" :placeholder="`选择${attr.name}`" allow-clear>
+            <a-option v-for="val in attr.values" :key="val.id" :value="val.id">
+              <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
+              {{ val.name }}
+            </a-option>
           </a-select>
         </div>
 
@@ -315,7 +312,8 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import { timeEntryApi, issueApi } from '@/api'
-import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO } from '@/api/timeEntry'
+import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, WorkItemAttributeVO } from '@/api/timeEntry'
+import { workItemAttributeApi } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
 import WeekGrid from './WeekGrid.vue'
 import MonthGrid from './MonthGrid.vue'
@@ -348,6 +346,10 @@ const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
 const projectEntries = ref<TimeEntryVO[]>([])
 
+// Work item attributes (dynamically loaded per project)
+const projectAttributes = ref<WorkItemAttributeVO[]>([])
+const formAttributeValues = ref<Record<string, string>>({})
+const loadedAttributeProjectId = ref<string | null>(null)
 // Form
 const dateMode = ref<'single' | 'range'>('single')
 const extraRecords = ref<{ workDate: string; durationText: string }[]>([])
@@ -571,6 +573,25 @@ async function searchIssues(keyword: string) {
   } catch { /* silent */ }
 }
 
+/**
+ * 根据 issue 获取其所属项目的工作项属性
+ */
+async function loadAttributesForIssue(issueId: string) {
+  try {
+    // 获取 issue 详情以确定 projectId
+    const issueRes = await issueApi.getDetail(issueId)
+    if (issueRes.code === 0 && issueRes.data?.projectId) {
+      const projectId = issueRes.data.projectId
+      if (loadedAttributeProjectId.value === projectId) return // 已加载
+      loadedAttributeProjectId.value = projectId
+      const attrRes = await workItemAttributeApi.listByProject(projectId)
+      if (attrRes.code === 0 && attrRes.data) {
+        projectAttributes.value = attrRes.data
+      }
+    }
+  } catch { /* silent */ }
+}
+
 // People view helpers — kept for future use if needed
 // (Grid rendering delegated to WeekGrid / MonthGrid sub-components)
 
@@ -615,6 +636,7 @@ function openAddDialog(date?: string) {
   editingEntry.value = null
   dateMode.value = 'single'
   extraRecords.value = []
+  formAttributeValues.value = {}
   form.value = {
     issueId: undefined,
     workDate: date || formatDateKey(new Date()),
@@ -636,6 +658,13 @@ function openEditDialog(entry: TimeEntryVO) {
   editingEntry.value = entry
   dateMode.value = 'single'
   extraRecords.value = []
+  formAttributeValues.value = {}
+  // Populate attribute values from entry
+  if (entry.attributeValues) {
+    for (const av of entry.attributeValues) {
+      formAttributeValues.value[av.attributeId] = av.valueId
+    }
+  }
   form.value = {
     issueId: entry.issueId,
     workDate: entry.workDate,
@@ -652,6 +681,8 @@ function openEditDialog(entry: TimeEntryVO) {
       issueOptions.value = [{ value: entry.issueId, label: `${entry.issueKey} - ${entry.issueTitle || ''}` }, ...issueOptions.value]
     }
   }
+  // Load attributes for the issue's project
+  loadAttributesForIssue(entry.issueId)
   showDialog.value = true
 }
 
@@ -683,7 +714,10 @@ async function saveEntry() {
         duration,
         startTime,
         workType: form.value.workType || undefined,
-        description: form.value.description || undefined
+        description: form.value.description || undefined,
+        attributeValues: Object.keys(formAttributeValues.value).length > 0
+          ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
+          : undefined
       })
       Message.success('工时已更新')
     } else {
@@ -693,7 +727,10 @@ async function saveEntry() {
         duration,
         startTime,
         workType: form.value.workType || undefined,
-        description: form.value.description || undefined
+        description: form.value.description || undefined,
+        attributeValues: Object.keys(formAttributeValues.value).length > 0
+          ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
+          : undefined
       })
       Message.success('工时已添加')
     }
@@ -804,6 +841,17 @@ function getMonday(d: Date): string {
 watch(currentWeekStart, () => { if (viewMode.value === 'week') reloadCurrentTab() })
 watch(currentMonthDate, () => { if (viewMode.value === 'month') reloadCurrentTab() })
 
+// Watch issue selection to load project-specific attributes
+watch(() => form.value.issueId, (newId) => {
+  if (newId) {
+    loadAttributesForIssue(newId)
+  } else {
+    projectAttributes.value = []
+    formAttributeValues.value = {}
+    loadedAttributeProjectId.value = null
+  }
+})
+
 // Init
 onMounted(async () => {
   // Load time tracking settings first (needed for parseDuration + quota)
@@ -828,6 +876,9 @@ onMounted(async () => {
 .timesheet-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .timesheet-header { padding: 16px 24px 0; }
 .page-title { font-size: 18px; font-weight: 600; color: var(--tf-text-primary); margin: 0; }
+
+/* Attribute value dot */
+.attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
 /* Tabs */
 .timesheet-tabs { display: flex; gap: 0; padding: 12px 24px 0; border-bottom: 1px solid var(--tf-border-light); }

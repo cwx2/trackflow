@@ -1,6 +1,13 @@
 import request from './request'
 import type { R } from './types'
 
+export interface TimeEntryAttributeValueItem {
+  attributeId: string
+  valueId: string
+  valueName: string
+  valueColor?: string
+}
+
 export interface TimeEntryVO {
   id: string
   issueId: string
@@ -15,6 +22,7 @@ export interface TimeEntryVO {
   description?: string
   createdAt?: string
   updatedAt?: string
+  attributeValues?: TimeEntryAttributeValueItem[]
 }
 
 export interface ProjectTimeSummaryVO {
@@ -32,6 +40,25 @@ export interface TimeEntryUserVO {
   avatarUrl?: string
 }
 
+export interface AttributeValueVO {
+  id: string
+  name: string
+  color?: string
+  position: number
+}
+
+export interface WorkItemAttributeVO {
+  id: string
+  name: string
+  isBuiltin: boolean
+  position: number
+  createdAt?: string
+  updatedAt?: string
+  values: AttributeValueVO[]
+  projectIds?: string[]
+  usageCount?: number
+}
+
 export const timeEntryApi = {
   /** 查询用户在日期范围内的工时 */
   list(params: { userId?: string; startDate: string; endDate: string }) {
@@ -39,12 +66,12 @@ export const timeEntryApi = {
   },
 
   /** 创建工时记录 */
-  create(data: { issueId: string; workDate: string; duration: number; startTime?: number; workType?: string; description?: string }) {
+  create(data: { issueId: string; workDate: string; duration: number; startTime?: number; workType?: string; description?: string; attributeValues?: Record<string, string> }) {
     return request.post<any, R<TimeEntryVO>>('/time-entries', data)
   },
 
   /** 更新工时记录 */
-  update(id: string, data: { issueId?: string; workDate?: string; duration?: number; startTime?: number; workType?: string; description?: string }) {
+  update(id: string, data: { issueId?: string; workDate?: string; duration?: number; startTime?: number; workType?: string; description?: string; attributeValues?: Record<string, string> }) {
     return request.put<any, R<TimeEntryVO>>(`/time-entries/${id}`, data)
   },
 
@@ -81,5 +108,51 @@ export const timeEntryApi = {
   /** 检查当前用户是否有权查看他人工时 */
   canViewOthers() {
     return request.get<any, R<boolean>>('/time-entries/can-view-others')
+  }
+}
+
+// ========== 工作项属性管理 API ==========
+
+export const workItemAttributeApi = {
+  /** 列出所有工作项属性（管理用） */
+  list() {
+    return request.get<any, R<WorkItemAttributeVO[]>>('/work-item-attributes')
+  },
+
+  /** 获取单个属性详情 */
+  getById(id: string) {
+    return request.get<any, R<WorkItemAttributeVO>>(`/work-item-attributes/${id}`)
+  },
+
+  /** 创建属性 */
+  create(data: { name: string; values?: { name: string; color?: string }[] }) {
+    return request.post<any, R<WorkItemAttributeVO>>('/work-item-attributes', data)
+  },
+
+  /** 更新属性（名称和/或值列表） */
+  update(id: string, data: { name?: string; values?: { id?: string; name: string; color?: string }[] }) {
+    return request.put<any, R<WorkItemAttributeVO>>(`/work-item-attributes/${id}`, data)
+  },
+
+  /** 删除属性 */
+  delete(id: string) {
+    return request.delete<any, R<void>>(`/work-item-attributes/${id}`)
+  },
+
+  /** 管理属性-项目分配 */
+  manageProjects(id: string, projectIds: string[]) {
+    return request.put<any, R<WorkItemAttributeVO>>(`/work-item-attributes/${id}/projects`, {
+      projectIds: projectIds.map(Number)
+    })
+  },
+
+  /** 获取项目可用的工作项属性（工时弹窗用） */
+  listByProject(projectId: string) {
+    return request.get<any, R<WorkItemAttributeVO[]>>(`/work-item-attributes/by-project/${projectId}`)
+  },
+
+  /** 获取属性使用统计 */
+  getUsage(id: string) {
+    return request.get<any, R<number>>(`/work-item-attributes/${id}/usage`)
   }
 }

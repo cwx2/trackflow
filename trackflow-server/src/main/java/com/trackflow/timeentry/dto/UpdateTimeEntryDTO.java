@@ -3,6 +3,8 @@ package com.trackflow.timeentry.dto;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
 
+import java.util.Map;
+
 @Data
 public class UpdateTimeEntryDTO {
     private Long issueId;
@@ -14,4 +16,9 @@ public class UpdateTimeEntryDTO {
     private Integer startTime;
     private String workType;
     private String description;
+
+    /**
+     * 工作项属性值：key=attributeId, value=valueId
+     */
+    private Map<String, String> attributeValues;
 }

@@ -102,13 +102,19 @@
       </a-form-item>
       <a-form-item label="工作类型">
         <a-select v-model="timeForm.workType" placeholder="选择工作类型" allow-clear>
-          <a-option value="Development">开发</a-option>
-          <a-option value="Testing">测试</a-option>
-          <a-option value="Documentation">文档</a-option>
-          <a-option value="Design">设计</a-option>
-          <a-option value="Review">代码审查</a-option>
-          <a-option value="Meeting">会议</a-option>
-          <a-option value="Other">其他</a-option>
+          <a-option v-for="val in issueWorkTypeValues" :key="val.id" :value="val.name">
+            <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
+            {{ val.name }}
+          </a-option>
+        </a-select>
+      </a-form-item>
+      <!-- Dynamic work item attributes -->
+      <a-form-item v-for="attr in issueExtraAttributes" :key="attr.id" :label="attr.name">
+        <a-select v-model="timeFormAttrValues[attr.id]" :placeholder="`选择${attr.name}`" allow-clear>
+          <a-option v-for="val in attr.values" :key="val.id" :value="val.id">
+            <span v-if="val.color" class="attr-value-dot" :style="{ background: val.color }"></span>
+            {{ val.name }}
+          </a-option>
         </a-select>
       </a-form-item>
       <a-form-item label="描述">
@@ -129,6 +135,8 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi, customFieldApi } from '@/api'
+import { workItemAttributeApi } from '@/api/timeEntry'
+import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
 import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useTabStore } from '@/stores/tabs'
@@ -157,6 +165,25 @@ const timeForm = ref({
   durationText: '',
   workType: undefined as string | undefined,
   description: ''
+})
+const timeFormAttrValues = ref<Record<string, string>>({})
+const issueProjectAttributes = ref<WorkItemAttributeVO[]>([])
+const issueWorkTypeValues = computed(() => {
+  // Find the "Work type" built-in attribute values
+  const wt = issueProjectAttributes.value.find(a => a.name === 'Work type' || a.isBuiltin)
+  return wt?.values || [
+    { id: 'Development', name: '开发', color: '#58a6ff' },
+    { id: 'Testing', name: '测试', color: '#3fb950' },
+    { id: 'Documentation', name: '文档', color: '#d29922' },
+    { id: 'Design', name: '设计', color: '#a371f7' },
+    { id: 'Review', name: '代码审查', color: '#f0883e' },
+    { id: 'Meeting', name: '会议', color: '#8b949e' },
+    { id: 'Other', name: '其他', color: '#6e7681' }
+  ]
+})
+const issueExtraAttributes = computed(() => {
+  // Extra attributes beyond the built-in "Work type"
+  return issueProjectAttributes.value.filter(a => !a.isBuiltin && a.name !== 'Work type')
 })
 const loading = ref(false)
 const loadError = ref<string | null>(null)
@@ -676,7 +703,21 @@ function openTimeDialog() {
     workType: undefined,
     description: ''
   }
+  timeFormAttrValues.value = {}
+  // Load attributes for this issue's project
+  if (issue.value?.projectId) {
+    loadIssueProjectAttributes(issue.value.projectId)
+  }
   showTimeDialog.value = true
+}
+
+async function loadIssueProjectAttributes(projectId: string) {
+  try {
+    const res = await workItemAttributeApi.listByProject(projectId)
+    if (res.code === 0 && res.data) {
+      issueProjectAttributes.value = res.data
+    }
+  } catch { /* silent */ }
 }
 
 async function submitTimeEntry() {
@@ -690,6 +731,11 @@ async function submitTimeEntry() {
     return
   }
 
+  // Build attributeValues from timeFormAttrValues
+  const attrVals = Object.keys(timeFormAttrValues.value).length > 0
+    ? Object.fromEntries(Object.entries(timeFormAttrValues.value).filter(([, v]) => v))
+    : undefined
+
   timeSaving.value = true
   try {
     await timeEntryApi.create({
@@ -697,7 +743,8 @@ async function submitTimeEntry() {
       workDate: timeForm.value.workDate,
       duration,
       workType: timeForm.value.workType || undefined,
-      description: timeForm.value.description || undefined
+      description: timeForm.value.description || undefined,
+      attributeValues: attrVals
     })
     Message.success('工时已记录')
     showTimeDialog.value = false
@@ -800,6 +847,7 @@ function priorityDot(p: string) {
 </script>
 
 <style scoped>
+.attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .issue-detail-page {
   height: 100%;
   display: flex;

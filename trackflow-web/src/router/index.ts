@@ -151,6 +151,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
+        path: 'admin/work-item-attributes',
+        name: 'WorkItemAttributes',
+        component: () => import('@/views/admin/WorkItemAttributesView.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+      },
+      {
         path: 'settings/profile',
         name: 'Profile',
         component: () => import('@/views/settings/ProfileView.vue')

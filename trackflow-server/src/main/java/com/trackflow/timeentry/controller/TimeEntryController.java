@@ -19,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/time-entries")
@@ -30,6 +31,7 @@ public class TimeEntryController {
     private final TimeEntryService timeEntryService;
     private final IssueService issueService;
     private final PermissionService permissionService;
+    private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
 
     /**
      * 创建工时记录
@@ -39,16 +41,7 @@ public class TimeEntryController {
     public R<TimeEntryVO> create(@Valid @RequestBody CreateTimeEntryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         TimeEntry entry = timeEntryService.create(userId, dto);
-        // Return simplified VO
-        TimeEntryVO vo = new TimeEntryVO();
-        vo.setId(String.valueOf(entry.getId()));
-        vo.setIssueId(String.valueOf(entry.getIssueId()));
-        vo.setUserId(String.valueOf(entry.getUserId()));
-        vo.setWorkDate(entry.getWorkDate().toString());
-        vo.setDuration(entry.getDuration());
-        vo.setStartTime(entry.getStartTime());
-        vo.setWorkType(entry.getWorkType());
-        vo.setDescription(entry.getDescription());
+        TimeEntryVO vo = buildEntryVO(entry);
         return R.ok(vo);
     }
 
@@ -60,15 +53,7 @@ public class TimeEntryController {
     public R<TimeEntryVO> update(@PathVariable Long id, @Valid @RequestBody UpdateTimeEntryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         TimeEntry entry = timeEntryService.update(id, userId, dto);
-        TimeEntryVO vo = new TimeEntryVO();
-        vo.setId(String.valueOf(entry.getId()));
-        vo.setIssueId(String.valueOf(entry.getIssueId()));
-        vo.setUserId(String.valueOf(entry.getUserId()));
-        vo.setWorkDate(entry.getWorkDate().toString());
-        vo.setDuration(entry.getDuration());
-        vo.setStartTime(entry.getStartTime());
-        vo.setWorkType(entry.getWorkType());
-        vo.setDescription(entry.getDescription());
+        TimeEntryVO vo = buildEntryVO(entry);
         return R.ok(vo);
     }
 
@@ -194,5 +179,32 @@ public class TimeEntryController {
      */
     private boolean canViewOthersTime(Long userId) {
         return permissionService.hasPermissionInAnyProject(userId, PERM_VIEW_OTHERS);
+    }
+
+    /**
+     * 构建 TimeEntryVO（含属性值）
+     */
+    private TimeEntryVO buildEntryVO(TimeEntry entry) {
+        TimeEntryVO vo = new TimeEntryVO();
+        vo.setId(String.valueOf(entry.getId()));
+        vo.setIssueId(String.valueOf(entry.getIssueId()));
+        vo.setUserId(String.valueOf(entry.getUserId()));
+        vo.setWorkDate(entry.getWorkDate().toString());
+        vo.setDuration(entry.getDuration());
+        vo.setStartTime(entry.getStartTime());
+        vo.setWorkType(entry.getWorkType());
+        vo.setDescription(entry.getDescription());
+
+        // 加载属性值
+        Map<String, Map<String, String>> attrValues = workItemAttributeService.getTimeEntryAttributeValues(entry.getId());
+        if (!attrValues.isEmpty()) {
+            vo.setAttributeValues(attrValues.entrySet().stream().map(e -> {
+                Map<String, String> item = new java.util.HashMap<>(e.getValue());
+                item.put("attributeId", e.getKey());
+                return item;
+            }).toList());
+        }
+
+        return vo;
     }
 }

@@ -118,6 +118,13 @@ const menuItems: AdminMenuItem[] = [
     title: '时间追踪',
     description: '配置每日工作时长和每周工作日',
     permission: 'system:manage_roles'
+  },
+  {
+    path: '/admin/work-item-attributes',
+    icon: '🏷️',
+    title: '工作项属性',
+    description: '管理工时记录的分类属性和值列表',
+    permission: 'system:manage_roles'
   }
 ]
 

@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.Map;
+
 @Data
 public class CreateTimeEntryDTO {
     @NotNull(message = "工单ID不能为空")
@@ -19,4 +21,10 @@ public class CreateTimeEntryDTO {
     private Integer startTime;  // minutes from midnight
     private String workType;
     private String description;
+
+    /**
+     * 工作项属性值：key=attributeId, value=valueId
+     * 前端传入格式：{"1234": "5678"} 表示属性 1234 选择了值 5678
+     */
+    private Map<String, String> attributeValues;
 }
