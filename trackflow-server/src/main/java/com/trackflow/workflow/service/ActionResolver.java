@@ -48,6 +48,34 @@ public class ActionResolver {
             return Collections.emptyList();
         }
 
+        return filterByPriority(allActions, projectId, issueType);
+    }
+
+    /**
+     * 解析创建时的动作执行列表（old_status_id IS NULL）。
+     *
+     * @param projectId   项目 ID
+     * @param issueType   Issue 类型
+     * @param newStatusId 创建后的初始状态 ID
+     * @return 最高优先级非空层级的动作列表
+     */
+    public List<TransitionAction> resolveOnCreate(Long projectId, String issueType, Long newStatusId) {
+        List<TransitionAction> allActions = actionMapper.selectByCreationPath(
+                projectId, issueType, newStatusId);
+
+        if (allActions == null || allActions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return filterByPriority(allActions, projectId, issueType);
+    }
+
+    /**
+     * 按优先级从动作列表中筛选最高优先级层级的动作。
+     */
+    private List<TransitionAction> filterByPriority(List<TransitionAction> allActions,
+                                                     Long projectId, String issueType) {
+
         // Level 1: project_id = projectId AND issue_type = issueType（精确匹配）
         List<TransitionAction> level1 = allActions.stream()
                 .filter(a -> Objects.equals(a.getProjectId(), projectId) && issueType.equals(a.getIssueType()))

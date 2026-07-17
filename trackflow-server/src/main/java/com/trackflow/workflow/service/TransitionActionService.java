@@ -69,8 +69,8 @@ public class TransitionActionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", errors));
         }
 
-        // 校验状态 ID 存在
-        if (issueStatusMapper.selectById(dto.getOldStatusId()) == null) {
+        // 校验状态 ID 存在（oldStatusId 为 null 时表示"创建时触发"，无需校验）
+        if (dto.getOldStatusId() != null && issueStatusMapper.selectById(dto.getOldStatusId()) == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "oldStatusId 对应的状态不存在");
         }
         if (issueStatusMapper.selectById(dto.getNewStatusId()) == null) {
@@ -81,7 +81,7 @@ public class TransitionActionService {
         // projectId=0 表示全局，存为 null
         action.setProjectId(dto.getProjectId() == 0L ? null : dto.getProjectId());
         action.setIssueType(dto.getIssueType());
-        action.setOldStatusId(dto.getOldStatusId());
+        action.setOldStatusId(dto.getOldStatusId()); // null = on-create trigger
         action.setNewStatusId(dto.getNewStatusId());
         action.setActionType(dto.getActionType());
         action.setActionConfig(serializeConfig(dto.getActionConfig()));

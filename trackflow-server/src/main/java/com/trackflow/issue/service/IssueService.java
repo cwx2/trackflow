@@ -130,6 +130,11 @@ public class IssueService {
 
         issueMapper.insert(issue);
 
+        // 自动分配：用户未指定 assignee 时，触发创建时自动分配规则
+        if (issue.getAssigneeId() == null) {
+            transitionActionEngine.executeOnCreate(issue, currentUserId);
+        }
+
         // 保存自定义字段值到 EAV 表（带验证）
         if (dto.getCustomFields() != null && !dto.getCustomFields().isEmpty()) {
             Map<Long, String> fieldValues = new java.util.HashMap<>();

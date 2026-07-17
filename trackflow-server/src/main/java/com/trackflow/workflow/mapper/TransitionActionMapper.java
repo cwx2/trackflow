@@ -29,4 +29,21 @@ public interface TransitionActionMapper extends BaseMapper<TransitionAction> {
                                                   @Param("issueType") String issueType,
                                                   @Param("oldStatusId") Long oldStatusId,
                                                   @Param("newStatusId") Long newStatusId);
+
+    /**
+     * 查询创建时（old_status_id IS NULL）的自动化动作。
+     * 用于 Issue 创建时触发自动分配规则。
+     */
+    @Select("""
+            SELECT * FROM transition_action
+            WHERE (project_id = #{projectId} OR project_id IS NULL)
+              AND (issue_type = #{issueType} OR issue_type = '*')
+              AND old_status_id IS NULL
+              AND new_status_id = #{newStatusId}
+              AND enabled = true
+            ORDER BY sort_order ASC
+            """)
+    List<TransitionAction> selectByCreationPath(@Param("projectId") Long projectId,
+                                                @Param("issueType") String issueType,
+                                                @Param("newStatusId") Long newStatusId);
 }

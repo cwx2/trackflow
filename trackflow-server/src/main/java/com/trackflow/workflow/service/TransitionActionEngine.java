@@ -117,6 +117,40 @@ public class TransitionActionEngine {
     }
 
     /**
+     * 创建工单时执行自动分配。
+     * <p>
+     * 仅在用户未显式指定 assignee 时调用。
+     * 匹配 old_status_id IS NULL 的规则。
+     *
+     * @param issue       刚创建的 Issue（已 insert 入库）
+     * @param creatorId   创建者用户 ID
+     */
+    public void executeOnCreate(Issue issue, Long creatorId) {
+        // 解析创建时的动作列表
+        List<TransitionAction> actions = actionResolver.resolveOnCreate(
+                issue.getProjectId(), issue.getIssueType(), issue.getStatusId());
+
+        if (actions == null || actions.isEmpty()) {
+            log.debug("[TransitionActionEngine] Issue {} no on-create actions found", issue.getId());
+            return;
+        }
+
+        // 按 sort_order 顺序执行
+        for (TransitionAction action : actions) {
+            try {
+                boolean assigned = executeCreateAction(action, issue, creatorId);
+                if (assigned) {
+                    break;
+                }
+            } catch (RuntimeException e) {
+                log.error("[TransitionActionEngine] Issue {} on-create action {} 执行异常: {}",
+                        issue.getId(), action.getId(), e.getMessage(), e);
+                recordWorkflowFailure(action, issue, e);
+            }
+        }
+    }
+
+    /**
      * 执行单个动作。
      *
      * @return true 如果成功执行了 auto_assign（assignee 已更新），false 表示跳过或失败
@@ -195,6 +229,76 @@ public class TransitionActionEngine {
 
         // 主策略 + fallback 都失败
         log.warn("[TransitionActionEngine] Failed to resolve assignee for issue {} (action_id={}, strategy={})",
+                issue.getId(), action.getId(), strategyKey);
+        return false;
+    }
+
+    /**
+     * 执行创建时的单个自动分配动作。
+     * <p>
+     * 与 executeAction 区别：
+     * - 不传 oldStatusId（创建时无先前状态）
+     * - 通知内容为"创建时自动分配"
+     *
+     * @return true 如果成功执行了 auto_assign
+     */
+    private boolean executeCreateAction(TransitionAction action, Issue issue, Long creatorId) {
+        if (!"auto_assign".equals(action.getActionType())) {
+            return false;
+        }
+
+        ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
+        if (config == null) {
+            log.error("[TransitionActionEngine] Issue {} on-create action {} config 解析失败, json={}",
+                    issue.getId(), action.getId(), action.getActionConfig());
+            return false;
+        }
+
+        String strategyKey = config.getStrategy();
+        AssignmentStrategy strategy = strategyMap.get(strategyKey);
+        if (strategy == null) {
+            log.warn("[TransitionActionEngine] 未找到策略: {}, action_id={}", strategyKey, action.getId());
+            return false;
+        }
+
+        Long result = strategy.resolve(issue, config, issue.getProjectId());
+
+        // fallback
+        if (result == null && config.getFallbackStrategy() != null
+                && !config.getFallbackStrategy().isBlank()) {
+            AssignmentStrategy fallbackStrategy = strategyMap.get(config.getFallbackStrategy());
+            if (fallbackStrategy != null) {
+                result = fallbackStrategy.resolve(issue, config, issue.getProjectId());
+            }
+        }
+
+        if (result != null) {
+            issue.setAssigneeId(result);
+            issueMapper.updateById(issue);
+
+            // 记录 auto_assigned activity
+            IssueActivity activity = new IssueActivity();
+            activity.setIssueId(issue.getId());
+            activity.setUserId(creatorId);
+            activity.setAction("auto_assigned");
+            activity.setFieldName("assignee_id");
+            activity.setOldValue(null);
+            activity.setNewValue(String.valueOf(result));
+            activity.setDetail(String.format(
+                    "{\"action_id\":%d,\"strategy\":\"%s\",\"trigger\":\"on_create\",\"triggered_by\":%d}",
+                    action.getId(), strategyKey, creatorId));
+            activity.setCreatedAt(LocalDateTime.now());
+            issueActivityMapper.insert(activity);
+
+            log.info("[TransitionActionEngine] Issue {} auto-assigned on create to user {} (strategy: {})",
+                    issue.getId(), result, strategyKey);
+
+            // 通知由 IssueNotificationEvent.Created 事件统一处理（issue 对象已更新 assigneeId）
+
+            return true;
+        }
+
+        log.warn("[TransitionActionEngine] On-create auto-assign failed for issue {} (action_id={}, strategy={})",
                 issue.getId(), action.getId(), strategyKey);
         return false;
     }

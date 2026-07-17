@@ -20,8 +20,7 @@ public class CreateTransitionActionDTO {
     @NotBlank
     private String issueType;
 
-    /** 转换前状态 ID */
-    @NotNull
+    /** 转换前状态 ID，null 表示"创建时触发" */
     private Long oldStatusId;
 
     /** 转换后状态 ID */
