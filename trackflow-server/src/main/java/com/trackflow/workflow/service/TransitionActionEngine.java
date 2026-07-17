@@ -349,7 +349,7 @@ public class TransitionActionEngine {
     }
 
     /**
-     * 获取状态名称，查找失败时返回 ID 字符串。
+     * 获取状态的中文显示名称，查找失败时返回 ID 字符串。
      */
     private String getStatusName(Long statusId) {
         if (statusId == null) {
@@ -357,7 +357,7 @@ public class TransitionActionEngine {
         }
         try {
             IssueStatus status = issueStatusMapper.selectById(statusId);
-            return status != null ? status.getName() : String.valueOf(statusId);
+            return status != null ? status.getLocalizedName() : String.valueOf(statusId);
         } catch (Exception e) {
             return String.valueOf(statusId);
         }

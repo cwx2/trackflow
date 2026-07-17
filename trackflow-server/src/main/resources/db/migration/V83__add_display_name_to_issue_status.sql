@@ -1,4 +1,4 @@
--- V37: 为 issue_status 表添加 display_name 列，用于存储中文显示名称
+-- V83: 为 issue_status 表添加 display_name 列，用于存储中文显示名称
 -- 通知消息、报表等后端生成的文本需要使用中文状态名
 
 ALTER TABLE issue_status ADD COLUMN display_name VARCHAR(100);

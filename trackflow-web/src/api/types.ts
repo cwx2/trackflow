@@ -236,6 +236,7 @@ export interface ChildProgressVO {
 export interface IssueStatusVO {
   id: string
   name: string
+  displayName?: string
   code: string
   color: string
   category: string

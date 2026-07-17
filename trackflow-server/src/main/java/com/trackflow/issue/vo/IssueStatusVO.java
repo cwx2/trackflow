@@ -8,6 +8,7 @@ import java.util.List;
 public class IssueStatusVO {
     private String id;
     private String name;
+    private String displayName;
     private String code;
     private String color;
     private String category;

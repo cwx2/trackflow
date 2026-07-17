@@ -649,12 +649,12 @@ public class WorkflowService {
     }
 
     /**
-     * 获取所有状态的 ID→名称映射
+     * 获取所有状态的 ID→显示名称映射（优先 displayName，fallback 到 name）
      */
     private Map<Long, String> getStatusNameMap() {
         List<IssueStatus> allStatuses = statusMapper.selectList(new LambdaQueryWrapper<>());
         return allStatuses.stream()
-                .collect(Collectors.toMap(IssueStatus::getId, IssueStatus::getName));
+                .collect(Collectors.toMap(IssueStatus::getId, IssueStatus::getLocalizedName));
     }
 
     /**

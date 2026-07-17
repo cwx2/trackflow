@@ -498,11 +498,12 @@ public class IssueService {
                     Long oldStatusId = issue.getStatusId();
                     issue.setStatusId(defaultStatus.getId());
                     String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
+                    String newStatusName = defaultStatus.getLocalizedName();
                     recordActivity(id, currentUserId, "status_reset", "status",
-                            oldStatusName, defaultStatus.getName());
+                            oldStatusName, newStatusName);
                     statusAutoReset = true;
                     log.info("Issue {} type changed from {} to {}: status auto-reset from {} to default ({})",
-                            id, oldType, newType, oldStatusName, defaultStatus.getName());
+                            id, oldType, newType, oldStatusName, newStatusName);
                 }
             }
 
@@ -1057,9 +1058,10 @@ public class IssueService {
 
         // 记录状态变更活动
         IssueStatus oldStatus = statusMapper.selectById(oldStatusId);
+        String oldStatusDisplayName = oldStatus != null ? oldStatus.getLocalizedName() : String.valueOf(oldStatusId);
+        String newStatusDisplayName = newStatus.getLocalizedName();
         recordActivity(id, currentUserId, "status_changed", "status",
-                oldStatus != null ? oldStatus.getName() : String.valueOf(oldStatusId),
-                newStatus.getName());
+                oldStatusDisplayName, newStatusDisplayName);
 
         // 通知报告人+负责人状态已变更 — 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.StatusChanged(issue, oldStatusId, newStatusId, currentUserId));
@@ -1315,6 +1317,7 @@ public class IssueService {
             IssueStatusVO statusVO = new IssueStatusVO();
             statusVO.setId(String.valueOf(row.get("status_id")));
             statusVO.setName((String) row.get("status_name"));
+            statusVO.setDisplayName((String) row.get("status_display_name"));
             statusVO.setCode((String) row.get("status_code"));
             statusVO.setColor((String) row.get("status_color"));
             statusVO.setCategory((String) row.get("status_category"));

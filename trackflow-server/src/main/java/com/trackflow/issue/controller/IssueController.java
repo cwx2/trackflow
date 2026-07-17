@@ -338,7 +338,9 @@ public class IssueController {
         if (targetStatus == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "目标状态不存在");
         }
-        if (!targetStatus.getName().equals(lastStatusChange.getOldValue())) {
+        // 比较时兼容 name（英文）和 localizedName（中文）——活动记录可能存的是英文或中文
+        String oldValue = lastStatusChange.getOldValue();
+        if (!targetStatus.getName().equals(oldValue) && !targetStatus.getLocalizedName().equals(oldValue)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "撤销操作只能回退到上一个状态（" + lastStatusChange.getOldValue() + "），不允许任意跳转");
         }

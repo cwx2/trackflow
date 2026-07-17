@@ -70,12 +70,13 @@ public class StatusCacheHelper {
     }
 
     /**
-     * 获取状态名称（通过 DB 查询，不缓存名称——仅用于活动记录等低频场景）
+     * 获取状态的中文显示名称（优先 displayName，fallback 到 name）。
+     * 仅用于活动记录等低频场景，不缓存名称。
      */
     public String getStatusName(Long statusId) {
         if (statusId == null) return null;
         IssueStatus status = statusMapper.selectById(statusId);
-        return status != null ? status.getName() : null;
+        return status != null ? status.getLocalizedName() : null;
     }
 
     /**

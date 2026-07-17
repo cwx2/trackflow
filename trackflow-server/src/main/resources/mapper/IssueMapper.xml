@@ -24,6 +24,7 @@
             p.status AS project_status,
             s.name AS status_name, s.code AS status_code, s.color AS status_color,
             s.category AS status_category, s.is_default AS status_is_default, s.is_closed AS status_is_closed,
+            s.display_name AS status_display_name,
             a.display_name AS assignee_name,
             a.avatar_url AS assignee_avatar_url,
             r.display_name AS reporter_name,

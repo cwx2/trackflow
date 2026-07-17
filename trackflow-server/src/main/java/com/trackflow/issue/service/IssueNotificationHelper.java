@@ -325,7 +325,7 @@ public class IssueNotificationHelper {
     }
 
     /**
-     * 获取状态名称
+     * 获取状态的中文显示名称（优先 displayName，fallback 到 name）
      */
     private String getStatusName(Long statusId) {
         if (statusId == null) {
@@ -333,7 +333,7 @@ public class IssueNotificationHelper {
         }
         try {
             IssueStatus status = statusMapper.selectById(statusId);
-            return status != null ? status.getName() : String.valueOf(statusId);
+            return status != null ? status.getLocalizedName() : String.valueOf(statusId);
         } catch (Exception e) {
             return String.valueOf(statusId);
         }
