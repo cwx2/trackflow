@@ -141,7 +141,7 @@ import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-import { localizeFieldName, localizeFieldValue, localizeStatusName } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -408,10 +408,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
       { value: 'Normal', label: 'Normal' }, { value: 'Low', label: 'Low' },
     ]},
     { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
-    { key: 'issueType', label: '类型', value: i.issueType, editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: [
-      { value: 'Bug', label: 'Bug' }, { value: 'Task', label: 'Task' },
-      { value: 'Feature', label: 'Feature' }, { value: 'Epic', label: 'Epic' }, { value: 'Story', label: 'Story' },
-    ]},
+    { key: 'issueType', label: '类型', value: i.issueType, editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: Object.entries(issueTypeLabelMap).map(([value, label]) => ({ value, label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },

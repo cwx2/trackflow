@@ -305,9 +305,7 @@
             @keyup.enter="quickCreate"
           />
           <a-select v-model="quickForm.issueType" size="small" style="width: 80px">
-            <a-option value="Task">任务</a-option>
-            <a-option value="Bug">缺陷</a-option>
-            <a-option value="Feature">需求</a-option>
+            <a-option v-for="(label, value) in issueTypeLabelMap" :key="value" :value="value">{{ label }}</a-option>
           </a-select>
           <a-select v-model="quickForm.priority" size="small" style="width: 80px">
             <a-option value="Normal">普通</a-option>
@@ -505,7 +503,7 @@ import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'

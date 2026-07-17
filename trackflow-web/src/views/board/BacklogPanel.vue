@@ -112,6 +112,7 @@ import { Message } from '@arco-design/web-vue'
 import { issueApi } from '@/api'
 import type { IssueVO } from '@/api/types'
 import { IconSearch, IconClose } from '@arco-design/web-vue/es/icon'
+import { localizeIssueType } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   visible: boolean
@@ -233,8 +234,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  const map: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Story: '故事' }
-  return map[type] || type
+  return localizeIssueType(type)
 }
 
 /** Called by parent to refresh after a successful drop */

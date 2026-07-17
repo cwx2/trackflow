@@ -152,7 +152,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { issueApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeIssueType } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
 
@@ -242,8 +242,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  const map: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Story: '故事' }
-  return map[type] || type
+  return localizeIssueType(type)
 }
 
 function formatTime(iso: string): string {

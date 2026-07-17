@@ -60,10 +60,7 @@
           <div class="prop-row">
             <span class="prop-label">类型</span>
             <a-select v-model="form.issueType" size="small">
-              <a-option value="Task">任务</a-option>
-              <a-option value="Bug">缺陷</a-option>
-              <a-option value="Feature">需求</a-option>
-              <a-option value="Story">故事</a-option>
+              <a-option v-for="(label, value) in issueTypeLabelMap" :key="value" :value="value">{{ label }}</a-option>
             </a-select>
           </div>
           <div class="prop-row">
@@ -239,6 +236,7 @@ import { projectApi, issueApi, sprintApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import RichEditor from './components/RichEditor.vue'
+import { issueTypeLabelMap } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   visible: boolean

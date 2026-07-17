@@ -622,7 +622,7 @@ import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeIssueType } from '@/utils/fieldLabels'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
@@ -758,8 +758,8 @@ interface SwimlaneRow {
   issues: IssueVO[]
 }
 
-// 类型映射
-const TYPE_LABELS: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Story: '故事' }
+// 类型映射（使用共享工具）
+const TYPE_LABELS = { Task: '任务', Bug: '缺陷', Feature: '需求', Epic: '史诗', Story: '故事' } as Record<string, string>
 
 const swimlanes = computed<SwimlaneRow[]>(() => {
   if (swimlaneGroupBy.value === 'none') return []
@@ -1185,8 +1185,7 @@ function priorityIcon(priority: string): string {
 }
 
 function typeLabel(type: string): string {
-  const map: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Story: '故事' }
-  return map[type] || type
+  return localizeIssueType(type)
 }
 
 function openIssue(issue: IssueVO) {

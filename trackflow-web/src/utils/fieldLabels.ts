@@ -45,6 +45,28 @@ export function localizeFieldName(name?: string | null): string | undefined {
 }
 
 /**
+ * Issue 类型英文值 → 中文映射
+ * 统一用于系统中所有展示 Issue 类型名称的位置（列表、详情、筛选器、看板、自定义字段等）
+ */
+export const issueTypeLabelMap: Record<string, string> = {
+  Bug: '缺陷',
+  Task: '任务',
+  Feature: '需求',
+  Epic: '史诗',
+  Story: '故事',
+}
+
+/**
+ * 本地化 Issue 类型名称
+ * @param type 英文类型值（如 "Bug"、"Task"）
+ * @returns 中文类型名（如 "缺陷"、"任务"），未匹配时返回原值
+ */
+export function localizeIssueType(type?: string | null): string {
+  if (!type) return '未知'
+  return issueTypeLabelMap[type] || type
+}
+
+/**
  * 优先级英文值 → 中文映射
  */
 export const priorityLabelMap: Record<string, string> = {
@@ -133,6 +155,11 @@ export function localizeFieldValue(fieldName?: string | null, value?: string | n
   // 状态字段
   if (fieldName === 'status' || fieldName === 'status_id') {
     return statusLabelMap[value] || value
+  }
+
+  // Issue 类型字段
+  if (fieldName === 'issueType' || fieldName === 'issue_type') {
+    return issueTypeLabelMap[value] || value
   }
 
   return value

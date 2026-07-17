@@ -153,7 +153,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, sprintApi, userApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, SprintVO, UserVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
 
 // ==================== Types ====================
 
@@ -475,12 +475,7 @@ async function loadValueOptions(fieldKey: string) {
         break
 
       case 'issueType':
-        valueOptions.value = [
-          { id: 'Task', label: '任务' },
-          { id: 'Bug', label: '缺陷' },
-          { id: 'Feature', label: '需求' },
-          { id: 'Epic', label: '史诗' },
-        ]
+        valueOptions.value = Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
         break
 
       case 'project':

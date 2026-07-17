@@ -320,8 +320,8 @@ public class WorkflowService {
      * 返回数据库中 issue 表的 distinct issue_type 值 + 预定义类型
      */
     public List<String> listIssueTypes() {
-        // 预定义的基础类型
-        List<String> baseTypes = List.of("Bug", "Task", "Feature");
+        // 预定义的基础类型（与系统内置类型一致）
+        List<String> baseTypes = List.of("Bug", "Task", "Feature", "Epic");
 
         // 从 issue 表查询所有已使用的 issue_type（排除已删除的）
         List<Object> dbTypes = issueMapper.selectObjs(

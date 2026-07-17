@@ -44,7 +44,7 @@
           <a-table-column title="适用类型" :width="140">
             <template #cell="{ record }">
               <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
-              <span v-else>{{ record.issueTypes.join(', ') }}</span>
+              <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
             </template>
           </a-table-column>
           <a-table-column title="操作" :width="120" align="center">
@@ -147,9 +147,7 @@
         <!-- Issue 类型关联 -->
         <a-form-item label="适用 Issue 类型">
           <a-checkbox-group v-model="form.issueTypes">
-            <a-checkbox value="Task">任务</a-checkbox>
-            <a-checkbox value="Bug">缺陷</a-checkbox>
-            <a-checkbox value="Feature">需求</a-checkbox>
+            <a-checkbox v-for="t in issueTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-checkbox>
           </a-checkbox-group>
           <div class="form-help">不选则适用所有类型</div>
         </a-form-item>
@@ -162,13 +160,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { IconPlus, IconDelete, IconCheck } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
-import { customFieldApi, projectApi } from '@/api'
+import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO } from '@/api/types'
+import { localizeIssueType } from '@/utils/fieldLabels'
 
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
 const loading = ref(false)
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
 const projectList = ref<any[]>([])
+const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
 
 // Drawer state
 const drawerVisible = ref(false)
@@ -225,6 +225,22 @@ async function loadProjects() {
     projectList.value = res.data?.list || []
   } catch {
     projectList.value = []
+  }
+}
+
+async function loadIssueTypes() {
+  try {
+    const res = await workflowApi.listIssueTypes()
+    const types = res.data || []
+    issueTypeOptions.value = types.map(t => ({ value: t, label: localizeIssueType(t) }))
+  } catch {
+    // Fallback to basic types if API fails
+    issueTypeOptions.value = [
+      { value: 'Bug', label: '缺陷' },
+      { value: 'Task', label: '任务' },
+      { value: 'Feature', label: '需求' },
+      { value: 'Epic', label: '史诗' },
+    ]
   }
 }
 
@@ -337,6 +353,7 @@ async function handleDelete(id: string) {
 onMounted(() => {
   loadList()
   loadProjects()
+  loadIssueTypes()
 })
 </script>
 
