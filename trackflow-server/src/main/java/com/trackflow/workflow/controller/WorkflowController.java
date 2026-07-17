@@ -33,16 +33,22 @@ public class WorkflowController {
      * 获取工作流转换矩阵
      * projectId=0 表示全局工作流，需要系统管理员权限
      * projectId>0 表示项目级工作流，需要项目 manage_workflow 权限
+     *
+     * @param author   筛选 author 模式：true=仅Author规则, false=仅Normal规则(该维度), null=不筛选
+     * @param assignee 筛选 assignee 模式：true=仅Assignee规则, false=仅Normal规则(该维度), null=不筛选
      */
     @GetMapping("/projects/{projectId}/workflows")
     @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<List<WorkflowTransitionVO>> getTransitionMatrix(
             @PathVariable Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType,
-            @RequestParam(value = "roleId", required = false) Long roleId) {
+            @RequestParam(value = "roleId", required = false) Long roleId,
+            @RequestParam(value = "author", required = false) Boolean author,
+            @RequestParam(value = "assignee", required = false) Boolean assignee) {
 
         Long effectiveProjectId = (projectId == 0L) ? null : projectId;
-        List<WorkflowTransition> transitions = workflowService.getTransitionMatrix(effectiveProjectId, issueType, roleId);
+        List<WorkflowTransition> transitions = workflowService.getTransitionMatrix(
+                effectiveProjectId, issueType, roleId, author, assignee);
         return R.ok(workflowConverter.toVOList(transitions));
     }
 

@@ -10,4 +10,6 @@ public class WorkflowTransitionVO {
     private String roleId;
     private String oldStatusId;
     private String newStatusId;
+    private Boolean author;
+    private Boolean assignee;
 }

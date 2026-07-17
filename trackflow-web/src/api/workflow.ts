@@ -6,7 +6,12 @@ import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowActivityVO, U
  */
 export const workflowApi = {
   /** 获取工作流转换矩阵 */
-  getTransitionMatrix(projectId: string, params?: { issueType?: string; roleId?: string }) {
+  getTransitionMatrix(projectId: string, params?: {
+    issueType?: string
+    roleId?: string
+    author?: boolean
+    assignee?: boolean
+  }) {
     return request.get<any, R<WorkflowTransitionVO[]>>(`/projects/${projectId}/workflows`, { params })
   },
 

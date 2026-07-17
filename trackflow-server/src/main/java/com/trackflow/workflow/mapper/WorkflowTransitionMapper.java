@@ -12,24 +12,28 @@ import java.util.List;
 public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition> {
 
     /**
-     * 查找允许的状态转换（精确匹配 projectId）。
+     * 查找允许的状态转换（精确匹配 projectId），支持 author/assignee 维度。
      * <p>
      * 当 projectId 为 null 时，精确匹配 project_id IS NULL（全局规则）。
      * 当 projectId 非 null 时，精确匹配 project_id = projectId（项目级规则）。
      * <p>
-     * issue_type 同理：精确匹配指定值，不含通配符。
+     * author/assignee 过滤逻辑（对标 OpenProject Workflow.from_status）：
+     * - 始终包含基础规则（author=false AND assignee=false）
+     * - 如果 isAuthor=true，额外包含 author=true 的规则
+     * - 如果 isAssignee=true，额外包含 assignee=true 的规则
      */
     List<Long> findAllowedNewStatusIdsExact(@Param("projectId") Long projectId,
                                             @Param("issueType") String issueType,
                                             @Param("roleIds") List<Long> roleIds,
-                                            @Param("oldStatusId") Long oldStatusId);
+                                            @Param("oldStatusId") Long oldStatusId,
+                                            @Param("isAuthor") boolean isAuthor,
+                                            @Param("isAssignee") boolean isAssignee);
 
     /**
      * 查找指定角色可以发起转换的所有源状态 ID（精确匹配 projectId）。
      * 用于看板等场景预判卡片是否可拖拽。
      * <p>
-     * 当 projectId 为 null 时，精确匹配 project_id IS NULL。
-     * 当 projectId 非 null 时，精确匹配 project_id = projectId。
+     * 注意：看板场景不区分 author/assignee，返回所有模式下的源状态。
      */
     List<Long> findTransitionableSourceStatusIdsExact(@Param("projectId") Long projectId,
                                                      @Param("roleIds") List<Long> roleIds);

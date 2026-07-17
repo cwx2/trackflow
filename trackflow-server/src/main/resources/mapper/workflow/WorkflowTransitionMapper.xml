@@ -4,9 +4,12 @@
 <mapper namespace="com.trackflow.workflow.mapper.WorkflowTransitionMapper">
 
     <!--
-      精确匹配查询：当 projectId 非 null 时匹配 project_id = projectId，
-      当 projectId 为 null 时匹配 project_id IS NULL。
-      issue_type 同理：精确匹配指定值。
+      精确匹配查询，支持 author/assignee 维度。
+      
+      对标 OpenProject Workflow.from_status 的合并逻辑：
+      - 始终包含基础规则（author=false AND assignee=false）
+      - 如果 isAuthor=true，额外包含 author=true 的规则
+      - 如果 isAssignee=true，额外包含 assignee=true 的规则
     -->
     <select id="findAllowedNewStatusIdsExact" resultType="java.lang.Long">
         SELECT DISTINCT new_status_id FROM workflow_transition
@@ -25,12 +28,21 @@
             #{roleId}
         </foreach>
           AND old_status_id = #{oldStatusId}
+          AND (
+            (author = false AND assignee = false)
+            <if test="isAuthor">
+                OR (author = true)
+            </if>
+            <if test="isAssignee">
+                OR (assignee = true)
+            </if>
+          )
         ORDER BY new_status_id
     </select>
 
     <!--
-      精确匹配查询源状态：当 projectId 非 null 时匹配 project_id = projectId，
-      当 projectId 为 null 时匹配 project_id IS NULL。
+      精确匹配查询源状态：看板场景不区分 author/assignee，
+      返回所有模式下的源状态（只要存在任何转换规则即可拖拽）。
     -->
     <select id="findTransitionableSourceStatusIdsExact" resultType="java.lang.Long">
         SELECT DISTINCT old_status_id FROM workflow_transition

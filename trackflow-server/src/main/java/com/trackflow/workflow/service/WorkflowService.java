@@ -74,14 +74,20 @@ public class WorkflowService {
      * - 项目成员：根据其角色在 workflow_transition 表中定义的规则确定可用转换
      * - 非项目成员：无可用转换
      * 
-     * 注意：不再对 developer 角色做 ownership 校验。
-     * 工作流规则已通过 workflow_transition 表按角色精确控制可用路径。
+     * author/assignee 维度（对标 OpenProject Workflow.from_status）：
+     * - 始终包含基础规则（author=false AND assignee=false）
+     * - 如果用户是工单创建者，额外包含 author=true 的规则
+     * - 如果用户是工单负责人，额外包含 assignee=true 的规则
      */
     public List<IssueStatus> getAvailableTransitions(Issue issue, Long userId) {
+        boolean isAuthor = userId.equals(issue.getCreatedBy());
+        boolean isAssignee = userId.equals(issue.getAssigneeId());
+
         // 系统管理员直接跳过所有权检查（由全局权限保障）
         if (permissionService.isSystemAdmin(userId)) {
             // 系统管理员使用 project_admin 的工作流规则
-            return getTransitionsForRoles(issue, List.of(PROJECT_ADMIN_ROLE_ID));
+            // 系统管理员同时视为 author + assignee（获取最大权限集）
+            return getTransitionsForRoles(issue, List.of(PROJECT_ADMIN_ROLE_ID), true, true);
         }
 
         // 获取用户在项目中的角色
@@ -90,13 +96,18 @@ public class WorkflowService {
             return List.of();
         }
 
-        return getTransitionsForRoles(issue, roleIds);
+        return getTransitionsForRoles(issue, roleIds, isAuthor, isAssignee);
     }
 
     /**
-     * 检查用户是否为工单的"所有者"（assignee 或 reporter 或创建者）
-     * 保留此方法供前端资源级权限判断使用（IssueController.getAvailableTransitions 中的 hasIssuePermission）
+     * 检查用户是否为工单的"所有者"（assignee 或 reporter 或创建者）。
+     *
+     * @deprecated 此方法的逻辑已被 author/assignee 查询维度替代。
+     *             工作流引擎现在通过 workflow_transition 表的 author/assignee 字段
+     *             直接在转换规则查询中处理创建者/负责人的额外权限。
+     *             计划在下个版本移除。
      */
+    @Deprecated(since = "2026-07-17", forRemoval = true)
     public boolean isIssueOwner(Issue issue, Long userId) {
         return Objects.equals(issue.getAssigneeId(), userId)
                 || Objects.equals(issue.getReporterId(), userId)
@@ -115,9 +126,11 @@ public class WorkflowService {
      * </ol>
      * 返回最高优先级非空层级的结果（项目级规则存在时不合并全局规则）。
      */
-    private List<IssueStatus> getTransitionsForRoles(Issue issue, List<Long> roleIds) {
+    private List<IssueStatus> getTransitionsForRoles(Issue issue, List<Long> roleIds,
+                                                     boolean isAuthor, boolean isAssignee) {
         List<Long> allowedStatusIds = resolveAllowedStatusIds(
-                issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId());
+                issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId(),
+                isAuthor, isAssignee);
 
         if (allowedStatusIds.isEmpty()) {
             return List.of();
@@ -134,10 +147,11 @@ public class WorkflowService {
      * 返回最高优先级非空层级的结果集。
      */
     private List<Long> resolveAllowedStatusIds(Long projectId, String issueType,
-                                               List<Long> roleIds, Long oldStatusId) {
+                                               List<Long> roleIds, Long oldStatusId,
+                                               boolean isAuthor, boolean isAssignee) {
         // Level 1: project_id = X AND issue_type = 精确类型
         List<Long> result = transitionMapper.findAllowedNewStatusIdsExact(
-                projectId, issueType, roleIds, oldStatusId);
+                projectId, issueType, roleIds, oldStatusId, isAuthor, isAssignee);
         if (!result.isEmpty()) {
             log.debug("Workflow transition resolved at Level 1 (project+exactType): {} statuses", result.size());
             return result;
@@ -145,7 +159,7 @@ public class WorkflowService {
 
         // Level 2: project_id = X AND issue_type = '*'
         result = transitionMapper.findAllowedNewStatusIdsExact(
-                projectId, "*", roleIds, oldStatusId);
+                projectId, "*", roleIds, oldStatusId, isAuthor, isAssignee);
         if (!result.isEmpty()) {
             log.debug("Workflow transition resolved at Level 2 (project+wildcard): {} statuses", result.size());
             return result;
@@ -153,7 +167,7 @@ public class WorkflowService {
 
         // Level 3: project_id IS NULL AND issue_type = 精确类型
         result = transitionMapper.findAllowedNewStatusIdsExact(
-                null, issueType, roleIds, oldStatusId);
+                null, issueType, roleIds, oldStatusId, isAuthor, isAssignee);
         if (!result.isEmpty()) {
             log.debug("Workflow transition resolved at Level 3 (global+exactType): {} statuses", result.size());
             return result;
@@ -161,7 +175,7 @@ public class WorkflowService {
 
         // Level 4: project_id IS NULL AND issue_type = '*'
         result = transitionMapper.findAllowedNewStatusIdsExact(
-                null, "*", roleIds, oldStatusId);
+                null, "*", roleIds, oldStatusId, isAuthor, isAssignee);
         if (!result.isEmpty()) {
             log.debug("Workflow transition resolved at Level 4 (global+wildcard): {} statuses", result.size());
             return result;
@@ -179,9 +193,14 @@ public class WorkflowService {
     }
 
     /**
-     * 获取项目的工作流转换矩阵
+     * 获取项目的工作流转换矩阵（用于编辑器展示）。
+     * 支持按 author/assignee 模式筛选。
+     *
+     * @param author  null=不筛选, false=Normal模式, true=Author模式
+     * @param assignee null=不筛选, false=Normal模式, true=Assignee模式
      */
-    public List<WorkflowTransition> getTransitionMatrix(Long projectId, String issueType, Long roleId) {
+    public List<WorkflowTransition> getTransitionMatrix(Long projectId, String issueType,
+                                                        Long roleId, Boolean author, Boolean assignee) {
         LambdaQueryWrapper<WorkflowTransition> wrapper = new LambdaQueryWrapper<>();
 
         if (projectId != null) {
@@ -200,35 +219,45 @@ public class WorkflowService {
             wrapper.eq(WorkflowTransition::getRoleId, roleId);
         }
 
+        // author/assignee 模式筛选
+        if (author != null) {
+            wrapper.eq(WorkflowTransition::getAuthor, author);
+        }
+        if (assignee != null) {
+            wrapper.eq(WorkflowTransition::getAssignee, assignee);
+        }
+
         return transitionMapper.selectList(wrapper);
     }
 
     /**
-     * 批量更新工作流转换矩阵（替换指定项目+类型+角色的所有规则）
+     * 获取项目的工作流转换矩阵（向后兼容旧接口，不筛选 author/assignee）
+     */
+    public List<WorkflowTransition> getTransitionMatrix(Long projectId, String issueType, Long roleId) {
+        return getTransitionMatrix(projectId, issueType, roleId, null, null);
+    }
+
+    /**
+     * 批量更新工作流转换矩阵（替换指定项目+类型+角色+模式的所有规则）
+     * 
+     * @param author  规则的 author 标记（Normal模式=false, Author模式=true）
+     * @param assignee 规则的 assignee 标记（Normal模式=false, Assignee模式=true）
      */
     @Transactional
     public void updateTransitionMatrix(Long projectId, String issueType, Long roleId,
+                                       Boolean author, Boolean assignee,
                                        List<WorkflowTransition> transitions) {
+        boolean effectiveAuthor = Boolean.TRUE.equals(author);
+        boolean effectiveAssignee = Boolean.TRUE.equals(assignee);
+
         // 查询旧规则（用于 diff 计算）
-        LambdaQueryWrapper<WorkflowTransition> oldWrapper = new LambdaQueryWrapper<>();
-        if (projectId != null) {
-            oldWrapper.eq(WorkflowTransition::getProjectId, projectId);
-        } else {
-            oldWrapper.isNull(WorkflowTransition::getProjectId);
-        }
-        oldWrapper.eq(WorkflowTransition::getIssueType, issueType != null ? issueType : "*");
-        oldWrapper.eq(WorkflowTransition::getRoleId, roleId);
+        LambdaQueryWrapper<WorkflowTransition> oldWrapper = buildDeleteWrapper(
+                projectId, issueType, roleId, effectiveAuthor, effectiveAssignee);
         List<WorkflowTransition> oldTransitions = transitionMapper.selectList(oldWrapper);
 
         // 删除旧规则
-        LambdaQueryWrapper<WorkflowTransition> deleteWrapper = new LambdaQueryWrapper<>();
-        if (projectId != null) {
-            deleteWrapper.eq(WorkflowTransition::getProjectId, projectId);
-        } else {
-            deleteWrapper.isNull(WorkflowTransition::getProjectId);
-        }
-        deleteWrapper.eq(WorkflowTransition::getIssueType, issueType != null ? issueType : "*");
-        deleteWrapper.eq(WorkflowTransition::getRoleId, roleId);
+        LambdaQueryWrapper<WorkflowTransition> deleteWrapper = buildDeleteWrapper(
+                projectId, issueType, roleId, effectiveAuthor, effectiveAssignee);
         transitionMapper.delete(deleteWrapper);
 
         // 插入新规则
@@ -236,11 +265,33 @@ public class WorkflowService {
             t.setProjectId(projectId);
             t.setIssueType(issueType != null ? issueType : "*");
             t.setRoleId(roleId);
+            t.setAuthor(effectiveAuthor);
+            t.setAssignee(effectiveAssignee);
             transitionMapper.insert(t);
         }
 
         // 计算 diff 并记录审计日志
-        recordDetailedActivity(projectId, issueType, roleId, oldTransitions, transitions);
+        recordDetailedActivity(projectId, issueType, roleId, effectiveAuthor, effectiveAssignee,
+                oldTransitions, transitions);
+    }
+
+    /**
+     * 构建删除条件 Wrapper
+     */
+    private LambdaQueryWrapper<WorkflowTransition> buildDeleteWrapper(
+            Long projectId, String issueType, Long roleId,
+            boolean author, boolean assignee) {
+        LambdaQueryWrapper<WorkflowTransition> wrapper = new LambdaQueryWrapper<>();
+        if (projectId != null) {
+            wrapper.eq(WorkflowTransition::getProjectId, projectId);
+        } else {
+            wrapper.isNull(WorkflowTransition::getProjectId);
+        }
+        wrapper.eq(WorkflowTransition::getIssueType, issueType != null ? issueType : "*");
+        wrapper.eq(WorkflowTransition::getRoleId, roleId);
+        wrapper.eq(WorkflowTransition::getAuthor, author);
+        wrapper.eq(WorkflowTransition::getAssignee, assignee);
+        return wrapper;
     }
 
     /**
@@ -258,7 +309,8 @@ public class WorkflowService {
                 })
                 .toList();
 
-        updateTransitionMatrix(projectId, dto.getIssueType(), dto.getRoleId(), transitions);
+        updateTransitionMatrix(projectId, dto.getIssueType(), dto.getRoleId(),
+                dto.getAuthor(), dto.getAssignee(), transitions);
     }
 
     /**
@@ -283,6 +335,7 @@ public class WorkflowService {
      *   <li>project_id IS NULL（全局规则）</li>
      * </ol>
      * 注意：此方法不涉及 issue_type 维度（看板是项目级视图，不按类型区分）。
+     * 也不区分 author/assignee（看板预判使用所有转换规则的并集）。
      */
     public Set<Long> getTransitionableSourceStatuses(Long projectId, Long userId) {
         // 系统管理员：使用 project_admin 规则
@@ -394,6 +447,7 @@ public class WorkflowService {
      * 记录详细的工作流变更审计日志（含 diff 明细）
      */
     private void recordDetailedActivity(Long projectId, String issueType, Long roleId,
+                                        boolean author, boolean assignee,
                                         List<WorkflowTransition> oldTransitions,
                                         List<WorkflowTransition> newTransitions) {
         try {
@@ -428,11 +482,13 @@ public class WorkflowService {
                     .map(key -> buildTransitionItem(key, statusNameMap))
                     .toList();
 
-            // 构建摘要
-            String summary = buildSummary(addedList, removedList, statusNameMap, roleId);
+            // 构建摘要（含模式信息）
+            String modeLabel = getModeLabel(author, assignee);
+            String summary = buildSummary(addedList, removedList, statusNameMap, roleId, modeLabel);
 
             // 构建 JSON details
             Map<String, Object> detailsMap = new java.util.LinkedHashMap<>();
+            detailsMap.put("mode", modeLabel);
             if (!addedList.isEmpty()) {
                 detailsMap.put("added", addedList);
             }
@@ -457,6 +513,15 @@ public class WorkflowService {
             // 审计日志写入失败不应中断主流程
             log.warn("Failed to record workflow activity: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 获取模式标签
+     */
+    private String getModeLabel(boolean author, boolean assignee) {
+        if (author) return "Author";
+        if (assignee) return "Assignee";
+        return "Normal";
     }
 
     /**
@@ -488,8 +553,10 @@ public class WorkflowService {
      */
     private String buildSummary(List<Map<String, String>> addedList,
                                 List<Map<String, String>> removedList,
-                                Map<Long, String> statusNameMap, Long roleId) {
+                                Map<Long, String> statusNameMap, Long roleId,
+                                String modeLabel) {
         StringBuilder sb = new StringBuilder();
+        sb.append("[").append(modeLabel).append("] ");
         if (!addedList.isEmpty()) {
             sb.append("新增 ").append(addedList.size()).append(" 条转换");
             if (addedList.size() <= 2) {
@@ -501,7 +568,11 @@ public class WorkflowService {
             }
         }
         if (!removedList.isEmpty()) {
-            if (!sb.isEmpty()) sb.append("；");
+            if (addedList.isEmpty()) {
+                // 没有新增时不需要分号
+            } else {
+                sb.append("；");
+            }
             sb.append("删除 ").append(removedList.size()).append(" 条转换");
             if (removedList.size() <= 2) {
                 sb.append("（");

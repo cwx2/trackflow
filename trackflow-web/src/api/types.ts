@@ -495,11 +495,15 @@ export interface WorkflowTransitionVO {
   roleId: string
   oldStatusId: string
   newStatusId: string
+  author: boolean
+  assignee: boolean
 }
 
 export interface UpdateWorkflowDTO {
   issueType: string
   roleId: number
+  author?: boolean
+  assignee?: boolean
   transitions: { from: number; to: number; allowed: boolean }[]
 }
 

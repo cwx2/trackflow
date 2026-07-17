@@ -54,6 +54,36 @@
       </div>
     </div>
 
+    <!-- Author/Assignee 模式 Tab -->
+    <div class="mode-tabs" v-if="statuses.length > 0">
+      <a-radio-group v-model="selectedMode" type="button" @change="onFilterChange">
+        <a-radio value="normal">
+          <template #default>
+            基础规则
+            <a-tooltip content="对拥有该角色的所有用户生效的通用转换规则。">
+              <icon-info-circle class="mode-info-icon" />
+            </a-tooltip>
+          </template>
+        </a-radio>
+        <a-radio value="author">
+          <template #default>
+            创建者额外规则
+            <a-tooltip content="此处配置的规则仅对工单创建者额外生效。例如：允许创建者取消自己提交的工单。">
+              <icon-info-circle class="mode-info-icon" />
+            </a-tooltip>
+          </template>
+        </a-radio>
+        <a-radio value="assignee">
+          <template #default>
+            负责人额外规则
+            <a-tooltip content="此处配置的规则仅对工单负责人额外生效。例如：允许负责人直接关闭自己负责的工单。">
+              <icon-info-circle class="mode-info-icon" />
+            </a-tooltip>
+          </template>
+        </a-radio>
+      </a-radio-group>
+    </div>
+
     <!-- 矩阵工具栏：搜索 + 筛选 -->
     <div class="matrix-toolbar" v-if="statuses.length > 0">
       <a-input
@@ -192,7 +222,16 @@
     </a-spin>
 
     <div class="help-text" v-if="statuses.length > 0">
-      <icon-info-circle /> 勾选单元格表示允许从行状态转换到列状态（针对当前选择的角色）。
+      <icon-info-circle />
+      <template v-if="selectedMode === 'normal'">
+        勾选单元格表示允许从行状态转换到列状态（针对当前选择的角色，对所有拥有该角色的用户生效）。
+      </template>
+      <template v-else-if="selectedMode === 'author'">
+        勾选单元格表示仅当用户是工单<b>创建者</b>时，额外允许此转换（不影响基础规则）。
+      </template>
+      <template v-else>
+        勾选单元格表示仅当用户是工单<b>负责人</b>时，额外允许此转换（不影响基础规则）。
+      </template>
       点击已允许的转换可配置自动化动作。hover 单元格高亮对应行列。
     </div>
 
@@ -229,6 +268,7 @@ import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 const selectedProject = ref('0')
 const selectedType = ref('*')
 const selectedRole = ref('')
+const selectedMode = ref<'normal' | 'author' | 'assignee'>('normal')
 const loading = ref(false)
 const saving = ref(false)
 const showHistory = ref(false)
@@ -457,8 +497,19 @@ async function loadMatrix() {
   if (!selectedRole.value) return
   loading.value = true
   try {
-    const params: Record<string, string> = { roleId: selectedRole.value }
+    const params: Record<string, string | boolean> = { roleId: selectedRole.value }
     if (selectedType.value !== '*') params.issueType = selectedType.value
+
+    // 按模式过滤 author/assignee
+    if (selectedMode.value === 'normal') {
+      params.author = false
+      params.assignee = false
+    } else if (selectedMode.value === 'author') {
+      params.author = true
+    } else if (selectedMode.value === 'assignee') {
+      params.assignee = true
+    }
+
     const projectId = selectedProject.value || '0'
 
     const res = await workflowApi.getTransitionMatrix(projectId, params)
@@ -477,9 +528,12 @@ async function loadMatrix() {
 }
 
 async function saveMatrix() {
+  const modeLabel = selectedMode.value === 'normal' ? '基础规则'
+    : selectedMode.value === 'author' ? '创建者额外规则' : '负责人额外规则'
+
   Modal.confirm({
     title: '确认更新工作流',
-    content: '此操作将替换当前筛选条件下的所有转换规则，确认保存？',
+    content: `此操作将替换当前筛选条件下"${modeLabel}"模式的所有转换规则，确认保存？`,
     okText: '确认保存',
     cancelText: '取消',
     async onOk() {
@@ -494,6 +548,8 @@ async function saveMatrix() {
         await workflowApi.updateTransitionMatrix(projectId, {
           issueType: selectedType.value,
           roleId: Number(selectedRole.value),
+          author: selectedMode.value === 'author' ? true : false,
+          assignee: selectedMode.value === 'assignee' ? true : false,
           transitions
         })
         Message.success('工作流已保存')
@@ -765,5 +821,18 @@ onMounted(async () => {
 .empty-state p {
   margin-top: 8px;
   font-size: 13px;
+}
+
+/* 模式 Tab */
+.mode-tabs {
+  margin-bottom: 12px;
+}
+
+.mode-info-icon {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  vertical-align: middle;
+  cursor: help;
 }
 </style>

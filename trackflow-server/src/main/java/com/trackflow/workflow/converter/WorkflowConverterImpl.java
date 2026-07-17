@@ -49,6 +49,8 @@ public class WorkflowConverterImpl implements WorkflowConverter {
         vo.setOldStatusId(longToString(entity.getOldStatusId()));
         vo.setNewStatusId(longToString(entity.getNewStatusId()));
         vo.setIssueType(entity.getIssueType());
+        vo.setAuthor(entity.getAuthor());
+        vo.setAssignee(entity.getAssignee());
         return vo;
     }
 

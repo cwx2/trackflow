@@ -18,6 +18,20 @@ public class WorkflowTransition implements Serializable {
     private Long oldStatusId;
     private Long newStatusId;
 
+    /**
+     * 此规则是否仅适用于工单创建者（author）。
+     * false = 对所有拥有该角色的用户生效（基础规则）
+     * true = 仅当用户是工单创建者时额外生效
+     */
+    private Boolean author;
+
+    /**
+     * 此规则是否仅适用于工单负责人（assignee）。
+     * false = 对所有拥有该角色的用户生效（基础规则）
+     * true = 仅当用户是工单负责人时额外生效
+     */
+    private Boolean assignee;
+
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String conditions;
 }
