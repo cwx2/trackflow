@@ -13,6 +13,8 @@ public class IssueVO {
     private String title;
     private String issueType;
     private String statusId;
+    private String statusName;
+    private String statusColor;
     private String priority;
     private String assigneeId;
     private String assigneeName;
@@ -20,6 +22,7 @@ public class IssueVO {
     private String reporterId;
     private String reporterName;
     private String sprintId;
+    private String sprintName;
     private LocalDate dueDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

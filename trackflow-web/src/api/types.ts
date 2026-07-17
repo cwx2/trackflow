@@ -165,6 +165,8 @@ export interface IssueVO {
   title: string
   issueType: string
   statusId: string
+  statusName?: string
+  statusColor?: string
   priority: string
   assigneeId?: string
   assigneeName?: string
@@ -172,6 +174,7 @@ export interface IssueVO {
   reporterId: string
   reporterName?: string
   sprintId?: string
+  sprintName?: string
   dueDate?: string
   createdAt: string
   updatedAt: string

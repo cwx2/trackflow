@@ -19,6 +19,8 @@ import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.service.precheck.ClosePreCheckChain;
 import com.trackflow.issue.vo.*;
+import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.service.WorkflowService;
@@ -45,6 +47,7 @@ public class IssueController {
     private final IssueTagService tagService;
     private final SysUserMapper sysUserMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final SprintMapper sprintMapper;
     private final ClosePreCheckChain closePreCheckChain;
     private final CustomFieldService customFieldService;
 
@@ -93,6 +96,39 @@ public class IssueController {
             Issue issue = result.getRecords().get(i);
             voList.get(i).setChildCount(issue.getChildCount());
             voList.get(i).setChildClosedCount(issue.getChildClosedCount());
+        }
+
+        // 批量填充 statusName + statusColor（issue_status 表数据极少，一次全量查出）
+        Map<Long, IssueStatus> statusMap = issueStatusMapper.selectList(null).stream()
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+        for (int i = 0; i < result.getRecords().size(); i++) {
+            Issue issue = result.getRecords().get(i);
+            if (issue.getStatusId() != null) {
+                IssueStatus status = statusMap.get(issue.getStatusId());
+                if (status != null) {
+                    voList.get(i).setStatusName(status.getName());
+                    voList.get(i).setStatusColor(status.getColor());
+                }
+            }
+        }
+
+        // 批量填充 sprintName（仅查询用到的 sprint）
+        Set<Long> sprintIds = new HashSet<>();
+        for (Issue issue : result.getRecords()) {
+            if (issue.getSprintId() != null) sprintIds.add(issue.getSprintId());
+        }
+        if (!sprintIds.isEmpty()) {
+            Map<Long, Sprint> sprintMap = sprintMapper.selectBatchIds(sprintIds).stream()
+                    .collect(Collectors.toMap(Sprint::getId, s -> s, (a, b) -> a));
+            for (int i = 0; i < result.getRecords().size(); i++) {
+                Issue issue = result.getRecords().get(i);
+                if (issue.getSprintId() != null) {
+                    Sprint sprint = sprintMap.get(issue.getSprintId());
+                    if (sprint != null) {
+                        voList.get(i).setSprintName(sprint.getName());
+                    }
+                }
+            }
         }
 
         // 批量填充自定义字段展示值

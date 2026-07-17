@@ -23,7 +23,11 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "assigneeName", ignore = true)
     @Mapping(target = "assigneeAvatarUrl", ignore = true)
     @Mapping(target = "reporterName", ignore = true)
+    @Mapping(target = "statusName", ignore = true)
+    @Mapping(target = "statusColor", ignore = true)
+    @Mapping(target = "sprintName", ignore = true)
     @Mapping(target = "customFieldValues", ignore = true)
+    @Mapping(target = "customFieldColors", ignore = true)
     IssueVO toVO(Issue entity);
 
     List<IssueVO> toVOList(List<Issue> entities);
