@@ -44,8 +44,27 @@
             </span>
             <span class="meta-item">
               <span class="meta-label">状态</span>
-              <span class="status-tag" :class="profile.status">{{ statusLabel(profile.status) }}</span>
+              <span class="status-tag" :class="profile.status">{{ statusLabel(profile.status, profile.banStatus) }}</span>
             </span>
+          </div>
+          <!-- 禁用信息展示 -->
+          <div v-if="profile.status === 'disabled' && profile.banStatus" class="ban-info-section">
+            <div class="ban-info-card">
+              <div class="ban-info-header">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="color: var(--color-danger-light)">
+                  <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8z"/>
+                  <path d="M4.646 4.646a.5.5 0 01.708 0L8 7.293l2.646-2.647a.5.5 0 01.708.708L8.707 8l2.647 2.646a.5.5 0 01-.708.708L8 8.707l-2.646 2.647a.5.5 0 01-.708-.708L7.293 8 4.646 5.354a.5.5 0 010-.708z"/>
+                </svg>
+                <span class="ban-info-title">账号已{{ getBanStatusLabel(profile.banStatus) }}</span>
+              </div>
+              <div class="ban-info-details">
+                <span v-if="profile.banReason" class="ban-reason">{{ profile.banReason }}</span>
+                <span class="ban-meta">
+                  <span v-if="profile.bannedByName">由 {{ profile.bannedByName }} 操作</span>
+                  <span v-if="profile.bannedAt">{{ formatDate(profile.bannedAt) }}</span>
+                </span>
+              </div>
+            </div>
           </div>
           <div class="user-timestamps">
             <span v-if="profile.createdAt">注册于 {{ formatDate(profile.createdAt) }}</span>
@@ -92,7 +111,10 @@
         <div class="section-card">
           <div class="section-header">
             <h2 class="section-title">项目角色</h2>
-            <span class="section-count">{{ profile.projectRoles.length }} 个项目</span>
+            <div class="section-header-right">
+              <span class="section-count">{{ profile.projectRoles.length }} 个项目</span>
+              <button class="btn-text" @click="openAssignRoleDialog">赋予角色</button>
+            </div>
           </div>
           <div class="section-body">
             <div v-if="profile.projectRoles.length === 0" class="empty-hint">
@@ -105,7 +127,18 @@
                   <span class="project-key">{{ pr.projectKey }}</span>
                   <span class="project-name">{{ pr.projectName }}</span>
                 </div>
-                <span class="project-role-name">{{ pr.roleName }}</span>
+                <div class="project-role-actions">
+                  <span class="project-role-name">{{ pr.roleName }}</span>
+                  <span v-if="pr.source === 'group'" class="role-source-tag" :title="`通过组「${pr.groupName}」继承`">
+                    组继承
+                  </span>
+                  <button
+                    v-if="pr.source !== 'group'"
+                    class="btn-revoke"
+                    title="撤销此角色"
+                    @click="revokeProjectRole(pr)"
+                  >×</button>
+                </div>
               </div>
             </div>
           </div>
@@ -164,6 +197,46 @@
         </div>
       </div>
     </div>
+
+    <!-- 赋予项目角色弹窗 -->
+    <div class="modal-overlay" v-if="showAssignProjectRoleDialog" @click.self="closeAssignDialog">
+      <div class="modal-sm">
+        <div class="modal-header">
+          <h3>赋予项目角色 — {{ profile?.displayName }}</h3>
+          <button class="btn-close" @click="closeAssignDialog">×</button>
+        </div>
+        <div class="modal-body assign-role-form">
+          <div class="form-field">
+            <label class="form-label">选择项目</label>
+            <select v-model="assignProjectId" class="form-select">
+              <option value="">请选择项目</option>
+              <option v-for="p in allProjects" :key="p.id" :value="p.id">
+                {{ p.key }} — {{ p.name }}
+              </option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">选择角色</label>
+            <select v-model="assignRoleId" class="form-select">
+              <option value="">请选择角色</option>
+              <option v-for="r in projectRoles" :key="r.id" :value="r.id">
+                {{ r.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="closeAssignDialog">取消</button>
+          <button
+            class="btn-primary"
+            :disabled="!assignProjectId || !assignRoleId || assignLoading"
+            @click="confirmAssignProjectRole"
+          >
+            {{ assignLoading ? '赋予中...' : '赋予角色' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -171,8 +244,8 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
-import { userApi } from '@/api'
-import type { UserProfileVO } from '@/api/user'
+import { userApi, projectApi } from '@/api'
+import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import request from '@/api/request'
 
 const route = useRoute()
@@ -183,6 +256,14 @@ const loading = ref(true)
 const error = ref('')
 const showRoleDialog = ref(false)
 const globalRoles = ref<any[]>([])
+
+// 赋予项目角色相关
+const showAssignProjectRoleDialog = ref(false)
+const assignProjectId = ref('')
+const assignRoleId = ref('')
+const assignLoading = ref(false)
+const allProjects = ref<any[]>([])
+const projectRoles = ref<any[]>([])
 
 const userId = computed(() => route.params.id as string)
 const currentRoleIds = computed(() => profile.value?.globalRoles.map(r => r.id) || [])
@@ -226,19 +307,48 @@ async function toggleRole(roleId: number) {
 async function handleDisable() {
   if (!profile.value) return
   const user = profile.value
+  const banStatus = ref('banned')
+  const banReason = ref('')
+
   Modal.confirm({
-    title: '确认禁用用户',
-    content: () => h('div', [
-      h('p', `确定要禁用用户 "${user.displayName}" (${user.username}) 吗？`),
-      h('p', { style: 'color: var(--tf-text-tertiary); font-size: 12px; margin-top: 8px' },
-        '禁用后该用户将无法登录系统，已有数据不会被删除。')
+    title: '禁用用户',
+    width: 480,
+    content: () => h('div', { style: 'padding: 4px 0' }, [
+      h('p', { style: 'margin-bottom: 16px; color: var(--tf-text-secondary)' },
+        `确定要禁用用户 "${user.displayName}" (${user.username}) 吗？禁用后该用户将无法登录系统。`),
+      h('div', { style: 'margin-bottom: 16px' }, [
+        h('label', { style: 'display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--tf-text-primary)' }, '禁用状态'),
+        h('select', {
+          value: banStatus.value,
+          style: 'width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--tf-border); border-radius: 6px; background: var(--tf-bg-surface); color: var(--tf-text-primary); font-size: 13px',
+          onChange: (e: Event) => { banStatus.value = (e.target as HTMLSelectElement).value }
+        }, [
+          h('option', { value: 'banned' }, '封禁 — 违规行为或安全问题'),
+          h('option', { value: 'suspended' }, '暂停 — 临时停用（如休假）'),
+          h('option', { value: 'inactive' }, '不活跃 — 长期未使用'),
+          h('option', { value: 'deactivated' }, '注销 — 员工离职'),
+          h('option', { value: 'locked' }, '锁定 — 安全审计锁定')
+        ])
+      ]),
+      h('div', [
+        h('label', { style: 'display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--tf-text-primary)' }, '原因说明（可选）'),
+        h('textarea', {
+          value: banReason.value,
+          placeholder: '例如：2026年7月离职、安全审计发现异常登录...',
+          style: 'width: 100%; min-height: 72px; padding: 8px; border: 1px solid var(--tf-border); border-radius: 6px; background: var(--tf-bg-surface); color: var(--tf-text-primary); font-size: 13px; resize: vertical; font-family: inherit',
+          onInput: (e: Event) => { banReason.value = (e.target as HTMLTextAreaElement).value }
+        })
+      ])
     ]),
     okText: '禁用用户',
     cancelText: '取消',
     okButtonProps: { status: 'danger' },
     async onOk() {
       try {
-        await userApi.disable(userId.value)
+        await userApi.disable(userId.value, {
+          banStatus: banStatus.value,
+          banReason: banReason.value || undefined
+        })
         Message.success('用户已禁用')
         await loadProfile()
       } catch (e: any) {
@@ -268,8 +378,23 @@ async function handleEnable() {
   })
 }
 
-function statusLabel(status: string) {
-  return status === 'active' ? '启用' : status === 'disabled' ? '禁用' : status
+const BAN_STATUS_LABELS: Record<string, string> = {
+  banned: '封禁',
+  suspended: '暂停',
+  inactive: '不活跃',
+  deactivated: '注销',
+  locked: '锁定'
+}
+
+function getBanStatusLabel(banStatus?: string): string {
+  if (!banStatus) return '禁用'
+  return BAN_STATUS_LABELS[banStatus] || '禁用'
+}
+
+function statusLabel(status: string, banStatus?: string) {
+  if (status === 'active') return '启用'
+  if (status === 'disabled' && banStatus) return getBanStatusLabel(banStatus)
+  return '禁用'
 }
 
 function formatDate(dt: string) {
@@ -332,9 +457,112 @@ function formatAction(activity: { action: string; fieldName?: string; oldValue?:
   return label
 }
 
+// ===== 项目角色管理 =====
+
+async function loadProjectRoles() {
+  try {
+    const res: any = await request.get('/roles', { params: { roleType: 'project', pageSize: 50 } })
+    projectRoles.value = res.data?.list || []
+  } catch (e) { projectRoles.value = [] }
+}
+
+async function loadAllProjects() {
+  try {
+    const res = await projectApi.list({ pageSize: 100 })
+    allProjects.value = res.data?.list || []
+  } catch (e) { allProjects.value = [] }
+}
+
+function openAssignRoleDialog() {
+  assignProjectId.value = ''
+  assignRoleId.value = ''
+  showAssignProjectRoleDialog.value = true
+}
+
+function closeAssignDialog() {
+  showAssignProjectRoleDialog.value = false
+  assignProjectId.value = ''
+  assignRoleId.value = ''
+}
+
+async function confirmAssignProjectRole() {
+  if (!assignProjectId.value || !assignRoleId.value || !profile.value) return
+  assignLoading.value = true
+  try {
+    await projectApi.addMember(assignProjectId.value, {
+      userId: userId.value,
+      roleIds: [Number(assignRoleId.value)]
+    })
+    Message.success('角色赋予成功')
+    closeAssignDialog()
+    await loadProfile()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '赋予角色失败')
+  } finally {
+    assignLoading.value = false
+  }
+}
+
+function revokeProjectRole(pr: UserProfileProjectRoleInfo) {
+  if (!profile.value) return
+
+  // 计算该用户在此项目中的所有直接角色
+  const directRolesInProject = profile.value.projectRoles.filter(
+    r => r.projectId === pr.projectId && r.source !== 'group'
+  )
+
+  if (directRolesInProject.length <= 1) {
+    // 只有一个直接角色：撤销意味着从项目中完全移除
+    Modal.confirm({
+      title: '确认撤销角色',
+      content: () => h('div', [
+        h('p', `确定撤销 "${profile.value!.displayName}" 在项目「${pr.projectName}」中的「${pr.roleName}」角色吗？`),
+        h('p', { style: 'color: var(--tf-text-tertiary); font-size: 12px; margin-top: 8px' },
+          '这是该用户在此项目中的唯一直接角色，撤销后将从项目中完全移除。')
+      ]),
+      okText: '撤销角色',
+      cancelText: '取消',
+      okButtonProps: { status: 'danger' },
+      async onOk() {
+        try {
+          await projectApi.removeMember(pr.projectId, userId.value)
+          Message.success('角色已撤销')
+          await loadProfile()
+        } catch (e: any) {
+          Message.error(e.response?.data?.message || '撤销失败')
+        }
+      }
+    })
+  } else {
+    // 多个角色：只移除选中的角色
+    Modal.confirm({
+      title: '确认撤销角色',
+      content: `确定撤销 "${profile.value.displayName}" 在项目「${pr.projectName}」中的「${pr.roleName}」角色吗？`,
+      okText: '撤销角色',
+      cancelText: '取消',
+      okButtonProps: { status: 'danger' },
+      async onOk() {
+        try {
+          // 保留其余角色
+          const remainingRoleIds = directRolesInProject
+            .filter(r => r.roleId !== pr.roleId)
+            .map(r => Number(r.roleId))
+          await projectApi.updateMemberRole(pr.projectId, userId.value, remainingRoleIds)
+          Message.success('角色已撤销')
+          await loadProfile()
+        } catch (e: any) {
+          Message.error(e.response?.data?.message || '撤销失败')
+        }
+      }
+    })
+  }
+}
+
 onMounted(() => {
   loadProfile()
   loadGlobalRoles()
+  loadProjectRoles()
+  loadAllProjects()
 })
 </script>
 
@@ -484,6 +712,10 @@ onMounted(() => {
   transition: opacity 150ms;
 }
 .btn-primary:hover { opacity: 0.9; }
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .btn-secondary {
   height: 32px;
@@ -530,6 +762,11 @@ onMounted(() => {
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border-light);
+}
+.section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .section-title {
   font-size: 14px;
@@ -609,6 +846,43 @@ onMounted(() => {
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+.project-role-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.role-source-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: rgba(210,153,34,0.12);
+  color: var(--accent-orange, #d29922);
+  white-space: nowrap;
+}
+.btn-revoke {
+  display: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+  align-items: center;
+  justify-content: center;
+}
+.project-role-item:hover .btn-revoke {
+  display: flex;
+}
+.btn-revoke:hover {
+  background: rgba(244,67,54,0.1);
+  color: var(--accent-red);
 }
 
 /* 活动列表 */
@@ -698,6 +972,44 @@ onMounted(() => {
   max-height: 300px;
   overflow-y: auto;
 }
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-color);
+}
+.assign-role-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.form-select {
+  height: 32px;
+  padding: 0 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  appearance: auto;
+  cursor: pointer;
+}
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
 .role-item { margin-bottom: 8px; }
 .role-check {
   display: flex;
@@ -712,5 +1024,43 @@ onMounted(() => {
 .role-code {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+}
+
+/* Ban info section */
+.ban-info-section {
+  margin-top: 12px;
+}
+.ban-info-card {
+  background: rgba(244, 67, 54, 0.06);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+.ban-info-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.ban-info-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--accent-red);
+}
+.ban-info-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ban-reason {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.ban-meta {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
 }
 </style>

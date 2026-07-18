@@ -390,6 +390,10 @@ export interface UserVO {
   email?: string
   orgId?: string
   status: string
+  banStatus?: string
+  banReason?: string
+  bannedAt?: string
+  bannedByName?: string
   lastLoginAt?: string
   createdAt: string
 }

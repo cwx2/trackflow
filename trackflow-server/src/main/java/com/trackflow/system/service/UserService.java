@@ -16,6 +16,7 @@ import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.dto.CreateUserDTO;
+import com.trackflow.system.dto.DisableUserDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.entity.UserGroup;
@@ -172,7 +173,7 @@ public class UserService {
      * 分页查询用户列表
      */
     public Page<SysUser> list(Page<SysUser> page, String username, String displayName,
-                              String email, Long orgId, String status) {
+                              String email, Long orgId, String status, String banStatus) {
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
         if (username != null && !username.isBlank()) {
             wrapper.like(SysUser::getUsername, username);
@@ -188,6 +189,9 @@ public class UserService {
         }
         if (status != null && !status.isBlank()) {
             wrapper.eq(SysUser::getStatus, status);
+        }
+        if (banStatus != null && !banStatus.isBlank()) {
+            wrapper.eq(SysUser::getBanStatus, banStatus);
         }
         wrapper.orderByDesc(SysUser::getCreatedAt);
         return userMapper.selectPage(page, wrapper);
@@ -217,7 +221,7 @@ public class UserService {
      * 禁用用户
      */
     @Transactional
-    public void disable(Long id) {
+    public void disable(Long id, DisableUserDTO dto) {
         SysUser user = getById(id);
 
         // 禁止禁用自己
@@ -232,6 +236,10 @@ public class UserService {
         }
 
         user.setStatus("disabled");
+        user.setBanStatus(dto.getBanStatus());
+        user.setBanReason(dto.getBanReason());
+        user.setBannedAt(java.time.LocalDateTime.now());
+        user.setBannedBy(currentUserId);
         userMapper.updateById(user);
         permissionService.invalidateCache(id);
 
@@ -252,10 +260,13 @@ public class UserService {
         systemAuditService.log("disable_user", "user", id,
                 Map.of("username", user.getUsername(),
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
+                        "banStatus", dto.getBanStatus(),
+                        "banReason", dto.getBanReason() != null ? dto.getBanReason() : "",
                         "revoked_api_keys", revokedKeys));
 
-        log.info("用户 {} 已禁用：Keycloak session 已终止, Redis 黑名单已写入(TTL={}min), API Key 已吊销({}个)",
-                user.getUsername(), DISABLED_USER_TTL.toMinutes(), revokedKeys);
+        log.info("用户 {} 已禁用(状态:{}，原因:{})：Keycloak session 已终止, Redis 黑名单已写入(TTL={}min), API Key 已吊销({}个)",
+                user.getUsername(), dto.getBanStatus(), dto.getBanReason(),
+                DISABLED_USER_TTL.toMinutes(), revokedKeys);
     }
 
     /**
@@ -264,8 +275,17 @@ public class UserService {
     @Transactional
     public void enable(Long id) {
         SysUser user = getById(id);
-        user.setStatus("active");
-        userMapper.updateById(user);
+
+        // 使用 UpdateWrapper 明确将 ban 字段设为 null
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SysUser> updateWrapper =
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+        updateWrapper.eq(SysUser::getId, id)
+                .set(SysUser::getStatus, "active")
+                .set(SysUser::getBanStatus, null)
+                .set(SysUser::getBanReason, null)
+                .set(SysUser::getBannedAt, null)
+                .set(SysUser::getBannedBy, null);
+        userMapper.update(null, updateWrapper);
 
         // 清除 Redis 黑名单（允许用户重新登录）
         redisTemplate.delete(DISABLED_USER_KEY_PREFIX + id);
@@ -360,6 +380,13 @@ public class UserService {
         profile.setEmail(user.getEmail());
         profile.setAvatarUrl(user.getAvatarUrl());
         profile.setStatus(user.getStatus());
+        profile.setBanStatus(user.getBanStatus());
+        profile.setBanReason(user.getBanReason());
+        profile.setBannedAt(user.getBannedAt());
+        if (user.getBannedBy() != null) {
+            SysUser bannedByUser = userMapper.selectById(user.getBannedBy());
+            profile.setBannedByName(bannedByUser != null ? bannedByUser.getDisplayName() : null);
+        }
         profile.setLastLoginAt(user.getLastLoginAt());
         profile.setCreatedAt(user.getCreatedAt());
 
@@ -457,6 +484,7 @@ public class UserService {
                 info.setProjectId(String.valueOf(project.getId()));
                 info.setProjectName(project.getName());
                 info.setProjectKey(project.getKey());
+                info.setRoleId(String.valueOf(role.getId()));
                 info.setRoleName(role.getName());
                 info.setRoleCode(role.getCode());
                 info.setJoinedAt(membership.getJoinedAt());
@@ -493,6 +521,7 @@ public class UserService {
                     info.setProjectId(String.valueOf(project.getId()));
                     info.setProjectName(project.getName());
                     info.setProjectKey(project.getKey());
+                    info.setRoleId(String.valueOf(role.getId()));
                     info.setRoleName(role.getName());
                     info.setRoleCode(role.getCode());
                     info.setSource("group");

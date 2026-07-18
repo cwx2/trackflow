@@ -23,5 +23,9 @@ public class SysUser extends BaseEntity {
     private String phone;
     private Long orgId;
     private String status;
+    private String banStatus;
+    private String banReason;
+    private LocalDateTime bannedAt;
+    private Long bannedBy;
     private LocalDateTime lastLoginAt;
 }

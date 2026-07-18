@@ -19,6 +19,10 @@ public class UserProfileVO {
     private String email;
     private String avatarUrl;
     private String status;
+    private String banStatus;
+    private String banReason;
+    private LocalDateTime bannedAt;
+    private String bannedByName;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
 
@@ -47,6 +51,7 @@ public class UserProfileVO {
         private String projectId;
         private String projectName;
         private String projectKey;
+        private String roleId;
         private String roleName;
         private String roleCode;
         private LocalDateTime joinedAt;

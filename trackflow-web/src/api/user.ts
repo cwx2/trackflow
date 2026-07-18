@@ -29,8 +29,8 @@ export const userApi = {
   },
 
   /** 禁用用户 */
-  disable(id: string) {
-    return request.put<any, R<void>>(`/users/${id}/disable`)
+  disable(id: string, data: { banStatus: string; banReason?: string }) {
+    return request.put<any, R<void>>(`/users/${id}/disable`, data)
   },
 
   /** 启用用户 */
@@ -57,6 +57,10 @@ export interface UserProfileVO {
   email?: string
   avatarUrl?: string
   status: string
+  banStatus?: string
+  banReason?: string
+  bannedAt?: string
+  bannedByName?: string
   lastLoginAt?: string
   createdAt: string
   globalRoles: UserProfileRoleInfo[]
@@ -76,7 +80,12 @@ export interface UserProfileProjectRoleInfo {
   projectKey: string
   roleName: string
   roleCode: string
+  roleId?: string
   joinedAt?: string
+  /** 角色来源: "direct" = 直接分配, "group" = 通过用户组继承 */
+  source?: string
+  /** 当 source=group 时，来源组名称 */
+  groupName?: string
 }
 
 export interface UserProfileActivityInfo {

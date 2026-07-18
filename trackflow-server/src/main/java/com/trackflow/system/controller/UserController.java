@@ -9,6 +9,7 @@ import com.trackflow.common.util.PageHelper;
 import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.AssignRoleDTO;
 import com.trackflow.system.dto.CreateUserDTO;
+import com.trackflow.system.dto.DisableUserDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
@@ -51,6 +52,7 @@ public class UserController {
             @RequestParam(value = "email", required = false) String email,
             @RequestParam(value = "orgId", required = false) Long orgId,
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "banStatus", required = false) String banStatus,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             @RequestParam(value = "sort", required = false) String sort) {
@@ -58,7 +60,7 @@ public class UserController {
         Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort,
                 Set.of("id", "username", "display_name", "email", "status",
                         "org_id", "created_at", "updated_at", "last_login_at"));
-        Page<SysUser> result = userService.list(pageObj, username, displayName, email, orgId, status);
+        Page<SysUser> result = userService.list(pageObj, username, displayName, email, orgId, status, banStatus);
 
         PageResult<UserVO> pageResult = new PageResult<>(
                 userConverter.toVOList(result.getRecords()), result.getTotal(),
@@ -87,8 +89,8 @@ public class UserController {
 
     @PutMapping("/{id}/disable")
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
-    public R<Void> disable(@PathVariable("id") Long id) {
-        userService.disable(id);
+    public R<Void> disable(@PathVariable("id") Long id, @Valid @RequestBody DisableUserDTO dto) {
+        userService.disable(id, dto);
         return R.ok();
     }
 

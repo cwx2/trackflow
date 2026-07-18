@@ -13,6 +13,7 @@ public interface UserConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "orgId", expression = "java(longToString(entity.getOrgId()))")
+    @Mapping(target = "bannedByName", ignore = true)
     UserVO toVO(SysUser entity);
 
     List<UserVO> toVOList(List<SysUser> entities);

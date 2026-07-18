@@ -10,6 +10,14 @@
             <option value="active">启用</option>
             <option value="disabled">禁用</option>
           </select>
+          <select v-model="filters.banStatus" class="filter-select" @change="loadUsers">
+            <option value="">全部禁用类型</option>
+            <option value="banned">封禁</option>
+            <option value="suspended">暂停</option>
+            <option value="inactive">不活跃</option>
+            <option value="deactivated">注销</option>
+            <option value="locked">锁定</option>
+          </select>
         </div>
         <button class="btn-primary" @click="showCreateDialog = true">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
@@ -42,7 +50,7 @@
           </div>
           <div class="col" style="flex:1">{{ user.email || '—' }}</div>
           <div class="col" style="width:80px">
-            <span class="status-tag" :class="user.status">{{ user.status === 'active' ? '启用' : '禁用' }}</span>
+            <span class="status-tag" :class="user.status">{{ user.status === 'active' ? '启用' : getBanStatusLabel(user.banStatus) }}</span>
           </div>
           <div class="col" style="width:150px">
             <span class="time-text">{{ formatDate(user.lastLoginAt) }}</span>
@@ -258,7 +266,7 @@ const pageSize = 20
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 const loading = ref(false)
 
-const filters = reactive({ keyword: '', status: '' })
+const filters = reactive({ keyword: '', status: '', banStatus: '' })
 
 // 创建用户
 const showCreateDialog = ref(false)
@@ -304,6 +312,7 @@ async function loadUsers() {
     const params: any = { page: page.value, pageSize }
     if (filters.keyword) params.username = filters.keyword
     if (filters.status) params.status = filters.status
+    if (filters.banStatus) params.banStatus = filters.banStatus
     const res = await userApi.list(params)
     users.value = res.data?.list || []
     total.value = res.data?.pagination?.total || 0
@@ -312,19 +321,49 @@ async function loadUsers() {
 }
 
 async function disableUser(user: any) {
+  // 使用响应式状态来收集表单数据
+  const banStatus = ref('banned')
+  const banReason = ref('')
+
   Modal.confirm({
-    title: '确认禁用用户',
-    content: () => h('div', [
-      h('p', `确定要禁用用户 "${user.displayName}" (${user.username}) 吗？`),
-      h('p', { style: 'color: var(--tf-text-tertiary); font-size: 12px; margin-top: 8px' },
-        '禁用后该用户将无法登录系统，已有数据不会被删除。')
+    title: '禁用用户',
+    width: 480,
+    content: () => h('div', { style: 'padding: 4px 0' }, [
+      h('p', { style: 'margin-bottom: 16px; color: var(--tf-text-secondary)' },
+        `确定要禁用用户 "${user.displayName}" (${user.username}) 吗？禁用后该用户将无法登录系统。`),
+      h('div', { class: 'form-group', style: 'margin-bottom: 16px' }, [
+        h('label', { style: 'display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--tf-text-primary)' }, '禁用状态'),
+        h('select', {
+          value: banStatus.value,
+          style: 'width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--tf-border); border-radius: 6px; background: var(--tf-bg-surface); color: var(--tf-text-primary); font-size: 13px',
+          onChange: (e: Event) => { banStatus.value = (e.target as HTMLSelectElement).value }
+        }, [
+          h('option', { value: 'banned' }, '封禁 — 违规行为或安全问题'),
+          h('option', { value: 'suspended' }, '暂停 — 临时停用（如休假）'),
+          h('option', { value: 'inactive' }, '不活跃 — 长期未使用'),
+          h('option', { value: 'deactivated' }, '注销 — 员工离职'),
+          h('option', { value: 'locked' }, '锁定 — 安全审计锁定')
+        ])
+      ]),
+      h('div', { class: 'form-group' }, [
+        h('label', { style: 'display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--tf-text-primary)' }, '原因说明（可选）'),
+        h('textarea', {
+          value: banReason.value,
+          placeholder: '例如：2026年7月离职、安全审计发现异常登录...',
+          style: 'width: 100%; min-height: 72px; padding: 8px; border: 1px solid var(--tf-border); border-radius: 6px; background: var(--tf-bg-surface); color: var(--tf-text-primary); font-size: 13px; resize: vertical; font-family: inherit',
+          onInput: (e: Event) => { banReason.value = (e.target as HTMLTextAreaElement).value }
+        })
+      ])
     ]),
     okText: '禁用用户',
     cancelText: '取消',
     okButtonProps: { status: 'danger' },
     async onOk() {
       try {
-        await userApi.disable(user.id)
+        await userApi.disable(user.id, {
+          banStatus: banStatus.value,
+          banReason: banReason.value || undefined
+        })
         Message.success('用户已禁用')
         loadUsers()
       } catch (e: any) {
@@ -553,6 +592,20 @@ async function loadAllProjects() {
 function formatDate(dt: string) {
   if (!dt) return '—'
   return new Date(dt).toLocaleString('zh-CN')
+}
+
+/** 禁用状态标签映射 */
+const BAN_STATUS_LABELS: Record<string, string> = {
+  banned: '封禁',
+  suspended: '暂停',
+  inactive: '不活跃',
+  deactivated: '注销',
+  locked: '锁定'
+}
+
+function getBanStatusLabel(banStatus?: string): string {
+  if (!banStatus) return '禁用'
+  return BAN_STATUS_LABELS[banStatus] || '禁用'
 }
 
 /** 获取用户名首字母（支持中文取第一个字） */

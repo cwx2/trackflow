@@ -12,6 +12,10 @@ public class UserVO {
     private String email;
     private String orgId;
     private String status;
+    private String banStatus;
+    private String banReason;
+    private LocalDateTime bannedAt;
+    private String bannedByName;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
 }
