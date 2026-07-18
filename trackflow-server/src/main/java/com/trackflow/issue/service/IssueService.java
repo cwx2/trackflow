@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.config.AttachmentConfig;
+import com.trackflow.common.context.NotificationContext;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
@@ -786,6 +787,40 @@ public class IssueService {
             String permissionCode,
             BatchIssueAction action,
             String operationName) {
+        return executeBatchWithSilent(issueIds, permissionCode, action, operationName, false);
+    }
+
+    /**
+     * 支持静默模式的批量操作执行引擎。
+     * silent=true 时通知事件监听器会跳过通知发送。
+     */
+    private BatchOperationResultVO executeBatchWithSilent(
+            List<Long> issueIds,
+            String permissionCode,
+            BatchIssueAction action,
+            String operationName,
+            boolean silent) {
+
+        if (silent) {
+            NotificationContext.setSilent(true);
+        }
+        try {
+            return doExecuteBatch(issueIds, permissionCode, action, operationName);
+        } finally {
+            if (silent) {
+                NotificationContext.clear();
+            }
+        }
+    }
+
+    /**
+     * 批量操作核心逻辑。
+     */
+    private BatchOperationResultVO doExecuteBatch(
+            List<Long> issueIds,
+            String permissionCode,
+            BatchIssueAction action,
+            String operationName) {
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
         BatchOperationResultVO result = new BatchOperationResultVO();
@@ -898,52 +933,72 @@ public class IssueService {
      * @param statusId 目标状态 ID
      * @param comment  可选备注（记录到活动日志）
      * @param versions 乐观锁版本映射（issueId → version），为 null 时跳过版本校验
+     * @param silent   静默模式，为 true 时不发送通知
      */
     public BatchOperationResultVO batchTransitStatus(List<Long> issueIds, Long statusId,
-                                                     String comment, Map<Long, Integer> versions) {
-        return executeBatch(issueIds, "issue:change_status", (issue, userId) -> {
+                                                     String comment, Map<Long, Integer> versions, boolean silent) {
+        return executeBatchWithSilent(issueIds, "issue:change_status", (issue, userId) -> {
             if (!workflowService.isTransitionAllowed(issue, statusId, userId)) {
                 return "工作流不允许此状态转换";
             }
-            // 已校验通过，跳过工作流重复校验但传递 comment 和 version
             Integer expectedVersion = versions != null ? versions.get(issue.getId()) : null;
             transitStatus(issue.getId(), statusId, comment, null, false, expectedVersion, true);
             return null;
-        }, "状态转换");
+        }, "状态转换", silent);
     }
 
     /**
      * 批量分配
      */
-    public BatchOperationResultVO batchAssign(List<Long> issueIds, Long assigneeId) {
-        return executeBatch(issueIds, "issue:assign", (issue, userId) -> {
+    public BatchOperationResultVO batchAssign(List<Long> issueIds, Long assigneeId, boolean silent) {
+        return executeBatchWithSilent(issueIds, "issue:assign", (issue, userId) -> {
             assign(issue.getId(), assigneeId);
             return null;
-        }, "分配");
+        }, "分配", silent);
     }
 
     /**
      * 批量更新 Sprint
      */
-    public BatchOperationResultVO batchUpdateSprint(List<Long> issueIds, Long sprintId) {
-        return executeBatch(issueIds, "issue:edit", (issue, userId) -> {
+    public BatchOperationResultVO batchUpdateSprint(List<Long> issueIds, Long sprintId, boolean silent) {
+        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
             UpdateIssueDTO dto = new UpdateIssueDTO();
             dto.setSprintId(sprintId);
             update(issue.getId(), dto);
             return null;
-        }, "Sprint移动");
+        }, "Sprint移动", silent);
     }
 
     /**
      * 批量更新优先级
      */
-    public BatchOperationResultVO batchUpdatePriority(List<Long> issueIds, String priority) {
-        return executeBatch(issueIds, "issue:edit", (issue, userId) -> {
+    public BatchOperationResultVO batchUpdatePriority(List<Long> issueIds, String priority, boolean silent) {
+        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
             UpdateIssueDTO dto = new UpdateIssueDTO();
             dto.setPriority(priority);
             update(issue.getId(), dto);
             return null;
-        }, "优先级变更");
+        }, "优先级变更", silent);
+    }
+
+    /**
+     * 批量添加标签
+     */
+    public BatchOperationResultVO batchAddTag(List<Long> issueIds, Long tagId, boolean silent) {
+        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
+            tagService.addTagToIssue(issue.getId(), tagId);
+            return null;
+        }, "添加标签", silent);
+    }
+
+    /**
+     * 批量移除标签
+     */
+    public BatchOperationResultVO batchRemoveTag(List<Long> issueIds, Long tagId, boolean silent) {
+        return executeBatchWithSilent(issueIds, "issue:edit", (issue, userId) -> {
+            tagService.removeTagFromIssue(issue.getId(), tagId);
+            return null;
+        }, "移除标签", silent);
     }
 
     /**

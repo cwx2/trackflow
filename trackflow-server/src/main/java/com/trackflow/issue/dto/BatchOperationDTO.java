@@ -19,7 +19,7 @@ public class BatchOperationDTO {
      * 操作类型: status, assign, sprint, priority, delete
      */
     @NotNull(message = "操作类型不能为空")
-    @Pattern(regexp = "status|assign|sprint|priority|delete|restore", message = "操作类型必须为: status, assign, sprint, priority, delete, restore")
+    @Pattern(regexp = "status|assign|sprint|priority|delete|restore|tag_add|tag_remove", message = "操作类型必须为: status, assign, sprint, priority, delete, restore, tag_add, tag_remove")
     private String operation;
 
     /**
@@ -54,6 +54,17 @@ public class BatchOperationDTO {
      * 非空时会作为评论记录到活动日志。
      */
     private String comment;
+
+    /**
+     * 静默模式：为 true 时不发送变更通知（Apply without notice）。
+     * 适用于批量操作时避免通知轰炸团队。
+     */
+    private Boolean silent;
+
+    /**
+     * 标签 ID（operation=tag_add 或 tag_remove 时必填）
+     */
+    private Long tagId;
 
     /**
      * 乐观锁版本号映射（issueId → version）。
