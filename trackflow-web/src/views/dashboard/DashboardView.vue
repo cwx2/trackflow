@@ -84,7 +84,7 @@
       <div class="chart-card chart-wide">
         <div class="chart-header">
           <h3 class="chart-title">工单趋势</h3>
-          <span class="chart-subtitle">近 14 天创建与关闭对比</span>
+          <span class="chart-subtitle">近 30 天创建与关闭对比</span>
         </div>
         <div class="chart-body">
           <div v-if="chartsLoading" class="chart-loading">
@@ -266,8 +266,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Message } from '@arco-design/web-vue'
-import { dashboardApi, projectApi } from '@/api'
-import type { DashboardSummaryVO, DashboardActivityVO, DashboardChartsVO } from '@/api/dashboard'
+import { dashboardApi, projectApi, reportStatisticsApi } from '@/api'
+import type { DashboardSummaryVO, DashboardActivityVO } from '@/api/dashboard'
+import type { DashboardData } from '@/api/reportStatistics'
 import type { IssueVO, ProjectVO } from '@/api/types'
 import { fieldLabelMap, localizeActionShort, localizeStatusName } from '@/utils/fieldLabels'
 import VChart from 'vue-echarts'
@@ -313,7 +314,7 @@ const summary = ref<DashboardSummaryVO>({
 const assignedIssues = ref<IssueVO[]>([])
 const overdueIssues = ref<IssueVO[]>([])
 const activities = ref<DashboardActivityVO[]>([])
-const chartsData = ref<DashboardChartsVO | null>(null)
+const chartsData = ref<DashboardData | null>(null)
 const projects = ref<ProjectVO[]>([])
 const selectedProjectId = ref<string>('__all__')
 
@@ -565,7 +566,7 @@ async function loadCharts() {
   chartsLoading.value = true
   try {
     const pid = selectedProjectId.value !== '__all__' ? selectedProjectId.value : undefined
-    const res = await dashboardApi.charts(pid)
+    const res = await reportStatisticsApi.dashboard({ projectId: pid })
     if (res.code === 0 && res.data) {
       chartsData.value = res.data
     }

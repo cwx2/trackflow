@@ -33,7 +33,10 @@ public class DashboardController {
     /**
      * 仪表盘图表数据（趋势、状态分布、工作负载）
      * @param projectId 可选项目筛选，传入时只查询该项目的数据
+     * @deprecated 请使用 ReportStatisticsController.dashboard() 端点 (GET /api/v1/reports/statistics/dashboard)，
+     *             数据口径统一且有 Redis 缓存。此端点将在未来版本移除。
      */
+    @Deprecated
     @GetMapping("/charts")
     @PreAuthorize("isAuthenticated()")
     public R<DashboardChartsVO> charts(
