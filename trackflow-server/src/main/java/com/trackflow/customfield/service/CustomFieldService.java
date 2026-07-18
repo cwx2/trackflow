@@ -332,6 +332,10 @@ public class CustomFieldService {
                 .collect(Collectors.toSet());
 
         // 3. 处理 DTO 中的每个选项
+        // 收集本次更新后的活跃选项值（用于后续清理同名归档条目）
+        Set<String> activeValues = new HashSet<>();
+        // 跟踪被复用（重新激活）的归档选项 ID，这些不应在 step 4 中被重新归档
+        Set<Long> reactivatedIds = new HashSet<>();
         for (int i = 0; i < dtoOptions.size(); i++) {
             UpdateCustomFieldDTO.OptionItem opt = dtoOptions.get(i);
             if (opt.getId() != null) {
@@ -339,7 +343,8 @@ public class CustomFieldService {
                 CustomFieldOption existing = existingMap.get(opt.getId());
                 if (existing == null) {
                     // ID 无效，当作新增处理
-                    insertNewOption(customFieldId, opt, i);
+                    Long reactivatedId = insertOrReactivateOption(customFieldId, opt, i, existingOptions);
+                    if (reactivatedId != null) reactivatedIds.add(reactivatedId);
                 } else {
                     existing.setValue(opt.getValue());
                     existing.setPosition(i);
@@ -350,14 +355,18 @@ public class CustomFieldService {
                     optionMapper.updateById(existing);
                 }
             } else {
-                // 新选项 → INSERT
-                insertNewOption(customFieldId, opt, i);
+                // 新选项 → 优先复用同名归档选项，避免产生重复
+                Long reactivatedId = insertOrReactivateOption(customFieldId, opt, i, existingOptions);
+                if (reactivatedId != null) reactivatedIds.add(reactivatedId);
             }
+            activeValues.add(opt.getValue());
         }
 
         // 4. 处理 DB 中存在但 DTO 中不存在的选项（被移除的）
+        // 排除被 step 3 复用重新激活的选项——这些虽然不在 dtoReferencedIds 中（DTO 没传 ID），
+        // 但已被成功匹配复用，不应该再被归档或删除
         Set<Long> removedIds = existingMap.keySet().stream()
-                .filter(id -> !dtoReferencedIds.contains(id))
+                .filter(id -> !dtoReferencedIds.contains(id) && !reactivatedIds.contains(id))
                 .collect(Collectors.toSet());
 
         for (Long removedId : removedIds) {
@@ -376,22 +385,78 @@ public class CustomFieldService {
                 optionMapper.deleteById(removedId);
             }
         }
+
+        // 5. 清理同名归档残留：如果一个归档选项的 value 与某个活跃选项相同，
+        //    且该归档选项未被工单引用，则物理删除（避免无意义的重复条目）
+        cleanupSupersededArchivedOptions(customFieldId, activeValues);
     }
 
     /**
-     * 插入新的选项记录
+     * 清理被活跃选项替代的归档残留条目。
+     * 当归档选项的 value 与活跃选项相同且未被工单引用时，物理删除归档条目。
      */
-    private void insertNewOption(Long customFieldId, UpdateCustomFieldDTO.OptionItem opt, int position) {
-        CustomFieldOption option = new CustomFieldOption();
-        option.setCustomFieldId(customFieldId);
-        option.setValue(opt.getValue());
-        option.setPosition(position);
-        option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
-        option.setColor(opt.getColor());
-        option.setIsArchived(false);
-        option.setCreatedAt(LocalDateTime.now());
-        option.setUpdatedAt(LocalDateTime.now());
-        optionMapper.insert(option);
+    private void cleanupSupersededArchivedOptions(Long customFieldId, Set<String> activeValues) {
+        if (activeValues.isEmpty()) return;
+
+        List<CustomFieldOption> archivedOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, customFieldId)
+                        .eq(CustomFieldOption::getIsArchived, true));
+
+        for (CustomFieldOption archived : archivedOptions) {
+            if (activeValues.contains(archived.getValue())) {
+                // 同名活跃选项已存在，检查归档条目是否还被工单引用
+                if (!isOptionReferenced(customFieldId, archived.getId())) {
+                    // 无引用 → 安全删除残留
+                    optionMapper.deleteById(archived.getId());
+                    log.info("Cleaned up superseded archived option {} (value='{}'), fieldId={}",
+                            archived.getId(), archived.getValue(), customFieldId);
+                }
+                // 如果仍被引用，保留归档条目（工单需要通过 ID 解析值）
+            }
+        }
+    }
+
+    /**
+     * 插入新选项或复用同名已归档选项。
+     * 当存在同名归档选项时，复用其 ID（保留工单引用），更新属性并取消归档。
+     * 这避免了"全删重建"策略产生的同名活跃+归档重复条目。
+     *
+     * @return 被复用的归档选项 ID（如果发生了复用），否则返回 null
+     */
+    private Long insertOrReactivateOption(Long customFieldId, UpdateCustomFieldDTO.OptionItem opt,
+                                           int position, List<CustomFieldOption> existingOptions) {
+        // 查找同名已归档选项
+        CustomFieldOption archivedSameName = existingOptions.stream()
+                .filter(o -> o.getIsArchived() && o.getValue().equals(opt.getValue()))
+                .findFirst()
+                .orElse(null);
+
+        if (archivedSameName != null) {
+            // 复用归档选项：更新属性并取消归档
+            archivedSameName.setPosition(position);
+            archivedSameName.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+            archivedSameName.setColor(opt.getColor());
+            archivedSameName.setIsArchived(false);
+            archivedSameName.setUpdatedAt(LocalDateTime.now());
+            optionMapper.updateById(archivedSameName);
+            log.info("Reactivated archived option {} (value='{}') instead of creating duplicate, fieldId={}",
+                    archivedSameName.getId(), opt.getValue(), customFieldId);
+            return archivedSameName.getId();
+        } else {
+            // 真正的新值 → 插入新记录
+            CustomFieldOption option = new CustomFieldOption();
+            option.setCustomFieldId(customFieldId);
+            option.setValue(opt.getValue());
+            option.setPosition(position);
+            option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+            option.setColor(opt.getColor());
+            option.setIsArchived(false);
+            option.setCreatedAt(LocalDateTime.now());
+            option.setUpdatedAt(LocalDateTime.now());
+            optionMapper.insert(option);
+            return null;
+        }
     }
 
     /**
@@ -545,6 +610,9 @@ public class CustomFieldService {
             return userProvided != null ? userProvided : new HashMap<>();
         }
 
+        // Load project-level overrides
+        Map<Long, CustomFieldProject> projectOverrides = getProjectFieldConditions(projectId);
+
         Map<Long, String> merged = new HashMap<>();
         if (userProvided != null) {
             merged.putAll(userProvided);
@@ -558,11 +626,11 @@ public class CustomFieldService {
                 continue;
             }
 
-            // 尝试应用默认值
-            String defaultVal = resolveDefaultValue(field);
+            // 尝试应用默认值（项目级优先）
+            String defaultVal = resolveDefaultValueWithOverride(field, projectOverrides.get(field.getId()));
             if (defaultVal != null && !defaultVal.isBlank()) {
                 merged.put(field.getId(), defaultVal);
-            } else if (Boolean.TRUE.equals(field.getIsRequired())) {
+            } else if (isFieldRequired(field, projectOverrides.get(field.getId()))) {
                 // 必填字段无默认值且用户未提供 → 报错
                 errors.add(new CustomFieldValidationEngine.FieldValidationError(
                         field.getName(), "此字段为必填项"));
@@ -610,6 +678,36 @@ public class CustomFieldService {
         }
     }
 
+    /**
+     * 解析字段默认值（优先使用项目级覆盖）。
+     * @param field 字段定义
+     * @param projectMapping 项目级映射（可为 null）
+     * @return 有效默认值
+     */
+    private String resolveDefaultValueWithOverride(CustomFieldDefinition field, CustomFieldProject projectMapping) {
+        // 项目级覆盖优先
+        if (projectMapping != null && projectMapping.getDefaultValue() != null) {
+            // 空字符串 "" 表示显式设为无默认值
+            String projectDefault = projectMapping.getDefaultValue();
+            return projectDefault.isEmpty() ? null : projectDefault;
+        }
+        // fallback 到全局默认值
+        return resolveDefaultValue(field);
+    }
+
+    /**
+     * 判断字段在指定项目中是否必填（优先使用项目级覆盖）。
+     * @param field 字段定义
+     * @param projectMapping 项目级映射（可为 null）
+     * @return 有效必填状态
+     */
+    private boolean isFieldRequired(CustomFieldDefinition field, CustomFieldProject projectMapping) {
+        if (projectMapping != null && projectMapping.getIsRequired() != null) {
+            return projectMapping.getIsRequired();
+        }
+        return Boolean.TRUE.equals(field.getIsRequired());
+    }
+
     @Transactional
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
         if (fieldValues == null || fieldValues.isEmpty()) return;
@@ -618,16 +716,23 @@ public class CustomFieldService {
         Map<Long, CustomFieldDefinition> fieldMap = applicableFields.stream()
                 .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
 
+        // Load project-level overrides for required check
+        Map<Long, CustomFieldProject> projectOverrides = getProjectFieldConditions(projectId);
+
         List<CustomFieldValidationEngine.FieldValidationError> allErrors = new ArrayList<>();
 
         for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
             CustomFieldDefinition field = fieldMap.get(entry.getKey());
             if (field == null) continue;
-            allErrors.addAll(validationEngine.validate(field, entry.getValue(), projectId));
+            // Pass project-level required override to validation engine
+            CustomFieldProject override = projectOverrides.get(entry.getKey());
+            Boolean effectiveRequired = (override != null && override.getIsRequired() != null)
+                    ? override.getIsRequired() : null;
+            allErrors.addAll(validationEngine.validate(field, entry.getValue(), projectId, effectiveRequired));
         }
 
         for (CustomFieldDefinition field : applicableFields) {
-            if (Boolean.TRUE.equals(field.getIsRequired()) && !fieldValues.containsKey(field.getId())) {
+            if (isFieldRequired(field, projectOverrides.get(field.getId())) && !fieldValues.containsKey(field.getId())) {
                 allErrors.add(new CustomFieldValidationEngine.FieldValidationError(
                         field.getName(), "此字段为必填项"));
             }
@@ -1317,9 +1422,10 @@ public class CustomFieldService {
     }
 
     public List<CustomFieldOption> getOptions(Long fieldId) {
-        return optionMapper.selectList(new LambdaQueryWrapper<CustomFieldOption>()
+        List<CustomFieldOption> allOptions = optionMapper.selectList(new LambdaQueryWrapper<CustomFieldOption>()
                 .eq(CustomFieldOption::getCustomFieldId, fieldId)
                 .orderByAsc(CustomFieldOption::getPosition));
+        return filterSupersededArchivedOptions(allOptions);
     }
 
     public List<Long> getProjectIds(Long fieldId) {
@@ -1346,8 +1452,29 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldOption>()
                         .in(CustomFieldOption::getCustomFieldId, fieldIds)
                         .orderByAsc(CustomFieldOption::getPosition));
+        // 按字段分组后，过滤每组中被活跃选项替代的归档残留
         return allOptions.stream()
-                .collect(Collectors.groupingBy(CustomFieldOption::getCustomFieldId));
+                .collect(Collectors.groupingBy(CustomFieldOption::getCustomFieldId))
+                .entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> filterSupersededArchivedOptions(e.getValue())));
+    }
+
+    /**
+     * 过滤被同名活跃选项替代的归档残留条目。
+     * 规则：如果一个归档选项的 value 与同字段内某个活跃选项相同，则视为"被替代"，从返回列表中移除。
+     * 没有同名活跃选项的归档条目（即被引用但该值已不再活跃列表中）仍然保留。
+     */
+    private List<CustomFieldOption> filterSupersededArchivedOptions(List<CustomFieldOption> options) {
+        Set<String> activeValues = options.stream()
+                .filter(o -> !o.getIsArchived())
+                .map(CustomFieldOption::getValue)
+                .collect(Collectors.toSet());
+
+        return options.stream()
+                .filter(o -> !o.getIsArchived() || !activeValues.contains(o.getValue()))
+                .toList();
     }
 
     /**
@@ -1842,6 +1969,49 @@ public class CustomFieldService {
 
         log.info("Updated field visibility: project={}, field={}, visibleTo={}, updatableBy={}",
                 projectId, fieldId, visibleToRoles, updatableByRoles);
+    }
+
+    /**
+     * 设置字段的项目级覆盖（必填性 + 默认值）。
+     * @param projectId    项目 ID
+     * @param fieldId      字段 ID
+     * @param isRequired   项目级必填性覆盖（null = 继承全局）
+     * @param defaultValue 项目级默认值覆盖（null = 继承全局）
+     */
+    @Transactional
+    public void setFieldProjectOverride(Long projectId, Long fieldId, Boolean isRequired, String defaultValue) {
+        // 验证字段存在
+        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+        }
+
+        // 查找或创建项目关联记录
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+
+        if (mapping == null) {
+            // 全局字段可能没有 mapping 记录，为其创建一个
+            if (!Boolean.TRUE.equals(field.getIsForAll())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "字段未附加到此项目");
+            }
+            mapping = new CustomFieldProject();
+            mapping.setCustomFieldId(fieldId);
+            mapping.setProjectId(projectId);
+            mapping.setPosition(0);
+            mapping.setIsRequired(isRequired);
+            mapping.setDefaultValue(defaultValue);
+            projectMapper.insert(mapping);
+        } else {
+            mapping.setIsRequired(isRequired);
+            mapping.setDefaultValue(defaultValue);
+            projectMapper.updateById(mapping);
+        }
+
+        log.info("Updated field project override: project={}, field={}, isRequired={}, defaultValue={}",
+                projectId, fieldId, isRequired, defaultValue);
     }
 
     /**
