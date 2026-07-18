@@ -88,7 +88,7 @@
 
       <!-- Save button -->
       <div class="settings-actions">
-        <a-button type="primary" :loading="saving" @click="saveSettings">
+        <a-button type="primary" :loading="saving" @click="handleSave">
           保存设置
         </a-button>
         <a-button @click="resetForm">
@@ -96,24 +96,127 @@
         </a-button>
       </div>
     </template>
+
+    <!-- Recalculation Strategy Dialog -->
+    <a-modal
+      v-model:visible="showRecalcDialog"
+      :title="'重新计算工时数据'"
+      :width="560"
+      :mask-closable="false"
+      :closable="!saving"
+      :footer="false"
+      @cancel="cancelRecalculation"
+    >
+      <div class="recalc-dialog">
+        <div class="recalc-warning">
+          <icon-exclamation-circle-fill class="recalc-warning-icon" />
+          <p class="recalc-warning-text">
+            每日工作时长从 <strong>{{ originalSettings.hoursPerDay }}h</strong> 修改为 <strong>{{ form.hoursPerDay }}h</strong>，
+            已有的工时数据需要重新计算。请选择计算策略：
+          </p>
+        </div>
+
+        <div class="recalc-options">
+          <label
+            class="recalc-option"
+            :class="{ selected: selectedStrategy === 'PRESERVE_MINUTES' }"
+            @click="selectedStrategy = 'PRESERVE_MINUTES'"
+          >
+            <input
+              type="radio"
+              name="strategy"
+              value="PRESERVE_MINUTES"
+              v-model="selectedStrategy"
+              class="recalc-radio"
+            />
+            <div class="recalc-option-content">
+              <span class="recalc-option-title">保留分钟数</span>
+              <span class="recalc-option-desc">
+                已有工时的实际分钟数不变，仅更新天/小时的换算展示。
+                例如：480 分钟原来显示为 1d，修改后显示为 {{ formatMinutesPreview(480, form.hoursPerDay) }}。
+              </span>
+            </div>
+          </label>
+
+          <label
+            class="recalc-option"
+            :class="{ selected: selectedStrategy === 'PRESERVE_DAYS' }"
+            @click="selectedStrategy = 'PRESERVE_DAYS'"
+          >
+            <input
+              type="radio"
+              name="strategy"
+              value="PRESERVE_DAYS"
+              v-model="selectedStrategy"
+              class="recalc-radio"
+            />
+            <div class="recalc-option-content">
+              <span class="recalc-option-title">保留天数</span>
+              <span class="recalc-option-desc">
+                已有工时的分钟数按比例重新计算，使天数展示保持不变。
+                例如：{{ originalSettings.hoursPerDay * 60 }}m (1d@{{ originalSettings.hoursPerDay }}h) 变为 {{ form.hoursPerDay * 60 }}m (1d@{{ form.hoursPerDay }}h)。
+              </span>
+              <span class="recalc-option-warning">
+                ⚠ 此操作将修改数据库中的实际数值，建议提前备份数据库。
+              </span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Example table -->
+        <div class="recalc-example">
+          <div class="recalc-example-title">换算示例</div>
+          <table class="recalc-table">
+            <thead>
+              <tr>
+                <th>当前值</th>
+                <th>保留分钟数</th>
+                <th>保留天数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="example in recalcExamples" :key="example.minutes">
+                <td>{{ formatMinutes(example.minutes, originalSettings.hoursPerDay) }}</td>
+                <td>{{ formatMinutes(example.minutes, form.hoursPerDay) }}</td>
+                <td>{{ formatMinutes(Math.round(example.minutes * form.hoursPerDay / originalSettings.hoursPerDay), form.hoursPerDay) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="recalc-actions">
+          <a-button @click="cancelRecalculation" :disabled="saving">取消</a-button>
+          <a-button
+            type="primary"
+            :loading="saving"
+            :disabled="!selectedStrategy"
+            @click="confirmRecalculation"
+          >
+            确认并保存
+          </a-button>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { systemSettingApi } from '@/api/systemSetting'
-import type { TimeTrackingSettingsVO } from '@/api/systemSetting'
+import type { TimeTrackingSettingsVO, UpdateTimeTrackingSettingsDTO } from '@/api/systemSetting'
 
 const loading = ref(true)
 const saving = ref(false)
+const showRecalcDialog = ref(false)
+const selectedStrategy = ref<'PRESERVE_MINUTES' | 'PRESERVE_DAYS'>('PRESERVE_MINUTES')
 
 const form = reactive({
   hoursPerDay: 8,
   workingDays: [1, 2, 3, 4, 5] as number[]
 })
 
-// Original values for reset
+// Original values for reset and comparison
 let originalSettings: TimeTrackingSettingsVO = { hoursPerDay: 8, workingDays: [1, 2, 3, 4, 5] }
 
 const allDays = [
@@ -126,10 +229,20 @@ const allDays = [
   { value: 7, label: '周日' }
 ]
 
+// Example data for the recalculation preview table
+const recalcExamples = computed(() => {
+  const oldH = originalSettings.hoursPerDay
+  return [
+    { minutes: oldH * 60 },         // 1d
+    { minutes: oldH * 60 + 120 },   // 1d2h
+    { minutes: 360 },               // 6h
+    { minutes: oldH * 60 * 5 + oldH * 60 * 3 }  // 1w3d
+  ]
+})
+
 function toggleWorkday(day: number) {
   const idx = form.workingDays.indexOf(day)
   if (idx >= 0) {
-    // Don't allow removing the last working day
     if (form.workingDays.length <= 1) {
       Message.warning('至少需要保留一个工作日')
       return
@@ -139,6 +252,28 @@ function toggleWorkday(day: number) {
     form.workingDays.push(day)
     form.workingDays.sort((a, b) => a - b)
   }
+}
+
+/**
+ * Format minutes into human-readable period string (e.g., "1d2h30m")
+ */
+function formatMinutes(totalMinutes: number, hoursPerDay: number): string {
+  if (totalMinutes <= 0) return '0m'
+  const minutesPerDay = hoursPerDay * 60
+  const days = Math.floor(totalMinutes / minutesPerDay)
+  let remaining = totalMinutes % minutesPerDay
+  const hours = Math.floor(remaining / 60)
+  const minutes = remaining % 60
+
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+  return parts.join('') || '0m'
+}
+
+function formatMinutesPreview(totalMinutes: number, newHoursPerDay: number): string {
+  return formatMinutes(totalMinutes, newHoursPerDay)
 }
 
 async function loadSettings() {
@@ -157,20 +292,58 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings() {
+/**
+ * Handle save button click. If hoursPerDay changed, show recalculation dialog.
+ */
+function handleSave() {
   if (form.workingDays.length === 0) {
     Message.warning('至少需要选择一个工作日')
     return
   }
+
+  if (form.hoursPerDay !== originalSettings.hoursPerDay) {
+    // hoursPerDay changed → show recalculation strategy dialog
+    selectedStrategy.value = 'PRESERVE_MINUTES'
+    showRecalcDialog.value = true
+  } else {
+    // Only workingDays changed → save directly (no recalculation needed)
+    doSave(undefined)
+  }
+}
+
+function cancelRecalculation() {
+  showRecalcDialog.value = false
+}
+
+function confirmRecalculation() {
+  doSave(selectedStrategy.value)
+}
+
+async function doSave(strategy?: 'PRESERVE_MINUTES' | 'PRESERVE_DAYS') {
   saving.value = true
   try {
-    const res = await systemSettingApi.updateTimeTrackingSettings({
+    const payload: UpdateTimeTrackingSettingsDTO = {
       hoursPerDay: form.hoursPerDay,
       workingDays: form.workingDays
-    })
+    }
+    if (strategy) {
+      payload.recalculationStrategy = strategy
+    }
+
+    const res = await systemSettingApi.updateTimeTrackingSettings(payload)
     if (res.code === 0 && res.data) {
-      originalSettings = { ...res.data }
-      Message.success('时间追踪设置已保存')
+      originalSettings = { ...res.data.settings }
+      showRecalcDialog.value = false
+
+      if (res.data.recalculated) {
+        Message.success(
+          `设置已保存，已重新计算 ${res.data.affectedTimeEntries} 条工时记录和 ${res.data.affectedEstimations} 条预估工时`
+        )
+      } else if (res.data.strategy === 'PRESERVE_MINUTES') {
+        Message.success('设置已保存，已有工时数据保持不变，仅更新换算展示')
+      } else {
+        Message.success('时间追踪设置已保存')
+      }
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '保存失败')
@@ -361,5 +534,134 @@ onMounted(loadSettings)
   display: flex;
   gap: 12px;
   padding-top: 8px;
+}
+
+/* Recalculation Dialog Styles */
+.recalc-dialog {
+  padding: 4px 0;
+}
+
+.recalc-warning {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-warning-light-1, rgba(255, 183, 77, 0.08));
+  border-radius: 6px;
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+
+.recalc-warning-icon {
+  color: var(--color-warning-6, #ff7d00);
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.recalc-warning-text {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.recalc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.recalc-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tf-border-light);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.recalc-option:hover {
+  border-color: var(--tf-border);
+  background: var(--tf-bg-hover);
+}
+
+.recalc-option.selected {
+  border-color: var(--tf-accent);
+  background: var(--tf-accent-bg);
+}
+
+.recalc-radio {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--tf-accent);
+}
+
+.recalc-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recalc-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.recalc-option-desc {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  line-height: 1.5;
+}
+
+.recalc-option-warning {
+  font-size: 11px;
+  color: var(--color-warning-6, #ff7d00);
+  margin-top: 4px;
+}
+
+.recalc-example {
+  margin-bottom: 20px;
+}
+
+.recalc-example-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  margin-bottom: 8px;
+}
+
+.recalc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.recalc-table th,
+.recalc-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--tf-border-light);
+}
+
+.recalc-table th {
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-surface);
+}
+
+.recalc-table td {
+  color: var(--tf-text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.recalc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 4px;
 }
 </style>

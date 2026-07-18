@@ -11,6 +11,18 @@ export interface TimeTrackingSettingsVO {
 export interface UpdateTimeTrackingSettingsDTO {
   hoursPerDay: number
   workingDays: number[]
+  /** 工时重新计算策略（hoursPerDay 变更时必填） */
+  recalculationStrategy?: 'PRESERVE_MINUTES' | 'PRESERVE_DAYS'
+}
+
+export interface TimeTrackingRecalculationResultVO {
+  settings: TimeTrackingSettingsVO
+  recalculated: boolean
+  strategy: string | null
+  affectedTimeEntries: number
+  affectedEstimations: number
+  oldHoursPerDay: number
+  newHoursPerDay: number
 }
 
 export const systemSettingApi = {
@@ -21,6 +33,6 @@ export const systemSettingApi = {
 
   /** 更新时间追踪设置（需要管理员权限） */
   updateTimeTrackingSettings(data: UpdateTimeTrackingSettingsDTO) {
-    return request.put<any, R<TimeTrackingSettingsVO>>('/system/settings/time-tracking', data)
+    return request.put<any, R<TimeTrackingRecalculationResultVO>>('/system/settings/time-tracking', data)
   }
 }

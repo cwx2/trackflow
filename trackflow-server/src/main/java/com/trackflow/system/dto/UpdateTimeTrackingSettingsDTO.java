@@ -23,4 +23,24 @@ public class UpdateTimeTrackingSettingsDTO {
     /** 每周工作日列表（1=周一, 7=周日） */
     @NotEmpty(message = "工作日不能为空")
     private List<Integer> workingDays;
+
+    /**
+     * 工时重新计算策略（仅当 hoursPerDay 变更时需要）。
+     * <ul>
+     *   <li>PRESERVE_MINUTES — 保留分钟值不变，仅更新天/小时的换算展示</li>
+     *   <li>PRESERVE_DAYS — 按比例重新计算分钟值，使天数展示保持不变</li>
+     *   <li>null — hoursPerDay 未变更时无需传递</li>
+     * </ul>
+     */
+    private RecalculationStrategy recalculationStrategy;
+
+    /**
+     * 工时重新计算策略枚举
+     */
+    public enum RecalculationStrategy {
+        /** 保留分钟值：time_entry.duration 不变，仅前端展示更新 */
+        PRESERVE_MINUTES,
+        /** 保留天数：time_entry.duration 按比例重新计算 */
+        PRESERVE_DAYS
+    }
 }
