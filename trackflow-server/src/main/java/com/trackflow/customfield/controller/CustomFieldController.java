@@ -9,6 +9,7 @@ import com.trackflow.customfield.dto.CustomFieldQuery;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
 import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
 import com.trackflow.customfield.dto.SetFieldConditionDTO;
+import com.trackflow.customfield.dto.SetFieldVisibilityDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.entity.CustomFieldOption;
@@ -115,8 +116,13 @@ public class CustomFieldController {
             @PathVariable("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType) {
         List<CustomFieldDefinition> fields = customFieldService.listByProject(projectId, issueType);
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
+
+        // Role-based visibility filtering
+        List<Long> userRoleIds = customFieldService.getCurrentUserRoleIds(projectId);
+        fields = customFieldService.filterFieldsByVisibility(fields, conditionsMap, userRoleIds);
+
+        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         // 批量加载选项数据（消除 N+1 查询）
         List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
         Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
@@ -129,6 +135,15 @@ public class CustomFieldController {
             if (mapping != null && mapping.getConditionFieldId() != null) {
                 vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
                 vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
+            }
+            // 填充可编辑性标记
+            if (mapping != null) {
+                List<Long> updatableRoles = customFieldService.parseRoleIds(mapping.getUpdatableByRoles());
+                vo.setEditable(customFieldService.isUpdatableByUser(updatableRoles, userRoleIds));
+                vo.setVisibleToRoles(customFieldService.parseRoleIds(mapping.getVisibleToRoles()));
+                vo.setUpdatableByRoles(updatableRoles);
+            } else {
+                vo.setEditable(true);
             }
         }
         return R.ok(voList);
@@ -172,6 +187,11 @@ public class CustomFieldController {
             if (mapping != null && mapping.getConditionFieldId() != null) {
                 vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
                 vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
+            }
+            // 填充可见性/可编辑性配置
+            if (mapping != null) {
+                vo.setVisibleToRoles(customFieldService.parseRoleIds(mapping.getVisibleToRoles()));
+                vo.setUpdatableByRoles(customFieldService.parseRoleIds(mapping.getUpdatableByRoles()));
             }
         }
         return R.ok(voList);
@@ -252,5 +272,20 @@ public class CustomFieldController {
             @PathVariable("fieldId") Long fieldId) {
         int cleared = customFieldService.clearHiddenValues(projectId, fieldId);
         return R.ok(cleared);
+    }
+
+    // ========== 字段可见性/可编辑性配置端点 ==========
+
+    /**
+     * 设置字段的可见性和编辑权限（项目级，基于角色）
+     */
+    @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/visibility")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Void> setFieldVisibility(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody SetFieldVisibilityDTO dto) {
+        customFieldService.setFieldVisibility(projectId, fieldId, dto.getVisibleToRoles(), dto.getUpdatableByRoles());
+        return R.ok();
     }
 }

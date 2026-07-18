@@ -1,4 +1,4 @@
--- V39: Add role-based field visibility and editability to custom_field_project
+-- V104: Add role-based field visibility and editability to custom_field_project
 -- Implements Group-based Field Visibility (similar to YouTrack Advanced Settings)
 
 -- visible_to_roles: JSONB array of role IDs (e.g. [2,7]). NULL = visible to all.

@@ -194,6 +194,10 @@ public class IssueController {
             @PathVariable("fieldId") Long fieldId,
             @RequestBody com.trackflow.customfield.dto.UpdateCustomFieldValueDTO dto) {
         Issue issue = issueService.getById(id);
+
+        // Check field-level editability (role-based)
+        customFieldService.checkFieldEditable(issue.getProjectId(), fieldId);
+
         // 多值字段使用 values 数组（逗号连接后传入 service 层解析为多行）
         String effectiveValue;
         if (dto.getValues() != null && !dto.getValues().isEmpty()) {

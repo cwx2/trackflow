@@ -604,7 +604,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       editType: editType as any,
       rawValue,
       rawValues: isMulti ? rawValues : undefined,
-      readonly: !canEdit,
+      readonly: !canEdit || cf.editable === false,
       options
     }
   })

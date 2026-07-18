@@ -16,7 +16,7 @@
       <div class="section-header">
         <div class="section-info">
           <h3 class="section-title">自定义字段</h3>
-          <p class="section-desc">管理本项目使用的自定义字段。全局字段自动可用，项目字段需手动添加。</p>
+          <p class="section-desc">管理本项目使用的自定义字段。点击字段可配置条件显示规则。</p>
         </div>
         <a-button
           v-if="canManage && !isArchived"
@@ -29,13 +29,17 @@
         </a-button>
       </div>
 
-      <!-- 字段列表 -->
-      <div v-if="fieldList.length > 0" class="field-list">
+      <!-- 主体区域：字段列表 + 详情面板 -->
+      <!-- 主体区域：字段列表 + 详情面板 -->
+      <div v-if="fieldList.length > 0" class="fields-body">
+        <!-- 字段列表 -->
+        <div class="field-list">
         <div
           v-for="field in fieldList"
           :key="field.id"
           class="field-item"
-          :class="{ 'is-global': field.isForAll }"
+          :class="{ 'is-global': field.isForAll, 'is-selected': selectedField?.id === field.id }"
+          @click="selectField(field)"
         >
           <div class="field-main">
             <div class="field-info">
@@ -43,9 +47,18 @@
               <span class="field-type-badge">{{ formatFieldType(field.fieldFormat) }}</span>
               <span v-if="field.isRequired" class="field-required-badge">必填</span>
               <span v-if="field.isForAll" class="field-global-badge">全局</span>
+              <span v-if="field.conditionFieldId" class="field-condition-badge">
+                <icon-eye-invisible :size="11" /> 条件显示
+              </span>
+              <span v-if="field.visibleToRoles && field.visibleToRoles.length > 0" class="field-visibility-badge">
+                <icon-lock :size="11" /> 受限可见
+              </span>
             </div>
             <div class="field-meta">
-              <span v-if="field.defaultValue" class="field-default">
+              <span v-if="field.conditionFieldId" class="field-condition-hint">
+                仅当「{{ getFieldName(field.conditionFieldId) }}」为指定值时显示
+              </span>
+              <span v-else-if="field.defaultValue" class="field-default">
                 默认值: {{ field.defaultValue }}
               </span>
               <span v-if="field.options && field.options.length > 0" class="field-options-count">
@@ -59,10 +72,171 @@
               type="text"
               size="mini"
               status="danger"
-              @click="confirmDetach(field)"
+              @click.stop="confirmDetach(field)"
             >
               移除
             </a-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 字段详情面板（条件配置） -->
+      <div v-if="selectedField && canManage && !isArchived" class="field-detail-panel">
+        <div class="detail-panel-header">
+          <h4 class="detail-panel-title">{{ selectedField.name }}</h4>
+          <a-button type="text" size="mini" @click="selectedField = null">
+            <icon-close />
+          </a-button>
+        </div>
+
+        <div class="detail-panel-body">
+          <!-- 高级设置：条件显示 -->
+          <div class="condition-section">
+            <h5 class="condition-title">高级设置</h5>
+
+            <div class="condition-form">
+              <div class="condition-row">
+                <label class="condition-label">Show only when</label>
+                <a-select
+                  v-model="conditionForm.conditionFieldId"
+                  placeholder="选择条件字段..."
+                  allow-clear
+                  size="small"
+                  @change="onConditionFieldChange"
+                >
+                  <a-option
+                    v-for="cf in eligibleConditionFields"
+                    :key="cf.id"
+                    :value="cf.id"
+                  >
+                    {{ cf.name }}
+                  </a-option>
+                </a-select>
+              </div>
+
+              <div v-if="conditionForm.conditionFieldId" class="condition-row">
+                <label class="condition-label">is set to</label>
+                <a-select
+                  v-model="conditionForm.conditionValues"
+                  placeholder="选择触发值..."
+                  multiple
+                  size="small"
+                  :max-tag-count="3"
+                >
+                  <a-option
+                    v-for="opt in conditionFieldOptions"
+                    :key="opt.id"
+                    :value="opt.id"
+                  >
+                    {{ opt.value }}
+                  </a-option>
+                </a-select>
+              </div>
+
+              <div class="condition-actions">
+                <a-button
+                  type="primary"
+                  size="small"
+                  :loading="savingCondition"
+                  :disabled="!isConditionDirty"
+                  @click="saveCondition"
+                >
+                  保存条件
+                </a-button>
+                <a-button
+                  v-if="selectedField.conditionFieldId"
+                  type="text"
+                  size="small"
+                  @click="clearCondition"
+                >
+                  清除条件
+                </a-button>
+              </div>
+
+              <!-- 清除隐藏值按钮 -->
+              <div v-if="selectedField.conditionFieldId" class="clear-hidden-section">
+                <a-divider :margin="12" />
+                <p class="clear-hidden-hint">
+                  如果修改了条件配置，已隐藏字段中的旧值不会自动删除。
+                  使用此操作可清除所有条件不满足的 issue 中的字段值。
+                </p>
+                <a-button
+                  type="outline"
+                  size="small"
+                  status="warning"
+                  :loading="clearingValues"
+                  @click="handleClearHiddenValues"
+                >
+                  清除隐藏值
+                </a-button>
+              </div>
+
+              <!-- 角色可见性/可编辑性 -->
+              <a-divider :margin="16" />
+              <h5 class="condition-title">字段权限</h5>
+
+              <div class="condition-row">
+                <label class="condition-label">Visible to（对谁可见）</label>
+                <a-select
+                  v-model="visibilityForm.visibleToRoles"
+                  placeholder="所有项目成员"
+                  allow-clear
+                  multiple
+                  size="small"
+                  :max-tag-count="2"
+                >
+                  <a-option
+                    v-for="role in projectRoles"
+                    :key="role.id"
+                    :value="Number(role.id)"
+                  >
+                    {{ role.name }}
+                  </a-option>
+                </a-select>
+                <span class="visibility-hint">留空 = 所有项目成员可见</span>
+              </div>
+
+              <div class="condition-row">
+                <label class="condition-label">Updatable by（谁可编辑）</label>
+                <a-select
+                  v-model="visibilityForm.updatableByRoles"
+                  placeholder="所有可见用户"
+                  allow-clear
+                  multiple
+                  size="small"
+                  :max-tag-count="2"
+                >
+                  <a-option
+                    v-for="role in projectRoles"
+                    :key="role.id"
+                    :value="Number(role.id)"
+                  >
+                    {{ role.name }}
+                  </a-option>
+                </a-select>
+                <span class="visibility-hint">留空 = 所有可见此字段的用户可编辑</span>
+              </div>
+
+              <div class="condition-actions">
+                <a-button
+                  type="primary"
+                  size="small"
+                  :loading="savingVisibility"
+                  :disabled="!isVisibilityDirty"
+                  @click="saveVisibility"
+                >
+                  保存权限
+                </a-button>
+                <a-button
+                  v-if="hasVisibilityConfig"
+                  type="text"
+                  size="small"
+                  @click="clearVisibility"
+                >
+                  清除限制
+                </a-button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -152,17 +326,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import {
   IconLock,
   IconPlus,
   IconApps,
   IconCheckCircle,
-  IconExclamationCircleFill
+  IconExclamationCircleFill,
+  IconEyeInvisible,
+  IconClose
 } from '@arco-design/web-vue/es/icon'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
-import type { ProjectDetailVO, CustomFieldDefinitionVO } from '@/api/types'
+import { workflowApi } from '@/api'
+import type { ProjectDetailVO, CustomFieldDefinitionVO, CustomFieldOptionVO, RoleVO } from '@/api/types'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -184,6 +361,23 @@ const showDetachDialog = ref(false)
 const detaching = ref(false)
 const detachTarget = ref<CustomFieldDefinitionVO | null>(null)
 
+// Condition management
+const selectedField = ref<CustomFieldDefinitionVO | null>(null)
+const savingCondition = ref(false)
+const clearingValues = ref(false)
+const conditionForm = reactive({
+  conditionFieldId: null as string | null,
+  conditionValues: [] as string[]
+})
+
+// Visibility management
+const projectRoles = ref<RoleVO[]>([])
+const savingVisibility = ref(false)
+const visibilityForm = reactive({
+  visibleToRoles: [] as number[],
+  updatableByRoles: [] as number[]
+})
+
 // Field type display names
 const fieldTypeMap: Record<string, string> = {
   string: '文本(单行)',
@@ -199,6 +393,211 @@ const fieldTypeMap: Record<string, string> = {
 
 function formatFieldType(format: string): string {
   return fieldTypeMap[format] || format
+}
+
+function getFieldName(fieldId: string): string {
+  const field = fieldList.value.find(f => f.id === fieldId)
+  return field?.name || '未知字段'
+}
+
+/**
+ * 可用作条件源的字段列表：
+ * - 必须是 list 类型
+ * - 必须是单值（非 multi）
+ * - 不能是当前选中的字段本身
+ * - 不能自身已有条件（禁止链式依赖）
+ */
+const eligibleConditionFields = computed(() => {
+  if (!selectedField.value) return []
+  return fieldList.value.filter(f =>
+    f.id !== selectedField.value!.id &&
+    f.fieldFormat === 'list' &&
+    !f.isMulti &&
+    !f.conditionFieldId // 禁止链式
+  )
+})
+
+/**
+ * 当前选中条件源字段的选项列表
+ */
+const conditionFieldOptions = computed<CustomFieldOptionVO[]>(() => {
+  if (!conditionForm.conditionFieldId) return []
+  const field = fieldList.value.find(f => f.id === conditionForm.conditionFieldId)
+  return (field?.options || []).filter(o => !o.isArchived)
+})
+
+/**
+ * 条件是否有修改
+ */
+const isConditionDirty = computed(() => {
+  if (!selectedField.value) return false
+  const origFieldId = selectedField.value.conditionFieldId || null
+  const origValues = selectedField.value.conditionValues || []
+  const currentFieldId = conditionForm.conditionFieldId || null
+  const currentValues = conditionForm.conditionValues || []
+
+  if (origFieldId !== currentFieldId) return true
+  if (origValues.length !== currentValues.length) return true
+  return !origValues.every(v => currentValues.includes(v))
+})
+
+function selectField(field: CustomFieldDefinitionVO) {
+  selectedField.value = field
+  conditionForm.conditionFieldId = field.conditionFieldId || null
+  conditionForm.conditionValues = field.conditionValues ? [...field.conditionValues] : []
+  // Populate visibility form
+  visibilityForm.visibleToRoles = field.visibleToRoles ? [...field.visibleToRoles] : []
+  visibilityForm.updatableByRoles = field.updatableByRoles ? [...field.updatableByRoles] : []
+}
+
+function onConditionFieldChange() {
+  // 切换条件源字段时清空选中的值
+  conditionForm.conditionValues = []
+}
+
+async function saveCondition() {
+  if (!selectedField.value) return
+  savingCondition.value = true
+  try {
+    await customFieldApi.setFieldCondition(props.project.id, selectedField.value.id, {
+      conditionFieldId: conditionForm.conditionFieldId || null,
+      conditionValues: conditionForm.conditionFieldId ? conditionForm.conditionValues : null
+    })
+    Message.success('条件设置已保存')
+    // 更新本地状态
+    selectedField.value.conditionFieldId = conditionForm.conditionFieldId
+    selectedField.value.conditionValues = conditionForm.conditionValues.length > 0 ? [...conditionForm.conditionValues] : null
+    // 重新加载列表刷新显示
+    await loadFields()
+    // 重新选中
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存条件失败')
+  } finally {
+    savingCondition.value = false
+  }
+}
+
+async function clearCondition() {
+  if (!selectedField.value) return
+  savingCondition.value = true
+  try {
+    await customFieldApi.setFieldCondition(props.project.id, selectedField.value.id, {
+      conditionFieldId: null,
+      conditionValues: null
+    })
+    Message.success('条件已清除')
+    conditionForm.conditionFieldId = null
+    conditionForm.conditionValues = []
+    selectedField.value.conditionFieldId = null
+    selectedField.value.conditionValues = null
+    await loadFields()
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '清除条件失败')
+  } finally {
+    savingCondition.value = false
+  }
+}
+
+async function handleClearHiddenValues() {
+  if (!selectedField.value) return
+  Modal.warning({
+    title: '确认清除隐藏值',
+    content: `将清除所有条件不满足的工单中「${selectedField.value.name}」字段的值。此操作不可撤销。`,
+    okText: '确认清除',
+    cancelText: '取消',
+    onOk: async () => {
+      clearingValues.value = true
+      try {
+        const res = await customFieldApi.clearHiddenValues(props.project.id, selectedField.value!.id)
+        const count = res.data || 0
+        Message.success(count > 0 ? `已清除 ${count} 条隐藏值` : '没有需要清除的隐藏值')
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '清除失败')
+      } finally {
+        clearingValues.value = false
+      }
+    }
+  })
+}
+
+// ===== Visibility methods =====
+
+const isVisibilityDirty = computed(() => {
+  if (!selectedField.value) return false
+  const origVisible = selectedField.value.visibleToRoles || []
+  const origUpdatable = selectedField.value.updatableByRoles || []
+  const currentVisible = visibilityForm.visibleToRoles || []
+  const currentUpdatable = visibilityForm.updatableByRoles || []
+
+  if (origVisible.length !== currentVisible.length) return true
+  if (origUpdatable.length !== currentUpdatable.length) return true
+  if (!origVisible.every(v => currentVisible.includes(v))) return true
+  if (!origUpdatable.every(v => currentUpdatable.includes(v))) return true
+  return false
+})
+
+const hasVisibilityConfig = computed(() => {
+  if (!selectedField.value) return false
+  return (selectedField.value.visibleToRoles && selectedField.value.visibleToRoles.length > 0) ||
+    (selectedField.value.updatableByRoles && selectedField.value.updatableByRoles.length > 0)
+})
+
+async function saveVisibility() {
+  if (!selectedField.value) return
+  savingVisibility.value = true
+  try {
+    await customFieldApi.setFieldVisibility(props.project.id, selectedField.value.id, {
+      visibleToRoles: visibilityForm.visibleToRoles.length > 0 ? visibilityForm.visibleToRoles : null,
+      updatableByRoles: visibilityForm.updatableByRoles.length > 0 ? visibilityForm.updatableByRoles : null
+    })
+    Message.success('字段权限已保存')
+    // Update local state
+    selectedField.value.visibleToRoles = visibilityForm.visibleToRoles.length > 0 ? [...visibilityForm.visibleToRoles] : null
+    selectedField.value.updatableByRoles = visibilityForm.updatableByRoles.length > 0 ? [...visibilityForm.updatableByRoles] : null
+    await loadFields()
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存字段权限失败')
+  } finally {
+    savingVisibility.value = false
+  }
+}
+
+async function clearVisibility() {
+  if (!selectedField.value) return
+  savingVisibility.value = true
+  try {
+    await customFieldApi.setFieldVisibility(props.project.id, selectedField.value.id, {
+      visibleToRoles: null,
+      updatableByRoles: null
+    })
+    Message.success('字段权限限制已清除')
+    visibilityForm.visibleToRoles = []
+    visibilityForm.updatableByRoles = []
+    selectedField.value.visibleToRoles = null
+    selectedField.value.updatableByRoles = null
+    await loadFields()
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '清除权限失败')
+  } finally {
+    savingVisibility.value = false
+  }
+}
+
+async function loadProjectRoles() {
+  try {
+    const res = await workflowApi.listProjectRoles()
+    projectRoles.value = res.data || []
+  } catch {
+    projectRoles.value = []
+  }
 }
 
 // Load fields
@@ -229,32 +628,26 @@ async function loadAvailableFields() {
   }
 }
 
-// Watch add dialog open
 function handleAddDialogClose() {
   availableFields.value = []
 }
 
-// Attach field
 async function handleAttach(field: CustomFieldDefinitionVO) {
   try {
     await customFieldApi.attachToProject(props.project.id, field.id)
     Message.success(`字段「${field.name}」已添加到项目`)
-    // Remove from available list
     availableFields.value = availableFields.value.filter(f => f.id !== field.id)
-    // Reload field list
     await loadFields()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '添加字段失败')
   }
 }
 
-// Confirm detach
 function confirmDetach(field: CustomFieldDefinitionVO) {
   detachTarget.value = field
   showDetachDialog.value = true
 }
 
-// Submit detach
 async function submitDetach() {
   if (!detachTarget.value) return
   detaching.value = true
@@ -263,6 +656,9 @@ async function submitDetach() {
     Message.success(`字段「${detachTarget.value.name}」已从项目移除`)
     showDetachDialog.value = false
     detachTarget.value = null
+    if (selectedField.value?.id === detachTarget.value?.id) {
+      selectedField.value = null
+    }
     await loadFields()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '移除字段失败')
@@ -271,22 +667,24 @@ async function submitDetach() {
   }
 }
 
-// Watch showAddDialog to load available fields
-import { watch } from 'vue'
 watch(showAddDialog, (val) => {
-  if (val) {
-    loadAvailableFields()
-  }
+  if (val) loadAvailableFields()
 })
 
 onMounted(() => {
   loadFields()
+  loadProjectRoles()
 })
 </script>
 
 <style scoped>
 .settings-custom-fields {
-  max-width: 680px;
+  max-width: 900px;
+}
+
+.fields-body {
+  display: flex;
+  gap: 24px;
 }
 
 /* Archived notice */
@@ -349,6 +747,8 @@ onMounted(() => {
   border: 1px solid var(--tf-border);
   border-radius: 6px;
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
 .field-item {
@@ -358,10 +758,17 @@ onMounted(() => {
   padding: 12px 16px;
   background: var(--tf-bg-surface, var(--tf-bg-elevated));
   transition: background 0.15s;
+  cursor: pointer;
 }
 
 .field-item:hover {
   background: var(--tf-bg-hover);
+}
+
+.field-item.is-selected {
+  background: var(--tf-bg-active, var(--tf-bg-hover));
+  border-left: 3px solid var(--tf-accent);
+  padding-left: 13px;
 }
 
 .field-item + .field-item {
@@ -378,6 +785,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 2px;
+  flex-wrap: wrap;
 }
 
 .field-name {
@@ -410,6 +818,28 @@ onMounted(() => {
   color: var(--tf-accent);
 }
 
+.field-condition-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(210, 153, 34, 0.1);
+  color: var(--tf-warning, #d29922);
+}
+
+.field-visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(130, 80, 223, 0.1);
+  color: var(--tf-info, #8250df);
+}
+
 .field-meta {
   display: flex;
   align-items: center;
@@ -417,14 +847,105 @@ onMounted(() => {
 }
 
 .field-default,
-.field-options-count {
+.field-options-count,
+.field-condition-hint {
   font-size: 11px;
   color: var(--tf-text-tertiary);
+}
+
+.field-condition-hint {
+  font-style: italic;
 }
 
 .field-actions {
   flex-shrink: 0;
   margin-left: 12px;
+}
+
+/* Detail panel */
+.field-detail-panel {
+  width: 280px;
+  flex-shrink: 0;
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  background: var(--tf-bg-surface, var(--tf-bg-elevated));
+  align-self: flex-start;
+  position: sticky;
+  top: 16px;
+}
+
+.detail-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--tf-border-light, var(--tf-border));
+}
+
+.detail-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0;
+}
+
+.detail-panel-body {
+  padding: 16px;
+}
+
+.condition-section {
+  /* no extra margin needed */
+}
+
+.condition-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tf-text-secondary);
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.condition-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.condition-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.condition-label {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  font-weight: 500;
+}
+
+.condition-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.clear-hidden-section {
+  margin-top: 8px;
+}
+
+.clear-hidden-hint {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.visibility-hint {
+  font-size: 11px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  margin-top: 2px;
 }
 
 /* Empty state */
