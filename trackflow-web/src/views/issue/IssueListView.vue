@@ -301,6 +301,8 @@
         @batch-sprint="onBatchSprint"
         @batch-priority="onBatchPriority"
         @batch-delete="onBatchDelete"
+        @batch-export="onBatchExport"
+        @open-command="showCommandDialog = true"
       />
 
       <!-- Filter bar -->
@@ -326,6 +328,21 @@
             {{ showInlineCreate ? '取消' : '快速创建' }}
           </a-button>
           <a-button v-if="canCreateIssueGlobal" type="primary" size="small" @click="showCreatePanel = true">创建工单</a-button>
+          <a-dropdown trigger="click" position="br" @select="handleExport">
+            <a-button size="small" type="text" title="导出数据" :loading="exportLoading">
+              <template #icon><icon-download /></template>
+            </a-button>
+            <template #content>
+              <a-doption value="xlsx">
+                <template #icon><icon-file /></template>
+                导出 XLSX
+              </a-doption>
+              <a-doption value="csv">
+                <template #icon><icon-code /></template>
+                导出 CSV
+              </a-doption>
+            </template>
+          </a-dropdown>
           <ColumnConfigPopover
             :standard-columns="standardColumns"
             :custom-field-columns="customFieldColumns"
@@ -570,13 +587,22 @@
       @update:visible="onPreviewVisibleChange"
       @go-detail="onPreviewGoDetail"
     />
+
+    <!-- Apply Command Dialog (Ctrl+Alt+J) -->
+    <ApplyCommandDialog
+      :visible="showCommandDialog"
+      :selected-count="selectedCount"
+      :selected-issues="selectedIssues"
+      @update:visible="showCommandDialog = $event"
+      @executed="onCommandExecuted"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
@@ -590,6 +616,7 @@ import IssueCreatePanel from './IssueCreatePanel.vue'
 import IssuePreviewDrawer from '../board/IssuePreviewDrawer.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import FilterBar from './components/FilterBar.vue'
+import ApplyCommandDialog from './components/ApplyCommandDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -1068,6 +1095,9 @@ const quickForm = reactive({
   priority: 'Normal'
 })
 
+// Apply Command dialog
+const showCommandDialog = ref(false)
+
 // ===== Preview mode (YouTrack-style Sidebar / Off) =====
 const PREVIEW_MODE_KEY = 'trackflow:preview-mode'
 type PreviewMode = 'sidebar' | 'off'
@@ -1119,6 +1149,13 @@ function onPreviewGoDetail(issueId: string) {
 
 // Keyboard navigation for preview mode
 function handleKeyboardNav(e: KeyboardEvent) {
+  // Apply Command dialog: Ctrl+Alt+J
+  if (e.key === 'j' && e.ctrlKey && e.altKey && selectedCount.value > 0) {
+    e.preventDefault()
+    showCommandDialog.value = true
+    return
+  }
+
   // Only handle when preview mode is sidebar and preview is visible
   if (previewMode.value !== 'sidebar' || !previewVisible.value) return
   // Don't intercept when focus is in an input
@@ -1482,6 +1519,86 @@ async function onBatchDelete() {
     refreshList()
   }
   clearSelection()
+}
+
+function onCommandExecuted() {
+  refreshList()
+  clearSelection()
+}
+
+// ========== 导出功能 ==========
+const exportLoading = ref(false)
+
+async function handleExport(format: string | number | Record<string, any> | undefined) {
+  await doExport(String(format), false)
+}
+
+function onBatchExport(format: string) {
+  doExport(format, true)
+}
+
+async function doExport(format: string, selectedOnly: boolean) {
+  if (format !== 'xlsx' && format !== 'csv') return
+  exportLoading.value = true
+  try {
+    const payload: Record<string, any> = { format }
+
+    if (selectedOnly && selectedIds.value.size > 0) {
+      // 选中导出模式
+      payload.issueIds = [...selectedIds.value]
+    } else {
+      // 筛选导出模式：复用当前筛选条件
+      if (activeProjectId.value) payload.projectId = activeProjectId.value
+      if (filterProject.value) payload.projectId = filterProject.value
+      if (hideResolved.value) payload.hideResolved = 'true'
+      // Merge global filter params
+      const fp = globalFilterParams.value
+      if (fp.statusId) payload.statusId = fp.statusId
+      if (fp.priority) payload.priority = fp.priority
+      if (fp.assigneeId) payload.assigneeId = fp.assigneeId
+      if (fp.sprintId) payload.sprintId = fp.sprintId
+      if (fp.issueType) payload.issueType = fp.issueType
+      if (fp.keyword) payload.keyword = fp.keyword
+      if (fp.statusIdNot) payload.statusIdNot = fp.statusIdNot
+      if (fp.priorityNot) payload.priorityNot = fp.priorityNot
+      if (fp.assigneeIdNot) payload.assigneeIdNot = fp.assigneeIdNot
+      if (fp.sprintIdNot) payload.sprintIdNot = fp.sprintIdNot
+      if (fp.issueTypeNot) payload.issueTypeNot = fp.issueTypeNot
+      if (searchKeyword.value.trim()) payload.keyword = searchKeyword.value.trim()
+    }
+
+    const response = await issueApi.export(payload as any)
+    // response 是 Blob（responseType: 'blob'）
+    const blob = response instanceof Blob ? response : new Blob([response as any])
+    const ext = format === 'xlsx' ? '.xlsx' : '.csv'
+    const filename = `TrackFlow_Issues_${new Date().toISOString().slice(0, 10)}${ext}`
+
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    Message.success(`导出成功 (${format.toUpperCase()})`)
+  } catch (e: any) {
+    // Blob error response needs special handling
+    if (e.response?.data instanceof Blob) {
+      const text = await e.response.data.text()
+      try {
+        const json = JSON.parse(text)
+        Message.error(json.message || '导出失败')
+      } catch {
+        Message.error('导出失败')
+      }
+    } else {
+      Message.error(e.response?.data?.message || '导出失败')
+    }
+  } finally {
+    exportLoading.value = false
+  }
 }
 
 // Panel helpers

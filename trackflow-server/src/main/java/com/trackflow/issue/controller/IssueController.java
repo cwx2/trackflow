@@ -15,6 +15,7 @@ import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.IssueService;
+import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.service.precheck.ClosePreCheckChain;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
 public class IssueController {
 
     private final IssueService issueService;
+    private final IssueExportService issueExportService;
     private final IssueConverter issueConverter;
     private final WorkflowService workflowService;
     private final IssueLinkService linkService;
@@ -251,31 +253,44 @@ public class IssueController {
     @PostMapping("/batch")
     @PreAuthorize("isAuthenticated()")
     public R<BatchOperationResultVO> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
+        boolean silent = Boolean.TRUE.equals(dto.getSilent());
         BatchOperationResultVO result = switch (dto.getOperation()) {
             case "status" -> {
                 if (dto.getStatusId() == null) {
                     yield null;
                 }
                 yield issueService.batchTransitStatus(dto.getIssueIds(), dto.getStatusId(),
-                        dto.getComment(), dto.getVersions());
+                        dto.getComment(), dto.getVersions(), silent);
             }
             case "assign" -> {
                 if (dto.getAssigneeId() == null) {
                     yield null;
                 }
-                yield issueService.batchAssign(dto.getIssueIds(), dto.getAssigneeId());
+                yield issueService.batchAssign(dto.getIssueIds(), dto.getAssigneeId(), silent);
             }
             case "sprint" -> {
                 if (dto.getSprintId() == null) {
                     yield null;
                 }
-                yield issueService.batchUpdateSprint(dto.getIssueIds(), dto.getSprintId());
+                yield issueService.batchUpdateSprint(dto.getIssueIds(), dto.getSprintId(), silent);
             }
             case "priority" -> {
                 if (dto.getPriority() == null || dto.getPriority().isBlank()) {
                     yield null;
                 }
-                yield issueService.batchUpdatePriority(dto.getIssueIds(), dto.getPriority());
+                yield issueService.batchUpdatePriority(dto.getIssueIds(), dto.getPriority(), silent);
+            }
+            case "tag_add" -> {
+                if (dto.getTagId() == null) {
+                    yield null;
+                }
+                yield issueService.batchAddTag(dto.getIssueIds(), dto.getTagId(), silent);
+            }
+            case "tag_remove" -> {
+                if (dto.getTagId() == null) {
+                    yield null;
+                }
+                yield issueService.batchRemoveTag(dto.getIssueIds(), dto.getTagId(), silent);
             }
             case "delete" -> issueService.batchDelete(dto.getIssueIds());
             case "restore" -> issueService.batchRestore(dto.getIssueIds());
@@ -286,6 +301,22 @@ public class IssueController {
             return R.fail(ErrorCode.INVALID_BATCH_OPERATION);
         }
         return R.ok(result);
+    }
+
+    // ========== 导出 ==========
+
+    @PostMapping("/export")
+    @PreAuthorize("isAuthenticated()")
+    public void exportIssues(@Valid @RequestBody IssueExportDTO dto,
+                             jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        IssueExportService.ExportResult result = issueExportService.export(dto);
+
+        response.setContentType(result.contentType());
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + java.net.URLEncoder.encode(result.filename(), java.nio.charset.StandardCharsets.UTF_8) + "\"");
+        response.setContentLength(result.content().length);
+        response.getOutputStream().write(result.content());
+        response.getOutputStream().flush();
     }
 
     // ========== 状态转换 ==========

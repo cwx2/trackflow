@@ -165,10 +165,28 @@
         </template>
       </a-trigger>
 
+      <!-- 批量导出 -->
+      <a-dropdown trigger="click" position="bl" @select="handleExport">
+        <a-button size="small" type="outline">
+          <template #icon><icon-download /></template>
+          导出
+        </a-button>
+        <template #content>
+          <a-doption value="xlsx">导出 XLSX</a-doption>
+          <a-doption value="csv">导出 CSV</a-doption>
+        </template>
+      </a-dropdown>
+
       <!-- 批量删除（仅有 issue:delete 权限时显示） -->
       <a-button v-if="canDelete" size="small" type="outline" status="danger" @click="confirmBatchDelete">
         <template #icon><icon-delete /></template>
         删除
+      </a-button>
+
+      <!-- 命令对话框入口 -->
+      <a-button size="small" type="outline" @click="$emit('open-command')">
+        <template #icon><icon-code /></template>
+        命令
       </a-button>
     </div>
 
@@ -180,7 +198,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete } from '@arco-design/web-vue/es/icon'
+import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode } from '@arco-design/web-vue/es/icon'
 import { Modal } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi } from '@/api'
 import type { IssueVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
@@ -199,6 +217,8 @@ const emit = defineEmits<{
   'batch-sprint': [sprintId: string | null]
   'batch-priority': [priority: string]
   'batch-delete': []
+  'batch-export': [format: string]
+  'open-command': []
 }>()
 
 // ========== 状态下拉 ==========
@@ -343,6 +363,11 @@ const priorityOptions = [
 function handleBatchPriority(priority: string) {
   showPriorityDropdown.value = false
   emit('batch-priority', priority)
+}
+
+// ========== 批量导出 ==========
+function handleExport(format: string | number | Record<string, any> | undefined) {
+  emit('batch-export', String(format))
 }
 
 // ========== 批量删除 ==========

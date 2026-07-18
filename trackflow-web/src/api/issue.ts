@@ -217,6 +217,8 @@ export const issueApi = {
     priority?: string
     comment?: string
     versions?: Record<string, number>
+    silent?: boolean
+    tagId?: string
   }) {
     return request.post<any, R<{
       total: number
@@ -224,5 +226,26 @@ export const issueApi = {
       failed: number
       failures: Array<{ issueId: string; issueKey: string; reason: string }>
     }>>('/issues/batch', data)
+  },
+
+  /** 导出工单数据（XLSX/CSV），返回 Blob */
+  export(data: {
+    format: 'xlsx' | 'csv'
+    issueIds?: string[]
+    projectId?: string
+    statusId?: string
+    priority?: string
+    assigneeId?: string
+    sprintId?: string
+    issueType?: string
+    keyword?: string
+    hideResolved?: string
+    statusIdNot?: string
+    priorityNot?: string
+    assigneeIdNot?: string
+    sprintIdNot?: string
+    issueTypeNot?: string
+  }) {
+    return request.post('/issues/export', data, { responseType: 'blob' })
   }
 }
