@@ -30,7 +30,7 @@
           size="small"
           allow-clear
           :disabled="!selectedProject"
-          @change="loadBoard"
+          @change="onSprintChange"
         >
           <a-option v-for="s in sprints" :key="s.id" :value="s.id">
             {{ s.name }}
@@ -649,8 +649,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi, queryApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
@@ -668,6 +668,7 @@ import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
 import { IconSettings, IconSearch, IconList } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
+const route = useRoute()
 const projectStore = useProjectStore()
 
 // ===== Card Size 控制 =====
@@ -733,6 +734,10 @@ function getSprintName(sprintId: string): string {
   return sprint?.name || ''
 }
 
+// ===== Swimlane 类型（提前声明供 URL 状态恢复使用） =====
+type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag'
+const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
+
 const selectedProject = computed({
   get: () => projectStore.selectedProjectId,
   set: (val) => projectStore.selectProject(val)
@@ -749,6 +754,74 @@ const currentProjectName = computed(() => {
   const p = projects.value.find(proj => proj.id === selectedProject.value)
   return p?.name || ''
 })
+
+/** 获取当前选中项目的 key（用于 URL 可读性） */
+const currentProjectKey = computed(() => {
+  if (!selectedProject.value) return undefined
+  const p = projects.value.find(proj => proj.id === selectedProject.value)
+  return p?.key
+})
+
+// ===== URL 状态同步 =====
+// URL query params: ?project=DE4&sprint=<id>&group=assignee
+// 用 suppressUrlSync 标志避免从 URL 恢复状态时触发 URL 写入（循环）
+let suppressUrlSync = false
+
+/**
+ * 将当前看板状态同步到 URL query params。
+ * 使用 router.replace 以不产生多余的浏览器历史条目。
+ */
+function syncUrlState() {
+  if (suppressUrlSync) return
+  const query: Record<string, string> = {}
+  if (currentProjectKey.value) {
+    query.project = currentProjectKey.value
+  }
+  if (selectedSprint.value) {
+    query.sprint = selectedSprint.value
+  }
+  if (swimlaneGroupBy.value && swimlaneGroupBy.value !== 'none') {
+    query.group = swimlaneGroupBy.value
+  }
+  router.replace({ query })
+}
+
+/**
+ * 从 URL query 恢复看板状态。
+ * 优先级：URL params > projectStore (localStorage) > 无选择
+ * @returns 是否成功从 URL 恢复了项目
+ */
+function restoreFromUrl(): boolean {
+  const queryProject = route.query.project as string | undefined
+  const querySprint = route.query.sprint as string | undefined
+  const queryGroup = route.query.group as string | undefined
+
+  let restoredProject = false
+
+  if (queryProject) {
+    // 按 key 查找项目
+    const project = projects.value.find(p => p.key === queryProject)
+    if (project && project.id !== selectedProject.value) {
+      suppressUrlSync = true
+      selectedProject.value = project.id
+      suppressUrlSync = false
+      restoredProject = true
+    } else if (project && project.id === selectedProject.value) {
+      restoredProject = true
+    }
+  }
+
+  if (querySprint) {
+    selectedSprint.value = querySprint
+  }
+
+  if (queryGroup && ['none', 'assignee', 'priority', 'type', 'sprint', 'tag'].includes(queryGroup)) {
+    swimlaneGroupBy.value = queryGroup as SwimlaneGroupBy
+    localStorage.setItem(SWIMLANE_STORAGE_KEY, queryGroup)
+  }
+
+  return restoredProject
+}
 
 // ===== Board Behavior 配置 =====
 const boardFilterMode = ref<'all' | 'active_sprint' | 'query'>('all')
@@ -803,8 +876,6 @@ function onBacklogDragEnd() {
 }
 
 // ===== Swimlane 分组 =====
-type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag'
-const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
 const COLLAPSED_SWIMLANES_KEY = 'tf_kanban_collapsed_swimlanes'
 
 const swimlaneGroupBy = ref<SwimlaneGroupBy>(
@@ -819,6 +890,8 @@ function onSwimlaneChange() {
   // 切换分组维度时清除折叠状态
   collapsedSwimlanes.value.clear()
   localStorage.removeItem(COLLAPSED_SWIMLANES_KEY)
+  // 同步到 URL
+  syncUrlState()
   // 持久化到服务端（静默保存，不阻塞 UI）
   if (selectedProject.value) {
     boardApi.saveSwimlaneConfig(selectedProject.value, {
@@ -1079,7 +1152,13 @@ async function loadIssuesWithLoading() {
 
 function onProjectChange() {
   keyword.value = ''
+  selectedSprint.value = undefined
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  syncUrlState()
+  loadBoard()
+}
+function onSprintChange() {
+  syncUrlState()
   loadBoard()
 }
 const sprints = ref<SprintVO[]>([])
@@ -2209,6 +2288,70 @@ onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
   document.addEventListener('keydown', handleKeydown)
 
+  // URL 状态恢复优先级：URL params > projectStore (localStorage) > 自动选择
+  restoreFromUrl()
+
+  if (selectedProject.value) {
+    // 如果恢复了状态或已有选择，同步到 URL 并加载看板
+    syncUrlState()
+    loadBoard()
+  } else {
+    // 尝试自动选择（单项目用户）
+    if (projects.value.length === 1) {
+      selectedProject.value = projects.value[0].id
+      syncUrlState()
+      loadBoard()
+    }
+  }
+})
+
+// 监听路由 query 变化（浏览器前进/后退按钮）
+watch(() => route.query, (newQuery, oldQuery) => {
+  // 避免自身 replace 触发的变化导致循环
+  if (JSON.stringify(newQuery) === JSON.stringify(oldQuery)) return
+
+  const queryProject = newQuery.project as string | undefined
+  const querySprint = newQuery.sprint as string | undefined
+  const queryGroup = newQuery.group as string | undefined
+
+  suppressUrlSync = true
+
+  // 恢复项目
+  if (queryProject) {
+    const project = projects.value.find(p => p.key === queryProject)
+    if (project && project.id !== selectedProject.value) {
+      selectedProject.value = project.id
+      selectedSprint.value = querySprint || undefined
+      swimlaneGroupBy.value = (queryGroup as SwimlaneGroupBy) || 'none'
+      localStorage.setItem(SWIMLANE_STORAGE_KEY, swimlaneGroupBy.value)
+      suppressUrlSync = false
+      loadBoard()
+      return
+    }
+  } else if (selectedProject.value) {
+    // URL 无项目参数了（用户后退到初始状态）
+    selectedProject.value = undefined
+    selectedSprint.value = undefined
+    issues.value = []
+  }
+
+  // 恢复 Sprint
+  if (querySprint !== selectedSprint.value) {
+    selectedSprint.value = querySprint || undefined
+  }
+
+  // 恢复分组
+  if (queryGroup && queryGroup !== swimlaneGroupBy.value) {
+    swimlaneGroupBy.value = queryGroup as SwimlaneGroupBy
+    localStorage.setItem(SWIMLANE_STORAGE_KEY, swimlaneGroupBy.value)
+  } else if (!queryGroup && swimlaneGroupBy.value !== 'none') {
+    swimlaneGroupBy.value = 'none'
+    localStorage.setItem(SWIMLANE_STORAGE_KEY, 'none')
+  }
+
+  suppressUrlSync = false
+
+  // 如果只是 sprint/group 变化，重新加载数据
   if (selectedProject.value) {
     loadBoard()
   }
