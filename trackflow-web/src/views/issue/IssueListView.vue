@@ -25,6 +25,13 @@
         </div>
         <div v-if="expandedGroups.has('projects')" class="group-items">
           <div
+            class="query-item"
+            :class="{ active: activeProjectId === null }"
+            @click="selectAllProjects"
+          >
+            <span class="query-name">所有项目</span>
+          </div>
+          <div
             v-for="p in projectList"
             :key="p.id"
             class="query-item"
@@ -285,8 +292,13 @@
         :status-list="statusCache"
         :project-list="projectList"
         :initial-filters="initialFilterChips"
+        :active-query-name="activeQueryId ? activeQueryName : null"
+        :is-owned-query="activeQueryOwned"
+        :readonly-filter-labels="activeQueryReadonlyLabels"
         @search="onGlobalSearch"
         @filter="onGlobalFilter"
+        @clear-query="onClearQuery"
+        @chip-click="onQueryChipClick"
       />
 
       <!-- Batch action toolbar (replaces filter bar when selected) -->
@@ -712,8 +724,33 @@ const savedQueries = ref<any[]>([])
 const projectList = ref<any[]>([])
 const activeQueryId = ref<string | null>(null)
 const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
+const activeQueryObj = ref<any>(null) // Track full active query object for chip-click
 const expandedGroups = reactive(new Set<string>(['saved', 'projects']))
 const panelSearch = ref('')
+
+// Computed: whether the active query belongs to the current user (for edit permission)
+const activeQueryOwned = computed(() => {
+  if (!activeQueryObj.value) return false
+  return isOwnQuery(activeQueryObj.value)
+})
+
+// Computed: readonly filter labels for non-owned queries (shown in FilterBar chip tooltip/expansion)
+const activeQueryReadonlyLabels = computed<string[]>(() => {
+  if (!activeQueryObj.value?.filters) return []
+  let filters: any[]
+  if (typeof activeQueryObj.value.filters === 'string') {
+    try { filters = JSON.parse(activeQueryObj.value.filters) } catch { return [] }
+  } else {
+    filters = activeQueryObj.value.filters
+  }
+  if (!Array.isArray(filters)) return []
+  return filters.map((f: any) => {
+    const fieldLabels: Record<string, string> = { status: '状态', priority: '优先级', assignee: '负责人', type: '类型', sprint: 'Sprint', project: '项目' }
+    const fieldLabel = fieldLabels[f.field] || f.field
+    const values = Array.isArray(f.value) ? f.value.join(', ') : (f.value || '')
+    return `${fieldLabel}: ${values}`
+  }).filter(Boolean)
+})
 
 // Create query modal state
 const showCreateQueryModal = ref(false)
@@ -875,6 +912,28 @@ async function handleEditQuery() {
     await queryApi.update(editQueryForm.id, updateData)
     Message.success('查询已更新')
     showEditQueryModal.value = false
+
+    // If this was the active query, update local state
+    if (activeQueryId.value === editQueryForm.id) {
+      activeQueryName.value = editQueryForm.name.trim()
+      // Update activeQueryObj to reflect changes
+      if (activeQueryObj.value) {
+        activeQueryObj.value = {
+          ...activeQueryObj.value,
+          name: editQueryForm.name.trim(),
+          icon: editQueryForm.icon || '',
+          pinned: editQueryForm.pinned,
+          shared: editQueryForm.shared,
+          ...(editQueryForm.replaceFilters ? { filters: JSON.stringify(updateData.filters) } : {})
+        }
+      }
+      // If filters were replaced, re-render the FilterBar chips and refresh list
+      if (editQueryForm.replaceFilters && activeQueryObj.value) {
+        const chips = parseSavedQueryFilters(activeQueryObj.value.filters)
+        filterBarRef.value?.setFilters(chips)
+        refreshList()
+      }
+    }
     loadPanel()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新失败')
@@ -1121,11 +1180,7 @@ function toggleHideResolved() {
 function onGlobalSearch(keyword: string) {
   searchKeyword.value = keyword
   globalFilterParams.value = {}
-  // If user types in search while a saved query is active, switch to ad-hoc mode
-  if (activeQueryId.value) {
-    activeQueryId.value = null
-    activeQueryName.value = '所有工单'
-  }
+  // If user types in search while a saved query is active, keep the query active for combined filtering
   currentPage.value = 1
   refreshList()
 }
@@ -1137,9 +1192,32 @@ function onGlobalFilter(filters: Record<string, any>) {
   if (activeQueryId.value) {
     activeQueryId.value = null
     activeQueryName.value = '所有工单'
+    activeQueryObj.value = null
   }
   currentPage.value = 1
   refreshList()
+}
+
+function onClearQuery() {
+  activeQueryId.value = null
+  activeQueryName.value = '所有工单'
+  activeQueryObj.value = null
+  searchKeyword.value = ''
+  globalFilterParams.value = {}
+  currentPage.value = 1
+  // Remove query param from URL
+  const { project, ...rest } = route.query
+  router.replace({ query: project ? { project } : {} })
+  // Clear FilterBar chips
+  filterBarRef.value?.clearAll()
+  refreshList()
+}
+
+function onQueryChipClick() {
+  // If the user owns the query, open the edit modal for it
+  if (activeQueryObj.value && isOwnQuery(activeQueryObj.value)) {
+    openEditQueryModal(activeQueryObj.value)
+  }
 }
 
 // Quick create
@@ -1971,7 +2049,7 @@ function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): 
 }
 
 function selectQuery(q: any) {
-  activeQueryId.value = q.id; activeQueryName.value = q.name; activeProjectId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
@@ -1981,17 +2059,23 @@ function selectQuery(q: any) {
 
   refreshList()
 }
+function selectAllProjects() {
+  if (activeProjectId.value === null) return // Already showing all projects
+  activeProjectId.value = null; activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; currentPage.value = 1
+  const { project, ...rest } = route.query
+  router.replace({ query: rest })
+  refreshList()
+  loadPanel()
+}
 function selectProject(p: any) {
   if (activeProjectId.value === p.id) {
     // Toggle off: clicking active project clears the filter
-    activeProjectId.value = null; activeQueryId.value = null; activeQueryName.value = '所有工单'; filterProject.value = undefined; currentPage.value = 1
-    const { project, ...rest } = route.query
-    router.replace({ query: rest })
-  } else {
-    // Select project
-    activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; filterProject.value = p.id; currentPage.value = 1
-    router.replace({ query: { ...route.query, project: p.key } })
+    selectAllProjects()
+    return
   }
+  // Select project
+  activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; activeQueryObj.value = null; filterProject.value = p.id; currentPage.value = 1
+  router.replace({ query: { ...route.query, project: p.key } })
   refreshList()
   loadPanel()
 }

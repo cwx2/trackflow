@@ -22,20 +22,38 @@
 
     <!-- Search mode -->
     <div v-if="mode === 'search'" class="search-mode">
+      <!-- Saved Query chip (displayed when a saved query is active) -->
+      <div v-if="activeQueryName" class="saved-query-chip" :class="{ clickable: true }">
+        <span class="sq-chip-icon">🔍</span>
+        <span class="sq-chip-name" @click="handleChipClick" :title="isOwnedQuery ? '点击编辑查询' : '点击查看筛选条件'">{{ activeQueryName }}</span>
+        <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
+      </div>
       <input
         ref="searchInputRef"
         v-model="searchKeyword"
         class="search-input"
-        placeholder="输入搜索请求"
+        :placeholder="activeQueryName ? '追加筛选关键词...' : '输入搜索请求'"
         @keyup.enter="emitSearch"
         @input="onSearchInput"
       />
       <span v-if="searchKeyword" class="clear-btn" @click="clearSearch">✕</span>
+
+      <!-- Read-only filter conditions display (for non-owned queries) -->
+      <div v-if="showReadonlyFilters && readonlyFilterLabels.length > 0" class="readonly-filters-row">
+        <span v-for="(label, i) in readonlyFilterLabels" :key="i" class="readonly-filter-chip">{{ label }}</span>
+      </div>
     </div>
 
     <!-- Filter mode -->
     <div v-else class="filter-mode">
       <div class="filter-chips">
+        <!-- Saved Query chip (displayed when a saved query is active in filter mode) -->
+        <div v-if="activeQueryName" class="saved-query-chip filter-mode-chip" :class="{ clickable: true }">
+          <span class="sq-chip-icon">🔍</span>
+          <span class="sq-chip-name" @click="handleChipClick" :title="isOwnedQuery ? '点击编辑查询' : '点击查看筛选条件'">{{ activeQueryName }}</span>
+          <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
+        </div>
+
         <!-- Active filter chips -->
         <div
           v-for="(chip, index) in activeFilters"
@@ -200,12 +218,17 @@ const props = defineProps<{
   statusList: IssueStatusVO[]
   projectList: ProjectVO[]
   initialFilters?: InitialFilter[]
+  activeQueryName?: string | null
+  isOwnedQuery?: boolean
+  readonlyFilterLabels?: string[]
 }>()
 
 const emit = defineEmits<{
   (e: 'search', keyword: string): void
   (e: 'filter', filters: Record<string, any>): void
   (e: 'mode-change', mode: 'search' | 'filter'): void
+  (e: 'clear-query'): void
+  (e: 'chip-click'): void
 }>()
 
 // ==================== Field Definitions ====================
@@ -331,6 +354,25 @@ function emitSearch() {
 function clearSearch() {
   searchKeyword.value = ''
   emit('search', '')
+}
+
+function handleClearQuery() {
+  showReadonlyFilters.value = false
+  emit('clear-query')
+}
+
+// ==================== Saved Query chip click ====================
+
+const showReadonlyFilters = ref(false)
+
+function handleChipClick() {
+  if (props.isOwnedQuery) {
+    // Own query — emit chip-click so parent opens edit dialog
+    emit('chip-click')
+  } else {
+    // Not owned — toggle readonly filter conditions display
+    showReadonlyFilters.value = !showReadonlyFilters.value
+  }
 }
 
 // ==================== Filter Mode - Add Filter ====================
@@ -791,6 +833,91 @@ defineExpose({ clearAll, setFilters })
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Saved Query chip */
+.saved-query-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  background: var(--tf-accent-bg);
+  border: 1px solid var(--tf-accent);
+  border-radius: var(--tf-radius-md);
+  font-size: 12px;
+  gap: 4px;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.saved-query-chip.clickable .sq-chip-name {
+  cursor: pointer;
+}
+
+.saved-query-chip.clickable .sq-chip-name:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.saved-query-chip.filter-mode-chip {
+  margin-right: 2px;
+}
+
+.sq-chip-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.sq-chip-name {
+  color: var(--tf-accent);
+  font-weight: 500;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sq-chip-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: var(--tf-accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.sq-chip-close:hover {
+  background: var(--tf-accent);
+  color: #fff;
+}
+
+/* Read-only filter conditions row */
+.readonly-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 2px;
+  width: 100%;
+  border-top: 1px solid var(--tf-border-secondary, rgba(255,255,255,0.06));
+  margin-top: 6px;
+}
+
+.readonly-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  background: var(--tf-bg-elevated, #2a2d33);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--tf-text-secondary);
+  white-space: nowrap;
 }
 
 .search-input {
