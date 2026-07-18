@@ -34,6 +34,10 @@
                 <template #icon><icon-branch /></template>
                 克隆工单
               </a-doption>
+              <a-doption v-if="canMove" @click="$emit('move')">
+                <template #icon><icon-swap /></template>
+                移动到项目...
+              </a-doption>
               <a-doption v-if="canDelete" class="danger-option" @click="$emit('delete')">
                 <template #icon><icon-delete /></template>
                 删除工单
@@ -157,7 +161,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { IconCopy, IconDelete, IconBranch } from '@arco-design/web-vue/es/icon'
+import { IconCopy, IconDelete, IconBranch, IconSwap } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'
@@ -178,6 +182,7 @@ const props = defineProps<{
   attachments: AttachItem[]
   readonly?: boolean
   canDelete?: boolean
+  canMove?: boolean
   children?: ChildIssueVO[]
   childProgress?: ChildProgressVO | null
 }>()
@@ -192,6 +197,7 @@ const emit = defineEmits<{
   'upload': []
   'copy-id': []
   'clone': []
+  'move': []
   'delete': []
 }>()
 

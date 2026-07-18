@@ -247,5 +247,12 @@ export const issueApi = {
     issueTypeNot?: string
   }) {
     return request.post('/issues/export', data, { responseType: 'blob' })
+  },
+
+  // ========== 移动工单 ==========
+
+  /** 移动工单到目标项目 */
+  move(issueId: string, targetProjectId: string) {
+    return request.post<any, R<IssueDetailVO>>(`/issues/${issueId}/move`, { targetProjectId })
   }
 }

@@ -33,6 +33,7 @@
         :attachments="issueAttachments"
         :readonly="!canEditIssueEffective"
         :can-delete="canDeleteIssue"
+        :can-move="canMoveIssue"
         :children="issue.children || []"
         :child-progress="issue.childProgress || null"
         @update-title="onUpdateTitle"
@@ -44,6 +45,7 @@
         @upload="() => {}"
         @copy-id="onCopyId"
         @clone="onCloneIssue"
+        @move="onMoveIssue"
         @delete="onDeleteIssue"
       >
         <template #activity>
@@ -92,6 +94,16 @@
   </div>
 
   <IssueCreatePanel :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" />
+
+  <!-- Move Issue Modal -->
+  <MoveIssueModal
+    ref="moveModalRef"
+    :visible="showMoveModal"
+    :issue-key="issue?.issueKey || ''"
+    :current-project-id="issue?.projectId || ''"
+    @update:visible="showMoveModal = $event"
+    @confirm="onMoveConfirm"
+  />
 
   <!-- Add Time Entry Dialog -->
   <a-modal
@@ -159,6 +171,7 @@ import DetailSidebar from './components/DetailSidebar.vue'
 import ActivityStream from './components/ActivityStream.vue'
 import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
+import MoveIssueModal from './components/MoveIssueModal.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
@@ -241,6 +254,17 @@ const canChangeStatusEffective = computed(() => {
   if (isProjectArchived.value) return false
   return canChangeStatus.value
 })
+
+/** 是否可以移动工单到其他项目 */
+const canMoveIssue = computed(() => {
+  if (isProjectArchived.value) return false
+  return hasProjectPermission('issue:move')
+})
+
+// Move modal state
+const showMoveModal = ref(false)
+const moveModalRef = ref<InstanceType<typeof MoveIssueModal> | null>(null)
+
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
 const activities = ref<IssueActivityVO[]>([])
@@ -654,6 +678,30 @@ function onDeleteIssue() {
       }
     }
   })
+}
+
+function onMoveIssue() {
+  showMoveModal.value = true
+}
+
+async function onMoveConfirm(targetProjectId: string) {
+  if (!issue.value) return
+  try {
+    const res = await issueApi.move(issue.value.id, targetProjectId)
+    if (res.code === 0 && res.data) {
+      const newKey = res.data.issueKey
+      Message.success(`已移动到项目，新编号：${newKey}`)
+      showMoveModal.value = false
+      // 跳转到新 issue_key 详情页
+      router.replace(`/issues/${newKey}`)
+    } else {
+      Message.error(res.message || '移动失败')
+      moveModalRef.value?.resetSubmitting()
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '移动失败')
+    moveModalRef.value?.resetSubmitting()
+  }
 }
 
 function onCreatePanelClose(val: boolean) {
