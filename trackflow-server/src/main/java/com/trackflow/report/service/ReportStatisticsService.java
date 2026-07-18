@@ -49,6 +49,11 @@ public class ReportStatisticsService {
     /** resolution-time 端点允许的 groupBy 值（对应 Mapper XML 中的 &lt;when&gt; 分支） */
     private static final Set<String> RESOLUTION_TIME_GROUP_BY_VALUES = Set.of("type", "priority", "assignee");
 
+    /** 趋势图最大允许天数（防止超大范围请求导致 DoS） */
+    private static final int TREND_MAX_DAYS = 365;
+    /** 解决时间按天模式最大允许天数 */
+    private static final int RESOLUTION_TIME_MAX_DAYS = 180;
+
     // ─── Dashboard (main entry) ──────────────────────────────────────────
 
     /**
@@ -300,6 +305,11 @@ public class ReportStatisticsService {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
+        // 防止超大日期范围请求导致 DoS：截断到最近 TREND_MAX_DAYS 天
+        if (ChronoUnit.DAYS.between(startDate, endDate) > TREND_MAX_DAYS) {
+            startDate = endDate.minusDays(TREND_MAX_DAYS);
+        }
+
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
@@ -459,6 +469,11 @@ public class ReportStatisticsService {
     private ResolutionTimeVO buildResolutionTime(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
+
+        // 防止超大日期范围请求导致 DoS：截断到最近 RESOLUTION_TIME_MAX_DAYS 天
+        if (ChronoUnit.DAYS.between(startDate, endDate) > RESOLUTION_TIME_MAX_DAYS) {
+            startDate = endDate.minusDays(RESOLUTION_TIME_MAX_DAYS);
+        }
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
@@ -660,10 +675,22 @@ public class ReportStatisticsService {
             return item;
         }).collect(Collectors.toList()));
 
-        // 每日趋势
+        // 每日趋势（填充完整日期范围，缺失日期用 0）
         List<TimeTrendRow> trendRows = reportStatisticsMapper.selectTimeTrend(projectIds, startStr, endStr);
-        vo.setTrendDates(trendRows.stream().map(TimeTrendRow::getWorkDate).collect(Collectors.toList()));
-        vo.setTrendMinutes(trendRows.stream().map(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).collect(Collectors.toList()));
+        Map<String, Integer> trendByDay = new HashMap<>();
+        for (TimeTrendRow row : trendRows) {
+            trendByDay.put(row.getWorkDate(), row.getTotalMinutes() != null ? row.getTotalMinutes() : 0);
+        }
+        List<String> trendDates = new ArrayList<>();
+        List<Integer> trendMinutes = new ArrayList<>();
+        LocalDate current = startDate;
+        while (!current.isAfter(endDate)) {
+            trendDates.add(current.toString());
+            trendMinutes.add(trendByDay.getOrDefault(current.toString(), 0));
+            current = current.plusDays(1);
+        }
+        vo.setTrendDates(trendDates);
+        vo.setTrendMinutes(trendMinutes);
 
         // 交叉维度
         List<TimeCrossProjectUserRow> crossRows = reportStatisticsMapper.selectTimeCrossProjectUser(projectIds, startStr, endStr);
