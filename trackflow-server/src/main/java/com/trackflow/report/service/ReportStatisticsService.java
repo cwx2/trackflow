@@ -1,5 +1,7 @@
 package com.trackflow.report.service;
 
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
@@ -42,6 +44,9 @@ public class ReportStatisticsService {
 
     private static final String CACHE_PREFIX = "report:dashboard:";
     private static final long CACHE_TTL_SECONDS = 90;
+
+    /** resolution-time 端点允许的 groupBy 值（对应 Mapper XML 中的 &lt;when&gt; 分支） */
+    private static final Set<String> RESOLUTION_TIME_GROUP_BY_VALUES = Set.of("type", "priority", "assignee");
 
     // ─── Dashboard (main entry) ──────────────────────────────────────────
 
@@ -506,9 +511,13 @@ public class ReportStatisticsService {
             }
         }
 
-        // 分组明细
+        // 分组明细 — 校验 groupBy 白名单（仅支持 type/priority/assignee）
         List<ResolutionTimeVO.GroupDetail> groupDetails = new ArrayList<>();
         if (groupBy != null) {
+            if (!RESOLUTION_TIME_GROUP_BY_VALUES.contains(groupBy)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "不支持的分组维度: " + groupBy + "，允许值: " + String.join(", ", RESOLUTION_TIME_GROUP_BY_VALUES));
+            }
             List<ResolutionTimeGroupRow> groupRows = reportStatisticsMapper.selectResolutionTimeByGroup(
                     projectIds, start, end, groupBy);
             for (ResolutionTimeGroupRow row : groupRows) {
