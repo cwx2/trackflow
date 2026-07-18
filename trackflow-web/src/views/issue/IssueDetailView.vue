@@ -21,6 +21,15 @@
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
     />
 
+    <!-- 快捷动作栏 -->
+    <div v-if="!isProjectArchived" class="quick-action-wrapper">
+      <QuickActionBar
+        :issue-id="issue.id"
+        :project-id="issue.projectId"
+        @executed="onQuickActionExecuted"
+      />
+    </div>
+
     <div class="page-body">
       <DetailMainContent
         :issue-key="issue.issueKey"
@@ -166,6 +175,7 @@ import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
+import QuickActionBar from './components/QuickActionBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
 import ActivityStream from './components/ActivityStream.vue'
@@ -762,6 +772,11 @@ async function onDeleteComment(commentId: string) {
   }
 }
 
+/** 快捷动作执行完成后刷新详情 */
+async function onQuickActionExecuted() {
+  await loadAll()
+}
+
 async function onTransition(target: StatusInfo) {
   try {
     const res = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version)
@@ -1020,6 +1035,12 @@ function priorityDot(p: string) {
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
+.quick-action-wrapper {
+  padding: 0 16px;
+  border-bottom: 1px solid var(--tf-border);
+  flex-shrink: 0;
 }
 
 .loading-page {
