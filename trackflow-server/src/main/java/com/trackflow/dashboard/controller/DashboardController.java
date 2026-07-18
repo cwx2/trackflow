@@ -3,7 +3,6 @@ package com.trackflow.dashboard.controller;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.dashboard.service.DashboardService;
-import com.trackflow.dashboard.vo.DashboardChartsVO;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
 import com.trackflow.issue.vo.IssueVO;
@@ -28,21 +27,6 @@ public class DashboardController {
     public R<DashboardSummaryVO> summary() {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getSummary(userId));
-    }
-
-    /**
-     * 仪表盘图表数据（趋势、状态分布、工作负载）
-     * @param projectId 可选项目筛选，传入时只查询该项目的数据
-     * @deprecated 请使用 ReportStatisticsController.dashboard() 端点 (GET /api/v1/reports/statistics/dashboard)，
-     *             数据口径统一且有 Redis 缓存。此端点将在未来版本移除。
-     */
-    @Deprecated
-    @GetMapping("/charts")
-    @PreAuthorize("isAuthenticated()")
-    public R<DashboardChartsVO> charts(
-            @RequestParam(value = "projectId", required = false) Long projectId) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(dashboardService.getCharts(userId, projectId));
     }
 
     /**
