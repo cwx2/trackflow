@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Issue 通知助手：负责在 Issue 关键操作后向相关人员推送站内通知。
@@ -95,6 +96,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     /**
      * 新评论通知：通知报告人 + 负责人 + 之前评论者（去重，排除当前用户）。
      * 每个接收者根据其角色获得对应的 reason。
+     * <p>
+     * 性能优化：使用批量偏好查询 + 按 reason 分组批量通知，
+     * 将 DB 操作从 N×3 次降至常数级（最多 3 组 × 2-3 次）。
      */
     @Async("notificationExecutor")
     public void notifyCommented(Issue issue, Long commenterId) {
@@ -106,23 +110,25 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             if (recipientReasons.isEmpty()) {
                 return;
             }
+
+            // 批量偏好过滤（1 次 SELECT 替代 N 次 isEnabled 调用）
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipientReasons.keySet(), NotificationEventType.ISSUE_COMMENTED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
             String commenterName = getUserDisplayName(commenterId);
             String title = String.format("%s 有新评论", issue.getIssueKey());
             String content = String.format("%s 在工单 [%s] %s 中添加了评论",
                     commenterName, issue.getIssueKey(), issue.getTitle());
 
-            for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
-                Long recipientId = entry.getKey();
-                NotificationReason reason = entry.getValue();
-                if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_COMMENTED, issue.getProjectId())) {
-                    continue;
-                }
-                notificationService.notify(recipientId, commenterId, title, content,
-                        NotificationType.issue_commented, reason,
-                        "issue", issue.getId(), issue.getProjectId());
-            }
+            // 按 reason 分组后批量调用（最多 3 组：assigned/reporter/commenter）
+            batchNotifyByReason(enabledUserIds, recipientReasons, commenterId, title, content,
+                    NotificationType.issue_commented, "issue", issue.getId(), issue.getProjectId());
+
             log.debug("[IssueNotification] 已发送评论通知: issue={}, recipients={}",
-                    issue.getIssueKey(), recipientReasons.size());
+                    issue.getIssueKey(), enabledUserIds.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送评论通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -136,8 +142,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 当新状态属于"已关闭"类别（isClosed=true）时，使用 ISSUE_RESOLVED 偏好检查；
      * 否则使用 ISSUE_STATUS_CHANGED 偏好检查。
      * <p>
-     * 性能优化：所有接收者共享相同的 operatorName / statusName / eventType，
-     * 在循环外一次性查询，避免 N+1。newStatusId 只查询一次同时获取名称和 isClosed。
+     * 性能优化：使用批量偏好查询 + 按 reason 分组批量通知，
+     * 将 DB 操作从 N×3 次降至常数级。
      */
     @Async("notificationExecutor")
     public void notifyStatusChanged(Issue issue, Long oldStatusId, Long newStatusId, Long operatorId) {
@@ -168,18 +174,19 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                     ? NotificationEventType.ISSUE_RESOLVED
                     : NotificationEventType.ISSUE_STATUS_CHANGED;
 
-            for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
-                Long recipientId = entry.getKey();
-                NotificationReason reason = entry.getValue();
-                if (!preferenceService.isEnabled(recipientId, eventType, issue.getProjectId())) {
-                    continue;
-                }
-                notificationService.notify(recipientId, operatorId, title, content,
-                        NotificationType.issue_status_changed, reason,
-                        "issue", issue.getId(), issue.getProjectId());
+            // 批量偏好过滤（1 次 SELECT 替代 N 次 isEnabled 调用）
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipientReasons.keySet(), eventType, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
             }
+
+            // 按 reason 分组后批量调用（最多 2 组：assigned/reporter）
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_status_changed, "issue", issue.getId(), issue.getProjectId());
+
             log.debug("[IssueNotification] 已发送状态变更通知: issue={}, eventType={}, recipients={}",
-                    issue.getIssueKey(), eventType, recipientReasons.size());
+                    issue.getIssueKey(), eventType, enabledUserIds.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送状态变更通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -234,9 +241,10 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * <p>
      * 规则：
      * - 从 HTML 内容中提取纯文本后匹配 @username
-     * - 排除评论者自己（不通知自己提及自己）
-     * - 排除已经通过评论通知收到通知的用户（由调用方决定是否去重）
+     * - 排除评论者自己（不通知自己提及自己），除非启用了 notifyOwnChanges
      * - 尊重 onMentioned 偏好开关
+     * <p>
+     * 性能优化：使用批量偏好查询 + notifyBatch，将 N 次 DB 操作降至常数级。
      */
     @Async("notificationExecutor")
     public void notifyMentioned(Issue issue, String commentContent, Long commenterId) {
@@ -255,32 +263,39 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
-            String commenterName = getUserDisplayName(commenterId);
-            String title = String.format("%s 在评论中提到了你", commenterName);
-            String content = String.format("%s 在工单 [%s] %s 的评论中提到了你",
-                    commenterName, issue.getIssueKey(), issue.getTitle());
-
-            int sent = 0;
+            // 收集候选接收者 ID（排除评论者自己，除非启用 notifyOwnChanges）
+            Set<Long> candidateIds = new HashSet<>();
             for (SysUser user : mentionedUsers) {
-                // 排除评论者自己（除非启用了 notifyOwnChanges）
                 if (user.getId().equals(commenterId)) {
                     if (!preferenceService.isNotifyOwnChanges(commenterId, issue.getProjectId())) {
                         continue;
                     }
                 }
-                // 检查 onMentioned 偏好
-                if (!preferenceService.isEnabled(user.getId(), NotificationEventType.MENTIONED, issue.getProjectId())) {
-                    continue;
-                }
-                notificationService.notify(user.getId(), commenterId, title, content,
-                        NotificationType.mention, NotificationReason.mentioned,
-                        "issue", issue.getId(), issue.getProjectId());
-                sent++;
+                candidateIds.add(user.getId());
             }
-            if (sent > 0) {
-                log.debug("[IssueNotification] 已发送@提及通知: issue={}, mentionedUsers={}",
-                        issue.getIssueKey(), sent);
+            if (candidateIds.isEmpty()) {
+                return;
             }
+
+            // 批量偏好过滤（1 次 SELECT 替代 N 次 isEnabled 调用）
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    candidateIds, NotificationEventType.MENTIONED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
+            String commenterName = getUserDisplayName(commenterId);
+            String title = String.format("%s 在评论中提到了你", commenterName);
+            String content = String.format("%s 在工单 [%s] %s 的评论中提到了你",
+                    commenterName, issue.getIssueKey(), issue.getTitle());
+
+            // 所有 @mention 通知 reason 相同，直接批量调用
+            notificationService.notifyBatch(enabledUserIds, commenterId, title, content,
+                    NotificationType.mention, NotificationReason.mentioned,
+                    "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送@提及通知: issue={}, mentionedUsers={}",
+                    issue.getIssueKey(), enabledUserIds.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送@提及通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -290,6 +305,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     /**
      * 工单移动到其他项目通知。
      * 通知报告人和负责人（如果有）。
+     * <p>
+     * 性能优化：使用批量偏好查询 + 按 reason 分组批量通知。
      */
     public void notifyMoved(Issue issue, Long sourceProjectId, Long targetProjectId, Long operatorId) {
         try {
@@ -301,6 +318,13 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
+            // 批量偏好过滤（使用 ISSUE_STATUS_CHANGED 偏好，移动属于重大变更类通知）
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipientReasons.keySet(), NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
             String operatorName = getUserDisplayName(operatorId);
             String sourceProjectName = getProjectName(sourceProjectId);
             String targetProjectName = getProjectName(targetProjectId);
@@ -309,19 +333,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             String content = String.format("%s 将工单 [%s] %s 从项目「%s」移动到项目「%s」",
                     operatorName, issue.getIssueKey(), issue.getTitle(), sourceProjectName, targetProjectName);
 
-            for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
-                Long recipientId = entry.getKey();
-                NotificationReason reason = entry.getValue();
-                // 使用 ISSUE_STATUS_CHANGED 偏好（移动属于重大变更类通知）
-                if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId())) {
-                    continue;
-                }
-                notificationService.notify(recipientId, operatorId, title, content,
-                        NotificationType.issue_moved, reason,
-                        "issue", issue.getId(), issue.getProjectId());
-            }
+            // 按 reason 分组后批量调用
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_moved, "issue", issue.getId(), issue.getProjectId());
+
             log.debug("[IssueNotification] 已发送移动通知: issue={}, from={}, to={}, recipients={}",
-                    issue.getIssueKey(), sourceProjectName, targetProjectName, recipientReasons.size());
+                    issue.getIssueKey(), sourceProjectName, targetProjectName, enabledUserIds.size());
         } catch (Exception e) {
             log.error("[IssueNotification] 发送移动通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
@@ -357,6 +374,39 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     }
 
     // ==================== 私有辅助方法 ====================
+
+    /**
+     * 按 reason 分组后批量调用 notifyBatch。
+     * <p>
+     * 将已通过偏好过滤的 enabledUserIds 按其对应的 reason 分组，
+     * 每组调用一次 notifyBatch（最多 3 组：assigned/reporter/commenter），
+     * 确保每个接收者的通知 reason 正确记录。
+     *
+     * @param enabledUserIds   通过偏好过滤后的接收者集合
+     * @param recipientReasons 接收者 → reason 映射（原始完整集合，含未通过偏好过滤的）
+     * @param actorId          操作者 ID
+     * @param title            通知标题
+     * @param content          通知内容
+     * @param type             通知类型
+     * @param resourceType     关联资源类型
+     * @param resourceId       关联资源 ID
+     * @param projectId        项目 ID
+     */
+    private void batchNotifyByReason(Set<Long> enabledUserIds, Map<Long, NotificationReason> recipientReasons,
+                                     Long actorId, String title, String content,
+                                     NotificationType type, String resourceType, Long resourceId, Long projectId) {
+        // 按 reason 分组（只保留通过偏好过滤的用户）
+        Map<NotificationReason, Set<Long>> grouped = enabledUserIds.stream()
+                .collect(Collectors.groupingBy(
+                        id -> recipientReasons.get(id),
+                        Collectors.toSet()));
+
+        // 每组一次批量调用（最多 3 组：assigned/reporter/commenter）
+        for (Map.Entry<NotificationReason, Set<Long>> entry : grouped.entrySet()) {
+            notificationService.notifyBatch(entry.getValue(), actorId, title, content,
+                    type, entry.getKey(), resourceType, resourceId, projectId);
+        }
+    }
 
     /**
      * 收集评论通知接收人及其 reason：
