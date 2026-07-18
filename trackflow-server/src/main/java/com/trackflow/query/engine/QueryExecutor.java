@@ -205,6 +205,7 @@ public class QueryExecutor {
                 case "dueDate" -> applyDateFilter(wrapper, "due_date", operator, values);
                 case "createdAt" -> applyDateFilter(wrapper, "created_at", operator, values);
                 case "updatedAt" -> applyDateFilter(wrapper, "updated_at", operator, values);
+                case "resolvedAt" -> applyDateFilter(wrapper, "resolved_at", operator, values);
                 default -> {
                     // 自定义字段筛选（通过 custom_field_value EAV 表）
                     if (field.startsWith("cf.") || field.startsWith("customField.")) {

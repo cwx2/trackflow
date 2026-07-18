@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDate;
 import java.util.Set;
 
 @Data
@@ -32,6 +33,14 @@ public class IssueQuery extends PageQuery {
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
     private String reportedByMe;  // "true" = reporter_id = current user AND status not done
     private String hideResolved;  // "true" = exclude issues with is_closed=true statuses
+
+    /**
+     * 排除在此日期之前已完成的工单（ISO 日期格式 yyyy-MM-dd）。
+     * 逻辑：status 不属于 done/cancelled 的全部返回；属于 done/cancelled 的，
+     * 仅在 resolved_at >= excludeDoneBefore（或 resolved_at IS NULL）时返回。
+     * 典型场景：看板"已完成工单保留天数"服务端过滤。
+     */
+    private LocalDate excludeDoneBefore;
 
     @Override
     protected Set<String> allowedSortFields() {

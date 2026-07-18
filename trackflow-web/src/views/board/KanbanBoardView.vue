@@ -828,6 +828,9 @@ const boardFilterMode = ref<'all' | 'active_sprint' | 'query'>('all')
 const boardFilterQuery = ref<string | null>(null)
 const boardDoneRetentionDays = ref<number | null>(null)
 
+/** 当前用户是否有看板编辑权限（来自 board_general_config 动态计算） */
+const canEditBoard = ref(false)
+
 /** 当前是否有 Board Behavior 过滤生效 */
 const isBehaviorFilterActive = computed(() => {
   return boardFilterMode.value !== 'all' || boardDoneRetentionDays.value !== null
@@ -2020,11 +2023,13 @@ async function loadBoardBehavior() {
       boardFilterMode.value = (res.data.filterMode as 'all' | 'active_sprint' | 'query') || 'all'
       boardFilterQuery.value = res.data.filterQuery ?? null
       boardDoneRetentionDays.value = res.data.doneRetentionDays ?? null
+      canEditBoard.value = res.data.currentUserCanEdit ?? false
     }
   } catch {
     boardFilterMode.value = 'all'
     boardFilterQuery.value = null
     boardDoneRetentionDays.value = null
+    canEditBoard.value = false
   }
 }
 
@@ -2061,6 +2066,13 @@ async function loadIssues() {
   let allIssues: IssueVO[] = []
   let total = 0
 
+  // 计算 excludeDoneBefore 截止日期（服务端过滤已完成工单保留天数）
+  let excludeDoneBefore: string | undefined
+  if (boardDoneRetentionDays.value !== null && boardDoneRetentionDays.value > 0) {
+    const cutoffDate = new Date(Date.now() - boardDoneRetentionDays.value * 24 * 60 * 60 * 1000)
+    excludeDoneBefore = cutoffDate.toISOString().split('T')[0] // yyyy-MM-dd
+  }
+
   // Board Behavior: Query 模式 — 使用 QueryExecutor 服务端过滤
   if (boardFilterMode.value === 'query' && boardFilterQuery.value) {
     let filters: any[] = []
@@ -2083,6 +2095,10 @@ async function loadIssues() {
     if (keyword.value) {
       filters.push({ field: 'keyword', operator: 'contains', value: [keyword.value] })
     }
+    // 服务端过滤已完成工单保留天数：使用 resolvedAt gte 过滤
+    // QueryExecutor 支持 resolvedAt 日期字段，但这里的语义是"排除 resolved_at < cutoff 的已完成工单"
+    // 需要通过 status open + (resolvedAt gte cutoff) 组合实现
+    // 暂不在 query mode 中注入——query mode 用户自定义的 filter 可能已涵盖此逻辑
     // 循环加载所有页
     while (true) {
       const res = await queryApi.executeAdhoc({ filters, page, pageSize: PAGE_SIZE })
@@ -2093,6 +2109,21 @@ async function loadIssues() {
         break
       }
       page++
+    }
+    // Query 模式下客户端补充过滤（QueryExecutor 暂不支持 excludeDoneBefore 复合语义）
+    if (excludeDoneBefore) {
+      const cutoffDate = new Date(excludeDoneBefore)
+      const doneStatusIds = new Set(
+        allColumnConfigs.value
+          .filter(c => c.statusCategory === 'done')
+          .map(c => c.statusId)
+      )
+      allIssues = allIssues.filter(issue => {
+        if (!doneStatusIds.has(issue.statusId)) return true
+        const resolvedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : (issue.updatedAt ? new Date(issue.updatedAt) : null)
+        if (!resolvedDate) return true
+        return resolvedDate >= cutoffDate
+      })
     }
   } else {
     // Board Behavior: 确定 sprint 过滤参数
@@ -2115,6 +2146,7 @@ async function loadIssues() {
         projectId: selectedProject.value,
         sprintId: effectiveSprintId,
         keyword: keyword.value || undefined,
+        excludeDoneBefore,
         page,
         pageSize: PAGE_SIZE
       })
@@ -2128,26 +2160,6 @@ async function loadIssues() {
       }
       page++
     }
-  }
-
-  // Board Behavior: 已完成工单保留天数过滤（客户端过滤）
-  if (boardDoneRetentionDays.value !== null && boardDoneRetentionDays.value > 0) {
-    const retentionMs = boardDoneRetentionDays.value * 24 * 60 * 60 * 1000
-    const cutoffDate = new Date(Date.now() - retentionMs)
-    // 获取所有"已完成"类别的状态 ID
-    const doneStatusIds = new Set(
-      allColumnConfigs.value
-        .filter(c => c.statusCategory === 'done')
-        .map(c => c.statusId)
-    )
-    allIssues = allIssues.filter(issue => {
-      // 非已完成状态的工单不过滤
-      if (!doneStatusIds.has(issue.statusId)) return true
-      // 已完成工单：检查 resolvedAt 或 updatedAt 是否在保留期内
-      const resolvedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : (issue.updatedAt ? new Date(issue.updatedAt) : null)
-      if (!resolvedDate) return true // 没有日期信息保留
-      return resolvedDate >= cutoffDate
-    })
   }
 
   boardTotalCount.value = total

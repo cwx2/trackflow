@@ -270,6 +270,23 @@ public class IssueService {
             wrapper.eq("reporter_id", currentUserId);
         }
 
+        // excludeDoneBefore: 排除在此日期之前完成的工单（看板"已完成保留天数"服务端过滤）
+        // 逻辑：status 不属于 done/cancelled → 保留；属于 done/cancelled → resolved_at >= cutoff 或 resolved_at IS NULL 时保留
+        if (query.getExcludeDoneBefore() != null) {
+            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+            if (!closedStatusIds.isEmpty()) {
+                // NOT (status_id IN (closed) AND resolved_at < cutoff)
+                // 等价于：status NOT closed OR resolved_at >= cutoff OR resolved_at IS NULL
+                wrapper.and(w -> w
+                        .notIn("status_id", closedStatusIds)
+                        .or()
+                        .ge("resolved_at", query.getExcludeDoneBefore().atStartOfDay())
+                        .or()
+                        .isNull("resolved_at")
+                );
+            }
+        }
+
         String keyword = query.getKeyword();
         if (keyword != null && !keyword.isBlank()) {
             applyKeywordFilter(wrapper, keyword);
