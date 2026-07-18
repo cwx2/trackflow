@@ -18,9 +18,15 @@ import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.entity.UserGroup;
+import com.trackflow.system.entity.UserGroupMember;
+import com.trackflow.system.entity.UserGroupRole;
 import com.trackflow.system.entity.UserRole;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.mapper.UserGroupMapper;
+import com.trackflow.system.mapper.UserGroupMemberMapper;
+import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import com.trackflow.system.vo.UserProfileVO;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +70,9 @@ public class UserService {
     private final KeycloakAdminService keycloakAdminService;
     private final ApiKeyService apiKeyService;
     private final StringRedisTemplate redisTemplate;
+    private final UserGroupMemberMapper userGroupMemberMapper;
+    private final UserGroupRoleMapper userGroupRoleMapper;
+    private final UserGroupMapper userGroupMapper;
 
     /**
      * 创建新用户（同步到 Keycloak + 本地 sys_user）
@@ -367,56 +376,133 @@ public class UserService {
     }
 
     private List<UserProfileVO.RoleInfo> buildGlobalRoles(Long userId) {
-        List<Long> roleIds = getUserGlobalRoleIds(userId);
-        if (roleIds.isEmpty()) {
-            return List.of();
+        List<UserProfileVO.RoleInfo> result = new ArrayList<>();
+
+        // 1. 直接分配的全局角色
+        List<Long> directRoleIds = getUserGlobalRoleIds(userId);
+        if (!directRoleIds.isEmpty()) {
+            List<SysRole> directRoles = roleMapper.selectBatchIds(directRoleIds);
+            for (SysRole role : directRoles) {
+                UserProfileVO.RoleInfo info = new UserProfileVO.RoleInfo();
+                info.setId(String.valueOf(role.getId()));
+                info.setName(role.getName());
+                info.setCode(role.getCode());
+                info.setSource("direct");
+                result.add(info);
+            }
         }
-        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
-        return roles.stream().map(role -> {
-            UserProfileVO.RoleInfo info = new UserProfileVO.RoleInfo();
-            info.setId(String.valueOf(role.getId()));
-            info.setName(role.getName());
-            info.setCode(role.getCode());
-            return info;
-        }).toList();
+
+        // 2. 通过用户组继承的全局角色
+        List<Long> groupIds = userGroupMemberMapper.selectGroupIdsByUserId(userId);
+        if (!groupIds.isEmpty()) {
+            // 批量加载组信息
+            List<UserGroup> groups = userGroupMapper.selectBatchIds(groupIds);
+            Map<Long, UserGroup> groupMap = groups.stream()
+                    .collect(Collectors.toMap(UserGroup::getId, g -> g));
+
+            // 查询每个组的全局角色分配
+            for (Long groupId : groupIds) {
+                List<UserGroupRole> groupRoles = userGroupRoleMapper.selectList(
+                        new LambdaQueryWrapper<UserGroupRole>()
+                                .eq(UserGroupRole::getGroupId, groupId)
+                                .isNull(UserGroupRole::getProjectId)
+                );
+                for (UserGroupRole gr : groupRoles) {
+                    SysRole role = roleMapper.selectById(gr.getRoleId());
+                    if (role == null) continue;
+                    // 避免重复（已通过直接分配存在的）
+                    boolean alreadyAdded = result.stream()
+                            .anyMatch(r -> r.getId().equals(String.valueOf(role.getId())));
+                    if (alreadyAdded) continue;
+
+                    UserProfileVO.RoleInfo info = new UserProfileVO.RoleInfo();
+                    info.setId(String.valueOf(role.getId()));
+                    info.setName(role.getName());
+                    info.setCode(role.getCode());
+                    info.setSource("group");
+                    UserGroup group = groupMap.get(groupId);
+                    info.setGroupName(group != null ? group.getName() : null);
+                    result.add(info);
+                }
+            }
+        }
+
+        return result;
     }
 
     private List<UserProfileVO.ProjectRoleInfo> buildProjectRoles(Long userId) {
-        // 查询用户的所有项目成员关系
+        List<UserProfileVO.ProjectRoleInfo> result = new ArrayList<>();
+
+        // 1. 直接项目成员角色
         List<ProjectMember> memberships = projectMemberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getUserId, userId)
         );
-        if (memberships.isEmpty()) {
-            return List.of();
+        if (!memberships.isEmpty()) {
+            List<Long> projectIds = memberships.stream().map(ProjectMember::getProjectId).distinct().toList();
+            List<Project> projects = projectMapper.selectBatchIds(projectIds);
+            Map<Long, Project> projectMap = projects.stream()
+                    .collect(Collectors.toMap(Project::getId, p -> p));
+
+            List<Long> roleIds = memberships.stream().map(ProjectMember::getRoleId).distinct().toList();
+            List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+            Map<Long, SysRole> roleMap = roles.stream()
+                    .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+            for (ProjectMember membership : memberships) {
+                Project project = projectMap.get(membership.getProjectId());
+                SysRole role = roleMap.get(membership.getRoleId());
+                if (project == null || role == null) continue;
+
+                UserProfileVO.ProjectRoleInfo info = new UserProfileVO.ProjectRoleInfo();
+                info.setProjectId(String.valueOf(project.getId()));
+                info.setProjectName(project.getName());
+                info.setProjectKey(project.getKey());
+                info.setRoleName(role.getName());
+                info.setRoleCode(role.getCode());
+                info.setJoinedAt(membership.getJoinedAt());
+                info.setSource("direct");
+                result.add(info);
+            }
         }
 
-        // 批量查询项目信息
-        List<Long> projectIds = memberships.stream().map(ProjectMember::getProjectId).distinct().toList();
-        List<Project> projects = projectMapper.selectBatchIds(projectIds);
-        Map<Long, Project> projectMap = projects.stream()
-                .collect(Collectors.toMap(Project::getId, p -> p));
+        // 2. 通过用户组继承的项目角色
+        List<Long> groupIds = userGroupMemberMapper.selectGroupIdsByUserId(userId);
+        if (!groupIds.isEmpty()) {
+            List<UserGroup> groups = userGroupMapper.selectBatchIds(groupIds);
+            Map<Long, UserGroup> groupMap = groups.stream()
+                    .collect(Collectors.toMap(UserGroup::getId, g -> g));
 
-        // 批量查询角色信息
-        List<Long> roleIds = memberships.stream().map(ProjectMember::getRoleId).distinct().toList();
-        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
-        Map<Long, SysRole> roleMap = roles.stream()
-                .collect(Collectors.toMap(SysRole::getId, r -> r));
+            for (Long groupId : groupIds) {
+                List<UserGroupRole> groupRoles = userGroupRoleMapper.selectList(
+                        new LambdaQueryWrapper<UserGroupRole>()
+                                .eq(UserGroupRole::getGroupId, groupId)
+                                .isNotNull(UserGroupRole::getProjectId)
+                );
+                for (UserGroupRole gr : groupRoles) {
+                    SysRole role = roleMapper.selectById(gr.getRoleId());
+                    Project project = projectMapper.selectById(gr.getProjectId());
+                    if (role == null || project == null) continue;
 
-        List<UserProfileVO.ProjectRoleInfo> result = new ArrayList<>();
-        for (ProjectMember membership : memberships) {
-            Project project = projectMap.get(membership.getProjectId());
-            SysRole role = roleMap.get(membership.getRoleId());
-            if (project == null || role == null) continue;
+                    // 避免重复（同项目同角色已通过直接成员存在的）
+                    boolean alreadyAdded = result.stream().anyMatch(r ->
+                            r.getProjectId().equals(String.valueOf(project.getId()))
+                                    && r.getRoleName().equals(role.getName()));
+                    if (alreadyAdded) continue;
 
-            UserProfileVO.ProjectRoleInfo info = new UserProfileVO.ProjectRoleInfo();
-            info.setProjectId(String.valueOf(project.getId()));
-            info.setProjectName(project.getName());
-            info.setProjectKey(project.getKey());
-            info.setRoleName(role.getName());
-            info.setRoleCode(role.getCode());
-            info.setJoinedAt(membership.getJoinedAt());
-            result.add(info);
+                    UserProfileVO.ProjectRoleInfo info = new UserProfileVO.ProjectRoleInfo();
+                    info.setProjectId(String.valueOf(project.getId()));
+                    info.setProjectName(project.getName());
+                    info.setProjectKey(project.getKey());
+                    info.setRoleName(role.getName());
+                    info.setRoleCode(role.getCode());
+                    info.setSource("group");
+                    UserGroup group = groupMap.get(groupId);
+                    info.setGroupName(group != null ? group.getName() : null);
+                    result.add(info);
+                }
+            }
         }
+
         return result;
     }
 

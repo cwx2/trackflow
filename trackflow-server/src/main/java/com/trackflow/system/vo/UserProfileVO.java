@@ -36,6 +36,10 @@ public class UserProfileVO {
         private String id;
         private String name;
         private String code;
+        /** 角色来源: "direct" = 直接分配, "group" = 通过用户组继承 */
+        private String source;
+        /** 当 source=group 时，来源组名称 */
+        private String groupName;
     }
 
     @Data
@@ -46,6 +50,10 @@ public class UserProfileVO {
         private String roleName;
         private String roleCode;
         private LocalDateTime joinedAt;
+        /** 角色来源: "direct" = 直接成员, "group" = 通过用户组继承 */
+        private String source;
+        /** 当 source=group 时，来源组名称 */
+        private String groupName;
     }
 
     @Data

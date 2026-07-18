@@ -139,6 +139,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs' }
       },
       {
+        path: 'admin/groups',
+        name: 'GroupManagement',
+        component: () => import('@/views/admin/GroupManagement.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_groups' }
+      },
+      {
         path: 'admin/custom-fields',
         name: 'CustomFieldManagement',
         component: () => import('@/views/admin/CustomFieldManage.vue'),
@@ -231,6 +237,7 @@ router.beforeEach(async (to, _from, next) => {
       const hasAnyAdminPerm = authStore.hasGlobalPermission('system:manage_users')
         || authStore.hasGlobalPermission('system:manage_roles')
         || authStore.hasGlobalPermission('system:manage_orgs')
+        || authStore.hasGlobalPermission('system:manage_groups')
       if (!hasAnyAdminPerm) {
         next({ name: 'Forbidden' })
         return

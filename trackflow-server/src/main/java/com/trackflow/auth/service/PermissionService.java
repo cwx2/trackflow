@@ -5,6 +5,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectVisibility;
 import com.trackflow.system.mapper.RolePermissionMapper;
+import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class PermissionService {
     private final StringRedisTemplate redisTemplate;
     private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
+    private final UserGroupRoleMapper userGroupRoleMapper;
     private final ProjectMapper projectMapper;
 
     /**
@@ -157,11 +159,20 @@ public class PermissionService {
     }
 
     /**
-     * 从数据库加载用户权限
+     * 从数据库加载用户权限（直接角色 + 组继承）
      */
     private Set<String> loadPermissionsFromDb(Long userId) {
-        List<String> permissions = rolePermissionMapper.selectPermissionsByUserId(userId);
-        return new HashSet<>(permissions);
+        Set<String> permissions = new HashSet<>();
+
+        // 1. 直接分配的全局角色权限
+        List<String> directPerms = rolePermissionMapper.selectPermissionsByUserId(userId);
+        permissions.addAll(directPerms);
+
+        // 2. 通过用户组继承的全局权限
+        List<String> groupPerms = userGroupRoleMapper.selectGlobalPermissionsByUserId(userId);
+        permissions.addAll(groupPerms);
+
+        return permissions;
     }
 
     /**
@@ -242,22 +253,38 @@ public class PermissionService {
     }
 
     /**
-     * 从数据库加载用户在项目中的权限
+     * 从数据库加载用户在项目中的权限（直接成员角色 + 组继承）
      */
     private Set<String> loadProjectPermissionsFromDb(Long userId, Long projectId) {
-        List<String> permissions = rolePermissionMapper.selectPermissionsByUserAndProject(userId, projectId);
-        return new HashSet<>(permissions);
+        Set<String> permissions = new HashSet<>();
+
+        // 1. 直接项目成员角色权限
+        List<String> directPerms = rolePermissionMapper.selectPermissionsByUserAndProject(userId, projectId);
+        permissions.addAll(directPerms);
+
+        // 2. 通过用户组继承的项目级权限
+        List<String> groupPerms = userGroupRoleMapper.selectProjectPermissionsByUserAndProject(userId, projectId);
+        permissions.addAll(groupPerms);
+
+        return permissions;
     }
 
     /**
      * 检查用户是否在任何项目中拥有指定权限
      * 用于导航级别的权限判断（如：用户在任何项目中是否可以管理工作流）
+     * 检查范围包括：直接项目成员角色 + 组继承的项目角色
      */
     public boolean hasPermissionInAnyProject(Long userId, String permission) {
         if (userId == null) return false;
         // system:admin 拥有所有权限
         if (isSystemAdmin(userId)) return true;
-        return rolePermissionMapper.hasPermissionInAnyProject(userId, permission);
+        // 1. 直接项目成员角色
+        if (rolePermissionMapper.hasPermissionInAnyProject(userId, permission)) {
+            return true;
+        }
+        // 2. 通过用户组继承的项目角色
+        List<String> groupProjectPerms = userGroupRoleMapper.selectAllProjectPermissionsByUserId(userId);
+        return groupProjectPerms.contains(permission);
     }
 
     /**

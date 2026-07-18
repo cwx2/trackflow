@@ -26,6 +26,7 @@ export { notificationApi } from './notification'
 export { auditLogApi } from './auditLog'
 export { systemSettingApi } from './systemSetting'
 export { notificationAdminApi } from './notificationAdmin'
+export { groupApi } from './group'
 
 // 类型导出
 export type * from './types'

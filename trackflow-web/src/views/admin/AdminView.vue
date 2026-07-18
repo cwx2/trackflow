@@ -51,6 +51,7 @@ const hasAnyAdminPermission = computed(() => {
   return authStore.hasGlobalPermission('system:manage_users')
     || authStore.hasGlobalPermission('system:manage_roles')
     || authStore.hasGlobalPermission('system:manage_orgs')
+    || authStore.hasGlobalPermission('system:manage_groups')
 })
 
 onMounted(async () => {
@@ -90,6 +91,13 @@ const menuItems: AdminMenuItem[] = [
     title: '组织管理',
     description: '管理组织结构和组织信息',
     permission: 'system:manage_orgs'
+  },
+  {
+    path: '/admin/groups',
+    icon: '👥',
+    title: '用户组',
+    description: '创建用户组，通过组批量管理权限，简化团队配置',
+    permission: 'system:manage_groups'
   },
   {
     path: '/admin/workflow',
