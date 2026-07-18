@@ -140,6 +140,13 @@ const menuItems: AdminMenuItem[] = [
     title: '通知管理',
     description: '配置全局通知策略、默认偏好和保留策略',
     permission: 'system:manage_roles'
+  },
+  {
+    path: '/admin/rules',
+    icon: '⚡',
+    title: '规则引擎',
+    description: '配置自动化规则，实现工单计分与罚款统计',
+    permission: 'system:manage_roles'
   }
 ]
 
