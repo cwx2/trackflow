@@ -46,6 +46,7 @@ public enum ErrorCode {
     PROJECT_KEY_DUPLICATE(40905, 409, "项目标识已存在"),
     CLOSE_CONFIRMATION_REQUIRED(40910, 409, "关闭前需要用户确认"),
     WORKFLOW_VERSION_CONFLICT(40911, 409, "工作流已被其他人修改，请刷新后重试"),
+    BOARD_CONFIG_VERSION_CONFLICT(40912, 409, "看板配置已被其他人修改，请刷新后重试"),
 
     // Server (500xx)
     INTERNAL_ERROR(50000, 500, "服务器内部错误");

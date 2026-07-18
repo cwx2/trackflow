@@ -238,6 +238,9 @@ const editableDoneRetentionDays = ref<number | null>(null)
 const editableSwimlaneGroupBy = ref('none')
 const editableMergeGroups = ref<MergeGroupLocal[]>([])
 
+// 乐观锁版本号（从 getGeneralConfig 响应中获取）
+const configVersion = ref<number>(0)
+
 // 拖拽排序状态
 const dragIndex = ref<number | null>(null)
 const dropIndex = ref<number | null>(null)
@@ -324,6 +327,8 @@ watch(() => props.visible, async (newVisible) => {
         editableFilterMode.value = res.data.filterMode || 'all'
         editableFilterQuery.value = res.data.filterQuery ?? null
         editableDoneRetentionDays.value = res.data.doneRetentionDays ?? null
+        // 保存版本号用于乐观锁
+        configVersion.value = res.data.configVersion ?? 0
       }
     } catch {
       editableBoardName.value = ''
@@ -332,6 +337,7 @@ watch(() => props.visible, async (newVisible) => {
       editableFilterMode.value = 'all'
       editableFilterQuery.value = null
       editableDoneRetentionDays.value = null
+      configVersion.value = 0
     }
   }
 })
@@ -516,6 +522,67 @@ function resetDragState() {
 
 // ===== 保存 =====
 
+/**
+ * 重新加载所有看板配置（版本冲突后调用）
+ */
+async function reloadAllConfigs() {
+  try {
+    const [colRes, cardRes, swimRes, mergeRes, generalRes] = await Promise.all([
+      boardApi.getColumns(props.projectId),
+      boardApi.getCardConfig(props.projectId),
+      boardApi.getSwimlaneConfig(props.projectId),
+      boardApi.getColumnMerges(props.projectId),
+      boardApi.getGeneralConfig(props.projectId)
+    ])
+
+    // 更新列配置
+    if (colRes.data) {
+      editableColumns.value = colRes.data.map(c => ({
+        ...c,
+        wipMin: c.wipMin ?? undefined,
+        wipMax: c.wipMax ?? undefined,
+        issueCount: c.issueCount ?? 0,
+        inWorkflow: c.inWorkflow ?? false
+      }))
+    }
+
+    // 更新卡片配置
+    if (cardRes.data) {
+      editableCardFields.value = cardRes.data.visibleFields || ['assignee', 'priority', 'type']
+      editableColorScheme.value = cardRes.data.colorScheme || 'none'
+    }
+
+    // 更新泳道配置
+    if (swimRes.data) {
+      editableSwimlaneGroupBy.value = swimRes.data.groupByField || 'none'
+    }
+
+    // 更新列合并配置
+    if (mergeRes.data && mergeRes.data.length > 0) {
+      editableMergeGroups.value = mergeRes.data.map(g => ({
+        mergeGroupId: g.mergeGroupId,
+        mergeTitle: g.mergeTitle,
+        statusIds: g.statusIds
+      }))
+    } else {
+      editableMergeGroups.value = []
+    }
+
+    // 更新基本设置 + 版本号
+    if (generalRes.data) {
+      editableBoardName.value = generalRes.data.name || ''
+      editableCanViewRoles.value = generalRes.data.canViewRoles || ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
+      editableCanEditRoles.value = generalRes.data.canEditRoles || ['project_admin', 'tech_lead']
+      editableFilterMode.value = generalRes.data.filterMode || 'all'
+      editableFilterQuery.value = generalRes.data.filterQuery ?? null
+      editableDoneRetentionDays.value = generalRes.data.doneRetentionDays ?? null
+      configVersion.value = generalRes.data.configVersion ?? 0
+    }
+  } catch {
+    Message.error('重新加载配置失败，请手动刷新页面')
+  }
+}
+
 async function handleSave() {
   saving.value = true
   try {
@@ -561,37 +628,50 @@ async function handleSave() {
       }
     }
 
-    await Promise.all([
-      boardApi.saveColumns(props.projectId, columns),
-      boardApi.saveCardConfig(props.projectId, {
+    await boardApi.saveBoardSettings(props.projectId, {
+      configVersion: configVersion.value || null,
+      columns: { columns },
+      cardConfig: {
         visibleFields: editableCardFields.value,
         colorScheme: editableColorScheme.value
-      }),
-      boardApi.saveSwimlaneConfig(props.projectId, {
+      },
+      swimlaneConfig: {
         groupByField: editableSwimlaneGroupBy.value
-      }),
-      boardApi.saveColumnMerges(props.projectId, {
+      },
+      columnMerges: {
         mergeGroups: validMergeGroups.map(g => ({
           mergeGroupId: g.mergeGroupId,
           mergeTitle: g.mergeTitle.trim(),
           statusIds: g.statusIds.map(id => Number(id))
         }))
-      }),
-      boardApi.saveGeneralConfig(props.projectId, {
+      },
+      generalConfig: {
         name: editableBoardName.value.trim(),
         canViewRoles: editableCanViewRoles.value,
         canEditRoles: editableCanEditRoles.value,
         filterMode: editableFilterMode.value,
         filterQuery: editableFilterQuery.value,
         doneRetentionDays: editableDoneRetentionDays.value
-      })
-    ])
+      }
+    })
 
     Message.success('看板设置已保存')
     emit('update:visible', false)
     emit('saved')
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
+    const status = e.response?.status
+    const message = e.response?.data?.message
+    if (status === 409) {
+      // 版本冲突：提示用户并重新加载
+      Message.warning({
+        content: message || '看板配置已被其他人修改，请刷新后重试',
+        duration: 5000
+      })
+      // 自动重新加载最新配置
+      await reloadAllConfigs()
+    } else {
+      Message.error(message || '保存失败')
+    }
   } finally {
     saving.value = false
   }

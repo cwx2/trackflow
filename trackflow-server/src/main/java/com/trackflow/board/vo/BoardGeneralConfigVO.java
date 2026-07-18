@@ -10,6 +10,9 @@ import java.util.List;
 @Data
 public class BoardGeneralConfigVO {
 
+    /** 看板配置版本号（用于乐观锁并发控制） */
+    private Integer configVersion;
+
     /** 看板名称（为空时前端使用项目名 + "看板"） */
     private String name;
 

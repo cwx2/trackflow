@@ -12,6 +12,9 @@ import java.util.List;
  */
 @Data
 public class UpdateBoardColumnMergeDTO {
+    /** 乐观锁版本号（从 GET 响应中获取，用于并发冲突检测） */
+    private Integer configVersion;
+
     /** 合并组列表（空列表 = 取消所有合并） */
     @NotNull(message = "合并组列表不能为 null")
     @Valid

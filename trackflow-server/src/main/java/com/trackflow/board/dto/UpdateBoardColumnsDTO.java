@@ -13,6 +13,9 @@ import java.util.List;
 @Data
 public class UpdateBoardColumnsDTO {
 
+    /** 乐观锁版本号（从 GET 响应中获取，用于并发冲突检测） */
+    private Integer configVersion;
+
     @NotEmpty(message = "列配置不能为空")
     @Valid
     private List<ColumnItem> columns;

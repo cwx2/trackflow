@@ -1,5 +1,6 @@
 package com.trackflow.board.controller;
 
+import com.trackflow.board.dto.SaveBoardSettingsDTO;
 import com.trackflow.board.dto.UpdateBoardCardConfigDTO;
 import com.trackflow.board.dto.UpdateBoardColumnMergeDTO;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
@@ -9,6 +10,7 @@ import com.trackflow.board.service.BoardAccessService;
 import com.trackflow.board.service.BoardCardConfigService;
 import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
+import com.trackflow.board.service.BoardConfigVersionService;
 import com.trackflow.board.service.BoardGeneralConfigService;
 import com.trackflow.board.service.BoardSwimlaneConfigService;
 import com.trackflow.board.vo.BoardCardConfigVO;
@@ -20,6 +22,7 @@ import com.trackflow.common.model.R;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +38,7 @@ public class BoardController {
     private final BoardColumnMergeService boardColumnMergeService;
     private final BoardGeneralConfigService boardGeneralConfigService;
     private final BoardAccessService boardAccessService;
+    private final BoardConfigVersionService boardConfigVersionService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
@@ -74,6 +78,7 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardColumnsDTO dto) {
         boardAccessService.checkEditAccess(projectId);
+        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardColumnService.saveColumns(projectId, dto);
         return R.ok();
     }
@@ -103,6 +108,7 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardCardConfigDTO dto) {
         boardAccessService.checkEditAccess(projectId);
+        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardCardConfigService.saveCardConfig(projectId, dto);
         return R.ok();
     }
@@ -132,6 +138,7 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardSwimlaneConfigDTO dto) {
         boardAccessService.checkEditAccess(projectId);
+        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardSwimlaneConfigService.saveSwimlaneConfig(projectId, dto);
         return R.ok();
     }
@@ -161,6 +168,7 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardColumnMergeDTO dto) {
         boardAccessService.checkEditAccess(projectId);
+        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardColumnMergeService.saveColumnMerges(projectId, dto);
         return R.ok();
     }
@@ -189,7 +197,39 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardGeneralConfigDTO dto) {
         boardAccessService.checkEditAccess(projectId);
+        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardGeneralConfigService.saveGeneralConfig(projectId, dto);
+        return R.ok();
+    }
+
+    // ========== 批量保存 ==========
+
+    /**
+     * 批量保存项目看板所有设置（原子操作 + 乐观锁）。
+     * <p>
+     * 将列设置、卡片配置、泳道配置、列合并、基本设置合并为一次请求，
+     * 仅做一次版本检查，确保并发安全。
+     * <p>
+     * 推荐前端优先使用此接口，避免 5 个并行请求的竞态条件。
+     */
+    @PutMapping("/settings")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @Transactional
+    public R<Void> saveBoardSettings(
+            @RequestParam("projectId") Long projectId,
+            @Valid @RequestBody SaveBoardSettingsDTO dto) {
+        boardAccessService.checkEditAccess(projectId);
+
+        // 一次性版本检查
+        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
+
+        // 依次保存各配置（已在同一事务中）
+        boardColumnService.saveColumns(projectId, dto.getColumns());
+        boardCardConfigService.saveCardConfig(projectId, dto.getCardConfig());
+        boardSwimlaneConfigService.saveSwimlaneConfig(projectId, dto.getSwimlaneConfig());
+        boardColumnMergeService.saveColumnMerges(projectId, dto.getColumnMerges());
+        boardGeneralConfigService.saveGeneralConfig(projectId, dto.getGeneralConfig());
+
         return R.ok();
     }
 }

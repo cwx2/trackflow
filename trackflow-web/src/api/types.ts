@@ -657,6 +657,8 @@ export interface BoardColumnMergeGroupVO {
 // ========== 看板基本设置 ==========
 
 export interface BoardGeneralConfigVO {
+  /** 看板配置版本号（用于乐观锁并发控制） */
+  configVersion: number
   /** 看板名称（空字符串时前端使用默认名） */
   name: string
   /** 可查看看板的角色代码列表 */

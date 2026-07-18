@@ -82,8 +82,26 @@ export const boardApi = {
   },
 
   /** 保存项目看板基本设置 */
-  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null }) {
+  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; configVersion?: number }) {
     return request.put<any, R<void>>('/boards/general-config', data, {
+      params: { projectId }
+    })
+  },
+
+  /**
+   * 批量保存所有看板设置（推荐）。
+   * 将列设置、卡片、泳道、列合并、基本设置合并为一次请求，
+   * 仅做一次版本检查，确保并发安全。
+   */
+  saveBoardSettings(projectId: string, data: {
+    configVersion: number | null
+    columns: { columns: Array<{ statusId: number; visible: boolean; sortOrder: number; collapsed?: boolean; wipMin?: number | null; wipMax?: number | null }> }
+    cardConfig: { visibleFields: string[]; colorScheme: string }
+    swimlaneConfig: { groupByField: string }
+    columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
+    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null }
+  }) {
+    return request.put<any, R<void>>('/boards/settings', data, {
       params: { projectId }
     })
   }

@@ -13,6 +13,9 @@ import java.util.List;
 @Data
 public class UpdateBoardCardConfigDTO {
 
+    /** 乐观锁版本号（从 GET 响应中获取，用于并发冲突检测） */
+    private Integer configVersion;
+
     /** 卡片上显示的字段列表（至少一个） */
     @NotEmpty(message = "显示字段不能为空")
     private List<String> visibleFields;

@@ -14,6 +14,9 @@ import java.util.List;
 @Data
 public class UpdateBoardGeneralConfigDTO {
 
+    /** 乐观锁版本号（从 GET 响应中获取，用于并发冲突检测） */
+    private Integer configVersion;
+
     /** 看板名称（可为空，为空时前端使用默认名） */
     @Size(max = 100, message = "看板名称不能超过 100 个字符")
     private String name;

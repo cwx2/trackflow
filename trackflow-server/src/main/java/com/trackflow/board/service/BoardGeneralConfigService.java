@@ -57,6 +57,7 @@ public class BoardGeneralConfigService {
     private final BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final ObjectMapper objectMapper;
     private final BoardAccessService boardAccessService;
+    private final BoardConfigVersionService boardConfigVersionService;
 
     /**
      * 获取项目的看板基本设置。
@@ -89,6 +90,9 @@ public class BoardGeneralConfigService {
         // 计算当前用户的看板权限
         vo.setCurrentUserCanView(boardAccessService.hasViewAccess(projectId));
         vo.setCurrentUserCanEdit(boardAccessService.hasEditAccess(projectId));
+
+        // 附加看板配置版本号（用于乐观锁）
+        vo.setConfigVersion(boardConfigVersionService.getCurrentVersion(projectId));
 
         return vo;
     }
