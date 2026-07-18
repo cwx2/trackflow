@@ -669,6 +669,10 @@ export interface BoardGeneralConfigVO {
   filterQuery: string | null
   /** 已完成工单保留天数（null 表示不限制） */
   doneRetentionDays: number | null
+  /** 当前用户是否有看板查看权限 */
+  currentUserCanView: boolean
+  /** 当前用户是否有看板编辑权限 */
+  currentUserCanEdit: boolean
 }
 
 // ========== Sprint 完成预览 ==========

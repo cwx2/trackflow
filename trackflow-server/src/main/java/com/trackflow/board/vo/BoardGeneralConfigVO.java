@@ -27,4 +27,10 @@ public class BoardGeneralConfigVO {
 
     /** 已完成工单保留天数（null 表示不限制） */
     private Integer doneRetentionDays;
+
+    /** 当前用户是否有看板查看权限（运行时计算） */
+    private Boolean currentUserCanView;
+
+    /** 当前用户是否有看板编辑权限（运行时计算） */
+    private Boolean currentUserCanEdit;
 }

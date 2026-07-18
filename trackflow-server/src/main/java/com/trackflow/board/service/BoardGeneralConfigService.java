@@ -56,10 +56,12 @@ public class BoardGeneralConfigService {
 
     private final BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final ObjectMapper objectMapper;
+    private final BoardAccessService boardAccessService;
 
     /**
      * 获取项目的看板基本设置。
      * 如果没有配置记录，返回默认配置（不写入数据库）。
+     * 同时计算当前用户的 canView / canEdit 权限。
      */
     public BoardGeneralConfigVO getGeneralConfig(Long projectId) {
         BoardGeneralConfig config = boardGeneralConfigMapper.selectOne(
@@ -83,6 +85,11 @@ public class BoardGeneralConfigService {
             vo.setFilterQuery(null);
             vo.setDoneRetentionDays(null);
         }
+
+        // 计算当前用户的看板权限
+        vo.setCurrentUserCanView(boardAccessService.hasViewAccess(projectId));
+        vo.setCurrentUserCanEdit(boardAccessService.hasEditAccess(projectId));
+
         return vo;
     }
 
