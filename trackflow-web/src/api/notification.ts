@@ -10,6 +10,7 @@ export type NotificationType =
   | 'issue_commented'
   | 'issue_status_changed'
   | 'mention'
+  | 'issue_moved'
   | 'member_added'
   | 'member_removed'
   | 'role_changed'
@@ -19,6 +20,8 @@ export type NotificationType =
   | 'project_deleted'
   | 'sprint_started'
   | 'sprint_completed'
+  | 'due_date_alert'
+  | 'overdue_alert'
 
 /**
  * 通知分类（与后端 NotificationCategory 枚举同步）

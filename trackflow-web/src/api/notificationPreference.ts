@@ -14,6 +14,9 @@ export interface NotificationPreferenceVO {
   onSprintCompleted: boolean
   onProjectMemberChanged: boolean
   onProjectLifecycle: boolean
+  onDueDate: boolean
+  onOverdue: boolean
+  dueDateAdvanceDays: number
   notifyOwnChanges: boolean
   emailEnabled: boolean
   quietHoursStart: string | null
@@ -30,6 +33,9 @@ export interface UpdateNotificationPreferenceDTO {
   onSprintCompleted?: boolean
   onProjectMemberChanged?: boolean
   onProjectLifecycle?: boolean
+  onDueDate?: boolean
+  onOverdue?: boolean
+  dueDateAdvanceDays?: number
   notifyOwnChanges?: boolean
   emailEnabled?: boolean
   quietHoursStart?: string | null

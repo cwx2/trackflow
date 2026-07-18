@@ -22,6 +22,13 @@ public class UpdateNotificationPreferenceDTO {
     private Boolean onProjectMemberChanged;
     private Boolean onProjectLifecycle;
 
+    // 日期提醒相关
+    private Boolean onDueDate;
+    private Boolean onOverdue;
+    @jakarta.validation.constraints.Min(value = 1, message = "提前提醒天数最少为1天")
+    @jakarta.validation.constraints.Max(value = 14, message = "提前提醒天数最多为14天")
+    private Integer dueDateAdvanceDays;
+
     // 自己的操作是否通知自己
     private Boolean notifyOwnChanges;
 

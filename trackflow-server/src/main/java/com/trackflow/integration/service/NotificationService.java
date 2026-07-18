@@ -73,7 +73,8 @@ public class NotificationService {
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                        NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
         // 防御性校验：actor_id 不应为 null（除系统自动通知外）
-        if (actorId == null && type != NotificationType.issue_auto_assigned) {
+        if (actorId == null && type != NotificationType.issue_auto_assigned
+                && type != NotificationType.due_date_alert && type != NotificationType.overdue_alert) {
             log.warn("[Notification] actor_id 为 null: userId={}, type={}, resourceType={}, resourceId={}",
                     userId, type, resourceType, resourceId);
         }

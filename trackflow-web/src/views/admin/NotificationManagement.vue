@@ -431,7 +431,9 @@ const typeLabels: Record<string, string> = {
   project_restored: '项目恢复',
   project_deleted: '项目删除',
   sprint_started: 'Sprint 开始',
-  sprint_completed: 'Sprint 完成'
+  sprint_completed: 'Sprint 完成',
+  due_date_alert: '到期提醒',
+  overdue_alert: '逾期提醒'
 }
 
 function formatType(type: string): string {

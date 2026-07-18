@@ -320,7 +320,7 @@ export function useNotification() {
 
     if (type === 'mention') {
       counts.mention = Math.max(0, counts.mention - 1)
-    } else if (['issue_assigned', 'issue_auto_assigned', 'issue_commented', 'issue_status_changed'].includes(type)) {
+    } else if (['issue_assigned', 'issue_auto_assigned', 'issue_commented', 'issue_status_changed', 'due_date_alert', 'overdue_alert'].includes(type)) {
       counts.subscription = Math.max(0, counts.subscription - 1)
     } else {
       counts.system = Math.max(0, counts.system - 1)

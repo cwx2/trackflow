@@ -297,6 +297,15 @@ public class NotificationPreferenceService {
         if (dto.getOnProjectLifecycle() != null) {
             pref.setOnProjectLifecycle(dto.getOnProjectLifecycle());
         }
+        if (dto.getOnDueDate() != null) {
+            pref.setOnDueDate(dto.getOnDueDate());
+        }
+        if (dto.getOnOverdue() != null) {
+            pref.setOnOverdue(dto.getOnOverdue());
+        }
+        if (dto.getDueDateAdvanceDays() != null) {
+            pref.setDueDateAdvanceDays(dto.getDueDateAdvanceDays());
+        }
         if (dto.getNotifyOwnChanges() != null) {
             pref.setNotifyOwnChanges(dto.getNotifyOwnChanges());
         }
@@ -324,6 +333,9 @@ public class NotificationPreferenceService {
         pref.setOnSprintCompleted(getDefaultBool("notification.default_on_sprint_completed", false));
         pref.setOnProjectMemberChanged(getDefaultBool("notification.default_on_project_member_changed", true));
         pref.setOnProjectLifecycle(getDefaultBool("notification.default_on_project_lifecycle", true));
+        pref.setOnDueDate(getDefaultBool("notification.default_on_due_date", true));
+        pref.setOnOverdue(getDefaultBool("notification.default_on_overdue", true));
+        pref.setDueDateAdvanceDays(getDefaultInt("notification.default_due_date_advance_days", 1));
         pref.setNotifyOwnChanges(getDefaultBool("notification.default_notify_own_changes", false));
         pref.setEmailEnabled(getDefaultBool("notification.default_email_enabled", false));
         pref.setCreatedAt(LocalDateTime.now());
@@ -335,5 +347,13 @@ public class NotificationPreferenceService {
     private boolean getDefaultBool(String key, boolean fallback) {
         String value = systemSettingService.getSettingValue(key, String.valueOf(fallback));
         return Boolean.parseBoolean(value);
+    }
+
+    private int getDefaultInt(String key, int fallback) {
+        try {
+            return Integer.parseInt(systemSettingService.getSettingValue(key, String.valueOf(fallback)));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 }

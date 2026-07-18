@@ -45,7 +45,13 @@ public enum NotificationType {
     /** Sprint 已启动 */
     sprint_started("Sprint启动"),
     /** Sprint 已完成 */
-    sprint_completed("Sprint完成");
+    sprint_completed("Sprint完成"),
+
+    // ===== Date Alert 相关 =====
+    /** 工单即将到期（到期前 N 天提醒） */
+    due_date_alert("到期提醒"),
+    /** 工单已逾期 */
+    overdue_alert("逾期提醒");
 
     private final String displayName;
 

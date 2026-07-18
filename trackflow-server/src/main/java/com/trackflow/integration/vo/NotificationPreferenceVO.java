@@ -24,6 +24,11 @@ public class NotificationPreferenceVO {
     private Boolean onProjectMemberChanged;
     private Boolean onProjectLifecycle;
 
+    // 日期提醒相关
+    private Boolean onDueDate;
+    private Boolean onOverdue;
+    private Integer dueDateAdvanceDays;
+
     // 自己的操作是否通知自己
     private Boolean notifyOwnChanges;
 

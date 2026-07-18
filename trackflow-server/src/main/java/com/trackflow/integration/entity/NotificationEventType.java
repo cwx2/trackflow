@@ -28,7 +28,11 @@ public enum NotificationEventType {
 
     // ===== Project 相关 =====
     PROJECT_MEMBER_CHANGED(NotificationPreference::getOnProjectMemberChanged),
-    PROJECT_LIFECYCLE(NotificationPreference::getOnProjectLifecycle);
+    PROJECT_LIFECYCLE(NotificationPreference::getOnProjectLifecycle),
+
+    // ===== Date Alert 相关 =====
+    DUE_DATE_APPROACHING(NotificationPreference::getOnDueDate),
+    OVERDUE(NotificationPreference::getOnOverdue);
 
     private final Function<NotificationPreference, Boolean> extractor;
 
