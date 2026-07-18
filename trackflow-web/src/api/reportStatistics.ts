@@ -165,6 +165,12 @@ export interface EstimationReportData {
   totalSpentHours: number
   overallDeviationRate: number
   items: EstimationIssueItem[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
   byProject: EstimationProjectItem[]
 }
 
@@ -251,9 +257,9 @@ export const reportStatisticsApi = {
   },
 
   /** 预估对比报表 */
-  estimationReport(projectId?: string) {
+  estimationReport(projectId?: string, page?: number, pageSize?: number) {
     return request.get<any, R<EstimationReportData>>('/reports/statistics/estimation-report', {
-      params: { projectId }
+      params: { projectId, page: page || 1, pageSize: pageSize || 50 }
     })
   }
 }

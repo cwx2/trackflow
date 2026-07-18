@@ -2,6 +2,7 @@ package com.trackflow.report.service;
 
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.model.PageResult;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
@@ -669,24 +670,40 @@ public class ReportStatisticsService {
     /**
      * 获取预估对比报表：estimation vs spent
      */
-    public EstimationReportVO getEstimationReport(Long projectId, Long userId) {
+    public EstimationReportVO getEstimationReport(Long projectId, Long userId, int page, int pageSize) {
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
-        List<EstimationComparisonRow> rows = reportStatisticsMapper.selectEstimationComparison(projectIds);
-
-        EstimationReportVO vo = new EstimationReportVO();
+        // 1. 聚合汇总（不受分页影响，基于全量数据计算）
+        List<EstimationSummaryRow> summaryRows = reportStatisticsMapper.selectEstimationSummary(projectIds);
 
         double totalEstimated = 0;
         double totalSpent = 0;
-        List<EstimationReportVO.IssueEstimationItem> items = new ArrayList<>();
-        Map<String, double[]> projectAgg = new LinkedHashMap<>();
+        List<EstimationReportVO.ProjectEstimationItem> byProject = new ArrayList<>();
 
+        for (EstimationSummaryRow sr : summaryRows) {
+            double est = sr.getEstimatedHoursSum() != null ? sr.getEstimatedHoursSum() : 0;
+            double spt = sr.getSpentHoursSum() != null ? sr.getSpentHoursSum() : 0;
+            totalEstimated += est;
+            totalSpent += spt;
+
+            EstimationReportVO.ProjectEstimationItem pi = new EstimationReportVO.ProjectEstimationItem();
+            pi.setProjectName(sr.getProjectName());
+            pi.setEstimatedHours(Math.round(est * 100.0) / 100.0);
+            pi.setSpentHours(Math.round(spt * 100.0) / 100.0);
+            pi.setDeviationRate(est > 0 ? Math.round((spt / est - 1) * 1000.0) / 1000.0 : 0);
+            pi.setIssueCount(sr.getIssueCount() != null ? sr.getIssueCount() : 0);
+            byProject.add(pi);
+        }
+
+        // 2. 明细分页查询
+        long total = reportStatisticsMapper.countEstimationComparison(projectIds);
+        int offset = (page - 1) * pageSize;
+        List<EstimationComparisonRow> rows = reportStatisticsMapper.selectEstimationComparison(projectIds, pageSize, offset);
+
+        List<EstimationReportVO.IssueEstimationItem> items = new ArrayList<>();
         for (EstimationComparisonRow row : rows) {
             double estimated = row.getEstimatedHours() != null ? row.getEstimatedHours() : 0;
             double spent = row.getSpentHours() != null ? row.getSpentHours() : 0;
-
-            totalEstimated += estimated;
-            totalSpent += spent;
 
             EstimationReportVO.IssueEstimationItem item = new EstimationReportVO.IssueEstimationItem();
             item.setIssueId(String.valueOf(row.getIssueId()));
@@ -707,31 +724,15 @@ public class ReportStatisticsService {
                 item.setDeviation("under");
             }
             items.add(item);
-
-            // 按项目聚合
-            String projName = row.getProjectName();
-            projectAgg.computeIfAbsent(projName, k -> new double[3]);
-            double[] agg = projectAgg.get(projName);
-            agg[0] += estimated;
-            agg[1] += spent;
-            agg[2] += 1;
         }
 
+        // 3. 组装响应
+        EstimationReportVO vo = new EstimationReportVO();
         vo.setTotalEstimatedHours(Math.round(totalEstimated * 100.0) / 100.0);
         vo.setTotalSpentHours(Math.round(totalSpent * 100.0) / 100.0);
         vo.setOverallDeviationRate(totalEstimated > 0 ? Math.round((totalSpent / totalEstimated - 1) * 1000.0) / 1000.0 : 0);
         vo.setItems(items);
-
-        List<EstimationReportVO.ProjectEstimationItem> byProject = new ArrayList<>();
-        for (Map.Entry<String, double[]> entry : projectAgg.entrySet()) {
-            EstimationReportVO.ProjectEstimationItem pi = new EstimationReportVO.ProjectEstimationItem();
-            pi.setProjectName(entry.getKey());
-            pi.setEstimatedHours(Math.round(entry.getValue()[0] * 100.0) / 100.0);
-            pi.setSpentHours(Math.round(entry.getValue()[1] * 100.0) / 100.0);
-            pi.setDeviationRate(entry.getValue()[0] > 0 ? Math.round((entry.getValue()[1] / entry.getValue()[0] - 1) * 1000.0) / 1000.0 : 0);
-            pi.setIssueCount((int) entry.getValue()[2]);
-            byProject.add(pi);
-        }
+        vo.setPagination(new com.trackflow.common.model.PageResult.Pagination(page, pageSize, total));
         vo.setByProject(byProject);
 
         return vo;

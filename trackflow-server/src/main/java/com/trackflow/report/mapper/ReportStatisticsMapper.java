@@ -152,9 +152,22 @@ public interface ReportStatisticsMapper {
             @Param("endDate") String endDate);
 
     /**
-     * 预估对比报表：查询有预估工时的工单的 estimated_hours vs spent_hours
+     * 预估对比报表：查询有预估工时的工单的 estimated_hours vs spent_hours（分页）
      * 返回行：(issue_id, issue_key, title, project_name, assignee_name, estimated_hours, spent_hours)
      */
     List<EstimationComparisonRow> selectEstimationComparison(
-            @Param("projectIds") List<Long> projectIds);
+            @Param("projectIds") List<Long> projectIds,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    /**
+     * 预估对比报表：统计有预估工时的工单总数
+     */
+    long countEstimationComparison(@Param("projectIds") List<Long> projectIds);
+
+    /**
+     * 预估对比报表：聚合汇总（总预估、总实际、按项目分组）
+     * 返回行：(project_name, estimated_hours_sum, spent_hours_sum, issue_count)
+     */
+    List<EstimationSummaryRow> selectEstimationSummary(@Param("projectIds") List<Long> projectIds);
 }

@@ -8,7 +8,7 @@
         allow-clear
         size="small"
         style="width: 180px"
-        @change="loadData"
+        @change="handleProjectChange"
       >
         <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
       </a-select>
@@ -26,7 +26,7 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="!reportData || reportData.items.length === 0" class="report-empty">
+    <div v-else-if="!reportData || reportData.pagination.total === 0" class="report-empty">
       <div class="empty-icon">📐</div>
       <h3 class="empty-title">暂无预估数据</h3>
       <p class="empty-desc">没有找到设置了预估工时的工单。请先为工单设置"预估工时"字段。</p>
@@ -49,7 +49,7 @@
           <div class="stat-label">总体偏差</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">{{ reportData.items.length }}</div>
+          <div class="stat-value">{{ reportData.pagination.total }}</div>
           <div class="stat-label">有预估的工单</div>
         </div>
       </div>
@@ -99,6 +99,20 @@
               </span>
             </div>
           </div>
+          <!-- 分页 -->
+          <div class="estimation-pagination" v-if="reportData.pagination && reportData.pagination.totalPages > 1">
+            <a-pagination
+              :current="currentPage"
+              :page-size="currentPageSize"
+              :total="reportData.pagination.total"
+              :page-size-options="[20, 50, 100]"
+              show-total
+              show-page-size
+              size="small"
+              @change="handlePageChange"
+              @page-size-change="handlePageSizeChange"
+            />
+          </div>
         </div>
       </div>
     </template>
@@ -127,6 +141,8 @@ const props = defineProps<{
 const loading = ref(false)
 const reportData = ref<EstimationReportData | null>(null)
 const selectedProjectId = ref<string | undefined>(undefined)
+const currentPage = ref(1)
+const currentPageSize = ref(50)
 
 const projects = computed(() => props.projects)
 
@@ -233,13 +249,29 @@ async function loadData() {
   loading.value = true
   reportData.value = null
   try {
-    const res = await reportStatisticsApi.estimationReport(selectedProjectId.value)
+    const res = await reportStatisticsApi.estimationReport(selectedProjectId.value, currentPage.value, currentPageSize.value)
     reportData.value = res.data
   } catch (e: any) {
     Message.error(e.response?.data?.message || '加载预估报表失败')
   } finally {
     loading.value = false
   }
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  loadData()
+}
+
+function handlePageSizeChange(pageSize: number) {
+  currentPageSize.value = pageSize
+  currentPage.value = 1
+  loadData()
+}
+
+function handleProjectChange() {
+  currentPage.value = 1
+  loadData()
 }
 
 // ─── 导出 CSV ─────────────────────────────
@@ -421,6 +453,14 @@ defineExpose({ loadData })
   flex-direction: column;
   max-height: 400px;
   overflow-y: auto;
+}
+
+.estimation-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--tf-border-light);
+  margin-top: 8px;
 }
 
 .est-row {

@@ -171,15 +171,22 @@ public class ReportStatisticsController {
      * 获取预估对比报表（Estimation Report）
      * 对比预估工时 vs 实际花费
      * projectId 可选：不传时返回用户有权限的全部项目数据
+     * 支持分页：page（默认1）, pageSize（默认50，最大200）
      */
     @GetMapping("/estimation-report")
     @PreAuthorize("isAuthenticated()")
     public R<EstimationReportVO> estimationReport(
-            @RequestParam(value = "projectId", required = false) Long projectId) {
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "50") Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
             projectService.assertProjectMember(userId, projectId);
         }
-        return R.ok(statisticsService.getEstimationReport(projectId, userId));
+        // 约束 pageSize 范围
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 1;
+        if (pageSize > 200) pageSize = 200;
+        return R.ok(statisticsService.getEstimationReport(projectId, userId, page, pageSize));
     }
 }
