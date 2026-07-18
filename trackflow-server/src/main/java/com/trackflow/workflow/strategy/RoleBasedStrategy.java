@@ -72,6 +72,14 @@ public class RoleBasedStrategy implements AssignmentStrategy {
             return null;
         }
 
+        // 排除报告人（默认行为，除非 exclude_reporter 显式设为 false）
+        candidates = excludeReporterIfNeeded(candidates, issue, config);
+        if (candidates.isEmpty()) {
+            log.info("[RoleBasedStrategy] 排除报告人后候选池为空（报告人 {} 是唯一候选人），跳过分配",
+                    issue.getReporterId());
+            return null;
+        }
+
         String mode = config.getMode();
         if ("round_robin".equals(mode)) {
             return resolveRoundRobin(candidates, projectId, roleId);
@@ -83,6 +91,48 @@ public class RoleBasedStrategy implements AssignmentStrategy {
             log.warn("[RoleBasedStrategy] 未知模式 '{}', issue={}", mode, issue.getId());
             return null;
         }
+    }
+
+    /**
+     * 根据配置排除报告人。
+     * <p>
+     * 默认行为（excludeReporter == null 或 true）：从候选列表中移除报告人。
+     * 如果显式配置 exclude_reporter = false，则保留报告人在候选池中。
+     * <p>
+     * 参考 YouTrack Workflow 的 excludeReporter 选项。
+     *
+     * @param candidates 原始候选人列表
+     * @param issue      当前 Issue（用于获取 reporterId）
+     * @param config     动作配置
+     * @return 排除后的候选人列表（可能为空）
+     */
+    private List<Long> excludeReporterIfNeeded(List<Long> candidates, Issue issue, ActionConfig config) {
+        // 显式设为 false 时不排除
+        if (Boolean.FALSE.equals(config.getExcludeReporter())) {
+            return candidates;
+        }
+
+        Long reporterId = issue.getReporterId();
+        if (reporterId == null) {
+            return candidates;
+        }
+
+        // 报告人不在候选池中（如产品经理），无需排除
+        if (!candidates.contains(reporterId)) {
+            return candidates;
+        }
+
+        // 排除报告人
+        List<Long> filtered = candidates.stream()
+                .filter(id -> !id.equals(reporterId))
+                .collect(Collectors.toList());
+
+        if (filtered.size() < candidates.size()) {
+            log.debug("[RoleBasedStrategy] 已从候选池中排除报告人 {}，剩余 {} 人",
+                    reporterId, filtered.size());
+        }
+
+        return filtered;
     }
 
     /**

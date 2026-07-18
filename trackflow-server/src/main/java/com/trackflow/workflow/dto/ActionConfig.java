@@ -43,4 +43,16 @@ public class ActionConfig {
      * 例如：{"12345": 3, "67890": 1} 表示用户 12345 被分配的概率是 67890 的 3 倍。
      */
     private java.util.Map<String, Integer> weights;
+
+    /**
+     * 是否排除报告人（reporter）作为自动分配的候选人。
+     * <p>
+     * 默认 true：Round-robin / Least-loaded / Weighted 模式下，
+     * 如果报告人也在候选池中，将被跳过（避免自己分配给自己）。
+     * <p>
+     * 设为 false 可关闭此行为（极少见场景）。
+     * 参考 YouTrack Workflow 的 excludeReporter 选项。
+     */
+    @JsonProperty("exclude_reporter")
+    private Boolean excludeReporter;
 }
