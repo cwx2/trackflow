@@ -24,6 +24,8 @@ import com.trackflow.project.dto.CreateProjectDTO;
 import com.trackflow.project.dto.UpdateProjectDTO;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.entity.ProjectStatus;
+import com.trackflow.project.entity.ProjectVisibility;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
@@ -113,8 +115,8 @@ public class ProjectService {
         project.setKey(dto.getKey().toUpperCase());
         project.setDescription(dto.getDescription());
         project.setLeadId(leadId);
-        project.setStatus("active");
-        project.setVisibility("private");
+        project.setStatus(ProjectStatus.ACTIVE);
+        project.setVisibility(ProjectVisibility.PRIVATE);
         project.setIssueSequence(0);
         projectMapper.insert(project);
 
@@ -159,9 +161,9 @@ public class ProjectService {
                 if (!memberProjectIds.isEmpty()) {
                     w.in(Project::getId, memberProjectIds)
                      .or()
-                     .in(Project::getVisibility, List.of("internal", "public"));
+                     .in(Project::getVisibility, List.of(ProjectVisibility.INTERNAL, ProjectVisibility.PUBLIC));
                 } else {
-                    w.in(Project::getVisibility, List.of("internal", "public"));
+                    w.in(Project::getVisibility, List.of(ProjectVisibility.INTERNAL, ProjectVisibility.PUBLIC));
                 }
             });
         }
@@ -171,10 +173,10 @@ public class ProjectService {
         }
 
         if (status != null && !status.isBlank()) {
-            wrapper.eq(Project::getStatus, status);
+            wrapper.eq(Project::getStatus, ProjectStatus.fromValue(status));
         } else {
             // 默认不显示归档项目
-            wrapper.eq(Project::getStatus, "active");
+            wrapper.eq(Project::getStatus, ProjectStatus.ACTIVE);
         }
 
         wrapper.orderByDesc(Project::getCreatedAt);
@@ -281,8 +283,8 @@ public class ProjectService {
                     }
                 } else {
                     // 非成员但项目可见（internal/public）→ 显示 NonMember 角色
-                    String visibility = project.getVisibility();
-                    if ("internal".equals(visibility) || "public".equals(visibility)) {
+                    ProjectVisibility visibility = project.getVisibility();
+                    if (ProjectVisibility.INTERNAL == visibility || ProjectVisibility.PUBLIC == visibility) {
                         vo.setMyRoleName("非成员");
                         vo.setMyRoleCode("non_member");
                     }
@@ -343,16 +345,21 @@ public class ProjectService {
             }
         }
 
-        // 可见性变更：需要失效所有用户的 accessible_projects 缓存
-        if (dto.getVisibility() != null && !dto.getVisibility().equals(project.getVisibility())) {
-            String oldVisibility = project.getVisibility();
-            project.setVisibility(dto.getVisibility());
-            invalidateAllAccessibleProjectsCache();
-            Map<String, Object> detail = new java.util.LinkedHashMap<>();
-            detail.put("field", "visibility");
-            detail.put("old_value", oldVisibility);
-            detail.put("new_value", dto.getVisibility());
-            projectActivityService.log(id, currentUserId, "change_visibility", null, detail);
+        // 可见性变更：事务提交后失效所有用户的 accessible_projects 缓存
+        if (dto.getVisibility() != null) {
+            ProjectVisibility newVisibility = ProjectVisibility.fromValue(dto.getVisibility());
+            if (newVisibility != project.getVisibility()) {
+                String oldVisibility = project.getVisibility().getValue();
+                project.setVisibility(newVisibility);
+                // 发布事件，由 ProjectCacheEventListener 在事务提交后执行 Redis SCAN 清理
+                eventPublisher.publishEvent(new com.trackflow.common.event.ProjectVisibilityChangedEvent(
+                        id, oldVisibility, newVisibility.getValue()));
+                Map<String, Object> detail = new java.util.LinkedHashMap<>();
+                detail.put("field", "visibility");
+                detail.put("old_value", oldVisibility);
+                detail.put("new_value", newVisibility.getValue());
+                projectActivityService.log(id, currentUserId, "change_visibility", null, detail);
+            }
         }
 
         // 负责人变更：需要完整的业务校验和权限联动
@@ -362,25 +369,6 @@ public class ProjectService {
 
         projectMapper.updateById(project);
         return project;
-    }
-
-    /**
-     * 失效所有用户的 accessible_projects 缓存。
-     * 当项目 visibility 变更时调用，确保所有用户及时看到/看不到该项目。
-     * 使用 SCAN 避免 KEYS 阻塞 Redis。
-     */
-    private void invalidateAllAccessibleProjectsCache() {
-        Set<String> keys = new java.util.HashSet<>();
-        var options = org.springframework.data.redis.core.ScanOptions.scanOptions()
-                .match(ACCESSIBLE_PROJECTS_CACHE_PREFIX + "*").count(200).build();
-        try (var cursor = redisTemplate.scan(options)) {
-            while (cursor.hasNext()) {
-                keys.add(cursor.next());
-            }
-        }
-        if (!keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
     }
 
     /**
@@ -482,14 +470,14 @@ public class ProjectService {
     @Transactional
     public void archive(Long id) {
         Project project = getById(id);
-        if ("archived".equals(project.getStatus())) {
+        if (ProjectStatus.ARCHIVED == project.getStatus()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "项目已处于归档状态");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         // 1. 归档项目
-        project.setStatus("archived");
+        project.setStatus(ProjectStatus.ARCHIVED);
         projectMapper.updateById(project);
 
         // 2. 暂停活跃 Sprint（ACTIVE → PLANNED）
@@ -520,14 +508,14 @@ public class ProjectService {
     @Transactional
     public void restore(Long id) {
         Project project = getById(id);
-        if (!"archived".equals(project.getStatus())) {
+        if (ProjectStatus.ARCHIVED != project.getStatus()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只能恢复归档状态的项目");
         }
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         // 1. 恢复项目
-        project.setStatus("active");
+        project.setStatus(ProjectStatus.ACTIVE);
         projectMapper.updateById(project);
 
         // 2. 记录活动日志
@@ -672,7 +660,7 @@ public class ProjectService {
     public void addMember(Long projectId, AddMemberDTO dto) {
         // 1. 校验项目状态（归档项目不允许添加成员）
         Project project = getById(projectId);
-        if (!"active".equals(project.getStatus())) {
+        if (ProjectStatus.ACTIVE != project.getStatus()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
         }
 
@@ -755,7 +743,7 @@ public class ProjectService {
     public void updateMemberRoles(Long projectId, Long userId, List<Long> newRoleIds) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
-        if (!"active".equals(project.getStatus())) {
+        if (ProjectStatus.ACTIVE != project.getStatus()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
         }
 
@@ -875,7 +863,7 @@ public class ProjectService {
     public int removeMember(Long projectId, Long userId) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
-        if (!"active".equals(project.getStatus())) {
+        if (ProjectStatus.ACTIVE != project.getStatus()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "归档项目不允许管理成员");
         }
 
@@ -999,7 +987,7 @@ public class ProjectService {
     public void assertProjectActive(Long projectId) {
         if (projectId == null) return;
         Project project = getById(projectId);
-        if (!"active".equals(project.getStatus())) {
+        if (ProjectStatus.ACTIVE != project.getStatus()) {
             throw new BusinessException(ErrorCode.PROJECT_ARCHIVED, "归档项目不允许此操作");
         }
     }
@@ -1049,7 +1037,8 @@ public class ProjectService {
         List<Long> memberProjectIds = memberMapper.selectProjectIdsByUserId(userId);
 
         // internal/public 项目
-        List<Long> visibleProjectIds = projectMapper.selectProjectIdsByVisibility(List.of("internal", "public"));
+        List<Long> visibleProjectIds = projectMapper.selectProjectIdsByVisibility(
+                List.of(ProjectVisibility.INTERNAL.getValue(), ProjectVisibility.PUBLIC.getValue()));
 
         // 合并去重
         Set<Long> allIds = new java.util.LinkedHashSet<>(memberProjectIds);
