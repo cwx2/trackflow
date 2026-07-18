@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -71,6 +72,12 @@ public class NotificationService {
     @Transactional
     public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
                        NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
+        // 防御性校验：actor_id 不应为 null（除系统自动通知外）
+        if (actorId == null && type != NotificationType.issue_auto_assigned) {
+            log.warn("[Notification] actor_id 为 null: userId={}, type={}, resourceType={}, resourceId={}",
+                    userId, type, resourceType, resourceId);
+        }
+
         // 全局站内通知开关检查（管理员可通过 NotificationAdmin 设置关闭）
         if (!isInAppEnabled()) {
             log.debug("[Notification] 全局站内通知已关闭，跳过: userId={}, type={}", userId, type);
@@ -302,6 +309,7 @@ public class NotificationService {
     /**
      * 批量分发邮件通知（仅对新建通知的用户）。
      * 批量查询用户信息和偏好，减少 DB 操作。
+     * 跳过处于静音时段内的用户。
      */
     private void dispatchEmailBatch(Set<Long> userIds, String title, String content) {
         try {
@@ -317,6 +325,7 @@ public class NotificationService {
             List<NotificationPreference> prefs = preferenceService.listGlobalByUserIds(userIds);
             Set<Long> emailEnabledUserIds = prefs.stream()
                     .filter(p -> Boolean.TRUE.equals(p.getEmailEnabled()))
+                    .filter(p -> !isInQuietHours(p))
                     .map(NotificationPreference::getUserId)
                     .collect(Collectors.toSet());
 
@@ -343,7 +352,7 @@ public class NotificationService {
 
     /**
      * 如果全局邮件通知已启用，且用户偏好中 emailEnabled=true，且用户有邮箱地址，
-     * 则异步发送通知邮件。发送失败不影响站内通知。
+     * 且当前不在用户的静音时段内，则异步发送通知邮件。发送失败不影响站内通知。
      */
     private void dispatchEmail(Long userId, String title, String content) {
         try {
@@ -353,6 +362,12 @@ public class NotificationService {
             // 检查用户偏好是否开启了邮件
             var pref = preferenceService.getByUserId(userId);
             if (!Boolean.TRUE.equals(pref.getEmailEnabled())) {
+                return;
+            }
+            // 静音时段检查：在 quiet hours 内跳过邮件发送
+            if (isInQuietHours(pref)) {
+                log.debug("[Notification] 用户处于静音时段，跳过邮件: userId={}, quietHours={}-{}",
+                        userId, pref.getQuietHoursStart(), pref.getQuietHoursEnd());
                 return;
             }
             // 获取用户邮箱
@@ -395,6 +410,47 @@ public class NotificationService {
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;");
+    }
+
+    /**
+     * 检查用户当前是否处于静音时段内。
+     * <p>
+     * 静音时段影响邮件发送——在 quiet hours 内跳过邮件，站内通知不受影响。
+     * 支持跨午夜场景（如 22:00 - 08:00）。
+     *
+     * @param pref 用户通知偏好（包含 quietHoursStart / quietHoursEnd）
+     * @return true 表示当前处于静音时段
+     */
+    private boolean isInQuietHours(NotificationPreference pref) {
+        if (pref == null) {
+            return false;
+        }
+        String startStr = pref.getQuietHoursStart();
+        String endStr = pref.getQuietHoursEnd();
+        if (startStr == null || startStr.isBlank() || endStr == null || endStr.isBlank()) {
+            return false;
+        }
+        try {
+            LocalTime now = LocalTime.now();
+            LocalTime start = LocalTime.parse(startStr);
+            LocalTime end = LocalTime.parse(endStr);
+
+            if (start.equals(end)) {
+                // 起止相同视为未设置
+                return false;
+            }
+            if (start.isBefore(end)) {
+                // 非跨午夜：如 09:00 - 18:00
+                return !now.isBefore(start) && now.isBefore(end);
+            } else {
+                // 跨午夜：如 22:00 - 08:00（不在 08:00~22:00 之间即为静音时段）
+                return !now.isBefore(start) || now.isBefore(end);
+            }
+        } catch (Exception e) {
+            log.warn("[Notification] 解析静音时段失败: start={}, end={}, error={}",
+                    startStr, endStr, e.getMessage());
+            return false;
+        }
     }
 
     /**

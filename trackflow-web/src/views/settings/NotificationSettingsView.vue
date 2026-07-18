@@ -149,7 +149,7 @@
       <!-- 静音时段 -->
       <div class="settings-section">
         <h3 class="section-title">静音时段</h3>
-        <p class="section-desc">在指定时段内暂停推送通知。通知不会丢失，静音结束后可在通知中心查看。</p>
+        <p class="section-desc">在指定时段内不发送邮件通知，避免非工作时间被打扰。站内通知不受影响，静音结束后可在通知中心查看。</p>
 
         <div class="quiet-hours">
           <div class="quiet-hours-toggle">
