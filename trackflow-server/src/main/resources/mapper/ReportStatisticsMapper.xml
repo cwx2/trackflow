@@ -303,16 +303,17 @@
                    ) AS cnt
             FROM filled
         )
-        -- 最终输出：过滤掉 NULL 和 0 的行，JOIN 状态表获取颜色和排序
+        -- 最终输出：过滤掉 NULL 和 0 的行，LEFT JOIN 状态表获取颜色和排序
+        -- 使用 LEFT JOIN 确保已删除/重命名的历史状态仍参与计算（REQ-385）
         SELECT ff.day::text AS day,
                ff.status_name,
-               s.color AS status_color,
-               s.sort_order,
+               COALESCE(s.color, '#6b7280') AS status_color,
+               COALESCE(s.sort_order, 999) AS sort_order,
                COALESCE(ff.cnt, 0) AS cnt
         FROM forward_filled ff
-        JOIN issue_status s ON s.name = ff.status_name
+        LEFT JOIN issue_status s ON s.name = ff.status_name
         WHERE COALESCE(ff.cnt, 0) > 0
-        ORDER BY ff.day, s.sort_order
+        ORDER BY ff.day, COALESCE(s.sort_order, 999)
     </select>
 
     <!-- ========== 解决时间趋势 ========== -->
@@ -491,7 +492,7 @@
         ORDER BY p.name ASC, total_minutes DESC
     </select>
 
-    <!-- 预估对比报表 -->
+    <!-- 预估对比报表（分页明细） -->
     <select id="selectEstimationComparison" resultType="com.trackflow.report.mapper.result.EstimationComparisonRow">
         SELECT
             i.id AS issue_id,
@@ -512,6 +513,40 @@
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
         ORDER BY (COALESCE(i.spent_hours, 0) / i.estimated_hours) DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 预估对比报表：总数统计 -->
+    <select id="countEstimationComparison" resultType="long">
+        SELECT COUNT(*)
+        FROM issue i
+        WHERE i.deleted_at IS NULL
+          AND i.estimated_hours IS NOT NULL
+          AND i.estimated_hours > 0
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+    </select>
+
+    <!-- 预估对比报表：按项目聚合汇总 -->
+    <select id="selectEstimationSummary" resultType="com.trackflow.report.mapper.result.EstimationSummaryRow">
+        SELECT
+            p.name AS project_name,
+            SUM(i.estimated_hours) AS estimated_hours_sum,
+            COALESCE(SUM(i.spent_hours), 0) AS spent_hours_sum,
+            COUNT(*) AS issue_count
+        FROM issue i
+        JOIN project p ON p.id = i.project_id
+        WHERE i.deleted_at IS NULL
+          AND i.estimated_hours IS NOT NULL
+          AND i.estimated_hours > 0
+          <if test="projectIds != null and projectIds.size() > 0">
+              AND i.project_id IN
+              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+          </if>
+        GROUP BY p.name
+        ORDER BY estimated_hours_sum DESC
     </select>
 
 </mapper>
