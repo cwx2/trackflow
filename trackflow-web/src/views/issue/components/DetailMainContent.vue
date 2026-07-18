@@ -126,7 +126,7 @@
           <div v-if="group.expanded" class="link-group-items">
             <div v-for="link in group.items" :key="link.id" class="link-item" :class="{ 'link-blocked': link.isUnresolvedBlocker }">
               <span v-if="link.isUnresolvedBlocker" class="link-block-icon" title="未解决的阻塞">⛔</span>
-              <router-link :to="`/issues/${link.issueId}`" class="link-key-ref">{{ link.issueKey }}</router-link>
+              <router-link :to="`/issues/${link.issueKey}`" class="link-key-ref">{{ link.issueKey }}</router-link>
               <span class="link-title-text">{{ link.issueTitle }}</span>
               <span class="link-status" :style="{ color: link.statusColor }">{{ link.statusName }}</span>
             </div>

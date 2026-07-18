@@ -256,7 +256,9 @@ function goNotifications() {
 
 function goToTimerIssue() {
   showTimerPopover.value = false
-  if (timerStore.issueId) {
+  if (timerStore.issueKey) {
+    router.push(`/issues/${timerStore.issueKey}`)
+  } else if (timerStore.issueId) {
     router.push(`/issues/${timerStore.issueId}`)
   }
 }

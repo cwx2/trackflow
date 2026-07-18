@@ -170,7 +170,7 @@
             v-for="issue in assignedIssues"
             :key="issue.id"
             class="issue-item"
-            @click="$router.push(`/issues/${issue.id}`)"
+            @click="$router.push(`/issues/${issue.issueKey}`)"
           >
             <div class="issue-row-top">
               <span class="issue-key-badge">{{ issue.issueKey }}</span>
@@ -210,7 +210,7 @@
             v-for="activity in activities"
             :key="activity.id"
             class="activity-item"
-            @click="$router.push(`/issues/${activity.issueId}`)"
+            @click="$router.push(`/issues/${activity.issueKey}`)"
           >
             <div class="activity-avatar">{{ (activity.userName || 'U').charAt(0) }}</div>
             <div class="activity-content">
@@ -247,7 +247,7 @@
           v-for="issue in overdueIssues"
           :key="issue.id"
           class="overdue-row"
-          @click="$router.push(`/issues/${issue.id}`)"
+          @click="$router.push(`/issues/${issue.issueKey}`)"
         >
           <span class="issue-key-badge">{{ issue.issueKey }}</span>
           <span class="overdue-title">{{ issue.title }}</span>

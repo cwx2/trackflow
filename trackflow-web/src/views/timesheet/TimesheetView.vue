@@ -108,7 +108,7 @@
         :quota-text="quotaText()"
         @day-click="openAddDialog"
         @entry-click="openEditDialog"
-        @issue-click="(entry) => { if (!entry.issueDeleted) $router.push(`/issues/${entry.issueId}`) }"
+        @issue-click="(entry) => { if (!entry.issueDeleted) $router.push(`/issues/${entry.issueKey || entry.issueId}`) }"
       />
 
       <!-- Month View -->

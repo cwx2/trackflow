@@ -1242,12 +1242,12 @@ function onRowClick(record: TableData) {
     const index = issues.value.findIndex(i => i.id === record.id)
     openPreview(record as unknown as IssueVO, index)
   } else {
-    router.push(`/issues/${record.id}`)
+    router.push(`/issues/${record.issueKey}`)
   }
 }
 function onRowDblClick(record: TableData) {
   // Double-click always navigates to full detail page regardless of preview mode
-  router.push(`/issues/${record.id}`)
+  router.push(`/issues/${record.issueKey}`)
 }
 function onSelectionChange(rowKeys: (string | number)[]) {
   selectedIds.value = new Set(rowKeys.map(String))
