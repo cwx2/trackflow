@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -303,6 +304,11 @@ public class QueryExecutor {
     }
 
     /**
+     * 自定义字段 IN 操作符的最大值数量上限
+     */
+    private static final int CF_IN_VALUES_MAX_SIZE = 100;
+
+    /**
      * 应用自定义字段筛选（通过 EXISTS 子查询关联 custom_field_value EAV 表）
      */
     private void applyCustomFieldFilter(QueryWrapper<Issue> wrapper, String cfKey, String operator, List<String> values) {
@@ -318,12 +324,8 @@ public class QueryExecutor {
             case "neq" -> wrapper.apply(
                     "NOT EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value = {1})",
                     Long.parseLong(cfKey), values.get(0));
-            case "in" -> {
-                String placeholders = values.stream().map(v -> "'" + v.replace("'", "''") + "'").collect(Collectors.joining(","));
-                wrapper.apply(
-                        "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IN (" + placeholders + "))",
-                        Long.parseLong(cfKey));
-            }
+            case "in" -> applyCustomFieldInFilter(wrapper, cfKey, values, false);
+            case "not_in" -> applyCustomFieldInFilter(wrapper, cfKey, values, true);
             case "contains" -> wrapper.apply(
                     "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value LIKE {1})",
                     Long.parseLong(cfKey), "%" + values.get(0) + "%");
@@ -334,6 +336,55 @@ public class QueryExecutor {
                     "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IS NOT NULL AND cfv.value != '')",
                     Long.parseLong(cfKey));
         }
+    }
+
+    /**
+     * 参数化实现自定义字段的 IN / NOT IN 筛选。
+     * 使用 MyBatis-Plus apply() 的编号占位符 {0}, {1}, {2}... 确保所有值通过 PreparedStatement 参数传递，
+     * 彻底杜绝 SQL 注入。
+     *
+     * @param wrapper  查询包装器
+     * @param cfKey    自定义字段 ID（已校验格式）
+     * @param values   筛选值列表
+     * @param negate   true 表示 NOT IN（NOT EXISTS），false 表示 IN（EXISTS）
+     */
+    private void applyCustomFieldInFilter(QueryWrapper<Issue> wrapper, String cfKey, List<String> values, boolean negate) {
+        if (values == null || values.isEmpty()) {
+            if (negate) {
+                // NOT IN 空列表 = 匹配所有，不添加条件
+                return;
+            } else {
+                // IN 空列表 = 匹配无结果
+                wrapper.apply("1 = 0");
+                return;
+            }
+        }
+
+        if (values.size() > CF_IN_VALUES_MAX_SIZE) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "自定义字段 IN 筛选值数量不能超过 " + CF_IN_VALUES_MAX_SIZE + " 个");
+        }
+
+        // 构建参数化 SQL：{0} 为 fieldId，{1}..{N} 为各个 value
+        // 例如 3 个值: "EXISTS (SELECT 1 FROM ... AND (cfv.value = {1} OR cfv.value = {2} OR cfv.value = {3}))"
+        StringBuilder sql = new StringBuilder();
+        sql.append(negate ? "NOT " : "");
+        sql.append("EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND (");
+
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                sql.append(" OR ");
+            }
+            sql.append("cfv.value = {").append(i + 1).append("}");
+        }
+        sql.append("))");
+
+        // 组装参数数组: [fieldId, value1, value2, ...]
+        List<Object> params = new ArrayList<>(values.size() + 1);
+        params.add(Long.parseLong(cfKey));
+        params.addAll(values);
+
+        wrapper.apply(sql.toString(), params.toArray());
     }
 
     /**
