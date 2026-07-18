@@ -11,6 +11,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -40,17 +41,20 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private final NotificationPreferenceService preferenceService;
     private final IssueCommentMapper commentMapper;
     private final IssueStatusMapper statusMapper;
+    private final ProjectMapper projectMapper;
 
     public IssueNotificationHelper(NotificationService notificationService,
                                    NotificationPreferenceService preferenceService,
                                    IssueCommentMapper commentMapper,
                                    IssueStatusMapper statusMapper,
+                                   ProjectMapper projectMapper,
                                    SysUserMapper sysUserMapper) {
         super(sysUserMapper, null); // IssueNotificationHelper 不需要 ProjectMemberMapper
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
         this.commentMapper = commentMapper;
         this.statusMapper = statusMapper;
+        this.projectMapper = projectMapper;
     }
 
     // ==================== 公共通知方法 ====================
@@ -280,6 +284,57 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送@提及通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 工单移动到其他项目通知。
+     * 通知报告人和负责人（如果有）。
+     */
+    public void notifyMoved(Issue issue, Long sourceProjectId, Long targetProjectId, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) {
+                return;
+            }
+
+            String operatorName = getUserDisplayName(operatorId);
+            String sourceProjectName = getProjectName(sourceProjectId);
+            String targetProjectName = getProjectName(targetProjectId);
+
+            String title = String.format("%s 已移动到项目 %s", issue.getIssueKey(), targetProjectName);
+            String content = String.format("%s 将工单 [%s] %s 从项目「%s」移动到项目「%s」",
+                    operatorName, issue.getIssueKey(), issue.getTitle(), sourceProjectName, targetProjectName);
+
+            for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
+                Long recipientId = entry.getKey();
+                NotificationReason reason = entry.getValue();
+                // 使用 ISSUE_STATUS_CHANGED 偏好（移动属于重大变更类通知）
+                if (!preferenceService.isEnabled(recipientId, NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId())) {
+                    continue;
+                }
+                notificationService.notify(recipientId, operatorId, title, content,
+                        NotificationType.issue_moved, reason,
+                        "issue", issue.getId(), issue.getProjectId());
+            }
+            log.debug("[IssueNotification] 已发送移动通知: issue={}, from={}, to={}, recipients={}",
+                    issue.getIssueKey(), sourceProjectName, targetProjectName, recipientReasons.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送移动通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+        }
+    }
+
+    private String getProjectName(Long projectId) {
+        if (projectId == null) return "未知";
+        try {
+            var project = projectMapper.selectById(projectId);
+            return project != null ? project.getName() : String.valueOf(projectId);
+        } catch (Exception e) {
+            return String.valueOf(projectId);
         }
     }
 

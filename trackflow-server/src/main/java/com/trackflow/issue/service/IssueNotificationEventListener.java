@@ -55,4 +55,10 @@ public class IssueNotificationEventListener {
         if (NotificationContext.isSilent()) return;
         notificationHelper.notifyMentioned(event.issue(), event.commentContent(), event.commenterId());
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleMoved(IssueNotificationEvent.Moved event) {
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyMoved(event.issue(), event.sourceProjectId(), event.targetProjectId(), event.operatorId());
+    }
 }

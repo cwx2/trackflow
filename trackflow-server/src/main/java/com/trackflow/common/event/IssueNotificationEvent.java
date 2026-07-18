@@ -34,4 +34,9 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * 工单 @mention 通知事件
      */
     record Mentioned(Issue issue, String commentContent, Long commenterId) implements IssueNotificationEvent {}
+
+    /**
+     * 工单移动到其他项目通知事件
+     */
+    record Moved(Issue issue, Long sourceProjectId, Long targetProjectId, Long operatorId) implements IssueNotificationEvent {}
 }

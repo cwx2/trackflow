@@ -22,6 +22,8 @@ public enum NotificationType {
     issue_status_changed("工单状态变更"),
     /** 评论中被 @提及 */
     mention("提及"),
+    /** 工单被移动到其他项目 */
+    issue_moved("工单移动"),
 
     // ===== Project 相关 =====
     /** 被添加到项目 */

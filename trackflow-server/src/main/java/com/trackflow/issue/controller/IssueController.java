@@ -538,4 +538,14 @@ public class IssueController {
     public R<List<IssueStatusVO>> listStatuses() {
         return R.ok(issueConverter.toStatusVOList(issueService.listStatuses()));
     }
+
+    // ========== 移动工单 ==========
+
+    @PostMapping("/{id}/move")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:move')")
+    public R<IssueDetailVO> move(@PathVariable("id") Long id,
+                                 @Valid @RequestBody com.trackflow.issue.dto.MoveIssueDTO dto) {
+        Issue moved = issueService.moveToProject(id, dto);
+        return R.ok(issueService.getDetail(moved.getId()));
+    }
 }
