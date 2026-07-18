@@ -300,6 +300,9 @@
         @batch-assign="onBatchAssign"
         @batch-sprint="onBatchSprint"
         @batch-priority="onBatchPriority"
+        @batch-tag-add="onBatchTagAdd"
+        @batch-tag-remove="onBatchTagRemove"
+        @batch-link="onBatchLink"
         @batch-delete="onBatchDelete"
         @batch-export="onBatchExport"
         @open-command="showCommandDialog = true"
@@ -344,11 +347,20 @@
             </template>
           </a-dropdown>
           <ColumnConfigPopover
+            v-if="isTableLayout"
             :standard-columns="standardColumns"
             :custom-field-columns="customFieldColumns"
             :is-visible="isColumnVisible"
             @toggle="toggleColumn"
             @reset="resetColumns"
+          />
+          <ViewSettingsMenu
+            :layout="layout"
+            :density="density"
+            :structure="structure"
+            @update:layout="setLayout"
+            @update:density="setDensity"
+            @update:structure="setStructure"
           />
           <a-dropdown trigger="click" position="br">
             <a-button size="small" type="text" title="预览模式">
@@ -396,8 +408,9 @@
         </div>
       </div>
 
-      <!-- Issue table -->
+      <!-- Issue table (Table layout mode) -->
       <a-table
+        v-if="isTableLayout"
         class="issue-table"
         :data="issues"
         :columns="tableColumns"
@@ -571,6 +584,22 @@
         </template>
       </a-table>
 
+      <!-- Issue list layout (List layout mode) -->
+      <IssueListLayout
+        v-if="isListLayout"
+        :issues="issues"
+        :density="density"
+        :structure="structure"
+        :loading="loading"
+        :sort-state="sortState"
+        :active-issue-id="previewIssueId"
+        :selected-ids="selectedIds"
+        @item-click="onListItemClick"
+        @item-dblclick="onListItemDblClick"
+        @sort-change="onListSortChange"
+        @select="onListItemSelect"
+      />
+
       <!-- Pagination -->
       <div class="pagination-bar" v-if="totalIssues > 0">
         <a-pagination v-model:current="currentPage" :total="totalIssues" :page-size="pageSize" size="small" show-total @change="goPage" />
@@ -609,7 +638,7 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/ty
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap } from '@/utils/fieldLabels'
-import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig } from './composables'
+import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
@@ -617,6 +646,8 @@ import IssuePreviewDrawer from '../board/IssuePreviewDrawer.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import FilterBar from './components/FilterBar.vue'
 import ApplyCommandDialog from './components/ApplyCommandDialog.vue'
+import ViewSettingsMenu from './components/ViewSettingsMenu.vue'
+import IssueListLayout from './components/IssueListLayout.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -633,8 +664,15 @@ const {
 } = useSelection(issues)
 
 const { isCellEditing, executeEdit } = useInlineEdit(issues)
-const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchDelete } = useBatchOps()
+const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchTagAdd, batchTagRemove, batchAddLink, batchDelete } = useBatchOps()
 const { loadPermissions, canEditIssue, canDeleteIssue } = usePermission(issues)
+
+// View settings (layout/density/structure)
+const {
+  layout, density, structure,
+  isTreeMode, isListLayout, isTableLayout,
+  setLayout, setDensity, setStructure
+} = useViewSettings()
 
 // 全局级创建权限：统一使用 authStore.canCreateIssue
 const authStore = useAuthStore()
@@ -1287,6 +1325,40 @@ function onRowDblClick(record: TableData) {
   // Double-click always navigates to full detail page regardless of preview mode
   router.push(`/issues/${record.issueKey}`)
 }
+
+// List layout event handlers
+function onListItemClick(issue: IssueVO) {
+  if (previewMode.value === 'sidebar') {
+    const index = issues.value.findIndex(i => i.id === issue.id)
+    openPreview(issue, index)
+  } else {
+    router.push(`/issues/${issue.issueKey}`)
+  }
+}
+function onListItemDblClick(issue: IssueVO) {
+  router.push(`/issues/${issue.issueKey}`)
+}
+function onListSortChange(field: string) {
+  // 三态切换: null → asc → desc → null (same logic as table)
+  if (sortState.value.field !== field) {
+    sortState.value = { field, direction: 'asc' }
+  } else if (sortState.value.direction === 'asc') {
+    sortState.value = { field, direction: 'desc' }
+  } else {
+    sortState.value = { field: null, direction: null }
+  }
+  currentPage.value = 1
+  refreshList()
+}
+function onListItemSelect(issue: IssueVO) {
+  if (selectedIds.value.has(issue.id)) {
+    selectedIds.value.delete(issue.id)
+  } else {
+    selectedIds.value.add(issue.id)
+  }
+  selectedIds.value = new Set(selectedIds.value)
+}
+
 function onSelectionChange(rowKeys: (string | number)[]) {
   selectedIds.value = new Set(rowKeys.map(String))
 }
@@ -1510,6 +1582,27 @@ async function onBatchPriority(priority: string) {
         updateLocalIssue(issue.id, { priority })
       }
     })
+  }
+  clearSelection()
+}
+async function onBatchTagAdd(tagId: string) {
+  const result = await batchTagAdd(selectedIssues.value, tagId)
+  if (result.succeeded > 0) {
+    refreshList()
+  }
+  clearSelection()
+}
+async function onBatchTagRemove(tagId: string) {
+  const result = await batchTagRemove(selectedIssues.value, tagId)
+  if (result.succeeded > 0) {
+    refreshList()
+  }
+  clearSelection()
+}
+async function onBatchLink(linkType: string, targetIssueId: string) {
+  const result = await batchAddLink(selectedIssues.value, linkType, targetIssueId)
+  if (result.succeeded > 0) {
+    refreshList()
   }
   clearSelection()
 }
