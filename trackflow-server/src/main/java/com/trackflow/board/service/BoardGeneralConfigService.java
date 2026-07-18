@@ -58,10 +58,14 @@ public class BoardGeneralConfigService {
             vo.setName(config.getName());
             vo.setCanViewRoles(parseRoles(config.getCanViewRoles()));
             vo.setCanEditRoles(parseRoles(config.getCanEditRoles()));
+            vo.setFilterMode(config.getFilterMode() != null ? config.getFilterMode() : "all");
+            vo.setDoneRetentionDays(config.getDoneRetentionDays());
         } else {
             vo.setName("");
             vo.setCanViewRoles(DEFAULT_CAN_VIEW_ROLES);
             vo.setCanEditRoles(DEFAULT_CAN_EDIT_ROLES);
+            vo.setFilterMode("all");
+            vo.setDoneRetentionDays(null);
         }
         return vo;
     }
@@ -84,11 +88,15 @@ public class BoardGeneralConfigService {
         String name = dto.getName() != null ? dto.getName().trim() : "";
         String canViewJson = serializeRoles(dto.getCanViewRoles());
         String canEditJson = serializeRoles(dto.getCanEditRoles());
+        String filterMode = dto.getFilterMode() != null ? dto.getFilterMode() : "all";
+        Integer doneRetentionDays = dto.getDoneRetentionDays();
 
         if (existing != null) {
             existing.setName(name);
             existing.setCanViewRoles(canViewJson);
             existing.setCanEditRoles(canEditJson);
+            existing.setFilterMode(filterMode);
+            existing.setDoneRetentionDays(doneRetentionDays);
             existing.setUpdatedAt(now);
             boardGeneralConfigMapper.updateById(existing);
         } else {
@@ -97,6 +105,8 @@ public class BoardGeneralConfigService {
             config.setName(name);
             config.setCanViewRoles(canViewJson);
             config.setCanEditRoles(canEditJson);
+            config.setFilterMode(filterMode);
+            config.setDoneRetentionDays(doneRetentionDays);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardGeneralConfigMapper.insert(config);

@@ -26,6 +26,7 @@ public class IssueVO {
     private LocalDate dueDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime resolvedAt;
     private Integer version;
 
     /** 直接子工单总数 */

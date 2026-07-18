@@ -22,9 +22,13 @@
           :can-view-roles="editableCanViewRoles"
           :can-edit-roles="editableCanEditRoles"
           :project-name="projectName"
+          :filter-mode="editableFilterMode"
+          :done-retention-days="editableDoneRetentionDays"
           @update:name="editableBoardName = $event"
           @update:can-view-roles="editableCanViewRoles = $event"
           @update:can-edit-roles="editableCanEditRoles = $event"
+          @update:filter-mode="editableFilterMode = $event"
+          @update:done-retention-days="editableDoneRetentionDays = $event"
         />
       </a-tab-pane>
 
@@ -199,6 +203,8 @@ const editableColorScheme = ref('none')
 const editableBoardName = ref('')
 const editableCanViewRoles = ref<string[]>(['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer'])
 const editableCanEditRoles = ref<string[]>(['project_admin', 'tech_lead'])
+const editableFilterMode = ref('all')
+const editableDoneRetentionDays = ref<number | null>(null)
 
 // 泳道设置状态
 const editableSwimlaneGroupBy = ref('none')
@@ -283,11 +289,15 @@ watch(() => props.visible, async (newVisible) => {
         editableBoardName.value = res.data.name || ''
         editableCanViewRoles.value = res.data.canViewRoles || ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
         editableCanEditRoles.value = res.data.canEditRoles || ['project_admin', 'tech_lead']
+        editableFilterMode.value = res.data.filterMode || 'all'
+        editableDoneRetentionDays.value = res.data.doneRetentionDays ?? null
       }
     } catch {
       editableBoardName.value = ''
       editableCanViewRoles.value = ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
       editableCanEditRoles.value = ['project_admin', 'tech_lead']
+      editableFilterMode.value = 'all'
+      editableDoneRetentionDays.value = null
     }
   }
 })
@@ -471,7 +481,9 @@ async function handleSave() {
       boardApi.saveGeneralConfig(props.projectId, {
         name: editableBoardName.value.trim(),
         canViewRoles: editableCanViewRoles.value,
-        canEditRoles: editableCanEditRoles.value
+        canEditRoles: editableCanEditRoles.value,
+        filterMode: editableFilterMode.value,
+        doneRetentionDays: editableDoneRetentionDays.value
       })
     ])
 

@@ -102,6 +102,15 @@
             </span>
           </transition>
         </div>
+        <!-- Board Behavior 过滤指示器 -->
+        <div v-if="isBehaviorFilterActive && selectedProject" class="behavior-filter-chips">
+          <span v-if="boardFilterMode === 'active_sprint'" class="behavior-chip">
+            🏃 仅活跃 Sprint
+          </span>
+          <span v-if="boardDoneRetentionDays !== null" class="behavior-chip">
+            ✅ 完成{{ boardDoneRetentionDays }}天内
+          </span>
+        </div>
         <a-tooltip :content="showBacklog ? '收起 Backlog' : '展开 Backlog'">
           <a-button
             size="small"
@@ -736,6 +745,15 @@ const currentProjectName = computed(() => {
   if (!selectedProject.value) return ''
   const p = projects.value.find(proj => proj.id === selectedProject.value)
   return p?.name || ''
+})
+
+// ===== Board Behavior 配置 =====
+const boardFilterMode = ref<'all' | 'active_sprint'>('all')
+const boardDoneRetentionDays = ref<number | null>(null)
+
+/** 当前是否有 Board Behavior 过滤生效 */
+const isBehaviorFilterActive = computed(() => {
+  return boardFilterMode.value !== 'all' || boardDoneRetentionDays.value !== null
 })
 
 // ===== Backlog 面板 =====
@@ -1895,6 +1913,8 @@ function onSettingsSaved() {
   loadCardConfig()
   loadSwimlaneConfig()
   loadColumnMerges()
+  // Reload behavior config and re-filter issues
+  loadBoardBehavior().then(() => loadIssues())
 }
 
 async function loadSprints() {
@@ -1908,13 +1928,28 @@ async function loadSprints() {
   }
 }
 
+/** 加载 Board Behavior 配置（过滤模式 + 完成工单保留天数） */
+async function loadBoardBehavior() {
+  if (!selectedProject.value) return
+  try {
+    const res = await boardApi.getGeneralConfig(selectedProject.value)
+    if (res.data) {
+      boardFilterMode.value = (res.data.filterMode as 'all' | 'active_sprint') || 'all'
+      boardDoneRetentionDays.value = res.data.doneRetentionDays ?? null
+    }
+  } catch {
+    boardFilterMode.value = 'all'
+    boardDoneRetentionDays.value = null
+  }
+}
+
 async function loadBoard() {
   if (!selectedProject.value) { issues.value = []; return }
   expandedEmptyColumns.value.clear()
   loadCollapsedColumnsState()
   loading.value = true
   try {
-    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses()])
+    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior()])
     await loadIssues()
   } catch {
     issues.value = []
@@ -1941,11 +1976,25 @@ async function loadIssues() {
   let allIssues: IssueVO[] = []
   let total = 0
 
+  // Board Behavior: 确定 sprint 过滤参数
+  let effectiveSprintId = selectedSprint.value || undefined
+  if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
+    const activeSprint = sprints.value.find(s => s.status === 'active')
+    effectiveSprintId = activeSprint?.id
+    // 如果没有活跃 Sprint，显示为空（无工单匹配）
+    if (!effectiveSprintId) {
+      issues.value = []
+      boardTotalCount.value = 0
+      boardTruncated.value = false
+      return
+    }
+  }
+
   // 循环加载所有页，直到获取全部工单或达到安全上限
   while (true) {
     const res = await issueApi.list({
       projectId: selectedProject.value,
-      sprintId: selectedSprint.value || undefined,
+      sprintId: effectiveSprintId,
       keyword: keyword.value || undefined,
       page,
       pageSize: PAGE_SIZE
@@ -1959,6 +2008,26 @@ async function loadIssues() {
       break
     }
     page++
+  }
+
+  // Board Behavior: 已完成工单保留天数过滤（客户端过滤）
+  if (boardDoneRetentionDays.value !== null && boardDoneRetentionDays.value > 0) {
+    const retentionMs = boardDoneRetentionDays.value * 24 * 60 * 60 * 1000
+    const cutoffDate = new Date(Date.now() - retentionMs)
+    // 获取所有"已完成"类别的状态 ID
+    const doneStatusIds = new Set(
+      allColumnConfigs.value
+        .filter(c => c.statusCategory === 'done')
+        .map(c => c.statusId)
+    )
+    allIssues = allIssues.filter(issue => {
+      // 非已完成状态的工单不过滤
+      if (!doneStatusIds.has(issue.statusId)) return true
+      // 已完成工单：检查 resolvedAt 或 updatedAt 是否在保留期内
+      const resolvedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : (issue.updatedAt ? new Date(issue.updatedAt) : null)
+      if (!resolvedDate) return true // 没有日期信息保留
+      return resolvedDate >= cutoffDate
+    })
   }
 
   boardTotalCount.value = total
@@ -2150,6 +2219,23 @@ onUnmounted(() => {
   font-size: 11px;
   color: rgb(var(--primary-6));
   background: rgba(var(--primary-6), 0.1);
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* ===== Board Behavior Filter Chips ===== */
+.behavior-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.behavior-chip {
+  font-size: 11px;
+  color: rgb(var(--warning-6));
+  background: rgba(var(--warning-6), 0.1);
   padding: 2px 8px;
   border-radius: 3px;
   white-space: nowrap;

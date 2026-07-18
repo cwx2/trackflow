@@ -178,6 +178,7 @@ export interface IssueVO {
   dueDate?: string
   createdAt: string
   updatedAt: string
+  resolvedAt?: string
   version: number
   /** 直接子工单总数 */
   childCount?: number
@@ -640,6 +641,10 @@ export interface BoardGeneralConfigVO {
   canViewRoles: string[]
   /** 可编辑看板设置的角色代码列表 */
   canEditRoles: string[]
+  /** 看板过滤模式：all | active_sprint */
+  filterMode: 'all' | 'active_sprint'
+  /** 已完成工单保留天数（null 表示不限制） */
+  doneRetentionDays: number | null
 }
 
 // ========== Sprint 完成预览 ==========
