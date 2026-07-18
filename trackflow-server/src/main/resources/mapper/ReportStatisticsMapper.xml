@@ -400,13 +400,12 @@
             u.display_name AS user_name,
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
-        JOIN issue i ON i.id = t.issue_id
         JOIN sys_user u ON u.id = t.user_id
-        WHERE i.deleted_at IS NULL
-          AND t.work_date >= #{startDate}::date
+        WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
           <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
+              AND t.project_id IN
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
         GROUP BY t.user_id, u.display_name
@@ -416,20 +415,19 @@
     <!-- 按项目分组汇总工时 -->
     <select id="selectTimeByProject" resultType="com.trackflow.report.mapper.result.TimeByProjectRow">
         SELECT
-            p.id AS project_id,
+            t.project_id AS project_id,
             p.name AS project_name,
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
-        JOIN issue i ON i.id = t.issue_id
-        JOIN project p ON p.id = i.project_id
-        WHERE i.deleted_at IS NULL
-          AND t.work_date >= #{startDate}::date
+        JOIN project p ON p.id = t.project_id
+        WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
           <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
+              AND t.project_id IN
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
-        GROUP BY p.id, p.name
+        GROUP BY t.project_id, p.name
         ORDER BY total_minutes DESC
     </select>
 
@@ -439,14 +437,13 @@
             COALESCE(wiav.name, '未分类') AS work_type,
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
-        JOIN issue i ON i.id = t.issue_id
         LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
         LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
-        WHERE i.deleted_at IS NULL
-          AND t.work_date >= #{startDate}::date
+        WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
           <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
+              AND t.project_id IN
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
         GROUP BY COALESCE(wiav.name, '未分类')
@@ -459,12 +456,11 @@
             t.work_date::text AS work_date,
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
-        JOIN issue i ON i.id = t.issue_id
-        WHERE i.deleted_at IS NULL
-          AND t.work_date >= #{startDate}::date
+        WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
           <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
+              AND t.project_id IN
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
         GROUP BY t.work_date
@@ -478,14 +474,13 @@
             u.display_name AS user_name,
             COALESCE(SUM(t.duration), 0) AS total_minutes
         FROM time_entry t
-        JOIN issue i ON i.id = t.issue_id
-        JOIN project p ON p.id = i.project_id
+        JOIN project p ON p.id = t.project_id
         JOIN sys_user u ON u.id = t.user_id
-        WHERE i.deleted_at IS NULL
-          AND t.work_date >= #{startDate}::date
+        WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
+          AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
           <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
+              AND t.project_id IN
               <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
           </if>
         GROUP BY p.name, u.display_name
