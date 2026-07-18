@@ -1,6 +1,7 @@
 package com.trackflow.customfield.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -15,6 +16,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,8 @@ public class CustomFieldService {
     private final SysUserMapper userMapper;
     private final IssueActivityMapper activityMapper;
     private final IssueMapper issueMapper;
+    private final ProjectMemberMapper projectMemberMapper;
+    private final PermissionService permissionService;
 
     @Transactional
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
@@ -66,6 +70,7 @@ public class CustomFieldService {
         entity.setRegexp(dto.getRegexp());
         entity.setPosition(position);
         entity.setIsMulti("list".equals(dto.getFieldFormat()) && Boolean.TRUE.equals(dto.getIsMulti()));
+        entity.setIsHiddenInList(Boolean.TRUE.equals(dto.getIsHiddenInList()));
         definitionMapper.insert(entity);
 
         if ("list".equals(dto.getFieldFormat()) && dto.getOptions() != null) {
@@ -133,6 +138,7 @@ public class CustomFieldService {
         if (dto.getIsMulti() != null && "list".equals(entity.getFieldFormat())) {
             entity.setIsMulti(dto.getIsMulti());
         }
+        if (dto.getIsHiddenInList() != null) entity.setIsHiddenInList(dto.getIsHiddenInList());
         definitionMapper.updateById(entity);
 
         if ("list".equals(entity.getFieldFormat()) && dto.getOptions() != null) {
@@ -465,9 +471,10 @@ public class CustomFieldService {
         columns.add(buildStandardColumn("dueDate", "截止日期", true, true));
         columns.add(buildStandardColumn("childProgress", "子任务进度", false, true));
 
-        // 所有自定义字段
+        // 所有自定义字段（排除管理员设为隐藏的）
         List<CustomFieldDefinition> allFields = definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getIsHiddenInList, false)
                         .orderByAsc(CustomFieldDefinition::getPosition));
         for (CustomFieldDefinition field : allFields) {
             AvailableColumnVO col = new AvailableColumnVO();
@@ -501,6 +508,8 @@ public class CustomFieldService {
 
         List<CustomFieldDefinition> fields = listByProject(projectId, null);
         for (CustomFieldDefinition field : fields) {
+            // 跳过管理员设为隐藏的字段
+            if (Boolean.TRUE.equals(field.getIsHiddenInList())) continue;
             AvailableColumnVO col = new AvailableColumnVO();
             col.setKey("cf_" + field.getId());
             col.setLabel(field.getName());
@@ -1774,5 +1783,148 @@ public class CustomFieldService {
             }
         }
         return result;
+    }
+
+    // ===== Group-based Field Visibility (Role-based) =====
+
+    /**
+     * 解析 JSONB 角色 ID 数组 (格式: [2,7] 或 ["2","7"])
+     */
+    public List<Long> parseRoleIds(String json) {
+        if (json == null || json.isBlank()) return null;
+        List<String> raw = parseJsonArray(json);
+        if (raw.isEmpty()) return null;
+        return raw.stream().map(Long::parseLong).toList();
+    }
+
+    /**
+     * 角色 ID 列表转 JSON 数组字符串
+     */
+    private String roleIdsToJson(List<Long> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) return null;
+        return "[" + roleIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "]";
+    }
+
+    /**
+     * 设置字段的可见性和可编辑性角色限制（项目级）
+     */
+    @Transactional
+    public void setFieldVisibility(Long projectId, Long fieldId, List<Long> visibleToRoles, List<Long> updatableByRoles) {
+        // 验证字段存在
+        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+        }
+
+        // 查找或创建项目关联记录
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+
+        if (mapping == null) {
+            // 全局字段可能没有 mapping 记录，为其创建一个
+            if (!Boolean.TRUE.equals(field.getIsForAll())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "字段未附加到此项目");
+            }
+            mapping = new CustomFieldProject();
+            mapping.setCustomFieldId(fieldId);
+            mapping.setProjectId(projectId);
+            mapping.setPosition(0);
+            mapping.setVisibleToRoles(roleIdsToJson(visibleToRoles));
+            mapping.setUpdatableByRoles(roleIdsToJson(updatableByRoles));
+            projectMapper.insert(mapping);
+        } else {
+            mapping.setVisibleToRoles(roleIdsToJson(visibleToRoles));
+            mapping.setUpdatableByRoles(roleIdsToJson(updatableByRoles));
+            projectMapper.updateById(mapping);
+        }
+
+        log.info("Updated field visibility: project={}, field={}, visibleTo={}, updatableBy={}",
+                projectId, fieldId, visibleToRoles, updatableByRoles);
+    }
+
+    /**
+     * 获取当前用户在项目中的角色 ID 列表。
+     * 系统管理员返回 null（表示不受限制）。
+     */
+    public List<Long> getCurrentUserRoleIds(Long projectId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return List.of();
+
+        // 系统管理员不受字段可见性限制
+        if (permissionService.hasGlobalPermission(userId, "system:admin")) {
+            return null; // null 表示"全部可见"
+        }
+
+        return projectMemberMapper.selectRoleIdsByUserAndProject(userId, projectId);
+    }
+
+    /**
+     * 判断用户角色是否满足可见性要求
+     * @param restrictedRoles 限制的角色列表（null=所有人可见）
+     * @param userRoleIds 用户角色列表（null=系统管理员，无限制）
+     */
+    public boolean isVisibleToUser(List<Long> restrictedRoles, List<Long> userRoleIds) {
+        // 系统管理员（userRoleIds == null）始终可见
+        if (userRoleIds == null) return true;
+        // 无限制（restrictedRoles == null 或空）所有人可见
+        if (restrictedRoles == null || restrictedRoles.isEmpty()) return true;
+        // 检查用户角色是否与限制角色有交集
+        for (Long roleId : userRoleIds) {
+            if (restrictedRoles.contains(roleId)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 判断用户角色是否满足编辑权限要求
+     */
+    public boolean isUpdatableByUser(List<Long> updatableRoles, List<Long> userRoleIds) {
+        return isVisibleToUser(updatableRoles, userRoleIds);
+    }
+
+    /**
+     * 检查当前用户是否有权编辑指定字段。
+     * 如果不可编辑，抛出 403 异常。
+     */
+    public void checkFieldEditable(Long projectId, Long fieldId) {
+        List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
+        if (userRoleIds == null) return; // 系统管理员
+
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        if (mapping == null) return; // 无限制
+
+        List<Long> updatableRoles = parseRoleIds(mapping.getUpdatableByRoles());
+        if (!isUpdatableByUser(updatableRoles, userRoleIds)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "您没有编辑此字段的权限");
+        }
+    }
+
+    /**
+     * 根据用户角色过滤字段列表（移除不可见字段），并计算 editable 标记。
+     * 返回可见字段及其 mapping 信息。
+     */
+    public List<CustomFieldDefinition> filterFieldsByVisibility(
+            List<CustomFieldDefinition> fields,
+            Map<Long, CustomFieldProject> conditionsMap,
+            List<Long> userRoleIds) {
+        if (userRoleIds == null) {
+            // 系统管理员：不过滤
+            return fields;
+        }
+
+        List<CustomFieldDefinition> visible = new ArrayList<>();
+        for (CustomFieldDefinition field : fields) {
+            CustomFieldProject mapping = conditionsMap.get(field.getId());
+            List<Long> visibleRoles = mapping != null ? parseRoleIds(mapping.getVisibleToRoles()) : null;
+            if (isVisibleToUser(visibleRoles, userRoleIds)) {
+                visible.add(field);
+            }
+        }
+        return visible;
     }
 }

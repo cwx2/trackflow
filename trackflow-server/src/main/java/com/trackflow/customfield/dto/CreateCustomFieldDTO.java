@@ -26,6 +26,9 @@ public class CreateCustomFieldDTO {
     /** 列表类型是否支持多值选择（仅 list 类型有效） */
     private Boolean isMulti = false;
 
+    /** 是否在工单列表的默认列选择器中隐藏 */
+    private Boolean isHiddenInList = false;
+
     /** list 类型的选项值列表 */
     private List<OptionItem> options;
 

@@ -19,6 +19,7 @@ export const customFieldApi = {
     isRequired?: boolean
     isForAll?: boolean
     isMulti?: boolean
+    isHiddenInList?: boolean
     defaultValue?: string
     minLength?: number
     maxLength?: number
@@ -36,6 +37,7 @@ export const customFieldApi = {
     isRequired?: boolean
     isForAll?: boolean
     isMulti?: boolean
+    isHiddenInList?: boolean
     defaultValue?: string
     minLength?: number
     maxLength?: number
@@ -119,5 +121,15 @@ export const customFieldApi = {
   /** 清除项目中字段被条件隐藏的 issue 值 */
   clearHiddenValues(projectId: string, fieldId: string) {
     return request.post<any, R<number>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/clear-hidden-values`)
+  },
+
+  // ========== 字段可见性/可编辑性 ==========
+
+  /** 设置字段的可见性和编辑权限（项目级，基于角色） */
+  setFieldVisibility(projectId: string, fieldId: string, data: {
+    visibleToRoles: number[] | null
+    updatableByRoles: number[] | null
+  }) {
+    return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/visibility`, data)
   }
 }

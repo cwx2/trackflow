@@ -47,6 +47,12 @@
               <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
             </template>
           </a-table-column>
+          <a-table-column title="列表可见" :width="80" align="center">
+            <template #cell="{ record }">
+              <icon-eye v-if="!record.isHiddenInList" style="color: var(--tf-success)" />
+              <icon-eye-invisible v-else style="color: var(--tf-text-quaternary)" />
+            </template>
+          </a-table-column>
           <a-table-column title="操作" :width="120" align="center">
             <template #cell="{ record }">
               <a-button type="text" size="mini" @click="openEdit(record)">编辑</a-button>
@@ -85,6 +91,11 @@
         <a-form-item label="全局可用">
           <a-switch v-model="form.isForAll" />
           <div class="form-help">开启后所有项目均可使用此字段</div>
+        </a-form-item>
+
+        <a-form-item label="隐藏于工单列表">
+          <a-switch v-model="form.isHiddenInList" />
+          <div class="form-help">开启后，此字段默认不出现在工单列表的列选择器中（用户仍可通过个人设置手动添加）</div>
         </a-form-item>
 
         <a-form-item label="默认值">
@@ -181,7 +192,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { IconPlus, IconDelete, IconCheck } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO } from '@/api/types'
@@ -204,6 +215,7 @@ const form = reactive({
   isRequired: false,
   isForAll: false,
   isMulti: false,
+  isHiddenInList: false,
   defaultValue: '',
   minLength: 0,
   maxLength: 0,
@@ -286,6 +298,7 @@ function resetForm() {
   form.isRequired = false
   form.isForAll = false
   form.isMulti = false
+  form.isHiddenInList = false
   form.defaultValue = ''
   form.minLength = 0
   form.maxLength = 0
@@ -308,6 +321,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.isRequired = record.isRequired
   form.isForAll = record.isForAll
   form.isMulti = record.isMulti || false
+  form.isHiddenInList = record.isHiddenInList || false
   form.defaultValue = record.defaultValue || ''
   form.minLength = record.minLength
   form.maxLength = record.maxLength
@@ -337,6 +351,7 @@ async function handleSave() {
         name: form.name,
         isRequired: form.isRequired,
         isForAll: form.isForAll,
+        isHiddenInList: form.isHiddenInList,
         defaultValue: form.defaultValue || undefined,
         minLength: form.minLength,
         maxLength: form.maxLength,
@@ -355,6 +370,7 @@ async function handleSave() {
         fieldFormat: form.fieldFormat,
         isRequired: form.isRequired,
         isForAll: form.isForAll,
+        isHiddenInList: form.isHiddenInList,
         defaultValue: form.defaultValue || undefined,
         minLength: form.minLength,
         maxLength: form.maxLength,

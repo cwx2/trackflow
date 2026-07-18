@@ -441,6 +441,8 @@ export interface CustomFieldDefinitionVO {
   isRequired: boolean
   isForAll: boolean
   isMulti: boolean
+  /** 是否在工单列表的默认列选择器中隐藏 */
+  isHiddenInList: boolean
   defaultValue?: string
   minLength: number
   maxLength: number
@@ -455,6 +457,12 @@ export interface CustomFieldDefinitionVO {
   conditionFieldId?: string | null
   /** 触发显示的选项 ID 列表 */
   conditionValues?: string[] | null
+  /** 可以查看此字段的角色 ID 列表（null = 所有人可见） */
+  visibleToRoles?: number[] | null
+  /** 可以编辑此字段的角色 ID 列表（null = 所有可见用户可编辑） */
+  updatableByRoles?: number[] | null
+  /** 当前用户是否可编辑此字段（后端根据角色计算） */
+  editable?: boolean
 }
 
 export interface CustomFieldOptionVO {

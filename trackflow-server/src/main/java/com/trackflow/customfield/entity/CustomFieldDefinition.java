@@ -39,4 +39,7 @@ public class CustomFieldDefinition extends BaseEntity {
 
     /** 列表类型是否支持多值选择（仅 list 类型有效） */
     private Boolean isMulti;
+
+    /** 是否在工单列表的默认可选列中隐藏（管理员控制默认可见性） */
+    private Boolean isHiddenInList;
 }

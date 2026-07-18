@@ -14,6 +14,7 @@ import java.util.List;
 public interface CustomFieldConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
+    @Mapping(target = "isHiddenInList", source = "isHiddenInList")
     @Mapping(target = "options", ignore = true)
     @Mapping(target = "projectIds", ignore = true)
     @Mapping(target = "issueTypes", ignore = true)
