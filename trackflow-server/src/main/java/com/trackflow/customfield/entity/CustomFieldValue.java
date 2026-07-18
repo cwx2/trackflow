@@ -25,6 +25,9 @@ public class CustomFieldValue implements Serializable {
     /** 所有类型统一存为 TEXT */
     private String value;
 
+    /** 冗余标记：是否为多值字段的行（用于条件唯一索引） */
+    private Boolean isMulti;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

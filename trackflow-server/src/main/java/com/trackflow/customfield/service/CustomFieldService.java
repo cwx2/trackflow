@@ -655,6 +655,7 @@ public class CustomFieldService {
                     cfv.setIssueId(issueId);
                     cfv.setCustomFieldId(entry.getKey());
                     cfv.setValue(singleValue);
+                    cfv.setIsMulti(true);
                     cfv.setCreatedAt(now);
                     cfv.setUpdatedAt(now);
                     valueMapper.insert(cfv);
@@ -667,7 +668,9 @@ public class CustomFieldService {
                     recordCustomFieldActivity(issueId, field.getName(), displayOld, displayNew);
                 }
             } else {
-                // 单值字段：原有逻辑
+                // 单值字段：使用 advisory lock 防止并发产生重复记录
+                valueMapper.acquireSingleValueLock(issueId, entry.getKey());
+
                 CustomFieldValue existing = valueMapper.selectOne(
                         new LambdaQueryWrapper<CustomFieldValue>()
                                 .eq(CustomFieldValue::getIssueId, issueId)
@@ -685,6 +688,7 @@ public class CustomFieldService {
                     cfv.setIssueId(issueId);
                     cfv.setCustomFieldId(entry.getKey());
                     cfv.setValue(newValue);
+                    cfv.setIsMulti(false);
                     cfv.setCreatedAt(LocalDateTime.now());
                     cfv.setUpdatedAt(LocalDateTime.now());
                     valueMapper.insert(cfv);
@@ -1231,6 +1235,7 @@ public class CustomFieldService {
                 cfv.setIssueId(issueId);
                 cfv.setCustomFieldId(customFieldId);
                 cfv.setValue(singleValue);
+                cfv.setIsMulti(true);
                 cfv.setCreatedAt(now);
                 cfv.setUpdatedAt(now);
                 valueMapper.insert(cfv);
@@ -1243,7 +1248,9 @@ public class CustomFieldService {
                 recordCustomFieldActivity(issueId, field.getName(), displayOld, displayNew);
             }
         } else {
-            // 单值字段：原有逻辑
+            // 单值字段：使用 advisory lock 防止并发产生重复记录
+            valueMapper.acquireSingleValueLock(issueId, customFieldId);
+
             CustomFieldValue existing = valueMapper.selectOne(
                     new LambdaQueryWrapper<CustomFieldValue>()
                             .eq(CustomFieldValue::getIssueId, issueId)
@@ -1267,6 +1274,7 @@ public class CustomFieldService {
                 cfv.setIssueId(issueId);
                 cfv.setCustomFieldId(customFieldId);
                 cfv.setValue(value);
+                cfv.setIsMulti(false);
                 cfv.setCreatedAt(LocalDateTime.now());
                 cfv.setUpdatedAt(LocalDateTime.now());
                 valueMapper.insert(cfv);
