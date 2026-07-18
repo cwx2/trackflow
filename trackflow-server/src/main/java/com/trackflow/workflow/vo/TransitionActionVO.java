@@ -22,6 +22,8 @@ public class TransitionActionVO {
     private Map<String, Object> actionConfig;
     private Integer sortOrder;
     private Boolean enabled;
+    /** 该动作绑定的转换路径在当前工作流中是否有效（true=路径存在, false=路径已被删除） */
+    private Boolean pathValid;
     private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

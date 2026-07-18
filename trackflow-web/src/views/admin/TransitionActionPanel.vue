@@ -20,14 +20,19 @@
           v-for="action in actions"
           :key="action.id"
           class="action-item"
+          :class="{ 'path-invalid': action.pathValid === false }"
         >
           <div class="action-main">
             <div class="action-header">
               <a-tag color="arcoblue" size="small">{{ actionTypeLabel(action.actionType) }}</a-tag>
               <span class="strategy-desc">{{ strategyDescription(action.actionConfig) }}</span>
+              <a-tooltip v-if="action.pathValid === false" content="该动作绑定的转换路径已被删除，动作不会触发">
+                <icon-exclamation-circle-fill class="path-warning-icon" />
+              </a-tooltip>
             </div>
             <div class="action-meta">
               <span class="sort-order">排序: {{ action.sortOrder }}</span>
+              <span v-if="action.pathValid === false" class="path-invalid-label">路径已禁用</span>
               <span v-if="action.actionConfig.fallback_strategy" class="fallback-info">
                 回退: {{ strategyLabel(action.actionConfig.fallback_strategy) }}
               </span>
@@ -90,7 +95,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconPlus, IconThunderbolt } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconThunderbolt, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { transitionActionApi } from '@/api'
 import type { TransitionActionVO } from '@/api/transitionAction'
 import TransitionActionForm from './TransitionActionForm.vue'
@@ -256,6 +261,22 @@ function strategyDescription(config: TransitionActionVO['actionConfig']): string
 
 .action-item:hover {
   background: var(--bg-tertiary, var(--color-fill-3));
+}
+
+.action-item.path-invalid {
+  border-left: 3px solid var(--color-warning-6, #ff7d00);
+  opacity: 0.75;
+}
+
+.path-warning-icon {
+  color: var(--color-warning-6, #ff7d00);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.path-invalid-label {
+  color: var(--color-warning-6, #ff7d00);
+  font-weight: 500;
 }
 
 .action-main {

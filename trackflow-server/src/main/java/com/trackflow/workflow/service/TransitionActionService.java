@@ -10,7 +10,9 @@ import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.dto.CreateTransitionActionDTO;
 import com.trackflow.workflow.dto.UpdateTransitionActionDTO;
 import com.trackflow.workflow.entity.TransitionAction;
+import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.mapper.TransitionActionMapper;
+import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 转换动作管理服务 —— 提供 CRUD 操作
@@ -40,6 +43,7 @@ public class TransitionActionService {
     private final TransitionActionMapper transitionActionMapper;
     private final ActionConfigValidator actionConfigValidator;
     private final IssueStatusMapper issueStatusMapper;
+    private final WorkflowTransitionMapper workflowTransitionMapper;
     private final ObjectMapper objectMapper;
 
     /**
@@ -267,5 +271,30 @@ public class TransitionActionService {
                     String.format("不支持的动作类型: %s，当前支持: %s",
                             actionType, String.join(", ", VALID_ACTION_TYPES)));
         }
+    }
+
+    /**
+     * 获取指定项目下所有有效的转换路径集合。
+     * <p>
+     * 返回格式为 "oldStatusId->newStatusId" 的字符串集合。
+     * 查询所有角色、所有类型、所有模式的转换规则的并集。
+     *
+     * @param projectId 项目 ID（null 表示全局）
+     * @return 有效转换路径的 Set
+     */
+    public Set<String> getValidTransitionPaths(Long projectId) {
+        LambdaQueryWrapper<WorkflowTransition> wrapper = new LambdaQueryWrapper<>();
+        if (projectId != null) {
+            // 查询项目级和全局的转换规则（项目级动作可能引用全局工作流路径）
+            wrapper.and(w -> w.eq(WorkflowTransition::getProjectId, projectId)
+                    .or().isNull(WorkflowTransition::getProjectId));
+        } else {
+            wrapper.isNull(WorkflowTransition::getProjectId);
+        }
+
+        List<WorkflowTransition> transitions = workflowTransitionMapper.selectList(wrapper);
+        return transitions.stream()
+                .map(t -> t.getOldStatusId() + "->" + t.getNewStatusId())
+                .collect(Collectors.toSet());
     }
 }

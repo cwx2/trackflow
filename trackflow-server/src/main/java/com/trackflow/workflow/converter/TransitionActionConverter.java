@@ -29,6 +29,7 @@ public abstract class TransitionActionConverter implements BaseConverter {
     @Mapping(target = "actionConfig", expression = "java(parseActionConfig(entity.getActionConfig()))")
     @Mapping(target = "oldStatusName", ignore = true)
     @Mapping(target = "newStatusName", ignore = true)
+    @Mapping(target = "pathValid", ignore = true)
     public abstract TransitionActionVO toVO(TransitionAction entity);
 
     public abstract List<TransitionActionVO> toVOList(List<TransitionAction> entities);

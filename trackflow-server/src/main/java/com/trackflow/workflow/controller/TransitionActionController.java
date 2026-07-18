@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 转换动作管理 REST API
@@ -38,9 +39,24 @@ public class TransitionActionController {
             @RequestParam(value = "oldStatusId", required = false) Long oldStatusId,
             @RequestParam(value = "newStatusId", required = false) Long newStatusId) {
 
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         List<TransitionAction> actions = transitionActionService.list(
-                WorkflowScope.fromApi(projectId), issueType, oldStatusId, newStatusId);
-        return R.ok(transitionActionConverter.toVOList(actions));
+                effectiveProjectId, issueType, oldStatusId, newStatusId);
+        List<TransitionActionVO> voList = transitionActionConverter.toVOList(actions);
+
+        // 查询当前有效的转换路径集合，标记每个动作的路径是否有效
+        Set<String> validPaths = transitionActionService.getValidTransitionPaths(effectiveProjectId);
+        for (TransitionActionVO vo : voList) {
+            if (vo.getOldStatusId() == null) {
+                // on-create 动作（old_status_id IS NULL）始终有效
+                vo.setPathValid(true);
+            } else {
+                String pathKey = vo.getOldStatusId() + "->" + vo.getNewStatusId();
+                vo.setPathValid(validPaths.contains(pathKey));
+            }
+        }
+
+        return R.ok(voList);
     }
 
     /**

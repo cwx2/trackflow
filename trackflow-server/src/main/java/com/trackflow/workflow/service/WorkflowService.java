@@ -25,6 +25,8 @@ import com.trackflow.workflow.entity.WorkflowVersion;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import com.trackflow.workflow.mapper.WorkflowVersionMapper;
+import com.trackflow.workflow.mapper.TransitionActionMapper;
+import com.trackflow.workflow.entity.TransitionAction;
 import com.trackflow.workflow.vo.WorkflowMatrixVO;
 import com.trackflow.workflow.vo.WorkflowTransitionVO;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +59,7 @@ public class WorkflowService {
     private final RoleConverter roleConverter;
     private final PermissionService permissionService;
     private final ObjectMapper objectMapper;
+    private final TransitionActionMapper transitionActionMapper;
 
     /**
      * 不再使用 ownership 限制。
@@ -318,6 +321,9 @@ public class WorkflowService {
         // 计算 diff 并记录审计日志
         recordDetailedActivity(projectId, issueType, roleId, effectiveAuthor, effectiveAssignee,
                 oldTransitions, transitions);
+
+        // 计算被删除的转换路径，自动禁用引用这些路径的 TransitionAction
+        disableOrphanedActions(projectId, oldTransitions, transitions);
     }
 
     /**
@@ -631,6 +637,108 @@ public class WorkflowService {
         } catch (Exception e) {
             // 审计日志写入失败不应中断主流程
             log.warn("Failed to record workflow activity: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 禁用引用已删除转换路径的 TransitionAction。
+     * <p>
+     * 当工作流矩阵更新后，被移除的路径上如果存在已启用的自动化动作，
+     * 且该路径在当前项目的所有角色/类型/模式组合中都不存在了，
+     * 会自动将其 enabled 设为 false，避免"死配置"或恢复路径时"复活"过时配置。
+     *
+     * @param projectId      项目 ID
+     * @param oldTransitions 更新前的转换规则列表
+     * @param newTransitions 更新后的转换规则列表
+     */
+    private void disableOrphanedActions(Long projectId,
+                                        List<WorkflowTransition> oldTransitions,
+                                        List<WorkflowTransition> newTransitions) {
+        // 计算本次更新中被移除的转换路径
+        Set<String> oldKeys = oldTransitions.stream()
+                .map(t -> t.getOldStatusId() + "->" + t.getNewStatusId())
+                .collect(Collectors.toSet());
+        Set<String> newKeys = newTransitions.stream()
+                .map(t -> t.getOldStatusId() + "->" + t.getNewStatusId())
+                .collect(Collectors.toSet());
+
+        Set<String> removedKeys = new HashSet<>(oldKeys);
+        removedKeys.removeAll(newKeys);
+
+        if (removedKeys.isEmpty()) {
+            return;
+        }
+
+        // 查询该项目下所有仍有效的转换路径（跨所有角色/类型/模式）
+        // 项目级动作也依赖全局路径，所以查询包含项目级 + 全局
+        LambdaQueryWrapper<WorkflowTransition> allPathsWrapper = new LambdaQueryWrapper<>();
+        if (projectId != null) {
+            allPathsWrapper.and(w -> w.eq(WorkflowTransition::getProjectId, projectId)
+                    .or().isNull(WorkflowTransition::getProjectId));
+        } else {
+            allPathsWrapper.isNull(WorkflowTransition::getProjectId);
+        }
+        List<WorkflowTransition> allRemainingTransitions = transitionMapper.selectList(allPathsWrapper);
+        Set<String> allValidPaths = allRemainingTransitions.stream()
+                .map(t -> t.getOldStatusId() + "->" + t.getNewStatusId())
+                .collect(Collectors.toSet());
+
+        // 获取状态名称映射（用于审计日志）
+        Map<Long, String> statusNameMap = getStatusNameMap();
+        List<String> disabledSummaries = new java.util.ArrayList<>();
+
+        // 对每个被本次更新移除的路径，检查是否在其他角色/类型/模式中仍存在
+        for (String removedPath : removedKeys) {
+            if (allValidPaths.contains(removedPath)) {
+                // 路径在其他角色/类型中仍有效，不禁用动作
+                continue;
+            }
+
+            String[] parts = removedPath.split("->");
+            Long fromId = Long.valueOf(parts[0]);
+            Long toId = Long.valueOf(parts[1]);
+
+            LambdaQueryWrapper<TransitionAction> wrapper = new LambdaQueryWrapper<>();
+            if (projectId != null) {
+                wrapper.eq(TransitionAction::getProjectId, projectId);
+            } else {
+                wrapper.isNull(TransitionAction::getProjectId);
+            }
+            wrapper.eq(TransitionAction::getOldStatusId, fromId);
+            wrapper.eq(TransitionAction::getNewStatusId, toId);
+            wrapper.eq(TransitionAction::getEnabled, true);
+
+            List<TransitionAction> orphanedActions = transitionActionMapper.selectList(wrapper);
+
+            for (TransitionAction action : orphanedActions) {
+                action.setEnabled(false);
+                action.setUpdatedAt(LocalDateTime.now());
+                transitionActionMapper.updateById(action);
+
+                String fromName = statusNameMap.getOrDefault(fromId, String.valueOf(fromId));
+                String toName = statusNameMap.getOrDefault(toId, String.valueOf(toId));
+                disabledSummaries.add(String.format("%s→%s (action_id=%d, type=%s)",
+                        fromName, toName, action.getId(), action.getActionType()));
+                log.info("[Workflow] 自动禁用孤立动作: action_id={}, 因转换路径 {}→{} 在所有角色/类型中均已被删除",
+                        action.getId(), fromId, toId);
+            }
+        }
+
+        // 记录审计日志（如果有动作被禁用）
+        if (!disabledSummaries.isEmpty()) {
+            try {
+                Long userId = SecurityUtils.getCurrentUserId();
+                WorkflowActivity activity = new WorkflowActivity();
+                activity.setProjectId(projectId);
+                activity.setUserId(userId);
+                activity.setAction("actions_auto_disabled");
+                activity.setSummary("因转换路径删除，自动禁用 " + disabledSummaries.size() + " 个动作: "
+                        + String.join("; ", disabledSummaries));
+                activity.setCreatedAt(LocalDateTime.now());
+                activityMapper.insert(activity);
+            } catch (Exception e) {
+                log.warn("Failed to record action auto-disable activity: {}", e.getMessage());
+            }
         }
     }
 

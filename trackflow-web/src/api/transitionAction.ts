@@ -19,6 +19,8 @@ export interface TransitionActionVO {
   }
   sortOrder: number
   enabled: boolean
+  /** 该动作绑定的转换路径在当前工作流中是否有效 */
+  pathValid?: boolean
   createdBy?: string
   createdAt?: string
   updatedAt?: string
