@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 转换动作管理服务 —— 提供 CRUD 操作
@@ -25,6 +26,15 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class TransitionActionService {
+
+    /**
+     * 支持的动作类型白名单。
+     * 未来新增动作类型时在此扩展，并同步更新：
+     * 1. TransitionActionEngine 中的处理逻辑
+     * 2. 数据库 CHECK 约束（新增 Flyway 迁移）
+     * 3. 前端 TransitionActionForm.vue 中的下拉选项
+     */
+    private static final Set<String> VALID_ACTION_TYPES = Set.of("auto_assign");
 
     private final TransitionActionMapper transitionActionMapper;
     private final ActionConfigValidator actionConfigValidator;
@@ -63,10 +73,21 @@ public class TransitionActionService {
      * 创建转换动作
      */
     public TransitionAction create(CreateTransitionActionDTO dto, Long currentUserId) {
-        // 校验 actionConfig
+        // 校验 actionType 合法性
+        validateActionType(dto.getActionType());
+
+        // 校验 actionConfig 结构
         List<String> errors = actionConfigValidator.validate(dto.getActionConfig());
         if (!errors.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", errors));
+        }
+
+        // 校验 actionConfig 中引用实体的存在性（用户/角色）
+        Long effectiveProjectId = (dto.getProjectId() == 0L) ? null : dto.getProjectId();
+        List<String> entityErrors = actionConfigValidator.validateEntityExistence(
+                dto.getActionConfig(), effectiveProjectId);
+        if (!entityErrors.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", entityErrors));
         }
 
         // 校验状态 ID 存在（oldStatusId 为 null 时表示"创建时触发"，无需校验）
@@ -78,7 +99,6 @@ public class TransitionActionService {
         }
 
         // 唯一性校验：同一转换路径上不允许存在相同 action_type 的动作
-        Long effectiveProjectId = (dto.getProjectId() == 0L) ? null : dto.getProjectId();
         checkDuplicateAction(effectiveProjectId, dto.getIssueType(),
                 dto.getOldStatusId(), dto.getNewStatusId(), dto.getActionType(), null);
 
@@ -115,10 +135,19 @@ public class TransitionActionService {
             if (!errors.isEmpty()) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", errors));
             }
+            // 校验引用实体存在性
+            Long projectId = action.getProjectId();
+            List<String> entityErrors = actionConfigValidator.validateEntityExistence(
+                    dto.getActionConfig(), projectId);
+            if (!entityErrors.isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", entityErrors));
+            }
             action.setActionConfig(serializeConfig(dto.getActionConfig()));
         }
 
         if (dto.getActionType() != null) {
+            // 校验 actionType 合法性
+            validateActionType(dto.getActionType());
             // 如果 actionType 发生变化，需检查唯一性
             if (!dto.getActionType().equals(action.getActionType())) {
                 checkDuplicateAction(action.getProjectId(), action.getIssueType(),
@@ -219,6 +248,18 @@ public class TransitionActionService {
         if (transitionActionMapper.selectCount(wrapper) > 0) {
             throw new BusinessException(ErrorCode.CONFLICT,
                     "该转换路径已存在相同类型的自动化动作，不允许重复创建");
+        }
+    }
+
+    /**
+     * 校验 actionType 是否属于支持的白名单。
+     * 非法值抛出 BusinessException。
+     */
+    private void validateActionType(String actionType) {
+        if (!VALID_ACTION_TYPES.contains(actionType)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    String.format("不支持的动作类型: %s，当前支持: %s",
+                            actionType, String.join(", ", VALID_ACTION_TYPES)));
         }
     }
 }
