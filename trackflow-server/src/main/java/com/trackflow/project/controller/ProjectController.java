@@ -11,11 +11,13 @@ import com.trackflow.issue.dto.CreateTagDTO;
 import com.trackflow.issue.entity.IssueTag;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.vo.IssueTagVO;
+import com.trackflow.auth.security.TrackFlowPermissionEvaluator;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.*;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectActivity;
 import com.trackflow.project.service.ProjectActivityService;
+import com.trackflow.project.service.ProjectCopyService;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.project.vo.ProjectActivityVO;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
@@ -37,16 +39,35 @@ import java.util.Map;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ProjectCopyService projectCopyService;
     private final ProjectConverter projectConverter;
     private final IssueTagService tagService;
     private final IssueConverter issueConverter;
     private final ProjectActivityService projectActivityService;
+    private final TrackFlowPermissionEvaluator permissionEvaluator;
 
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('project:create')")
     public R<ProjectVO> create(@Valid @RequestBody CreateProjectDTO dto) {
         Project project = projectService.create(dto);
         return R.ok(projectConverter.toVO(project));
+    }
+
+    @PostMapping("/copy")
+    @PreAuthorize("@perm.checkGlobal('project:create')")
+    public R<ProjectVO> copyProject(@Valid @RequestBody CopyProjectDTO dto) {
+        // 额外验证：需要源项目的 view 权限
+        if (!permissionEvaluator.check(dto.getSourceProjectId(), "project:view")) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问源项目");
+        }
+        Project project = projectCopyService.copyProject(dto);
+        return R.ok(projectConverter.toVO(project));
+    }
+
+    @GetMapping("/{id}/copy-summary")
+    @PreAuthorize("@perm.check(#id, 'project:view')")
+    public R<Map<String, Integer>> getCopySummary(@PathVariable("id") Long id) {
+        return R.ok(projectCopyService.getSourceProjectSummary(id));
     }
 
     @GetMapping

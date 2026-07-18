@@ -117,5 +117,15 @@ export const projectApi = {
   /** 更新项目时间追踪设置 */
   updateTimeTrackingSettings(projectId: string, data: { enabled: boolean }) {
     return request.put<any, R<{ enabled: boolean }>>(`/projects/${projectId}/time-tracking-settings`, data)
+  },
+
+  /** 获取项目可复制模块的概要统计 */
+  getCopySummary(projectId: string) {
+    return request.get<any, R<Record<string, number>>>(`/projects/${projectId}/copy-summary`)
+  },
+
+  /** 复制项目 */
+  copy(data: { sourceProjectId: string; name: string; key: string; description?: string; copyOptions?: string[] }) {
+    return request.post<any, R<ProjectVO>>('/projects/copy', data)
   }
 }

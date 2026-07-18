@@ -66,6 +66,7 @@
               <template #content>
                 <a-doption @click="editProject(project)">编辑</a-doption>
                 <a-doption @click="manageMembers(project)">成员管理</a-doption>
+                <a-doption v-if="canCreateProject" @click="openCopyDialog(project)">复制项目</a-doption>
                 <a-doption class="danger-option" @click="archiveProject(project)">归档</a-doption>
                 <a-doption v-if="canDeleteProject(project)" class="danger-option" @click="confirmDeleteProject(project)">删除项目</a-doption>
               </template>
@@ -399,6 +400,85 @@
           <a-input v-model="deleteConfirmKey" placeholder="输入项目标识确认" />
         </div>
       </div>
+    </a-modal>
+
+    <!-- 复制项目弹窗 -->
+    <a-modal
+      v-model:visible="showCopyDialog"
+      title="复制项目"
+      :width="520"
+      :ok-text="'复制项目'"
+      :cancel-text="'取消'"
+      :ok-loading="copying"
+      :ok-button-props="{ disabled: !copyForm.name || !copyForm.key }"
+      @before-ok="handleCopyBeforeOk"
+      @close="resetCopyForm"
+    >
+      <!-- 源项目信息 -->
+      <div class="copy-source-info" v-if="copySourceProject">
+        <div class="copy-source-header">
+          <div class="project-icon" :style="{ background: getProjectColor(copySourceProject), width: '28px', height: '28px' }">
+            <span class="icon-text" style="font-size: 9px">{{ getProjectAbbr(copySourceProject) }}</span>
+          </div>
+          <div class="copy-source-detail">
+            <span class="copy-source-name">{{ copySourceProject.name }}</span>
+            <span class="copy-source-key">{{ copySourceProject.key }}</span>
+          </div>
+        </div>
+      </div>
+
+      <a-form :model="copyForm" layout="vertical" style="margin-top: 16px">
+        <a-form-item label="新项目名称" required :validate-status="copyNameError ? 'error' : undefined" :help="copyNameError">
+          <a-input v-model="copyForm.name" placeholder="例如：后端开发 (副本)" @input="copyNameError = ''" />
+        </a-form-item>
+        <a-form-item label="项目标识" required :validate-status="copyKeyError ? 'error' : undefined" :help="copyKeyError" :extra="copyKeyError ? undefined : '用于生成工单编号，如 BE-1, BE-2...'">
+          <a-input
+            v-model="copyForm.key"
+            placeholder="例如：BE2（大写英文缩写）"
+            :max-length="10"
+            @input="handleCopyKeyInput"
+          />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea
+            v-model="copyForm.description"
+            placeholder="可选，新项目的描述"
+            :auto-size="{ minRows: 2, maxRows: 4 }"
+          />
+        </a-form-item>
+        <a-form-item label="复制内容">
+          <div class="copy-options-list">
+            <a-checkbox v-model="copyForm.options.workflow">
+              <span class="copy-option-text">工作流规则</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.workflow || 0 }} 条</span>
+            </a-checkbox>
+            <a-checkbox v-model="copyForm.options.tags">
+              <span class="copy-option-text">标签</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.tags || 0 }} 个</span>
+            </a-checkbox>
+            <a-checkbox v-model="copyForm.options.custom_fields">
+              <span class="copy-option-text">自定义字段绑定</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.custom_fields || 0 }} 个</span>
+            </a-checkbox>
+            <a-checkbox v-model="copyForm.options.board">
+              <span class="copy-option-text">看板配置</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.board || 0 }} 列</span>
+            </a-checkbox>
+            <a-checkbox v-model="copyForm.options.actions">
+              <span class="copy-option-text">转换动作</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.actions || 0 }} 个</span>
+            </a-checkbox>
+            <a-checkbox v-model="copyForm.options.members">
+              <span class="copy-option-text">项目成员</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.members || 0 }} 人</span>
+            </a-checkbox>
+            <a-checkbox v-model="copyForm.options.queries">
+              <span class="copy-option-text">共享查询</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.queries || 0 }} 个</span>
+            </a-checkbox>
+          </div>
+        </a-form-item>
+      </a-form>
     </a-modal>
   </div>
 </template>
@@ -1038,6 +1118,117 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString('zh-CN')
 }
 
+// ========== 复制项目 ==========
+const showCopyDialog = ref(false)
+const copying = ref(false)
+const copySourceProject = ref<any>(null)
+const copySummary = ref<Record<string, number> | null>(null)
+const copyNameError = ref('')
+const copyKeyError = ref('')
+const copyForm = reactive({
+  name: '',
+  key: '',
+  description: '',
+  options: {
+    workflow: true,
+    tags: true,
+    custom_fields: true,
+    board: true,
+    actions: true,
+    members: false,
+    queries: false
+  }
+})
+
+function openCopyDialog(project: any) {
+  copySourceProject.value = project
+  copyForm.name = project.name + ' (副本)'
+  copyForm.key = ''
+  copyForm.description = project.description || ''
+  copyForm.options = {
+    workflow: true,
+    tags: true,
+    custom_fields: true,
+    board: true,
+    actions: true,
+    members: false,
+    queries: false
+  }
+  copyNameError.value = ''
+  copyKeyError.value = ''
+  copySummary.value = null
+  showCopyDialog.value = true
+  // 加载源项目概要
+  loadCopySummary(project.id)
+}
+
+async function loadCopySummary(projectId: string) {
+  try {
+    const res = await projectApi.getCopySummary(projectId)
+    if (res.code === 0 && res.data) {
+      copySummary.value = res.data
+    }
+  } catch {
+    copySummary.value = null
+  }
+}
+
+function handleCopyKeyInput() {
+  copyForm.key = copyForm.key.toUpperCase()
+  copyKeyError.value = ''
+}
+
+function resetCopyForm() {
+  copyForm.name = ''
+  copyForm.key = ''
+  copyForm.description = ''
+  copyNameError.value = ''
+  copyKeyError.value = ''
+  copySummary.value = null
+  copySourceProject.value = null
+}
+
+async function handleCopyBeforeOk(done: (closed: boolean) => void) {
+  if (!copyForm.name || !copyForm.key || !copySourceProject.value) {
+    done(false)
+    return
+  }
+  copying.value = true
+  try {
+    // 构建选中的 copyOptions 数组
+    const copyOptions: string[] = []
+    for (const [key, checked] of Object.entries(copyForm.options)) {
+      if (checked) copyOptions.push(key)
+    }
+
+    await projectApi.copy({
+      sourceProjectId: copySourceProject.value.id,
+      name: copyForm.name,
+      key: copyForm.key,
+      description: copyForm.description || undefined,
+      copyOptions
+    })
+    resetCopyForm()
+    Message.success('项目复制成功')
+    page.value = 1
+    loadProjects()
+    done(true)
+  } catch (e: any) {
+    const code = e.response?.data?.code
+    const message = e.response?.data?.message || '复制失败'
+    if (code === 40905 || message.includes('已存在')) {
+      copyKeyError.value = '该项目标识已被占用，请使用其他标识'
+    } else if (message.includes('名称')) {
+      copyNameError.value = message
+    } else {
+      Message.error(message)
+    }
+    done(false)
+  } finally {
+    copying.value = false
+  }
+}
+
 onMounted(() => {
   loadProjects()
   loadArchivedCount()
@@ -1471,5 +1662,57 @@ watch(projects, () => {
 .delete-confirm-input strong {
   color: var(--tf-text-primary);
   font-weight: 600;
+}
+
+/* 复制项目弹窗 */
+.copy-source-info {
+  padding: 12px 16px;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+}
+
+.copy-source-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.copy-source-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.copy-source-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.copy-source-key {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.copy-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.copy-options-list :deep(.arco-checkbox) {
+  width: 100%;
+}
+
+.copy-option-text {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+}
+
+.copy-option-count {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin-left: 8px;
 }
 </style>
