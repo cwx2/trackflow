@@ -57,17 +57,20 @@
       >
         <div class="card-header">
           <span class="card-type-badge" :class="'type-' + report.type">{{ reportTypeLabel(report.type) }}</span>
-          <a-dropdown v-if="canCreateReport" trigger="click" @click.stop>
-            <span class="card-menu-btn" @click.stop>⋯</span>
-            <template #content>
-              <a-doption @click="startEdit(report)">
-                编辑
-              </a-doption>
-              <a-doption @click="confirmDelete(report)">
-                <span style="color: var(--tf-danger)">删除</span>
-              </a-doption>
-            </template>
-          </a-dropdown>
+          <div class="card-header-right">
+            <span v-if="report.isSystem" class="system-badge">系统</span>
+            <a-dropdown v-if="canManageReport(report)" trigger="click" @click.stop>
+              <span class="card-menu-btn" @click.stop>⋯</span>
+              <template #content>
+                <a-doption @click="startEdit(report)">
+                  编辑
+                </a-doption>
+                <a-doption v-if="!report.isSystem" @click="confirmDelete(report)">
+                  <span style="color: var(--tf-danger)">删除</span>
+                </a-doption>
+              </template>
+            </a-dropdown>
+          </div>
         </div>
         <h3 class="card-title">{{ report.name }}</h3>
         <div class="card-meta">
@@ -188,6 +191,15 @@ const canCreateReport = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
   return authStore.hasGlobalPermission('nav:report_create')
 })
+
+/** 是否可管理指定报表（显示编辑/删除菜单） */
+function canManageReport(report: ReportDefinitionVO): boolean {
+  // 系统报表只有系统管理员可编辑
+  if (report.isSystem) {
+    return authStore.hasGlobalPermission('system:admin')
+  }
+  return canCreateReport.value
+}
 
 /** type → groupBy 自动映射 */
 const typeToGroupByMap: Record<string, string> = {
@@ -362,6 +374,7 @@ function reportTypeLabel(type: string) {
     by_status: '状态分布',
     by_assignee: '负责人分布',
     by_priority: '优先级分布',
+    by_type: '类型分布',
     burndown: '燃尽图',
     custom: '自定义'
   }
@@ -500,6 +513,23 @@ function formatTime(time: string) {
   margin-bottom: 8px;
 }
 
+.card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.system-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  background: rgba(88, 166, 255, 0.1);
+  color: var(--tf-accent);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 .card-type-badge {
   font-size: 11px;
   padding: 2px 8px;
@@ -512,6 +542,7 @@ function formatTime(time: string) {
 .card-type-badge.type-by_status { color: var(--tf-accent); background: rgba(88, 166, 255, 0.1); }
 .card-type-badge.type-by_assignee { color: var(--tf-purple, #a371f7); background: rgba(163, 113, 247, 0.1); }
 .card-type-badge.type-by_priority { color: var(--tf-warning); background: rgba(210, 153, 34, 0.1); }
+.card-type-badge.type-by_type { color: var(--tf-success); background: rgba(63, 185, 80, 0.1); }
 .card-type-badge.type-issue_count { color: var(--tf-success); background: rgba(63, 185, 80, 0.1); }
 
 .card-menu-btn {

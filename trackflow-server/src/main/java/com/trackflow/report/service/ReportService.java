@@ -94,6 +94,7 @@ public class ReportService {
     /**
      * 更新报表（带权限校验）
      * 只有报表创建者或拥有 project:edit 权限的用户可以更新
+     * 系统预置报表只有系统管理员可以修改
      */
     @Transactional
     public ReportDefinition updateWithAccessCheck(Long id, UpdateReportDTO dto, Long userId) {
@@ -102,17 +103,24 @@ public class ReportService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
 
-        // 权限校验：创建者可修改自己的报表
-        if (!userId.equals(report.getCreatedBy())) {
-            // 非创建者需要 project:edit 权限（项目管理员可修改任意报表）
-            if (report.getProjectId() != null) {
-                if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
-                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以修改此报表");
-                }
-            } else {
-                // 全局报表（无 projectId），只有系统管理员可修改他人的
-                if (!permissionService.isSystemAdmin(userId)) {
-                    throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或系统管理员可以修改此报表");
+        // 系统预置报表只有系统管理员可以修改
+        if (Boolean.TRUE.equals(report.getIsSystem())) {
+            if (!permissionService.isSystemAdmin(userId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "系统预置报表只有系统管理员可以修改");
+            }
+        } else {
+            // 权限校验：创建者可修改自己的报表
+            if (!userId.equals(report.getCreatedBy())) {
+                // 非创建者需要 project:edit 权限（项目管理员可修改任意报表）
+                if (report.getProjectId() != null) {
+                    if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
+                        throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以修改此报表");
+                    }
+                } else {
+                    // 全局报表（无 projectId），只有系统管理员可修改他人的
+                    if (!permissionService.isSystemAdmin(userId)) {
+                        throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或系统管理员可以修改此报表");
+                    }
                 }
             }
         }
@@ -201,11 +209,17 @@ public class ReportService {
     /**
      * 删除报表（带权限校验）
      * 只有报表创建者或拥有 project:edit 权限的用户可以删除
+     * 系统预置报表不允许删除
      */
     @Transactional
     public void deleteWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
+
+        // 系统预置报表不允许删除
+        if (Boolean.TRUE.equals(report.getIsSystem())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "系统预置报表不允许删除");
+        }
 
         // 校验所有权：创建者可删除自己的报表
         if (!userId.equals(report.getCreatedBy())) {

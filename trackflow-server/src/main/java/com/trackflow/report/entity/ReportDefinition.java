@@ -23,6 +23,9 @@ public class ReportDefinition implements Serializable {
 
     private Boolean shared;
 
+    /** 系统预置报表标记（不可被普通用户删除） */
+    private Boolean isSystem;
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
     @TableField(fill = FieldFill.INSERT)

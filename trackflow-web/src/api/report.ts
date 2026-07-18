@@ -8,6 +8,7 @@ export interface ReportDefinitionVO {
   type: string
   config: string
   shared: boolean
+  isSystem: boolean
   createdBy: string
   createdAt: string
   updatedAt: string

@@ -10,6 +10,7 @@ public class ReportDefinitionVO {
     private String type;
     private String config;
     private Boolean shared;
+    private Boolean isSystem;
     private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
