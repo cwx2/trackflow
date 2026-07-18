@@ -36,10 +36,22 @@ export interface UpdateNotificationPreferenceDTO {
   quietHoursEnd?: string | null
 }
 
+export interface EmailAvailabilityVO {
+  available: boolean
+  globalEnabled: boolean
+  smtpConfigured: boolean
+  reason: string | null
+}
+
 export const notificationPreferenceApi = {
   /** 获取当前用户的全局通知偏好 */
   get() {
     return request.get<any, R<NotificationPreferenceVO>>('/notification-preferences')
+  },
+
+  /** 查询全局邮件通知可用状态 */
+  getEmailStatus() {
+    return request.get<any, R<EmailAvailabilityVO>>('/notification-preferences/email-status')
   },
 
   /** 更新当前用户的全局通知偏好 */

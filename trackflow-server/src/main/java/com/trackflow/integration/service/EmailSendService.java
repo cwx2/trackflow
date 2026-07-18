@@ -1,5 +1,6 @@
 package com.trackflow.integration.service;
 
+import com.trackflow.integration.vo.EmailAvailabilityVO;
 import com.trackflow.integration.vo.EmailConfigVO;
 import com.trackflow.system.service.SystemSettingService;
 import jakarta.mail.MessagingException;
@@ -44,6 +45,27 @@ public class EmailSendService {
         // SMTP 配置完整性
         EmailConfigVO config = emailConfigService.getConfig();
         return Boolean.TRUE.equals(config.getConfigured());
+    }
+
+    /**
+     * 获取邮件可用状态详情（供用户偏好页展示）
+     */
+    public EmailAvailabilityVO getEmailAvailability() {
+        String enabled = systemSettingService.getSettingValue(GLOBAL_EMAIL_ENABLED_KEY, "false");
+        boolean globalEnabled = Boolean.parseBoolean(enabled);
+
+        EmailConfigVO config = emailConfigService.getConfig();
+        boolean smtpConfigured = Boolean.TRUE.equals(config.getConfigured());
+
+        boolean available = globalEnabled && smtpConfigured;
+        String reason = null;
+        if (!globalEnabled) {
+            reason = "管理员尚未启用邮件通知渠道";
+        } else if (!smtpConfigured) {
+            reason = "邮件服务器尚未配置，请联系管理员";
+        }
+
+        return new EmailAvailabilityVO(available, globalEnabled, smtpConfigured, reason);
     }
 
     /**

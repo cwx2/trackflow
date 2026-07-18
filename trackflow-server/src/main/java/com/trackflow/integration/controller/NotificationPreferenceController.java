@@ -5,7 +5,9 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.integration.converter.NotificationPreferenceConverter;
 import com.trackflow.integration.dto.UpdateNotificationPreferenceDTO;
 import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.service.EmailSendService;
 import com.trackflow.integration.service.NotificationPreferenceService;
+import com.trackflow.integration.vo.EmailAvailabilityVO;
 import com.trackflow.integration.vo.NotificationPreferenceVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,17 @@ public class NotificationPreferenceController {
 
     private final NotificationPreferenceService preferenceService;
     private final NotificationPreferenceConverter preferenceConverter;
+    private final EmailSendService emailSendService;
+
+    /**
+     * 查询全局邮件通知可用状态（任何已认证用户可调用）。
+     * 返回全局邮件开关是否启用、SMTP 是否已配置。
+     * 前端根据此结果决定邮件通知开关是否可操作。
+     */
+    @GetMapping("/email-status")
+    public R<EmailAvailabilityVO> getEmailStatus() {
+        return R.ok(emailSendService.getEmailAvailability());
+    }
 
     /**
      * 获取当前用户的全局通知偏好

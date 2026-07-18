@@ -130,11 +130,18 @@
               <span class="channel-icon">📧</span>
               <div class="channel-text">
                 <span class="channel-label">邮件通知</span>
-                <span class="channel-desc">将通知发送到你的注册邮箱</span>
+                <span class="channel-desc">{{ emailStatusDesc }}</span>
               </div>
             </div>
-            <a-switch v-model="form.emailEnabled" size="small" @change="handleSave" disabled />
-            <a-tag size="small" class="coming-soon-tag">即将推出</a-tag>
+            <a-switch
+              v-model="form.emailEnabled"
+              size="small"
+              :disabled="!emailAvailable"
+              @change="handleSave"
+            />
+            <a-tag v-if="!emailAvailable && emailStatusReason" size="small" color="orangered" class="email-unavailable-tag">
+              {{ emailStatusReason }}
+            </a-tag>
           </div>
         </div>
       </div>
@@ -211,15 +218,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationPreferenceApi, notificationApi } from '@/api'
-import type { NotificationPreferenceVO } from '@/api/notificationPreference'
+import type { NotificationPreferenceVO, EmailAvailabilityVO } from '@/api/notificationPreference'
 import type { MutedThreadVO } from '@/api/notification'
 import ProjectNotificationPreferences from './ProjectNotificationPreferences.vue'
 
 const loading = ref(true)
 const quietHoursEnabled = ref(false)
+
+// Email availability state
+const emailStatus = ref<EmailAvailabilityVO | null>(null)
+const emailAvailable = computed(() => emailStatus.value?.available === true)
+const emailStatusReason = computed(() => {
+  if (!emailStatus.value) return null
+  return emailStatus.value.reason
+})
+const emailStatusDesc = computed(() => {
+  if (emailAvailable.value) return '将通知发送到你的注册邮箱'
+  if (!emailStatus.value?.globalEnabled) return '管理员尚未启用邮件通知渠道'
+  if (!emailStatus.value?.smtpConfigured) return '邮件服务器尚未配置'
+  return '将通知发送到你的注册邮箱'
+})
 
 const form = reactive({
   onIssueAssigned: true,
@@ -244,9 +265,20 @@ const mutedThreads = ref<MutedThreadVO[]>([])
 const mutedThreadsLoading = ref(false)
 
 onMounted(async () => {
-  await loadPreference()
+  await Promise.all([loadPreference(), loadEmailStatus()])
   await loadMutedThreads()
 })
+
+async function loadEmailStatus() {
+  try {
+    const res = await notificationPreferenceApi.getEmailStatus()
+    if (res.code === 0 && res.data) {
+      emailStatus.value = res.data
+    }
+  } catch {
+    // 获取失败时保持邮件不可用状态
+  }
+}
 
 async function loadPreference() {
   try {
@@ -515,9 +547,9 @@ function formatMutedTime(dateStr: string): string {
   color: var(--tf-text-tertiary);
 }
 
-.coming-soon-tag {
+.email-unavailable-tag {
   margin-left: 8px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 /* 静音时段 */
