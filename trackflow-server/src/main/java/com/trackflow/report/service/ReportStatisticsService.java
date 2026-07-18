@@ -546,8 +546,13 @@ public class ReportStatisticsService {
         if (projectId != null) {
             return List.of(projectId);
         }
-        // null 表示系统管理员无限制
-        return projectService.getAccessibleProjectIds(userId);
+        // 获取用户可访问项目 ID
+        List<Long> ids = projectService.getAccessibleProjectIds(userId);
+        if (ids == null) {
+            // 系统管理员：改为显式查询所有活跃项目 ID（走索引而非全表扫描）
+            ids = projectService.getAllActiveProjectIds();
+        }
+        return ids;
     }
 
     // ─── Redis cache ─────────────────────────────────────────────────────

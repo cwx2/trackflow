@@ -27,4 +27,10 @@ public interface ProjectMapper extends BaseMapper<Project> {
             "</foreach>" +
             "</script>")
     List<Long> selectProjectIdsByVisibility(@Param("visibilities") List<String> visibilities);
+
+    /**
+     * 查询所有活跃项目的 ID（用于系统管理员全项目模式，走索引而非全表扫描）
+     */
+    @Select("SELECT id FROM project WHERE status = 'active'")
+    List<Long> selectAllActiveProjectIds();
 }

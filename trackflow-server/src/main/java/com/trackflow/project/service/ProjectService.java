@@ -1053,6 +1053,14 @@ public class ProjectService {
     }
 
     /**
+     * 获取所有活跃项目的 ID 列表。
+     * 用于系统管理员全项目模式，确保 SQL 使用 IN 条件走索引，而非无 WHERE 全表扫描。
+     */
+    public List<Long> getAllActiveProjectIds() {
+        return projectMapper.selectAllActiveProjectIds();
+    }
+
+    /**
      * 递增 Issue 序号并返回新序号。
      * 使用 FOR UPDATE 锁防止并发冲突。
      * 如果发现实际 max 序号高于项目记录的 sequence（数据不一致），自动校正。
