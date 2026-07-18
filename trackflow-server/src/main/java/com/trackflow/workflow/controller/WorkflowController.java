@@ -9,6 +9,7 @@ import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.entity.WorkflowActivity;
+import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.WorkflowActivityVO;
 import com.trackflow.workflow.vo.WorkflowMatrixVO;
@@ -37,7 +38,7 @@ public class WorkflowController {
      * @param assignee 筛选 assignee 模式：true=仅Assignee规则, false=仅Normal规则(该维度), null=不筛选
      */
     @GetMapping("/projects/{projectId}/workflows")
-    @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<WorkflowMatrixVO> getTransitionMatrix(
             @PathVariable("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType,
@@ -45,7 +46,7 @@ public class WorkflowController {
             @RequestParam(value = "author", required = false) Boolean author,
             @RequestParam(value = "assignee", required = false) Boolean assignee) {
 
-        Long effectiveProjectId = (projectId == 0L) ? null : projectId;
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         WorkflowMatrixVO matrix = workflowService.getTransitionMatrixWithVersion(
                 effectiveProjectId, issueType, roleId, author, assignee);
         return R.ok(matrix);
@@ -57,12 +58,12 @@ public class WorkflowController {
      * projectId>0 表示项目级工作流，需要项目 manage_workflow 权限
      */
     @PutMapping("/projects/{projectId}/workflows")
-    @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<Void> updateTransitionMatrix(
             @PathVariable("projectId") Long projectId,
             @Valid @RequestBody UpdateWorkflowDTO dto) {
 
-        Long effectiveProjectId = (projectId == 0L) ? null : projectId;
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
         workflowService.updateTransitionMatrix(effectiveProjectId, dto);
         return R.ok();
     }
@@ -107,7 +108,7 @@ public class WorkflowController {
      * 权限：与工作流编辑相同
      */
     @GetMapping("/projects/{projectId}/workflow-activities")
-    @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<PageResult<WorkflowActivityVO>> listWorkflowActivities(
             @PathVariable("projectId") Long projectId,
             WorkflowActivityQuery query) {

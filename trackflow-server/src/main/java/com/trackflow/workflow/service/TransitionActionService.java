@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.dto.CreateTransitionActionDTO;
 import com.trackflow.workflow.dto.UpdateTransitionActionDTO;
 import com.trackflow.workflow.entity.TransitionAction;
@@ -43,13 +44,15 @@ public class TransitionActionService {
 
     /**
      * 列表查询（支持 projectId + 可选过滤条件）
+     * <p>
+     * projectId 已由 Controller 通过 {@link WorkflowScope#fromApi(Long)} 转换：
+     * null 表示查全局（project_id IS NULL），非 null 查指定项目。
      */
     public List<TransitionAction> list(Long projectId, String issueType,
                                        Long oldStatusId, Long newStatusId) {
         LambdaQueryWrapper<TransitionAction> wrapper = new LambdaQueryWrapper<>();
 
-        // projectId=0 查全局（project_id IS NULL）
-        if (projectId == null || projectId == 0L) {
+        if (projectId == null) {
             wrapper.isNull(TransitionAction::getProjectId);
         } else {
             wrapper.eq(TransitionAction::getProjectId, projectId);
@@ -82,8 +85,10 @@ public class TransitionActionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", errors));
         }
 
+        // 统一将 API 层的 projectId 转为 Service 层语义（0→null）
+        Long effectiveProjectId = WorkflowScope.fromApi(dto.getProjectId());
+
         // 校验 actionConfig 中引用实体的存在性（用户/角色）
-        Long effectiveProjectId = (dto.getProjectId() == 0L) ? null : dto.getProjectId();
         List<String> entityErrors = actionConfigValidator.validateEntityExistence(
                 dto.getActionConfig(), effectiveProjectId);
         if (!entityErrors.isEmpty()) {
@@ -103,8 +108,7 @@ public class TransitionActionService {
                 dto.getOldStatusId(), dto.getNewStatusId(), dto.getActionType(), null);
 
         TransitionAction action = new TransitionAction();
-        // projectId=0 表示全局，存为 null
-        action.setProjectId(dto.getProjectId() == 0L ? null : dto.getProjectId());
+        action.setProjectId(effectiveProjectId);
         action.setIssueType(dto.getIssueType());
         action.setOldStatusId(dto.getOldStatusId()); // null = on-create trigger
         action.setNewStatusId(dto.getNewStatusId());
@@ -193,15 +197,17 @@ public class TransitionActionService {
     }
 
     /**
-     * 获取动作的 projectId（用于 @PreAuthorize SpEL 表达式）
-     * 返回 0L 表示全局（projectId IS NULL 时）
+     * 获取动作的 projectId（用于 @PreAuthorize SpEL 表达式）。
+     * <p>
+     * 返回 API 层语义的 projectId：全局（DB 中 null）→ 0L，项目级 → 实际 ID。
+     * 配合 {@link WorkflowScope#isGlobal(Long)} 在 SpEL 中判断。
      */
     public Long getProjectId(Long actionId) {
         TransitionAction action = transitionActionMapper.selectById(actionId);
         if (action == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
         }
-        return action.getProjectId() != null ? action.getProjectId() : 0L;
+        return WorkflowScope.toApi(action.getProjectId());
     }
 
     /**

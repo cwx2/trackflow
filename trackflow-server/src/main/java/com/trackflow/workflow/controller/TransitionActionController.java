@@ -2,6 +2,7 @@ package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.converter.TransitionActionConverter;
 import com.trackflow.workflow.dto.CreateTransitionActionDTO;
 import com.trackflow.workflow.dto.UpdateTransitionActionDTO;
@@ -30,7 +31,7 @@ public class TransitionActionController {
      * 列表查询
      */
     @GetMapping
-    @PreAuthorize("#projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
     public R<List<TransitionActionVO>> list(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType,
@@ -38,7 +39,7 @@ public class TransitionActionController {
             @RequestParam(value = "newStatusId", required = false) Long newStatusId) {
 
         List<TransitionAction> actions = transitionActionService.list(
-                projectId, issueType, oldStatusId, newStatusId);
+                WorkflowScope.fromApi(projectId), issueType, oldStatusId, newStatusId);
         return R.ok(transitionActionConverter.toVOList(actions));
     }
 
@@ -46,7 +47,7 @@ public class TransitionActionController {
      * 创建转换动作
      */
     @PostMapping
-    @PreAuthorize("#dto.projectId == null || #dto.projectId == 0L ? @perm.checkGlobal('system:admin') : @perm.check(#dto.projectId, 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#dto.projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#dto.projectId, 'project:manage_workflow')")
     public R<TransitionActionVO> create(@RequestBody @Valid CreateTransitionActionDTO dto) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         TransitionAction action = transitionActionService.create(dto, currentUserId);
@@ -57,7 +58,7 @@ public class TransitionActionController {
      * 更新转换动作
      */
     @PutMapping("/{id}")
-    @PreAuthorize("@transitionActionService.getProjectId(#id) == 0L ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(@transitionActionService.getProjectId(#id)) ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
     public R<TransitionActionVO> update(@PathVariable("id") Long id,
                                         @RequestBody @Valid UpdateTransitionActionDTO dto) {
         TransitionAction action = transitionActionService.update(id, dto);
@@ -68,7 +69,7 @@ public class TransitionActionController {
      * 删除转换动作
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("@transitionActionService.getProjectId(#id) == 0L ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(@transitionActionService.getProjectId(#id)) ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
     public R<Void> delete(@PathVariable("id") Long id) {
         transitionActionService.delete(id);
         return R.ok();
@@ -78,7 +79,7 @@ public class TransitionActionController {
      * 切换启用状态
      */
     @PatchMapping("/{id}/toggle")
-    @PreAuthorize("@transitionActionService.getProjectId(#id) == 0L ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(@transitionActionService.getProjectId(#id)) ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
     public R<Void> toggleEnabled(@PathVariable("id") Long id) {
         transitionActionService.toggleEnabled(id);
         return R.ok();
