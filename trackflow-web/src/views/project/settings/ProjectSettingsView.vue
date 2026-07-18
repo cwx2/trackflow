@@ -11,7 +11,7 @@
         <div class="breadcrumb">
           <a class="breadcrumb-link" @click="$router.push('/projects')">项目</a>
           <span class="breadcrumb-sep">/</span>
-          <a class="breadcrumb-link" @click="$router.push(`/projects/${project.id}`)">{{ project.name }}</a>
+          <a class="breadcrumb-link" @click="$router.push(`/projects/${project.key}`)">{{ project.name }}</a>
           <span class="breadcrumb-sep">/</span>
           <span class="breadcrumb-current">设置</span>
         </div>
@@ -118,9 +118,9 @@ function handleTabChange(key: string | number) {
 }
 
 async function loadProject() {
-  const projectId = route.params.id as string
-  if (!projectId) {
-    error.value = '无效的项目 ID'
+  const projectKey = route.params.projectKey as string
+  if (!projectKey) {
+    error.value = '无效的项目标识'
     loading.value = false
     return
   }
@@ -129,12 +129,17 @@ async function loadProject() {
   error.value = ''
 
   try {
-    const res = await projectApi.getDetail(projectId)
+    const res = await projectApi.getDetail(projectKey)
     project.value = res.data
 
-    // 加载权限
+    // 如果 URL 使用的是数字 ID，重定向到 key 格式
+    if (project.value.key && projectKey !== project.value.key) {
+      router.replace({ path: `/projects/${project.value.key}/settings`, query: route.query })
+    }
+
+    // 加载权限（使用解析后的数字 ID）
     try {
-      projectPerms.value = await loadProjectPermissions(projectId)
+      projectPerms.value = await loadProjectPermissions(project.value.id)
     } catch {
       projectPerms.value = new Set()
     }
@@ -160,7 +165,7 @@ onMounted(() => {
 })
 
 // Watch route param changes (e.g., navigating between different project settings)
-watch(() => route.params.id, () => {
+watch(() => route.params.projectKey, () => {
   loadProject()
 })
 </script>

@@ -409,9 +409,9 @@ function getMemberColor(userId: string) {
 
 // 加载数据
 async function loadProject() {
-  const projectId = route.params.id as string
-  if (!projectId) {
-    error.value = '无效的项目 ID'
+  const projectKey = route.params.projectKey as string
+  if (!projectKey) {
+    error.value = '无效的项目标识'
     loading.value = false
     return
   }
@@ -420,9 +420,16 @@ async function loadProject() {
   error.value = ''
 
   try {
-    const res = await projectApi.getDetail(projectId)
+    const res = await projectApi.getDetail(projectKey)
     project.value = res.data
 
+    // 如果 URL 使用的是数字 ID，重定向到 key 格式（更可读）
+    if (project.value!.key && projectKey !== project.value!.key) {
+      router.replace({ path: `/projects/${project.value!.key}` })
+    }
+
+    // 使用解析后的数字 ID 调用后续 API
+    const projectId = project.value!.id
     // 并行加载权限、成员和角色
     await Promise.all([
       loadPerms(projectId),
@@ -578,24 +585,24 @@ function formatRelativeTime(dateStr: string): string {
 
 // 导航
 function goToIssues() {
-  router.push({ path: '/issues', query: { project: project.value?.id } })
+  router.push({ path: '/issues', query: { project: project.value?.key } })
 }
 
 function goToBoard() {
-  router.push({ path: '/boards', query: { project: project.value?.id } })
+  router.push({ path: '/boards', query: { project: project.value?.key } })
 }
 
 function goToSprints() {
-  router.push({ path: '/sprints', query: { project: project.value?.id } })
+  router.push({ path: '/sprints', query: { project: project.value?.key } })
 }
 
 function goToMembers() {
-  router.push({ path: `/projects/${project.value?.id}/settings`, query: { tab: 'members' } })
+  router.push({ path: `/projects/${project.value?.key}/settings`, query: { tab: 'members' } })
 }
 
 function goToSettings() {
   if (!project.value) return
-  router.push({ path: `/projects/${project.value.id}/settings` })
+  router.push({ path: `/projects/${project.value.key}/settings` })
 }
 
 async function handleRestore() {
@@ -621,7 +628,7 @@ async function handleRestore() {
 async function confirmDeleteProject() {
   if (!project.value) return
   // Navigate to settings page danger zone
-  router.push({ path: `/projects/${project.value.id}/settings`, query: { tab: 'general' } })
+  router.push({ path: `/projects/${project.value.key}/settings`, query: { tab: 'general' } })
 }
 
 onMounted(() => {

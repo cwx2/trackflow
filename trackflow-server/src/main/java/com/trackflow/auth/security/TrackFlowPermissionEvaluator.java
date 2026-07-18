@@ -31,6 +31,38 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
 
     private final PermissionService permissionService;
     private final IssueMapper issueMapper;
+    private final com.trackflow.project.mapper.ProjectMapper projectMapper;
+
+    /**
+     * 检查项目级权限（通过项目标识符：Key 或 ID）
+     * <p>
+     * 用于 @PreAuthorize("@perm.checkProject(#identifier, 'project:view')")
+     * identifier 可以是项目 Key（如 "TF1"）或数字 ID 字符串
+     */
+    public boolean checkProject(String identifier, String permission) {
+        if (identifier == null || identifier.isBlank()) return false;
+        Long projectId = resolveProjectIdForPerm(identifier);
+        if (projectId == null) return false;
+        return check(projectId, permission);
+    }
+
+    /**
+     * 解析项目标识符为数据库 ID（用于权限检查）
+     */
+    private Long resolveProjectIdForPerm(String identifier) {
+        // 尝试按数字 ID 解析
+        try {
+            return Long.parseLong(identifier);
+        } catch (NumberFormatException e) {
+            // 非数字，按 key 查询
+        }
+        com.trackflow.project.entity.Project project = projectMapper.selectOne(
+                new LambdaQueryWrapper<com.trackflow.project.entity.Project>()
+                        .select(com.trackflow.project.entity.Project::getId)
+                        .apply("LOWER(\"key\") = LOWER({0})", identifier)
+        );
+        return project != null ? project.getId() : null;
+    }
 
     /**
      * 检查项目级权限

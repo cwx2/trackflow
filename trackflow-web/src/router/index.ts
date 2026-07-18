@@ -54,12 +54,12 @@ const routes = [
         component: () => import('@/views/project/ProjectListView.vue')
       },
       {
-        path: 'projects/:id',
+        path: 'projects/:projectKey',
         name: 'ProjectDetail',
         component: () => import('@/views/project/ProjectDetailView.vue')
       },
       {
-        path: 'projects/:id/settings',
+        path: 'projects/:projectKey/settings',
         name: 'ProjectSettings',
         component: () => import('@/views/project/settings/ProjectSettingsView.vue'),
         meta: { requiresProjectEdit: true }

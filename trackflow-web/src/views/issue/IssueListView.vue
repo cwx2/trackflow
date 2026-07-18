@@ -1828,7 +1828,7 @@ function onFilterChange() {
     const matched = projectList.value.find(p => p.id === filterProject.value)
     activeProjectId.value = filterProject.value
     activeQueryName.value = matched?.name || '所有工单'
-    router.replace({ query: { ...route.query, project: filterProject.value } })
+    router.replace({ query: { ...route.query, project: matched?.key || filterProject.value } })
   } else {
     // Cleared project filter
     activeProjectId.value = null
@@ -1990,7 +1990,7 @@ function selectProject(p: any) {
   } else {
     // Select project
     activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; filterProject.value = p.id; currentPage.value = 1
-    router.replace({ query: { ...route.query, project: p.id } })
+    router.replace({ query: { ...route.query, project: p.key } })
   }
   refreshList()
   loadPanel()
@@ -2023,14 +2023,26 @@ async function loadStatuses() {
 }
 
 onMounted(async () => {
-  if (route.query.project) activeProjectId.value = String(route.query.project)
-
   await loadPanel()
   await loadProjects()
   await loadStatuses()
 
+  // Resolve project from URL param (supports both key and id for backward compat)
+  if (route.query.project) {
+    const queryProject = String(route.query.project)
+    const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject)
+    if (matched) {
+      activeProjectId.value = matched.id
+      activeQueryName.value = matched.name
+      filterProject.value = matched.id
+    } else {
+      // Fallback: treat as ID directly (backward compat for old bookmarks)
+      activeProjectId.value = queryProject
+    }
+  }
+
   // Sync project context display from URL param after projectList is loaded
-  if (activeProjectId.value && projectList.value.length > 0) {
+  if (activeProjectId.value && projectList.value.length > 0 && !filterProject.value) {
     const matched = projectList.value.find(p => p.id === activeProjectId.value)
     if (matched) {
       activeQueryName.value = matched.name
