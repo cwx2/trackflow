@@ -17,7 +17,9 @@ import java.util.Set;
  * 监听 {@link ReportCacheInvalidationEvent}，在事务提交后清除受影响项目的 Dashboard 缓存。
  * 使用 Redis SCAN + UNLINK 按模式匹配删除，避免阻塞 Redis 主线程。
  * <p>
- * 缓存 key 格式：{@code report:dashboard:{projectId|all}:{sprintId|none}:{startDate}:{endDate}}
+ * 缓存 key 格式：
+ * - 单项目：{@code report:dashboard:{projectId}:{sprintId|none}:{startDate}:{endDate}}
+ * - 全部项目：{@code report:dashboard:all_{projectIdsHash}:{sprintId|none}:{startDate}:{endDate}}
  */
 @Slf4j
 @Component
@@ -53,8 +55,8 @@ public class ReportCacheInvalidator {
             deletedCount += deleteByPattern(pattern);
         }
 
-        // 2. 删除"全部项目"模式的缓存（projectId=all 的 key）
-        String allPattern = CACHE_PREFIX + "all:*";
+        // 2. 删除"全部项目"模式的缓存（key 格式为 report:dashboard:all_{hash}:...）
+        String allPattern = CACHE_PREFIX + "all_*";
         deletedCount += deleteByPattern(allPattern);
 
         if (deletedCount > 0) {

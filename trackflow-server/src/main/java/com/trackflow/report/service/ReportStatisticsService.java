@@ -58,8 +58,8 @@ public class ReportStatisticsService {
     public DashboardVO getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate, Long userId) {
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
-        // 尝试从缓存获取
-        String cacheKey = buildCacheKey(projectId, sprintId, startDate, endDate);
+        // 尝试从缓存获取（key 包含 projectIds hash，确保不同权限用户缓存隔离）
+        String cacheKey = buildCacheKey(projectId, sprintId, startDate, endDate, projectIds);
         DashboardVO cached = getFromCache(cacheKey);
         if (cached != null) {
             return cached;
@@ -559,18 +559,29 @@ public class ReportStatisticsService {
     // ─── Redis cache ─────────────────────────────────────────────────────
 
     /**
-     * 构建缓存 key（按项目维度共享，不含 userId）。
+     * 构建缓存 key（包含项目集合 hash，确保不同权限范围的用户缓存隔离）。
      * <p>
-     * 格式：report:dashboard:{projectId|all}:{sprintId|none}:{startDate}:{endDate}
+     * 格式：
+     * - 单项目模式：report:dashboard:{projectId}:{sprintId|none}:{startDate}:{endDate}
+     * - 全部项目模式：report:dashboard:all_{projectIdsHash}:{sprintId|none}:{startDate}:{endDate}
      * <p>
-     * 去掉 userId 的理由：
-     * - 相同筛选条件下不同用户看到的统计数据相同（权限过滤在 resolveProjectIds 阶段完成）
-     * - 减少 Redis 存储（N 个用户共享 1 份缓存而非各存 1 份）
-     * - 事件驱动失效时只需按 projectId 维度精准清除
+     * 设计决策：
+     * - 单项目模式下 projectId 即可唯一标识数据范围，无需 hash
+     * - 全部项目模式下不同用户可访问的项目集合不同，用排序后的 hashCode 区分
+     * - 相同项目集合的用户共享缓存（减少 Redis 存储），不同集合互相隔离（安全）
      */
-    private String buildCacheKey(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate) {
-        return CACHE_PREFIX
-                + (projectId != null ? projectId : "all") + ":"
+    private String buildCacheKey(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate, List<Long> projectIds) {
+        String projectPart;
+        if (projectId != null) {
+            projectPart = String.valueOf(projectId);
+        } else {
+            // 用 projectIds 排序后的 hashCode 作为缓存隔离维度
+            int hash = (projectIds == null || projectIds.isEmpty())
+                    ? 0
+                    : projectIds.stream().sorted().toList().hashCode();
+            projectPart = "all_" + hash;
+        }
+        return CACHE_PREFIX + projectPart + ":"
                 + (sprintId != null ? sprintId : "none") + ":"
                 + (startDate != null ? startDate : "null") + ":"
                 + (endDate != null ? endDate : "null");
