@@ -645,6 +645,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
+import { extractVersion, showActionFeedback } from '@/utils/transition'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
@@ -1559,13 +1560,17 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   try {
     const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
 
-    // 同步更新本地版本号（后端返回更新后的 version）
-    if (res.data != null) {
-      issue.version = res.data
+    // 同步更新本地版本号（后端返回 TransitStatusResultVO）
+    const newVersion = extractVersion(res.data)
+    if (newVersion != null) {
+      issue.version = newVersion
     } else {
       // fallback: 本地递增
       issue.version = (issue.version || 0) + 1
     }
+
+    // 显示自动分配反馈
+    showActionFeedback(res.data)
 
     const undoEntry: UndoEntry = {
       issueId: issue.id,
@@ -1623,12 +1628,14 @@ async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
     let newVersion = issue.version
     if (issue.statusId !== targetStatusId) {
       const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
-      if (res.data != null) {
-        newVersion = res.data
+      const extracted = extractVersion(res.data)
+      if (extracted != null) {
+        newVersion = extracted
       } else {
         // update + transitStatus = version +2 (each updateById increments version)
         newVersion = (issue.version || 0) + 2
       }
+      showActionFeedback(res.data)
     } else {
       // Only sprint update, version +1
       newVersion = (issue.version || 0) + 1
@@ -1675,8 +1682,9 @@ async function undoTransition(entry: UndoEntry) {
   try {
     const res = await issueApi.undoTransitStatus(issue.id, entry.oldStatusId)
     // 同步更新版本号
-    if (res.data != null) {
-      issue.version = res.data
+    const newVersion = extractVersion(res.data)
+    if (newVersion != null) {
+      issue.version = newVersion
     } else {
       issue.version = (issue.version || 0) + 1
     }

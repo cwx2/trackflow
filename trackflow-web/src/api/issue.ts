@@ -2,7 +2,8 @@ import request from './request'
 import type {
   R, PageResult, IssueVO, IssueDetailVO, IssueCommentVO,
   IssueActivityVO, IssueStatusVO, IssueAttachmentVO,
-  IssueTagVO, IssueLinkVO, IssueTrashVO, BatchAvailableStatusVO
+  IssueTagVO, IssueLinkVO, IssueTrashVO, BatchAvailableStatusVO,
+  TransitStatusResultVO
 } from './types'
 import { validateFile } from '@/utils/attachment'
 
@@ -77,14 +78,14 @@ export const issueApi = {
 
   // ========== 状态 ==========
 
-  /** 状态流转（返回更新后的版本号） */
+  /** 状态流转（返回版本号 + 动作执行结果） */
   transitStatus(id: string, statusId: string, comment?: string, version?: number, force?: boolean) {
-    return request.post<any, R<number>>(`/issues/${id}/transitions`, { statusId, comment, version, force })
+    return request.post<any, R<TransitStatusResultVO>>(`/issues/${id}/transitions`, { statusId, comment, version, force })
   },
 
-  /** 撤销状态流转（限 30 秒内、仅本人操作可撤销，返回更新后的版本号） */
+  /** 撤销状态流转（限 30 秒内、仅本人操作可撤销，返回版本号 + 动作执行结果） */
   undoTransitStatus(id: string, statusId: string) {
-    return request.post<any, R<number>>(`/issues/${id}/transitions/undo`, { statusId })
+    return request.post<any, R<TransitStatusResultVO>>(`/issues/${id}/transitions/undo`, { statusId })
   },
 
   /** 获取可用状态转换 */

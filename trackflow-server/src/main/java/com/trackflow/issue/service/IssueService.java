@@ -24,6 +24,7 @@ import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.TransitionActionEngine;
 import com.trackflow.workflow.service.WorkflowService;
+import com.trackflow.workflow.vo.ActionExecutionResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -992,8 +993,8 @@ public class IssueService {
      * 状态变更
      */
     @Transactional
-    public void transitStatus(Long id, Long newStatusId, String comment) {
-        transitStatus(id, newStatusId, comment, null, false, null, false);
+    public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment) {
+        return transitStatus(id, newStatusId, comment, null, false, null, false);
     }
 
     /**
@@ -1006,36 +1007,37 @@ public class IssueService {
      * @param assigneeExplicitlySet true = 用户明确设置了 assignee（即使为 null）
      */
     @Transactional
-    public void transitStatus(Long id, Long newStatusId, String comment,
+    public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet) {
-        transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, null, false);
+        return transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, null, false);
     }
 
     /**
      * 状态变更（带乐观锁版本校验）
      */
     @Transactional
-    public void transitStatus(Long id, Long newStatusId, String comment,
+    public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet,
                               Integer expectedVersion) {
-        transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, expectedVersion, false);
+        return transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, expectedVersion, false);
     }
 
     /**
      * 状态变更（跳过工作流校验 - 仅限撤销操作内部调用）
      */
     @Transactional
-    public void transitStatusSkipWorkflow(Long id, Long newStatusId, String comment) {
-        transitStatus(id, newStatusId, comment, null, false, null, true);
+    public ActionExecutionResult transitStatusSkipWorkflow(Long id, Long newStatusId, String comment) {
+        return transitStatus(id, newStatusId, comment, null, false, null, true);
     }
 
     /**
      * 状态变更内部实现
      *
      * @param skipWorkflowCheck true = 跳过工作流规则校验（仅用于撤销操作，目标状态已在 Controller 中校验为上一状态）
+     * @return 动作执行结果摘要
      */
     @Transactional
-    public void transitStatus(Long id, Long newStatusId, String comment,
+    public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet,
                               Integer expectedVersion, boolean skipWorkflowCheck) {
         Issue issue = getById(id);
@@ -1092,13 +1094,15 @@ public class IssueService {
         }
 
         // 调用 TransitionActionEngine 执行自动化动作（auto-assign 等）
-        transitionActionEngine.execute(issue, oldStatusId, newStatusId,
+        ActionExecutionResult actionResult = transitionActionEngine.execute(issue, oldStatusId, newStatusId,
                 currentUserId, assigneeId, assigneeExplicitlySet);
 
         // 状态变更后：刷新祖先链的派生属性（影响 childClosedCount）
         if (issue.getParentId() != null && issue.getParentId() != 0) {
             ancestorRefreshService.refreshAncestorChain(issue.getParentId());
         }
+
+        return actionResult;
     }
 
     /**

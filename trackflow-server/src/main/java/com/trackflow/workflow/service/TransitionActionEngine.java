@@ -16,6 +16,7 @@ import com.trackflow.workflow.entity.TransitionAction;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
 import com.trackflow.workflow.strategy.AssignmentStrategy;
+import com.trackflow.workflow.vo.ActionExecutionResult;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,8 +69,9 @@ public class TransitionActionEngine {
      * @param triggeredBy          触发转换的用户 ID
      * @param explicitAssigneeId   用户显式指定的 assignee（null 表示 unassign）
      * @param assigneeExplicitlySet 是否显式设置了 assignee（区分"未传"和"传了null"）
+     * @return 动作执行结果摘要
      */
-    public void execute(Issue issue, Long oldStatusId, Long newStatusId,
+    public ActionExecutionResult execute(Issue issue, Long oldStatusId, Long newStatusId,
                         Long triggeredBy, Long explicitAssigneeId,
                         boolean assigneeExplicitlySet) {
 
@@ -89,7 +91,8 @@ public class TransitionActionEngine {
 
             log.info("[TransitionActionEngine] Issue {} manual override, assignee set to {}",
                     issue.getId(), explicitAssigneeId);
-            return;
+            return ActionExecutionResult.manualOverride(
+                    explicitAssigneeId, getUserDisplayName(explicitAssigneeId));
         }
 
         // 2. 解析匹配的动作列表
@@ -97,24 +100,31 @@ public class TransitionActionEngine {
                 issue.getProjectId(), issue.getIssueType(), oldStatusId, newStatusId);
 
         if (actions == null || actions.isEmpty()) {
-            return;
+            return ActionExecutionResult.noActions();
         }
 
         // 3. 按 sort_order 顺序执行每个动作
+        boolean hasError = false;
         for (TransitionAction action : actions) {
             try {
-                boolean assigned = executeAction(action, issue, triggeredBy, oldStatusId, newStatusId);
-                if (assigned) {
+                ActionExecutionResult result = executeActionWithResult(
+                        action, issue, triggeredBy, oldStatusId, newStatusId);
+                if (result != null && result.isExecuted()) {
                     // 第一个成功的 auto_assign 后停止（不重复分配）
-                    break;
+                    return result;
                 }
             } catch (RuntimeException e) {
                 // 4. 错误处理：记录错误，继续执行下一个动作
                 log.error("[TransitionActionEngine] Issue {} action {} 执行异常: {}",
                         issue.getId(), action.getId(), e.getMessage(), e);
                 recordWorkflowFailure(action, issue, e);
+                hasError = true;
             }
         }
+
+        // 所有动作都未成功分配
+        return hasError ? ActionExecutionResult.executionError()
+                : ActionExecutionResult.strategyFailed();
     }
 
     /**
@@ -152,17 +162,17 @@ public class TransitionActionEngine {
     }
 
     /**
-     * 执行单个动作。
+     * 执行单个动作并返回结果。
      *
-     * @return true 如果成功执行了 auto_assign（assignee 已更新），false 表示跳过或失败
+     * @return ActionExecutionResult（成功时 executed=true），null 表示跳过非 auto_assign 类型
      */
-    private boolean executeAction(TransitionAction action, Issue issue, Long triggeredBy,
+    private ActionExecutionResult executeActionWithResult(TransitionAction action, Issue issue, Long triggeredBy,
                                   Long oldStatusId, Long newStatusId) {
         // 仅处理 auto_assign 类型（未来可扩展 switch）
         if (!"auto_assign".equals(action.getActionType())) {
             log.debug("[TransitionActionEngine] 跳过非 auto_assign 动作: type={}",
                     action.getActionType());
-            return false;
+            return null;
         }
 
         // 解析 action_config
@@ -170,7 +180,7 @@ public class TransitionActionEngine {
         if (config == null) {
             log.error("[TransitionActionEngine] Issue {} action {} action_config 解析失败, json={}",
                     issue.getId(), action.getId(), action.getActionConfig());
-            return false;
+            return null;
         }
 
         // 查找主策略
@@ -179,13 +189,14 @@ public class TransitionActionEngine {
         if (strategy == null) {
             log.warn("[TransitionActionEngine] 未找到策略: {}, action_id={}",
                     strategyKey, action.getId());
-            return false;
+            return null;
         }
 
         // 执行主策略
         Long result = strategy.resolve(issue, config, issue.getProjectId());
 
         // 主策略失败时尝试 fallback
+        String usedStrategy = strategyKey;
         if (result == null && config.getFallbackStrategy() != null
                 && !config.getFallbackStrategy().isBlank()) {
             String fallbackKey = config.getFallbackStrategy();
@@ -194,6 +205,9 @@ public class TransitionActionEngine {
                 log.debug("[TransitionActionEngine] 主策略 {} 返回 null，尝试 fallback: {}",
                         strategyKey, fallbackKey);
                 result = fallbackStrategy.resolve(issue, config, issue.getProjectId());
+                if (result != null) {
+                    usedStrategy = fallbackKey;
+                }
             } else {
                 log.warn("[TransitionActionEngine] fallback 策略未找到: {}", fallbackKey);
             }
@@ -215,29 +229,29 @@ public class TransitionActionEngine {
             activity.setNewValue(String.valueOf(result));
             activity.setDetail(String.format(
                     "{\"action_id\":%d,\"strategy\":\"%s\",\"triggered_by\":%d}",
-                    action.getId(), strategyKey, triggeredBy));
+                    action.getId(), usedStrategy, triggeredBy));
             activity.setCreatedAt(LocalDateTime.now());
             issueActivityMapper.insert(activity);
 
             log.info("[TransitionActionEngine] Issue {} auto-assigned to user {} (strategy: {})",
-                    issue.getId(), result, strategyKey);
+                    issue.getId(), result, usedStrategy);
 
             // 发送通知给新 assignee（跳过自我通知，失败不影响动作执行）
             sendAutoAssignNotification(issue, result, triggeredBy, oldStatusId, newStatusId);
 
-            return true;
+            return ActionExecutionResult.assigned(result, getUserDisplayName(result), usedStrategy);
         }
 
         // 主策略 + fallback 都失败
         log.warn("[TransitionActionEngine] Failed to resolve assignee for issue {} (action_id={}, strategy={})",
                 issue.getId(), action.getId(), strategyKey);
-        return false;
+        return null;
     }
 
     /**
      * 执行创建时的单个自动分配动作。
      * <p>
-     * 与 executeAction 区别：
+     * 与 executeActionWithResult 区别：
      * - 不传 oldStatusId（创建时无先前状态）
      * - 通知内容为"创建时自动分配"
      *

@@ -553,6 +553,32 @@ export interface TransitionChangeItem {
   toStatus: string
 }
 
+// ========== 状态转换结果 ==========
+
+/** 自动化动作执行结果（TransitionActionEngine 返回） */
+export interface ActionExecutionResult {
+  /** 是否有动作被成功执行 */
+  executed: boolean
+  /** 动作类型（如 "auto_assign"） */
+  actionType?: string
+  /** 执行结果 */
+  outcome: 'ASSIGNED' | 'MANUAL_OVERRIDE' | 'STRATEGY_FAILED' | 'NO_ACTIONS' | 'EXECUTION_ERROR'
+  /** 分配给了谁的用户 ID */
+  newAssigneeId?: string
+  /** 分配给了谁的显示名称 */
+  newAssigneeName?: string
+  /** 使用了哪个策略 */
+  strategyUsed?: string
+}
+
+/** 状态转换 API 响应体 */
+export interface TransitStatusResultVO {
+  /** 更新后的乐观锁版本号 */
+  version: number
+  /** 自动化动作执行结果（可为 null，表示无动作配置） */
+  actionResult?: ActionExecutionResult | null
+}
+
 // ========== 看板 ==========
 export interface BoardColumnVO {
   statusId: string

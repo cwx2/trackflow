@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { IssueVO } from '@/api/types'
+import { extractVersion, showActionFeedback } from '@/utils/transition'
 
 export interface CellEditState {
   issueId: string
@@ -71,15 +72,19 @@ export function useInlineEdit(issues: { value: IssueVO[] }) {
       const res = await apiCall(controller.signal)
       // 成功：同步版本号
       if (res?.data != null) {
-        if (typeof res.data === 'number') {
-          // transitStatus/undoTransitStatus 直接返回新版本号
-          issue.version = res.data
+        const version = extractVersion(res.data)
+        if (version != null) {
+          issue.version = version
         } else if (typeof res.data === 'object' && 'version' in res.data && typeof res.data.version === 'number') {
           // update 返回完整 IssueDetailVO，包含 version 字段
           issue.version = res.data.version
         } else {
           // 其他情况本地递增
           issue.version = (issue.version || 0) + 1
+        }
+        // 显示自动分配反馈（仅对 TransitStatusResultVO 响应有效）
+        if (typeof res.data === 'object' && 'actionResult' in res.data) {
+          showActionFeedback(res.data)
         }
       } else {
         issue.version = (issue.version || 0) + 1

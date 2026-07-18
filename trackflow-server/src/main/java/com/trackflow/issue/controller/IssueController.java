@@ -24,6 +24,7 @@ import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.service.WorkflowService;
+import com.trackflow.workflow.vo.ActionExecutionResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -313,7 +314,7 @@ public class IssueController {
 
     @PostMapping("/{id}/transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
-    public R<Integer> transitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<TransitStatusResultVO> transitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
@@ -331,18 +332,18 @@ public class IssueController {
         }
 
         // Controller 已完成工作流校验，传入 skipWorkflowCheck=true 避免 Service 重复校验
-        issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
+        ActionExecutionResult actionResult = issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
                 dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
                 dto.getVersion(), true);
 
-        // 返回更新后的版本号，用于前端乐观锁同步
+        // 返回更新后的版本号 + 动作执行结果
         Issue updated = issueService.getById(id);
-        return R.ok(updated.getVersion());
+        return R.ok(TransitStatusResultVO.of(updated.getVersion(), actionResult));
     }
 
     @PostMapping("/{id}/transitions/undo")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<Integer> undoTransitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
+    public R<TransitStatusResultVO> undoTransitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
         // 撤销操作：验证目标状态必须是上一个状态（从活动记录获取），防止任意跳转
         IssueActivity lastStatusChange = issueService.getLastStatusChange(id);
         if (lastStatusChange == null) {
@@ -383,11 +384,11 @@ public class IssueController {
         }
 
         // 目标状态已验证为上一个状态，跳过工作流校验执行撤销
-        issueService.transitStatusSkipWorkflow(id, dto.getStatusId(), "撤销状态变更");
+        ActionExecutionResult actionResult = issueService.transitStatusSkipWorkflow(id, dto.getStatusId(), "撤销状态变更");
 
         // 返回更新后的版本号
         Issue updated = issueService.getById(id);
-        return R.ok(updated.getVersion());
+        return R.ok(TransitStatusResultVO.of(updated.getVersion(), actionResult));
     }
 
     @PutMapping("/{id}/assign")

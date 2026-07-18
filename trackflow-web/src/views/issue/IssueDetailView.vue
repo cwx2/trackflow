@@ -144,6 +144,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
+import { showActionFeedback } from '@/utils/transition'
 import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi, customFieldApi } from '@/api'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
@@ -719,6 +720,7 @@ async function onTransition(target: StatusInfo) {
     if (res.code === 0) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
+      showActionFeedback(res.data)
     } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
       // 关闭前置检查警告（子任务未完成 / 被阻塞 / 组合）— 统一弹窗
       Modal.warning({
@@ -733,6 +735,7 @@ async function onTransition(target: StatusInfo) {
             if (forceRes.code === 0) {
               await loadAll()
               Message.success(`状态已变更为 ${target.name}`)
+              showActionFeedback(forceRes.data)
             } else {
               Message.error(forceRes.message || '变更失败')
             }
