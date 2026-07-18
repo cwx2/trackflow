@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 报表统计专用 Mapper — 所有聚合在 SQL 层完成，不加载原始记录到内存
@@ -170,4 +171,18 @@ public interface ReportStatisticsMapper {
      * 返回行：(project_name, estimated_hours_sum, spent_hours_sum, issue_count)
      */
     List<EstimationSummaryRow> selectEstimationSummary(@Param("projectIds") List<Long> projectIds);
+
+    // ─── 报表执行引擎增强查询 ─────────────────────────────────────────
+
+    /**
+     * 通用单维度分组查询（带筛选 + 时间范围）
+     * groupBy 维度在 SQL 中动态选择
+     */
+    List<ReportGroupRow> selectReportGrouped(@Param("params") Map<String, Object> params);
+
+    /**
+     * 双维度交叉分组查询
+     * 返回行：(primary_label, secondary_label, cnt)
+     */
+    List<ReportCrossRow> selectReportCross(@Param("params") Map<String, Object> params);
 }

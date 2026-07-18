@@ -544,4 +544,165 @@
         ORDER BY estimated_hours_sum DESC
     </select>
 
+    <!-- ═══════════ 报表执行引擎增强查询 ═══════════ -->
+
+    <!-- 可复用：报表筛选条件片段 -->
+    <sql id="reportFilters">
+        <if test="params.projectIds != null and params.projectIds.size() > 0">
+            <if test="params.projectIds.size() == 1">
+                AND i.project_id = #{params.projectIds[0]}
+            </if>
+            <if test="params.projectIds.size() > 1">
+                AND i.project_id IN
+                <foreach collection="params.projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+            </if>
+        </if>
+        <if test="params.sprintId != null">
+            AND i.sprint_id = #{params.sprintId}
+        </if>
+        <if test="params.statuses != null and params.statuses.size() > 0">
+            AND s.name IN
+            <foreach collection="params.statuses" item="st" open="(" separator="," close=")">#{st}</foreach>
+        </if>
+        <if test="params.statusesExclude != null and params.statusesExclude.size() > 0">
+            AND s.name NOT IN
+            <foreach collection="params.statusesExclude" item="se" open="(" separator="," close=")">#{se}</foreach>
+        </if>
+        <if test="params.priorities != null and params.priorities.size() > 0">
+            AND i.priority IN
+            <foreach collection="params.priorities" item="pr" open="(" separator="," close=")">#{pr}</foreach>
+        </if>
+        <if test="params.issueTypes != null and params.issueTypes.size() > 0">
+            AND i.issue_type IN
+            <foreach collection="params.issueTypes" item="it" open="(" separator="," close=")">#{it}</foreach>
+        </if>
+        <if test="params.assigneeIds != null and params.assigneeIds.size() > 0">
+            AND i.assignee_id IN
+            <foreach collection="params.assigneeIds" item="aid" open="(" separator="," close=")">#{aid}</foreach>
+        </if>
+        <if test="params.timeStart != null">
+            AND i.${params.timeField} >= #{params.timeStart}
+        </if>
+        <if test="params.timeEnd != null">
+            AND i.${params.timeField} &lt;= #{params.timeEnd}
+        </if>
+    </sql>
+
+    <!-- 分组维度 SELECT 表达式 -->
+    <sql id="groupByExpression">
+        <choose>
+            <when test="${dimensionParam} == 'status'">
+                s.name
+            </when>
+            <when test="${dimensionParam} == 'priority'">
+                COALESCE(i.priority, 'Normal')
+            </when>
+            <when test="${dimensionParam} == 'type'">
+                COALESCE(i.issue_type, 'Task')
+            </when>
+            <when test="${dimensionParam} == 'assignee'">
+                COALESCE(u.display_name, '未分配')
+            </when>
+            <when test="${dimensionParam} == 'project'">
+                p.name
+            </when>
+            <otherwise>
+                s.name
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 通用单维度分组查询 -->
+    <select id="selectReportGrouped" resultType="com.trackflow.report.mapper.result.ReportGroupRow">
+        SELECT
+        <choose>
+            <when test="params.groupBy == 'status'">s.name</when>
+            <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
+            <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
+            <when test="params.groupBy == 'assignee'">COALESCE(u.display_name, '未分配')</when>
+            <when test="params.groupBy == 'project'">p.name</when>
+            <otherwise>s.name</otherwise>
+        </choose>
+        AS label,
+        COUNT(*) AS cnt
+        FROM issue i
+        JOIN issue_status s ON s.id = i.status_id
+        <if test="params.groupBy == 'assignee'">
+            LEFT JOIN sys_user u ON u.id = i.assignee_id
+        </if>
+        <if test="params.groupBy == 'project'">
+            JOIN project p ON p.id = i.project_id
+        </if>
+        WHERE i.deleted_at IS NULL
+        <include refid="reportFilters"/>
+        GROUP BY
+        <choose>
+            <when test="params.groupBy == 'status'">s.name</when>
+            <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
+            <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
+            <when test="params.groupBy == 'assignee'">COALESCE(u.display_name, '未分配')</when>
+            <when test="params.groupBy == 'project'">p.name</when>
+            <otherwise>s.name</otherwise>
+        </choose>
+        <choose>
+            <when test="params.sortBy == 'count_asc'">ORDER BY cnt ASC</when>
+            <when test="params.sortBy == 'label_asc'">ORDER BY label ASC</when>
+            <when test="params.sortBy == 'label_desc'">ORDER BY label DESC</when>
+            <otherwise>ORDER BY cnt DESC</otherwise>
+        </choose>
+    </select>
+
+    <!-- 双维度交叉分组查询 -->
+    <select id="selectReportCross" resultType="com.trackflow.report.mapper.result.ReportCrossRow">
+        SELECT
+        <choose>
+            <when test="params.groupBy == 'status'">s.name</when>
+            <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
+            <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
+            <when test="params.groupBy == 'assignee'">COALESCE(u.display_name, '未分配')</when>
+            <when test="params.groupBy == 'project'">p.name</when>
+            <otherwise>s.name</otherwise>
+        </choose>
+        AS primary_label,
+        <choose>
+            <when test="params.secondGroupBy == 'status'">s.name</when>
+            <when test="params.secondGroupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
+            <when test="params.secondGroupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
+            <when test="params.secondGroupBy == 'assignee'">COALESCE(u.display_name, '未分配')</when>
+            <when test="params.secondGroupBy == 'project'">p.name</when>
+            <otherwise>s.name</otherwise>
+        </choose>
+        AS secondary_label,
+        COUNT(*) AS cnt
+        FROM issue i
+        JOIN issue_status s ON s.id = i.status_id
+        <if test="params.groupBy == 'assignee' or params.secondGroupBy == 'assignee'">
+            LEFT JOIN sys_user u ON u.id = i.assignee_id
+        </if>
+        <if test="params.groupBy == 'project' or params.secondGroupBy == 'project'">
+            JOIN project p ON p.id = i.project_id
+        </if>
+        WHERE i.deleted_at IS NULL
+        <include refid="reportFilters"/>
+        GROUP BY
+        <choose>
+            <when test="params.groupBy == 'status'">s.name</when>
+            <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
+            <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
+            <when test="params.groupBy == 'assignee'">COALESCE(u.display_name, '未分配')</when>
+            <when test="params.groupBy == 'project'">p.name</when>
+            <otherwise>s.name</otherwise>
+        </choose>
+        ,
+        <choose>
+            <when test="params.secondGroupBy == 'status'">s.name</when>
+            <when test="params.secondGroupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
+            <when test="params.secondGroupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
+            <when test="params.secondGroupBy == 'assignee'">COALESCE(u.display_name, '未分配')</when>
+            <when test="params.secondGroupBy == 'project'">p.name</when>
+            <otherwise>s.name</otherwise>
+        </choose>
+        ORDER BY cnt DESC
+    </select>
+
 </mapper>

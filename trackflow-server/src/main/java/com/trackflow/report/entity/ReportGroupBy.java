@@ -14,7 +14,8 @@ public enum ReportGroupBy {
     STATUS("status", "按状态"),
     ASSIGNEE("assignee", "按负责人"),
     PRIORITY("priority", "按优先级"),
-    TYPE("type", "按工单类型");
+    TYPE("type", "按工单类型"),
+    PROJECT("project", "按项目");
 
     private final String value;
     private final String label;
