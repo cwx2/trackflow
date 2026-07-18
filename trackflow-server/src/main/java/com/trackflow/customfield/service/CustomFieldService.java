@@ -514,6 +514,93 @@ public class CustomFieldService {
         return columns;
     }
 
+    /**
+     * 为创建工单场景应用默认值并校验必填字段。
+     * <p>
+     * 流程：
+     * 1. 获取项目+类型下所有适用字段
+     * 2. 对用户未提供值的字段：
+     *    - 有 defaultValue → 填充
+     *    - 是 list 类型且有 is_default=true 的选项 → 填充选项 ID
+     * 3. 对必填字段：用户未提供且无默认值 → 抛出异常
+     * 4. 返回合并后的 fieldValues（含默认值），供 saveValues 使用
+     *
+     * @param userProvided 用户显式提供的字段值（可为 null 或空）
+     * @param issueType    工单类型
+     * @param projectId    项目ID
+     * @return 合并默认值后的字段值 Map（字段ID → 值）
+     */
+    public Map<Long, String> applyDefaultsAndValidate(Map<Long, String> userProvided, String issueType, Long projectId) {
+        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        if (applicableFields.isEmpty()) {
+            return userProvided != null ? userProvided : new HashMap<>();
+        }
+
+        Map<Long, String> merged = new HashMap<>();
+        if (userProvided != null) {
+            merged.putAll(userProvided);
+        }
+
+        List<CustomFieldValidationEngine.FieldValidationError> errors = new ArrayList<>();
+
+        for (CustomFieldDefinition field : applicableFields) {
+            if (merged.containsKey(field.getId())) {
+                // 用户已提供值，跳过默认值填充
+                continue;
+            }
+
+            // 尝试应用默认值
+            String defaultVal = resolveDefaultValue(field);
+            if (defaultVal != null && !defaultVal.isBlank()) {
+                merged.put(field.getId(), defaultVal);
+            } else if (Boolean.TRUE.equals(field.getIsRequired())) {
+                // 必填字段无默认值且用户未提供 → 报错
+                errors.add(new CustomFieldValidationEngine.FieldValidationError(
+                        field.getName(), "此字段为必填项"));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "自定义字段验证失败: " + errors.stream()
+                            .map(e -> e.getField() + ": " + e.getMessage())
+                            .collect(Collectors.joining("; ")));
+        }
+
+        return merged;
+    }
+
+    /**
+     * 解析字段的默认值。
+     * - list 类型：查找 is_default=true 且未归档的选项，返回选项 ID
+     * - 其他类型：返回 defaultValue 字段值
+     */
+    private String resolveDefaultValue(CustomFieldDefinition field) {
+        if ("list".equals(field.getFieldFormat())) {
+            // list 类型：查找 is_default=true 的未归档选项
+            List<CustomFieldOption> defaultOptions = optionMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldOption>()
+                            .eq(CustomFieldOption::getCustomFieldId, field.getId())
+                            .eq(CustomFieldOption::getIsDefault, true)
+                            .eq(CustomFieldOption::getIsArchived, false));
+            if (!defaultOptions.isEmpty()) {
+                if (Boolean.TRUE.equals(field.getIsMulti())) {
+                    // 多值列表：返回逗号分隔的选项 ID
+                    return defaultOptions.stream()
+                            .map(o -> String.valueOf(o.getId()))
+                            .collect(Collectors.joining(","));
+                } else {
+                    // 单值列表：返回第一个默认选项 ID
+                    return String.valueOf(defaultOptions.get(0).getId());
+                }
+            }
+            return null;
+        } else {
+            // 非 list 类型：直接返回 defaultValue
+            return field.getDefaultValue();
+        }
+    }
+
     @Transactional
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
         if (fieldValues == null || fieldValues.isEmpty()) return;

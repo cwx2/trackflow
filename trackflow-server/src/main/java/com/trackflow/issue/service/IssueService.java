@@ -136,16 +136,21 @@ public class IssueService {
             transitionActionEngine.executeOnCreate(issue, currentUserId);
         }
 
-        // 保存自定义字段值到 EAV 表（带验证）
-        if (dto.getCustomFields() != null && !dto.getCustomFields().isEmpty()) {
-            Map<Long, String> fieldValues = new java.util.HashMap<>();
+        // 保存自定义字段值到 EAV 表（带默认值应用 + 必填校验）
+        Map<Long, String> userFieldValues = new java.util.HashMap<>();
+        if (dto.getCustomFields() != null) {
             for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
                 try {
-                    fieldValues.put(Long.parseLong(entry.getKey()),
+                    userFieldValues.put(Long.parseLong(entry.getKey()),
                             entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
                 } catch (NumberFormatException ignored) {}
             }
-            customFieldService.saveValues(issue.getId(), fieldValues,
+        }
+        // 应用默认值并校验必填字段（始终执行，无论用户是否传了 customFields）
+        Map<Long, String> mergedFieldValues = customFieldService.applyDefaultsAndValidate(
+                userFieldValues, issue.getIssueType(), issue.getProjectId());
+        if (!mergedFieldValues.isEmpty()) {
+            customFieldService.saveValues(issue.getId(), mergedFieldValues,
                     issue.getIssueType(), issue.getProjectId());
         }
 
