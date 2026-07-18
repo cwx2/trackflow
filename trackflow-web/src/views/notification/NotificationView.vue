@@ -108,7 +108,11 @@
           <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
             <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
             <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
-            <span v-else>{{ getTypeIcon(item.type) }}</span>
+            <span v-else class="actor-system" title="系统操作">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 1.363 4.177c.255.426.542.832.857 1.215A7.002 7.002 0 0 1 1 8c0-3.526 2.621-6.435 6.02-6.91a9.586 9.586 0 0 0-1.24 7.66Zm4.44-1.5a9.64 9.64 0 0 0-1.363-4.177c-.255-.426-.542-.832-.857-1.215A7.002 7.002 0 0 1 15 8c0 3.526-2.621 6.435-6.02 6.91a9.586 9.586 0 0 0 1.24-7.66Z"/>
+              </svg>
+            </span>
           </div>
           <div class="item-content">
             <div class="item-title">
@@ -294,26 +298,6 @@ function getEmptyDesc(): string {
     case 'subscription': return '当你关注的工单有状态变更、评论或分配时，通知会出现在这里'
     case 'system': return '项目成员变更、归档等系统级事件会出现在这里'
     default: return '当有新的工单分配、评论或状态变更时，通知会出现在这里'
-  }
-}
-
-function getTypeIcon(type: string): string {
-  switch (type) {
-    case 'issue_assigned': return '👤'
-    case 'issue_auto_assigned': return '🤖'
-    case 'issue_commented': return '💬'
-    case 'issue_status_changed': return '🔄'
-    case 'mention': return '📢'
-    case 'member_added': return '➕'
-    case 'member_removed': return '➖'
-    case 'role_changed': return '🔑'
-    case 'lead_changed': return '👑'
-    case 'project_archived': return '📦'
-    case 'project_restored': return '📂'
-    case 'project_deleted': return '🗑️'
-    case 'sprint_started': return '🚀'
-    case 'sprint_completed': return '🏁'
-    default: return '🔔'
   }
 }
 
@@ -690,6 +674,14 @@ onMounted(() => {
   font-weight: 500;
   color: var(--tf-text-secondary);
   text-transform: uppercase;
+}
+
+.actor-system {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tf-text-tertiary);
+  opacity: 0.7;
 }
 
 .item-content {
