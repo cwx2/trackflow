@@ -594,6 +594,7 @@
         :sort-state="sortState"
         :active-issue-id="previewIssueId"
         :selected-ids="selectedIds"
+        :show-checkbox="canBatchOps"
         @item-click="onListItemClick"
         @item-dblclick="onListItemDblClick"
         @sort-change="onListSortChange"
@@ -677,6 +678,25 @@ const {
 // 全局级创建权限：统一使用 authStore.canCreateIssue
 const authStore = useAuthStore()
 const canCreateIssueGlobal = authStore.canCreateIssue
+
+// 全局级批量操作权限：控制 checkbox 列和批量工具栏是否显示
+const canBatchOps = computed(() => {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:batch_ops')
+  }
+  // 权限未加载时乐观显示
+  return true
+})
+
+// 全局级 Sprint 查看权限：控制是否预加载 Sprint 数据
+const canViewSprintGlobal = computed(() => {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:sprint_view') || authStore.hasGlobalPermission('nav:sprint_manage')
+  }
+  return true
+})
 
 // Panel state (declared before useColumnConfig so it can be passed as ref)
 const activeProjectId = ref<string | null>(null)
@@ -1276,7 +1296,7 @@ function loadColumnWidths(): Record<string, number> {
 }
 
 /**
- * 表格最小总宽度 = 各可见列宽度之和 + checkbox列(60px)
+ * 表格最小总宽度 = 各可见列宽度之和 + checkbox列(60px，仅有权限时)
  */
 const tableMinWidth = computed(() => {
   const sum = visibleColumns.value
@@ -1284,7 +1304,7 @@ const tableMinWidth = computed(() => {
     .reduce((acc, col) => {
       return acc + (columnWidths[col.key] || DEFAULT_COLUMN_WIDTHS[col.key] || 100)
     }, 0)
-  return sum + 60
+  return sum + (canBatchOps.value ? 60 : 0)
 })
 
 /**
@@ -1304,10 +1324,13 @@ const tableColumns = computed(() => {
     }))
 })
 
-// Row selection config for a-table
-const rowSelection = reactive({
-  type: 'checkbox' as const,
-  showCheckedAll: true
+// Row selection config for a-table (only show when user has batch ops permission)
+const rowSelection = computed(() => {
+  if (!canBatchOps.value) return undefined
+  return {
+    type: 'checkbox' as const,
+    showCheckedAll: true
+  }
 })
 
 // a-table event handlers
@@ -1785,6 +1808,8 @@ function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions
 
 /** 预加载当前列表中涉及到的 sprint 名称 */
 async function preloadSprintNames() {
+  // 用户无 sprint:view 权限时跳过，避免触发 403
+  if (!canViewSprintGlobal.value) return
   const projectIds = [...new Set(issues.value.map(i => i.projectId).filter(Boolean))]
   const toLoad = projectIds.filter(pid => !sprintOptionsCache[pid])
   await Promise.all(toLoad.map(async (pid) => {

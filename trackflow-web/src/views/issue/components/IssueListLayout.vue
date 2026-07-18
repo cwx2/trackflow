@@ -41,6 +41,7 @@
             :expanded="expandedIds.has(node.issue.id)"
             :active="activeIssueId === node.issue.id"
             :selected="selectedIds.has(node.issue.id)"
+            :show-checkbox="showCheckbox"
             @click="$emit('item-click', node.issue)"
             @dblclick="$emit('item-dblclick', node.issue)"
             @toggle-expand="toggleExpand(node.issue)"
@@ -61,6 +62,7 @@
           :expanded="false"
           :active="activeIssueId === issue.id"
           :selected="selectedIds.has(issue.id)"
+          :show-checkbox="showCheckbox"
           @click="$emit('item-click', issue)"
           @dblclick="$emit('item-dblclick', issue)"
           @select="toggleSelect(issue)"
@@ -82,7 +84,7 @@ interface IssueWithDesc extends IssueVO {
   description?: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   issues: IssueWithDesc[]
   density: DensityLevel
   structure: StructureMode
@@ -90,7 +92,10 @@ const props = defineProps<{
   sortState: SortState
   activeIssueId?: string | null
   selectedIds: Set<string>
-}>()
+  showCheckbox?: boolean
+}>(), {
+  showCheckbox: true
+})
 
 const emit = defineEmits<{
   (e: 'item-click', issue: IssueWithDesc): void

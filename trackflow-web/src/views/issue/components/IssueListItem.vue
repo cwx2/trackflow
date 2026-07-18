@@ -13,7 +13,7 @@
     @dblclick="$emit('dblclick')"
   >
     <!-- Selection checkbox -->
-    <label class="item-checkbox" @click.stop>
+    <label v-if="showCheckbox" class="item-checkbox" @click.stop>
       <input
         type="checkbox"
         :checked="selected"
@@ -107,7 +107,7 @@ interface IssueListItemIssue extends IssueVO {
   description?: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   issue: IssueListItemIssue
   density: DensityLevel
   indent: number
@@ -115,7 +115,10 @@ const props = defineProps<{
   expanded: boolean
   active: boolean
   selected: boolean
-}>()
+  showCheckbox?: boolean
+}>(), {
+  showCheckbox: true
+})
 
 defineEmits<{
   (e: 'click'): void

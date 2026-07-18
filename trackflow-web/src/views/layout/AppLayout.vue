@@ -48,7 +48,7 @@
           <span class="nav-icon">⚙️</span>
           <span class="nav-label">管理</span>
         </router-link>
-        <router-link to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
+        <router-link v-if="canViewTrash" to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
           <span class="nav-icon">🗑️</span>
           <span class="nav-label">回收站</span>
         </router-link>
@@ -207,6 +207,17 @@ const canViewReport = computed(() => {
   }
   // 权限未加载时乐观显示，确保所有页面导航一致（包括 403/404 错误页）
   // 路由守卫 + 后端 @PreAuthorize 做最终权限拦截
+  return true
+})
+
+const canViewTrash = computed(() => {
+  // system:admin 自动拥有所有权限
+  if (isAdmin.value) return true
+  // 后端在 my-global-permissions 中返回 nav:trash 表示用户在任意项目中有 issue:delete
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:trash')
+  }
+  // 权限未加载时乐观显示
   return true
 })
 

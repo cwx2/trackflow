@@ -94,6 +94,21 @@ public class AuthController {
             if (permissionService.hasPermissionInAnyProject(userId, "sprint:create")) {
                 permissions.add("nav:sprint_manage");
             }
+            // 用户在任意项目中有 sprint:view 权限 → 允许前端请求 Sprint 数据
+            if (permissionService.hasPermissionInAnyProject(userId, "sprint:view")) {
+                permissions.add("nav:sprint_view");
+            }
+            // 用户在任意项目中有 issue:delete 权限 → 显示回收站入口
+            if (permissionService.hasPermissionInAnyProject(userId, "issue:delete")) {
+                permissions.add("nav:trash");
+            }
+            // 用户在任意项目中有批量操作权限 → 显示 checkbox 列和批量工具栏
+            if (permissionService.hasPermissionInAnyProject(userId, "issue:edit")
+                || permissionService.hasPermissionInAnyProject(userId, "issue:delete")
+                || permissionService.hasPermissionInAnyProject(userId, "issue:assign")
+                || permissionService.hasPermissionInAnyProject(userId, "issue:change_status")) {
+                permissions.add("nav:batch_ops");
+            }
         }
 
         return R.ok(permissions);
