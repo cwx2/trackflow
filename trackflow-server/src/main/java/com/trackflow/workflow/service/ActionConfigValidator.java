@@ -1,7 +1,14 @@
 package com.trackflow.workflow.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.system.entity.SysRole;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysRoleMapper;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.dto.ActionConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +20,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 动作配置校验器 —— 校验 action_config JSON 是否符合 schema 规则。
+ * 动作配置校验器 —— 校验 action_config JSON 是否符合 schema 规则，
+ * 并验证引用实体（用户、角色）的存在性和有效性。
  */
 @Slf4j
 @Component
@@ -27,6 +35,9 @@ public class ActionConfigValidator {
     private static final Set<String> VALID_MODES = Set.of("round_robin", "least_loaded", "weighted_round_robin");
 
     private final ObjectMapper objectMapper;
+    private final SysUserMapper sysUserMapper;
+    private final SysRoleMapper sysRoleMapper;
+    private final ProjectMemberMapper projectMemberMapper;
 
     /**
      * 校验 action_config 结构。
@@ -87,6 +98,143 @@ public class ActionConfigValidator {
         }
 
         return errors;
+    }
+
+    /**
+     * 校验 action_config 中引用实体的存在性和有效性。
+     * <p>
+     * 必须在结构校验（validate）通过后调用。验证内容：
+     * <ul>
+     *   <li>specific_user：user_id 对应用户存在且活跃；项目级动作还要验证是项目成员</li>
+     *   <li>role_based：role_id 对应角色存在且为 project 类型</li>
+     * </ul>
+     *
+     * @param actionConfig 原始 Map 格式的配置
+     * @param projectId    项目 ID（null 表示全局动作）
+     * @return 错误消息列表，空列表表示校验通过
+     */
+    public List<String> validateEntityExistence(Map<String, Object> actionConfig, Long projectId) {
+        List<String> errors = new ArrayList<>();
+
+        if (actionConfig == null || actionConfig.isEmpty()) {
+            return errors;
+        }
+
+        String strategy = actionConfig.get("strategy").toString();
+
+        switch (strategy) {
+            case "specific_user" -> validateSpecificUser(actionConfig, projectId, errors);
+            case "role_based" -> validateRoleBased(actionConfig, errors);
+        }
+
+        // 如果 fallback_strategy 也是 specific_user 或 role_based，也要校验其引用
+        Object fallback = actionConfig.get("fallback_strategy");
+        if (fallback != null && !fallback.toString().isBlank()) {
+            String fallbackStrategy = fallback.toString();
+            if ("specific_user".equals(fallbackStrategy)) {
+                Object fallbackUserId = actionConfig.get("fallback_user_id");
+                if (fallbackUserId != null) {
+                    validateUserExists(parseLong(fallbackUserId), projectId, errors, "fallback_user_id");
+                }
+            } else if ("role_based".equals(fallbackStrategy)) {
+                Object fallbackRoleId = actionConfig.get("fallback_role_id");
+                if (fallbackRoleId != null) {
+                    validateRoleExists(parseLong(fallbackRoleId), errors, "fallback_role_id");
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * 校验 specific_user 策略的 user_id 有效性
+     */
+    private void validateSpecificUser(Map<String, Object> actionConfig, Long projectId, List<String> errors) {
+        Object userIdObj = actionConfig.get("user_id");
+        if (userIdObj == null) {
+            return; // 结构校验已处理
+        }
+        Long userId = parseLong(userIdObj);
+        if (userId == null) {
+            errors.add("user_id 格式无效，必须为数字");
+            return;
+        }
+        validateUserExists(userId, projectId, errors, "user_id");
+    }
+
+    /**
+     * 校验用户存在性、活跃性、项目成员关系
+     */
+    private void validateUserExists(Long userId, Long projectId, List<String> errors, String fieldName) {
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            errors.add(fieldName + " 对应的用户不存在（ID: " + userId + "）");
+            return;
+        }
+        if (!"active".equals(user.getStatus())) {
+            errors.add(fieldName + " 对应的用户已禁用（用户: " + user.getUsername() + "）");
+            return;
+        }
+        // 如果是项目级动作，验证用户是该项目的成员
+        if (projectId != null) {
+            boolean isMember = projectMemberMapper.exists(
+                    new LambdaQueryWrapper<ProjectMember>()
+                            .eq(ProjectMember::getProjectId, projectId)
+                            .eq(ProjectMember::getUserId, userId)
+            );
+            if (!isMember) {
+                errors.add(fieldName + " 对应的用户不是该项目的成员（用户: " + user.getUsername() + "）");
+            }
+        }
+    }
+
+    /**
+     * 校验 role_based 策略的 role_id 有效性
+     */
+    private void validateRoleBased(Map<String, Object> actionConfig, List<String> errors) {
+        Object roleIdObj = actionConfig.get("role_id");
+        if (roleIdObj == null) {
+            return; // 结构校验已处理
+        }
+        Long roleId = parseLong(roleIdObj);
+        if (roleId == null) {
+            errors.add("role_id 格式无效，必须为数字");
+            return;
+        }
+        validateRoleExists(roleId, errors, "role_id");
+    }
+
+    /**
+     * 校验角色存在性和类型
+     */
+    private void validateRoleExists(Long roleId, List<String> errors, String fieldName) {
+        SysRole role = sysRoleMapper.selectById(roleId);
+        if (role == null) {
+            errors.add(fieldName + " 对应的角色不存在（ID: " + roleId + "）");
+            return;
+        }
+        if (!"project".equals(role.getRoleType())) {
+            errors.add(fieldName + " 必须引用项目级角色（role_type='project'），当前角色 '"
+                    + role.getName() + "' 为 " + role.getRoleType() + " 类型");
+        }
+    }
+
+    /**
+     * 安全地将 Object 转为 Long（支持 Integer、Long、String 等类型）
+     */
+    private Long parseLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
