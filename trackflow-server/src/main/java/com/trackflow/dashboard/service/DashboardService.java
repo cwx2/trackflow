@@ -8,6 +8,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.result.ActivityRow;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.issue.vo.IssueVO;
 import com.trackflow.project.mapper.ProjectMapper;
@@ -244,7 +245,7 @@ public class DashboardService {
     public List<DashboardActivityVO> getRecentActivity(Long userId, int limit) {
         List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
 
-        List<Map<String, Object>> rows;
+        List<ActivityRow> rows;
         if (!userProjectIds.isEmpty()) {
             // 基于项目范围的活动查询（通过 SQL JOIN 过滤，无需先加载 issue ID 列表）
             rows = issueMapper.selectDashboardActivitiesByProjects(userProjectIds, limit);
@@ -268,19 +269,17 @@ public class DashboardService {
 
         return rows.stream().map(row -> {
             DashboardActivityVO vo = new DashboardActivityVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setIssueId(String.valueOf(row.get("issue_id")));
-            vo.setIssueKey((String) row.get("issue_key"));
-            vo.setIssueTitle((String) row.get("issue_title"));
-            vo.setUserId(String.valueOf(row.get("user_id")));
-            vo.setUserName((String) row.get("user_name"));
-            vo.setAction((String) row.get("action"));
-            vo.setFieldName((String) row.get("field_name"));
-            vo.setOldValue((String) row.get("old_value"));
-            vo.setNewValue((String) row.get("new_value"));
-            if (row.get("created_at") != null) {
-                vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
-            }
+            vo.setId(String.valueOf(row.getId()));
+            vo.setIssueId(String.valueOf(row.getIssueId()));
+            vo.setIssueKey(row.getIssueKey());
+            vo.setIssueTitle(row.getIssueTitle());
+            vo.setUserId(String.valueOf(row.getUserId()));
+            vo.setUserName(row.getUserName());
+            vo.setAction(row.getAction());
+            vo.setFieldName(row.getFieldName());
+            vo.setOldValue(row.getOldValue());
+            vo.setNewValue(row.getNewValue());
+            vo.setCreatedAt(row.getCreatedAt());
             return vo;
         }).toList();
     }

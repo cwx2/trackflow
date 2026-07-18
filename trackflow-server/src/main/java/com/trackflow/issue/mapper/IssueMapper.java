@@ -3,6 +3,7 @@ package com.trackflow.issue.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.mapper.result.ActivityRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -32,17 +33,17 @@ public interface IssueMapper extends BaseMapper<Issue> {
     /**
      * 活动列表 JOIN 用户表（一次查询）
      */
-    List<Map<String, Object>> selectActivitiesWithUser(@Param("issueId") Long issueId);
+    List<ActivityRow> selectActivitiesWithUser(@Param("issueId") Long issueId);
 
     /**
      * Dashboard 活动流：查询指定 issue 列表的最近活动记录，JOIN 用户表和 Issue 表
      */
-    List<Map<String, Object>> selectDashboardActivities(@Param("issueIds") List<Long> issueIds, @Param("limit") int limit);
+    List<ActivityRow> selectDashboardActivities(@Param("issueIds") List<Long> issueIds, @Param("limit") int limit);
 
     /**
      * Dashboard 活动流（基于项目范围）：通过 JOIN project_member 子查询，避免传递大量 issue ID
      */
-    List<Map<String, Object>> selectDashboardActivitiesByProjects(@Param("projectIds") List<Long> projectIds, @Param("limit") int limit);
+    List<ActivityRow> selectDashboardActivitiesByProjects(@Param("projectIds") List<Long> projectIds, @Param("limit") int limit);
 
     /**
      * 查询回收站工单列表（已删除的），绕过 MyBatis-Plus 逻辑删除过滤

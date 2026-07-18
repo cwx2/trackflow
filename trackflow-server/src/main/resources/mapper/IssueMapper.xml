@@ -53,7 +53,7 @@
     </select>
 
     <!-- 活动列表：JOIN 用户表获取操作者名称 -->
-    <select id="selectActivitiesWithUser" resultType="map">
+    <select id="selectActivitiesWithUser" resultType="com.trackflow.issue.mapper.result.ActivityRow">
         SELECT
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
             <include refid="activity_value_columns"/>,
@@ -66,7 +66,7 @@
     </select>
 
     <!-- Dashboard 活动流：指定 issue 列表的最近活动 -->
-    <select id="selectDashboardActivities" resultType="map">
+    <select id="selectDashboardActivities" resultType="com.trackflow.issue.mapper.result.ActivityRow">
         SELECT
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
             <include refid="activity_value_columns"/>,
@@ -85,7 +85,7 @@
     </select>
 
     <!-- Dashboard 活动流（基于项目范围）：通过 JOIN issue 表的 project_id 过滤，避免传递大量 ID -->
-    <select id="selectDashboardActivitiesByProjects" resultType="map">
+    <select id="selectDashboardActivitiesByProjects" resultType="com.trackflow.issue.mapper.result.ActivityRow">
         SELECT
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
             <include refid="activity_value_columns"/>,

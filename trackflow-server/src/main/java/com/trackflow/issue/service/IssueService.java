@@ -15,9 +15,11 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
+import com.trackflow.issue.dto.MoveIssueDTO;
 import com.trackflow.issue.dto.UpdateIssueDTO;
 import com.trackflow.issue.entity.*;
 import com.trackflow.issue.mapper.*;
+import com.trackflow.issue.mapper.result.ActivityRow;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -71,6 +73,7 @@ public class IssueService {
     private final AttachmentConfig attachmentConfig;
     private final AncestorRefreshService ancestorRefreshService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
 
     /**
      * 创建 Issue
@@ -652,6 +655,126 @@ public class IssueService {
         if (parentId != null && parentId != 0) {
             ancestorRefreshService.refreshAncestorChain(parentId);
         }
+    }
+
+    // ========== 移动到其他项目 ==========
+
+    /**
+     * 将工单移动到目标项目。
+     * <p>
+     * 流程：
+     * 1. 权限校验（源项目 issue:move + 目标项目 issue:create）
+     * 2. 重新分配 issue_key（目标项目序号递增）
+     * 3. 字段清理（Sprint 置空、Assignee 校验、自定义字段清理）
+     * 4. 关联数据同步（time_entry project_id 更新）
+     * 5. 活动记录
+     * 6. 通知触发
+     */
+    @Transactional
+    public Issue moveToProject(Long issueId, MoveIssueDTO dto) {
+        Issue issue = getById(issueId);
+        Long sourceProjectId = issue.getProjectId();
+        Long targetProjectId = dto.getTargetProjectId();
+
+        // 不能移动到同一个项目
+        if (sourceProjectId.equals(targetProjectId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "工单已在该项目中，无需移动");
+        }
+
+        // 源项目和目标项目都不能是归档状态
+        projectService.assertProjectActive(sourceProjectId);
+        projectService.assertProjectActive(targetProjectId);
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 权限校验：源项目需要 issue:move，目标项目需要 issue:create
+        if (!permissionService.hasPermission(currentUserId, sourceProjectId, "issue:move")) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "您没有在源项目中移动工单的权限");
+        }
+        if (!permissionService.hasPermission(currentUserId, targetProjectId, "issue:create")) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "您没有在目标项目中创建工单的权限");
+        }
+
+        // 获取源/目标项目信息
+        var sourceProject = projectService.getById(sourceProjectId);
+        var targetProject = projectService.getById(targetProjectId);
+        if (targetProject == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标项目不存在");
+        }
+
+        // 生成新的 issue_key
+        String oldIssueKey = issue.getIssueKey();
+        int newSeq = projectService.nextIssueSequence(targetProjectId);
+        String newIssueKey = targetProject.getKey() + "-" + newSeq;
+
+        // 字段清理：Sprint 置空（不同项目的 Sprint 不通用）
+        Long oldSprintId = issue.getSprintId();
+        issue.setSprintId(null);
+
+        // 字段清理：如果 assignee 不是目标项目成员，置空
+        Long oldAssigneeId = issue.getAssigneeId();
+        if (oldAssigneeId != null && !projectService.isProjectMember(oldAssigneeId, targetProjectId)) {
+            issue.setAssigneeId(null);
+        }
+
+        // 更新核心字段
+        issue.setProjectId(targetProjectId);
+        issue.setIssueKey(newIssueKey);
+
+        // 子工单处理：清理 parentId（如果父工单不在目标项目中）
+        if (issue.getParentId() != null) {
+            Issue parent = issueMapper.selectById(issue.getParentId());
+            if (parent == null || !parent.getProjectId().equals(targetProjectId)) {
+                issue.setParentId(null);
+            }
+        }
+
+        issueMapper.updateById(issue);
+
+        // 自定义字段清理：移除不适用于目标项目的字段值
+        customFieldService.removeOrphanValues(issueId, issue.getIssueType(), targetProjectId);
+
+        // 关联数据：更新 time_entry 的 project_id
+        timeEntryMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.trackflow.timeentry.entity.TimeEntry>()
+                        .eq(com.trackflow.timeentry.entity.TimeEntry::getIssueId, issueId)
+                        .set(com.trackflow.timeentry.entity.TimeEntry::getProjectId, targetProjectId));
+
+        // 活动记录
+        String sourceProjectName = sourceProject != null ? sourceProject.getName() : String.valueOf(sourceProjectId);
+        String targetProjectName = targetProject.getName();
+        recordActivity(issueId, currentUserId, "moved_to_project", "project",
+                sourceProjectName, targetProjectName);
+
+        // Sprint 清空活动记录（如果原来有值）
+        if (oldSprintId != null) {
+            String oldSprintName = null;
+            var oldSprint = sprintMapper.selectById(oldSprintId);
+            if (oldSprint != null) oldSprintName = oldSprint.getName();
+            recordActivity(issueId, currentUserId, "updated", "sprint", oldSprintName, null);
+        }
+
+        // Assignee 清空活动记录（如果因移动被清空）
+        if (oldAssigneeId != null && issue.getAssigneeId() == null) {
+            String oldAssigneeName = getUserDisplayName(oldAssigneeId);
+            recordActivity(issueId, currentUserId, "assigned", "assignee", oldAssigneeName, null);
+        }
+
+        // issue_key 变更活动
+        recordActivity(issueId, currentUserId, "updated", "issue_key", oldIssueKey, newIssueKey);
+
+        // 失效两个项目的缓存
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sourceProjectId, "issue_moved"));
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(targetProjectId, "issue_moved"));
+
+        // 通知：通知工单相关人
+        eventPublisher.publishEvent(new IssueNotificationEvent.Moved(issue, sourceProjectId, targetProjectId, currentUserId));
+
+        log.info("Issue {} moved from project {} ({}) to project {} ({}). Key: {} → {}",
+                issueId, sourceProjectId, sourceProjectName, targetProjectId, targetProjectName,
+                oldIssueKey, newIssueKey);
+
+        return issue;
     }
 
     // ========== 父子关系逻辑 ==========
@@ -1461,18 +1584,18 @@ public class IssueService {
      * assignee 字段的 old/new value 在 SQL 层自动解析为用户显示名
      */
     public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
-        List<Map<String, Object>> rows = issueMapper.selectActivitiesWithUser(issueId);
+        List<ActivityRow> rows = issueMapper.selectActivitiesWithUser(issueId);
         return rows.stream().map(row -> {
             IssueActivityVO vo = new IssueActivityVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setIssueId(String.valueOf(row.get("issue_id")));
-            vo.setUserId(String.valueOf(row.get("user_id")));
-            vo.setUserName((String) row.get("user_name"));
-            vo.setAction((String) row.get("action"));
-            vo.setFieldName((String) row.get("field_name"));
-            vo.setOldValue((String) row.get("old_value"));
-            vo.setNewValue((String) row.get("new_value"));
-            if (row.get("created_at") != null) vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
+            vo.setId(String.valueOf(row.getId()));
+            vo.setIssueId(String.valueOf(row.getIssueId()));
+            vo.setUserId(String.valueOf(row.getUserId()));
+            vo.setUserName(row.getUserName());
+            vo.setAction(row.getAction());
+            vo.setFieldName(row.getFieldName());
+            vo.setOldValue(row.getOldValue());
+            vo.setNewValue(row.getNewValue());
+            vo.setCreatedAt(row.getCreatedAt());
             return vo;
         }).toList();
     }
@@ -1772,3 +1895,4 @@ public class IssueService {
         activityMapper.insert(activity);
     }
 }
+
