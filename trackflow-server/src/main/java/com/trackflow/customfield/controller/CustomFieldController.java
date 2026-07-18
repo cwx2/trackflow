@@ -11,6 +11,7 @@ import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
 import com.trackflow.customfield.dto.SetFieldConditionDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.customfield.entity.CustomFieldProject;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.AvailableColumnVO;
@@ -43,14 +44,19 @@ public class CustomFieldController {
         Page<CustomFieldDefinition> result = customFieldService.list(
                 query.toPage(), query.getFieldFormat(), query.getKeyword());
         List<CustomFieldDefinitionVO> voList = converter.toVOList(result.getRecords());
-        // 填充关联数据
+        // 批量加载关联数据（消除 N+1 查询）
+        List<Long> fieldIds = result.getRecords().stream()
+                .map(CustomFieldDefinition::getId).toList();
+        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
+        Map<Long, List<Long>> projectIdsMap = customFieldService.getBatchProjectIds(fieldIds);
+        Map<Long, List<String>> issueTypesMap = customFieldService.getBatchIssueTypes(fieldIds);
         for (int i = 0; i < result.getRecords().size(); i++) {
-            CustomFieldDefinition entity = result.getRecords().get(i);
+            Long fieldId = result.getRecords().get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
-            vo.setOptions(converter.toOptionVOList(customFieldService.getOptions(entity.getId())));
-            vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
+            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
                     .map(String::valueOf).toList());
-            vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
+            vo.setIssueTypes(issueTypesMap.getOrDefault(fieldId, List.of()));
         }
         return R.ok(new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize()));
@@ -111,13 +117,15 @@ public class CustomFieldController {
         List<CustomFieldDefinition> fields = customFieldService.listByProject(projectId, issueType);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
+        // 批量加载选项数据（消除 N+1 查询）
+        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
+        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
         for (int i = 0; i < fields.size(); i++) {
-            CustomFieldDefinition entity = fields.get(i);
+            Long fieldId = fields.get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
-            vo.setOptions(converter.toOptionVOList(
-                    customFieldService.getOptions(entity.getId())));
+            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
             // 填充条件信息
-            CustomFieldProject mapping = conditionsMap.get(entity.getId());
+            CustomFieldProject mapping = conditionsMap.get(fieldId);
             if (mapping != null && mapping.getConditionFieldId() != null) {
                 vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
                 vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
@@ -147,15 +155,20 @@ public class CustomFieldController {
         List<CustomFieldDefinition> fields = customFieldService.listProjectFields(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
+        // 批量加载关联数据（消除 N+1 查询）
+        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
+        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
+        Map<Long, List<Long>> projectIdsMap = customFieldService.getBatchProjectIds(fieldIds);
+        Map<Long, List<String>> issueTypesMap = customFieldService.getBatchIssueTypes(fieldIds);
         for (int i = 0; i < fields.size(); i++) {
-            CustomFieldDefinition entity = fields.get(i);
+            Long fieldId = fields.get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
-            vo.setOptions(converter.toOptionVOList(customFieldService.getOptions(entity.getId())));
-            vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
+            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
                     .map(String::valueOf).toList());
-            vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
+            vo.setIssueTypes(issueTypesMap.getOrDefault(fieldId, List.of()));
             // 填充条件信息
-            CustomFieldProject mapping = conditionsMap.get(entity.getId());
+            CustomFieldProject mapping = conditionsMap.get(fieldId);
             if (mapping != null && mapping.getConditionFieldId() != null) {
                 vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
                 vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
@@ -172,9 +185,12 @@ public class CustomFieldController {
     public R<List<CustomFieldDefinitionVO>> listAvailableForProject(@PathVariable("projectId") Long projectId) {
         List<CustomFieldDefinition> fields = customFieldService.listAvailableFieldsForProject(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
+        // 批量加载选项数据（消除 N+1 查询）
+        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
+        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
         for (int i = 0; i < fields.size(); i++) {
-            voList.get(i).setOptions(converter.toOptionVOList(
-                    customFieldService.getOptions(fields.get(i).getId())));
+            Long fieldId = fields.get(i).getId();
+            voList.get(i).setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
         }
         return R.ok(voList);
     }

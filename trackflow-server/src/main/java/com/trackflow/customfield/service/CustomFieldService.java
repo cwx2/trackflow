@@ -1317,6 +1317,52 @@ public class CustomFieldService {
                 .stream().map(CustomFieldIssueType::getIssueType).toList();
     }
 
+    // ========== 批量加载方法（消除 N+1 查询）==========
+
+    /**
+     * 批量获取多个字段的选项列表。
+     * @return Map<fieldId, List<CustomFieldOption>>（按 position 排序）
+     */
+    public Map<Long, List<CustomFieldOption>> getBatchOptions(List<Long> fieldIds) {
+        if (fieldIds == null || fieldIds.isEmpty()) return Map.of();
+        List<CustomFieldOption> allOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .in(CustomFieldOption::getCustomFieldId, fieldIds)
+                        .orderByAsc(CustomFieldOption::getPosition));
+        return allOptions.stream()
+                .collect(Collectors.groupingBy(CustomFieldOption::getCustomFieldId));
+    }
+
+    /**
+     * 批量获取多个字段的项目关联 ID 列表。
+     * @return Map<fieldId, List<projectId>>
+     */
+    public Map<Long, List<Long>> getBatchProjectIds(List<Long> fieldIds) {
+        if (fieldIds == null || fieldIds.isEmpty()) return Map.of();
+        List<CustomFieldProject> allMappings = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .in(CustomFieldProject::getCustomFieldId, fieldIds));
+        return allMappings.stream()
+                .collect(Collectors.groupingBy(
+                        CustomFieldProject::getCustomFieldId,
+                        Collectors.mapping(CustomFieldProject::getProjectId, Collectors.toList())));
+    }
+
+    /**
+     * 批量获取多个字段的适用工单类型列表。
+     * @return Map<fieldId, List<issueType>>
+     */
+    public Map<Long, List<String>> getBatchIssueTypes(List<Long> fieldIds) {
+        if (fieldIds == null || fieldIds.isEmpty()) return Map.of();
+        List<CustomFieldIssueType> allTypes = issueTypeMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldIssueType>()
+                        .in(CustomFieldIssueType::getCustomFieldId, fieldIds));
+        return allTypes.stream()
+                .collect(Collectors.groupingBy(
+                        CustomFieldIssueType::getCustomFieldId,
+                        Collectors.mapping(CustomFieldIssueType::getIssueType, Collectors.toList())));
+    }
+
     private AvailableColumnVO buildStandardColumn(String key, String label, boolean sortable, boolean removable) {
         AvailableColumnVO col = new AvailableColumnVO();
         col.setKey(key);
