@@ -165,8 +165,8 @@
         </template>
       </a-trigger>
 
-      <!-- 批量删除 -->
-      <a-button size="small" type="outline" status="danger" @click="confirmBatchDelete">
+      <!-- 批量删除（仅有 issue:delete 权限时显示） -->
+      <a-button v-if="canDelete" size="small" type="outline" status="danger" @click="confirmBatchDelete">
         <template #icon><icon-delete /></template>
         删除
       </a-button>
@@ -189,6 +189,7 @@ import { localizeStatusName } from '@/utils/fieldLabels'
 const props = defineProps<{
   selectedCount: number
   selectedIssues: IssueVO[]
+  canDelete?: boolean
 }>()
 
 const emit = defineEmits<{

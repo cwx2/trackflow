@@ -54,10 +54,22 @@ export function usePermission(issues: Ref<IssueVO[]>) {
     return perms.has('issue:edit')
   }
 
+  /**
+   * 判断当前用户是否可以删除工单（任意已加载项目中具有 issue:delete 权限）
+   * system:admin 直接返回 true
+   */
+  function canDeleteIssue(): boolean {
+    if (authStore.hasGlobalPermission('system:admin')) return true
+    // 只要任一已加载项目有 issue:delete 权限即可显示删除按钮
+    // 后端对每个工单仍会做精确校验
+    return Object.values(permissionCache.value).some(perms => perms.has('issue:delete'))
+  }
+
   return {
     permissionCache,
     loading,
     loadPermissions,
-    canEditIssue
+    canEditIssue,
+    canDeleteIssue
   }
 }

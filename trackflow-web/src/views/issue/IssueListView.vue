@@ -294,6 +294,7 @@
         v-if="selectedCount > 0"
         :selected-count="selectedCount"
         :selected-issues="selectedIssues"
+        :can-delete="canDeleteIssue()"
         @deselect-all="clearSelection"
         @batch-state="onBatchState"
         @batch-assign="onBatchAssign"
@@ -606,7 +607,7 @@ const {
 
 const { isCellEditing, executeEdit } = useInlineEdit(issues)
 const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchDelete } = useBatchOps()
-const { loadPermissions, canEditIssue } = usePermission(issues)
+const { loadPermissions, canEditIssue, canDeleteIssue } = usePermission(issues)
 
 // 全局级创建权限：统一使用 authStore.canCreateIssue
 const authStore = useAuthStore()

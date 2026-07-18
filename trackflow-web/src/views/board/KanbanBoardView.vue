@@ -620,6 +620,7 @@
         <BatchActionToolbar
           :selected-count="selectedCount"
           :selected-issues="selectedIssues"
+          :can-delete="canDeleteIssue"
           @deselect-all="clearSelection"
           @batch-state="onBatchState"
           @batch-assign="onBatchAssign"
@@ -722,7 +723,7 @@ const selectedProject = computed({
 })
 
 // 权限控制
-const { canChangeStatus, canCreateIssue, canEditProject } = usePermission(() => selectedProject.value)
+const { canChangeStatus, canCreateIssue, canEditProject, canDeleteIssue } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 const keyword = ref('')
 const loading = ref(false)
