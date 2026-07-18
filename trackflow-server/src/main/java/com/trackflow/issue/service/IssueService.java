@@ -74,6 +74,7 @@ public class IssueService {
     private final AncestorRefreshService ancestorRefreshService;
     private final ApplicationEventPublisher eventPublisher;
     private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
+    private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
 
     /**
      * 创建 Issue
@@ -642,6 +643,9 @@ public class IssueService {
 
         // 断开子工单的父引用（将子工单 parent_id 置为 NULL），防止产生孤儿引用
         issueMapper.clearParentId(id);
+
+        // 清理通知静音记录（工单删除后静音无意义，避免孤立数据残留）
+        mutedThreadService.deleteByResource("issue", id);
 
         // 先记录活动（deleteById 后逻辑删除字段被填充，查询会过滤掉）
         recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
@@ -1825,6 +1829,9 @@ public class IssueService {
 
         // 清理活动记录
         activityMapper.delete(new LambdaQueryWrapper<IssueActivity>().eq(IssueActivity::getIssueId, id));
+
+        // 清理通知静音记录（兜底，软删除时应已清理）
+        mutedThreadService.deleteByResource("issue", id);
 
         // 物理删除工单
         issueMapper.permanentDeleteById(id);

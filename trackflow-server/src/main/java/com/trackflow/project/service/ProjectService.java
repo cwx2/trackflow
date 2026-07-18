@@ -85,6 +85,7 @@ public class ProjectService {
     private final ProjectInitializationService projectInitializationService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
 
     /**
      * 创建项目
@@ -1247,6 +1248,16 @@ public class ProjectService {
         List<String> attachmentPaths = issueAttachmentMapper.selectFilePathsByProjectId(projectId);
         if (attachmentPaths != null && !attachmentPaths.isEmpty()) {
             eventPublisher.publishEvent(new ProjectAttachmentCleanupEvent(projectId, attachmentPaths));
+        }
+
+        // 4.5 清理项目下所有工单的通知静音记录（notification_muted_thread 无 FK，不会被 CASCADE 删除）
+        List<Long> projectIssueIds = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getId)
+                        .eq(Issue::getProjectId, projectId)
+        ).stream().map(Issue::getId).toList();
+        if (!projectIssueIds.isEmpty()) {
+            mutedThreadService.deleteByResources("issue", projectIssueIds);
         }
 
         // 5. 物理删除项目（FK CASCADE 自动删除所有关联数据）

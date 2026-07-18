@@ -120,7 +120,102 @@ public class MutedThreadService {
     }
 
     /**
-     * 获取用户所有已静音的线程列表（用于设置页面展示）
+     * 删除指定资源的所有静音记录（资源被删除时调用）。
+     *
+     * @param resourceType 资源类型
+     * @param resourceId   资源 ID
+     * @return 删除的记录数
+     */
+    @Transactional
+    public int deleteByResource(String resourceType, Long resourceId) {
+        if (resourceId == null) {
+            return 0;
+        }
+        long deleted = mutedThreadMapper.delete(
+                new LambdaQueryWrapper<MutedThread>()
+                        .eq(MutedThread::getResourceType, resourceType)
+                        .eq(MutedThread::getResourceId, resourceId)
+        );
+        if (deleted > 0) {
+            log.info("[MutedThread] 清理资源 {}:{} 的静音记录，共 {} 条", resourceType, resourceId, deleted);
+        }
+        return (int) deleted;
+    }
+
+    /**
+     * 批量删除指定资源的所有静音记录（项目删除级联时调用）。
+     *
+     * @param resourceType 资源类型
+     * @param resourceIds  资源 ID 集合
+     * @return 删除的记录数
+     */
+    @Transactional
+    public int deleteByResources(String resourceType, Collection<Long> resourceIds) {
+        if (resourceIds == null || resourceIds.isEmpty()) {
+            return 0;
+        }
+        long deleted = mutedThreadMapper.delete(
+                new LambdaQueryWrapper<MutedThread>()
+                        .eq(MutedThread::getResourceType, resourceType)
+                        .in(MutedThread::getResourceId, resourceIds)
+        );
+        if (deleted > 0) {
+            log.info("[MutedThread] 批量清理 {} 类型资源的静音记录，共 {} 条", resourceType, deleted);
+        }
+        return (int) deleted;
+    }
+
+    /**
+     * 清理孤立的静音记录（引用的 issue 已不存在）。
+     * 由定时任务调用，作为兜底清理机制。
+     *
+     * @return 删除的记录数
+     */
+    @Transactional
+    public int cleanupOrphanedRecords() {
+        // 查询所有 resource_type='issue' 的记录
+        List<MutedThread> issueThreads = mutedThreadMapper.selectList(
+                new LambdaQueryWrapper<MutedThread>()
+                        .eq(MutedThread::getResourceType, "issue")
+        );
+        if (issueThreads.isEmpty()) {
+            return 0;
+        }
+
+        // 批量检查哪些 issue 仍然存在（包括已软删除的也视为不存在）
+        Set<Long> allResourceIds = issueThreads.stream()
+                .map(MutedThread::getResourceId)
+                .collect(Collectors.toSet());
+
+        Set<Long> existingIds;
+        if (!allResourceIds.isEmpty()) {
+            List<Issue> existingIssues = issueMapper.selectBatchIds(allResourceIds);
+            existingIds = existingIssues.stream()
+                    .map(Issue::getId)
+                    .collect(Collectors.toSet());
+        } else {
+            existingIds = Collections.emptySet();
+        }
+
+        // 找出孤立记录的 ID
+        List<Long> orphanIds = issueThreads.stream()
+                .filter(mt -> !existingIds.contains(mt.getResourceId()))
+                .map(MutedThread::getId)
+                .toList();
+
+        if (orphanIds.isEmpty()) {
+            return 0;
+        }
+
+        // 批量删除
+        mutedThreadMapper.deleteByIds(orphanIds);
+        log.info("[MutedThread] 清理孤立静音记录 {} 条", orphanIds.size());
+        return orphanIds.size();
+    }
+
+    /**
+     * 获取用户所有已静音的线程列表（用于设置页面展示）。
+     * 自动过滤已删除资源的条目。
      */
     public List<MutedThreadVO> listMutedThreads(Long userId) {
         List<MutedThread> threads = mutedThreadMapper.selectList(
@@ -146,8 +241,17 @@ public class MutedThreadService {
                             i -> (i.getIssueKey() != null ? i.getIssueKey() + " " : "") + i.getTitle()));
         }
 
+        // 构建 VO 列表，过滤掉已删除资源的条目（防御性编程）
+        Map<Long, String> finalIssueTitleMap = issueTitleMap;
         List<MutedThreadVO> voList = new ArrayList<>();
         for (MutedThread mt : threads) {
+            if ("issue".equals(mt.getResourceType())) {
+                // 如果 issue 已不存在（已删除），跳过该条目
+                if (!finalIssueTitleMap.containsKey(mt.getResourceId())) {
+                    continue;
+                }
+            }
+
             MutedThreadVO vo = new MutedThreadVO();
             vo.setId(String.valueOf(mt.getId()));
             vo.setUserId(String.valueOf(mt.getUserId()));
@@ -156,7 +260,7 @@ public class MutedThreadService {
             vo.setCreatedAt(mt.getCreatedAt());
             // 填充标题
             if ("issue".equals(mt.getResourceType())) {
-                vo.setResourceTitle(issueTitleMap.getOrDefault(mt.getResourceId(), "未知工单"));
+                vo.setResourceTitle(finalIssueTitleMap.get(mt.getResourceId()));
             } else {
                 vo.setResourceTitle(mt.getResourceType() + ":" + mt.getResourceId());
             }
