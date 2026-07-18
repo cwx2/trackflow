@@ -16,6 +16,8 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
+import com.trackflow.timeentry.entity.TimeEntry;
+import com.trackflow.timeentry.mapper.TimeEntryMapper;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.AddMemberDTO;
 import com.trackflow.project.dto.CreateProjectDTO;
@@ -73,6 +75,7 @@ public class ProjectService {
     private final IssueStatusMapper issueStatusMapper;
     private final IssueAttachmentMapper issueAttachmentMapper;
     private final SprintMapper sprintMapper;
+    private final TimeEntryMapper timeEntryMapper;
     private final ProjectActivityService projectActivityService;
     private final ProjectInitializationService projectInitializationService;
     private final MinioService minioService;
@@ -1134,6 +1137,12 @@ public class ProjectService {
                 new LambdaQueryWrapper<ProjectMember>()
                         .eq(ProjectMember::getProjectId, projectId));
         vo.setMemberCount((int) memberCount);
+
+        // 工时记录数量
+        long timeEntryCount = timeEntryMapper.selectCount(
+                new LambdaQueryWrapper<TimeEntry>()
+                        .eq(TimeEntry::getProjectId, projectId));
+        vo.setTimeEntryCount((int) timeEntryCount);
 
         // 判断是否可删除
         vo.setDeletable(true);

@@ -391,6 +391,7 @@
             <li>📋 {{ deleteTarget.issueCount }} 个工单<span v-if="deleteTarget.openIssueCount > 0" class="impact-warn">（其中 {{ deleteTarget.openIssueCount }} 个未关闭）</span></li>
             <li>🏃 {{ deleteTarget.sprintCount }} 个 Sprint</li>
             <li>👥 {{ deleteTarget.memberCount }} 名成员</li>
+            <li v-if="deleteTarget.timeEntryCount > 0">⏱️ {{ deleteTarget.timeEntryCount }} 条工时记录</li>
           </ul>
         </div>
         <div class="delete-confirm-input">

@@ -53,6 +53,7 @@ export const projectApi = {
       sprintCount: number
       memberCount: number
       openIssueCount: number
+      timeEntryCount: number
       deletable: boolean
       reason: string | null
     }>>(`/projects/${id}/delete-precheck`)

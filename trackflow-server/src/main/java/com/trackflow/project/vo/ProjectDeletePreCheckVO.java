@@ -19,6 +19,8 @@ public class ProjectDeletePreCheckVO {
     private int memberCount;
     /** 未关闭的工单数量 */
     private int openIssueCount;
+    /** 工时记录数量 */
+    private int timeEntryCount;
     /** 是否允许删除（active 或 archived 状态都可以删除） */
     private boolean deletable;
     /** 不允许删除的原因（如有） */

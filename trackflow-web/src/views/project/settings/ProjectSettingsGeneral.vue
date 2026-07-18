@@ -167,6 +167,7 @@
             </li>
             <li>🏃 {{ deletePreCheckData.sprintCount }} 个 Sprint</li>
             <li>👥 {{ deletePreCheckData.memberCount }} 名成员</li>
+            <li v-if="deletePreCheckData.timeEntryCount > 0">⏱️ {{ deletePreCheckData.timeEntryCount }} 条工时记录</li>
           </ul>
         </div>
         <div class="delete-confirm-input">
@@ -242,6 +243,7 @@ const deletePreCheckData = ref<{
   sprintCount: number
   memberCount: number
   openIssueCount: number
+  timeEntryCount: number
 } | null>(null)
 
 // Initialize form from project
