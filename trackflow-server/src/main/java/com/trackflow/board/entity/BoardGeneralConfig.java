@@ -35,8 +35,12 @@ public class BoardGeneralConfig implements Serializable {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String canEditRoles;
 
-    /** 看板过滤模式：all=显示所有工单, active_sprint=仅显示活跃Sprint工单 */
+    /** 看板过滤模式：all=显示所有工单, active_sprint=仅显示活跃Sprint工单, query=按查询过滤 */
     private String filterMode;
+
+    /** 查询过滤条件（JSON数组），当 filter_mode='query' 时生效 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String filterQuery;
 
     /** 已完成工单保留天数（NULL 表示不限制） */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)

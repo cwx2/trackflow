@@ -23,11 +23,13 @@
           :can-edit-roles="editableCanEditRoles"
           :project-name="projectName"
           :filter-mode="editableFilterMode"
+          :filter-query="editableFilterQuery"
           :done-retention-days="editableDoneRetentionDays"
           @update:name="editableBoardName = $event"
           @update:can-view-roles="editableCanViewRoles = $event"
           @update:can-edit-roles="editableCanEditRoles = $event"
           @update:filter-mode="editableFilterMode = $event"
+          @update:filter-query="editableFilterQuery = $event"
           @update:done-retention-days="editableDoneRetentionDays = $event"
         />
       </a-tab-pane>
@@ -204,6 +206,7 @@ const editableBoardName = ref('')
 const editableCanViewRoles = ref<string[]>(['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer'])
 const editableCanEditRoles = ref<string[]>(['project_admin', 'tech_lead'])
 const editableFilterMode = ref('all')
+const editableFilterQuery = ref<string | null>(null)
 const editableDoneRetentionDays = ref<number | null>(null)
 
 // 泳道设置状态
@@ -290,6 +293,7 @@ watch(() => props.visible, async (newVisible) => {
         editableCanViewRoles.value = res.data.canViewRoles || ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
         editableCanEditRoles.value = res.data.canEditRoles || ['project_admin', 'tech_lead']
         editableFilterMode.value = res.data.filterMode || 'all'
+        editableFilterQuery.value = res.data.filterQuery ?? null
         editableDoneRetentionDays.value = res.data.doneRetentionDays ?? null
       }
     } catch {
@@ -297,6 +301,7 @@ watch(() => props.visible, async (newVisible) => {
       editableCanViewRoles.value = ['project_admin', 'tech_lead', 'developer', 'product_manager', 'tester', 'observer']
       editableCanEditRoles.value = ['project_admin', 'tech_lead']
       editableFilterMode.value = 'all'
+      editableFilterQuery.value = null
       editableDoneRetentionDays.value = null
     }
   }
@@ -483,6 +488,7 @@ async function handleSave() {
         canViewRoles: editableCanViewRoles.value,
         canEditRoles: editableCanEditRoles.value,
         filterMode: editableFilterMode.value,
+        filterQuery: editableFilterQuery.value,
         doneRetentionDays: editableDoneRetentionDays.value
       })
     ])

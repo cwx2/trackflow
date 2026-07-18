@@ -82,7 +82,7 @@ export const boardApi = {
   },
 
   /** 保存项目看板基本设置 */
-  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; doneRetentionDays: number | null }) {
+  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null }) {
     return request.put<any, R<void>>('/boards/general-config', data, {
       params: { projectId }
     })

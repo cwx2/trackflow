@@ -194,13 +194,13 @@ public class QueryExecutor {
             List<String> values = resolveValues(value, currentUserId);
 
             switch (field) {
-                case "project" -> applyFilter(wrapper, "project_id", operator, values);
+                case "project" -> applyUserFilter(wrapper, "project_id", operator, values, currentUserId);
                 case "status" -> applyStatusFilter(wrapper, operator, values);
                 case "priority" -> applyFilter(wrapper, "priority", operator, values);
                 case "assignee" -> applyUserFilter(wrapper, "assignee_id", operator, values, currentUserId);
                 case "reporter" -> applyUserFilter(wrapper, "reporter_id", operator, values, currentUserId);
                 case "type" -> applyFilter(wrapper, "issue_type", operator, values);
-                case "sprint" -> applyFilter(wrapper, "sprint_id", operator, values);
+                case "sprint" -> applyUserFilter(wrapper, "sprint_id", operator, values, currentUserId);
                 case "keyword" -> applyKeywordFilter(wrapper, values);
                 case "dueDate" -> applyDateFilter(wrapper, "due_date", operator, values);
                 case "createdAt" -> applyDateFilter(wrapper, "created_at", operator, values);

@@ -107,6 +107,9 @@
           <span v-if="boardFilterMode === 'active_sprint'" class="behavior-chip">
             🏃 仅活跃 Sprint
           </span>
+          <span v-if="boardFilterMode === 'query'" class="behavior-chip">
+            🔍 查询过滤
+          </span>
           <span v-if="boardDoneRetentionDays !== null" class="behavior-chip">
             ✅ 完成{{ boardDoneRetentionDays }}天内
           </span>
@@ -649,7 +652,7 @@
 import { ref, computed, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
-import { issueApi, sprintApi, boardApi, workflowApi } from '@/api'
+import { issueApi, sprintApi, boardApi, workflowApi, queryApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
@@ -748,7 +751,8 @@ const currentProjectName = computed(() => {
 })
 
 // ===== Board Behavior 配置 =====
-const boardFilterMode = ref<'all' | 'active_sprint'>('all')
+const boardFilterMode = ref<'all' | 'active_sprint' | 'query'>('all')
+const boardFilterQuery = ref<string | null>(null)
 const boardDoneRetentionDays = ref<number | null>(null)
 
 /** 当前是否有 Board Behavior 过滤生效 */
@@ -1934,11 +1938,13 @@ async function loadBoardBehavior() {
   try {
     const res = await boardApi.getGeneralConfig(selectedProject.value)
     if (res.data) {
-      boardFilterMode.value = (res.data.filterMode as 'all' | 'active_sprint') || 'all'
+      boardFilterMode.value = (res.data.filterMode as 'all' | 'active_sprint' | 'query') || 'all'
+      boardFilterQuery.value = res.data.filterQuery ?? null
       boardDoneRetentionDays.value = res.data.doneRetentionDays ?? null
     }
   } catch {
     boardFilterMode.value = 'all'
+    boardFilterQuery.value = null
     boardDoneRetentionDays.value = null
   }
 }
@@ -1976,38 +1982,73 @@ async function loadIssues() {
   let allIssues: IssueVO[] = []
   let total = 0
 
-  // Board Behavior: 确定 sprint 过滤参数
-  let effectiveSprintId = selectedSprint.value || undefined
-  if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
-    const activeSprint = sprints.value.find(s => s.status === 'active')
-    effectiveSprintId = activeSprint?.id
-    // 如果没有活跃 Sprint，显示为空（无工单匹配）
-    if (!effectiveSprintId) {
+  // Board Behavior: Query 模式 — 使用 QueryExecutor 服务端过滤
+  if (boardFilterMode.value === 'query' && boardFilterQuery.value) {
+    let filters: any[] = []
+    try {
+      filters = JSON.parse(boardFilterQuery.value)
+    } catch {
+      // 无效的 filter query，不加载
       issues.value = []
       boardTotalCount.value = 0
       boardTruncated.value = false
       return
     }
-  }
-
-  // 循环加载所有页，直到获取全部工单或达到安全上限
-  while (true) {
-    const res = await issueApi.list({
-      projectId: selectedProject.value,
-      sprintId: effectiveSprintId,
-      keyword: keyword.value || undefined,
-      page,
-      pageSize: PAGE_SIZE
-    })
-    const list = res.data?.list || []
-    total = res.data?.pagination?.total || 0
-    allIssues = allIssues.concat(list)
-
-    // 已加载全部 或 到达安全上限
-    if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
-      break
+    // 注入项目过滤条件
+    filters = [{ field: 'project', operator: 'eq', value: [selectedProject.value] }, ...filters]
+    // 如果有额外 Sprint 选中，也追加
+    if (selectedSprint.value) {
+      filters.push({ field: 'sprint', operator: 'eq', value: [selectedSprint.value] })
     }
-    page++
+    // 如果有搜索关键词，追加
+    if (keyword.value) {
+      filters.push({ field: 'keyword', operator: 'contains', value: [keyword.value] })
+    }
+    // 循环加载所有页
+    while (true) {
+      const res = await queryApi.executeAdhoc({ filters, page, pageSize: PAGE_SIZE })
+      const list = res.data?.list || []
+      total = res.data?.pagination?.total || 0
+      allIssues = allIssues.concat(list)
+      if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
+        break
+      }
+      page++
+    }
+  } else {
+    // Board Behavior: 确定 sprint 过滤参数
+    let effectiveSprintId = selectedSprint.value || undefined
+    if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
+      const activeSprint = sprints.value.find(s => s.status === 'active')
+      effectiveSprintId = activeSprint?.id
+      // 如果没有活跃 Sprint，显示为空（无工单匹配）
+      if (!effectiveSprintId) {
+        issues.value = []
+        boardTotalCount.value = 0
+        boardTruncated.value = false
+        return
+      }
+    }
+
+    // 循环加载所有页，直到获取全部工单或达到安全上限
+    while (true) {
+      const res = await issueApi.list({
+        projectId: selectedProject.value,
+        sprintId: effectiveSprintId,
+        keyword: keyword.value || undefined,
+        page,
+        pageSize: PAGE_SIZE
+      })
+      const list = res.data?.list || []
+      total = res.data?.pagination?.total || 0
+      allIssues = allIssues.concat(list)
+
+      // 已加载全部 或 到达安全上限
+      if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
+        break
+      }
+      page++
+    }
   }
 
   // Board Behavior: 已完成工单保留天数过滤（客户端过滤）

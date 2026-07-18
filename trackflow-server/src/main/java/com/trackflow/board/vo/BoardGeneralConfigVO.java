@@ -19,8 +19,11 @@ public class BoardGeneralConfigVO {
     /** 可编辑看板设置的角色代码列表 */
     private List<String> canEditRoles;
 
-    /** 看板过滤模式：all | active_sprint */
+    /** 看板过滤模式：all | active_sprint | query */
     private String filterMode;
+
+    /** 查询过滤条件（JSON 数组字符串），当 filterMode='query' 时有值 */
+    private String filterQuery;
 
     /** 已完成工单保留天数（null 表示不限制） */
     private Integer doneRetentionDays;

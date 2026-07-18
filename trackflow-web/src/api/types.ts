@@ -641,8 +641,10 @@ export interface BoardGeneralConfigVO {
   canViewRoles: string[]
   /** 可编辑看板设置的角色代码列表 */
   canEditRoles: string[]
-  /** 看板过滤模式：all | active_sprint */
-  filterMode: 'all' | 'active_sprint'
+  /** 看板过滤模式：all | active_sprint | query */
+  filterMode: 'all' | 'active_sprint' | 'query'
+  /** 查询过滤条件（JSON 数组字符串），当 filterMode='query' 时有值 */
+  filterQuery: string | null
   /** 已完成工单保留天数（null 表示不限制） */
   doneRetentionDays: number | null
 }

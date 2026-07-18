@@ -28,9 +28,13 @@ public class UpdateBoardGeneralConfigDTO {
     @Size(min = 1, message = "至少需要一个角色可以编辑看板设置")
     private List<String> canEditRoles;
 
-    /** 看板过滤模式：all | active_sprint */
-    @Pattern(regexp = "^(all|active_sprint)$", message = "过滤模式只允许: all, active_sprint")
+    /** 看板过滤模式：all | active_sprint | query */
+    @Pattern(regexp = "^(all|active_sprint|query)$", message = "过滤模式只允许: all, active_sprint, query")
     private String filterMode;
+
+    /** 查询过滤条件（JSON 数组字符串），当 filterMode='query' 时必填 */
+    @Size(max = 4000, message = "查询过滤条件不能超过 4000 个字符")
+    private String filterQuery;
 
     /** 已完成工单保留天数（null 表示不限制） */
     @Min(value = 1, message = "保留天数必须大于 0")
