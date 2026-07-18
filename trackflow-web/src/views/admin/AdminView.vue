@@ -147,6 +147,13 @@ const menuItems: AdminMenuItem[] = [
     title: '规则引擎',
     description: '配置自动化规则，实现工单计分与罚款统计',
     permission: 'system:manage_roles'
+  },
+  {
+    path: '/admin/webhooks',
+    icon: '🔗',
+    title: 'Webhook',
+    description: '管理项目 Webhook 通知，事件触发时推送到外部系统',
+    permission: 'system:manage_roles'
   }
 ]
 

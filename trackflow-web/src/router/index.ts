@@ -181,6 +181,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
+        path: 'admin/webhooks',
+        name: 'WebhookManagement',
+        component: () => import('@/views/admin/WebhookManagement.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notification/NotificationView.vue')

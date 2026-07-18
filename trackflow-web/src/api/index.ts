@@ -29,6 +29,7 @@ export { notificationAdminApi } from './notificationAdmin'
 export { groupApi } from './group'
 export { quickActionApi } from './quickAction'
 export { ruleApi } from './rule'
+export { webhookApi } from './webhook'
 
 // 类型导出
 export type * from './types'
