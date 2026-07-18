@@ -28,6 +28,7 @@ export function useProjectList() {
   /**
    * 加载当前用户可见的项目列表。
    * 成功后自动调用 projectStore.autoSelectIfNeeded() 尝试自动选中。
+   * 收藏的项目排在列表前面。
    *
    * @returns 加载后的项目列表
    */
@@ -35,7 +36,14 @@ export function useProjectList() {
     projectLoadState.value = 'loading'
     try {
       const res = await projectApi.list({ pageSize: SELECTOR_PAGE_SIZE })
-      projects.value = res.data?.list || []
+      const list = res.data?.list || []
+      // 收藏项目排前面
+      list.sort((a, b) => {
+        if (a.favorited && !b.favorited) return -1
+        if (!a.favorited && b.favorited) return 1
+        return 0
+      })
+      projects.value = list
       projectLoadState.value = 'success'
 
       // 自动选择逻辑

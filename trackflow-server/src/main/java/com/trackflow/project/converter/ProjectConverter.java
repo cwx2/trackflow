@@ -21,6 +21,7 @@ public interface ProjectConverter extends BaseConverter {
     @Mapping(target = "visibility", expression = "java(projectVisibilityToString(entity.getVisibility()))")
     @Mapping(target = "memberCount", ignore = true)
     @Mapping(target = "topMembers", ignore = true)
+    @Mapping(target = "favorited", ignore = true)
     ProjectVO toVO(Project entity);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")

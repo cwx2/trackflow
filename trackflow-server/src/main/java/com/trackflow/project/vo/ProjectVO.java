@@ -23,4 +23,6 @@ public class ProjectVO {
     private Integer memberCount;
     /** 前几名成员的显示名称（用于头像展示） */
     private List<String> topMembers;
+    /** 当前用户是否已收藏该项目 */
+    private Boolean favorited;
 }

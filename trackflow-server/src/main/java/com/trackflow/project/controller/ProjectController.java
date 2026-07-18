@@ -76,21 +76,24 @@ public class ProjectController {
         Page<Project> result = projectService.list(query.toPage(), query.getKeyword(), query.getStatus(), userId);
         List<ProjectVO> voList = projectConverter.toVOList(result.getRecords());
         projectService.populateMemberSummary(voList);
+        projectService.populateFavoriteStatus(voList, userId);
         PageResult<ProjectVO> pageResult = new PageResult<>(voList, result.getTotal(), (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<ProjectVO> getById(@PathVariable("id") Long id) {
-        return R.ok(projectConverter.toVO(projectService.getById(id)));
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<ProjectVO> getById(@PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
+        return R.ok(projectConverter.toVO(projectService.getById(projectId)));
     }
 
     @GetMapping("/{id}/detail")
-    @PreAuthorize("@perm.check(#id, 'project:view')")
-    public R<ProjectDetailVO> getDetail(@PathVariable("id") Long id) {
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<ProjectDetailVO> getDetail(@PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
         Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(projectService.getProjectDetail(id, userId));
+        return R.ok(projectService.getProjectDetail(projectId, userId));
     }
 
     @PutMapping("/{id}")
@@ -236,5 +239,19 @@ public class ProjectController {
         var vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
         vo.setEnabled(projectService.isTimeTrackingEnabled(id));
         return R.ok(vo);
+    }
+
+    // ========== 项目收藏 ==========
+
+    /**
+     * 切换项目收藏状态（Toggle）
+     * 返回 { favorited: true/false }
+     */
+    @PostMapping("/{id}/favorite")
+    @PreAuthorize("@perm.check(#id, 'project:view')")
+    public R<Map<String, Boolean>> toggleFavorite(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        boolean favorited = projectService.toggleFavorite(id, userId);
+        return R.ok(Map.of("favorited", favorited));
     }
 }

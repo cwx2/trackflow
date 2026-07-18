@@ -25,8 +25,10 @@ import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.project.entity.ProjectVisibility;
+import com.trackflow.project.entity.UserProjectFavorite;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.project.mapper.UserProjectFavoriteMapper;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysRole;
@@ -68,6 +70,7 @@ public class ProjectService {
 
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper memberMapper;
+    private final UserProjectFavoriteMapper favoriteMapper;
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final ProjectConverter projectConverter;
@@ -250,6 +253,54 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
         }
         return project;
+    }
+
+    /**
+     * 通过标识符（项目 Key 或数字 ID）解析项目 ID。
+     * <p>
+     * 解析策略：
+     * 1. 如果 identifier 可解析为 Long → 按数据库 ID 查询
+     * 2. 否则 → 按 project.key（不区分大小写）查询
+     *
+     * @param identifier 项目 Key（如 "TF1"）或数字 ID 字符串
+     * @return 项目数据库 ID
+     * @throws BusinessException 如果项目不存在
+     */
+    public Long resolveProjectId(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "项目标识不能为空");
+        }
+
+        // 尝试按数字 ID 解析
+        try {
+            Long id = Long.parseLong(identifier);
+            Project project = projectMapper.selectById(id);
+            if (project != null) {
+                return project.getId();
+            }
+            // 数字 ID 不存在，不尝试 key 查询（避免歧义）
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+        } catch (NumberFormatException e) {
+            // 非数字，按 key 查询
+        }
+
+        // 按 Key 查询（不区分大小写）
+        Project project = projectMapper.selectOne(
+                new LambdaQueryWrapper<Project>()
+                        .apply("LOWER(\"key\") = LOWER({0})", identifier)
+        );
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + identifier);
+        }
+        return project.getId();
+    }
+
+    /**
+     * 通过标识符获取项目实体
+     */
+    public Project getByIdentifier(String identifier) {
+        Long id = resolveProjectId(identifier);
+        return projectMapper.selectById(id);
     }
 
     /**
@@ -1412,5 +1463,55 @@ public class ProjectService {
     @Transactional
     public void updateTimeTrackingEnabled(Long projectId, boolean enabled) {
         updateProjectSetting(projectId, "timeTrackingEnabled", enabled);
+    }
+
+    // ========== 项目收藏 ==========
+
+    /**
+     * 切换项目收藏状态（Toggle）
+     * @return true=已收藏，false=已取消收藏
+     */
+    @Transactional
+    public boolean toggleFavorite(Long projectId, Long userId) {
+        // 确保项目存在
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+        }
+
+        int existing = favoriteMapper.countByUserAndProject(userId, projectId);
+        if (existing > 0) {
+            // 已收藏 → 取消
+            favoriteMapper.deleteFavorite(userId, projectId);
+            return false;
+        } else {
+            // 未收藏 → 添加
+            UserProjectFavorite fav = new UserProjectFavorite();
+            fav.setUserId(userId);
+            fav.setProjectId(projectId);
+            fav.setCreatedAt(LocalDateTime.now());
+            favoriteMapper.insert(fav);
+            return true;
+        }
+    }
+
+    /**
+     * 查询用户收藏的项目ID集合
+     */
+    public Set<Long> getUserFavoriteProjectIds(Long userId) {
+        List<Long> ids = favoriteMapper.selectFavoriteProjectIds(userId);
+        return new java.util.HashSet<>(ids);
+    }
+
+    /**
+     * 为项目 VO 列表填充当前用户的收藏状态
+     */
+    public void populateFavoriteStatus(List<ProjectVO> voList, Long userId) {
+        if (voList == null || voList.isEmpty() || userId == null) return;
+
+        Set<Long> favoriteIds = getUserFavoriteProjectIds(userId);
+        for (ProjectVO vo : voList) {
+            vo.setFavorited(favoriteIds.contains(Long.valueOf(vo.getId())));
+        }
     }
 }

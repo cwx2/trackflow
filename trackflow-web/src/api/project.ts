@@ -127,5 +127,10 @@ export const projectApi = {
   /** 复制项目 */
   copy(data: { sourceProjectId: string; name: string; key: string; description?: string; copyOptions?: string[] }) {
     return request.post<any, R<ProjectVO>>('/projects/copy', data)
+  },
+
+  /** 切换项目收藏状态 */
+  toggleFavorite(projectId: string) {
+    return request.post<any, R<{ favorited: boolean }>>(`/projects/${projectId}/favorite`)
   }
 }

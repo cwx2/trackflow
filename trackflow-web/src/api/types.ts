@@ -84,6 +84,8 @@ export interface ProjectVO {
   memberCount?: number
   /** 前几名成员的显示名称 */
   topMembers?: string[]
+  /** 当前用户是否已收藏该项目 */
+  favorited?: boolean
 }
 
 export interface ProjectDetailVO extends ProjectVO {

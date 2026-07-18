@@ -19,12 +19,90 @@
 
     <!-- 项目列表 -->
     <div class="project-list">
+      <!-- 收藏项目分区 -->
+      <template v-if="favoriteProjects.length > 0 && !searchKeyword">
+        <div class="section-header">
+          <icon-star-fill class="section-icon favorite-icon" />
+          <span class="section-title">收藏</span>
+          <span class="section-count">{{ favoriteProjects.length }}</span>
+        </div>
+        <div
+          v-for="project in favoriteProjects"
+          :key="'fav-' + project.id"
+          class="project-row"
+          @click="goToProject(project)"
+        >
+          <!-- 收藏星标 -->
+          <div class="favorite-btn favorited" @click.stop="toggleFavorite(project)">
+            <icon-star-fill />
+          </div>
+
+          <!-- 项目图标 -->
+          <div class="project-icon" :style="{ background: getProjectColor(project) }">
+            <span class="icon-text">{{ getProjectAbbr(project) }}</span>
+          </div>
+
+          <!-- 项目信息 -->
+          <div class="project-info">
+            <div class="project-name-row">
+              <span class="project-name">{{ project.name }}</span>
+              <span v-if="project.visibility && project.visibility !== 'private'" class="visibility-tag" :class="'vis-' + project.visibility">
+                {{ project.visibility === 'internal' ? '内部' : '公开' }}
+              </span>
+            </div>
+            <span class="project-desc" v-if="project.description">{{ project.description }}</span>
+          </div>
+
+          <!-- 右侧：成员 + 操作 -->
+          <div class="project-right">
+            <div class="member-avatars">
+              <a-avatar-group :size="24">
+                <a-avatar
+                  v-for="(member, idx) in (project.topMembers || []).slice(0, 3)"
+                  :key="idx"
+                  :style="{ backgroundColor: getMemberColor(idx) }"
+                >
+                  {{ member.charAt(0) }}
+                </a-avatar>
+              </a-avatar-group>
+              <span v-if="(project.memberCount || 0) > 3" class="member-overflow">
+                +{{ (project.memberCount || 0) - 3 }}
+              </span>
+            </div>
+            <span v-if="canManageProject(project)" class="dropdown-wrapper">
+              <a-dropdown trigger="click" @click.stop>
+                <a-button type="text" size="small" class="btn-more">
+                  <icon-more />
+                </a-button>
+                <template #content>
+                  <a-doption @click="editProject(project)">编辑</a-doption>
+                  <a-doption @click="manageMembers(project)">成员管理</a-doption>
+                  <a-doption v-if="canCreateProject" @click="openCopyDialog(project)">复制项目</a-doption>
+                  <a-doption class="danger-option" @click="archiveProject(project)">归档</a-doption>
+                  <a-doption v-if="canDeleteProject(project)" class="danger-option" @click="confirmDeleteProject(project)">删除项目</a-doption>
+                </template>
+              </a-dropdown>
+            </span>
+          </div>
+        </div>
+
+        <!-- 分隔线 -->
+        <div class="section-divider"></div>
+      </template>
+
+      <!-- 普通项目分区 -->
       <div
-        v-for="project in filteredProjects"
+        v-for="project in nonFavoriteFilteredProjects"
         :key="project.id"
         class="project-row"
         @click="goToProject(project)"
       >
+        <!-- 收藏星标 -->
+        <div class="favorite-btn" :class="{ favorited: project.favorited }" @click.stop="toggleFavorite(project)">
+          <icon-star-fill v-if="project.favorited" />
+          <icon-star v-else />
+        </div>
+
         <!-- 项目图标 -->
         <div class="project-icon" :style="{ background: getProjectColor(project) }">
           <span class="icon-text">{{ getProjectAbbr(project) }}</span>
@@ -492,7 +570,9 @@ import {
   IconMore,
   IconFolder,
   IconRight,
-  IconExclamationCircleFill
+  IconExclamationCircleFill,
+  IconStar,
+  IconStarFill
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi, workflowApi } from '@/api'
 import type { ProjectActivityVO } from '@/api/types'
@@ -636,6 +716,20 @@ const filteredProjects = computed(() => {
   )
 })
 
+/** 收藏的项目（搜索模式下不单独分区） */
+const favoriteProjects = computed(() => {
+  return projects.value.filter(p => p.favorited)
+})
+
+/** 非收藏的过滤后项目（搜索模式下显示全部匹配结果） */
+const nonFavoriteFilteredProjects = computed(() => {
+  if (searchKeyword.value) {
+    // 搜索模式下不区分收藏/非收藏，直接返回搜索结果
+    return filteredProjects.value
+  }
+  return projects.value.filter(p => !p.favorited)
+})
+
 async function loadProjects() {
   loading.value = true
   try {
@@ -663,8 +757,25 @@ function loadMore() {
   loadProjects()
 }
 
+/** 切换项目收藏状态（乐观更新） */
+async function toggleFavorite(project: any) {
+  const previousState = project.favorited
+  // 乐观更新
+  project.favorited = !previousState
+  try {
+    const res = await projectApi.toggleFavorite(project.id)
+    if (res.code === 0 && res.data) {
+      project.favorited = res.data.favorited
+    }
+  } catch (e: any) {
+    // 回滚
+    project.favorited = previousState
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
 function goToProject(project: any) {
-  router.push({ path: `/projects/${project.id}` })
+  router.push({ path: `/projects/${project.key}` })
 }
 
 function editProject(project: any) {
@@ -1276,6 +1387,78 @@ watch(projects, () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* 收藏分区标题 */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 4px;
+}
+
+.section-icon {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.section-icon.favorite-icon {
+  color: #d29922;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-count {
+  font-size: 10px;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-hover);
+  padding: 0 5px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.section-divider {
+  height: 1px;
+  background: var(--tf-border);
+  margin: 12px 16px;
+  opacity: 0.5;
+}
+
+/* 收藏星标按钮 */
+.favorite-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  cursor: pointer;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+  font-size: 14px;
+}
+
+.favorite-btn:hover {
+  background: var(--tf-bg-hover);
+  color: #d29922;
+}
+
+.favorite-btn.favorited {
+  opacity: 1;
+  color: #d29922;
+}
+
+.project-row:hover .favorite-btn {
+  opacity: 1;
 }
 
 .project-row {

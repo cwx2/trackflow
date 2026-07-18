@@ -54,7 +54,9 @@
                   <a-link @click.stop="loadProjects">重试</a-link>
                 </div>
               </template>
-              <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.key }} - {{ p.name }}</a-option>
+              <a-option v-for="p in projects" :key="p.id" :value="p.id">
+                <span v-if="p.favorited" style="color: #d29922; margin-right: 4px; font-size: 10px">★</span>{{ p.key }} - {{ p.name }}
+              </a-option>
             </a-select>
           </div>
           <div class="prop-row">
