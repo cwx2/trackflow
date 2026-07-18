@@ -36,6 +36,11 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
     record Mentioned(Issue issue, String commentContent, Long commenterId) implements IssueNotificationEvent {}
 
     /**
+     * 工单取消/废弃通知事件（状态转换到 cancelled 类别时触发）
+     */
+    record Cancelled(Issue issue, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
      * 工单移动到其他项目通知事件
      */
     record Moved(Issue issue, Long sourceProjectId, Long targetProjectId, Long operatorId) implements IssueNotificationEvent {}

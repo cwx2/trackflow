@@ -1284,6 +1284,11 @@ public class IssueService {
         // 通知报告人+负责人状态已变更 — 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.StatusChanged(issue, oldStatusId, newStatusId, currentUserId));
 
+        // 如果是转换到 cancelled 类别，额外发布取消事件（供外部集成模块监听）
+        if ("cancelled".equals(newStatus.getCategory())) {
+            eventPublisher.publishEvent(new IssueNotificationEvent.Cancelled(issue, currentUserId));
+        }
+
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_status_changed"));
 
