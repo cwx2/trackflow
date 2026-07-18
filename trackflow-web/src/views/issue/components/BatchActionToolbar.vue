@@ -165,6 +165,133 @@
         </template>
       </a-trigger>
 
+      <!-- 添加标签 -->
+      <a-trigger
+        v-model:popup-visible="showTagDropdown"
+        trigger="click"
+        position="bl"
+        :popup-offset="4"
+      >
+        <a-button size="small" type="outline">
+          <template #icon><icon-tag /></template>
+          添加标签
+        </a-button>
+        <template #content>
+          <div class="batch-dropdown tag-dropdown">
+            <div class="dropdown-search">
+              <a-input
+                v-model="tagSearch"
+                placeholder="搜索标签..."
+                size="small"
+                allow-clear
+              >
+                <template #prefix><icon-search /></template>
+              </a-input>
+            </div>
+            <div v-if="tagLoading" class="dropdown-loading">
+              <a-spin :size="16" />
+            </div>
+            <template v-else>
+              <!-- 移除标签选项 -->
+              <div v-if="showRemoveSection" class="dropdown-group-label">移除标签</div>
+              <div
+                v-for="tag in removableTags"
+                :key="'remove-' + tag.id"
+                class="dropdown-item tag-remove-item"
+                @click="handleBatchTagRemove(tag)"
+              >
+                <span class="tag-dot" :style="{ background: tag.color }"></span>
+                <span class="tag-name">{{ tag.name }}</span>
+                <icon-close class="tag-remove-icon" />
+              </div>
+              <div v-if="showRemoveSection" class="dropdown-divider"></div>
+
+              <!-- 添加标签选项 -->
+              <div v-if="showRemoveSection" class="dropdown-group-label">添加标签</div>
+              <div
+                v-for="tag in filteredTags"
+                :key="tag.id"
+                class="dropdown-item"
+                @click="handleBatchTagAdd(tag)"
+              >
+                <span class="tag-dot" :style="{ background: tag.color }"></span>
+                <span class="tag-name">{{ tag.name }}</span>
+              </div>
+              <div v-if="filteredTags.length === 0 && removableTags.length === 0" class="dropdown-empty">
+                无可用标签
+              </div>
+            </template>
+          </div>
+        </template>
+      </a-trigger>
+
+      <!-- 添加关联 -->
+      <a-trigger
+        v-model:popup-visible="showLinkDropdown"
+        trigger="click"
+        position="bl"
+        :popup-offset="4"
+      >
+        <a-button size="small" type="outline">
+          <template #icon><icon-link /></template>
+          添加关联
+        </a-button>
+        <template #content>
+          <div class="batch-dropdown link-dropdown">
+            <div class="dropdown-group-label">选择关联类型</div>
+            <div
+              v-for="lt in linkTypeOptions"
+              :key="lt.value"
+              class="dropdown-item"
+              @click="handleSelectLinkType(lt.value)"
+            >
+              <span>{{ lt.label }}</span>
+            </div>
+          </div>
+        </template>
+      </a-trigger>
+
+      <!-- 关联目标工单选择弹窗 -->
+      <a-modal
+        v-model:visible="showLinkTargetModal"
+        title="选择目标工单"
+        :width="480"
+        :footer="false"
+        unmount-on-close
+      >
+        <div class="link-target-search">
+          <a-input
+            v-model="linkTargetSearch"
+            placeholder="输入工单编号或标题搜索..."
+            size="small"
+            allow-clear
+            @input="handleLinkTargetSearchDebounced"
+          >
+            <template #prefix><icon-search /></template>
+          </a-input>
+        </div>
+        <div v-if="linkTargetLoading" class="link-target-loading">
+          <a-spin :size="20" />
+        </div>
+        <div v-else class="link-target-list">
+          <div
+            v-for="issue in linkTargetResults"
+            :key="issue.id"
+            class="link-target-item"
+            @click="handleBatchLink(issue)"
+          >
+            <span class="link-target-key">{{ issue.issueKey }}</span>
+            <span class="link-target-title">{{ issue.title }}</span>
+          </div>
+          <div v-if="linkTargetResults.length === 0 && linkTargetSearch" class="dropdown-empty">
+            无匹配工单
+          </div>
+          <div v-if="!linkTargetSearch" class="dropdown-empty">
+            请输入工单编号或标题搜索
+          </div>
+        </div>
+      </a-modal>
+
       <!-- 批量导出 -->
       <a-dropdown trigger="click" position="bl" @select="handleExport">
         <a-button size="small" type="outline">
@@ -198,10 +325,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode } from '@arco-design/web-vue/es/icon'
+import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode, IconTag, IconLink, IconClose } from '@arco-design/web-vue/es/icon'
 import { Modal } from '@arco-design/web-vue'
-import { issueApi, projectApi, sprintApi } from '@/api'
-import type { IssueVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
+import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
+import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
 
 const props = defineProps<{
@@ -216,6 +343,9 @@ const emit = defineEmits<{
   'batch-assign': [assigneeId: string | null]
   'batch-sprint': [sprintId: string | null]
   'batch-priority': [priority: string]
+  'batch-tag-add': [tagId: string]
+  'batch-tag-remove': [tagId: string]
+  'batch-link': [linkType: string, targetIssueId: string]
   'batch-delete': []
   'batch-export': [format: string]
   'open-command': []
@@ -368,6 +498,133 @@ function handleBatchPriority(priority: string) {
 // ========== 批量导出 ==========
 function handleExport(format: string | number | Record<string, any> | undefined) {
   emit('batch-export', String(format))
+}
+
+// ========== 标签下拉 ==========
+const showTagDropdown = ref(false)
+const tagLoading = ref(false)
+const tagSearch = ref('')
+const projectTags = ref<IssueTagVO[]>([])
+
+/** 当前选中工单已有的标签（取交集/并集用于展示可移除的） */
+const existingTagIds = computed(() => {
+  const tagIds = new Set<string>()
+  props.selectedIssues.forEach(issue => {
+    issue.tags?.forEach(t => tagIds.add(t.id))
+  })
+  return tagIds
+})
+
+/** 可移除的标签：选中工单中至少有一个有该标签 */
+const removableTags = computed(() => {
+  return projectTags.value.filter(t => existingTagIds.value.has(t.id))
+})
+
+/** 可添加的标签：过滤掉已在所有选中工单上的标签 */
+const filteredTags = computed(() => {
+  const kw = tagSearch.value.toLowerCase()
+  return projectTags.value
+    .filter(t => !existingTagIds.value.has(t.id))
+    .filter(t => !kw || t.name.toLowerCase().includes(kw))
+})
+
+const showRemoveSection = computed(() => removableTags.value.length > 0)
+
+watch(showTagDropdown, async (visible) => {
+  if (visible) {
+    tagSearch.value = ''
+    tagLoading.value = true
+    try {
+      const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId))]
+      if (projectIds.length === 1) {
+        const res = await tagApi.listProjectTags(projectIds[0])
+        projectTags.value = res.data || []
+      } else {
+        // 多项目场景：合并所有项目标签并去重
+        const allTags: IssueTagVO[] = []
+        for (const pid of projectIds) {
+          const res = await tagApi.listProjectTags(pid)
+          allTags.push(...(res.data || []))
+        }
+        const seen = new Set<string>()
+        projectTags.value = allTags.filter(t => {
+          if (seen.has(t.id)) return false
+          seen.add(t.id)
+          return true
+        })
+      }
+    } catch {
+      projectTags.value = []
+    } finally {
+      tagLoading.value = false
+    }
+  }
+})
+
+function handleBatchTagAdd(tag: IssueTagVO) {
+  showTagDropdown.value = false
+  emit('batch-tag-add', tag.id)
+}
+
+function handleBatchTagRemove(tag: IssueTagVO) {
+  showTagDropdown.value = false
+  emit('batch-tag-remove', tag.id)
+}
+
+// ========== 关联下拉 ==========
+const showLinkDropdown = ref(false)
+const showLinkTargetModal = ref(false)
+const linkTargetSearch = ref('')
+const linkTargetLoading = ref(false)
+const linkTargetResults = ref<IssueVO[]>([])
+const selectedLinkType = ref('')
+
+const linkTypeOptions = [
+  { value: 'relates_to', label: '关联（relates to）' },
+  { value: 'blocks', label: '阻塞（blocks）' },
+  { value: 'blocked_by', label: '被阻塞（blocked by）' },
+  { value: 'duplicates', label: '重复（duplicates）' },
+  { value: 'parent_of', label: '父工单（parent of）' },
+  { value: 'child_of', label: '子工单（child of）' }
+]
+
+function handleSelectLinkType(linkType: string) {
+  showLinkDropdown.value = false
+  selectedLinkType.value = linkType
+  linkTargetSearch.value = ''
+  linkTargetResults.value = []
+  showLinkTargetModal.value = true
+}
+
+let linkSearchTimer: ReturnType<typeof setTimeout> | null = null
+function handleLinkTargetSearchDebounced() {
+  if (linkSearchTimer) clearTimeout(linkSearchTimer)
+  linkSearchTimer = setTimeout(async () => {
+    if (!linkTargetSearch.value.trim()) {
+      linkTargetResults.value = []
+      return
+    }
+    linkTargetLoading.value = true
+    try {
+      const res = await issueApi.list({
+        keyword: linkTargetSearch.value.trim(),
+        page: 1,
+        pageSize: 20
+      })
+      // 排除已选中的工单
+      const selectedIds = new Set(props.selectedIssues.map(i => i.id))
+      linkTargetResults.value = (res.data?.list || []).filter((i: IssueVO) => !selectedIds.has(i.id))
+    } catch {
+      linkTargetResults.value = []
+    } finally {
+      linkTargetLoading.value = false
+    }
+  }, 300)
+}
+
+function handleBatchLink(targetIssue: IssueVO) {
+  showLinkTargetModal.value = false
+  emit('batch-link', selectedLinkType.value, targetIssue.id)
 }
 
 // ========== 批量删除 ==========
@@ -549,5 +806,92 @@ function confirmBatchDelete() {
 }
 .status-dropdown .dropdown-item.partially-reachable:hover {
   opacity: 1;
+}
+
+/* 标签下拉 */
+.tag-dropdown {
+  min-width: 200px;
+}
+
+.tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tag-name {
+  flex: 1;
+}
+
+.tag-remove-item {
+  color: var(--tf-text-secondary);
+}
+.tag-remove-item:hover {
+  color: var(--tf-danger);
+}
+
+.tag-remove-icon {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  flex-shrink: 0;
+}
+.tag-remove-item:hover .tag-remove-icon {
+  color: var(--tf-danger);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--tf-border);
+  margin: 4px 8px;
+}
+
+/* 关联下拉 */
+.link-dropdown {
+  min-width: 200px;
+}
+
+/* 关联目标工单选择弹窗 */
+.link-target-search {
+  margin-bottom: 12px;
+}
+
+.link-target-loading {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.link-target-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.link-target-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.link-target-item:hover {
+  background: var(--tf-bg-hover);
+}
+
+.link-target-key {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+  flex-shrink: 0;
+}
+
+.link-target-title {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

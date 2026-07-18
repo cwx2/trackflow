@@ -3,6 +3,7 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, IssueTagVO } fr
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import { localizeStatusName, localizePriority, statusLabelMap } from '@/utils/fieldLabels'
 import type { BatchResult } from './useBatchOps'
+import { useBatchOps } from './useBatchOps'
 
 /**
  * 命令类型定义

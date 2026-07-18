@@ -58,6 +58,63 @@ export function useBatchOps() {
   }
 
   /**
+   * 批量添加标签
+   */
+  async function batchTagAdd(
+    issues: IssueVO[],
+    tagId: string
+  ): Promise<BatchResult> {
+    return executeBatchApi(issues, 'tag_add', { tagId }, '添加标签')
+  }
+
+  /**
+   * 批量移除标签
+   */
+  async function batchTagRemove(
+    issues: IssueVO[],
+    tagId: string
+  ): Promise<BatchResult> {
+    return executeBatchApi(issues, 'tag_remove', { tagId }, '移除标签')
+  }
+
+  /**
+   * 批量添加关联（逐个调用单条 API）
+   */
+  async function batchAddLink(
+    issues: IssueVO[],
+    linkType: string,
+    targetIssueId: string
+  ): Promise<BatchResult> {
+    const batch = issues.slice(0, MAX_BATCH_SIZE)
+    executing.value = true
+    const failures: Array<{ issueId: string; issueKey: string; reason: string }> = []
+    let succeeded = 0
+
+    try {
+      for (const issue of batch) {
+        try {
+          await issueApi.createLink(issue.id, { linkType, targetIssueId })
+          succeeded++
+        } catch (e: any) {
+          const reason = e.response?.data?.message || '创建关联失败'
+          failures.push({ issueId: issue.id, issueKey: issue.issueKey, reason })
+        }
+      }
+
+      const result: BatchResult = {
+        total: batch.length,
+        succeeded,
+        failed: failures.length,
+        failures
+      }
+      showBatchResult(result, '添加关联')
+      return result
+    } finally {
+      executing.value = false
+    }
+  }
+
+  /**
    * 批量删除（带撤销 toast）
    */
   async function batchDelete(
@@ -215,6 +272,9 @@ export function useBatchOps() {
     batchAssign,
     batchUpdateSprint,
     batchUpdatePriority,
+    batchTagAdd,
+    batchTagRemove,
+    batchAddLink,
     batchDelete
   }
 }

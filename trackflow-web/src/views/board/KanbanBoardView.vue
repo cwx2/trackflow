@@ -626,6 +626,9 @@
           @batch-assign="onBatchAssign"
           @batch-sprint="onBatchSprint"
           @batch-priority="onBatchPriority"
+          @batch-tag-add="onBatchTagAdd"
+          @batch-tag-remove="onBatchTagRemove"
+          @batch-link="onBatchLink"
           @batch-delete="onBatchDelete"
         />
       </div>
@@ -1067,7 +1070,7 @@ const {
   toggle: toggleCardSelection, clearSelection
 } = useSelection(issues)
 
-const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchDelete } = useBatchOps()
+const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchTagAdd, batchTagRemove, batchAddLink, batchDelete } = useBatchOps()
 
 // 看板列配置
 const allColumnConfigs = ref<BoardColumnVO[]>([])
@@ -1762,6 +1765,30 @@ async function onBatchPriority(priority: string) {
         issue.priority = priority
       }
     })
+  }
+  clearSelection()
+}
+
+async function onBatchTagAdd(tagId: string) {
+  const result = await batchTagAdd(selectedIssues.value, tagId)
+  if (result.succeeded > 0) {
+    await loadIssues()
+  }
+  clearSelection()
+}
+
+async function onBatchTagRemove(tagId: string) {
+  const result = await batchTagRemove(selectedIssues.value, tagId)
+  if (result.succeeded > 0) {
+    await loadIssues()
+  }
+  clearSelection()
+}
+
+async function onBatchLink(linkType: string, targetIssueId: string) {
+  const result = await batchAddLink(selectedIssues.value, linkType, targetIssueId)
+  if (result.succeeded > 0) {
+    await loadIssues()
   }
   clearSelection()
 }
