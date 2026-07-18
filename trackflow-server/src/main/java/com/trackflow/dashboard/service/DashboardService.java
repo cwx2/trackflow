@@ -7,14 +7,16 @@ import com.trackflow.dashboard.vo.DashboardSummaryVO;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
-import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.issue.vo.IssueVO;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.report.service.ReportStatisticsService;
+import com.trackflow.report.vo.OverviewVO;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -34,17 +36,20 @@ public class DashboardService {
 
     private final IssueMapper issueMapper;
     private final IssueStatusMapper statusMapper;
-    private final IssueActivityMapper activityMapper;
     private final IssueConverter issueConverter;
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final SysUserMapper sysUserMapper;
+    private final StatusCacheHelper statusCacheHelper;
+    private final ReportStatisticsService reportStatisticsService;
 
     /**
      * 获取仪表盘统计概览。
-     * 统计范围：用户所在项目的所有工单（而非仅 assignee_id = userId）。
-     * 对于有明确 assignee 的统计（待处理、进行中），仍基于 assignee_id。
-     * 对于角色相关统计（如测试人员看 Testing 状态），基于项目范围。
+     * <p>
+     * 重叠指标（总工单数、逾期等全局统计）委托给 ReportStatisticsService.buildOverview()，
+     * 确保统计口径与报表页面一致。
+     * <p>
+     * 个人视角指标（分配给我、我报告的、即将到期）保持独立计算。
      */
     public DashboardSummaryVO getSummary(Long userId) {
         DashboardSummaryVO vo = new DashboardSummaryVO();
@@ -56,27 +61,37 @@ public class DashboardService {
         String primaryRole = determinePrimaryRole(userId, userProjectIds);
         vo.setPrimaryRoleCode(primaryRole);
 
-        // 获取状态分类
+        // ─── 统一状态判定（使用 StatusCacheHelper，与 ReportStatisticsService 口径一致） ───
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+        Set<Long> openStatusIds = statusCacheHelper.getOpenStatusIds();
+
+        // 细分：从开放状态中区分 open / in_progress（个人视角需要）
         List<IssueStatus> statuses = statusMapper.selectList(null);
-        Set<Long> openStatusIds = statuses.stream()
+        Set<Long> pureOpenStatusIds = statuses.stream()
                 .filter(s -> "open".equals(s.getCategory()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
         Set<Long> inProgressStatusIds = statuses.stream()
                 .filter(s -> "in_progress".equals(s.getCategory()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
-        Set<Long> doneStatusIds = statuses.stream()
-                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
-                .map(IssueStatus::getId).collect(Collectors.toSet());
-        // Testing 状态 ID（使用 code 字段匹配，比 name 更稳定，不受国际化影响）
         Set<Long> testingStatusIds = statuses.stream()
                 .filter(s -> "testing".equals(s.getCode()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
+
+        // ─── 委托给 ReportStatisticsService 的全局统计 ───────────────────────
+        if (!userProjectIds.isEmpty()) {
+            OverviewVO overview = reportStatisticsService.getOverview(userProjectIds, null);
+            vo.setTotalIssues(overview.getTotal());
+        } else {
+            vo.setTotalIssues(0L);
+        }
+
+        // ─── 个人视角统计（DashboardService 独有） ────────────────────────────
 
         // 分配给我的待处理
         vo.setAssignedOpen(issueMapper.selectCount(new QueryWrapper<Issue>()
                 .isNull("deleted_at")
                 .eq("assignee_id", userId)
-                .in("status_id", openStatusIds)));
+                .in("status_id", pureOpenStatusIds)));
 
         // 分配给我的进行中
         vo.setAssignedInProgress(issueMapper.selectCount(new QueryWrapper<Issue>()
@@ -84,14 +99,14 @@ public class DashboardService {
                 .eq("assignee_id", userId)
                 .in("status_id", inProgressStatusIds)));
 
-        // 本周已完成：分配给我或我报告的，且本周变为 done/cancelled 状态
+        // 本周已完成：分配给我或我报告的，且本周变为关闭状态
         LocalDateTime weekStart = LocalDate.now()
                 .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                 .atStartOfDay();
         vo.setCompletedThisWeek(issueMapper.selectCount(new QueryWrapper<Issue>()
                 .isNull("deleted_at")
                 .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
-                .in("status_id", doneStatusIds)
+                .in("status_id", closedStatusIds)
                 .ge("updated_at", weekStart)));
 
         // 即将到期（7天内）：我所在项目范围内，分配给我或我报告的
@@ -102,7 +117,7 @@ public class DashboardService {
                     .isNull("deleted_at")
                     .in("project_id", userProjectIds)
                     .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
-                    .notIn("status_id", doneStatusIds)
+                    .notIn("status_id", closedStatusIds)
                     .ge("due_date", today)
                     .le("due_date", sevenDaysLater)));
 
@@ -111,7 +126,7 @@ public class DashboardService {
                     .isNull("deleted_at")
                     .in("project_id", userProjectIds)
                     .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
-                    .notIn("status_id", doneStatusIds)
+                    .notIn("status_id", closedStatusIds)
                     .lt("due_date", today)));
         } else {
             vo.setDueSoon(0L);
@@ -122,7 +137,7 @@ public class DashboardService {
         vo.setReportedByMeOpen(issueMapper.selectCount(new QueryWrapper<Issue>()
                 .isNull("deleted_at")
                 .eq("reporter_id", userId)
-                .notIn("status_id", doneStatusIds)));
+                .notIn("status_id", closedStatusIds)));
 
         // 待测试工单数（Testing 状态，用户所在项目范围内）
         if (!userProjectIds.isEmpty() && !testingStatusIds.isEmpty()) {
@@ -134,15 +149,6 @@ public class DashboardService {
             vo.setTestingCount(0L);
         }
 
-        // 总工单数（用户所在项目范围）
-        if (!userProjectIds.isEmpty()) {
-            vo.setTotalIssues(issueMapper.selectCount(new QueryWrapper<Issue>()
-                    .isNull("deleted_at")
-                    .in("project_id", userProjectIds)));
-        } else {
-            vo.setTotalIssues(0L);
-        }
-
         // 活跃项目数
         vo.setActiveProjects(projectMapper.selectCount(new QueryWrapper<Project>()
                 .eq("status", "Active")));
@@ -151,33 +157,30 @@ public class DashboardService {
         LocalDateTime lastWeekStart = weekStart.minusWeeks(1);
         LocalDateTime lastWeekEnd = weekStart; // 上周结束 = 本周开始
 
-        // 上周待处理快照近似：上周五这天的 open 状态（简化为上周末时间点之前创建且当时未关闭的数量）
-        // 实际采用简化方案：上周同期 assignedOpen 数量（用上周最后一天的状态）
-        // 简化实现：计算上周完成数量来对比
+        // 上周完成数量
         vo.setLastWeekCompleted(issueMapper.selectCount(new QueryWrapper<Issue>()
                 .isNull("deleted_at")
                 .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
-                .in("status_id", doneStatusIds)
+                .in("status_id", closedStatusIds)
                 .ge("updated_at", lastWeekStart)
                 .lt("updated_at", lastWeekEnd)));
 
-        // 上周逾期近似：使用当前逾期趋势（上周到期日在上周范围内且未完成的数量）
+        // 上周逾期近似
         LocalDate lastWeekToday = today.minusWeeks(1);
         if (!userProjectIds.isEmpty()) {
             vo.setLastWeekOverdue(issueMapper.selectCount(new QueryWrapper<Issue>()
                     .isNull("deleted_at")
                     .in("project_id", userProjectIds)
                     .and(w -> w.eq("assignee_id", userId).or().eq("reporter_id", userId))
-                    .notIn("status_id", doneStatusIds)
+                    .notIn("status_id", closedStatusIds)
                     .lt("due_date", lastWeekToday)));
         } else {
             vo.setLastWeekOverdue(0L);
         }
 
-        // 上周同期 open/inProgress（简化：使用上周创建且当时未关闭的数量来对比变化趋势）
-        // 实际使用当前值的倒推估算（因为没有历史快照表）
-        vo.setLastWeekOpen(vo.getAssignedOpen()); // 占位，前端会用 completed 做对比
-        vo.setLastWeekInProgress(vo.getAssignedInProgress()); // 占位
+        // 上周同期 open/inProgress（占位，前端用 completed 做对比）
+        vo.setLastWeekOpen(vo.getAssignedOpen());
+        vo.setLastWeekInProgress(vo.getAssignedInProgress());
 
         return vo;
     }
@@ -186,11 +189,8 @@ public class DashboardService {
      * 分配给我的工单（按优先级+更新时间排序）
      */
     public List<IssueVO> getAssignedToMe(Long userId, int limit) {
-        // 获取未关闭的状态
-        List<IssueStatus> statuses = statusMapper.selectList(null);
-        Set<Long> closedStatusIds = statuses.stream()
-                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
-                .map(IssueStatus::getId).collect(Collectors.toSet());
+        // 使用 StatusCacheHelper 获取关闭状态（统一口径）
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
 
         QueryWrapper<Issue> wrapper = new QueryWrapper<>();
         wrapper.isNull("deleted_at")
@@ -211,10 +211,8 @@ public class DashboardService {
      * 即将到期工单（用户所在项目范围内，分配给我或我报告的）
      */
     public List<IssueVO> getOverdueIssues(Long userId, int days, int limit) {
-        List<IssueStatus> statuses = statusMapper.selectList(null);
-        Set<Long> closedStatusIds = statuses.stream()
-                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
-                .map(IssueStatus::getId).collect(Collectors.toSet());
+        // 使用 StatusCacheHelper 获取关闭状态（统一口径）
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
 
         List<Long> userProjectIds = projectMemberMapper.selectProjectIdsByUserId(userId);
         if (userProjectIds.isEmpty()) {
@@ -325,11 +323,10 @@ public class DashboardService {
                 .ge("created_at", start)
                 .le("created_at", end));
 
-        // 状态列表（用于状态分布 + 工作负载中区分已完成/未完成）
+        // 使用 StatusCacheHelper 获取关闭状态（与 ReportStatisticsService 口径一致）
+        Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+        // 状态列表仅用于 name/color/category 展示
         List<IssueStatus> statuses = statusMapper.selectList(null);
-        Set<Long> closedStatusIds = statuses.stream()
-                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
-                .map(IssueStatus::getId).collect(Collectors.toSet());
 
         List<Issue> resolvedIssues = issueMapper.selectList(new QueryWrapper<Issue>()
                 .isNull("deleted_at")

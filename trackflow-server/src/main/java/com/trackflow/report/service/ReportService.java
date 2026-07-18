@@ -8,10 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
-import com.trackflow.issue.entity.Issue;
-import com.trackflow.issue.entity.IssueStatus;
-import com.trackflow.issue.mapper.IssueMapper;
-import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.dto.UpdateReportDTO;
@@ -19,8 +16,8 @@ import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.entity.ReportGroupBy;
 import com.trackflow.report.entity.ReportType;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
-import com.trackflow.system.entity.SysUser;
-import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.report.mapper.ReportStatisticsMapper;
+import com.trackflow.report.mapper.result.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +26,14 @@ import com.trackflow.report.vo.ReportExecuteResultVO;
 
 import java.util.*;
 import java.time.LocalDateTime;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ReportService {
 
     private final ReportDefinitionMapper reportMapper;
-    private final IssueMapper issueMapper;
-    private final IssueStatusMapper statusMapper;
-    private final SysUserMapper userMapper;
+    private final ReportStatisticsMapper reportStatisticsMapper;
+    private final StatusCacheHelper statusCacheHelper;
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
     private final PermissionService permissionService;
@@ -268,74 +263,75 @@ public class ReportService {
         // 执行时校验 groupBy 合法性（防御已存在的脏数据）
         final String groupBy = ReportGroupBy.isValid(rawGroupBy) ? rawGroupBy : "status";
 
-        // 构建查询条件
-        LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
-        wrapper.isNull(Issue::getDeletedAt);
-        if (report.getProjectId() != null) {
-            wrapper.eq(Issue::getProjectId, report.getProjectId());
+        // 构建项目 ID 列表用于 SQL 查询
+        List<Long> projectIds = report.getProjectId() != null
+                ? List.of(report.getProjectId())
+                : null; // null = 不限项目（全局报表）
+
+        // 使用 SQL GROUP BY 聚合，不加载原始工单到内存
+        List<String> labels = new ArrayList<>();
+        List<Long> data = new ArrayList<>();
+        long total = 0;
+
+        switch (groupBy) {
+            case "status" -> {
+                List<StatusDistributionRow> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, null);
+                for (StatusDistributionRow row : rows) {
+                    labels.add(row.getStatusName());
+                    long cnt = row.getCnt() != null ? row.getCnt() : 0L;
+                    data.add(cnt);
+                    total += cnt;
+                }
+            }
+            case "priority" -> {
+                List<PriorityDistributionRow> rows = reportStatisticsMapper.selectPriorityDistribution(projectIds, null);
+                for (PriorityDistributionRow row : rows) {
+                    labels.add(row.getPriorityName());
+                    long cnt = row.getCnt() != null ? row.getCnt() : 0L;
+                    data.add(cnt);
+                    total += cnt;
+                }
+            }
+            case "type" -> {
+                List<TypeDistributionRow> rows = reportStatisticsMapper.selectTypeDistribution(projectIds, null);
+                for (TypeDistributionRow row : rows) {
+                    labels.add(row.getTypeName());
+                    long cnt = row.getCnt() != null ? row.getCnt() : 0L;
+                    data.add(cnt);
+                    total += cnt;
+                }
+            }
+            case "assignee" -> {
+                List<Long> closedStatusIds = new ArrayList<>(statusCacheHelper.getClosedStatusIds());
+                List<WorkloadRow> rows = reportStatisticsMapper.selectWorkload(projectIds, null, closedStatusIds);
+                for (WorkloadRow row : rows) {
+                    String name = row.getAssigneeName() != null ? row.getAssigneeName() : "未分配";
+                    labels.add(name);
+                    long cnt = row.getTotal() != null ? row.getTotal() : 0L;
+                    data.add(cnt);
+                    total += cnt;
+                }
+            }
+            default -> {
+                // 未知 groupBy 按 status 兜底
+                List<StatusDistributionRow> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, null);
+                for (StatusDistributionRow row : rows) {
+                    labels.add(row.getStatusName());
+                    long cnt = row.getCnt() != null ? row.getCnt() : 0L;
+                    data.add(cnt);
+                    total += cnt;
+                }
+            }
         }
-
-        List<Issue> issues = issueMapper.selectList(wrapper);
-
-        // 构建 ID→名称映射
-        Map<Long, String> nameMap = buildNameMap(issues, groupBy);
-
-        // 按 groupBy 分组统计（使用可读名称）
-        Map<String, Long> grouped = issues.stream()
-                .collect(Collectors.groupingBy(issue -> getGroupValue(issue, groupBy, nameMap), Collectors.counting()));
 
         ReportExecuteResultVO result = new ReportExecuteResultVO();
         result.setTitle(report.getName());
         result.setType(report.getType());
         result.setGroupBy(groupBy);
-        result.setLabels(new ArrayList<>(grouped.keySet()));
-        result.setData(new ArrayList<>(grouped.values()));
-        result.setTotal(issues.size());
+        result.setLabels(labels);
+        result.setData(data);
+        result.setTotal(total);
         return result;
-    }
-
-    /**
-     * 构建 ID→可读名称映射（按需查询数据库）
-     */
-    private Map<Long, String> buildNameMap(List<Issue> issues, String groupBy) {
-        return switch (groupBy) {
-            case "status" -> {
-                Set<Long> statusIds = issues.stream()
-                        .map(Issue::getStatusId)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
-                if (statusIds.isEmpty()) yield Map.of();
-                yield statusMapper.selectBatchIds(statusIds).stream()
-                        .collect(Collectors.toMap(IssueStatus::getId, IssueStatus::getName, (a, b) -> a));
-            }
-            case "assignee" -> {
-                Set<Long> userIds = issues.stream()
-                        .map(Issue::getAssigneeId)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
-                if (userIds.isEmpty()) yield Map.of();
-                yield userMapper.selectBatchIds(userIds).stream()
-                        .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
-            }
-            default -> Map.of();
-        };
-    }
-
-    private String getGroupValue(Issue issue, String groupBy, Map<Long, String> nameMap) {
-        return switch (groupBy) {
-            case "status" -> {
-                Long statusId = issue.getStatusId();
-                yield nameMap.getOrDefault(statusId, "未知状态");
-            }
-            case "priority" -> issue.getPriority() != null ? issue.getPriority() : "无";
-            case "type" -> issue.getIssueType() != null ? issue.getIssueType() : "未分类";
-            case "assignee" -> {
-                Long assigneeId = issue.getAssigneeId();
-                if (assigneeId == null) yield "未分配";
-                yield nameMap.getOrDefault(assigneeId, "未知用户");
-            }
-            default -> "其他";
-        };
     }
 
     @SuppressWarnings("unchecked")

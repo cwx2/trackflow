@@ -91,6 +91,20 @@ public class ReportStatisticsService {
 
     // ─── Public endpoints (single chart) ────────────────────────────────
 
+    /**
+     * 获取概览统计（总数/开放/已关闭/未分配/逾期/完成率）。
+     * <p>
+     * 供 DashboardService 等跨模块调用，确保统计口径统一。
+     *
+     * @param projectIds      项目 ID 列表
+     * @param sprintId        Sprint 过滤（可选）
+     * @return 概览统计 VO
+     */
+    public OverviewVO getOverview(List<Long> projectIds, Long sprintId) {
+        List<Long> closedStatusIds = new ArrayList<>(statusCacheHelper.getClosedStatusIds());
+        return buildOverview(projectIds, sprintId, closedStatusIds);
+    }
+
     public StatusDistributionVO getStatusDistribution(Long projectId, Long sprintId) {
         return buildStatusDistribution(List.of(projectId), sprintId);
     }
