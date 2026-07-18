@@ -39,7 +39,7 @@
       <span v-if="searchKeyword" class="clear-btn" @click="clearSearch">✕</span>
 
       <!-- Read-only filter conditions display (for non-owned queries) -->
-      <div v-if="showReadonlyFilters && readonlyFilterLabels.length > 0" class="readonly-filters-row">
+      <div v-if="showReadonlyFilters && readonlyFilterLabels && readonlyFilterLabels.length > 0" class="readonly-filters-row">
         <span v-for="(label, i) in readonlyFilterLabels" :key="i" class="readonly-filter-chip">{{ label }}</span>
       </div>
     </div>
@@ -731,6 +731,11 @@ watch(() => props.initialFilters, (filters) => {
   }
 }, { immediate: true })
 
+// Reset readonly filter display when the active query changes
+watch(() => props.activeQueryName, () => {
+  showReadonlyFilters.value = false
+})
+
 /** 标记：正在应用外部过滤条件，阻止 mode watch 触发 emitFilters（避免冗余请求） */
 let suppressEmit = false
 
@@ -756,9 +761,17 @@ function applyInitialFilters(filters: InitialFilter[]) {
 /**
  * 清空所有搜索/筛选状态（供外部组件调用）
  */
+/**
+ * 清空所有搜索/筛选状态（供外部组件调用）
+ */
 function clearAll() {
   searchKeyword.value = ''
   activeFilters.value = []
+  showReadonlyFilters.value = false
+  // Reset to search mode
+  suppressEmit = true
+  mode.value = 'search'
+  nextTick(() => { suppressEmit = false })
 }
 
 /**

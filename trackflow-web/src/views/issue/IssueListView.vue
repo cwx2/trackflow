@@ -744,12 +744,48 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
     filters = activeQueryObj.value.filters
   }
   if (!Array.isArray(filters)) return []
+
+  const fieldLabels: Record<string, string> = {
+    status: '状态', priority: '优先级', assignee: '负责人',
+    type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人'
+  }
+  const operatorLabels: Record<string, string> = {
+    eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭'
+  }
+
   return filters.map((f: any) => {
-    const fieldLabels: Record<string, string> = { status: '状态', priority: '优先级', assignee: '负责人', type: '类型', sprint: 'Sprint', project: '项目' }
     const fieldLabel = fieldLabels[f.field] || f.field
-    const values = Array.isArray(f.value) ? f.value.join(', ') : (f.value || '')
-    return `${fieldLabel}: ${values}`
-  }).filter(Boolean)
+    const op = f.operator
+
+    // Handle special "open" operator (means all non-closed statuses)
+    if (op === 'open') return `${fieldLabel}: 未关闭`
+
+    let values: string
+    if (Array.isArray(f.value)) {
+      values = f.value.map((v: string) => {
+        if (v === '${currentUser}') return '我'
+        if (f.field === 'type') return issueTypeLabelMap[v] || v
+        if (f.field === 'priority') {
+          const map: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
+          return map[v] || v
+        }
+        if (f.field === 'status') {
+          const st = statusCache.value.find(s => s.code === v || s.id === v)
+          return st ? localizeStatusName(st.name) : v
+        }
+        if (f.field === 'project') {
+          const p = projectList.value.find(pr => pr.id === v)
+          return p ? p.name : v
+        }
+        return v
+      }).join(', ')
+    } else {
+      values = String(f.value || '')
+    }
+
+    const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
+    return `${fieldLabel}${opLabel} ${values}`
+  }).filter(l => l && l.trim())
 })
 
 // Create query modal state
@@ -838,6 +874,7 @@ async function confirmDeleteQuery(q: any) {
         if (activeQueryId.value === q.id) {
           activeQueryId.value = null
           activeQueryName.value = '所有工单'
+          activeQueryObj.value = null
           refreshList()
         }
         loadPanel()
@@ -2053,9 +2090,15 @@ function selectQuery(q: any) {
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
-  // Parse saved query filters and display them in FilterBar
-  const chips = parseSavedQueryFilters(q.filters)
-  filterBarRef.value?.setFilters(chips)
+  // For owned queries: parse and show editable filter chips in FilterBar
+  // For non-owned queries: stay in search mode, readonly conditions shown on chip click
+  if (isOwnQuery(q)) {
+    const chips = parseSavedQueryFilters(q.filters)
+    filterBarRef.value?.setFilters(chips)
+  } else {
+    // Clear any existing filters and keep in search mode
+    filterBarRef.value?.clearAll()
+  }
 
   refreshList()
 }
@@ -2160,6 +2203,7 @@ function handleIssuesRestored() {
 function applyDashboardFilter() {
   // 清除已选中的保存查询，防止 buildFilters() 中 queryId 覆盖 dashboard 过滤条件
   activeQueryId.value = null
+  activeQueryObj.value = null
   filterProject.value = undefined
   searchKeyword.value = ''
 
