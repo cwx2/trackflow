@@ -19,6 +19,7 @@
     "axios": "^1.7.9",
     "dompurify": "^3.4.11",
     "echarts": "^6.1.0",
+    "grid-layout-plus": "^1.1.1",
     "lowlight": "^3.3.0",
     "markdown-it": "^14.3.0",
     "pinia": "^2.2.6",

@@ -200,6 +200,20 @@ public class SystemSettingService {
         return setting != null ? setting.getValue() : defaultValue;
     }
 
+    /**
+     * 获取指定前缀的所有配置（key → value）
+     */
+    public Map<String, String> getSettingsByPrefix(String prefix) {
+        var wrapper = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SystemSetting>();
+        wrapper.likeRight(SystemSetting::getSettingKey, prefix);
+        List<SystemSetting> settings = settingMapper.selectList(wrapper);
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        for (SystemSetting s : settings) {
+            result.put(s.getSettingKey(), s.getValue());
+        }
+        return result;
+    }
+
     public void upsertSetting(String key, String value, String description, String category) {
         SystemSetting existing = settingMapper.selectByKey(key);
         if (existing != null) {

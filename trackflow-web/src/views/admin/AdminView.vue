@@ -154,6 +154,13 @@ const menuItems: AdminMenuItem[] = [
     title: 'Webhook',
     description: '管理项目 Webhook 通知，事件触发时推送到外部系统',
     permission: 'system:manage_roles'
+  },
+  {
+    path: '/admin/integrations',
+    icon: '🔌',
+    title: '第三方集成',
+    description: '管理外部系统适配器的启用/禁用、配置和事件日志',
+    permission: 'system:manage_roles'
   }
 ]
 

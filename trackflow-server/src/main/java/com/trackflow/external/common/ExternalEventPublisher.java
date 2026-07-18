@@ -1,6 +1,7 @@
 package com.trackflow.external.common;
 
 import com.trackflow.external.mapper.ExternalEventLogMapper;
+import com.trackflow.system.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,6 +32,7 @@ public class ExternalEventPublisher {
 
     private final ExternalEventLogMapper eventLogMapper;
     private final List<ExternalAdapter> adapters;
+    private final SystemSettingService settingService;
 
     /**
      * 发布出站事件到所有匹配的适配器。
@@ -48,7 +50,7 @@ public class ExternalEventPublisher {
         }
 
         for (ExternalAdapter adapter : adapters) {
-            if (!adapter.isEnabled()) {
+            if (!isAdapterEffectivelyEnabled(adapter)) {
                 continue;
             }
             if (!adapter.getSupportedEvents().contains(eventType)) {
@@ -116,5 +118,18 @@ public class ExternalEventPublisher {
     private String truncateMessage(String message, int maxLength) {
         if (message == null) return null;
         return message.length() > maxLength ? message.substring(0, maxLength) : message;
+    }
+
+    /**
+     * 判断适配器是否实际启用（优先从 system_setting 动态读取，其次 fallback 到适配器自身 isEnabled()）
+     */
+    private boolean isAdapterEffectivelyEnabled(ExternalAdapter adapter) {
+        String key = "external." + adapter.getAdapterType() + ".enabled";
+        String value = settingService.getSettingValue(key, null);
+        if (value != null) {
+            return "true".equalsIgnoreCase(value);
+        }
+        // 未在 system_setting 中配置时，使用适配器自身的默认值
+        return adapter.isEnabled();
     }
 }

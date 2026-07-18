@@ -1,0 +1,302 @@
+package com.trackflow.report.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.report.converter.DashboardConverter;
+import com.trackflow.report.dto.CreateDashboardDTO;
+import com.trackflow.report.dto.CreateWidgetDTO;
+import com.trackflow.report.dto.UpdateDashboardDTO;
+import com.trackflow.report.dto.UpdateLayoutDTO;
+import com.trackflow.report.dto.UpdateWidgetDTO;
+import com.trackflow.report.entity.Dashboard;
+import com.trackflow.report.entity.DashboardWidget;
+import com.trackflow.report.mapper.DashboardMapper;
+import com.trackflow.report.mapper.DashboardWidgetMapper;
+import com.trackflow.report.vo.DashboardDetailVO;
+import com.trackflow.report.vo.DashboardListVO;
+import com.trackflow.report.vo.DashboardWidgetVO;
+import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.entity.SysUser;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 报表仪表盘 Service
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CustomDashboardService {
+
+    private final DashboardMapper dashboardMapper;
+    private final DashboardWidgetMapper widgetMapper;
+    private final DashboardConverter dashboardConverter;
+    private final SysUserMapper sysUserMapper;
+
+    /**
+     * 获取仪表盘列表（当前用户拥有的 + 共享的）
+     */
+    public List<DashboardListVO> list(Long userId) {
+        LambdaQueryWrapper<Dashboard> wrapper = new LambdaQueryWrapper<Dashboard>()
+                .eq(Dashboard::getOwnerId, userId)
+                .or()
+                .eq(Dashboard::getShared, true)
+                .orderByDesc(Dashboard::getUpdatedAt);
+
+        List<Dashboard> dashboards = dashboardMapper.selectList(wrapper);
+        List<DashboardListVO> voList = dashboardConverter.toListVOList(dashboards);
+
+        // 填充 owner 姓名 + widget 数量
+        if (!voList.isEmpty()) {
+            Set<Long> ownerIds = dashboards.stream().map(Dashboard::getOwnerId).collect(Collectors.toSet());
+            Map<Long, String> ownerNames = getOwnerNameMap(ownerIds);
+
+            List<Long> dashboardIds = dashboards.stream().map(Dashboard::getId).collect(Collectors.toList());
+            Map<Long, Long> widgetCounts = getWidgetCountMap(dashboardIds);
+
+            for (int i = 0; i < voList.size(); i++) {
+                Dashboard entity = dashboards.get(i);
+                DashboardListVO vo = voList.get(i);
+                vo.setOwnerName(ownerNames.getOrDefault(entity.getOwnerId(), ""));
+                vo.setWidgetCount(widgetCounts.getOrDefault(entity.getId(), 0L).intValue());
+            }
+        }
+
+        return voList;
+    }
+
+    /**
+     * 获取仪表盘详情（含所有 Widget）
+     */
+    public DashboardDetailVO getDetail(Long dashboardId, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+
+        // 权限检查：owner 或共享仪表盘可查看
+        if (!dashboard.getOwnerId().equals(userId) && !Boolean.TRUE.equals(dashboard.getShared())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问该仪表盘");
+        }
+
+        DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
+
+        // 填充 owner 名称
+        SysUser owner = sysUserMapper.selectById(dashboard.getOwnerId());
+        vo.setOwnerName(owner != null ? owner.getDisplayName() : "");
+
+        // 查询 widgets
+        LambdaQueryWrapper<DashboardWidget> widgetWrapper = new LambdaQueryWrapper<DashboardWidget>()
+                .eq(DashboardWidget::getDashboardId, dashboardId)
+                .orderByAsc(DashboardWidget::getSortOrder)
+                .orderByAsc(DashboardWidget::getPositionY)
+                .orderByAsc(DashboardWidget::getPositionX);
+        List<DashboardWidget> widgets = widgetMapper.selectList(widgetWrapper);
+        vo.setWidgets(dashboardConverter.toWidgetVOList(widgets));
+
+        return vo;
+    }
+
+    /**
+     * 创建仪表盘
+     */
+    @Transactional
+    public DashboardDetailVO create(CreateDashboardDTO dto, Long userId) {
+        Dashboard dashboard = new Dashboard();
+        dashboard.setName(dto.getName());
+        dashboard.setDescription(dto.getDescription());
+        dashboard.setOwnerId(userId);
+        dashboard.setShared(dto.getShared() != null ? dto.getShared() : false);
+        dashboard.setLayout("{}");
+
+        dashboardMapper.insert(dashboard);
+        log.info("Dashboard created: id={}, name={}, owner={}", dashboard.getId(), dashboard.getName(), userId);
+
+        DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
+        SysUser owner = sysUserMapper.selectById(userId);
+        vo.setOwnerName(owner != null ? owner.getDisplayName() : "");
+        vo.setWidgets(List.of());
+        return vo;
+    }
+
+    /**
+     * 更新仪表盘（名称/描述/共享）
+     */
+    @Transactional
+    public DashboardDetailVO update(Long dashboardId, UpdateDashboardDTO dto, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以修改");
+        }
+
+        if (dto.getName() != null) {
+            dashboard.setName(dto.getName());
+        }
+        if (dto.getDescription() != null) {
+            dashboard.setDescription(dto.getDescription());
+        }
+        if (dto.getShared() != null) {
+            dashboard.setShared(dto.getShared());
+        }
+
+        dashboardMapper.updateById(dashboard);
+        return getDetail(dashboardId, userId);
+    }
+
+    /**
+     * 删除仪表盘（只有 owner 可删除，级联删除 widget）
+     */
+    @Transactional
+    public void delete(Long dashboardId, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以删除");
+        }
+
+        // 先删 widgets（DB 有 ON DELETE CASCADE，但显式删除更清晰）
+        widgetMapper.delete(new LambdaQueryWrapper<DashboardWidget>()
+                .eq(DashboardWidget::getDashboardId, dashboardId));
+        dashboardMapper.deleteById(dashboardId);
+
+        log.info("Dashboard deleted: id={}, owner={}", dashboardId, userId);
+    }
+
+    /**
+     * 添加 Widget 到仪表盘
+     */
+    @Transactional
+    public DashboardWidgetVO addWidget(Long dashboardId, CreateWidgetDTO dto, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以添加微件");
+        }
+
+        // 计算 sortOrder（当前最大 + 1）
+        Long maxSort = widgetMapper.selectCount(new LambdaQueryWrapper<DashboardWidget>()
+                .eq(DashboardWidget::getDashboardId, dashboardId));
+
+        DashboardWidget widget = new DashboardWidget();
+        widget.setDashboardId(dashboardId);
+        widget.setWidgetType(dto.getWidgetType());
+        widget.setTitle(dto.getTitle());
+        widget.setConfig(dto.getConfig() != null ? dto.getConfig() : "{}");
+        widget.setReportId(dto.getReportId());
+        widget.setPositionX(dto.getPositionX() != null ? dto.getPositionX() : 0);
+        widget.setPositionY(dto.getPositionY() != null ? dto.getPositionY() : maxSort.intValue() * 3);
+        widget.setWidth(dto.getWidth() != null ? dto.getWidth() : 4);
+        widget.setHeight(dto.getHeight() != null ? dto.getHeight() : 3);
+        widget.setSortOrder(maxSort.intValue());
+
+        widgetMapper.insert(widget);
+        log.info("Widget added: id={}, dashboard={}, type={}", widget.getId(), dashboardId, dto.getWidgetType());
+
+        return dashboardConverter.toWidgetVO(widget);
+    }
+
+    /**
+     * 更新 Widget（配置/位置/大小）
+     */
+    @Transactional
+    public DashboardWidgetVO updateWidget(Long dashboardId, Long widgetId, UpdateWidgetDTO dto, Long userId) {
+        assertDashboardOwner(dashboardId, userId);
+
+        DashboardWidget widget = widgetMapper.selectById(widgetId);
+        if (widget == null || !widget.getDashboardId().equals(dashboardId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "微件不存在");
+        }
+
+        if (dto.getTitle() != null) widget.setTitle(dto.getTitle());
+        if (dto.getConfig() != null) widget.setConfig(dto.getConfig());
+        if (dto.getReportId() != null) widget.setReportId(dto.getReportId());
+        if (dto.getPositionX() != null) widget.setPositionX(dto.getPositionX());
+        if (dto.getPositionY() != null) widget.setPositionY(dto.getPositionY());
+        if (dto.getWidth() != null) widget.setWidth(dto.getWidth());
+        if (dto.getHeight() != null) widget.setHeight(dto.getHeight());
+
+        widgetMapper.updateById(widget);
+        return dashboardConverter.toWidgetVO(widget);
+    }
+
+    /**
+     * 删除 Widget
+     */
+    @Transactional
+    public void deleteWidget(Long dashboardId, Long widgetId, Long userId) {
+        assertDashboardOwner(dashboardId, userId);
+
+        DashboardWidget widget = widgetMapper.selectById(widgetId);
+        if (widget == null || !widget.getDashboardId().equals(dashboardId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "微件不存在");
+        }
+
+        widgetMapper.deleteById(widgetId);
+        log.info("Widget deleted: id={}, dashboard={}", widgetId, dashboardId);
+    }
+
+    /**
+     * 批量更新 Widget 位置（拖拽后保存布局）
+     */
+    @Transactional
+    public void updateLayout(Long dashboardId, UpdateLayoutDTO dto, Long userId) {
+        assertDashboardOwner(dashboardId, userId);
+
+        for (UpdateLayoutDTO.LayoutItem item : dto.getItems()) {
+            LambdaUpdateWrapper<DashboardWidget> updateWrapper = new LambdaUpdateWrapper<DashboardWidget>()
+                    .eq(DashboardWidget::getId, item.getWidgetId())
+                    .eq(DashboardWidget::getDashboardId, dashboardId)
+                    .set(DashboardWidget::getPositionX, item.getPositionX())
+                    .set(DashboardWidget::getPositionY, item.getPositionY())
+                    .set(DashboardWidget::getWidth, item.getWidth())
+                    .set(DashboardWidget::getHeight, item.getHeight());
+            widgetMapper.update(null, updateWrapper);
+        }
+
+        log.info("Dashboard layout updated: dashboardId={}, items={}", dashboardId, dto.getItems().size());
+    }
+
+    // ─── 私有方法 ────────────────────────────────────────
+
+    private void assertDashboardOwner(Long dashboardId, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以操作");
+        }
+    }
+
+    private Map<Long, String> getOwnerNameMap(Set<Long> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
+        return users.stream().collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+    }
+
+    private Map<Long, Long> getWidgetCountMap(List<Long> dashboardIds) {
+        if (dashboardIds.isEmpty()) return Map.of();
+        // 使用逐个查询简单实现，数据量不大
+        return dashboardIds.stream().collect(Collectors.toMap(
+                id -> id,
+                id -> widgetMapper.selectCount(new LambdaQueryWrapper<DashboardWidget>()
+                        .eq(DashboardWidget::getDashboardId, id))
+        ));
+    }
+}

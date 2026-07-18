@@ -103,6 +103,12 @@ const routes = [
         meta: { requiresReport: true }
       },
       {
+        path: 'reports/dashboards',
+        name: 'CustomDashboards',
+        component: () => import('@/views/report/dashboard/CustomDashboardView.vue'),
+        meta: { requiresReport: true }
+      },
+      {
         path: 'admin',
         name: 'Admin',
         component: () => import('@/views/admin/AdminView.vue'),
@@ -184,6 +190,12 @@ const routes = [
         path: 'admin/webhooks',
         name: 'WebhookManagement',
         component: () => import('@/views/admin/WebhookManagement.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+      },
+      {
+        path: 'admin/integrations',
+        name: 'IntegrationManagement',
+        component: () => import('@/views/admin/IntegrationManagement.vue'),
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {

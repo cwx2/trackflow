@@ -20,6 +20,16 @@
         <span class="tab-icon">{{ tab.icon }}</span>
         {{ tab.label }}
       </button>
+      <router-link to="/reports/dashboards" class="tab-btn tab-link">
+        <span class="tab-icon">📋</span>
+        自定义仪表盘
+        <icon-right :size="12" style="margin-left: 2px; opacity: 0.5;" />
+      </router-link>
+      <router-link to="/reports/saved" class="tab-btn tab-link">
+        <span class="tab-icon">💾</span>
+        已保存报表
+        <icon-right :size="12" style="margin-left: 2px; opacity: 0.5;" />
+      </router-link>
     </div>
 
     <!-- 仪表盘 Tab -->
@@ -290,7 +300,7 @@ import {
 import VChart from 'vue-echarts'
 import TimeReportTab from './TimeReportTab.vue'
 import EstimationReportTab from './EstimationReportTab.vue'
-import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
+import { IconDownload, IconFile, IconPrinter, IconRight } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
@@ -1239,6 +1249,19 @@ function printReport() {
 .tab-btn.active {
   color: var(--tf-accent);
   border-bottom-color: var(--tf-accent);
+}
+
+.tab-link {
+  text-decoration: none;
+  margin-left: auto;
+}
+
+.tab-link:first-of-type {
+  margin-left: auto;
+}
+
+.tab-link + .tab-link {
+  margin-left: 0;
 }
 
 .tab-icon {

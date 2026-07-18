@@ -12,6 +12,13 @@ public class IssueExternalEvent extends ExternalEvent {
     }
 
     /**
+     * 用于重试场景：从日志记录重建事件
+     */
+    public IssueExternalEvent(String eventType, String referenceId, String payload) {
+        super("*", eventType, Direction.OUTBOUND, referenceId, payload);
+    }
+
+    /**
      * 构造工单创建事件
      */
     public static IssueExternalEvent created(String referenceId, String payload) {
