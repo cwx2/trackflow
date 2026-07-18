@@ -80,4 +80,9 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * 用于父工单软删除时清理子工单的引用关系
      */
     int clearParentId(@Param("parentId") Long parentId);
+
+    /**
+     * 查询项目中各状态的工单数量（用于看板列设置的智能推荐）
+     */
+    List<Map<String, Object>> selectIssueCountByStatus(@Param("projectId") Long projectId);
 }

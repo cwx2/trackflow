@@ -178,4 +178,13 @@
           AND deleted_at IS NULL
     </select>
 
+    <!-- 查询项目中各状态的工单数量（用于看板列设置的智能推荐） -->
+    <select id="selectIssueCountByStatus" resultType="java.util.Map">
+        SELECT status_id, COUNT(*) AS cnt
+        FROM issue
+        WHERE project_id = #{projectId}
+          AND deleted_at IS NULL
+        GROUP BY status_id
+    </select>
+
 </mapper>

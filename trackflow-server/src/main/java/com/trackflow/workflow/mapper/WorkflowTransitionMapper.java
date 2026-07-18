@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Mapper
 public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition> {
@@ -77,4 +78,19 @@ public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition>
     int countStatusInWorkflow(@Param("projectId") Long projectId,
                               @Param("issueType") String issueType,
                               @Param("statusId") Long statusId);
+
+    /**
+     * 获取项目工作流中涉及的所有状态 ID（包含项目级规则和全局规则）。
+     * 用于看板列智能推荐——仅推荐在工作流中实际出现的状态。
+     */
+    @Select("""
+            SELECT DISTINCT status_id FROM (
+                SELECT old_status_id AS status_id FROM workflow_transition
+                WHERE project_id = #{projectId} OR project_id IS NULL
+                UNION
+                SELECT new_status_id AS status_id FROM workflow_transition
+                WHERE project_id = #{projectId} OR project_id IS NULL
+            ) t
+            """)
+    Set<Long> selectWorkflowStatusIds(@Param("projectId") Long projectId);
 }

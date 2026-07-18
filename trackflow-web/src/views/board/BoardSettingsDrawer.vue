@@ -45,71 +45,94 @@
           <div class="quick-actions">
             <a-button size="mini" @click="selectAll">全选</a-button>
             <a-button size="mini" @click="selectNone">全不选</a-button>
-            <a-button size="mini" @click="selectDefault">恢复默认</a-button>
+            <a-button size="mini" type="primary" @click="selectRecommended">
+              <template #icon><icon-thunderbolt /></template>
+              智能推荐
+            </a-button>
+            <a-button size="mini" @click="selectWithIssues">仅显示有工单的状态</a-button>
           </div>
 
-          <!-- 可拖拽的列配置列表 -->
+          <!-- 按 Category 分组的列配置列表 -->
           <div class="column-list">
             <div class="column-list-header">
               <span class="col-h-drag"></span>
               <span class="col-h-visible">显示</span>
               <span class="col-h-name">状态列</span>
+              <span class="col-h-count">工单数</span>
               <span class="col-h-wip">WIP 限制</span>
             </div>
             <div
               ref="sortableContainer"
               class="column-list-body"
             >
-              <div
-                v-for="(col, index) in editableColumns"
-                :key="col.statusId"
-                class="column-item"
-                :class="{
-                  'column-item--disabled': !col.visible,
-                  'column-item--dragging': dragIndex === index,
-                  'column-item--drop-above': dropIndex === index && dropPosition === 'above',
-                  'column-item--drop-below': dropIndex === index && dropPosition === 'below'
-                }"
-                :draggable="true"
-                @dragstart="onItemDragStart($event, index)"
-                @dragover="onItemDragOver($event, index)"
-                @dragleave="onItemDragLeave"
-                @drop="onItemDrop($event, index)"
-                @dragend="onItemDragEnd"
-              >
-                <span class="col-drag-handle" title="拖拽排序">⠿</span>
-                <a-checkbox v-model="col.visible" class="col-visible-check" />
-                <div class="col-name-cell">
-                  <span class="column-color" :style="{ backgroundColor: col.statusColor }"></span>
-                  <span class="column-name">{{ localizeStatusName(col.statusName) }}</span>
-                  <span class="column-category-badge">{{ categoryLabel(col.statusCategory) }}</span>
+              <template v-for="group in groupedColumns" :key="group.category">
+                <!-- 分组标题 -->
+                <div class="column-group-header" @click="toggleGroupCollapse(group.category)">
+                  <span class="group-collapse-icon">{{ collapsedGroups.has(group.category) ? '▶' : '▼' }}</span>
+                  <span class="group-title">{{ group.label }}</span>
+                  <span class="group-count">{{ group.items.filter(c => c.visible).length }}/{{ group.items.length }}</span>
                 </div>
-                <div class="col-wip-cell">
-                  <a-input-number
-                    v-model="col.wipMin"
-                    placeholder="Min"
-                    size="mini"
-                    :min="0"
-                    :max="999"
-                    :style="{ width: '64px' }"
-                    :disabled="!col.visible"
-                    hide-button
-                    allow-clear
-                  />
-                  <span class="wip-separator">–</span>
-                  <a-input-number
-                    v-model="col.wipMax"
-                    placeholder="Max"
-                    size="mini"
-                    :min="0"
-                    :max="999"
-                    :style="{ width: '64px' }"
-                    :disabled="!col.visible"
-                    hide-button
-                    allow-clear
-                  />
-                </div>
-              </div>
+                <!-- 分组内容 -->
+                <template v-if="!collapsedGroups.has(group.category)">
+                  <div
+                    v-for="col in group.items"
+                    :key="col.statusId"
+                    class="column-item"
+                    :class="{
+                      'column-item--disabled': !col.visible,
+                      'column-item--inactive': (col.issueCount ?? 0) === 0,
+                      'column-item--dragging': dragIndex === getGlobalIndex(col),
+                      'column-item--drop-above': dropIndex === getGlobalIndex(col) && dropPosition === 'above',
+                      'column-item--drop-below': dropIndex === getGlobalIndex(col) && dropPosition === 'below'
+                    }"
+                    :draggable="true"
+                    @dragstart="onItemDragStart($event, getGlobalIndex(col))"
+                    @dragover="onItemDragOver($event, getGlobalIndex(col))"
+                    @dragleave="onItemDragLeave"
+                    @drop="onItemDrop($event, getGlobalIndex(col))"
+                    @dragend="onItemDragEnd"
+                  >
+                    <span class="col-drag-handle" title="拖拽排序">⠿</span>
+                    <a-checkbox v-model="col.visible" class="col-visible-check" />
+                    <div class="col-name-cell">
+                      <span class="column-color" :style="{ backgroundColor: col.statusColor }"></span>
+                      <span class="column-name">{{ localizeStatusName(col.statusName) }}</span>
+                      <span v-if="col.inWorkflow" class="column-workflow-badge" title="工作流中活跃的状态">⚡</span>
+                    </div>
+                    <div class="col-count-cell">
+                      <span
+                        class="issue-count-badge"
+                        :class="{ 'issue-count-badge--zero': (col.issueCount ?? 0) === 0 }"
+                      >{{ col.issueCount ?? 0 }}</span>
+                    </div>
+                    <div class="col-wip-cell">
+                      <a-input-number
+                        v-model="col.wipMin"
+                        placeholder="Min"
+                        size="mini"
+                        :min="0"
+                        :max="999"
+                        :style="{ width: '64px' }"
+                        :disabled="!col.visible"
+                        hide-button
+                        allow-clear
+                      />
+                      <span class="wip-separator">–</span>
+                      <a-input-number
+                        v-model="col.wipMax"
+                        placeholder="Max"
+                        size="mini"
+                        :min="0"
+                        :max="999"
+                        :style="{ width: '64px' }"
+                        :disabled="!col.visible"
+                        hide-button
+                        allow-clear
+                      />
+                    </div>
+                  </div>
+                </template>
+              </template>
             </div>
           </div>
 
@@ -150,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { boardApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
@@ -170,6 +193,8 @@ interface EditableColumn {
   collapsed: boolean
   wipMin: number | null | undefined
   wipMax: number | null | undefined
+  issueCount: number | null
+  inWorkflow: boolean | null
 }
 
 interface MergeGroupLocal {
@@ -226,7 +251,9 @@ watch(() => props.visible, async (newVisible) => {
       editableColumns.value = props.columns.map(c => ({
         ...c,
         wipMin: c.wipMin ?? undefined,
-        wipMax: c.wipMax ?? undefined
+        wipMax: c.wipMax ?? undefined,
+        issueCount: c.issueCount ?? 0,
+        inWorkflow: c.inWorkflow ?? false
       }))
     } else {
       initializing.value = true
@@ -236,7 +263,9 @@ watch(() => props.visible, async (newVisible) => {
         editableColumns.value = initialized.map(c => ({
           ...c,
           wipMin: c.wipMin ?? undefined,
-          wipMax: c.wipMax ?? undefined
+          wipMax: c.wipMax ?? undefined,
+          issueCount: c.issueCount ?? 0,
+          inWorkflow: c.inWorkflow ?? false
         }))
         emit('saved')
       } catch (e: any) {
@@ -313,7 +342,9 @@ watch(() => props.columns, () => {
     editableColumns.value = props.columns.map(c => ({
       ...c,
       wipMin: c.wipMin ?? undefined,
-      wipMax: c.wipMax ?? undefined
+      wipMax: c.wipMax ?? undefined,
+      issueCount: c.issueCount ?? 0,
+      inWorkflow: c.inWorkflow ?? false
     }))
   }
 })
@@ -328,6 +359,60 @@ function categoryLabel(category: string): string {
   return map[category] || category
 }
 
+// 分组折叠状态
+const collapsedGroups = ref<Set<string>>(new Set())
+
+function toggleGroupCollapse(category: string) {
+  const newSet = new Set(collapsedGroups.value)
+  if (newSet.has(category)) {
+    newSet.delete(category)
+  } else {
+    newSet.add(category)
+  }
+  collapsedGroups.value = newSet
+}
+
+// 按 category 分组
+interface ColumnGroup {
+  category: string
+  label: string
+  items: EditableColumn[]
+}
+
+const CATEGORY_ORDER = ['open', 'in_progress', 'done', 'cancelled']
+const CATEGORY_LABELS: Record<string, string> = {
+  open: '待办',
+  in_progress: '进行中',
+  done: '已完成',
+  cancelled: '已取消'
+}
+
+const groupedColumns = computed<ColumnGroup[]>(() => {
+  const groups: Map<string, EditableColumn[]> = new Map()
+  for (const cat of CATEGORY_ORDER) {
+    groups.set(cat, [])
+  }
+  for (const col of editableColumns.value) {
+    const cat = col.statusCategory || 'open'
+    if (!groups.has(cat)) {
+      groups.set(cat, [])
+    }
+    groups.get(cat)!.push(col)
+  }
+  return CATEGORY_ORDER
+    .filter(cat => (groups.get(cat) || []).length > 0)
+    .map(cat => ({
+      category: cat,
+      label: CATEGORY_LABELS[cat] || cat,
+      items: groups.get(cat)!
+    }))
+})
+
+// 获取列项在 editableColumns 中的全局索引
+function getGlobalIndex(col: EditableColumn): number {
+  return editableColumns.value.findIndex(c => c.statusId === col.statusId)
+}
+
 function selectAll() {
   editableColumns.value.forEach(c => c.visible = true)
 }
@@ -336,22 +421,31 @@ function selectNone() {
   editableColumns.value.forEach(c => c.visible = false)
 }
 
-function selectDefault() {
-  const categoryLimits: Record<string, number> = {
-    open: 1,
-    in_progress: 3,
-    done: 1,
-    cancelled: 1
-  }
-  const categoryCounters: Record<string, number> = {}
-
+/**
+ * 智能推荐：选中种子状态 + 有工单的状态
+ * 种子状态：open, in_progress, code_review, testing, done, cancelled
+ */
+function selectRecommended() {
+  const seedCodes = new Set(['open', 'in_progress', 'code_review', 'testing', 'done', 'cancelled'])
   editableColumns.value.forEach(c => {
-    const cat = c.statusCategory || 'open'
-    const limit = categoryLimits[cat] ?? 1
-    const count = categoryCounters[cat] || 0
-    c.visible = count < limit
-    categoryCounters[cat] = count + 1
+    c.visible = seedCodes.has(c.statusCode) || (c.issueCount ?? 0) > 0
   })
+  Message.success('已按智能推荐设置列显示')
+}
+
+/**
+ * 仅显示有工单的状态
+ */
+function selectWithIssues() {
+  const hasAnyIssues = editableColumns.value.some(c => (c.issueCount ?? 0) > 0)
+  if (!hasAnyIssues) {
+    Message.warning('当前项目暂无工单，无法筛选')
+    return
+  }
+  editableColumns.value.forEach(c => {
+    c.visible = (c.issueCount ?? 0) > 0
+  })
+  Message.success('已显示有工单的状态列')
 }
 
 // ===== 拖拽排序 =====
@@ -570,6 +664,12 @@ async function handleSave() {
   min-width: 0;
 }
 
+.col-h-count {
+  width: 52px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
 .col-h-wip {
   width: 152px;
   flex-shrink: 0;
@@ -602,6 +702,14 @@ async function handleSave() {
 
 .column-item--disabled {
   opacity: 0.55;
+}
+
+.column-item--inactive {
+  color: var(--color-text-4);
+}
+
+.column-item--inactive .column-name {
+  color: var(--color-text-3);
 }
 
 .column-item--dragging {
@@ -668,6 +776,75 @@ async function handleSave() {
   padding: 1px 5px;
   border-radius: 3px;
   flex-shrink: 0;
+}
+
+.column-workflow-badge {
+  font-size: 10px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ===== 分组标题 ===== */
+.column-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--color-fill-1);
+  border-bottom: 1px solid var(--color-border-light, var(--color-border));
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.column-group-header:hover {
+  background: var(--color-fill-2);
+}
+
+.group-collapse-icon {
+  font-size: 10px;
+  color: var(--color-text-3);
+  width: 12px;
+  text-align: center;
+}
+
+.group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.group-count {
+  font-size: 11px;
+  color: var(--color-text-4);
+  margin-left: auto;
+}
+
+/* ===== 工单数量 ===== */
+.col-count-cell {
+  width: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.issue-count-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-2);
+  background: var(--color-fill-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.issue-count-badge--zero {
+  color: var(--color-text-4);
+  background: transparent;
 }
 
 .col-wip-cell {

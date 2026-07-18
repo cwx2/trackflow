@@ -43,4 +43,10 @@ public class BoardColumnVO {
      * 仅当 visible=false 且有工单使用该状态时为 true，用于前端提示。
      */
     private Boolean hasHiddenIssues;
+
+    /** 该项目中处于此状态的工单数量 */
+    private Integer issueCount;
+
+    /** 该状态是否出现在项目的工作流转换路径中（即是工作流图中的节点） */
+    private Boolean inWorkflow;
 }

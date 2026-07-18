@@ -12,6 +12,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class BoardColumnService {
     private final BoardColumnConfigMapper boardColumnConfigMapper;
     private final IssueStatusMapper issueStatusMapper;
     private final IssueMapper issueMapper;
+    private final WorkflowTransitionMapper workflowTransitionMapper;
 
     /**
      * 获取项目的看板列配置（纯读取，不执行任何写操作）。
@@ -56,14 +58,20 @@ public class BoardColumnService {
         // 查询项目中实际使用的状态 ID（高性能 DISTINCT 查询）
         Set<Long> usedStatusIds = getProjectUsedStatusIds(projectId);
 
+        // 查询项目中各状态的工单数量
+        Map<Long, Integer> issueCountMap = getProjectIssueCountByStatus(projectId);
+
+        // 查询项目工作流中涉及的状态 ID
+        Set<Long> workflowStatusIds = getProjectWorkflowStatusIds(projectId);
+
         // 构建结果
         if (configs.isEmpty()) {
             // 无持久化配置：基于默认规则在内存中计算视图
-            return buildDefaultView(allStatuses, usedStatusIds);
+            return buildDefaultView(allStatuses, usedStatusIds, issueCountMap, workflowStatusIds);
         }
 
         // 有持久化配置：按配置返回，同时标注隐藏列中是否有工单
-        return buildConfiguredView(allStatuses, configs, usedStatusIds);
+        return buildConfiguredView(allStatuses, configs, usedStatusIds, issueCountMap, workflowStatusIds);
     }
 
     /**
@@ -74,6 +82,11 @@ public class BoardColumnService {
      * 2. 项目创建后的默认初始化
      * <p>
      * 如果项目已有配置，此方法不做任何操作（幂等）。
+     * <p>
+     * 智能推荐逻辑（优先级从高到低）：
+     * 1. 项目已有工单使用的状态 → 必须可见
+     * 2. 核心工作流路径上的种子状态（Open→In Progress→Code Review→Testing→Done→Cancelled）→ 默认可见
+     * 3. 其他在工作流中存在但无工单的状态 → 默认不可见
      *
      * @return 初始化后的列配置
      */
@@ -103,6 +116,14 @@ public class BoardColumnService {
         // 查询该项目已有工单涉及的状态 ID
         Set<Long> usedStatusIds = getProjectUsedStatusIds(projectId);
 
+        // 查询项目工作流中涉及的状态 ID
+        Set<Long> workflowStatusIds = getProjectWorkflowStatusIds(projectId);
+
+        // 智能推荐：种子状态 + 项目使用中的状态 可见
+        // 如果项目有工单使用了非种子状态，也应该显示
+        Set<Long> recommendedVisible = new HashSet<>(seedStatusIds);
+        recommendedVisible.addAll(usedStatusIds);
+
         // 构建并持久化配置
         LocalDateTime now = LocalDateTime.now();
         List<BoardColumnConfig> configs = new ArrayList<>();
@@ -111,8 +132,7 @@ public class BoardColumnService {
             BoardColumnConfig config = new BoardColumnConfig();
             config.setProjectId(projectId);
             config.setStatusId(status.getId());
-            // 基础工作流状态或项目已有工单使用的状态默认可见
-            config.setVisible(seedStatusIds.contains(status.getId()) || usedStatusIds.contains(status.getId()));
+            config.setVisible(recommendedVisible.contains(status.getId()));
             config.setSortOrder(order);
             config.setCollapsed(false);
             config.setCreatedAt(now);
@@ -123,8 +143,11 @@ public class BoardColumnService {
 
         Db.saveBatch(configs);
 
+        // 查询工单数量用于返回
+        Map<Long, Integer> issueCountMap = getProjectIssueCountByStatus(projectId);
+
         // 返回初始化后的视图
-        return buildConfiguredView(allStatuses, configs, usedStatusIds);
+        return buildConfiguredView(allStatuses, configs, usedStatusIds, issueCountMap, workflowStatusIds);
     }
 
     /**
@@ -240,7 +263,8 @@ public class BoardColumnService {
      * 无持久化配置时，基于默认规则在内存中计算列视图。
      * 不执行任何写操作。
      */
-    private List<BoardColumnVO> buildDefaultView(List<IssueStatus> allStatuses, Set<Long> usedStatusIds) {
+    private List<BoardColumnVO> buildDefaultView(List<IssueStatus> allStatuses, Set<Long> usedStatusIds,
+                                                  Map<Long, Integer> issueCountMap, Set<Long> workflowStatusIds) {
         Set<Long> seedStatusIds = allStatuses.stream()
                 .filter(s -> SEED_STATUS_CODES.contains(s.getCode()))
                 .map(IssueStatus::getId)
@@ -262,6 +286,9 @@ public class BoardColumnService {
             vo.setCollapsed(false);
             // 标记隐藏列中是否有工单
             vo.setHasHiddenIssues(!visible && usedStatusIds.contains(status.getId()));
+            // 新增字段
+            vo.setIssueCount(issueCountMap.getOrDefault(status.getId(), 0));
+            vo.setInWorkflow(workflowStatusIds.contains(status.getId()));
             result.add(vo);
             order++;
         }
@@ -275,7 +302,9 @@ public class BoardColumnService {
     private List<BoardColumnVO> buildConfiguredView(
             List<IssueStatus> allStatuses,
             List<BoardColumnConfig> configs,
-            Set<Long> usedStatusIds) {
+            Set<Long> usedStatusIds,
+            Map<Long, Integer> issueCountMap,
+            Set<Long> workflowStatusIds) {
 
         Map<Long, BoardColumnConfig> configMap = configs.stream()
                 .collect(Collectors.toMap(BoardColumnConfig::getStatusId, c -> c));
@@ -306,6 +335,10 @@ public class BoardColumnService {
                 vo.setCollapsed(false);
                 vo.setHasHiddenIssues(hasIssues);
             }
+
+            // 新增字段
+            vo.setIssueCount(issueCountMap.getOrDefault(status.getId(), 0));
+            vo.setInWorkflow(workflowStatusIds.contains(status.getId()));
             result.add(vo);
         }
 
@@ -319,6 +352,31 @@ public class BoardColumnService {
      */
     private Set<Long> getProjectUsedStatusIds(Long projectId) {
         Set<Long> ids = issueMapper.selectDistinctStatusIdsByProject(projectId);
+        return ids != null ? ids : Collections.emptySet();
+    }
+
+    /**
+     * 查询项目中各状态的工单数量。
+     */
+    private Map<Long, Integer> getProjectIssueCountByStatus(Long projectId) {
+        List<Map<String, Object>> rows = issueMapper.selectIssueCountByStatus(projectId);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, Integer> result = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Long statusId = ((Number) row.get("status_id")).longValue();
+            Integer count = ((Number) row.get("cnt")).intValue();
+            result.put(statusId, count);
+        }
+        return result;
+    }
+
+    /**
+     * 查询项目工作流中涉及的所有状态 ID。
+     */
+    private Set<Long> getProjectWorkflowStatusIds(Long projectId) {
+        Set<Long> ids = workflowTransitionMapper.selectWorkflowStatusIds(projectId);
         return ids != null ? ids : Collections.emptySet();
     }
 }

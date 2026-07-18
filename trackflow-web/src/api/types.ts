@@ -594,6 +594,10 @@ export interface BoardColumnVO {
   wipMax: number | null
   /** 该隐藏列中是否有工单存在（仅 visible=false 时有意义） */
   hasHiddenIssues: boolean | null
+  /** 该项目中处于此状态的工单数量 */
+  issueCount: number | null
+  /** 该状态是否出现在项目的工作流转换路径中 */
+  inWorkflow: boolean | null
 }
 
 export interface BoardColumnItem {
