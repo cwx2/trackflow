@@ -1,6 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.trackflow.project.entity.Project;
+import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.service.ProjectService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -43,7 +44,7 @@ public class TrashCleanupScheduler {
 
         // 获取所有活跃项目
         List<Project> projects = projectMapper.selectList(
-                new LambdaQueryWrapper<Project>().eq(Project::getStatus, "active")
+                new LambdaQueryWrapper<Project>().eq(Project::getStatus, ProjectStatus.ACTIVE)
         );
 
         for (Project project : projects) {

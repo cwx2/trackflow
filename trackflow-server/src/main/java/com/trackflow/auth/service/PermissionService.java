@@ -3,6 +3,7 @@ package com.trackflow.auth.service;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.entity.Project;
+import com.trackflow.project.entity.ProjectVisibility;
 import com.trackflow.system.mapper.RolePermissionMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
@@ -209,7 +210,7 @@ public class PermissionService {
         if (project == null) {
             return Set.of();
         }
-        if ("public".equals(project.getVisibility())) {
+        if (ProjectVisibility.PUBLIC == project.getVisibility()) {
             return loadRolePermissions(ANONYMOUS_ROLE_ID);
         }
         return Set.of();
@@ -225,8 +226,8 @@ public class PermissionService {
         if (project == null) {
             return Set.of();
         }
-        String visibility = project.getVisibility();
-        if ("internal".equals(visibility) || "public".equals(visibility)) {
+        ProjectVisibility visibility = project.getVisibility();
+        if (ProjectVisibility.INTERNAL == visibility || ProjectVisibility.PUBLIC == visibility) {
             return loadRolePermissions(NON_MEMBER_ROLE_ID);
         }
         return Set.of();
