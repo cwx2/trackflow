@@ -2,6 +2,7 @@ package com.trackflow.timeentry.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
@@ -20,6 +21,7 @@ import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryUserVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +52,7 @@ public class TimeEntryService {
     private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
     private final com.trackflow.project.service.ProjectService projectService;
     private final PermissionService permissionService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 创建工时记录
@@ -127,6 +130,9 @@ public class TimeEntryService {
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(dto.getIssueId());
+
+        // 发布报表缓存失效事件（工时变更影响 TimeReport/EstimationReport 等统计）
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "time_entry_created"));
 
         return entry;
     }
@@ -246,6 +252,21 @@ public class TimeEntryService {
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(entry.getIssueId());
 
+        // 发布报表缓存失效事件（工时变更影响 TimeReport/EstimationReport 等统计）
+        // 如果跨项目转移，两个项目的缓存都需要失效
+        Long currentProjectId = entry.getProjectId();
+        if (dto.getIssueId() != null && !oldIssueId.equals(dto.getIssueId())) {
+            Issue oldIssue = issueMapper.selectById(oldIssueId);
+            if (oldIssue != null && !oldIssue.getProjectId().equals(currentProjectId)) {
+                eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(
+                        Set.of(currentProjectId, oldIssue.getProjectId()), "time_entry_updated"));
+            } else {
+                eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(currentProjectId, "time_entry_updated"));
+            }
+        } else {
+            eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(currentProjectId, "time_entry_updated"));
+        }
+
         return entry;
     }
 
@@ -292,6 +313,9 @@ public class TimeEntryService {
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(issueId);
+
+        // 发布报表缓存失效事件（工时变更影响 TimeReport/EstimationReport 等统计）
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(entryProjectId, "time_entry_deleted"));
     }
 
     /**
@@ -695,6 +719,9 @@ public class TimeEntryService {
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(entry.getIssueId());
+
+        // 发布报表缓存失效事件（计时器停止 = 新增工时记录）
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(entry.getProjectId(), "time_entry_created"));
 
         return entry;
     }
