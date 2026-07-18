@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition> {
@@ -28,6 +29,28 @@ public interface WorkflowTransitionMapper extends BaseMapper<WorkflowTransition>
                                             @Param("oldStatusId") Long oldStatusId,
                                             @Param("isAuthor") boolean isAuthor,
                                             @Param("isAssignee") boolean isAssignee);
+
+    /**
+     * 单次查询获取所有 4 级优先级的匹配规则（合并查询）。
+     * <p>
+     * 返回 new_status_id + priority_level（1~4），由 Java 层按最高优先级过滤。
+     * 将原来的 4 次串行 DB 调用合并为 1 次，性能优化核心方法。
+     * <p>
+     * 优先级定义：
+     * <ol>
+     *   <li>project_id = X AND issue_type = 精确类型</li>
+     *   <li>project_id = X AND issue_type = '*'</li>
+     *   <li>project_id IS NULL AND issue_type = 精确类型</li>
+     *   <li>project_id IS NULL AND issue_type = '*'</li>
+     * </ol>
+     */
+    List<Map<String, Object>> findAllowedNewStatusIdsWithPriority(
+            @Param("projectId") Long projectId,
+            @Param("issueType") String issueType,
+            @Param("roleIds") List<Long> roleIds,
+            @Param("oldStatusId") Long oldStatusId,
+            @Param("isAuthor") boolean isAuthor,
+            @Param("isAssignee") boolean isAssignee);
 
     /**
      * 查找指定角色可以发起转换的所有源状态 ID（精确匹配 projectId）。

@@ -41,6 +41,39 @@
     </select>
 
     <!--
+      合并查询：单次 SQL 获取所有 4 级优先级的匹配规则。
+      返回 new_status_id + priority_level，由 Java 层按最高优先级过滤。
+      将原来的 4 次串行 DB 调用合并为 1 次。
+    -->
+    <select id="findAllowedNewStatusIdsWithPriority" resultType="java.util.Map">
+        SELECT DISTINCT new_status_id,
+               CASE
+                 WHEN project_id = #{projectId} AND issue_type = #{issueType} THEN 1
+                 WHEN project_id = #{projectId} AND issue_type = '*' THEN 2
+                 WHEN project_id IS NULL AND issue_type = #{issueType} THEN 3
+                 WHEN project_id IS NULL AND issue_type = '*' THEN 4
+               END AS priority_level
+        FROM workflow_transition
+        WHERE (project_id = #{projectId} OR project_id IS NULL)
+          AND (issue_type = #{issueType} OR issue_type = '*')
+          AND role_id IN
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
+        </foreach>
+          AND old_status_id = #{oldStatusId}
+          AND (
+            (author = false AND assignee = false)
+            <if test="isAuthor">
+                OR (author = true)
+            </if>
+            <if test="isAssignee">
+                OR (assignee = true)
+            </if>
+          )
+        ORDER BY priority_level, new_status_id
+    </select>
+
+    <!--
       精确匹配查询源状态：看板场景不区分 author/assignee，
       返回所有模式下的源状态（只要存在任何转换规则即可拖拽）。
     -->

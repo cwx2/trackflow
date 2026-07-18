@@ -15,6 +15,7 @@ import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.mapper.SysRoleMapper;
 import com.trackflow.system.vo.RoleVO;
+import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
@@ -150,45 +151,39 @@ public class WorkflowService {
     }
 
     /**
-     * 4 级优先级解析允许的目标状态 ID。
-     * 返回最高优先级非空层级的结果集。
+     * 4 级优先级解析允许的目标状态 ID（优化版：单次 DB 查询）。
+     * <p>
+     * 将所有 4 级规则通过单次 SQL 查询获取，附带 priority_level 标记，
+     * 然后在 Java 层筛选出最高优先级（最小 priority_level）的结果集。
+     * <p>
+     * 优化前：最坏 4 次串行 DB 调用；优化后：固定 1 次 DB 调用。
      */
     private List<Long> resolveAllowedStatusIds(Long projectId, String issueType,
                                                List<Long> roleIds, Long oldStatusId,
                                                boolean isAuthor, boolean isAssignee) {
-        // Level 1: project_id = X AND issue_type = 精确类型
-        List<Long> result = transitionMapper.findAllowedNewStatusIdsExact(
+        List<Map<String, Object>> results = transitionMapper.findAllowedNewStatusIdsWithPriority(
                 projectId, issueType, roleIds, oldStatusId, isAuthor, isAssignee);
-        if (!result.isEmpty()) {
-            log.debug("Workflow transition resolved at Level 1 (project+exactType): {} statuses", result.size());
-            return result;
+
+        if (results == null || results.isEmpty()) {
+            return List.of();
         }
 
-        // Level 2: project_id = X AND issue_type = '*'
-        result = transitionMapper.findAllowedNewStatusIdsExact(
-                projectId, "*", roleIds, oldStatusId, isAuthor, isAssignee);
-        if (!result.isEmpty()) {
-            log.debug("Workflow transition resolved at Level 2 (project+wildcard): {} statuses", result.size());
-            return result;
-        }
+        // 找到最高优先级（最小 priority_level 值）
+        int minPriority = results.stream()
+                .mapToInt(row -> ((Number) row.get("priority_level")).intValue())
+                .min()
+                .orElse(Integer.MAX_VALUE);
 
-        // Level 3: project_id IS NULL AND issue_type = 精确类型
-        result = transitionMapper.findAllowedNewStatusIdsExact(
-                null, issueType, roleIds, oldStatusId, isAuthor, isAssignee);
-        if (!result.isEmpty()) {
-            log.debug("Workflow transition resolved at Level 3 (global+exactType): {} statuses", result.size());
-            return result;
-        }
+        // 筛选该优先级层的所有 new_status_id
+        List<Long> statusIds = results.stream()
+                .filter(row -> ((Number) row.get("priority_level")).intValue() == minPriority)
+                .map(row -> ((Number) row.get("new_status_id")).longValue())
+                .distinct()
+                .toList();
 
-        // Level 4: project_id IS NULL AND issue_type = '*'
-        result = transitionMapper.findAllowedNewStatusIdsExact(
-                null, "*", roleIds, oldStatusId, isAuthor, isAssignee);
-        if (!result.isEmpty()) {
-            log.debug("Workflow transition resolved at Level 4 (global+wildcard): {} statuses", result.size());
-            return result;
-        }
-
-        return List.of();
+        log.debug("Workflow transition resolved at Level {} (single query): {} statuses",
+                minPriority, statusIds.size());
+        return statusIds;
     }
 
     /**
@@ -543,7 +538,7 @@ public class WorkflowService {
         LambdaQueryWrapper<WorkflowActivity> wrapper = new LambdaQueryWrapper<>();
 
         if (query.getProjectId() != null) {
-            if (query.getProjectId() == 0L) {
+            if (WorkflowScope.isGlobal(query.getProjectId())) {
                 wrapper.isNull(WorkflowActivity::getProjectId);
             } else {
                 wrapper.eq(WorkflowActivity::getProjectId, query.getProjectId());
