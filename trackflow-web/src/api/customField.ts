@@ -131,5 +131,13 @@ export const customFieldApi = {
     updatableByRoles: number[] | null
   }) {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/visibility`, data)
+  },
+
+  /** 设置字段的项目级覆盖（必填性 + 默认值） */
+  setFieldProjectOverride(projectId: string, fieldId: string, data: {
+    isRequired: boolean | null
+    defaultValue: string | null
+  }) {
+    return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/override`, data)
   }
 }

@@ -543,7 +543,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
     const rawValues = stored?.values || []
     const displayValue = isMulti && stored?.displayValues?.length
       ? stored.displayValues.join(', ')
-      : stored?.displayValue || (cf.isRequired ? '设置值' : '-')
+      : stored?.displayValue || ((cf.effectiveIsRequired ?? cf.isRequired) ? '设置值' : '-')
 
     // 根据字段类型确定 editType
     let editType: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | undefined

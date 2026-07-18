@@ -463,6 +463,14 @@ export interface CustomFieldDefinitionVO {
   updatableByRoles?: number[] | null
   /** 当前用户是否可编辑此字段（后端根据角色计算） */
   editable?: boolean
+  /** 项目级必填性覆盖（null = 使用全局 isRequired） */
+  projectIsRequired?: boolean | null
+  /** 项目级默认值覆盖（null = 使用全局 defaultValue） */
+  projectDefaultValue?: string | null
+  /** 有效必填性（考虑项目覆盖后的实际值） */
+  effectiveIsRequired?: boolean
+  /** 有效默认值（考虑项目覆盖后的实际值） */
+  effectiveDefaultValue?: string | null
 }
 
 export interface CustomFieldOptionVO {

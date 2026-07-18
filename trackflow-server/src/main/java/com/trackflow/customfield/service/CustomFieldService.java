@@ -1,5 +1,6 @@
 package com.trackflow.customfield.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
@@ -2005,9 +2006,11 @@ public class CustomFieldService {
             mapping.setDefaultValue(defaultValue);
             projectMapper.insert(mapping);
         } else {
-            mapping.setIsRequired(isRequired);
-            mapping.setDefaultValue(defaultValue);
-            projectMapper.updateById(mapping);
+            // Use LambdaUpdateWrapper to explicitly SET null values (updateById skips nulls)
+            projectMapper.update(null, new LambdaUpdateWrapper<CustomFieldProject>()
+                    .eq(CustomFieldProject::getId, mapping.getId())
+                    .set(CustomFieldProject::getIsRequired, isRequired)
+                    .set(CustomFieldProject::getDefaultValue, defaultValue));
         }
 
         log.info("Updated field project override: project={}, field={}, isRequired={}, defaultValue={}",

@@ -9,6 +9,7 @@ import com.trackflow.customfield.dto.CustomFieldQuery;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
 import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
 import com.trackflow.customfield.dto.SetFieldConditionDTO;
+import com.trackflow.customfield.dto.SetFieldProjectOverrideDTO;
 import com.trackflow.customfield.dto.SetFieldVisibilityDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
@@ -129,6 +130,7 @@ public class CustomFieldController {
         for (int i = 0; i < fields.size(); i++) {
             Long fieldId = fields.get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
+            CustomFieldDefinition field = fields.get(i);
             vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
             // 填充条件信息
             CustomFieldProject mapping = conditionsMap.get(fieldId);
@@ -145,6 +147,13 @@ public class CustomFieldController {
             } else {
                 vo.setEditable(true);
             }
+            // 计算项目级有效必填性和默认值（前端用于校验和填充）
+            vo.setEffectiveIsRequired(mapping != null && mapping.getIsRequired() != null
+                    ? mapping.getIsRequired() : field.getIsRequired());
+            String effectiveDefault = (mapping != null && mapping.getDefaultValue() != null)
+                    ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
+                    : field.getDefaultValue();
+            vo.setEffectiveDefaultValue(effectiveDefault);
         }
         return R.ok(voList);
     }
@@ -193,6 +202,19 @@ public class CustomFieldController {
                 vo.setVisibleToRoles(customFieldService.parseRoleIds(mapping.getVisibleToRoles()));
                 vo.setUpdatableByRoles(customFieldService.parseRoleIds(mapping.getUpdatableByRoles()));
             }
+            // 填充项目级覆盖（必填性 + 默认值）
+            if (mapping != null) {
+                vo.setProjectIsRequired(mapping.getIsRequired());
+                vo.setProjectDefaultValue(mapping.getDefaultValue());
+            }
+            // 计算有效值（项目覆盖 > 全局）
+            CustomFieldDefinition field = fields.get(i);
+            vo.setEffectiveIsRequired(mapping != null && mapping.getIsRequired() != null
+                    ? mapping.getIsRequired() : field.getIsRequired());
+            String effectiveDefault = (mapping != null && mapping.getDefaultValue() != null)
+                    ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
+                    : field.getDefaultValue();
+            vo.setEffectiveDefaultValue(effectiveDefault);
         }
         return R.ok(voList);
     }
@@ -286,6 +308,22 @@ public class CustomFieldController {
             @PathVariable("fieldId") Long fieldId,
             @Valid @RequestBody SetFieldVisibilityDTO dto) {
         customFieldService.setFieldVisibility(projectId, fieldId, dto.getVisibleToRoles(), dto.getUpdatableByRoles());
+        return R.ok();
+    }
+
+    // ========== 项目级覆盖（必填性 + 默认值）端点 ==========
+
+    /**
+     * 设置字段在项目中的必填性和默认值覆盖。
+     * null 值表示继承全局设置。
+     */
+    @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/override")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Void> setFieldProjectOverride(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody SetFieldProjectOverrideDTO dto) {
+        customFieldService.setFieldProjectOverride(projectId, fieldId, dto.getIsRequired(), dto.getDefaultValue());
         return R.ok();
     }
 }

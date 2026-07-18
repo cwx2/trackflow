@@ -58,4 +58,29 @@ public class CustomFieldDefinitionVO {
      * true = 可编辑，false = 只读。
      */
     private Boolean editable;
+
+    // ===== 项目级覆盖（仅项目上下文接口返回） =====
+
+    /**
+     * 项目级必填性覆盖。
+     * null = 使用全局设置（isRequired），非 null = 项目覆盖值。
+     */
+    private Boolean projectIsRequired;
+
+    /**
+     * 项目级默认值覆盖。
+     * null = 使用全局设置（defaultValue），非 null = 项目覆盖值。
+     */
+    private String projectDefaultValue;
+
+    /**
+     * 计算后的有效必填性（考虑项目覆盖后的实际值）。
+     * 前端校验时应使用此值。
+     */
+    private Boolean effectiveIsRequired;
+
+    /**
+     * 计算后的有效默认值（考虑项目覆盖后的实际值）。
+     */
+    private String effectiveDefaultValue;
 }

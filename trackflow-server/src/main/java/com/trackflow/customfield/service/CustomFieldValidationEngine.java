@@ -45,10 +45,23 @@ public class CustomFieldValidationEngine {
      * @param projectId 工单所属项目 ID（用于 user 类型的成员校验）
      */
     public List<FieldValidationError> validate(CustomFieldDefinition field, String value, Long projectId) {
+        return validate(field, value, projectId, null);
+    }
+
+    /**
+     * 验证单个字段值（带项目上下文和项目级必填性覆盖）。
+     *
+     * @param field              字段定义
+     * @param value              待验证的值
+     * @param projectId          工单所属项目 ID
+     * @param effectiveRequired  项目级必填性覆盖（null = 使用字段定义的 isRequired）
+     */
+    public List<FieldValidationError> validate(CustomFieldDefinition field, String value, Long projectId, Boolean effectiveRequired) {
         List<FieldValidationError> errors = new ArrayList<>();
 
-        // 必填检查
-        if (Boolean.TRUE.equals(field.getIsRequired()) && (value == null || value.isBlank())) {
+        // 必填检查：项目级覆盖 > 全局定义
+        boolean isRequired = effectiveRequired != null ? effectiveRequired : Boolean.TRUE.equals(field.getIsRequired());
+        if (isRequired && (value == null || value.isBlank())) {
             errors.add(new FieldValidationError(field.getName(), "此字段为必填项"));
             return errors;
         }

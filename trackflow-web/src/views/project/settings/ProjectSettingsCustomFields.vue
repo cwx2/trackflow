@@ -45,7 +45,9 @@
             <div class="field-info">
               <span class="field-name">{{ field.name }}</span>
               <span class="field-type-badge">{{ formatFieldType(field.fieldFormat) }}</span>
-              <span v-if="field.isRequired" class="field-required-badge">必填</span>
+              <span v-if="field.effectiveIsRequired" class="field-required-badge">
+                必填{{ field.projectIsRequired != null ? ' (项目)' : '' }}
+              </span>
               <span v-if="field.isForAll" class="field-global-badge">全局</span>
               <span v-if="field.conditionFieldId" class="field-condition-badge">
                 <icon-eye-invisible :size="11" /> 条件显示
@@ -58,8 +60,8 @@
               <span v-if="field.conditionFieldId" class="field-condition-hint">
                 仅当「{{ getFieldName(field.conditionFieldId) }}」为指定值时显示
               </span>
-              <span v-else-if="field.defaultValue" class="field-default">
-                默认值: {{ field.defaultValue }}
+              <span v-else-if="field.effectiveDefaultValue" class="field-default">
+                默认值: {{ field.effectiveDefaultValue }}{{ field.projectDefaultValue != null ? ' (项目)' : '' }}
               </span>
               <span v-if="field.options && field.options.length > 0" class="field-options-count">
                 {{ field.options.length }} 个选项
@@ -171,6 +173,112 @@
                 </a-button>
               </div>
 
+              <!-- 项目级覆盖：必填性 + 默认值 -->
+              <a-divider :margin="16" />
+              <h5 class="condition-title">项目级覆盖</h5>
+
+              <div class="condition-row">
+                <label class="condition-label">必填性</label>
+                <a-select
+                  v-model="overrideForm.isRequiredMode"
+                  size="small"
+                  @change="onOverrideChange"
+                >
+                  <a-option value="inherit">继承全局设置 ({{ selectedField?.isRequired ? '必填' : '非必填' }})</a-option>
+                  <a-option value="required">本项目必填</a-option>
+                  <a-option value="optional">本项目非必填</a-option>
+                </a-select>
+              </div>
+
+              <div class="condition-row">
+                <label class="condition-label">默认值</label>
+                <a-select
+                  v-model="overrideForm.defaultValueMode"
+                  size="small"
+                  @change="onOverrideChange"
+                >
+                  <a-option value="inherit">继承全局设置{{ selectedField?.defaultValue ? ` (${selectedField.defaultValue})` : '' }}</a-option>
+                  <a-option value="custom">本项目自定义</a-option>
+                  <a-option value="none">本项目无默认值</a-option>
+                </a-select>
+              </div>
+
+              <div v-if="overrideForm.defaultValueMode === 'custom'" class="condition-row">
+                <label class="condition-label">自定义默认值</label>
+                <a-input
+                  v-if="selectedField && !['list', 'user', 'bool'].includes(selectedField.fieldFormat)"
+                  v-model="overrideForm.defaultValue"
+                  size="small"
+                  placeholder="输入默认值..."
+                  @input="onOverrideChange"
+                />
+                <a-select
+                  v-else-if="selectedField?.fieldFormat === 'list'"
+                  v-model="overrideForm.defaultValue"
+                  size="small"
+                  placeholder="选择默认选项..."
+                  allow-clear
+                  @change="onOverrideChange"
+                >
+                  <a-option
+                    v-for="opt in activeOptions"
+                    :key="opt.id"
+                    :value="opt.id"
+                  >
+                    {{ opt.value }}
+                  </a-option>
+                </a-select>
+                <a-select
+                  v-else-if="selectedField?.fieldFormat === 'bool'"
+                  v-model="overrideForm.defaultValue"
+                  size="small"
+                  placeholder="选择默认值..."
+                  allow-clear
+                  @change="onOverrideChange"
+                >
+                  <a-option value="true">是 (true)</a-option>
+                  <a-option value="false">否 (false)</a-option>
+                </a-select>
+                <a-input
+                  v-else
+                  v-model="overrideForm.defaultValue"
+                  size="small"
+                  placeholder="输入默认值..."
+                  @input="onOverrideChange"
+                />
+              </div>
+
+              <div class="condition-actions">
+                <a-button
+                  type="primary"
+                  size="small"
+                  :loading="savingOverride"
+                  :disabled="!isOverrideDirty"
+                  @click="saveOverride"
+                >
+                  保存覆盖
+                </a-button>
+                <a-button
+                  v-if="hasOverrideConfig"
+                  type="text"
+                  size="small"
+                  @click="clearOverride"
+                >
+                  恢复全局
+                </a-button>
+              </div>
+
+              <!-- 当前有效值提示 -->
+              <div v-if="selectedField" class="override-effective-hint">
+                <span class="effective-label">有效配置：</span>
+                <span :class="['effective-value', { 'is-required': selectedField.effectiveIsRequired }]">
+                  {{ selectedField.effectiveIsRequired ? '必填' : '非必填' }}
+                </span>
+                <span v-if="selectedField.effectiveDefaultValue" class="effective-default">
+                  · 默认: {{ selectedField.effectiveDefaultValue }}
+                </span>
+              </div>
+
               <!-- 角色可见性/可编辑性 -->
               <a-divider :margin="16" />
               <h5 class="condition-title">字段权限</h5>
@@ -239,6 +347,7 @@
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       <!-- 空状态 -->
@@ -378,6 +487,14 @@ const visibilityForm = reactive({
   updatableByRoles: [] as number[]
 })
 
+// Override management (project-level isRequired + defaultValue)
+const savingOverride = ref(false)
+const overrideForm = reactive({
+  isRequiredMode: 'inherit' as 'inherit' | 'required' | 'optional',
+  defaultValueMode: 'inherit' as 'inherit' | 'custom' | 'none',
+  defaultValue: '' as string
+})
+
 // Field type display names
 const fieldTypeMap: Record<string, string> = {
   string: '文本(单行)',
@@ -448,6 +565,24 @@ function selectField(field: CustomFieldDefinitionVO) {
   // Populate visibility form
   visibilityForm.visibleToRoles = field.visibleToRoles ? [...field.visibleToRoles] : []
   visibilityForm.updatableByRoles = field.updatableByRoles ? [...field.updatableByRoles] : []
+  // Populate override form
+  if (field.projectIsRequired === true) {
+    overrideForm.isRequiredMode = 'required'
+  } else if (field.projectIsRequired === false) {
+    overrideForm.isRequiredMode = 'optional'
+  } else {
+    overrideForm.isRequiredMode = 'inherit'
+  }
+  if (field.projectDefaultValue === '') {
+    overrideForm.defaultValueMode = 'none'
+    overrideForm.defaultValue = ''
+  } else if (field.projectDefaultValue != null) {
+    overrideForm.defaultValueMode = 'custom'
+    overrideForm.defaultValue = field.projectDefaultValue
+  } else {
+    overrideForm.defaultValueMode = 'inherit'
+    overrideForm.defaultValue = ''
+  }
 }
 
 function onConditionFieldChange() {
@@ -597,6 +732,96 @@ async function loadProjectRoles() {
     projectRoles.value = res.data || []
   } catch {
     projectRoles.value = []
+  }
+}
+
+// ===== Override methods =====
+
+/**
+ * 非归档选项列表（用于 list 类型的默认值选择）
+ */
+const activeOptions = computed(() => {
+  if (!selectedField.value?.options) return []
+  return selectedField.value.options.filter(o => !o.isArchived)
+})
+
+const isOverrideDirty = computed(() => {
+  if (!selectedField.value) return false
+  // Compare current form with stored field values
+  const origRequired = selectedField.value.projectIsRequired
+  const origDefault = selectedField.value.projectDefaultValue
+
+  let currentRequired: boolean | null
+  if (overrideForm.isRequiredMode === 'inherit') currentRequired = null
+  else if (overrideForm.isRequiredMode === 'required') currentRequired = true
+  else currentRequired = false
+
+  let currentDefault: string | null
+  if (overrideForm.defaultValueMode === 'inherit') currentDefault = null
+  else if (overrideForm.defaultValueMode === 'none') currentDefault = ''
+  else currentDefault = overrideForm.defaultValue || ''
+
+  if (currentRequired !== (origRequired ?? null)) return true
+  if (currentDefault !== (origDefault ?? null)) return true
+  return false
+})
+
+const hasOverrideConfig = computed(() => {
+  if (!selectedField.value) return false
+  return selectedField.value.projectIsRequired != null || selectedField.value.projectDefaultValue != null
+})
+
+function onOverrideChange() {
+  // Trigger reactivity — no-op, computed handles the dirty check
+}
+
+async function saveOverride() {
+  if (!selectedField.value) return
+  savingOverride.value = true
+  try {
+    let isRequired: boolean | null = null
+    if (overrideForm.isRequiredMode === 'required') isRequired = true
+    else if (overrideForm.isRequiredMode === 'optional') isRequired = false
+
+    let defaultValue: string | null = null
+    if (overrideForm.defaultValueMode === 'custom') defaultValue = overrideForm.defaultValue || ''
+    else if (overrideForm.defaultValueMode === 'none') defaultValue = ''
+
+    await customFieldApi.setFieldProjectOverride(props.project.id, selectedField.value.id, {
+      isRequired,
+      defaultValue
+    })
+    Message.success('项目级覆盖已保存')
+    // Refresh field list
+    await loadFields()
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存项目级覆盖失败')
+  } finally {
+    savingOverride.value = false
+  }
+}
+
+async function clearOverride() {
+  if (!selectedField.value) return
+  savingOverride.value = true
+  try {
+    await customFieldApi.setFieldProjectOverride(props.project.id, selectedField.value.id, {
+      isRequired: null,
+      defaultValue: null
+    })
+    Message.success('已恢复全局设置')
+    overrideForm.isRequiredMode = 'inherit'
+    overrideForm.defaultValueMode = 'inherit'
+    overrideForm.defaultValue = ''
+    await loadFields()
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '恢复全局设置失败')
+  } finally {
+    savingOverride.value = false
   }
 }
 
@@ -1076,5 +1301,39 @@ onMounted(() => {
   font-size: 13px;
   color: var(--tf-text-secondary);
   margin: 0;
+}
+
+/* Override section */
+.override-effective-hint {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--tf-bg-hover);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.effective-label {
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+}
+
+.effective-value {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--tf-bg-surface);
+}
+
+.effective-value.is-required {
+  background: rgba(245, 63, 63, 0.08);
+  color: var(--color-danger-6, #f53f3f);
+}
+
+.effective-default {
+  color: var(--tf-text-tertiary);
 }
 </style>

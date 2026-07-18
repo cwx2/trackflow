@@ -101,14 +101,14 @@
             <div v-for="cf in customFields" :key="cf.id" class="prop-row">
               <span class="prop-label">
                 {{ cf.name }}
-                <span v-if="cf.isRequired" class="required-mark">*</span>
+                <span v-if="cf.effectiveIsRequired ?? cf.isRequired" class="required-mark">*</span>
               </span>
               <!-- string -->
               <a-input
                 v-if="cf.fieldFormat === 'string'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                :placeholder="cf.defaultValue || ''"
+                :placeholder="cf.effectiveDefaultValue ?? cf.defaultValue ?? ''"
                 allow-clear
               />
               <!-- text (多行/Markdown) -->
@@ -116,7 +116,7 @@
                 v-else-if="cf.fieldFormat === 'text'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                :placeholder="cf.defaultValue || '输入多行文本（支持 Markdown）'"
+                :placeholder="cf.effectiveDefaultValue ?? cf.defaultValue ?? '输入多行文本（支持 Markdown）'"
                 :auto-size="{ minRows: 2, maxRows: 6 }"
                 allow-clear
               />

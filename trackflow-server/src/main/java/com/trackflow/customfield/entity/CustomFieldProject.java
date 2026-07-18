@@ -55,4 +55,16 @@ public class CustomFieldProject implements Serializable {
      */
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String updatableByRoles;
+
+    /**
+     * 项目级必填性覆盖。
+     * NULL = 继承全局设置，true/false = 项目级覆盖。
+     */
+    private Boolean isRequired;
+
+    /**
+     * 项目级默认值覆盖。
+     * NULL = 继承全局设置。
+     */
+    private String defaultValue;
 }
