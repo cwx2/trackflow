@@ -263,11 +263,9 @@ public class NotificationService {
             log.debug("[Notification] 批量插入通知: count={}, type={}", toInsert.size(), typeValue);
         }
 
-        // 批量 UPDATE
+        // 批量 UPDATE（使用 MyBatis-Plus 批量操作，避免 N 次独立 SQL）
         if (!toUpdate.isEmpty()) {
-            for (Notification n : toUpdate) {
-                notificationMapper.updateById(n);
-            }
+            Db.updateBatchById(toUpdate);
             log.debug("[Notification] 批量聚合更新通知: count={}, type={}", toUpdate.size(), typeValue);
         }
 
