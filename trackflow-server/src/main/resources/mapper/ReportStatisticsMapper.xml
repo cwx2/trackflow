@@ -181,15 +181,17 @@
 
     <!-- ========== 累积流图 ========== -->
     <!--
-        算法：利用 LATERAL JOIN + 部分索引 idx_activity_status_lookup 高效回放每日状态
-        复杂度：O(N×D) 索引扫描，每次 LATERAL 命中索引的 B-tree 直接定位
-
-        索引：idx_activity_status_lookup ON issue_activity (issue_id, created_at DESC) WHERE field_name='status'
+        算法：增量回放（delta-based）—— 只处理实际的状态变更事件
+        复杂度：O(N + A) 其中 N=工单数, A=状态变更活动数，远优于旧方案的 O(N×D)
 
         核心思路：
-        - 对每个工单×每天，通过 LATERAL JOIN 利用索引快速查找截至当天最后一次状态变更
-        - 初始状态通过 DISTINCT ON (issue_id) 取第一条活动的 old_value
-        - 查询范围在 Service 层限制为最多 90 天
+        1. 确定每个工单的初始状态和创建日期
+        2. 收集所有 status 变更事件（进入/离开）
+        3. 生成每天每状态的 delta（+1 进入, -1 离开），startDate 之前的事件截断到 startDate
+        4. 用窗口函数 SUM() OVER 做累积求和
+        5. 用 date_series + forward fill 填充无变化的日期
+
+        索引利用：idx_activity_status_lookup 加速 status 活动过滤
     -->
     <select id="selectCumulativeFlow" resultType="com.trackflow.report.mapper.result.CumulativeFlowRow">
         WITH
@@ -202,7 +204,7 @@
                 '1 day'::interval
             ) d
         ),
-        -- 相关工单（在 endDate 之前创建的）
+        -- 相关工单（在 endDate 之前创建的，未软删除）
         relevant_issues AS (
             SELECT i.id, i.status_id, i.created_at
             FROM issue i
@@ -218,45 +220,99 @@
               AND a.issue_id IN (SELECT id FROM relevant_issues)
             ORDER BY a.issue_id, a.created_at
         ),
-        issue_initial_status AS (
+        issue_initial AS (
             SELECT ri.id AS issue_id,
-                   ri.created_at,
+                   ri.created_at::date AS created_date,
                    COALESCE(fsc.old_value, s.name) AS initial_status
             FROM relevant_issues ri
             LEFT JOIN first_status_change fsc ON fsc.issue_id = ri.id
             LEFT JOIN issue_status s ON s.id = ri.status_id
         ),
-        -- 每个工单在每天结束时的状态（LATERAL JOIN 利用索引快速定位）
-        daily_status AS (
+        -- 所有 status 变更事件（包括 startDate 之前的——用于正确计算初始快照）
+        status_transitions AS (
+            SELECT a.issue_id,
+                   a.created_at::date AS change_date,
+                   a.old_value AS left_status,
+                   a.new_value AS entered_status
+            FROM issue_activity a
+            WHERE a.field_name = 'status'
+              AND a.issue_id IN (SELECT id FROM relevant_issues)
+              AND a.created_at &lt; (#{endDate}::timestamp + interval '1 day')
+        ),
+        -- 每天每状态的 delta 事件：
+        --   创建事件：工单创建当天，initial_status +1
+        --   进入事件：变更当天，entered_status +1
+        --   离开事件：变更当天，left_status -1
+        -- GREATEST 将 startDate 之前的事件截断到 startDate（确保累积从第一天开始）
+        daily_delta AS (
+            SELECT clamped_day AS event_day, status_name, SUM(delta) AS delta
+            FROM (
+                -- 创建事件
+                SELECT GREATEST(created_date, #{startDate}::date) AS clamped_day, initial_status AS status_name, 1 AS delta
+                FROM issue_initial
+                WHERE initial_status IS NOT NULL
+                UNION ALL
+                -- 进入事件
+                SELECT GREATEST(change_date, #{startDate}::date) AS clamped_day, entered_status AS status_name, 1 AS delta
+                FROM status_transitions
+                WHERE entered_status IS NOT NULL
+                UNION ALL
+                -- 离开事件
+                SELECT GREATEST(change_date, #{startDate}::date) AS clamped_day, left_status AS status_name, -1 AS delta
+                FROM status_transitions
+                WHERE left_status IS NOT NULL
+            ) events
+            GROUP BY clamped_day, status_name
+        ),
+        -- 对每个状态，按天做累积求和，得到"截至当天该状态的工单总数"
+        cumulative_sparse AS (
+            SELECT event_day,
+                   status_name,
+                   SUM(delta) OVER (PARTITION BY status_name ORDER BY event_day) AS cnt
+            FROM daily_delta
+        ),
+        -- 收集所有出现过的状态
+        all_statuses AS (
+            SELECT DISTINCT status_name FROM daily_delta
+        ),
+        -- 为每个状态×每天生成完整网格，LEFT JOIN 稀疏累积值
+        grid_with_sparse AS (
             SELECT ds.day,
-                   iis.issue_id,
-                   CASE
-                       WHEN iis.created_at >= (ds.day + interval '1 day') THEN NULL
-                       ELSE COALESCE(lat.new_value, iis.initial_status)
-                   END AS status_name
+                   ast.status_name,
+                   cs.cnt AS sparse_cnt
             FROM date_series ds
-            CROSS JOIN issue_initial_status iis
-            LEFT JOIN LATERAL (
-                SELECT a.new_value
-                FROM issue_activity a
-                WHERE a.field_name = 'status'
-                  AND a.issue_id = iis.issue_id
-                  AND a.created_at &lt; (ds.day + interval '1 day')
-                ORDER BY a.created_at DESC
-                LIMIT 1
-            ) lat ON true
+            CROSS JOIN all_statuses ast
+            LEFT JOIN cumulative_sparse cs
+                ON cs.status_name = ast.status_name AND cs.event_day = ds.day
+        ),
+        -- Forward fill：PostgreSQL 用 COUNT(non-null) OVER + FIRST_VALUE 技巧
+        -- 创建分组号：每次 sparse_cnt 不为 NULL 就开始新组
+        filled AS (
+            SELECT day,
+                   status_name,
+                   sparse_cnt,
+                   COUNT(sparse_cnt) OVER (PARTITION BY status_name ORDER BY day) AS grp
+            FROM grid_with_sparse
+        ),
+        -- 用分组号取每组的第一个非 NULL 值（即前值填充）
+        forward_filled AS (
+            SELECT day,
+                   status_name,
+                   FIRST_VALUE(sparse_cnt) OVER (
+                       PARTITION BY status_name, grp ORDER BY day
+                   ) AS cnt
+            FROM filled
         )
-        -- 最终聚合：按天、按状态 COUNT
-        SELECT ds_agg.day::text AS day,
-               ds_agg.status_name,
+        -- 最终输出：过滤掉 NULL 和 0 的行，JOIN 状态表获取颜色和排序
+        SELECT ff.day::text AS day,
+               ff.status_name,
                s.color AS status_color,
                s.sort_order,
-               COUNT(*) AS cnt
-        FROM daily_status ds_agg
-        JOIN issue_status s ON s.name = ds_agg.status_name
-        WHERE ds_agg.status_name IS NOT NULL
-        GROUP BY ds_agg.day, ds_agg.status_name, s.color, s.sort_order
-        ORDER BY ds_agg.day, s.sort_order
+               COALESCE(ff.cnt, 0) AS cnt
+        FROM forward_filled ff
+        JOIN issue_status s ON s.name = ff.status_name
+        WHERE COALESCE(ff.cnt, 0) > 0
+        ORDER BY ff.day, s.sort_order
     </select>
 
     <!-- ========== 解决时间趋势 ========== -->
