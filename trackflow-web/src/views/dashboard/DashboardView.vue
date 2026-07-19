@@ -658,10 +658,23 @@ function isOverdue(dt: string): boolean {
 }
 
 function formatAction(activity: DashboardActivityVO): string {
-  let text = localizeActionShort(activity.action)
-  if (activity.fieldName && (activity.action === 'update' || activity.action === 'updated')) {
-    text = `更新了 ${fieldLabelMap[activity.fieldName] || activity.fieldName}`
+  // 特殊 action：移动到项目（newValue 包含目标项目名）
+  if (activity.action === 'moved_to_project') {
+    return activity.newValue ? `移动到项目 ${activity.newValue}` : '移动到其他项目'
   }
+  // 特殊 action：关联操作
+  if (activity.action === 'link_added') {
+    return activity.newValue ? `添加了关联 ${activity.newValue}` : '添加了关联'
+  }
+  if (activity.action === 'link_removed') {
+    return activity.oldValue ? `移除了关联 ${activity.oldValue}` : '移除了关联'
+  }
+  // 通用 update 操作：拼接字段中文名
+  if (activity.fieldName && (activity.action === 'update' || activity.action === 'updated')) {
+    return `更新了 ${fieldLabelMap[activity.fieldName] || activity.fieldName}`
+  }
+  // 默认：使用 actionLabelMap 映射
+  let text = localizeActionShort(activity.action)
   return text
 }
 

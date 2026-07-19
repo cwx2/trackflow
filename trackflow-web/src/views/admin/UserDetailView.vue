@@ -247,6 +247,7 @@ import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import request from '@/api/request'
+import { localizeActionShort, fieldLabelMap } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -421,40 +422,22 @@ function formatRelativeTime(dt: string) {
 }
 
 function formatAction(activity: { action: string; fieldName?: string; oldValue?: string; newValue?: string }) {
-  const actionMap: Record<string, string> = {
-    'create': '创建了',
-    'created': '创建了',
-    'update': '更新了',
-    'updated': '更新了',
-    'comment': '评论了',
-    'commented': '评论了',
-    'delete': '删除了',
-    'deleted': '删除了',
-    'status_change': '修改了状态',
-    'status_changed': '修改了状态',
-    'assign': '分配了',
-    'assigned': '分配了',
-    'field_changed': '修改了字段',
+  // 特殊 action：移动到项目
+  if (activity.action === 'moved_to_project') {
+    return activity.newValue ? `移动到项目 ${activity.newValue}` : '移动到其他项目'
   }
-
-  let label = actionMap[activity.action] || activity.action
+  // 特殊 action：关联操作
+  if (activity.action === 'link_added') {
+    return activity.newValue ? `添加了关联 ${activity.newValue}` : '添加了关联'
+  }
+  if (activity.action === 'link_removed') {
+    return activity.oldValue ? `移除了关联 ${activity.oldValue}` : '移除了关联'
+  }
+  // 通用 update：拼接字段中文名
   if ((activity.action === 'update' || activity.action === 'updated' || activity.action === 'field_changed') && activity.fieldName) {
-    const fieldMap: Record<string, string> = {
-      'title': '标题',
-      'description': '描述',
-      'status': '状态',
-      'assignee_id': '负责人',
-      'priority': '优先级',
-      'sprint_id': 'Sprint',
-      'due_date': '截止日期',
-      'issue_type': '类型',
-      'parent_id': '父工单',
-      'estimated_hours': '预估工时',
-      'spent_hours': '已用工时',
-    }
-    label = `修改了${fieldMap[activity.fieldName] || activity.fieldName}`
+    return `修改了${fieldLabelMap[activity.fieldName] || activity.fieldName}`
   }
-  return label
+  return localizeActionShort(activity.action)
 }
 
 // ===== 项目角色管理 =====

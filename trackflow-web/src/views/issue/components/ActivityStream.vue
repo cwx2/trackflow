@@ -81,6 +81,15 @@
               <template v-else-if="item.action === 'attachment_removed'">
                 删除了附件: <span class="val-old">{{ item.from }}</span>
               </template>
+              <template v-else-if="item.action === 'moved_to_project'">
+                移动到项目：<span class="val-old">{{ item.from || '未知' }}</span> → <span class="val-new">{{ item.to || '未知' }}</span>
+              </template>
+              <template v-else-if="item.action === 'link_added'">
+                添加了关联: <span class="val-new">{{ item.to }}</span>
+              </template>
+              <template v-else-if="item.action === 'link_removed'">
+                移除了关联: <span class="val-old">{{ item.from }}</span>
+              </template>
               <template v-else-if="item.field">
                 修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
               </template>

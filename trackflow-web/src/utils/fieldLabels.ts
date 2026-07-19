@@ -32,6 +32,12 @@ export const fieldLabelMap: Record<string, string> = {
   reporter: '报告人',
   reporterId: '报告人',
   reporter_id: '报告人',
+  issue_key: '工单编号',
+  issueKey: '工单编号',
+  project: '项目',
+  project_id: '项目',
+  projectId: '项目',
+  link: '关联',
 }
 
 /**
@@ -190,6 +196,7 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
   updated: { short: '更新了', full: '修改了工单' },
   status_change: { short: '变更了状态', full: '修改了状态' },
   status_changed: { short: '变更了状态', full: '修改了状态' },
+  status_reset: { short: '重置了状态', full: '重置了状态' },
   assign: { short: '分配了', full: '修改了负责人' },
   assigned: { short: '分配了', full: '修改了负责人' },
   comment: { short: '评论了', full: '添加了评论' },
@@ -209,6 +216,18 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
   resolved: { short: '解决了', full: '解决了此工单' },
   auto_assigned: { short: '自动分配了', full: '自动分配了负责人' },
   auto_assign_skipped: { short: '跳过了自动分配', full: '跳过了自动分配' },
+  moved_to_project: { short: '移动到项目', full: '移动了工单到其他项目' },
+  link_added: { short: '添加了关联', full: '添加了工单关联' },
+  link_removed: { short: '移除了关联', full: '移除了工单关联' },
+}
+
+/**
+ * 将 snake_case 的 action 标识转换为基本可读的中文兜底描述
+ * 仅用于 actionLabelMap 中未覆盖的未知 action 类型
+ */
+function fallbackActionLabel(action: string): string {
+  // 将 snake_case 转为空格分隔，首字母保持
+  return action.replace(/_/g, ' ')
 }
 
 /**
@@ -216,7 +235,7 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
  */
 export function localizeAction(action?: string | null): string {
   if (!action) return '未知操作'
-  return actionLabelMap[action]?.full || action
+  return actionLabelMap[action]?.full || `执行了 ${fallbackActionLabel(action)}`
 }
 
 /**
@@ -224,7 +243,7 @@ export function localizeAction(action?: string | null): string {
  */
 export function localizeActionShort(action?: string | null): string {
   if (!action) return '操作了'
-  return actionLabelMap[action]?.short || action
+  return actionLabelMap[action]?.short || '操作了'
 }
 
 /**
