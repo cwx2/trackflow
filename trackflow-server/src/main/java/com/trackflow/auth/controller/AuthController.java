@@ -94,6 +94,9 @@ public class AuthController {
      * 获取当前用户的全局权限列表（含导航级别的派生权限）
      * 除了全局角色直接分配的权限外，还包含从项目角色聚合的导航级权限：
      * - nav:workflow — 用户在任意项目中拥有 project:manage_workflow 权限
+     *
+     * 性能优化：结果缓存到 Redis（key: perm:nav:{userId}，TTL 5分钟），
+     * 缓存命中时 0 次 DB 查询，未命中时最多 2 次 DB 查询。
      */
     @GetMapping("/my-global-permissions")
     @PreAuthorize("isAuthenticated()")
@@ -102,46 +105,6 @@ public class AuthController {
         if (userId == null) {
             return R.fail(ErrorCode.AUTH_MISSING);
         }
-        Set<String> permissions = new HashSet<>(permissionService.getPermissions(userId));
-
-        // 导航级别的派生权限：项目中有 manage_workflow 权限的用户可见工作流菜单
-        if (!permissions.contains("system:admin")) {
-            if (permissionService.hasPermissionInAnyProject(userId, "project:manage_workflow")) {
-                permissions.add("nav:workflow");
-            }
-            // 用户在任意项目中有 issue:create 权限 → 显示创建入口
-            if (permissionService.hasPermissionInAnyProject(userId, "issue:create")) {
-                permissions.add("nav:create_issue");
-            }
-            // 用户在任意项目中有 report:view 权限 → 显示报表入口
-            if (permissionService.hasPermissionInAnyProject(userId, "report:view")) {
-                permissions.add("nav:report");
-            }
-            // 用户在任意项目中有 report:create 权限 → 显示创建报表按钮
-            if (permissionService.hasPermissionInAnyProject(userId, "report:create")) {
-                permissions.add("nav:report_create");
-            }
-            // 用户在任意项目中有 sprint:create 权限 → 迭代管理模式（非只读）
-            if (permissionService.hasPermissionInAnyProject(userId, "sprint:create")) {
-                permissions.add("nav:sprint_manage");
-            }
-            // 用户在任意项目中有 sprint:view 权限 → 允许前端请求 Sprint 数据
-            if (permissionService.hasPermissionInAnyProject(userId, "sprint:view")) {
-                permissions.add("nav:sprint_view");
-            }
-            // 用户在任意项目中有 issue:delete 权限 → 显示回收站入口
-            if (permissionService.hasPermissionInAnyProject(userId, "issue:delete")) {
-                permissions.add("nav:trash");
-            }
-            // 用户在任意项目中有批量操作权限 → 显示 checkbox 列和批量工具栏
-            if (permissionService.hasPermissionInAnyProject(userId, "issue:edit")
-                || permissionService.hasPermissionInAnyProject(userId, "issue:delete")
-                || permissionService.hasPermissionInAnyProject(userId, "issue:assign")
-                || permissionService.hasPermissionInAnyProject(userId, "issue:change_status")) {
-                permissions.add("nav:batch_ops");
-            }
-        }
-
-        return R.ok(permissions);
+        return R.ok(permissionService.getNavigationPermissions(userId));
     }
 }

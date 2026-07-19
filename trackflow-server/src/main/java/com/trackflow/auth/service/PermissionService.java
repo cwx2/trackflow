@@ -35,6 +35,7 @@ public class PermissionService {
 
     private static final String CACHE_KEY_PREFIX = "perm:user:";
     private static final String PROJECT_CACHE_KEY_PREFIX = "perm:user:project:";
+    private static final String NAV_CACHE_KEY_PREFIX = "perm:nav:";
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
     private static final String SYSTEM_ADMIN_PERMISSION = "system:admin";
 
@@ -113,7 +114,7 @@ public class PermissionService {
     }
 
     /**
-     * 失效指定用户的所有权限缓存（全局 + 所有项目级）
+     * 失效指定用户的所有权限缓存（全局 + 导航 + 所有项目级）
      * 使用 SCAN 迭代匹配项目级 key，避免 KEYS 命令阻塞 Redis
      */
     public void invalidateCache(Long userId) {
@@ -121,14 +122,18 @@ public class PermissionService {
         String globalKey = CACHE_KEY_PREFIX + userId;
         redisTemplate.delete(globalKey);
 
-        // 2. 使用 SCAN 迭代删除该用户所有项目级权限缓存
+        // 2. 删除导航权限缓存
+        String navKey = NAV_CACHE_KEY_PREFIX + userId;
+        redisTemplate.delete(navKey);
+
+        // 3. 使用 SCAN 迭代删除该用户所有项目级权限缓存
         String projectPattern = PROJECT_CACHE_KEY_PREFIX + userId + ":*";
         Set<String> projectKeys = scanKeys(projectPattern);
         if (!projectKeys.isEmpty()) {
             redisTemplate.delete(projectKeys);
-            log.debug("Permission cache invalidated for user {}: global + {} project keys", userId, projectKeys.size());
+            log.debug("Permission cache invalidated for user {}: global + nav + {} project keys", userId, projectKeys.size());
         } else {
-            log.debug("Permission cache invalidated for user {}: global only", userId);
+            log.debug("Permission cache invalidated for user {}: global + nav", userId);
         }
     }
 
@@ -285,6 +290,89 @@ public class PermissionService {
         // 2. 通过用户组继承的项目角色
         List<String> groupProjectPerms = userGroupRoleMapper.selectAllProjectPermissionsByUserId(userId);
         return groupProjectPerms.contains(permission);
+    }
+
+    /**
+     * 一次性获取用户在所有项目中的去重权限集合（直接成员角色 + 组继承）。
+     * 用于导航权限聚合计算，替代多次 hasPermissionInAnyProject 串行调用。
+     *
+     * @param userId 用户 ID
+     * @return 用户在所有项目中拥有的去重权限集合
+     */
+    public Set<String> getAllProjectPermissionsForUser(Long userId) {
+        if (userId == null) return Set.of();
+        Set<String> permissions = new HashSet<>();
+        // 1. 直接项目成员角色的权限
+        List<String> directPerms = rolePermissionMapper.selectAllProjectPermissionsByUserId(userId);
+        permissions.addAll(directPerms);
+        // 2. 通过用户组继承的项目角色权限
+        List<String> groupPerms = userGroupRoleMapper.selectAllProjectPermissionsByUserId(userId);
+        permissions.addAll(groupPerms);
+        return permissions;
+    }
+
+    /**
+     * 获取用户的导航权限集合（Redis 缓存优先）。
+     * 结合全局权限 + 项目级权限聚合派生 nav:* 权限。
+     * <p>
+     * 缓存命中：0 DB 查询
+     * 缓存未命中：最多 2 次 DB 查询（1 次全局权限 + 1 次聚合项目权限）
+     *
+     * @param userId 用户 ID
+     * @return 包含全局权限和 nav:* 派生权限的完整集合
+     */
+    public Set<String> getNavigationPermissions(Long userId) {
+        String navCacheKey = NAV_CACHE_KEY_PREFIX + userId;
+
+        // 1. 尝试从 Redis 获取缓存
+        Set<String> cached = redisTemplate.opsForSet().members(navCacheKey);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+
+        // 2. 计算：全局权限 + 导航派生权限
+        Set<String> permissions = new HashSet<>(getPermissions(userId));
+
+        if (!permissions.contains(SYSTEM_ADMIN_PERMISSION)) {
+            // 一次性加载用户所有项目级权限（2 次 DB 查询代替 8-11 次）
+            Set<String> allProjectPerms = getAllProjectPermissionsForUser(userId);
+
+            if (allProjectPerms.contains("project:manage_workflow")) {
+                permissions.add("nav:workflow");
+            }
+            if (allProjectPerms.contains("issue:create")) {
+                permissions.add("nav:create_issue");
+            }
+            if (allProjectPerms.contains("report:view")) {
+                permissions.add("nav:report");
+            }
+            if (allProjectPerms.contains("report:create")) {
+                permissions.add("nav:report_create");
+            }
+            if (allProjectPerms.contains("sprint:create")) {
+                permissions.add("nav:sprint_manage");
+            }
+            if (allProjectPerms.contains("sprint:view")) {
+                permissions.add("nav:sprint_view");
+            }
+            if (allProjectPerms.contains("issue:delete")) {
+                permissions.add("nav:trash");
+            }
+            if (allProjectPerms.contains("issue:edit")
+                    || allProjectPerms.contains("issue:delete")
+                    || allProjectPerms.contains("issue:assign")
+                    || allProjectPerms.contains("issue:change_status")) {
+                permissions.add("nav:batch_ops");
+            }
+        }
+
+        // 3. 写入 Redis 缓存
+        if (!permissions.isEmpty()) {
+            redisTemplate.opsForSet().add(navCacheKey, permissions.toArray(new String[0]));
+            redisTemplate.expire(navCacheKey, CACHE_TTL);
+        }
+
+        return permissions;
     }
 
     /**
