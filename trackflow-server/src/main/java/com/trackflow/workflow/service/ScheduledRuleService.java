@@ -91,8 +91,13 @@ public class ScheduledRuleService {
 
         try {
             // 1. 查询匹配工单
+            long queryStart = System.currentTimeMillis();
             List<Issue> matchedIssues = findMatchingIssues(rule);
+            long queryDuration = System.currentTimeMillis() - queryStart;
             matched = matchedIssues.size();
+
+            log.debug("[ScheduledRule] 规则 '{}' 查询匹配工单: 匹配={}, 查询耗时={}ms",
+                    rule.getName(), matched, queryDuration);
 
             // 2. 对每个匹配工单执行动作
             for (Issue issue : matchedIssues) {
@@ -138,40 +143,241 @@ public class ScheduledRuleService {
 
     // ============ 工单匹配 ============
 
-    private List<Issue> findMatchingIssues(WorkflowRule rule) {
-        // 构建基础查询条件
-        LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
-        wrapper.isNull(Issue::getDeletedAt);
+    /** 单批最大查询量，避免一次性加载过多工单到内存 */
+    private static final int BATCH_SIZE = 500;
 
-        // 限定项目
+    private List<Issue> findMatchingIssues(WorkflowRule rule) {
+        // 解析条件 JSON
+        String condJson = rule.getConditionJson();
+        JsonNode conditions = null;
+        if (condJson != null && !condJson.isBlank() && !"[]".equals(condJson.trim())) {
+            try {
+                conditions = objectMapper.readTree(condJson);
+                if (!conditions.isArray() || conditions.isEmpty()) {
+                    conditions = null;
+                }
+            } catch (Exception e) {
+                log.warn("[ScheduledRule] 条件解析失败: {}", e.getMessage());
+                return List.of();
+            }
+        }
+
+        // 分类条件：可下推到 SQL 的 vs 只能 Java 层处理的
+        List<JsonNode> javaOnlyConditions = new ArrayList<>();
+        if (conditions != null) {
+            LambdaQueryWrapper<Issue> probe = new LambdaQueryWrapper<>();
+            for (JsonNode cond : conditions) {
+                if (!pushConditionToSql(cond, probe)) {
+                    javaOnlyConditions.add(cond);
+                }
+            }
+        }
+
+        // 分批查询（基于 ID 游标分页）
+        List<Issue> result = new ArrayList<>();
+        Long lastId = null;
+
+        while (true) {
+            LambdaQueryWrapper<Issue> batchWrapper = buildBatchWrapper(rule, conditions, javaOnlyConditions, lastId);
+            batchWrapper.last("LIMIT " + BATCH_SIZE);
+
+            List<Issue> batch = issueMapper.selectList(batchWrapper);
+            if (batch.isEmpty()) {
+                break;
+            }
+
+            // Java 层过滤无法下推的条件
+            if (!javaOnlyConditions.isEmpty()) {
+                for (Issue issue : batch) {
+                    if (evaluateJavaConditions(javaOnlyConditions, issue)) {
+                        result.add(issue);
+                    }
+                }
+            } else {
+                result.addAll(batch);
+            }
+
+            // 更新游标
+            lastId = batch.get(batch.size() - 1).getId();
+
+            // 如果本批不满，说明已到末尾
+            if (batch.size() < BATCH_SIZE) {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 构建每批次的查询 Wrapper（含所有 SQL 下推条件 + 游标）。
+     */
+    private LambdaQueryWrapper<Issue> buildBatchWrapper(WorkflowRule rule, JsonNode conditions,
+                                                        List<JsonNode> javaOnlyConditions, Long lastId) {
+        LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
+        // MyBatis-Plus 全局配置已自动添加 deleted_at IS NULL 逻辑删除过滤
+
         if (rule.getProjectId() != null) {
             wrapper.eq(Issue::getProjectId, rule.getProjectId());
         }
 
-        // 先查出候选工单，再用规则条件过滤
-        List<Issue> candidates = issueMapper.selectList(wrapper);
+        wrapper.select(
+                Issue::getId, Issue::getProjectId, Issue::getIssueKey, Issue::getTitle,
+                Issue::getIssueType, Issue::getStatusId, Issue::getPriority,
+                Issue::getAssigneeId, Issue::getReporterId, Issue::getSprintId,
+                Issue::getDueDate
+        );
 
-        // 使用 conditionJson 过滤
-        String condJson = rule.getConditionJson();
-        if (condJson == null || condJson.isBlank() || "[]".equals(condJson.trim())) {
-            return candidates;
+        // 应用下推条件
+        if (conditions != null) {
+            for (JsonNode cond : conditions) {
+                if (!javaOnlyConditions.contains(cond)) {
+                    pushConditionToSql(cond, wrapper);
+                }
+            }
         }
 
-        try {
-            JsonNode conditions = objectMapper.readTree(condJson);
-            if (!conditions.isArray() || conditions.isEmpty()) {
-                return candidates;
+        wrapper.orderByAsc(Issue::getId);
+        if (lastId != null) {
+            wrapper.gt(Issue::getId, lastId);
+        }
+
+        return wrapper;
+    }
+
+    /**
+     * 尝试将单个条件下推到 SQL WHERE 子句。
+     * @return true 如果成功下推（无需 Java 层再评估），false 表示需要 Java 层处理
+     */
+    private boolean pushConditionToSql(JsonNode cond, LambdaQueryWrapper<Issue> wrapper) {
+        String field = textOf(cond, "field");
+        String operator = textOf(cond, "operator");
+        String value = textOf(cond, "value");
+        if (field == null || operator == null) return true; // 无效条件，跳过
+
+        // overdue 和 due_within_days 是特殊操作符，直接处理日期
+        if ("overdue".equals(operator)) {
+            wrapper.isNotNull(Issue::getDueDate);
+            wrapper.lt(Issue::getDueDate, LocalDate.now());
+            return true;
+        }
+        if ("due_within_days".equals(operator)) {
+            if (value == null) return true;
+            try {
+                int days = Integer.parseInt(value);
+                LocalDate today = LocalDate.now();
+                wrapper.isNotNull(Issue::getDueDate);
+                wrapper.ge(Issue::getDueDate, today);
+                wrapper.lt(Issue::getDueDate, today.plusDays(days + 1));
+                return true;
+            } catch (NumberFormatException e) {
+                return true; // 无效值，跳过
             }
-            return candidates.stream()
-                    .filter(issue -> evaluateScheduleConditions(conditions, issue))
-                    .toList();
-        } catch (Exception e) {
-            log.warn("[ScheduledRule] 条件解析失败: {}", e.getMessage());
-            return List.of();
+        }
+
+        // 标准字段条件下推
+        return switch (operator) {
+            case "equals" -> pushEquals(field, value, wrapper);
+            case "not_equals" -> pushNotEquals(field, value, wrapper);
+            case "in" -> pushIn(field, value, wrapper);
+            case "is_empty" -> pushIsEmpty(field, wrapper);
+            case "is_not_empty" -> pushIsNotEmpty(field, wrapper);
+            case "contains" -> false; // contains 只能在 Java 层处理（LIKE 对标题可下推，但通用性不高）
+            default -> false;
+        };
+    }
+
+    private boolean pushEquals(String field, String value, LambdaQueryWrapper<Issue> wrapper) {
+        if (value == null) return false;
+        return switch (field) {
+            case "type", "issue_type" -> { wrapper.eq(Issue::getIssueType, value); yield true; }
+            case "priority" -> { wrapper.eq(Issue::getPriority, value); yield true; }
+            case "status", "status_id" -> { wrapper.eq(Issue::getStatusId, toLong(value)); yield true; }
+            case "assignee", "assignee_id" -> { wrapper.eq(Issue::getAssigneeId, toLong(value)); yield true; }
+            case "reporter", "reporter_id" -> { wrapper.eq(Issue::getReporterId, toLong(value)); yield true; }
+            case "sprint", "sprint_id" -> { wrapper.eq(Issue::getSprintId, toLong(value)); yield true; }
+            default -> false;
+        };
+    }
+
+    private boolean pushNotEquals(String field, String value, LambdaQueryWrapper<Issue> wrapper) {
+        if (value == null) return false;
+        return switch (field) {
+            case "type", "issue_type" -> { wrapper.ne(Issue::getIssueType, value); yield true; }
+            case "priority" -> { wrapper.ne(Issue::getPriority, value); yield true; }
+            case "status", "status_id" -> { wrapper.ne(Issue::getStatusId, toLong(value)); yield true; }
+            case "assignee", "assignee_id" -> { wrapper.ne(Issue::getAssigneeId, toLong(value)); yield true; }
+            case "reporter", "reporter_id" -> { wrapper.ne(Issue::getReporterId, toLong(value)); yield true; }
+            case "sprint", "sprint_id" -> { wrapper.ne(Issue::getSprintId, toLong(value)); yield true; }
+            default -> false;
+        };
+    }
+
+    private boolean pushIn(String field, String value, LambdaQueryWrapper<Issue> wrapper) {
+        if (value == null || value.isBlank()) return false;
+        List<String> values = Arrays.asList(value.split(","));
+        return switch (field) {
+            case "type", "issue_type" -> { wrapper.in(Issue::getIssueType, values); yield true; }
+            case "priority" -> { wrapper.in(Issue::getPriority, values); yield true; }
+            case "status", "status_id" -> {
+                List<Long> ids = values.stream().map(this::toLong).filter(Objects::nonNull).toList();
+                if (!ids.isEmpty()) wrapper.in(Issue::getStatusId, ids);
+                yield true;
+            }
+            case "assignee", "assignee_id" -> {
+                List<Long> ids = values.stream().map(this::toLong).filter(Objects::nonNull).toList();
+                if (!ids.isEmpty()) wrapper.in(Issue::getAssigneeId, ids);
+                yield true;
+            }
+            case "reporter", "reporter_id" -> {
+                List<Long> ids = values.stream().map(this::toLong).filter(Objects::nonNull).toList();
+                if (!ids.isEmpty()) wrapper.in(Issue::getReporterId, ids);
+                yield true;
+            }
+            case "sprint", "sprint_id" -> {
+                List<Long> ids = values.stream().map(this::toLong).filter(Objects::nonNull).toList();
+                if (!ids.isEmpty()) wrapper.in(Issue::getSprintId, ids);
+                yield true;
+            }
+            default -> false;
+        };
+    }
+
+    private boolean pushIsEmpty(String field, LambdaQueryWrapper<Issue> wrapper) {
+        return switch (field) {
+            case "assignee", "assignee_id" -> { wrapper.isNull(Issue::getAssigneeId); yield true; }
+            case "reporter", "reporter_id" -> { wrapper.isNull(Issue::getReporterId); yield true; }
+            case "sprint", "sprint_id" -> { wrapper.isNull(Issue::getSprintId); yield true; }
+            case "type", "issue_type" -> { wrapper.and(w -> w.isNull(Issue::getIssueType).or().eq(Issue::getIssueType, "")); yield true; }
+            case "priority" -> { wrapper.and(w -> w.isNull(Issue::getPriority).or().eq(Issue::getPriority, "")); yield true; }
+            default -> false;
+        };
+    }
+
+    private boolean pushIsNotEmpty(String field, LambdaQueryWrapper<Issue> wrapper) {
+        return switch (field) {
+            case "assignee", "assignee_id" -> { wrapper.isNotNull(Issue::getAssigneeId); yield true; }
+            case "reporter", "reporter_id" -> { wrapper.isNotNull(Issue::getReporterId); yield true; }
+            case "sprint", "sprint_id" -> { wrapper.isNotNull(Issue::getSprintId); yield true; }
+            case "type", "issue_type" -> { wrapper.isNotNull(Issue::getIssueType).ne(Issue::getIssueType, ""); yield true; }
+            case "priority" -> { wrapper.isNotNull(Issue::getPriority).ne(Issue::getPriority, ""); yield true; }
+            default -> false;
+        };
+    }
+
+    private Long toLong(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 
-    private boolean evaluateScheduleConditions(JsonNode conditions, Issue issue) {
+    /**
+     * Java 层评估无法下推到 SQL 的条件（如 contains 操作符）。
+     */
+    private boolean evaluateJavaConditions(List<JsonNode> conditions, Issue issue) {
         for (JsonNode cond : conditions) {
             if (!evalSingleCondition(cond, issue)) {
                 return false;
