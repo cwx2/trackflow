@@ -6,11 +6,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueComment;
+import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.mapper.SprintMapper;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import lombok.RequiredArgsConstructor;
@@ -18,11 +25,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -34,7 +43,16 @@ public class WorkflowRuleEngine {
     private final IssueActivityMapper activityMapper;
     private final IssueCommentMapper commentMapper;
     private final IssueTagRelationMapper tagRelationMapper;
+    private final IssueStatusMapper statusMapper;
+    private final SysUserMapper sysUserMapper;
+    private final SprintMapper sprintMapper;
+    private final ProjectService projectService;
     private final ObjectMapper objectMapper;
+
+    /** Valid priority values recognized by the system. */
+    private static final Set<String> VALID_PRIORITIES = Set.of(
+            "Critical", "High", "Normal", "Low"
+    );
 
     /**
      * 触发 on-create 规则。
@@ -205,6 +223,7 @@ public class WorkflowRuleEngine {
         if ("assignee".equals(field) || "assignee_id".equals(field)) return issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null;
         if ("reporter".equals(field) || "reporter_id".equals(field)) return issue.getReporterId() != null ? String.valueOf(issue.getReporterId()) : null;
         if ("sprint".equals(field) || "sprint_id".equals(field)) return issue.getSprintId() != null ? String.valueOf(issue.getSprintId()) : null;
+        if ("due_date".equals(field) || "dueDate".equals(field)) return issue.getDueDate() != null ? issue.getDueDate().toString() : null;
         if ("title".equals(field)) return issue.getTitle();
         return null;
     }
@@ -241,13 +260,193 @@ public class WorkflowRuleEngine {
         String value = textOf(act, "value");
         if (field == null) return false;
         String old = fieldValue(issue, field);
-        if ("priority".equals(field)) issue.setPriority(value);
-        else if ("assignee".equals(field) || "assignee_id".equals(field)) {
-            issue.setAssigneeId(value != null && !value.isBlank() ? Long.parseLong(value) : null);
-        } else if ("type".equals(field) || "issue_type".equals(field)) issue.setIssueType(value);
-        else return false;
+
+        switch (field) {
+            case "priority" -> {
+                if (!validatePriority(value, rule)) return false;
+                issue.setPriority(value);
+            }
+            case "assignee", "assignee_id" -> {
+                Long assigneeId = resolveAndValidateAssignee(value, issue.getProjectId(), rule);
+                if (assigneeId == null && value != null && !value.isBlank()) {
+                    // value was non-empty but resolved to null (invalid) — skip
+                    return false;
+                }
+                issue.setAssigneeId(assigneeId);
+            }
+            case "type", "issue_type" -> {
+                issue.setIssueType(value);
+            }
+            case "status", "status_id" -> {
+                Long statusId = parseIdSafe(value, "status_id", rule);
+                if (statusId == null && value != null && !value.isBlank()) return false;
+                if (statusId != null && !validateStatusExists(statusId, rule)) return false;
+                issue.setStatusId(statusId);
+            }
+            case "sprint", "sprint_id" -> {
+                Long sprintId = parseIdSafe(value, "sprint_id", rule);
+                if (sprintId == null && value != null && !value.isBlank()) return false;
+                if (sprintId != null && !validateSprint(sprintId, issue.getProjectId(), rule)) return false;
+                issue.setSprintId(sprintId);
+            }
+            case "due_date", "dueDate" -> {
+                LocalDate dueDate = parseDateSafe(value, rule);
+                if (dueDate == null && value != null && !value.isBlank()) return false;
+                issue.setDueDate(dueDate);
+            }
+            default -> {
+                log.warn("[RuleEngine] set_field: unsupported field '{}' in rule '{}' (id={})",
+                        field, rule.getName(), rule.getId());
+                return false;
+            }
+        }
         logActivity(issue.getId(), rule, "updated", field, old, value);
         return true;
+    }
+
+    // ===== Validation helpers for doSetField =====
+
+    /**
+     * Validate priority value against known enum values.
+     * Null/blank is allowed (clears priority).
+     */
+    private boolean validatePriority(String value, WorkflowRule rule) {
+        if (value == null || value.isBlank()) return true;
+        if (!VALID_PRIORITIES.contains(value)) {
+            log.warn("[RuleEngine] set_field priority: invalid value '{}' in rule '{}' (id={}). " +
+                    "Valid values: {}", value, rule.getName(), rule.getId(), VALID_PRIORITIES);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Resolve assignee value (numeric ID or username) and validate:
+     * 1. User exists and is not disabled
+     * 2. User is a member of the issue's project
+     *
+     * Returns null if value is null/blank (unassign), or null if validation fails.
+     */
+    private Long resolveAndValidateAssignee(String value, Long projectId, WorkflowRule rule) {
+        if (value == null || value.isBlank() || "null".equals(value)) return null;
+
+        // Try parsing as numeric ID first, then fallback to username lookup
+        Long userId = null;
+        try {
+            userId = Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            // Not numeric — try username lookup
+            LambdaQueryWrapper<SysUser> uw = new LambdaQueryWrapper<>();
+            uw.eq(SysUser::getUsername, value);
+            SysUser user = sysUserMapper.selectOne(uw);
+            if (user != null) {
+                userId = user.getId();
+            }
+        }
+
+        if (userId == null) {
+            log.warn("[RuleEngine] set_field assignee: cannot resolve user '{}' in rule '{}' (id={})",
+                    value, rule.getName(), rule.getId());
+            return null;
+        }
+
+        // Validate user exists and is active
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            log.warn("[RuleEngine] set_field assignee: user id={} does not exist, rule '{}' (id={})",
+                    userId, rule.getName(), rule.getId());
+            return null;
+        }
+        if ("disabled".equals(user.getStatus())) {
+            log.warn("[RuleEngine] set_field assignee: user '{}' (id={}) is disabled, rule '{}' (id={})",
+                    user.getUsername(), userId, rule.getName(), rule.getId());
+            return null;
+        }
+
+        // Validate project membership
+        if (!projectService.isProjectMember(userId, projectId)) {
+            log.warn("[RuleEngine] set_field assignee: user '{}' (id={}) is not a member of project {}, rule '{}' (id={})",
+                    user.getUsername(), userId, projectId, rule.getName(), rule.getId());
+            return null;
+        }
+
+        return userId;
+    }
+
+    /**
+     * Safely parse a string value as Long ID. Returns null if blank or parse fails.
+     */
+    private Long parseIdSafe(String value, String fieldName, WorkflowRule rule) {
+        if (value == null || value.isBlank() || "null".equals(value)) return null;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            log.warn("[RuleEngine] set_field {}: invalid numeric value '{}' in rule '{}' (id={})",
+                    fieldName, value, rule.getName(), rule.getId());
+            return null;
+        }
+    }
+
+    /**
+     * Validate that the given status ID exists in issue_status table.
+     * Note: Rule engine is system-level automation and bypasses user workflow transition constraints,
+     * but the target status must at least exist.
+     */
+    private boolean validateStatusExists(Long statusId, WorkflowRule rule) {
+        IssueStatus status = statusMapper.selectById(statusId);
+        if (status == null) {
+            log.warn("[RuleEngine] set_field status_id: status {} does not exist, rule '{}' (id={})",
+                    statusId, rule.getName(), rule.getId());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Validate sprint: must exist and belong to the same project as the issue.
+     */
+    private boolean validateSprint(Long sprintId, Long projectId, WorkflowRule rule) {
+        Sprint sprint = sprintMapper.selectById(sprintId);
+        if (sprint == null) {
+            log.warn("[RuleEngine] set_field sprint_id: sprint {} does not exist, rule '{}' (id={})",
+                    sprintId, rule.getName(), rule.getId());
+            return false;
+        }
+        if (!Objects.equals(sprint.getProjectId(), projectId)) {
+            log.warn("[RuleEngine] set_field sprint_id: sprint {} belongs to project {}, not {}, rule '{}' (id={})",
+                    sprintId, sprint.getProjectId(), projectId, rule.getName(), rule.getId());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Safely parse a date value. Supports:
+     * - ISO format: "2026-07-19"
+     * - Relative format: "+7d" (today + 7 days), "-3d" (today - 3 days)
+     * - Null/blank: returns null (clear due date)
+     */
+    private LocalDate parseDateSafe(String value, WorkflowRule rule) {
+        if (value == null || value.isBlank() || "null".equals(value)) return null;
+        // Relative date: "+7d", "-3d"
+        if (value.matches("[+-]\\d+d")) {
+            try {
+                int days = Integer.parseInt(value.substring(0, value.length() - 1));
+                return LocalDate.now().plusDays(days);
+            } catch (NumberFormatException e) {
+                log.warn("[RuleEngine] set_field due_date: cannot parse relative date '{}' in rule '{}' (id={})",
+                        value, rule.getName(), rule.getId());
+                return null;
+            }
+        }
+        // Absolute date
+        try {
+            return LocalDate.parse(value);
+        } catch (Exception e) {
+            log.warn("[RuleEngine] set_field due_date: invalid date format '{}' in rule '{}' (id={})",
+                    value, rule.getName(), rule.getId());
+            return null;
+        }
     }
 
     private void doAddTag(JsonNode act, Issue issue, WorkflowRule rule) {
