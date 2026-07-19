@@ -104,7 +104,7 @@
                 size="mini"
                 type="text"
                 status="danger"
-                @click="removeValue(idx)"
+                @click="handleRemoveValue(idx)"
               >删除</a-button>
             </div>
           </div>
@@ -205,6 +205,41 @@
         </a-checkbox>
       </div>
     </a-modal>
+
+    <!-- Transfer Value Dialog -->
+    <a-modal
+      v-model:visible="showTransferDialog"
+      title="转移属性值引用"
+      :ok-loading="transferring"
+      ok-text="转移并删除"
+      @ok="executeTransfer"
+      @cancel="cancelTransfer"
+    >
+      <div class="transfer-content">
+        <p class="transfer-warning">
+          值 <strong>"{{ transferSource?.name }}"</strong> 已被 <strong>{{ transferUsageCount }}</strong> 条工时记录使用。
+        </p>
+        <p class="transfer-hint">
+          请选择一个替代值，系统将把所有工时记录的分类迁移到新值，然后删除原值。
+        </p>
+        <a-select
+          v-model="transferTargetId"
+          placeholder="选择替代值..."
+          style="width: 100%; margin-top: 12px"
+        >
+          <a-option
+            v-for="val in transferTargetOptions"
+            :key="val.id"
+            :value="val.id"
+          >
+            <span class="transfer-option">
+              <span class="transfer-color-dot" :style="{ background: val.color || '#6e7681' }"></span>
+              {{ val.name }}
+            </span>
+          </a-option>
+        </a-select>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -221,15 +256,31 @@ const selectedId = ref('')
 const showDetail = ref(false)
 const showCreateDialog = ref(false)
 const showProjectDialog = ref(false)
+const showTransferDialog = ref(false)
 const saving = ref(false)
 const savingValues = ref(false)
 const savingProjects = ref(false)
 const creating = ref(false)
+const transferring = ref(false)
 
 // Edit state
 const editName = ref('')
 const editValues = ref<{ id?: string; name: string; color?: string }[]>([])
 const selectedProjectIds = ref<string[]>([])
+
+// Transfer state
+const transferSource = ref<{ id?: string; name: string; color?: string } | null>(null)
+const transferSourceIdx = ref(-1)
+const transferUsageCount = ref(0)
+const transferTargetId = ref('')
+
+const transferTargetOptions = computed(() => {
+  if (!selectedAttr.value || !transferSource.value) return []
+  // All values in this attribute except the one being transferred from
+  return editValues.value
+    .filter(v => v.id && v.id !== transferSource.value?.id)
+    .map(v => ({ id: v.id!, name: v.name, color: v.color }))
+})
 
 // Projects for assignment
 const allProjects = ref<{ id: string; key: string; name: string }[]>([])
@@ -276,6 +327,67 @@ function addNewValue() {
 
 function removeValue(idx: number) {
   editValues.value.splice(idx, 1)
+}
+
+async function handleRemoveValue(idx: number) {
+  const val = editValues.value[idx]
+  // Newly added values (no id) can be removed directly
+  if (!val.id) {
+    removeValue(idx)
+    return
+  }
+  // Check usage for existing values
+  try {
+    const res = await workItemAttributeApi.getValueUsage(selectedId.value, val.id)
+    if (res.code === 0 && res.data && res.data > 0) {
+      // Value is in use — show transfer dialog
+      transferSource.value = val
+      transferSourceIdx.value = idx
+      transferUsageCount.value = res.data
+      transferTargetId.value = ''
+      showTransferDialog.value = true
+    } else {
+      // Not in use — remove directly
+      removeValue(idx)
+    }
+  } catch {
+    // If usage check fails, still allow removal (backend will catch on save)
+    removeValue(idx)
+  }
+}
+
+async function executeTransfer() {
+  if (!transferTargetId.value || !transferSource.value?.id) {
+    Message.warning('请选择一个替代值')
+    return
+  }
+  transferring.value = true
+  try {
+    const res = await workItemAttributeApi.transferValue(
+      selectedId.value,
+      transferSource.value.id,
+      transferTargetId.value
+    )
+    if (res.code === 0) {
+      Message.success(`已将 ${res.data} 条工时记录转移到新值`)
+      // Now safe to remove from edit list
+      removeValue(transferSourceIdx.value)
+      showTransferDialog.value = false
+      transferSource.value = null
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '转移失败')
+  } finally {
+    transferring.value = false
+  }
+}
+
+function cancelTransfer() {
+  showTransferDialog.value = false
+  transferSource.value = null
+  transferSourceIdx.value = -1
+  transferUsageCount.value = 0
+  transferTargetId.value = ''
 }
 
 function toggleProject(id: string, checked: boolean) {
@@ -402,11 +514,18 @@ async function saveProjects() {
 function confirmDelete() {
   if (!selectedAttr.value) return
   const usage = selectedAttr.value.usageCount || 0
+  if (usage > 0) {
+    Modal.warning({
+      title: '无法删除',
+      content: `此属性已被 ${usage} 条工时记录引用。请先将所有属性值的引用转移到其他值（在值列表中逐个处理），或者等待所有引用清除后再删除。`,
+      okText: '我知道了',
+      hideCancel: true
+    })
+    return
+  }
   Modal.warning({
     title: '确认删除',
-    content: usage > 0
-      ? `此属性已被 ${usage} 条工时记录引用。删除后这些记录将丢失相关分类数据，且不可恢复。确定删除吗？`
-      : '确定删除此属性吗？此操作不可恢复。',
+    content: '确定删除此属性吗？此操作不可恢复。',
     okText: '确认删除',
     cancelText: '取消',
     okButtonProps: { status: 'danger' },
@@ -708,5 +827,35 @@ onMounted(() => {
 .project-name-text {
   font-size: 12px;
   color: var(--tf-text-primary);
+}
+
+/* Transfer dialog */
+.transfer-content {
+  padding: 4px 0;
+}
+
+.transfer-warning {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  margin: 0 0 8px 0;
+}
+
+.transfer-hint {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
+}
+
+.transfer-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transfer-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>

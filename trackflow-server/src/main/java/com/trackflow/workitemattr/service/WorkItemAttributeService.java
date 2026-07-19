@@ -273,6 +273,7 @@ public class WorkItemAttributeService {
 
     /**
      * 删除工作项属性
+     * FK 已改为 RESTRICT，需先清理所有引用才能删除
      */
     @Transactional
     public void delete(Long id) {
@@ -284,7 +285,19 @@ public class WorkItemAttributeService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "内置属性不可删除");
         }
 
-        // 级联删除：值、项目关联、工时关联（数据库 CASCADE 已处理）
+        // 检查是否有工时记录引用此属性
+        Long usageCount = entryValueMapper.selectCount(
+                new QueryWrapper<TimeEntryAttributeValue>().eq("attribute_id", id));
+        if (usageCount > 0) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "该属性已被 " + usageCount + " 条工时记录使用，请先将工时转移到其他属性或逐个删除属性值的引用");
+        }
+
+        // 先删除属性值（FK RESTRICT 要求先清理子表）
+        valueMapper.delete(new QueryWrapper<WorkItemAttributeValue>().eq("attribute_id", id));
+        // 删除项目关联
+        projectMapper.delete(new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", id));
+        // 最后删除属性本体
         attributeMapper.deleteById(id);
         log.info("删除工作项属性: id={}, name={}", id, attr.getName());
     }
@@ -404,6 +417,52 @@ public class WorkItemAttributeService {
                 new QueryWrapper<TimeEntryAttributeValue>().eq("attribute_id", attributeId)).intValue();
     }
 
+    /**
+     * 获取单个属性值的使用统计
+     */
+    public int getValueUsageCount(Long valueId) {
+        return entryValueMapper.selectCount(
+                new QueryWrapper<TimeEntryAttributeValue>().eq("value_id", valueId)).intValue();
+    }
+
+    /**
+     * 转移属性值引用：将所有引用 fromValueId 的工时记录迁移到 targetValueId
+     * 参考 OpenProject TimeEntryActivity#transfer_relations(to)
+     *
+     * @param attributeId 属性 ID（用于校验值归属）
+     * @param fromValueId 源值 ID
+     * @param targetValueId 目标值 ID
+     * @return 转移的工时记录数量
+     */
+    @Transactional
+    public int transferValueReferences(Long attributeId, Long fromValueId, Long targetValueId) {
+        // 校验源值存在且属于该属性
+        WorkItemAttributeValue fromValue = valueMapper.selectById(fromValueId);
+        if (fromValue == null || !fromValue.getAttributeId().equals(attributeId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源属性值不存在或不属于该属性");
+        }
+
+        // 校验目标值存在且属于同一属性
+        WorkItemAttributeValue targetValue = valueMapper.selectById(targetValueId);
+        if (targetValue == null || !targetValue.getAttributeId().equals(attributeId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "目标属性值不存在或不属于同一属性");
+        }
+
+        // 源和目标不能相同
+        if (fromValueId.equals(targetValueId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "源值和目标值不能相同");
+        }
+
+        // 批量迁移：UPDATE time_entry_attribute_value SET value_id = target WHERE value_id = from
+        int transferred = entryValueMapper.transferValueReferences(fromValueId, targetValueId);
+
+        log.info("属性值引用转移完成: attributeId={}, fromValueId={} ({}), targetValueId={} ({}), transferred={}",
+                attributeId, fromValueId, fromValue.getName(),
+                targetValueId, targetValue.getName(), transferred);
+
+        return transferred;
+    }
+
     // ========== 内部方法 ==========
 
     private void updateValues(Long attributeId, List<UpdateWorkItemAttributeDTO.ValueItem> items) {
@@ -441,12 +500,15 @@ public class WorkItemAttributeService {
             }
         }
 
-        // 删除不在新列表中的旧值
+        // 删除不在新列表中的旧值——但必须先检查引用
         for (WorkItemAttributeValue old : existing) {
             if (!newIds.contains(old.getId())) {
-                // 先删除工时关联
-                entryValueMapper.delete(
+                Long usageCount = entryValueMapper.selectCount(
                         new QueryWrapper<TimeEntryAttributeValue>().eq("value_id", old.getId()));
+                if (usageCount > 0) {
+                    throw new BusinessException(ErrorCode.CONFLICT,
+                            "值\"" + old.getName() + "\"已被 " + usageCount + " 条工时记录使用，请先转移到其他值再删除");
+                }
                 valueMapper.deleteById(old.getId());
             }
         }

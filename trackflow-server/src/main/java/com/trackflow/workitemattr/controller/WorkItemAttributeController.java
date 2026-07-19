@@ -3,6 +3,7 @@ package com.trackflow.workitemattr.controller;
 import com.trackflow.common.model.R;
 import com.trackflow.workitemattr.dto.CreateWorkItemAttributeDTO;
 import com.trackflow.workitemattr.dto.ManageAttributeProjectsDTO;
+import com.trackflow.workitemattr.dto.TransferAttributeValueDTO;
 import com.trackflow.workitemattr.dto.UpdateWorkItemAttributeDTO;
 import com.trackflow.workitemattr.service.WorkItemAttributeService;
 import com.trackflow.workitemattr.vo.WorkItemAttributeVO;
@@ -96,5 +97,29 @@ public class WorkItemAttributeController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Integer> getUsage(@PathVariable("id") Long id) {
         return R.ok(attributeService.getUsageCount(id));
+    }
+
+    /**
+     * 获取单个属性值的使用统计
+     */
+    @GetMapping("/{id}/values/{valueId}/usage")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<Integer> getValueUsage(@PathVariable("id") Long id, @PathVariable("valueId") Long valueId) {
+        return R.ok(attributeService.getValueUsageCount(valueId));
+    }
+
+    /**
+     * 转移属性值引用
+     * 将所有引用 fromValueId 的工时记录迁移到 targetValueId
+     * 参考 OpenProject TimeEntryActivity#transfer_relations(to)
+     */
+    @PostMapping("/{id}/values/{valueId}/transfer")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<Integer> transferValueReferences(
+            @PathVariable("id") Long id,
+            @PathVariable("valueId") Long valueId,
+            @Valid @RequestBody TransferAttributeValueDTO dto) {
+        int transferred = attributeService.transferValueReferences(id, valueId, dto.getTargetValueId());
+        return R.ok(transferred);
     }
 }

@@ -209,5 +209,17 @@ export const workItemAttributeApi = {
   /** 获取属性使用统计 */
   getUsage(id: string) {
     return request.get<any, R<number>>(`/work-item-attributes/${id}/usage`)
+  },
+
+  /** 获取单个属性值的使用统计 */
+  getValueUsage(id: string, valueId: string) {
+    return request.get<any, R<number>>(`/work-item-attributes/${id}/values/${valueId}/usage`)
+  },
+
+  /** 转移属性值引用（将所有工时记录从 sourceValueId 迁移到 targetValueId） */
+  transferValue(id: string, valueId: string, targetValueId: string) {
+    return request.post<any, R<number>>(`/work-item-attributes/${id}/values/${valueId}/transfer`, {
+      targetValueId
+    })
   }
 }

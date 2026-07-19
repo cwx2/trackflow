@@ -5,6 +5,7 @@ import com.trackflow.workitemattr.entity.TimeEntryAttributeValue;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.Map;
@@ -42,4 +43,18 @@ public interface TimeEntryAttributeValueMapper extends BaseMapper<TimeEntryAttri
     List<Map<String, Object>> selectWorkTypeForEntries(
             @Param("workTypeAttributeId") Long workTypeAttributeId,
             @Param("timeEntryIds") String timeEntryIds);
+
+    /**
+     * 转移属性值引用：将所有引用 fromValueId 的工时记录迁移到 targetValueId
+     * 参考 OpenProject TimeEntryActivity#transfer_relations(to)
+     *
+     * @return 受影响的行数
+     */
+    @Update("""
+        UPDATE time_entry_attribute_value
+        SET value_id = #{targetValueId}
+        WHERE value_id = #{fromValueId}
+    """)
+    int transferValueReferences(@Param("fromValueId") Long fromValueId,
+                                @Param("targetValueId") Long targetValueId);
 }
