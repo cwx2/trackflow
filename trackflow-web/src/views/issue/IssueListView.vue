@@ -902,15 +902,47 @@ const editQueryFiltersPreview = computed(() => {
   if (editQueryForm.replaceFilters) {
     return createQueryFiltersPreview.value.map(f => `[新] ${f}`)
   }
-  // Show existing filter conditions
-  const previews: string[] = []
-  for (const f of editQueryForm.filters) {
-    const field = f.field || f.name || '未知'
-    const op = f.operator || 'eq'
-    const val = Array.isArray(f.value) ? f.value.join(', ') : (f.value || '')
-    previews.push(`${field} ${op} ${val}`)
+  // Show existing filter conditions with human-readable labels
+  const fieldLabels: Record<string, string> = {
+    status: '状态', priority: '优先级', assignee: '负责人',
+    type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人'
   }
-  return previews
+  const operatorLabels: Record<string, string> = {
+    eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭'
+  }
+
+  return editQueryForm.filters.map((f: any) => {
+    const fieldLabel = fieldLabels[f.field] || f.field
+    const op = f.operator
+
+    if (op === 'open') return `${fieldLabel}: 未关闭`
+
+    let values: string
+    if (Array.isArray(f.value)) {
+      values = f.value.map((v: string) => {
+        if (v === '${currentUser}') return '我'
+        if (f.field === 'type') return issueTypeLabelMap[v] || v
+        if (f.field === 'priority') {
+          const map: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
+          return map[v] || v
+        }
+        if (f.field === 'status') {
+          const st = statusCache.value.find(s => s.code === v || s.id === v)
+          return st ? localizeStatusName(st.name) : v
+        }
+        if (f.field === 'project') {
+          const p = projectList.value.find(pr => pr.id === v)
+          return p ? p.name : v
+        }
+        return v
+      }).join(', ')
+    } else {
+      values = String(f.value || '')
+    }
+
+    const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
+    return `${fieldLabel}${opLabel} ${values}`
+  }).filter((l: string) => l && l.trim())
 })
 
 function openEditQueryModal(q: any) {
