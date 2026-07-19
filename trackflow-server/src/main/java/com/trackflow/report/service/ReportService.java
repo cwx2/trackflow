@@ -159,7 +159,8 @@ public class ReportService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
-        ReportExecuteResultVO result = executeInternal(report);
+        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        ReportExecuteResultVO result = executeInternal(report, scopeProjectIds);
         return buildCsv(result);
     }
 
@@ -307,6 +308,7 @@ public class ReportService {
 
     /**
      * 执行报表（带权限校验）
+     * 对全局报表（projectId=null），按当前用户可访问的项目范围限制数据。
      */
     public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
@@ -320,23 +322,52 @@ public class ReportService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
-        return executeInternal(report);
+        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        return executeInternal(report, scopeProjectIds);
     }
 
     /**
-     * 执行报表：根据报表配置生成数据
+     * 执行报表（系统内部调用，无用户权限限制）。
+     * 用于定时任务、系统通知等无用户上下文的场景。
      */
     public ReportExecuteResultVO execute(Long id) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
-        return executeInternal(report);
+        // 内部调用不限制项目范围，传入 null 表示无限制
+        List<Long> projectIds = report.getProjectId() != null
+                ? List.of(report.getProjectId())
+                : null;
+        return executeInternal(report, projectIds);
+    }
+
+    /**
+     * 解析报表执行的项目范围。
+     * <p>
+     * - 项目级报表：返回 [projectId]
+     * - 全局报表 + 系统管理员：返回所有活跃项目 ID（确保 SQL 走索引）
+     * - 全局报表 + 普通用户：返回用户可访问的项目 ID 列表
+     */
+    private List<Long> resolveExecutionScope(ReportDefinition report, Long userId) {
+        if (report.getProjectId() != null) {
+            return List.of(report.getProjectId());
+        }
+        // 全局报表：按用户权限限制项目范围
+        List<Long> ids = projectService.getAccessibleProjectIds(userId);
+        if (ids == null) {
+            // 系统管理员：显式查询所有活跃项目 ID（走索引而非全表扫描）
+            ids = projectService.getAllActiveProjectIds();
+        }
+        return ids;
     }
 
     /**
      * 增强版执行引擎
      * 支持：timeRange筛选 + filters组合筛选 + 双维度交叉 + 按项目分组 + chartType
+     *
+     * @param report     报表定义
+     * @param projectIds 项目范围限制（null 表示不限制——仅内部调用允许）
      */
-    private ReportExecuteResultVO executeInternal(ReportDefinition report) {
+    private ReportExecuteResultVO executeInternal(ReportDefinition report, List<Long> projectIds) {
         Map<String, Object> rawConfig = parseConfig(report.getConfig());
         ReportConfig config = ReportConfig.fromMap(rawConfig);
 
@@ -346,12 +377,7 @@ public class ReportService {
             groupBy = "status";
         }
 
-        // 构建项目 ID 列表
-        List<Long> projectIds = report.getProjectId() != null
-                ? List.of(report.getProjectId())
-                : null;
-
-        // 构建查询参数 Map
+        // 构建查询参数 Map（使用传入的 projectIds 限制范围）
         Map<String, Object> params = buildQueryParams(config, groupBy, projectIds);
 
         ReportExecuteResultVO result = new ReportExecuteResultVO();
