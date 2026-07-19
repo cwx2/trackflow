@@ -30,6 +30,22 @@
 
     <!-- Sprint 列表 -->
     <div class="sprint-list" v-if="loadingState === 'success' && sprints.length > 0">
+
+      <!-- 无活跃 Sprint 警告条 -->
+      <div v-if="!hasActiveSprint && plannedSprints.length > 0" class="no-active-sprint-warning">
+        <span class="warning-bar-icon">⚠️</span>
+        <span class="warning-bar-text">当前没有活跃的迭代。请开始一个已计划的迭代以跟踪团队工作进度。</span>
+        <a-button
+          size="mini"
+          type="primary"
+          class="warning-bar-action"
+          :disabled="!nextStartableSprint"
+          @click="nextStartableSprint && activateSprint(nextStartableSprint.id)"
+        >
+          开始迭代
+        </a-button>
+      </div>
+
       <!-- Active Sprints -->
       <div v-for="sprint in activeSprints" :key="sprint.id" class="sprint-card active" :class="{ 'sprint-overdue': sprint.overdue }">
         <div class="sprint-header">
@@ -192,7 +208,14 @@
         </div>
       </div>
 
-      <!-- Completed Sprints -->
+      <!-- Completed Sprints Section (collapsible) -->
+      <div v-if="completedSprints.length > 0" class="completed-section">
+        <div class="completed-section-header" @click="showCompletedSprints = !showCompletedSprints">
+          <span class="completed-toggle-icon">{{ showCompletedSprints ? '▾' : '▸' }}</span>
+          <span class="completed-section-title">已完成</span>
+          <span class="completed-section-count">{{ completedSprints.length }}</span>
+        </div>
+        <template v-if="showCompletedSprints">
       <div v-for="sprint in completedSprints" :key="sprint.id" class="sprint-card completed">
         <div class="sprint-header">
           <div class="sprint-info">
@@ -262,6 +285,8 @@
           :sprint-end-date="sprint.endDate"
           :is-completed="true"
         />
+      </div>
+        </template>
       </div>
     </div>
 
@@ -578,6 +603,7 @@ const showCreate = ref(false)
 const creating = ref(false)
 const creationPreview = ref<CreationPreviewVO | null>(null)
 const expandedCompletedSprints = ref<Set<string>>(new Set())
+const showCompletedSprints = ref(false)
 
 // ===== 编辑迭代相关 =====
 const showEdit = ref(false)
@@ -633,6 +659,9 @@ const activeSprints = computed(() => sprints.value.filter(s => s.status === 'act
 const plannedSprints = computed(() => sprints.value.filter(s => s.status === 'planned' || s.status === 'Planned'))
 const completedSprints = computed(() => sprints.value.filter(s => s.status === 'completed' || s.status === 'Completed'))
 const hasActiveSprint = computed(() => activeSprints.value.length > 0)
+const nextStartableSprint = computed(() => {
+  return plannedSprints.value.find(s => !isSprintNotStartable(s)) || null
+})
 
 // ===== 工具函数 =====
 
@@ -1470,5 +1499,68 @@ onMounted(async () => {
   color: var(--color-text-3);
   margin-left: 24px;
   line-height: 1.5;
+}
+
+/* ===== 无活跃 Sprint 警告条 ===== */
+.no-active-sprint-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(var(--warning-6), 0.08);
+  border: 1px solid rgba(var(--warning-6), 0.25);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+.warning-bar-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.warning-bar-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-1);
+  line-height: 1.4;
+}
+.warning-bar-action {
+  flex-shrink: 0;
+}
+
+/* ===== 已完成 Sprint 折叠区域 ===== */
+.completed-section {
+  margin-top: 8px;
+}
+.completed-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+  transition: background 0.15s;
+}
+.completed-section-header:hover {
+  background: var(--color-fill-1);
+}
+.completed-toggle-icon {
+  font-size: 11px;
+  color: var(--color-text-3);
+  width: 12px;
+  text-align: center;
+}
+.completed-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.completed-section-count {
+  font-size: 11px;
+  color: var(--color-text-4);
+  background: var(--color-fill-2);
+  padding: 1px 6px;
+  border-radius: 8px;
 }
 </style>
