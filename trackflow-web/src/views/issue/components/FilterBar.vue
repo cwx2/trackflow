@@ -23,9 +23,16 @@
     <!-- Search mode -->
     <div v-if="mode === 'search'" class="search-mode">
       <!-- Saved Query chip (displayed when a saved query is active) -->
-      <div v-if="activeQueryName" class="saved-query-chip" :class="{ clickable: true }">
+      <a-tooltip v-if="activeQueryName && !isOwnedQuery" :content="readonlyFilterTooltip" position="bottom" mini>
+        <div class="saved-query-chip">
+          <span class="sq-chip-icon">🔍</span>
+          <span class="sq-chip-name">{{ activeQueryName }}</span>
+          <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
+        </div>
+      </a-tooltip>
+      <div v-else-if="activeQueryName && isOwnedQuery" class="saved-query-chip clickable">
         <span class="sq-chip-icon">🔍</span>
-        <span class="sq-chip-name" @click="handleChipClick" :title="isOwnedQuery ? '点击编辑查询' : '点击查看筛选条件'">{{ activeQueryName }}</span>
+        <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
         <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
       </div>
       <input
@@ -37,20 +44,22 @@
         @input="onSearchInput"
       />
       <span v-if="searchKeyword" class="clear-btn" @click="clearSearch">✕</span>
-
-      <!-- Read-only filter conditions display (for non-owned queries) -->
-      <div v-if="showReadonlyFilters && readonlyFilterLabels && readonlyFilterLabels.length > 0" class="readonly-filters-row">
-        <span v-for="(label, i) in readonlyFilterLabels" :key="i" class="readonly-filter-chip">{{ label }}</span>
-      </div>
     </div>
 
     <!-- Filter mode -->
     <div v-else class="filter-mode">
       <div class="filter-chips">
         <!-- Saved Query chip (displayed when a saved query is active in filter mode) -->
-        <div v-if="activeQueryName" class="saved-query-chip filter-mode-chip" :class="{ clickable: true }">
+        <a-tooltip v-if="activeQueryName && !isOwnedQuery" :content="readonlyFilterTooltip" position="bottom" mini>
+          <div class="saved-query-chip filter-mode-chip">
+            <span class="sq-chip-icon">🔍</span>
+            <span class="sq-chip-name">{{ activeQueryName }}</span>
+            <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
+          </div>
+        </a-tooltip>
+        <div v-else-if="activeQueryName && isOwnedQuery" class="saved-query-chip filter-mode-chip clickable">
           <span class="sq-chip-icon">🔍</span>
-          <span class="sq-chip-name" @click="handleChipClick" :title="isOwnedQuery ? '点击编辑查询' : '点击查看筛选条件'">{{ activeQueryName }}</span>
+          <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
           <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
         </div>
 
@@ -357,23 +366,23 @@ function clearSearch() {
 }
 
 function handleClearQuery() {
-  showReadonlyFilters.value = false
   emit('clear-query')
 }
 
 // ==================== Saved Query chip click ====================
 
-const showReadonlyFilters = ref(false)
-
 function handleChipClick() {
-  if (props.isOwnedQuery) {
-    // Own query — emit chip-click so parent opens edit dialog
-    emit('chip-click')
-  } else {
-    // Not owned — toggle readonly filter conditions display
-    showReadonlyFilters.value = !showReadonlyFilters.value
-  }
+  // Only owned queries are clickable — emit chip-click so parent opens edit dialog
+  emit('chip-click')
 }
+
+// Tooltip content for non-owned queries (shows filter conditions on hover)
+const readonlyFilterTooltip = computed(() => {
+  if (!props.readonlyFilterLabels || props.readonlyFilterLabels.length === 0) {
+    return '无筛选条件'
+  }
+  return props.readonlyFilterLabels.join('　')
+})
 
 // ==================== Filter Mode - Add Filter ====================
 
@@ -731,9 +740,9 @@ watch(() => props.initialFilters, (filters) => {
   }
 }, { immediate: true })
 
-// Reset readonly filter display when the active query changes
+// Reset state when the active query changes
 watch(() => props.activeQueryName, () => {
-  showReadonlyFilters.value = false
+  // No state to reset — tooltip is declarative
 })
 
 /** 标记：正在应用外部过滤条件，阻止 mode watch 触发 emitFilters（避免冗余请求） */
@@ -767,7 +776,6 @@ function applyInitialFilters(filters: InitialFilter[]) {
 function clearAll() {
   searchKeyword.value = ''
   activeFilters.value = []
-  showReadonlyFilters.value = false
   // Reset to search mode
   suppressEmit = true
   mode.value = 'search'
@@ -908,29 +916,6 @@ defineExpose({ clearAll, setFilters })
 .sq-chip-close:hover {
   background: var(--tf-accent);
   color: #fff;
-}
-
-/* Read-only filter conditions row */
-.readonly-filters-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 0 2px;
-  width: 100%;
-  border-top: 1px solid var(--tf-border-secondary, rgba(255,255,255,0.06));
-  margin-top: 6px;
-}
-
-.readonly-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  background: var(--tf-bg-elevated, #2a2d33);
-  border-radius: 3px;
-  font-size: 11px;
-  color: var(--tf-text-secondary);
-  white-space: nowrap;
 }
 
 .search-input {
