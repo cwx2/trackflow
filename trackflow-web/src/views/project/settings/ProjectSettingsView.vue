@@ -20,7 +20,7 @@
       <!-- 设置标题 -->
       <div class="settings-title-section">
         <h1 class="settings-title">项目设置</h1>
-        <p class="settings-desc">管理项目基本信息、成员、自定义字段配置</p>
+        <p class="settings-desc">管理项目基本信息、成员、自定义字段和工作流配置</p>
       </div>
 
       <!-- Tab 导航 -->
@@ -44,6 +44,13 @@
           <ProjectSettingsCustomFields
             :project="project"
             :can-manage="canManageCustomFields"
+            :is-archived="isArchived"
+          />
+        </a-tab-pane>
+        <a-tab-pane key="workflow" title="工作流">
+          <ProjectSettingsWorkflow
+            :project="project"
+            :can-manage="canManageWorkflow"
             :is-archived="isArchived"
           />
         </a-tab-pane>
@@ -79,6 +86,7 @@ import ProjectSettingsGeneral from './ProjectSettingsGeneral.vue'
 import ProjectSettingsMembers from './ProjectSettingsMembers.vue'
 import ProjectSettingsCustomFields from './ProjectSettingsCustomFields.vue'
 import ProjectSettingsTimeTracking from './ProjectSettingsTimeTracking.vue'
+import ProjectSettingsWorkflow from './ProjectSettingsWorkflow.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,7 +100,7 @@ const projectPerms = ref<Set<string>>(new Set())
 // Active tab from route query or default
 const activeTab = computed(() => {
   const tab = route.query.tab as string
-  return ['general', 'members', 'custom-fields', 'time-tracking'].includes(tab) ? tab : 'general'
+  return ['general', 'members', 'custom-fields', 'workflow', 'time-tracking'].includes(tab) ? tab : 'general'
 })
 
 // Permissions
@@ -109,6 +117,11 @@ const canManageMembers = computed(() => {
 const canManageCustomFields = computed(() => {
   if (authStore.hasGlobalPermission('system:admin')) return true
   return projectPerms.value.has('project:manage_custom_fields')
+})
+
+const canManageWorkflow = computed(() => {
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  return projectPerms.value.has('project:manage_workflow')
 })
 
 const isArchived = computed(() => project.value?.status === 'archived')
