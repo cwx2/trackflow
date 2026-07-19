@@ -76,5 +76,18 @@ export const reportApi = {
   /** 执行报表（获取数据） */
   execute(id: string) {
     return request.get<any, R<ReportDataVO>>(`/reports/${id}/data`)
+  },
+
+  /** 克隆报表 */
+  clone(id: string) {
+    return request.post<any, R<ReportDefinitionVO>>(`/reports/${id}/clone`)
+  },
+
+  /** 导出报表为 CSV（返回 Blob） */
+  exportCsv(id: string) {
+    return request.get<any, Blob>(`/reports/${id}/export`, {
+      params: { format: 'csv' },
+      responseType: 'blob'
+    })
   }
 }

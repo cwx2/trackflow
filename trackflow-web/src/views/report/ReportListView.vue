@@ -55,14 +55,20 @@
           <span class="card-type-badge" :class="'type-' + report.type">{{ reportTypeLabel(report.type) }}</span>
           <div class="card-header-right">
             <span v-if="report.isSystem" class="system-badge">系统</span>
-            <a-dropdown v-if="canManageReport(report)" trigger="click" @click.stop>
+            <a-dropdown v-if="canShowMenu(report)" trigger="click" @click.stop>
               <span class="card-menu-btn" @click.stop>⋯</span>
               <template #content>
-                <a-doption @click="startEdit(report)">
-                  编辑
+                <a-doption v-if="canEditReport(report)" @click="startEdit(report)">
+                  <span class="menu-item"><span class="menu-icon">✏️</span>编辑</span>
                 </a-doption>
-                <a-doption v-if="!report.isSystem" @click="confirmDelete(report)">
-                  <span style="color: var(--tf-danger)">删除</span>
+                <a-doption @click="cloneReport(report)">
+                  <span class="menu-item"><span class="menu-icon">📋</span>克隆</span>
+                </a-doption>
+                <a-doption @click="exportReport(report)">
+                  <span class="menu-item"><span class="menu-icon">📥</span>导出 CSV</span>
+                </a-doption>
+                <a-doption v-if="canDeleteReport(report)" @click="confirmDelete(report)">
+                  <span class="menu-item menu-danger"><span class="menu-icon">🗑️</span>删除</span>
                 </a-doption>
               </template>
             </a-dropdown>
@@ -196,6 +202,25 @@ function canManageReport(report: ReportDefinitionVO): boolean {
   if (report.isSystem) {
     return authStore.hasGlobalPermission('system:admin')
   }
+  return canCreateReport.value
+}
+
+/** 是否显示「⋯」菜单（所有已认证用户都能看到克隆/导出） */
+function canShowMenu(_report: ReportDefinitionVO): boolean {
+  return true
+}
+
+/** 是否可编辑报表（系统报表仅管理员） */
+function canEditReport(report: ReportDefinitionVO): boolean {
+  if (report.isSystem) {
+    return authStore.hasGlobalPermission('system:admin')
+  }
+  return canCreateReport.value
+}
+
+/** 是否可删除报表（系统报表不可删除） */
+function canDeleteReport(report: ReportDefinitionVO): boolean {
+  if (report.isSystem) return false
   return canCreateReport.value
 }
 
@@ -351,6 +376,34 @@ function confirmDelete(report: ReportDefinitionVO) {
       }
     }
   })
+}
+
+async function cloneReport(report: ReportDefinitionVO) {
+  try {
+    const res = await reportApi.clone(report.id)
+    Message.success(`已克隆为「${res.data?.name || report.name + ' (副本)'}」`)
+    await loadReports()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '克隆失败')
+  }
+}
+
+async function exportReport(report: ReportDefinitionVO) {
+  try {
+    const blob = await reportApi.exportCsv(report.id)
+    // 触发浏览器下载
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${report.name}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    Message.success('报表已导出')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '导出失败')
+  }
 }
 
 function resetForm() {
@@ -817,5 +870,23 @@ function buildBarVerticalOption(data: ReportDataVO, c: typeof chartColors.value)
   font-size: 12px;
   color: var(--tf-text-tertiary);
   margin-left: 8px;
+}
+
+/* 菜单项 */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.menu-icon {
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
+}
+
+.menu-danger {
+  color: var(--tf-danger);
 }
 </style>
