@@ -5,6 +5,7 @@ import com.trackflow.project.entity.Project;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -33,4 +34,24 @@ public interface ProjectMapper extends BaseMapper<Project> {
      */
     @Select("SELECT id FROM project WHERE status = 'active'")
     List<Long> selectAllActiveProjectIds();
+
+    /**
+     * 原子更新 settings JSONB 中的单个 key（使用 PostgreSQL jsonb_set，无竞态条件）。
+     * 如果 settings 列为 NULL，先初始化为空 JSON 对象再设置。
+     */
+    @Update("UPDATE project SET settings = jsonb_set(COALESCE(settings, '{}')::jsonb, ARRAY[#{key}], #{value}::jsonb), " +
+            "updated_at = NOW(), updated_by = #{updatedBy} WHERE id = #{projectId}")
+    int updateSettingKey(@Param("projectId") Long projectId,
+                         @Param("key") String key,
+                         @Param("value") String value,
+                         @Param("updatedBy") Long updatedBy);
+
+    /**
+     * 原子删除 settings JSONB 中的单个 key（使用 PostgreSQL - 操作符）。
+     */
+    @Update("UPDATE project SET settings = COALESCE(settings, '{}')::jsonb - #{key}, " +
+            "updated_at = NOW(), updated_by = #{updatedBy} WHERE id = #{projectId}")
+    int removeSettingKey(@Param("projectId") Long projectId,
+                         @Param("key") String key,
+                         @Param("updatedBy") Long updatedBy);
 }

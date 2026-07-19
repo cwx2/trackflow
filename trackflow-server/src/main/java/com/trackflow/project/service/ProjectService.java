@@ -343,11 +343,12 @@ public class ProjectService {
             }
         }
 
-        // 查询负责人名称
+        // 查询负责人名称和状态
         if (project.getLeadId() != null) {
             SysUser lead = userMapper.selectById(project.getLeadId());
             if (lead != null) {
                 vo.setLeadName(lead.getDisplayName());
+                vo.setLeadStatus(lead.getStatus());
             }
         }
 
@@ -607,18 +608,7 @@ public class ProjectService {
      */
     @Transactional
     public void updateTrashSettings(Long id, int days) {
-        Project project = getById(id);
-        String existingSettings = project.getSettings();
-        try {
-            var root = (existingSettings != null && !existingSettings.isBlank())
-                    ? (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(existingSettings)
-                    : objectMapper.createObjectNode();
-            root.put("trashRetentionDays", days);
-            project.setSettings(objectMapper.writeValueAsString(root));
-        } catch (Exception e) {
-            project.setSettings("{\"trashRetentionDays\":" + days + "}");
-        }
-        projectMapper.updateById(project);
+        updateProjectSetting(id, "trashRetentionDays", days);
     }
 
     /**
@@ -1399,33 +1389,30 @@ public class ProjectService {
     }
 
     /**
-     * 更新项目 settings JSONB 中的指定字段。
+     * 原子更新项目 settings JSONB 中的指定字段。
+     * 使用 PostgreSQL jsonb_set 在数据库层完成更新，避免 Read-Modify-Write 竞态条件。
      */
     @Transactional
     public void updateProjectSetting(Long projectId, String key, Object value) {
-        Project project = getById(projectId);
-        String existingSettings = project.getSettings();
-        try {
-            var root = (existingSettings != null && !existingSettings.isBlank())
-                    ? (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(existingSettings)
-                    : objectMapper.createObjectNode();
-            if (value == null) {
-                root.remove(key);
-            } else if (value instanceof Long) {
-                root.put(key, (Long) value);
-            } else if (value instanceof Integer) {
-                root.put(key, (Integer) value);
-            } else if (value instanceof Boolean) {
-                root.put(key, (Boolean) value);
+        // 确保项目存在
+        getById(projectId);
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (value == null) {
+            projectMapper.removeSettingKey(projectId, key, currentUserId);
+        } else {
+            // 将 value 转为 JSON 字面值（PostgreSQL jsonb_set 需要 JSON 格式的 value）
+            String jsonValue;
+            if (value instanceof Boolean) {
+                jsonValue = value.toString();
+            } else if (value instanceof Number) {
+                jsonValue = value.toString();
             } else {
-                root.put(key, String.valueOf(value));
+                // 字符串值需要加引号
+                jsonValue = "\"" + value.toString().replace("\"", "\\\"") + "\"";
             }
-            project.setSettings(objectMapper.writeValueAsString(root));
-        } catch (Exception e) {
-            log.warn("更新项目 settings 失败，projectId={}, key={}", projectId, key, e);
-            return;
+            projectMapper.updateSettingKey(projectId, key, jsonValue, currentUserId);
         }
-        projectMapper.updateById(project);
     }
 
     /**
