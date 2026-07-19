@@ -698,8 +698,13 @@ function getActivateTooltip(sprint: SprintVO): string | undefined {
 }
 
 function viewSprintIssues(sprint: SprintVO) {
-  // 跳转到 Issue 列表，按 Sprint 筛选
-  router.push({ path: '/issues', query: { sprint: sprint.id, label: sprint.name } })
+  // 跳转到 Issue 列表，按 Sprint + 项目筛选
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const query: Record<string, string> = { sprint: sprint.id, label: sprint.name }
+  if (currentProject) {
+    query.project = currentProject.key
+  }
+  router.push({ path: '/issues', query })
 }
 
 function toggleCompletedBurndown(sprintId: string) {

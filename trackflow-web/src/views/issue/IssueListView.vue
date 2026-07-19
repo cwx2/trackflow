@@ -2489,8 +2489,15 @@ function applyDashboardFilter() {
     })
   }
 
-  // projectId: 项目筛选（从报表页面跳转时带入）
-  if (route.query.projectId) {
+  // project (key) or projectId: 项目筛选（从 Sprint/报表页面跳转时带入）
+  if (route.query.project) {
+    const queryProject = String(route.query.project)
+    const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject)
+    if (matched) {
+      filterProject.value = matched.id
+      activeProjectId.value = matched.id
+    }
+  } else if (route.query.projectId) {
     const pid = String(route.query.projectId)
     filterProject.value = pid
     activeProjectId.value = pid
