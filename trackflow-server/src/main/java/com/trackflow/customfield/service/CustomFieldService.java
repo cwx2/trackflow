@@ -834,6 +834,22 @@ public class CustomFieldService {
         // Load project-level overrides for required check
         Map<Long, CustomFieldProject> projectOverrides = getProjectFieldConditions(projectId);
 
+        // Field-level editability check (updatableByRoles enforcement)
+        List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
+        if (userRoleIds != null) { // null = system admin, skip check
+            for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
+                CustomFieldProject mapping = projectOverrides.get(entry.getKey());
+                if (mapping == null) continue;
+                List<Long> updatableRoles = parseRoleIds(mapping.getUpdatableByRoles());
+                if (!isUpdatableByUser(updatableRoles, userRoleIds)) {
+                    CustomFieldDefinition field = fieldMap.get(entry.getKey());
+                    String fieldName = field != null ? field.getName() : "ID:" + entry.getKey();
+                    throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                            "您没有编辑字段「" + fieldName + "」的权限");
+                }
+            }
+        }
+
         List<CustomFieldValidationEngine.FieldValidationError> allErrors = new ArrayList<>();
 
         for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
