@@ -364,6 +364,11 @@ public class ProjectService {
         // 归档项目不允许修改
         assertProjectActive(id);
 
+        // 项目 Key 创建后不可修改——明确拒绝变更请求
+        if (dto.getKey() != null && !dto.getKey().equals(project.getKey())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "项目标识（Key）创建后不可修改");
+        }
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         // 名称变更

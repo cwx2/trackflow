@@ -17,4 +17,10 @@ public class UpdateProjectDTO {
 
     @Pattern(regexp = "^(private|internal|public)$", message = "可见性无效，可选值：private、internal、public")
     private String visibility;
+
+    /**
+     * 项目标识（Key）——创建后不可修改。
+     * 此字段用于接收请求中的 key 值，以便后端检测并明确拒绝变更请求。
+     */
+    private String key;
 }
