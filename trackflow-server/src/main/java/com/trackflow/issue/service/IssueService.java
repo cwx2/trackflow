@@ -175,8 +175,8 @@ public class IssueService {
             ancestorRefreshService.refreshAncestorChain(issue.getParentId());
         }
 
-        // 触发 on-create 自动化规则（通过事件，解耦）
-        eventPublisher.publishEvent(new WorkflowRuleEvent.IssueCreated(issue));
+        // 触发 on-create 自动化规则（事务提交后异步执行，通过事件解耦）
+        eventPublisher.publishEvent(new WorkflowRuleEvent.IssueCreated(issue.getId(), issue.getProjectId()));
 
         return issue;
     }
@@ -1928,26 +1928,27 @@ public class IssueService {
     }
 
     /**
-     * 触发字段变更自动化规则：检查 DTO 中哪些字段被实际修改了，对每个变更字段触发规则
+     * 触发字段变更自动化规则：检查 DTO 中哪些字段被实际修改了，对每个变更字段触发规则。
+     * 事件仅传递 ID，规则引擎在事务提交后异步从 DB 重新加载最新实体执行。
      */
     private void fireFieldChangeRules(Issue issue, UpdateIssueDTO dto) {
         if (dto.getIssueType() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "issue_type", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "issue_type", null));
         }
         if (dto.getPriority() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "priority", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "priority", null));
         }
         if (dto.getAssigneeId() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "assignee", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "assignee", null));
         }
         if (dto.getSprintId() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "sprint", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "sprint", null));
         }
         if (dto.getTitle() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "title", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "title", null));
         }
         if (dto.getDueDate() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "due_date", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "due_date", null));
         }
     }
 

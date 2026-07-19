@@ -16,13 +16,13 @@ import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -36,12 +36,64 @@ public class WorkflowRuleEngine {
     private final IssueTagRelationMapper tagRelationMapper;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 触发 on-create 规则。
+     * <p>
+     * 从 DB 重新加载 issue 实体（确保获取最新已提交的状态），
+     * 每条规则在独立上下文中执行，单条失败不影响其他规则。
+     */
+    @Transactional
+    public void fireOnCreate(Long issueId, Long projectId) {
+        List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "issue_created");
+        if (rules.isEmpty()) return;
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) {
+            log.warn("[RuleEngine] on-create: issue {} 不存在或已删除，跳过规则执行", issueId);
+            return;
+        }
+
+        evaluateAndExecute(rules, issue);
+    }
+
+    /**
+     * 触发 on-field-changed 规则。
+     * <p>
+     * 从 DB 重新加载 issue 实体，过滤匹配 changedField 的规则后执行。
+     */
+    @Transactional
+    public void fireOnFieldChanged(Long issueId, Long projectId, String changedField, String oldValue) {
+        List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "field_changed");
+        if (rules.isEmpty()) return;
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) {
+            log.warn("[RuleEngine] on-field-changed: issue {} 不存在或已删除，跳过规则执行", issueId);
+            return;
+        }
+
+        List<WorkflowRule> matching = rules.stream()
+                .filter(r -> r.getTriggerField() == null || r.getTriggerField().equals(changedField))
+                .toList();
+        if (matching.isEmpty()) return;
+
+        evaluateAndExecute(matching, issue);
+    }
+
+    /**
+     * 兼容旧接口：直接传入 Issue 对象触发 on-create 规则。
+     * 仅供 {@link ScheduledRuleService} 等内部调度场景使用（已在独立事务中，不存在共享引用问题）。
+     */
     public void fireOnCreate(Issue issue) {
         List<WorkflowRule> rules = ruleMapper.findEnabledRules(issue.getProjectId(), "issue_created");
         if (rules.isEmpty()) return;
         evaluateAndExecute(rules, issue);
     }
 
+    /**
+     * 兼容旧接口：直接传入 Issue 对象触发 on-field-changed 规则。
+     * 仅供内部调度场景使用。
+     */
     public void fireOnFieldChanged(Issue issue, String changedField, String oldValue) {
         List<WorkflowRule> rules = ruleMapper.findEnabledRules(issue.getProjectId(), "field_changed");
         if (rules.isEmpty()) return;
@@ -59,7 +111,8 @@ public class WorkflowRuleEngine {
                     executeActions(rule, issue);
                 }
             } catch (Exception e) {
-                log.warn("[RuleEngine] Rule '{}' failed: {}", rule.getName(), e.getMessage());
+                log.warn("[RuleEngine] Rule '{}' (id={}) failed for issue {}: {}",
+                        rule.getName(), rule.getId(), issue.getId(), e.getMessage());
             }
         }
     }
@@ -75,7 +128,7 @@ public class WorkflowRuleEngine {
             }
             return true;
         } catch (Exception e) {
-            log.warn("[RuleEngine] Condition parse error: {}", e.getMessage());
+            log.warn("[RuleEngine] Condition parse error for rule '{}': {}", rule.getName(), e.getMessage());
             return false;
         }
     }
@@ -124,7 +177,7 @@ public class WorkflowRuleEngine {
             }
             if (modified) issueMapper.updateById(issue);
         } catch (Exception e) {
-            log.warn("[RuleEngine] Action exec error: {}", e.getMessage());
+            log.warn("[RuleEngine] Action exec error for rule '{}': {}", rule.getName(), e.getMessage());
         }
     }
 
