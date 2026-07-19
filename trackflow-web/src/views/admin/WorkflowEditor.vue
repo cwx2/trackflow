@@ -290,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, h } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconSettings, IconInfoCircle, IconHistory, IconSearch } from '@arco-design/web-vue/es/icon'
@@ -358,6 +358,12 @@ const pendingChangesCount = computed(() => {
 
 // 乐观锁版本号（从 GET 接口获取，保存时回传）
 const matrixVersion = ref<number | null>(null)
+
+// 当前选中角色名称（用于确认对话框展示）
+const selectedRoleName = computed(() => {
+  const role = roles.value.find(r => r.id === selectedRole.value)
+  return role?.name || '未选择角色'
+})
 
 // 动作指示器: "fromId-toId" 有配置动作的转换路径
 const actionPaths = reactive(new Set<string>())
@@ -652,11 +658,149 @@ async function saveMatrix() {
   const modeLabel = selectedMode.value === 'normal' ? '基础规则'
     : selectedMode.value === 'author' ? '创建者额外规则' : '负责人额外规则'
 
+  // 计算变更详情
+  const added: { fromId: string; toId: string; fromName: string; toName: string }[] = []
+  const removed: { fromId: string; toId: string; fromName: string; toName: string }[] = []
+
+  const statusMap = new Map(statuses.value.map(s => [s.id, s]))
+
+  for (const key of allowedTransitions) {
+    if (!originalTransitions.has(key)) {
+      const [fromId, toId] = key.split('-')
+      const fromStatus = statusMap.get(fromId)
+      const toStatus = statusMap.get(toId)
+      added.push({
+        fromId, toId,
+        fromName: fromStatus ? localizeStatusName(fromStatus.name) : fromId,
+        toName: toStatus ? localizeStatusName(toStatus.name) : toId
+      })
+    }
+  }
+  for (const key of originalTransitions) {
+    if (!allowedTransitions.has(key)) {
+      const [fromId, toId] = key.split('-')
+      const fromStatus = statusMap.get(fromId)
+      const toStatus = statusMap.get(toId)
+      removed.push({
+        fromId, toId,
+        fromName: fromStatus ? localizeStatusName(fromStatus.name) : fromId,
+        toName: toStatus ? localizeStatusName(toStatus.name) : toId
+      })
+    }
+  }
+
+  const totalChanges = added.length + removed.length
+
+  // 获取影响分析数据（仅在有删除转换时）
+  let impactData: Record<string, number> | null = null
+  let totalAffected = 0
+  let impactLoading = false
+
+  if (removed.length > 0) {
+    try {
+      impactLoading = true
+      // 取出删除转换的源状态 ID（去重）
+      const affectedStatusIds = [...new Set(removed.map(r => Number(r.fromId)))]
+      const projectIdNum = selectedProject.value ? Number(selectedProject.value) : 0
+      const res = await workflowApi.analyzeImpact({
+        statusIds: affectedStatusIds,
+        projectId: projectIdNum > 0 ? projectIdNum : undefined,
+        issueType: selectedType.value !== '*' ? selectedType.value : undefined
+      })
+      if (res.code === 0 && res.data) {
+        impactData = res.data.statusIssueCounts
+        totalAffected = res.data.totalAffectedIssues
+      }
+    } catch {
+      // 影响分析失败不阻断保存流程，仅展示变更摘要
+    } finally {
+      impactLoading = false
+    }
+  }
+
+  // 构建确认对话框的内容 VNode
+  const renderContent = () => {
+    const children: any[] = []
+
+    // 变更摘要
+    children.push(h('div', { style: 'margin-bottom: 12px; font-weight: 500; color: var(--color-text-1);' },
+      `本次变更（${totalChanges} 条规则）：`
+    ))
+
+    // 显示新增的转换
+    if (added.length > 0) {
+      const addedItems = added.slice(0, 5).map(item =>
+        h('div', { style: 'padding: 2px 0; color: var(--color-text-2); font-size: 13px;' }, [
+          h('span', { style: 'color: #3fb950; margin-right: 6px;' }, '＋'),
+          `新增转换：${item.fromName} → ${item.toName}`
+        ])
+      )
+      if (added.length > 5) {
+        addedItems.push(h('div', { style: 'padding: 2px 0; color: var(--color-text-3); font-size: 12px;' },
+          `…及另外 ${added.length - 5} 条新增转换`
+        ))
+      }
+      children.push(...addedItems)
+    }
+
+    // 显示删除的转换
+    if (removed.length > 0) {
+      const removedItems = removed.slice(0, 5).map(item =>
+        h('div', { style: 'padding: 2px 0; color: var(--color-text-2); font-size: 13px;' }, [
+          h('span', { style: 'color: #f85149; margin-right: 6px;' }, '✕'),
+          `删除转换：${item.fromName} → ${item.toName}`
+        ])
+      )
+      if (removed.length > 5) {
+        removedItems.push(h('div', { style: 'padding: 2px 0; color: var(--color-text-3); font-size: 12px;' },
+          `…及另外 ${removed.length - 5} 条删除转换`
+        ))
+      }
+      children.push(...removedItems)
+    }
+
+    // 影响分析（仅在有删除转换时显示）
+    if (removed.length > 0 && impactData) {
+      children.push(h('div', {
+        style: 'margin-top: 16px; padding: 10px 12px; border-radius: 6px; background: var(--color-warning-light-1); border: 1px solid var(--color-warning-light-3);'
+      }, [
+        h('div', { style: 'font-weight: 500; color: var(--color-warning-6); margin-bottom: 6px; font-size: 13px;' },
+          '⚠️ 影响分析'
+        ),
+        ...Object.entries(impactData)
+          .filter(([_, count]) => count > 0)
+          .map(([statusId, count]) => {
+            const status = statusMap.get(statusId)
+            const statusName = status ? localizeStatusName(status.name) : statusId
+            return h('div', { style: 'padding: 2px 0; color: var(--color-text-2); font-size: 13px;' },
+              `当前有 ${count} 个工单处于"${statusName}"状态`)
+          }),
+        totalAffected > 0
+          ? h('div', { style: 'padding-top: 4px; color: var(--color-text-3); font-size: 12px;' },
+              `这些工单的"${selectedRoleName.value}"角色用户将失去被删除的转换选项`)
+          : null
+      ].filter(Boolean)))
+    } else if (removed.length > 0 && !impactData) {
+      // 影响分析加载失败时的提示
+      children.push(h('div', {
+        style: 'margin-top: 12px; color: var(--color-text-3); font-size: 12px;'
+      }, '（影响分析数据暂不可用）'))
+    }
+
+    // 模式+筛选上下文信息
+    children.push(h('div', {
+      style: 'margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--color-border-2); color: var(--color-text-3); font-size: 12px;'
+    }, `适用范围：${modeLabel} / ${selectedRoleName.value} / ${selectedProject.value === '0' ? '全局' : '项目级'}`))
+
+    return h('div', { style: 'line-height: 1.6;' }, children)
+  }
+
   Modal.confirm({
-    title: '确认更新工作流',
-    content: `此操作将替换当前筛选条件下"${modeLabel}"模式的所有转换规则，确认保存？`,
+    title: `确认应用 ${totalChanges} 项工作流变更`,
+    content: renderContent,
     okText: '确认保存',
     cancelText: '取消',
+    width: 520,
     async onOk() {
       const transitions = Array.from(allowedTransitions).map(key => {
         const [from, to] = key.split('-')

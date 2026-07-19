@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO } from './types'
+import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO, WorkflowImpactAnalysisVO } from './types'
 
 /**
  * 工作流模块 API
@@ -44,5 +44,14 @@ export const workflowApi = {
     pageSize?: number
   }) {
     return request.get<any, R<PageResult<WorkflowActivityVO>>>(`/projects/${projectId}/workflow-activities`, { params })
+  },
+
+  /** 工作流影响分析：统计被删除转换的源状态下有多少工单 */
+  analyzeImpact(data: {
+    statusIds: number[]
+    projectId?: number
+    issueType?: string
+  }) {
+    return request.post<any, R<WorkflowImpactAnalysisVO>>('/workflows/impact-analysis', data)
   }
 }

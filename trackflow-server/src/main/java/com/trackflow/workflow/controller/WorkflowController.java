@@ -8,10 +8,12 @@ import com.trackflow.system.vo.RoleVO;
 import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
+import com.trackflow.workflow.dto.WorkflowImpactAnalysisDTO;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.WorkflowActivityVO;
+import com.trackflow.workflow.vo.WorkflowImpactAnalysisVO;
 import com.trackflow.workflow.vo.WorkflowMatrixVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @RestController
@@ -117,5 +120,32 @@ public class WorkflowController {
         Page<WorkflowActivity> page = workflowService.listActivities(query);
         List<WorkflowActivityVO> voList = workflowConverter.toActivityVOList(page.getRecords());
         return R.ok(new PageResult<>(voList, page.getTotal(), (int) page.getCurrent(), (int) page.getSize()));
+    }
+
+    /**
+     * 工作流影响分析：统计被删除转换的源状态下有多少工单。
+     * 用于保存确认对话框展示"爆炸半径"。
+     * 权限：任意系统管理员或拥有 manage_workflow 权限的用户。
+     */
+    @PostMapping("/workflows/impact-analysis")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<WorkflowImpactAnalysisVO> analyzeImpact(@Valid @RequestBody WorkflowImpactAnalysisDTO dto) {
+        Long effectiveProjectId = (dto.getProjectId() != null && dto.getProjectId() > 0)
+                ? dto.getProjectId() : null;
+        String effectiveIssueType = (dto.getIssueType() != null && !"*".equals(dto.getIssueType()))
+                ? dto.getIssueType() : null;
+
+        Map<Long, Long> counts = workflowService.getIssueCountByStatuses(
+                dto.getStatusIds(), effectiveProjectId, effectiveIssueType);
+
+        // 转换为 String key（前端 ID 为 String）
+        Map<String, Long> stringCounts = new java.util.LinkedHashMap<>();
+        long total = 0;
+        for (Map.Entry<Long, Long> entry : counts.entrySet()) {
+            stringCounts.put(String.valueOf(entry.getKey()), entry.getValue());
+            total += entry.getValue();
+        }
+
+        return R.ok(new WorkflowImpactAnalysisVO(stringCounts, total));
     }
 }

@@ -569,6 +569,42 @@ public class WorkflowService {
     }
 
     /**
+     * 工作流影响分析：统计指定状态下的工单数量。
+     * 用于保存工作流前的确认对话框，让管理员了解变更的"爆炸半径"。
+     *
+     * @param statusIds 需要统计的源状态 ID 列表
+     * @param projectId 项目 ID（null 表示全局，统计所有项目）
+     * @param issueType 工单类型（null 或 "*" 表示所有类型）
+     * @return Map: statusId → issueCount
+     */
+    public Map<Long, Long> getIssueCountByStatuses(List<Long> statusIds, Long projectId, String issueType) {
+        if (statusIds == null || statusIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // 对每个 statusId 单独统计（数量通常不超过 18 个状态）
+        Map<Long, Long> result = new java.util.LinkedHashMap<>();
+        for (Long statusId : statusIds) {
+            LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(Issue::getStatusId, statusId);
+            wrapper.isNull(Issue::getDeletedAt);
+
+            if (projectId != null) {
+                wrapper.eq(Issue::getProjectId, projectId);
+            }
+
+            if (issueType != null && !"*".equals(issueType) && !issueType.isBlank()) {
+                wrapper.eq(Issue::getIssueType, issueType);
+            }
+
+            long count = issueMapper.selectCount(wrapper);
+            result.put(statusId, count);
+        }
+
+        return result;
+    }
+
+    /**
      * 记录详细的工作流变更审计日志（含 diff 明细）
      */
     private void recordDetailedActivity(Long projectId, String issueType, Long roleId,

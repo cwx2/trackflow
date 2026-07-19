@@ -578,6 +578,14 @@ export interface TransitionChangeItem {
   toStatus: string
 }
 
+/** 工作流影响分析响应 */
+export interface WorkflowImpactAnalysisVO {
+  /** 状态 ID → 该状态下的工单数量 */
+  statusIssueCounts: Record<string, number>
+  /** 总影响工单数 */
+  totalAffectedIssues: number
+}
+
 // ========== 状态转换结果 ==========
 
 /** 自动化动作执行结果（TransitionActionEngine 返回） */
