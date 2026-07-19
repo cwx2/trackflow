@@ -128,6 +128,14 @@ public class WorkflowRuleEngine {
         }
     }
 
+    /**
+     * 供 ScheduledRuleService 调用——对单个工单执行规则的所有动作。
+     * 与内部 executeActions 逻辑相同，但为 public 暴露。
+     */
+    public void executeActionsForSchedule(WorkflowRule rule, Issue issue) {
+        executeActions(rule, issue);
+    }
+
     private boolean doSetField(JsonNode act, Issue issue, WorkflowRule rule) {
         String field = textOf(act, "field");
         String value = textOf(act, "value");

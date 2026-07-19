@@ -35,6 +35,12 @@ public class WorkflowRuleVO {
 
     private Integer sortOrder;
 
+    /** 调度表达式（on_schedule 类型） */
+    private String cronExpression;
+
+    /** 上次执行时间（on_schedule 类型） */
+    private LocalDateTime lastExecutedAt;
+
     private String createdBy;
 
     private LocalDateTime createdAt;

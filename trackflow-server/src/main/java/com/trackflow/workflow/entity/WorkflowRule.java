@@ -8,7 +8,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 工作流自动化规则实体 —— 字段变更时自动执行动作。
+ * 工作流自动化规则实体 —— 支持 on_change 和 on_schedule 两种规则类型。
  */
 @Data
 @TableName(value = "workflow_rule", autoResultMap = true)
@@ -26,16 +26,16 @@ public class WorkflowRule implements Serializable {
     /** 规则描述 */
     private String description;
 
-    /** 规则类型：on_change */
+    /** 规则类型：on_change / on_schedule */
     private String ruleType;
 
-    /** 触发事件：issue_created / field_changed */
+    /** 触发事件：issue_created / field_changed（on_change）；cron 表达式值（on_schedule）*/
     private String triggerEvent;
 
     /** 触发字段名（field_changed 时可指定），NULL=所有字段 */
     private String triggerField;
 
-    /** 前置条件 JSON 数组 */
+    /** 前置条件 JSON 数组（on_schedule 时为工单匹配条件） */
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String conditionJson;
 
@@ -48,6 +48,12 @@ public class WorkflowRule implements Serializable {
 
     /** 排序字段 */
     private Integer sortOrder;
+
+    /** 调度表达式：daily / weekly / hourly 或标准 cron（仅 on_schedule） */
+    private String cronExpression;
+
+    /** 上次执行时间（仅 on_schedule） */
+    private LocalDateTime lastExecutedAt;
 
     /** 创建者 */
     private Long createdBy;

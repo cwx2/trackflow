@@ -63,7 +63,14 @@ public class WorkflowRuleService {
      */
     @Transactional
     public WorkflowRuleVO createRule(Long projectId, WorkflowRuleDTO dto) {
-        validateTriggerEvent(dto.getTriggerEvent());
+        String ruleType = dto.getRuleType() != null ? dto.getRuleType() : "on_change";
+        if ("on_change".equals(ruleType)) {
+            validateTriggerEvent(dto.getTriggerEvent());
+        } else if ("on_schedule".equals(ruleType)) {
+            validateCronExpression(dto.getCronExpression());
+        } else {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的规则类型: " + ruleType);
+        }
         validateJson(dto.getConditionJson(), "条件");
         validateJson(dto.getActionJson(), "动作");
 
@@ -71,20 +78,21 @@ public class WorkflowRuleService {
         rule.setProjectId(projectId != null && projectId > 0 ? projectId : null);
         rule.setName(dto.getName().trim());
         rule.setDescription(dto.getDescription());
-        rule.setRuleType("on_change");
+        rule.setRuleType(ruleType);
         rule.setTriggerEvent(dto.getTriggerEvent());
         rule.setTriggerField(dto.getTriggerField());
         rule.setConditionJson(dto.getConditionJson());
         rule.setActionJson(dto.getActionJson());
         rule.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : true);
         rule.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 0);
+        rule.setCronExpression(dto.getCronExpression());
         rule.setCreatedBy(SecurityUtils.getCurrentUserId());
         rule.setCreatedAt(LocalDateTime.now());
         rule.setUpdatedAt(LocalDateTime.now());
 
         ruleMapper.insert(rule);
-        log.info("[WorkflowRule] Created rule '{}' (id={}) for project={}",
-                rule.getName(), rule.getId(), rule.getProjectId());
+        log.info("[WorkflowRule] Created {} rule '{}' (id={}) for project={}",
+                ruleType, rule.getName(), rule.getId(), rule.getProjectId());
         return toVO(rule);
     }
 
@@ -98,16 +106,23 @@ public class WorkflowRuleService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
 
-        validateTriggerEvent(dto.getTriggerEvent());
+        String ruleType = dto.getRuleType() != null ? dto.getRuleType() : rule.getRuleType();
+        if ("on_change".equals(ruleType)) {
+            validateTriggerEvent(dto.getTriggerEvent());
+        } else if ("on_schedule".equals(ruleType)) {
+            validateCronExpression(dto.getCronExpression());
+        }
         validateJson(dto.getConditionJson(), "条件");
         validateJson(dto.getActionJson(), "动作");
 
         rule.setName(dto.getName().trim());
         rule.setDescription(dto.getDescription());
+        rule.setRuleType(ruleType);
         rule.setTriggerEvent(dto.getTriggerEvent());
         rule.setTriggerField(dto.getTriggerField());
         rule.setConditionJson(dto.getConditionJson());
         rule.setActionJson(dto.getActionJson());
+        rule.setCronExpression(dto.getCronExpression());
         if (dto.getEnabled() != null) {
             rule.setEnabled(dto.getEnabled());
         }
@@ -159,12 +174,30 @@ public class WorkflowRuleService {
         }
     }
 
+    private static final java.util.Set<String> VALID_SCHEDULES =
+            java.util.Set.of("hourly", "daily", "weekly");
+
+    private void validateCronExpression(String cron) {
+        if (cron == null || cron.isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "调度表达式不能为空");
+        }
+        // 支持预设值和标准 cron（5 段或 6 段）
+        if (VALID_SCHEDULES.contains(cron.toLowerCase())) {
+            return;
+        }
+        // 简单校验 cron 格式（5-6 个段，空格分隔）
+        String[] parts = cron.trim().split("\\s+");
+        if (parts.length < 5 || parts.length > 6) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "无效的调度表达式: " + cron + "，支持 hourly/daily/weekly 或标准 cron 格式");
+        }
+    }
+
     private void validateJson(String json, String fieldLabel) {
         if (json == null || json.isBlank()) {
             return;
         }
         try {
-            // 简单校验是否为合法 JSON 数组
             var node = objectMapper.readTree(json);
             if (!node.isArray()) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, fieldLabel + "必须为 JSON 数组格式");
@@ -189,6 +222,8 @@ public class WorkflowRuleService {
         vo.setActionJson(rule.getActionJson());
         vo.setEnabled(rule.getEnabled());
         vo.setSortOrder(rule.getSortOrder());
+        vo.setCronExpression(rule.getCronExpression());
+        vo.setLastExecutedAt(rule.getLastExecutedAt());
         vo.setCreatedBy(rule.getCreatedBy() != null ? String.valueOf(rule.getCreatedBy()) : null);
         vo.setCreatedAt(rule.getCreatedAt());
         vo.setUpdatedAt(rule.getUpdatedAt());

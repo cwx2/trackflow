@@ -17,6 +17,9 @@ public class WorkflowRuleDTO {
 
     private String description;
 
+    /** 规则类型：on_change / on_schedule */
+    private String ruleType;
+
     @NotBlank(message = "触发事件不能为空")
     private String triggerEvent;
 
@@ -36,4 +39,7 @@ public class WorkflowRuleDTO {
 
     /** 排序字段 */
     private Integer sortOrder;
+
+    /** 调度表达式：daily / weekly / hourly 或标准 cron（仅 on_schedule） */
+    private String cronExpression;
 }

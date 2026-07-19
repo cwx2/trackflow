@@ -254,10 +254,20 @@
     </div>
 
     <!-- 自动化规则面板 -->
-    <WorkflowRulePanel
-      v-show="activeMainTab === 'rules'"
-      :project-id="selectedProject"
-    />
+    <div v-show="activeMainTab === 'rules'" class="rules-tab-container">
+      <a-radio-group v-model="activeRuleSubTab" type="button" class="rule-sub-tabs">
+        <a-radio value="on_change">字段变更规则</a-radio>
+        <a-radio value="on_schedule">定时规则</a-radio>
+      </a-radio-group>
+      <WorkflowRulePanel
+        v-show="activeRuleSubTab === 'on_change'"
+        :project-id="selectedProject"
+      />
+      <ScheduledRulePanel
+        v-show="activeRuleSubTab === 'on_schedule'"
+        :project-id="selectedProject"
+      />
+    </div>
 
     <!-- 动作配置面板 -->
     <TransitionActionPanel
@@ -289,9 +299,11 @@ import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
 import WorkflowActivityDrawer from './WorkflowActivityDrawer.vue'
 import WorkflowRulePanel from './WorkflowRulePanel.vue'
+import ScheduledRulePanel from './ScheduledRulePanel.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const activeMainTab = ref('matrix')
+const activeRuleSubTab = ref('on_change')
 const selectedProject = ref('0')
 const selectedType = ref('*')
 const selectedRole = ref('')
@@ -1027,5 +1039,13 @@ onBeforeRouteLeave(() => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.rules-tab-container {
+  padding-top: 8px;
+}
+
+.rule-sub-tabs {
+  margin-bottom: 16px;
 }
 </style>

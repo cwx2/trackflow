@@ -2,7 +2,9 @@ package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
+import com.trackflow.workflow.service.ScheduledRuleService;
 import com.trackflow.workflow.service.WorkflowRuleService;
+import com.trackflow.workflow.vo.WorkflowRuleExecutionLogVO;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import java.util.List;
 public class WorkflowRuleController {
 
     private final WorkflowRuleService ruleService;
+    private final ScheduledRuleService scheduledRuleService;
 
     /**
      * 获取项目规则列表（含全局规则）
@@ -79,5 +82,25 @@ public class WorkflowRuleController {
     @PreAuthorize("isAuthenticated()")
     public R<WorkflowRuleVO> toggleRule(@PathVariable("id") Long id) {
         return R.ok(ruleService.toggleRule(id));
+    }
+
+    /**
+     * 手动触发执行 on_schedule 规则（用于测试）
+     */
+    @PostMapping("/workflow-rules/{id}/execute")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<WorkflowRuleExecutionLogVO> executeRule(@PathVariable("id") Long id) {
+        return R.ok(scheduledRuleService.executeRuleManually(id));
+    }
+
+    /**
+     * 获取规则执行日志
+     */
+    @GetMapping("/workflow-rules/{id}/execution-logs")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<WorkflowRuleExecutionLogVO>> getExecutionLogs(
+            @PathVariable("id") Long id,
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        return R.ok(scheduledRuleService.getExecutionLogs(id, Math.min(limit, 100)));
     }
 }

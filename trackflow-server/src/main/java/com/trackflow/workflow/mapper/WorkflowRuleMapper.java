@@ -36,4 +36,15 @@ public interface WorkflowRuleMapper extends BaseMapper<WorkflowRule> {
         ORDER BY sort_order ASC, id ASC
         """)
     List<WorkflowRule> findByProjectIncludeGlobal(@Param("projectId") Long projectId);
+
+    /**
+     * 查询所有已启用的 on_schedule 规则
+     */
+    @Select("""
+        SELECT * FROM workflow_rule
+        WHERE enabled = true
+          AND rule_type = 'on_schedule'
+        ORDER BY sort_order ASC, id ASC
+        """)
+    List<WorkflowRule> findEnabledScheduledRules();
 }
