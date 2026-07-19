@@ -35,6 +35,13 @@ public class QuickActionDefinition {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String visibility;
 
+    /** 自动化执行动作列表 JSON：[{"type":"set_field","field":"priority","value":"Critical"},...] */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String executionActions;
+
+    /** 动作类型：form=需用户填表, rule=点击即执行 */
+    private String actionType;
+
     private String statusTransitionTo;
 
     private Boolean enabled;

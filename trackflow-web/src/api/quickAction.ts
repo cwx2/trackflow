@@ -13,6 +13,8 @@ export interface QuickActionDefinitionVO {
   formSchema: string  // JSON string of form field definitions
   actions: string     // JSON string of executable actions
   visibility: string  // JSON string of visibility rules
+  executionActions: string  // JSON string of automated actions for rule type
+  actionType: string  // 'form' or 'rule'
   statusTransitionTo: string | null
   enabled: boolean
   createdAt: string
@@ -70,7 +72,7 @@ export const quickActionApi = {
     return request.get<any, R<QuickActionDefinitionVO[]>>(`/issues/${issueId}/quick-actions`)
   },
 
-  /** 执行快捷动作 */
+  /** 执行快捷动作（form 类型） */
   execute(issueId: string, actionKey: string, data: {
     formData: string
     resultType: string
@@ -79,6 +81,13 @@ export const quickActionApi = {
     return request.post<any, R<QuickActionExecutionResultVO>>(
       `/issues/${issueId}/quick-actions/${actionKey}/execute`,
       data
+    )
+  },
+
+  /** 执行 rule 类型快捷动作（点击即执行） */
+  executeRule(issueId: string, actionKey: string) {
+    return request.post<any, R<QuickActionExecutionResultVO>>(
+      `/issues/${issueId}/quick-actions/${actionKey}/execute-rule`
     )
   },
 

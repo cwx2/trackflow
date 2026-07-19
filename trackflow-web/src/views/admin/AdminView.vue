@@ -156,6 +156,13 @@ const menuItems: AdminMenuItem[] = [
     permission: 'system:manage_roles'
   },
   {
+    path: '/admin/action-rules',
+    icon: '⚡',
+    title: 'Action 动作',
+    description: '配置工单自定义动作按钮（一键延期、标记为重复、升级优先级等）',
+    permission: 'system:manage_roles'
+  },
+  {
     path: '/admin/integrations',
     icon: '🔌',
     title: '第三方集成',

@@ -6,7 +6,8 @@
       :key="action.actionKey"
       size="small"
       class="qa-btn"
-      @click="openDialog(action)"
+      :loading="executingKey === action.actionKey"
+      @click="handleClick(action)"
     >
       {{ action.label }}
     </a-button>
@@ -21,12 +22,12 @@
         <a-doption
           v-for="action in overflowActions"
           :key="action.actionKey"
-          @click="openDialog(action)"
+          @click="handleClick(action)"
         >{{ action.label }}</a-doption>
       </template>
     </a-dropdown>
 
-    <!-- 弹窗 -->
+    <!-- 弹窗（仅 form 类型使用） -->
     <QuickActionDialog
       :visible="dialogVisible"
       :definition="selectedAction"
@@ -40,6 +41,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import { IconDown } from '@arco-design/web-vue/es/icon'
 import { quickActionApi } from '@/api'
 import type { QuickActionDefinitionVO } from '@/api/quickAction'
@@ -57,6 +59,7 @@ const emit = defineEmits<{
 const actions = ref<QuickActionDefinitionVO[]>([])
 const dialogVisible = ref(false)
 const selectedAction = ref<QuickActionDefinitionVO | null>(null)
+const executingKey = ref('')
 
 const MAX_VISIBLE = 3
 
@@ -74,9 +77,32 @@ async function loadActions() {
   }
 }
 
+function handleClick(action: QuickActionDefinitionVO) {
+  if (action.actionType === 'rule') {
+    executeRuleAction(action)
+  } else {
+    openDialog(action)
+  }
+}
+
 function openDialog(action: QuickActionDefinitionVO) {
   selectedAction.value = action
   dialogVisible.value = true
+}
+
+async function executeRuleAction(action: QuickActionDefinitionVO) {
+  executingKey.value = action.actionKey
+  try {
+    const res = await quickActionApi.executeRule(props.issueId, action.actionKey)
+    if (res.data?.success) {
+      Message.success(`「${action.label}」已执行`)
+    }
+    emit('executed')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '执行失败')
+  } finally {
+    executingKey.value = ''
+  }
 }
 
 // 加载动作列表

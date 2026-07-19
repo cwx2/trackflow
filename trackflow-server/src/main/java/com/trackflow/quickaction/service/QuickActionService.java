@@ -57,6 +57,7 @@ public class QuickActionService {
     private final SysRoleMapper sysRoleMapper;
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final ActionRuleExecutor actionRuleExecutor;
     private final ObjectMapper objectMapper;
 
     public List<QuickActionDefinitionVO> getAvailableActions(Long issueId) {
@@ -111,6 +112,52 @@ public class QuickActionService {
         return QuickActionExecutionResultVO.success(created.getId().toString(), mailSent, entry.getId().toString());
     }
 
+    /**
+     * 执行 rule 类型的快捷动作（无需用户填表，点击即执行）。
+     */
+    @Transactional
+    public QuickActionExecutionResultVO executeRule(Long issueId, String actionKey) {
+        Issue issue = issueService.getById(issueId);
+        if (issue == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        Long uid = SecurityUtils.getCurrentUserId();
+        QuickActionDefinition def = findDefinition(issue.getProjectId(), actionKey);
+        if (def == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "快捷动作不存在");
+        if (!"rule".equals(def.getActionType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "此动作需要填写表单，请使用标准执行接口");
+        }
+        Set<String> roles = getUserProjectRoles(uid, issue.getProjectId());
+        IssueStatus curSt = issueStatusMapper.selectById(issue.getStatusId());
+        if (!isVisible(def, roles, curSt != null ? curSt.getName() : ""))
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "不允许执行此动作");
+
+        // 执行自动化动作
+        ActionRuleExecutor.ActionRuleResult result = actionRuleExecutor.executeActions(issue, def, uid);
+
+        // 记录执行日志
+        QuickActionLog entry = new QuickActionLog();
+        entry.setIssueId(issueId);
+        entry.setActionKey(actionKey);
+        entry.setOperatorId(uid);
+        entry.setFormData(null);
+        entry.setMailTemplateId(null);
+        entry.setResultType("rule_execution");
+        entry.setCommentId(null);
+        entry.setMailSent(false);
+        entry.setMailError(null);
+        entry.setStatusBefore(curSt != null ? curSt.getName() : null);
+        entry.setStatusAfter(null);
+        entry.setCreatedAt(LocalDateTime.now());
+        logMapper.insert(entry);
+
+        if (!result.success()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                    "规则执行失败: " + String.join("; ", result.errors()));
+        }
+
+        return QuickActionExecutionResultVO.ruleExecuted(
+                entry.getId().toString(), result.executedActions());
+    }
+
     public List<MailTemplateVO> getMailTemplates(String actionKey, Long projectId) {
         var w = new LambdaQueryWrapper<MailTemplate>();
         w.eq(MailTemplate::getActionKey, actionKey).eq(MailTemplate::getEnabled, true)
@@ -134,6 +181,8 @@ public class QuickActionService {
         e.setIcon(dto.getIcon()); e.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 0);
         e.setFormSchema(dto.getFormSchema()); e.setActions(dto.getActions()); e.setVisibility(dto.getVisibility());
         e.setStatusTransitionTo(dto.getStatusTransitionTo());
+        e.setExecutionActions(dto.getExecutionActions() != null ? dto.getExecutionActions() : "[]");
+        e.setActionType(dto.getActionType() != null ? dto.getActionType() : "form");
         e.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : true);
         e.setCreatedBy(uid); e.setUpdatedBy(uid); e.setCreatedAt(LocalDateTime.now()); e.setUpdatedAt(LocalDateTime.now());
         definitionMapper.insert(e);
@@ -148,6 +197,8 @@ public class QuickActionService {
         e.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : e.getSortOrder());
         e.setFormSchema(dto.getFormSchema()); e.setActions(dto.getActions()); e.setVisibility(dto.getVisibility());
         e.setStatusTransitionTo(dto.getStatusTransitionTo());
+        if (dto.getExecutionActions() != null) e.setExecutionActions(dto.getExecutionActions());
+        if (dto.getActionType() != null) e.setActionType(dto.getActionType());
         e.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : e.getEnabled());
         e.setUpdatedBy(SecurityUtils.getCurrentUserId()); e.setUpdatedAt(LocalDateTime.now());
         definitionMapper.updateById(e);

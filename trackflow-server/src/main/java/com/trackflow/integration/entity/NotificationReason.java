@@ -32,7 +32,10 @@ public enum NotificationReason {
     watched("你关注了此工单"),
 
     /** 工作流自动分配 */
-    auto_assigned("工作流自动分配给你");
+    auto_assigned("工作流自动分配给你"),
+
+    /** 自动化规则触发通知 */
+    rule_triggered("自动化规则触发");
 
     private final String displayLabel;
 

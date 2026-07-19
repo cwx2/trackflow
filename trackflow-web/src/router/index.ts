@@ -207,6 +207,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
+        path: 'admin/action-rules',
+        name: 'ActionRuleManagement',
+        component: () => import('@/views/admin/ActionRuleManagement.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings' }
+      },
+      {
         path: 'admin/integrations',
         name: 'IntegrationManagement',
         component: () => import('@/views/admin/IntegrationManagement.vue'),

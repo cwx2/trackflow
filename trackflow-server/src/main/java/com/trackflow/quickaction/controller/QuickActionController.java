@@ -38,7 +38,7 @@ public class QuickActionController {
     }
 
     /**
-     * 执行快捷动作
+     * 执行快捷动作（form 类型：需要用户填表）
      */
     @PostMapping("/issues/{issueId}/quick-actions/{actionKey}/execute")
     @PreAuthorize("isAuthenticated()")
@@ -47,6 +47,18 @@ public class QuickActionController {
             @PathVariable String actionKey,
             @Valid @RequestBody ExecuteQuickActionDTO dto) {
         QuickActionExecutionResultVO result = quickActionService.execute(issueId, actionKey, dto);
+        return R.ok(result);
+    }
+
+    /**
+     * 执行 rule 类型快捷动作（点击即执行，无需填表）
+     */
+    @PostMapping("/issues/{issueId}/quick-actions/{actionKey}/execute-rule")
+    @PreAuthorize("isAuthenticated()")
+    public R<QuickActionExecutionResultVO> executeRule(
+            @PathVariable Long issueId,
+            @PathVariable String actionKey) {
+        QuickActionExecutionResultVO result = quickActionService.executeRule(issueId, actionKey);
         return R.ok(result);
     }
 

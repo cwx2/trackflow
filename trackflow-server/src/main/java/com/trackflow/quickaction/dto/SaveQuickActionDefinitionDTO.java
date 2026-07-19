@@ -30,6 +30,12 @@ public class SaveQuickActionDefinitionDTO {
 
     private String visibility;
 
+    /** 自动化执行动作列表 JSON */
+    private String executionActions;
+
+    /** 动作类型：form / rule */
+    private String actionType;
+
     private String statusTransitionTo;
 
     private Boolean enabled;
