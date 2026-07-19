@@ -135,6 +135,22 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.3.0</version>
         </dependency>
+        <!-- POI transitive deps not resolved by IDEA classpath generation -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-collections4</artifactId>
+            <version>4.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.xmlbeans</groupId>
+            <artifactId>xmlbeans</artifactId>
+            <version>5.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-math3</artifactId>
+            <version>3.6.1</version>
+        </dependency>
 
         <!-- API 文档 -->
         <dependency>
