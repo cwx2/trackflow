@@ -37,6 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
+import com.trackflow.common.event.WorkflowRuleEvent;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -173,6 +174,9 @@ public class IssueService {
         if (issue.getParentId() != null && issue.getParentId() != 0) {
             ancestorRefreshService.refreshAncestorChain(issue.getParentId());
         }
+
+        // 触发 on-create 自动化规则（通过事件，解耦）
+        eventPublisher.publishEvent(new WorkflowRuleEvent.IssueCreated(issue));
 
         return issue;
     }
@@ -647,6 +651,9 @@ public class IssueService {
         }
 
         issueMapper.updateById(issue);
+
+        // 触发 on-field-changed 自动化规则（通过事件，解耦）
+        fireFieldChangeRules(issue, dto);
 
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_updated"));
@@ -1918,6 +1925,30 @@ public class IssueService {
         }
         SysUser user = sysUserMapper.selectById(userId);
         return user != null ? user.getDisplayName() : null;
+    }
+
+    /**
+     * 触发字段变更自动化规则：检查 DTO 中哪些字段被实际修改了，对每个变更字段触发规则
+     */
+    private void fireFieldChangeRules(Issue issue, UpdateIssueDTO dto) {
+        if (dto.getIssueType() != null) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "issue_type", null));
+        }
+        if (dto.getPriority() != null) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "priority", null));
+        }
+        if (dto.getAssigneeId() != null) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "assignee", null));
+        }
+        if (dto.getSprintId() != null) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "sprint", null));
+        }
+        if (dto.getTitle() != null) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "title", null));
+        }
+        if (dto.getDueDate() != null) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue, "due_date", null));
+        }
     }
 
     private void recordActivity(Long issueId, Long userId, String action,

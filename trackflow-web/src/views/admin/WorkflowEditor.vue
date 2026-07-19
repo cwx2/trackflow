@@ -2,7 +2,11 @@
   <div class="workflow-page">
     <div class="page-header">
       <h2 class="page-title">工作流编辑器</h2>
-      <div class="header-filters">
+      <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
+        <a-tab-pane key="matrix" title="状态转换矩阵" />
+        <a-tab-pane key="rules" title="自动化规则" />
+      </a-tabs>
+      <div class="header-filters" v-show="activeMainTab === 'matrix'">
         <a-select
           v-model="selectedProject"
           placeholder="选择项目"
@@ -55,7 +59,7 @@
     </div>
 
     <!-- Author/Assignee 模式 Tab -->
-    <div class="mode-tabs" v-if="statuses.length > 0">
+    <div v-show="activeMainTab === 'matrix'" class="mode-tabs" v-if="statuses.length > 0">
       <a-radio-group v-model="selectedMode" type="button" @change="onFilterChange">
         <a-radio value="normal">
           <template #default>
@@ -85,7 +89,7 @@
     </div>
 
     <!-- 矩阵工具栏：搜索 + 筛选 -->
-    <div class="matrix-toolbar" v-if="statuses.length > 0">
+    <div v-show="activeMainTab === 'matrix'" class="matrix-toolbar" v-if="statuses.length > 0">
       <a-input
         v-model="searchKeyword"
         placeholder="搜索状态名..."
@@ -107,7 +111,7 @@
       </span>
     </div>
 
-    <a-spin :loading="loading" tip="加载中...">
+    <a-spin v-show="activeMainTab === 'matrix'" :loading="loading" tip="加载中...">
       <!-- 转换矩阵 -->
       <div class="matrix-container" v-if="filteredStatuses.length > 0">
         <table class="matrix-table">
@@ -221,7 +225,7 @@
       </div>
     </a-spin>
 
-    <div class="help-text" v-if="statuses.length > 0">
+    <div v-show="activeMainTab === 'matrix'" class="help-text" v-if="statuses.length > 0">
       <icon-info-circle />
       <template v-if="selectedMode === 'normal'">
         勾选单元格表示允许从行状态转换到列状态（针对当前选择的角色，对所有拥有该角色的用户生效）。
@@ -234,6 +238,12 @@
       </template>
       点击已允许的转换可配置自动化动作。hover 单元格高亮对应行列。
     </div>
+
+    <!-- 自动化规则面板 -->
+    <WorkflowRulePanel
+      v-show="activeMainTab === 'rules'"
+      :project-id="selectedProject"
+    />
 
     <!-- 动作配置面板 -->
     <TransitionActionPanel
@@ -263,8 +273,10 @@ import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
 import WorkflowActivityDrawer from './WorkflowActivityDrawer.vue'
+import WorkflowRulePanel from './WorkflowRulePanel.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
+const activeMainTab = ref('matrix')
 const selectedProject = ref('0')
 const selectedType = ref('*')
 const selectedRole = ref('')
@@ -605,6 +617,16 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.workflow-main-tabs {
+  :deep(.arco-tabs-nav) {
+    &::before {
+      display: none;
+    }
+  }
 }
 
 .page-title {

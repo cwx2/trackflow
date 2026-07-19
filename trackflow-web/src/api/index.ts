@@ -32,6 +32,7 @@ export { quickActionApi } from './quickAction'
 export { ruleApi } from './rule'
 export { webhookApi } from './webhook'
 export { integrationAdminApi } from './integrationAdmin'
+export { workflowRuleApi } from './workflowRule'
 
 // 类型导出
 export type * from './types'
