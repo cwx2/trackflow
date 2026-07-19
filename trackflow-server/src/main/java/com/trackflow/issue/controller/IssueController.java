@@ -1,5 +1,8 @@
 package com.trackflow.issue.controller;
 
+import com.trackflow.board.entity.BoardColumnConfig;
+import com.trackflow.board.mapper.BoardColumnConfigMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -13,6 +16,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueExportService;
@@ -50,9 +54,11 @@ public class IssueController {
     private final IssueTagService tagService;
     private final SysUserMapper sysUserMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final IssueMapper issueMapper;
     private final SprintMapper sprintMapper;
     private final ClosePreCheckChain closePreCheckChain;
     private final CustomFieldService customFieldService;
+    private final BoardColumnConfigMapper boardColumnConfigMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -258,6 +264,16 @@ public class IssueController {
     @PreAuthorize("isAuthenticated()")
     public R<BatchOperationResultVO> batchOperation(@Valid @RequestBody BatchOperationDTO dto) {
         boolean silent = Boolean.TRUE.equals(dto.getSilent());
+
+        // WIP 限制预检查（仅 status 操作）
+        if ("status".equals(dto.getOperation()) && dto.getStatusId() != null
+                && !Boolean.TRUE.equals(dto.getForceWip())) {
+            String wipWarning = checkBatchWipLimit(dto.getIssueIds(), dto.getStatusId());
+            if (wipWarning != null) {
+                return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, wipWarning);
+            }
+        }
+
         BatchOperationResultVO result = switch (dto.getOperation()) {
             case "status" -> {
                 if (dto.getStatusId() == null) {
@@ -354,6 +370,25 @@ public class IssueController {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
             return R.fail(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
+        }
+
+        // WIP 限制校验：查询目标状态在该项目的看板列配置
+        if (!Boolean.TRUE.equals(dto.getForceWip())) {
+            BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
+                    new LambdaQueryWrapper<BoardColumnConfig>()
+                            .eq(BoardColumnConfig::getProjectId, issue.getProjectId())
+                            .eq(BoardColumnConfig::getStatusId, dto.getStatusId()));
+            if (columnConfig != null && columnConfig.getWipMax() != null) {
+                long currentCount = issueMapper.selectCount(
+                        new LambdaQueryWrapper<Issue>()
+                                .eq(Issue::getProjectId, issue.getProjectId())
+                                .eq(Issue::getStatusId, dto.getStatusId()));
+                if (currentCount >= columnConfig.getWipMax()) {
+                    String message = String.format("目标列已达到 WIP 上限（%d/%d），确定要继续移入吗？",
+                            currentCount, columnConfig.getWipMax());
+                    return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, message);
+                }
+            }
         }
 
         // 关闭状态时的前置检查链（非强制模式下返回警告）
@@ -551,5 +586,51 @@ public class IssueController {
                                  @Valid @RequestBody com.trackflow.issue.dto.MoveIssueDTO dto) {
         Issue moved = issueService.moveToProject(id, dto);
         return R.ok(issueService.getDetail(moved.getId()));
+    }
+
+    // ========== WIP 限制内部方法 ==========
+
+    /**
+     * 批量状态转换的 WIP 限制预检查。
+     * 按项目分组统计：移入后是否会超出目标列 WIP 上限。
+     *
+     * @return 超限警告信息；null 表示不超限或目标列无 WIP 配置
+     */
+    private String checkBatchWipLimit(List<Long> issueIds, Long targetStatusId) {
+        // 查询所有涉及的 issue，按项目分组
+        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
+        if (issues.isEmpty()) return null;
+
+        // 按项目分组，只统计会真正移入目标状态的（排除已经在目标状态的）
+        Map<Long, Long> projectMoveInCount = issues.stream()
+                .filter(i -> !targetStatusId.equals(i.getStatusId()))
+                .collect(Collectors.groupingBy(Issue::getProjectId, Collectors.counting()));
+
+        if (projectMoveInCount.isEmpty()) return null;
+
+        // 对每个项目检查 WIP 限制
+        List<String> warnings = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : projectMoveInCount.entrySet()) {
+            Long projectId = entry.getKey();
+            long moveInCount = entry.getValue();
+
+            BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
+                    new LambdaQueryWrapper<BoardColumnConfig>()
+                            .eq(BoardColumnConfig::getProjectId, projectId)
+                            .eq(BoardColumnConfig::getStatusId, targetStatusId));
+            if (columnConfig == null || columnConfig.getWipMax() == null) continue;
+
+            long currentCount = issueMapper.selectCount(
+                    new LambdaQueryWrapper<Issue>()
+                            .eq(Issue::getProjectId, projectId)
+                            .eq(Issue::getStatusId, targetStatusId));
+            long afterCount = currentCount + moveInCount;
+            if (afterCount > columnConfig.getWipMax()) {
+                warnings.add(String.format("项目中目标列将达到 %d/%d", afterCount, columnConfig.getWipMax()));
+            }
+        }
+
+        if (warnings.isEmpty()) return null;
+        return "批量操作将超出 WIP 上限（" + String.join("；", warnings) + "），确定要继续吗？";
     }
 }

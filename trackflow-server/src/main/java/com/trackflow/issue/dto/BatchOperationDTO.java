@@ -72,4 +72,10 @@ public class BatchOperationDTO {
      * 为 null 时不做乐观锁校验（向后兼容）。
      */
     private Map<Long, Integer> versions;
+
+    /**
+     * 是否强制超越 WIP 限制（operation=status 时可选）。
+     * 当目标列已达到 WIP 上限，用户确认后强制移入时设为 true。
+     */
+    private Boolean forceWip;
 }

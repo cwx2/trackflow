@@ -1,6 +1,7 @@
 import { ref } from 'vue'
-import { Message, Notification } from '@arco-design/web-vue'
+import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi } from '@/api'
+import { ERROR_CODES } from '@/api/error-codes'
 import type { IssueVO } from '@/api/types'
 
 export interface BatchResult {
@@ -24,7 +25,68 @@ export function useBatchOps() {
     comment?: string
   ): Promise<BatchResult> {
     const versions = buildVersionMap(issues)
-    return executeBatchApi(issues, 'status', { statusId: targetStatusId, comment, versions }, '状态变更')
+    const batch = issues.slice(0, MAX_BATCH_SIZE)
+    executing.value = true
+
+    try {
+      const res = await issueApi.batch({
+        operation: 'status',
+        issueIds: batch.map(i => i.id),
+        statusId: targetStatusId,
+        comment,
+        versions
+      })
+
+      // WIP 限制超出 — 弹确认对话框
+      if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+        executing.value = false
+        return new Promise<BatchResult>((resolve) => {
+          Modal.warning({
+            title: 'WIP 限制',
+            content: res.message,
+            okText: '继续变更',
+            cancelText: '取消',
+            hideCancel: false,
+            onOk: async () => {
+              // 用户确认后重试，带 forceWip=true
+              const result = await executeBatchApi(issues, 'status', {
+                statusId: targetStatusId, comment, versions, forceWip: true
+              }, '状态变更')
+              resolve(result)
+            },
+            onCancel: () => {
+              resolve({ total: batch.length, succeeded: 0, failed: 0, failures: [] })
+            }
+          })
+        })
+      }
+
+      // 正常响应处理
+      const data = res.data
+      const result: BatchResult = {
+        total: data?.total ?? batch.length,
+        succeeded: data?.succeeded ?? 0,
+        failed: data?.failed ?? 0,
+        failures: data?.failures ?? []
+      }
+      showBatchResult(result, '状态变更')
+      return result
+    } catch (e: any) {
+      const errorMsg = e.response?.data?.message || '批量操作失败'
+      Message.error({ content: errorMsg, duration: 5000 })
+      return {
+        total: batch.length,
+        succeeded: 0,
+        failed: batch.length,
+        failures: batch.map(i => ({
+          issueId: i.id,
+          issueKey: i.issueKey,
+          reason: errorMsg
+        }))
+      }
+    } finally {
+      executing.value = false
+    }
   }
 
   /**

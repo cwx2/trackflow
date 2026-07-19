@@ -790,6 +790,29 @@ async function onTransition(target: StatusInfo) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
       showActionFeedback(res.data)
+    } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+      // WIP 超限警告 — 弹确认框
+      Modal.warning({
+        title: 'WIP 限制',
+        content: res.message,
+        okText: '继续移入',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: async () => {
+          try {
+            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version, undefined, true)
+            if (forceRes.code === 0) {
+              await loadAll()
+              Message.success(`状态已变更为 ${target.name}`)
+              showActionFeedback(forceRes.data)
+            } else {
+              Message.error(forceRes.message || '变更失败')
+            }
+          } catch (e2: any) {
+            handleUpdateError(e2, '变更失败')
+          }
+        }
+      })
     } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
       // 关闭前置检查警告（子任务未完成 / 被阻塞 / 组合）— 统一弹窗
       Modal.warning({

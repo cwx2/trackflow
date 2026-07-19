@@ -29,6 +29,12 @@ public class TransitStatusDTO {
     private Boolean force;
 
     /**
+     * 是否强制超越 WIP 限制。
+     * 当目标列已达到 WIP 上限，用户确认后强制移入时设为 true。
+     */
+    private Boolean forceWip;
+
+    /**
      * 乐观锁版本号（前端传入，用于并发控制）。
      */
     private Integer version;
