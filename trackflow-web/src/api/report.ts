@@ -31,11 +31,21 @@ export interface UpdateReportParams {
 
 export interface ReportDataVO {
   title: string
+  /** 图表类型（bar_horizontal/bar_vertical/pie/line/number_card） */
+  chartType: string
   type: string
   groupBy: string
+  /** 第二分组依据（双维度交叉时使用） */
+  secondGroupBy?: string
   labels: string[]
   data: number[]
+  /** 第二维度标签列表（双维度模式） */
+  secondLabels?: string[]
+  /** 矩阵数据（双维度模式） matrix[i][j] = 主维度第i项 × 第二维度第j项 */
+  matrix?: number[][]
   total: number
+  /** 应用的筛选条件摘要 */
+  appliedFilters?: Record<string, any>
 }
 
 /**

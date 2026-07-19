@@ -74,27 +74,18 @@
           <span class="meta-time">{{ formatTime(report.createdAt) }}</span>
         </div>
 
-        <!-- 报表数据（展开后） -->
+        <!-- 报表数据（展开后）— ECharts 图表 -->
         <div v-if="reportData[report.id]" class="card-chart" @click.stop>
           <div class="chart-summary">
             <span class="chart-total">共 {{ reportData[report.id].total }} 个工单</span>
             <span class="chart-group">按 {{ groupByLabel(reportData[report.id].groupBy) }} 分组</span>
           </div>
-          <div class="chart-bars">
-            <div
-              v-for="(label, idx) in reportData[report.id].labels"
-              :key="idx"
-              class="chart-bar-item"
-            >
-              <span class="bar-label">{{ label }}</span>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  :style="{ width: barWidth(reportData[report.id].data[idx], reportData[report.id].total) }"
-                ></div>
-              </div>
-              <span class="bar-value">{{ reportData[report.id].data[idx] }}</span>
-            </div>
+          <div class="chart-container">
+            <v-chart
+              :option="buildChartOption(reportData[report.id])"
+              autoresize
+              class="report-chart-instance"
+            />
           </div>
         </div>
 
@@ -155,13 +146,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { PieChart, BarChart } from 'echarts/charts'
+import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
+import VChart from 'vue-echarts'
 import { reportApi } from '@/api/report'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 import type { ProjectVO } from '@/api/types'
+
+// 注册 ECharts 组件（按需引入）
+use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, GridComponent])
 
 const authStore = useAuthStore()
 
@@ -214,10 +214,6 @@ watch(() => form.type, (newType) => {
   if (newType in typeToGroupByMap) {
     form.groupBy = typeToGroupByMap[newType]
   }
-})
-
-onMounted(async () => {
-  await Promise.all([loadReports(), loadProjects()])
 })
 
 async function loadReports() {
@@ -391,15 +387,231 @@ function groupByLabel(groupBy: string) {
   return map[groupBy] || groupBy
 }
 
-function barWidth(value: number, total: number) {
-  if (!total) return '0%'
-  return Math.max(4, (value / total) * 100) + '%'
-}
-
 function formatTime(time: string) {
   if (!time) return ''
   const d = new Date(time)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// ─── ECharts 主题色（动态读取 CSS 变量，适配亮色/暗色主题） ─────────
+
+const chartColors = ref({
+  textColor: '#9ca3af',
+  axisColor: '#30363d',
+  tooltipBg: '#22252a',
+  tooltipBorder: '#30363d',
+  tooltipText: '#e6edf3',
+  cardBorder: '#2a2d33'
+})
+
+function readThemeColors() {
+  const style = getComputedStyle(document.documentElement)
+  chartColors.value = {
+    textColor: style.getPropertyValue('--tf-text-secondary').trim() || '#9ca3af',
+    axisColor: style.getPropertyValue('--tf-border').trim() || '#30363d',
+    tooltipBg: style.getPropertyValue('--tf-bg-elevated').trim() || '#22252a',
+    tooltipBorder: style.getPropertyValue('--tf-border').trim() || '#30363d',
+    tooltipText: style.getPropertyValue('--tf-text-primary').trim() || '#e6edf3',
+    cardBorder: style.getPropertyValue('--tf-bg-elevated').trim() || '#2a2d33'
+  }
+}
+
+// 监听主题切换
+let themeObserver: MutationObserver | null = null
+
+onMounted(async () => {
+  readThemeColors()
+  themeObserver = new MutationObserver(() => readThemeColors())
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
+  await Promise.all([loadReports(), loadProjects()])
+})
+
+onBeforeUnmount(() => {
+  themeObserver?.disconnect()
+})
+
+// ─── 图表预设色板 ─────────────────────────────────────
+
+/** 状态色（按分类） */
+const statusColors: Record<string, string> = {
+  'Open': '#58a6ff',
+  'In Progress': '#f0883e',
+  'Code Review': '#a371f7',
+  'Testing': '#d29922',
+  'Done': '#3fb950',
+  'Cancelled': '#6b7280',
+  'Reopened': '#f85149',
+  'Todo': '#58a6ff',
+  'Closed': '#3fb950',
+  'Solved': '#3fb950',
+  'Online': '#3fb950'
+}
+
+/** 优先级色 */
+const priorityColors: Record<string, string> = {
+  'Critical': '#f85149',
+  'High': '#f0883e',
+  'Normal': '#58a6ff',
+  'Low': '#3fb950',
+  'critical': '#f85149',
+  'high': '#f0883e',
+  'normal': '#58a6ff',
+  'low': '#3fb950'
+}
+
+/** 通用色板（轮循） */
+const palette = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#d29922', '#f85149', '#79c0ff', '#56d364', '#ffa657', '#d2a8ff']
+
+function getItemColor(label: string, groupBy: string, idx: number): string {
+  if (groupBy === 'status') return statusColors[label] || palette[idx % palette.length]
+  if (groupBy === 'priority') return priorityColors[label] || palette[idx % palette.length]
+  return palette[idx % palette.length]
+}
+
+function localizeLabel(label: string, groupBy: string): string {
+  if (groupBy === 'status') return localizeStatusName(label)
+  if (groupBy === 'priority') return priorityLabelMap[label] || label
+  return label
+}
+
+// ─── 构建 ECharts Option ──────────────────────────────────
+
+function buildChartOption(data: ReportDataVO): Record<string, any> {
+  const chartType = data.chartType || inferChartType(data.groupBy, data.type)
+  const c = chartColors.value
+
+  if (chartType === 'pie') {
+    return buildPieOption(data, c)
+  } else if (chartType === 'bar_horizontal') {
+    return buildBarHorizontalOption(data, c)
+  } else {
+    // bar_vertical (default)
+    return buildBarVerticalOption(data, c)
+  }
+}
+
+/** 根据 groupBy/type 推断图表类型（当后端没有返回 chartType 时的 fallback） */
+function inferChartType(groupBy: string, type: string): string {
+  if (groupBy === 'assignee' || type === 'by_assignee') return 'bar_horizontal'
+  if (groupBy === 'status' || groupBy === 'priority' || groupBy === 'type'
+    || type === 'by_status' || type === 'by_priority' || type === 'by_type') return 'pie'
+  return 'bar_vertical'
+}
+
+function buildPieOption(data: ReportDataVO, c: typeof chartColors.value): Record<string, any> {
+  const items = data.labels.map((label, idx) => ({
+    name: localizeLabel(label, data.groupBy),
+    value: data.data[idx],
+    itemStyle: { color: getItemColor(label, data.groupBy, idx) }
+  }))
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}: {c} ({d}%)',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 }
+    },
+    legend: {
+      orient: 'vertical',
+      right: 8,
+      top: 'center',
+      textStyle: { color: c.textColor, fontSize: 11 },
+      itemWidth: 10,
+      itemHeight: 10
+    },
+    series: [{
+      type: 'pie',
+      radius: ['38%', '68%'],
+      center: ['35%', '50%'],
+      avoidLabelOverlap: true,
+      itemStyle: { borderRadius: 3, borderColor: c.cardBorder, borderWidth: 2 },
+      label: { show: false },
+      emphasis: {
+        label: { show: true, fontSize: 12, fontWeight: 500, color: c.tooltipText },
+        itemStyle: { shadowBlur: 8, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' }
+      },
+      data: items
+    }]
+  }
+}
+
+function buildBarHorizontalOption(data: ReportDataVO, c: typeof chartColors.value): Record<string, any> {
+  const labels = data.labels.map(l => localizeLabel(l, data.groupBy))
+  const colors = data.labels.map((l, i) => getItemColor(l, data.groupBy, i))
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 }
+    },
+    grid: { left: 80, right: 24, top: 8, bottom: 16 },
+    xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 11, width: 70, overflow: 'truncate' },
+      axisTick: { show: false }
+    },
+    series: [{
+      type: 'bar',
+      barWidth: '55%',
+      data: data.data.map((val, idx) => ({
+        value: val,
+        itemStyle: { color: colors[idx], borderRadius: [0, 3, 3, 0] }
+      }))
+    }]
+  }
+}
+
+function buildBarVerticalOption(data: ReportDataVO, c: typeof chartColors.value): Record<string, any> {
+  const labels = data.labels.map(l => localizeLabel(l, data.groupBy))
+  const colors = data.labels.map((l, i) => getItemColor(l, data.groupBy, i))
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 }
+    },
+    grid: { left: 36, right: 16, top: 8, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+    },
+    series: [{
+      type: 'bar',
+      barWidth: '50%',
+      data: data.data.map((val, idx) => ({
+        value: val,
+        itemStyle: { color: colors[idx], borderRadius: [3, 3, 0, 0] }
+      }))
+    }]
+  }
 }
 </script>
 
@@ -571,7 +783,7 @@ function formatTime(time: string) {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   font-size: 11px;
   color: var(--tf-text-tertiary);
 }
@@ -581,50 +793,14 @@ function formatTime(time: string) {
   color: var(--tf-text-secondary);
 }
 
-.chart-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.chart-container {
+  width: 100%;
+  height: 200px;
 }
 
-.chart-bar-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bar-label {
-  font-size: 11px;
-  color: var(--tf-text-secondary);
-  width: 72px;
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bar-track {
-  flex: 1;
-  height: 6px;
-  background: var(--tf-bg-surface);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.bar-fill {
+.report-chart-instance {
+  width: 100%;
   height: 100%;
-  background: var(--tf-accent);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.bar-value {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  width: 28px;
-  text-align: right;
-  flex-shrink: 0;
 }
 
 .card-executing {
