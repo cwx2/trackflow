@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.converter.BaseConverter;
+import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.system.entity.SysRole;
@@ -37,6 +39,7 @@ public class WorkflowConverterImpl implements WorkflowConverter {
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final ProjectMapper projectMapper;
+    private final IssueStatusMapper statusMapper;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -91,15 +94,29 @@ public class WorkflowConverterImpl implements WorkflowConverter {
                 projectMapper.selectList(new LambdaQueryWrapper<Project>().in(Project::getId, projectIds))
                         .stream().collect(Collectors.toMap(Project::getId, Project::getName));
 
+        // 获取所有状态的 ID→显示名称映射，用于动态解析历史记录中的状态名
+        Map<Long, String> statusNameMap = getStatusNameMap();
+
         return activities.stream()
-                .map(a -> toActivityVO(a, userNameMap, roleNameMap, projectNameMap))
+                .map(a -> toActivityVO(a, userNameMap, roleNameMap, projectNameMap, statusNameMap))
                 .toList();
+    }
+
+    /**
+     * 获取所有状态的 ID→本地化显示名称映射。
+     * 优先使用 displayName（中文），fallback 到 name（英文）。
+     */
+    private Map<Long, String> getStatusNameMap() {
+        List<IssueStatus> allStatuses = statusMapper.selectList(new LambdaQueryWrapper<>());
+        return allStatuses.stream()
+                .collect(Collectors.toMap(IssueStatus::getId, IssueStatus::getLocalizedName));
     }
 
     private WorkflowActivityVO toActivityVO(WorkflowActivity activity,
                                             Map<Long, String> userNameMap,
                                             Map<Long, String> roleNameMap,
-                                            Map<Long, String> projectNameMap) {
+                                            Map<Long, String> projectNameMap,
+                                            Map<Long, String> statusNameMap) {
         WorkflowActivityVO vo = new WorkflowActivityVO();
         vo.setId(longToString(activity.getId()));
         vo.setProjectId(longToString(activity.getProjectId()));
@@ -114,30 +131,33 @@ public class WorkflowConverterImpl implements WorkflowConverter {
         vo.setUserId(longToString(activity.getUserId()));
         vo.setUserDisplayName(userNameMap.getOrDefault(activity.getUserId(), "未知用户"));
         vo.setAction(activity.getAction());
-        vo.setSummary(activity.getSummary());
         vo.setCreatedAt(activity.getCreatedAt());
 
-        // 解析 details JSON
-        parseDetails(activity.getDetails(), vo);
+        // 解析 details JSON，使用 statusId 动态解析当前显示名称
+        parseDetails(activity.getDetails(), vo, statusNameMap);
+
+        // 动态重建 summary，确保使用当前状态的本地化名称
+        vo.setSummary(buildDynamicSummary(vo));
 
         return vo;
     }
 
-    private void parseDetails(String detailsJson, WorkflowActivityVO vo) {
+    private void parseDetails(String detailsJson, WorkflowActivityVO vo, Map<Long, String> statusNameMap) {
         if (detailsJson == null || detailsJson.isBlank()) {
             vo.setAdded(Collections.emptyList());
             vo.setRemoved(Collections.emptyList());
             return;
         }
         try {
-            Map<String, List<Map<String, String>>> details = objectMapper.readValue(
-                    detailsJson, new TypeReference<>() {});
+            Map<String, Object> details = objectMapper.readValue(detailsJson, new TypeReference<>() {});
 
-            List<Map<String, String>> addedRaw = details.getOrDefault("added", Collections.emptyList());
-            List<Map<String, String>> removedRaw = details.getOrDefault("removed", Collections.emptyList());
+            @SuppressWarnings("unchecked")
+            List<Map<String, String>> addedRaw = (List<Map<String, String>>) details.getOrDefault("added", Collections.emptyList());
+            @SuppressWarnings("unchecked")
+            List<Map<String, String>> removedRaw = (List<Map<String, String>>) details.getOrDefault("removed", Collections.emptyList());
 
-            vo.setAdded(addedRaw.stream().map(this::toChangeItem).toList());
-            vo.setRemoved(removedRaw.stream().map(this::toChangeItem).toList());
+            vo.setAdded(addedRaw.stream().map(raw -> toChangeItem(raw, statusNameMap)).toList());
+            vo.setRemoved(removedRaw.stream().map(raw -> toChangeItem(raw, statusNameMap)).toList());
         } catch (Exception e) {
             log.warn("Failed to parse workflow activity details: {}", e.getMessage());
             vo.setAdded(Collections.emptyList());
@@ -145,10 +165,77 @@ public class WorkflowConverterImpl implements WorkflowConverter {
         }
     }
 
-    private WorkflowActivityVO.TransitionChangeItem toChangeItem(Map<String, String> raw) {
+    /**
+     * 将 JSON 中的转换项解析为 VO，优先使用 statusId 动态解析当前显示名称。
+     * 如果 statusId 不存在（极旧记录）或状态已被删除，降级使用存储的文本。
+     */
+    private WorkflowActivityVO.TransitionChangeItem toChangeItem(Map<String, String> raw, Map<Long, String> statusNameMap) {
         WorkflowActivityVO.TransitionChangeItem item = new WorkflowActivityVO.TransitionChangeItem();
-        item.setFromStatus(raw.getOrDefault("fromStatus", "Unknown"));
-        item.setToStatus(raw.getOrDefault("toStatus", "Unknown"));
+
+        String fromStatusId = raw.get("fromStatusId");
+        String toStatusId = raw.get("toStatusId");
+
+        // 优先使用 statusId 动态解析当前本地化名称
+        if (fromStatusId != null) {
+            try {
+                Long id = Long.parseLong(fromStatusId);
+                item.setFromStatus(statusNameMap.getOrDefault(id, raw.getOrDefault("fromStatus", "未知状态")));
+            } catch (NumberFormatException e) {
+                item.setFromStatus(raw.getOrDefault("fromStatus", "未知状态"));
+            }
+        } else {
+            item.setFromStatus(raw.getOrDefault("fromStatus", "未知状态"));
+        }
+
+        if (toStatusId != null) {
+            try {
+                Long id = Long.parseLong(toStatusId);
+                item.setToStatus(statusNameMap.getOrDefault(id, raw.getOrDefault("toStatus", "未知状态")));
+            } catch (NumberFormatException e) {
+                item.setToStatus(raw.getOrDefault("toStatus", "未知状态"));
+            }
+        } else {
+            item.setToStatus(raw.getOrDefault("toStatus", "未知状态"));
+        }
+
         return item;
+    }
+
+    /**
+     * 根据已解析的 added/removed 列表动态重建摘要，确保状态名称统一使用本地化名。
+     */
+    private String buildDynamicSummary(WorkflowActivityVO vo) {
+        List<WorkflowActivityVO.TransitionChangeItem> added = vo.getAdded();
+        List<WorkflowActivityVO.TransitionChangeItem> removed = vo.getRemoved();
+
+        if ((added == null || added.isEmpty()) && (removed == null || removed.isEmpty())) {
+            return "工作流已更新";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (added != null && !added.isEmpty()) {
+            sb.append("新增 ").append(added.size()).append(" 条转换");
+            if (added.size() <= 3) {
+                sb.append("（");
+                sb.append(added.stream()
+                        .map(item -> item.getFromStatus() + "→" + item.getToStatus())
+                        .collect(Collectors.joining("，")));
+                sb.append("）");
+            }
+        }
+        if (removed != null && !removed.isEmpty()) {
+            if (added != null && !added.isEmpty()) {
+                sb.append("；");
+            }
+            sb.append("删除 ").append(removed.size()).append(" 条转换");
+            if (removed.size() <= 3) {
+                sb.append("（");
+                sb.append(removed.stream()
+                        .map(item -> item.getFromStatus() + "→" + item.getToStatus())
+                        .collect(Collectors.joining("，")));
+                sb.append("）");
+            }
+        }
+        return sb.toString();
     }
 }
