@@ -36,6 +36,7 @@ public class NotificationMailScheduler {
     private final EmailSendService emailSendService;
     private final NotificationPreferenceService preferenceService;
     private final SysUserMapper sysUserMapper;
+    private final NotificationUrlBuilder urlBuilder;
 
     /**
      * 每批最多处理的通知数量（避免长时间占用线程）
@@ -117,6 +118,14 @@ public class NotificationMailScheduler {
                         .max(Comparator.comparing(n -> n.getUpdatedAt() != null ? n.getUpdatedAt() : n.getCreatedAt()))
                         .orElse(notifications.get(0));
 
+                // 构建资源直链（优先使用已存储的 resourceUrl，兜底动态构建）
+                String resourceFullUrl = null;
+                if (latest.getResourceUrl() != null && !latest.getResourceUrl().isBlank()) {
+                    resourceFullUrl = urlBuilder.buildFullUrl(latest.getResourceUrl());
+                } else {
+                    resourceFullUrl = urlBuilder.buildFullUrl(latest.getResourceType(), latest.getResourceId(), latest.getProjectId());
+                }
+
                 String subject = "[TrackFlow] " + latest.getTitle();
                 String htmlContent;
 
@@ -125,10 +134,10 @@ public class NotificationMailScheduler {
                     int totalChanges = notifications.stream()
                             .mapToInt(n -> n.getAggregationCount() != null ? n.getAggregationCount() : 1)
                             .sum();
-                    htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges);
+                    htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges, resourceFullUrl);
                 } else {
                     // 单条通知 → 普通邮件
-                    htmlContent = buildNotificationEmailContent(latest.getTitle(), latest.getContent());
+                    htmlContent = buildNotificationEmailContent(latest.getTitle(), latest.getContent(), resourceFullUrl);
                 }
 
                 emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
@@ -151,37 +160,55 @@ public class NotificationMailScheduler {
     }
 
     /**
-     * 构建普通通知邮件 HTML 内容
+     * 构建普通通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildNotificationEmailContent(String title, String content) {
+    private String buildNotificationEmailContent(String title, String content, String resourceUrl) {
+        String actionButton = buildActionButton(resourceUrl);
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 12px 0;">%s</h3>
                   <p style="color: #57606a; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">%s</p>
+                  %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
                     此邮件由 TrackFlow 项目管理系统自动发送。您可以在个人通知偏好中关闭邮件通知。
                   </p>
                 </div>
-                """, escapeHtml(title), escapeHtml(content));
+                """, escapeHtml(title), escapeHtml(content), actionButton);
     }
 
     /**
-     * 构建聚合/汇总通知邮件 HTML 内容
+     * 构建聚合/汇总通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildAggregatedEmailContent(String title, String content, int totalChanges) {
+    private String buildAggregatedEmailContent(String title, String content, int totalChanges, String resourceUrl) {
+        String actionButton = buildActionButton(resourceUrl);
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 8px 0;">%s</h3>
                   <p style="color: #0969da; font-size: 12px; margin: 0 0 12px 0;">包含 %d 次变更的汇总通知</p>
                   <p style="color: #57606a; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">%s</p>
+                  %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
                     此邮件由 TrackFlow 项目管理系统自动发送。聚合窗口内的多次变更已合并为此封邮件。
                     您可以在个人通知偏好中关闭邮件通知。
                   </p>
                 </div>
-                """, escapeHtml(title), totalChanges, escapeHtml(content));
+                """, escapeHtml(title), totalChanges, escapeHtml(content), actionButton);
+    }
+
+    /**
+     * 构建"在 TrackFlow 中查看"按钮 HTML
+     */
+    private String buildActionButton(String resourceUrl) {
+        if (resourceUrl == null || resourceUrl.isBlank()) {
+            return "";
+        }
+        return String.format("""
+                  <p style="margin: 0 0 24px 0;">
+                    <a href="%s" style="display: inline-block; padding: 10px 20px; background-color: #0969da; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500;">在 TrackFlow 中查看</a>
+                  </p>
+                """, resourceUrl);
     }
 
     private String escapeHtml(String text) {

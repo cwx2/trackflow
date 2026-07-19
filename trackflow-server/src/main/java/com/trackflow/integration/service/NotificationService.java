@@ -40,6 +40,7 @@ public class NotificationService {
     private final EmailSendService emailSendService;
     private final NotificationPreferenceService preferenceService;
     private final SystemSettingService systemSettingService;
+    private final NotificationUrlBuilder urlBuilder;
 
     /**
      * 通知聚合时间窗口（分钟）。同一用户+同一类型+同一资源在此窗口内的多次通知将被合并。
@@ -128,6 +129,7 @@ public class NotificationService {
             n.setReason(reason != null ? reason.name() : null);
             n.setResourceType(resourceType);
             n.setResourceId(resourceId);
+            n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId));
             n.setIsRead(false);
             n.setMailSent(false);
             n.setCreatedAt(LocalDateTime.now());
@@ -141,7 +143,8 @@ public class NotificationService {
         // - 其他类型：延迟发送，由 NotificationMailScheduler 定时任务在聚合窗口结束后处理
         //   如果用户在等待期间已读 IAN，则跳过邮件（避免"已知道了还收到邮件"的冗余打扰）
         if (isNew && type == NotificationType.mention) {
-            dispatchEmail(userId, title, content);
+            String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId);
+            dispatchEmail(userId, title, content, fullUrl);
             // 标记 mention 通知邮件已发送（直接更新刚插入的记录）
             markMailSent(userId, typeValue, resourceType, resourceId);
         }
@@ -262,6 +265,7 @@ public class NotificationService {
                 n.setReason(reason != null ? reason.name() : null);
                 n.setResourceType(resourceType);
                 n.setResourceId(resourceId);
+                n.setResourceUrl(urlBuilder.buildPath(resourceType, resourceId, projectId));
                 n.setIsRead(false);
                 n.setMailSent(false);
                 n.setCreatedAt(LocalDateTime.now());
@@ -287,7 +291,8 @@ public class NotificationService {
         // - mention 类型：立即批量发送邮件
         // - 其他类型：延迟发送，由 NotificationMailScheduler 处理
         if (!newNotificationUserIds.isEmpty() && type == NotificationType.mention) {
-            dispatchEmailBatch(newNotificationUserIds, title, content);
+            String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId);
+            dispatchEmailBatch(newNotificationUserIds, title, content, fullUrl);
             // 批量标记 mention 通知邮件已发送
             markMailSentBatch(newNotificationUserIds, typeValue, resourceType, resourceId);
         }
@@ -417,7 +422,7 @@ public class NotificationService {
      * 批量查询用户信息和偏好，减少 DB 操作。
      * 跳过处于静音时段内的用户。
      */
-    private void dispatchEmailBatch(Set<Long> userIds, String title, String content) {
+    private void dispatchEmailBatch(Set<Long> userIds, String title, String content, String resourceUrl) {
         try {
             if (!emailSendService.isEmailAvailable()) {
                 return;
@@ -436,7 +441,7 @@ public class NotificationService {
                     .collect(Collectors.toSet());
 
             String subject = "[TrackFlow] " + title;
-            String htmlContent = buildNotificationEmailContent(title, content);
+            String htmlContent = buildNotificationEmailContent(title, content, resourceUrl);
 
             for (SysUser user : users) {
                 if (user.getEmail() == null || user.getEmail().isBlank()) {
@@ -460,7 +465,7 @@ public class NotificationService {
      * 如果全局邮件通知已启用，且用户偏好中 emailEnabled=true，且用户有邮箱地址，
      * 且当前不在用户的静音时段内，则异步发送通知邮件。发送失败不影响站内通知。
      */
-    private void dispatchEmail(Long userId, String title, String content) {
+    private void dispatchEmail(Long userId, String title, String content, String resourceUrl) {
         try {
             if (!emailSendService.isEmailAvailable()) {
                 return;
@@ -483,7 +488,7 @@ public class NotificationService {
             }
             // 异步发送
             String subject = "[TrackFlow] " + title;
-            String htmlContent = buildNotificationEmailContent(title, content);
+            String htmlContent = buildNotificationEmailContent(title, content, resourceUrl);
             emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
         } catch (Exception e) {
             log.warn("[Notification] 邮件分发异常（不影响站内通知）: userId={}, error={}",
@@ -492,19 +497,28 @@ public class NotificationService {
     }
 
     /**
-     * 构建通知邮件 HTML 内容
+     * 构建通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildNotificationEmailContent(String title, String content) {
+    private String buildNotificationEmailContent(String title, String content, String resourceUrl) {
+        String actionButton = "";
+        if (resourceUrl != null && !resourceUrl.isBlank()) {
+            actionButton = String.format("""
+                      <p style="margin: 0 0 24px 0;">
+                        <a href="%s" style="display: inline-block; padding: 10px 20px; background-color: #0969da; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500;">在 TrackFlow 中查看</a>
+                      </p>
+                    """, resourceUrl);
+        }
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 12px 0;">%s</h3>
                   <p style="color: #57606a; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">%s</p>
+                  %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
                     此邮件由 TrackFlow 项目管理系统自动发送。您可以在个人通知偏好中关闭邮件通知。
                   </p>
                 </div>
-                """, escapeHtml(title), escapeHtml(content));
+                """, escapeHtml(title), escapeHtml(content), actionButton);
     }
 
     /**

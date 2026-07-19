@@ -125,8 +125,8 @@
             <div class="item-meta">
               <span v-if="item.reasonLabel" class="item-reason">{{ item.reasonLabel }}</span>
               <span class="item-time">{{ formatTime(item.updatedAt || item.createdAt) }}</span>
-              <span v-if="item.resourceType === 'issue' && item.resourceId" class="item-link">
-                查看工单 →
+              <span v-if="item.resourceUrl || (item.resourceType === 'issue' && item.resourceId)" class="item-link">
+                {{ item.resourceType === 'sprint' ? '查看 Sprint →' : '查看工单 →' }}
               </span>
             </div>
           </div>
@@ -331,10 +331,15 @@ function handleItemClick(item: NotificationVO) {
   if (!item.isRead) {
     markRead(item.id)
   }
-  if (item.resourceType === 'issue' && item.resourceId) {
+  // 优先使用后端返回的 resourceUrl（通用化导航）
+  if (item.resourceUrl) {
+    router.push(item.resourceUrl)
+  } else if (item.resourceType === 'issue' && item.resourceId) {
     router.push(`/issues/${item.resourceId}`)
   } else if (item.resourceType === 'project' && item.resourceId) {
     router.push(`/projects/${item.resourceId}`)
+  } else if (item.resourceType === 'sprint' && item.projectId) {
+    router.push(`/sprints?projectId=${item.projectId}`)
   }
 }
 

@@ -31,11 +31,12 @@ public class NotificationConverterManual implements NotificationConverter {
         vo.setActorId(longToString(entity.getActorId()));
         vo.setProjectId(longToString(entity.getProjectId()));
         vo.setResourceId(longToString(entity.getResourceId()));
+        vo.setResourceType(entity.getResourceType());
+        vo.setResourceUrl(entity.getResourceUrl());
         vo.setTitle(entity.getTitle());
         vo.setContent(entity.getContent());
         vo.setType(entity.getType());
         vo.setReason(entity.getReason());
-        vo.setResourceType(entity.getResourceType());
         vo.setIsRead(entity.getIsRead());
         vo.setCreatedAt(entity.getCreatedAt());
         vo.setUpdatedAt(entity.getUpdatedAt());

@@ -17,6 +17,7 @@ public class NotificationVO {
     private String reasonLabel;
     private String resourceType;
     private String resourceId;
+    private String resourceUrl;
     private Boolean isRead;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

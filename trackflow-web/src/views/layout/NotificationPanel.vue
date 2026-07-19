@@ -434,13 +434,19 @@ function handleItemClick(item: NotificationVO) {
   if (!item.isRead) {
     markRead(item.id)
   }
-  // 跳转到对应资源
-  if (item.resourceType === 'issue' && item.resourceId) {
+  // 优先使用后端返回的 resourceUrl（通用化导航）
+  if (item.resourceUrl) {
+    closePanel()
+    router.push(item.resourceUrl)
+  } else if (item.resourceType === 'issue' && item.resourceId) {
     closePanel()
     router.push(`/issues/${item.resourceId}`)
   } else if (item.resourceType === 'project' && item.resourceId) {
     closePanel()
     router.push(`/projects/${item.resourceId}`)
+  } else if (item.resourceType === 'sprint' && item.projectId) {
+    closePanel()
+    router.push(`/sprints?projectId=${item.projectId}`)
   }
 }
 
