@@ -42,6 +42,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
 
     /**
      * 按项目聚合：查询用户有权访问的所有项目工时（项目视图概览）
+     * ongoing 记录仅返回当前用户自己的，他人的 ongoing 记录不可见
      */
     List<Map<String, Object>> selectEntriesByProjectForUser(
             @Param("userId") Long userId,
@@ -52,11 +53,13 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
 
     /**
      * 查询指定项目在日期范围内的所有工时（项目视图明细）
+     * ongoing 记录仅返回当前用户自己的，他人的 ongoing 记录不可见
      */
     List<Map<String, Object>> selectEntriesByProject(
             @Param("projectId") Long projectId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
-            @Param("workTypeAttributeId") Long workTypeAttributeId
+            @Param("workTypeAttributeId") Long workTypeAttributeId,
+            @Param("currentUserId") Long currentUserId
     );
 }

@@ -63,6 +63,7 @@
     </select>
 
     <!-- 按项目聚合工时：使用 time_entry.project_id 直接关联，不依赖 issue 存在性 -->
+    <!-- ongoing 可见性：仅返回已完成记录 + 当前用户自己的 ongoing 记录 -->
     <select id="selectEntriesByProjectForUser" resultType="map">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
@@ -86,10 +87,12 @@
         )
           AND t.work_date >= #{startDate}
           AND t.work_date &lt;= #{endDate}
+          AND (t.ongoing = false OR t.user_id = #{userId})
         ORDER BY p.name ASC, t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 
     <!-- 按项目查询工时：使用 time_entry.project_id 直接关联 -->
+    <!-- ongoing 可见性：仅返回已完成记录 + 当前用户自己的 ongoing 记录 -->
     <select id="selectEntriesByProject" resultType="map">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
@@ -111,6 +114,7 @@
         WHERE t.project_id = #{projectId}
           AND t.work_date >= #{startDate}
           AND t.work_date &lt;= #{endDate}
+          AND (t.ongoing = false OR t.user_id = #{currentUserId})
         ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 

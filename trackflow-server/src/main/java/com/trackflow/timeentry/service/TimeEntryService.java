@@ -338,10 +338,12 @@ public class TimeEntryService {
     /**
      * 查询某 Issue 的所有工时记录
      */
-    public List<TimeEntryVO> listByIssue(Long issueId) {
-        List<TimeEntry> entries = timeEntryMapper.selectList(
-                new QueryWrapper<TimeEntry>().eq("issue_id", issueId).orderByDesc("work_date", "created_at")
-        );
+    public List<TimeEntryVO> listByIssue(Long issueId, Long currentUserId) {
+        QueryWrapper<TimeEntry> wrapper = new QueryWrapper<TimeEntry>()
+                .eq("issue_id", issueId)
+                .and(w -> w.eq("ongoing", false).or().eq("user_id", currentUserId))
+                .orderByDesc("work_date", "created_at");
+        List<TimeEntry> entries = timeEntryMapper.selectList(wrapper);
         if (entries.isEmpty()) return List.of();
 
         // 批量加载属性值
@@ -435,10 +437,11 @@ public class TimeEntryService {
 
     /**
      * 查询指定项目在日期范围内的工时明细（项目视图详情）
+     * ongoing 记录仅对其所有者可见，他人的 ongoing 记录不返回
      */
-    public List<TimeEntryVO> listByProject(Long projectId, LocalDate startDate, LocalDate endDate) {
+    public List<TimeEntryVO> listByProject(Long projectId, LocalDate startDate, LocalDate endDate, Long currentUserId) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(
-                projectId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId());
+                projectId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId(), currentUserId);
         return rows.stream().map(row -> {
             TimeEntryVO vo = mapRowToVO(row);
             vo.setUserName((String) row.get("user_name"));

@@ -150,13 +150,15 @@ public class TimeEntryController {
 
     /**
      * 查询某 Issue 的工时记录（校验项目成员权限）
+     * ongoing 记录仅对其所有者可见
      */
     @GetMapping("/issue/{issueId}")
     @PreAuthorize("isAuthenticated()")
     public R<List<TimeEntryVO>> listByIssue(@PathVariable("issueId") Long issueId) {
         // 校验当前用户是否有权访问该工单所属的项目
         issueService.getByIdWithAccessCheck(issueId);
-        return R.ok(timeEntryService.listByIssue(issueId));
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(timeEntryService.listByIssue(issueId, currentUserId));
     }
 
     /**
@@ -194,6 +196,7 @@ public class TimeEntryController {
 
     /**
      * 查询指定项目在日期范围内的工时明细（项目视图详情）
+     * ongoing 记录仅对其所有者可见
      */
     @GetMapping("/by-project/{projectId}")
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
@@ -201,7 +204,8 @@ public class TimeEntryController {
             @PathVariable("projectId") Long projectId,
             @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return R.ok(timeEntryService.listByProject(projectId, startDate, endDate));
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(timeEntryService.listByProject(projectId, startDate, endDate, currentUserId));
     }
 
     /**
