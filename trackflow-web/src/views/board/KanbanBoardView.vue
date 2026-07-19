@@ -633,6 +633,7 @@
           :selected-count="selectedCount"
           :selected-issues="selectedIssues"
           :can-delete="canDeleteIssue"
+          :active-project-id="selectedProject"
           @deselect-all="clearSelection"
           @batch-state="onBatchState"
           @batch-assign="onBatchAssign"

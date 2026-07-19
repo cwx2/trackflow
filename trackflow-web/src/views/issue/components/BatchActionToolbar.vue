@@ -110,6 +110,9 @@
             <div v-if="sprintWarning" class="dropdown-warning">
               {{ sprintWarning }}
             </div>
+            <div v-else-if="sprintError" class="dropdown-error">
+              {{ sprintError }}
+            </div>
             <div v-else-if="sprintLoading" class="dropdown-loading">
               <a-spin :size="16" />
             </div>
@@ -132,7 +135,7 @@
                 </div>
               </template>
               <div v-if="sprintGroups.length === 0" class="dropdown-empty">
-                无可用 Sprint
+                该项目暂无可用 Sprint
               </div>
             </template>
           </div>
@@ -335,6 +338,8 @@ const props = defineProps<{
   selectedCount: number
   selectedIssues: IssueVO[]
   canDelete?: boolean
+  /** 当前视图选中的项目 ID（用作 Sprint 加载的 fallback 上下文） */
+  activeProjectId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -440,6 +445,7 @@ function handleBatchAssign(member: ProjectMemberVO | null) {
 const showSprintDropdown = ref(false)
 const sprintLoading = ref(false)
 const sprintWarning = ref('')
+const sprintError = ref('')
 const sprints = ref<SprintVO[]>([])
 
 interface SprintGroup {
@@ -456,20 +462,55 @@ const sprintGroups = computed<SprintGroup[]>(() => {
   return groups
 })
 
+/** 用于确定 Sprint 应加载哪个项目的 ID */
+function resolveSprintProjectId(): string | undefined {
+  // 优先从选中工单推断项目
+  const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId).filter(Boolean))]
+  if (projectIds.length === 1) return projectIds[0]
+  if (projectIds.length > 1) return undefined // 多项目场景，外层已处理
+  // fallback: 使用当前视图的项目筛选
+  if (props.activeProjectId) return props.activeProjectId
+  return undefined
+}
+
 watch(showSprintDropdown, async (visible) => {
   if (visible) {
     sprintWarning.value = ''
-    const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId))]
+    sprintError.value = ''
+    sprints.value = []
+
+    const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId).filter(Boolean))]
+
     if (projectIds.length > 1) {
-      sprintWarning.value = '批量移动 Sprint 仅支持同一项目的工单'
+      sprintWarning.value = '批量移动 Sprint 仅支持同一项目的工单，请选择同一项目的工单'
       return
     }
+
+    const targetProjectId = resolveSprintProjectId()
+    if (!targetProjectId) {
+      sprintWarning.value = '无法确定目标项目，请选择具体项目的工单或在顶部筛选项目'
+      return
+    }
+
     sprintLoading.value = true
     try {
-      const res = await sprintApi.listByProject(projectIds[0])
+      const res = await sprintApi.listByProject(targetProjectId)
       sprints.value = res.data || []
-    } catch {
+      // 如果 API 成功但没有 active/planned Sprint，给出明确提示
+      if (sprints.value.length > 0 && sprintGroups.value.length === 0) {
+        // 有 Sprint 但都已完成
+        sprintWarning.value = '该项目所有 Sprint 均已完成，暂无进行中或计划中的 Sprint'
+      }
+    } catch (e: any) {
       sprints.value = []
+      const status = e.response?.status
+      if (status === 403) {
+        sprintError.value = '权限不足，无法查看该项目的 Sprint'
+      } else if (status === 404) {
+        sprintError.value = '项目不存在或已被删除'
+      } else {
+        sprintError.value = '加载 Sprint 列表失败，请稍后重试'
+      }
     } finally {
       sprintLoading.value = false
     }
@@ -743,6 +784,15 @@ function confirmBatchDelete() {
   font-size: 12px;
   color: var(--tf-warning);
   background: rgba(210, 153, 34, 0.1);
+  border-radius: 4px;
+  margin: 4px;
+}
+
+.dropdown-error {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--tf-danger);
+  background: rgba(248, 81, 73, 0.1);
   border-radius: 4px;
   margin: 4px;
 }
