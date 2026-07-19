@@ -1162,10 +1162,12 @@ const showManageQueriesModal = ref(false)
 const manageQuerySearch = ref('')
 const availableQueries = ref<any[]>([])
 
-/** Check if a query belongs to the current user */
+/** Check if a query belongs to the current user AND is editable (not shared/system) */
 function isOwnQuery(q: any): boolean {
+  if (!q) return false
   const currentUserId = authStore.user?.userId || authStore.user?.id || ''
-  return q.userId === String(currentUserId)
+  // Must be created by current user AND not shared (shared queries are system/public, not editable)
+  return q.userId === String(currentUserId) && !q.shared
 }
 function isOwnQueryById(userId: string): boolean {
   const currentUserId = authStore.user?.userId || authStore.user?.id || ''
