@@ -110,24 +110,30 @@
                 v-if="cf.fieldFormat === 'string'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                :placeholder="cf.effectiveDefaultValue ?? cf.defaultValue ?? ''"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
+                @input="clearFieldError(cf.id)"
               />
               <!-- text (多行/Markdown) -->
               <a-textarea
                 v-else-if="cf.fieldFormat === 'text'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                :placeholder="cf.effectiveDefaultValue ?? cf.defaultValue ?? '输入多行文本（支持 Markdown）'"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 :auto-size="{ minRows: 2, maxRows: 6 }"
                 allow-clear
+                @input="clearFieldError(cf.id)"
               />
               <!-- int -->
               <a-input-number
                 v-else-if="cf.fieldFormat === 'int'"
                 :model-value="customFieldValues[cf.id] ? Number(customFieldValues[cf.id]) : undefined"
-                @update:model-value="(v: any) => customFieldValues[cf.id] = v != null ? String(v) : ''"
+                @update:model-value="(v: any) => { customFieldValues[cf.id] = v != null ? String(v) : ''; clearFieldError(cf.id) }"
                 size="small"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 :precision="0"
                 hide-button
                 style="width: 100%"
@@ -136,8 +142,10 @@
               <a-input-number
                 v-else-if="cf.fieldFormat === 'float'"
                 :model-value="customFieldValues[cf.id] ? Number(customFieldValues[cf.id]) : undefined"
-                @update:model-value="(v: any) => customFieldValues[cf.id] = v != null ? String(v) : ''"
+                @update:model-value="(v: any) => { customFieldValues[cf.id] = v != null ? String(v) : ''; clearFieldError(cf.id) }"
                 size="small"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 hide-button
                 style="width: 100%"
               />
@@ -147,7 +155,9 @@
                 v-model="customFieldValues[cf.id]"
                 size="small"
                 style="width: 100%"
-                placeholder="选择日期"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
+                @change="clearFieldError(cf.id)"
               />
               <!-- datetime -->
               <a-date-picker
@@ -157,22 +167,25 @@
                 style="width: 100%"
                 show-time
                 format="YYYY-MM-DDTHH:mm:ss"
-                placeholder="选择日期和时间"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
+                @change="clearFieldError(cf.id)"
               />
               <!-- bool -->
               <a-switch
                 v-else-if="cf.fieldFormat === 'bool'"
                 :model-value="customFieldValues[cf.id] === 'true'"
                 size="small"
-                @change="(v: any) => customFieldValues[cf.id] = String(v)"
+                @change="(v: any) => { customFieldValues[cf.id] = String(v); clearFieldError(cf.id) }"
               />
               <!-- list (多值模式) -->
               <a-select
                 v-else-if="cf.fieldFormat === 'list' && cf.isMulti"
                 :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
-                @update:model-value="(v: any) => customFieldValues[cf.id] = (v as string[]).join(',')"
+                @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(','); clearFieldError(cf.id) }"
                 size="small"
-                placeholder="选择（可多选）"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 multiple
                 allow-clear
               >
@@ -183,8 +196,10 @@
                 v-else-if="cf.fieldFormat === 'list'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                placeholder="选择"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
+                @change="clearFieldError(cf.id)"
               >
                 <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
               </a-select>
@@ -193,12 +208,16 @@
                 v-else-if="cf.fieldFormat === 'user'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                placeholder="选择用户"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
                 allow-search
+                @change="clearFieldError(cf.id)"
               >
                 <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
               </a-select>
+              <!-- inline error message -->
+              <span v-if="cfValidationErrors[cf.id]" class="field-error-msg">{{ cfValidationErrors[cf.id] }}</span>
             </div>
           </template>
         </div>
@@ -239,6 +258,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
+import type { CustomFieldDefinitionVO } from '@/api/types'
 
 const props = defineProps<{
   visible: boolean
@@ -277,6 +297,55 @@ const { fields: customFields, values: customFieldValues, loading: cfLoading, val
   projectIdRef,
   issueTypeRef
 )
+
+// 自定义字段校验错误（inline 显示）
+const cfValidationErrors = ref<Record<string, string>>({})
+
+/**
+ * 根据字段类型和配置生成占位文字
+ * 优先使用 effectiveDefaultValue 作为引导提示（类似 YouTrack Empty Value Name）
+ */
+function getFieldPlaceholder(cf: CustomFieldDefinitionVO): string {
+  // 如果有项目级/全局默认值配置且字段无值，用作占位提示
+  const hint = cf.effectiveDefaultValue ?? cf.defaultValue
+  if (hint && cf.fieldFormat !== 'bool') {
+    // 对于 list 类型，defaultValue 是 option ID，不适合作为 placeholder 文本
+    if (cf.fieldFormat !== 'list' && cf.fieldFormat !== 'user') {
+      return hint
+    }
+  }
+
+  const isRequired = cf.effectiveIsRequired ?? cf.isRequired
+
+  switch (cf.fieldFormat) {
+    case 'string':
+    case 'text':
+      return isRequired ? `请输入${cf.name}` : `输入${cf.name}`
+    case 'int':
+    case 'float':
+      return isRequired ? `请输入${cf.name}` : `输入数值`
+    case 'date':
+      return isRequired ? `请选择日期` : `选择日期`
+    case 'datetime':
+      return isRequired ? `请选择日期和时间` : `选择日期和时间`
+    case 'list':
+      if (cf.isMulti) return isRequired ? `请选择${cf.name}` : `选择（可多选）`
+      return isRequired ? `请选择${cf.name}` : `选择`
+    case 'user':
+      return isRequired ? `请选择` : `选择用户`
+    default:
+      return ''
+  }
+}
+
+/**
+ * 清除指定字段的验证错误
+ */
+function clearFieldError(fieldId: string) {
+  if (cfValidationErrors.value[fieldId]) {
+    delete cfValidationErrors.value[fieldId]
+  }
+}
 
 const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 
@@ -348,9 +417,17 @@ async function submitAndNew() {
 async function doSubmit(): Promise<boolean> {
   if (!canSubmit.value) return false
 
-  // 自定义字段必填校验
+  // 自定义字段必填校验（inline 显示错误）
+  cfValidationErrors.value = {}
   const cfErrors = validateCustomFields()
   if (cfErrors.length > 0) {
+    // 填充 inline 错误
+    for (const field of customFields.value) {
+      const isRequired = field.effectiveIsRequired ?? field.isRequired
+      if (isRequired && (!customFieldValues.value[field.id] || customFieldValues.value[field.id].trim() === '')) {
+        cfValidationErrors.value[field.id] = '此字段为必填项'
+      }
+    }
     Message.warning(cfErrors[0])
     return false
   }
@@ -412,6 +489,10 @@ onMounted(() => {
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
 .required-mark { color: #f85149; margin-left: 2px; }
+.field-error :deep(.arco-input-wrapper),
+.field-error :deep(.arco-select-view),
+.field-error :deep(.arco-picker) { border-color: #f85149 !important; }
+.field-error-msg { display: block; font-size: 11px; color: #f85149; margin-top: 2px; line-height: 1.3; }
 
 .panel-footer { display: flex; align-items: center; padding: 10px 0; border-top: 1px solid var(--color-border); flex-shrink: 0; }
 
