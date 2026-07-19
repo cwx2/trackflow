@@ -533,6 +533,10 @@ public class IssueService {
             oldValues.put("due_date", issue.getDueDate() != null ? issue.getDueDate().toString() : null);
         }
 
+        // 收集通知用字段变更：fieldName → [oldValue, newValue]
+        // 所有通知在方法末尾统一发布一个 MultiFieldUpdated 事件，避免聚合覆盖丢失信息
+        Map<String, String[]> fieldChanges = new java.util.LinkedHashMap<>();
+
         if (dto.getTitle() != null) {
             String trimmedTitle = dto.getTitle().trim();
             if (trimmedTitle.isEmpty()) {
@@ -546,9 +550,8 @@ public class IssueService {
                     issue.getDescription() != null ? "（已有内容）" : null,
                     dto.getDescription() != null ? "（已更新）" : null);
             issue.setDescription(dto.getDescription());
-            // 通知报告人和负责人描述变更（不传具体内容，仅告知有变更）
-            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "description", null, null, currentUserId));
+            // 收集描述变更（不传具体内容，仅告知有变更）
+            fieldChanges.put("description", new String[]{null, null});
         }
         if (dto.getIssueType() != null && !dto.getIssueType().equals(issue.getIssueType())) {
             String oldType = issue.getIssueType();
@@ -583,10 +586,9 @@ public class IssueService {
             String oldPriority = issue.getPriority();
             recordActivity(id, currentUserId, "updated", "priority", oldPriority, dto.getPriority());
             issue.setPriority(dto.getPriority());
-            // 通知报告人和负责人优先级变更
+            // 收集优先级变更（仅当实际变更时）
             if (!dto.getPriority().equals(oldPriority)) {
-                eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                        issue, "priority", oldPriority, dto.getPriority(), currentUserId));
+                fieldChanges.put("priority", new String[]{oldPriority, dto.getPriority()});
             }
         }
         if (dto.getAssigneeId() != null) {
@@ -600,6 +602,7 @@ public class IssueService {
             Long oldAssigneeId = issue.getAssigneeId();
             issue.setAssigneeId(normalizedAssigneeId);
             // 通知新负责人（仅当 assignee 实际变更且不为空时）— 事务提交后触发
+            // Assigned 事件保持独立发布（有专门的通知逻辑，不走 FieldUpdated 路径）
             if (normalizedAssigneeId != null && !normalizedAssigneeId.equals(oldAssigneeId)) {
                 eventPublisher.publishEvent(new IssueNotificationEvent.Assigned(issue, normalizedAssigneeId, currentUserId));
             }
@@ -625,9 +628,8 @@ public class IssueService {
             }
             recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
             issue.setSprintId(dto.getSprintId());
-            // 通知报告人和负责人迭代变更
-            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "sprint", oldSprintName, newSprintName, currentUserId));
+            // 收集迭代变更
+            fieldChanges.put("sprint", new String[]{oldSprintName, newSprintName});
         }
         if (dto.getParentId() != null) {
             Long oldParentId = issue.getParentId();
@@ -645,9 +647,8 @@ public class IssueService {
             }
             recordActivity(id, currentUserId, "updated", "parent", oldParentKey, newParentKey);
             issue.setParentId(dto.getParentId());
-            // 通知报告人和负责人父工单变更
-            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "parent", oldParentKey, newParentKey, currentUserId));
+            // 收集父工单变更
+            fieldChanges.put("parent", new String[]{oldParentKey, newParentKey});
 
             // parentId 变更：刷新旧父和新父的祖先链
             Long newParentId = dto.getParentId() == 0 ? null : dto.getParentId();
@@ -663,9 +664,8 @@ public class IssueService {
             String newDueDateStr = dto.getDueDate().toString();
             recordActivity(id, currentUserId, "updated", "due_date", oldDueDateStr, newDueDateStr);
             issue.setDueDate(dto.getDueDate());
-            // 通知报告人和负责人截止日期变更
-            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
-                    issue, "due_date", oldDueDateStr, newDueDateStr, currentUserId));
+            // 收集截止日期变更
+            fieldChanges.put("due_date", new String[]{oldDueDateStr, newDueDateStr});
         }
         if (dto.getEstimatedHours() != null) {
             recordActivity(id, currentUserId, "updated", "estimated_hours",
@@ -695,6 +695,12 @@ public class IssueService {
 
         // 触发 on-field-changed 自动化规则（通过事件，解耦）
         fireFieldChangeRules(issue, dto, oldValues);
+
+        // 发布合并的字段变更通知事件（事务提交后触发，一次操作只产生一条通知）
+        if (!fieldChanges.isEmpty()) {
+            eventPublisher.publishEvent(new IssueNotificationEvent.MultiFieldUpdated(
+                    issue, fieldChanges, currentUserId));
+        }
 
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_updated"));

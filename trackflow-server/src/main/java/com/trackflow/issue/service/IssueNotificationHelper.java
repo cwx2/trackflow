@@ -488,6 +488,86 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     }
 
     /**
+     * 发送多字段同时变更的合并通知。
+     * <p>
+     * 当用户在一次 API 调用中同时修改多个字段时，将所有变更合并为一条通知，
+     * 避免聚合机制覆盖式更新导致前面字段的变更信息丢失。
+     * <p>
+     * 如果仅变更了一个字段，退化为与 {@link #notifyFieldUpdated} 相同的行为。
+     *
+     * @param issue      变更后的 Issue 实体
+     * @param changes    变更字段映射：fieldName → [oldValue, newValue]
+     * @param operatorId 操作者 ID
+     */
+    @Async("notificationExecutor")
+    public void notifyMultiFieldUpdated(Issue issue, Map<String, String[]> changes, Long operatorId) {
+        try {
+            if (changes == null || changes.isEmpty()) {
+                return;
+            }
+
+            // 如果只有一个字段变更，退化为单字段通知逻辑
+            if (changes.size() == 1) {
+                Map.Entry<String, String[]> entry = changes.entrySet().iterator().next();
+                String[] vals = entry.getValue();
+                notifyFieldUpdated(issue, entry.getKey(), vals[0], vals[1], operatorId);
+                return;
+            }
+
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) {
+                return;
+            }
+
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipientReasons.keySet(), NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
+            String operatorName = getUserDisplayName(operatorId);
+            String title = String.format("%s 有 %d 个字段更新", issue.getIssueKey(), changes.size());
+
+            // 组装多字段变更详情
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("%s 更新了工单 [%s] %s：\n", operatorName, issue.getIssueKey(), issue.getTitle()));
+            for (Map.Entry<String, String[]> entry : changes.entrySet()) {
+                String fieldLabel = getFieldLabel(entry.getKey());
+                String[] vals = entry.getValue();
+                String oldVal = vals[0];
+                String newVal = vals[1];
+                if (oldVal != null && newVal != null) {
+                    sb.append(String.format("• %s：%s → %s\n", fieldLabel, oldVal, newVal));
+                } else if (newVal != null) {
+                    sb.append(String.format("• %s：设置为「%s」\n", fieldLabel, newVal));
+                } else if (oldVal != null) {
+                    sb.append(String.format("• %s：已清除（原值「%s」）\n", fieldLabel, oldVal));
+                } else {
+                    sb.append(String.format("• %s：已更新\n", fieldLabel));
+                }
+            }
+            String content = sb.toString().stripTrailing();
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送多字段变更通知: issue={}, fields={}, recipients={}",
+                    issue.getIssueKey(), changes.keySet(), enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送多字段变更通知失败: issue={}, fields={}, error={}",
+                    issue.getIssueKey(), changes != null ? changes.keySet() : "null", e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyMultiFieldUpdated", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 有多个字段更新", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 的多个字段已变更", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_updated.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
      * 获取字段的中文显示标签。
      */
     private String getFieldLabel(String fieldName) {

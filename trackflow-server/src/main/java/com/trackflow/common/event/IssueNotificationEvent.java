@@ -50,6 +50,9 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * <p>
      * 不同于 StatusChanged/Assigned 等有专门逻辑的事件，FieldUpdated 是一个通用事件，
      * 用于所有"仅需告知相关人员有变更"的字段修改。
+     * <p>
+     * 注意：IssueService.update() 中的多字段更新已改用 {@link MultiFieldUpdated}，
+     * 本事件仅用于其他服务的单字段独立变更（如 IssueTagService）。
      *
      * @param issue       变更后的 Issue 实体
      * @param fieldName   变更的字段名（如 "priority", "due_date", "description"）
@@ -58,4 +61,19 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param operatorId  操作者 ID
      */
     record FieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 工单多字段同时变更通知事件。
+     * <p>
+     * 当用户在一次 API 调用中同时修改多个字段时（如优先级 + 截止日期 + 迭代），
+     * 收集所有变更发布一个复合事件，确保接收人只收到一条包含全部变更详情的通知。
+     * <p>
+     * 与 FieldUpdated 的区别：FieldUpdated 用于其他服务的单字段独立变更，
+     * MultiFieldUpdated 用于 IssueService.update() 中的批量字段变更。
+     *
+     * @param issue       变更后的 Issue 实体
+     * @param changes     变更字段映射：fieldName → [oldValue, newValue]
+     * @param operatorId  操作者 ID
+     */
+    record MultiFieldUpdated(Issue issue, java.util.Map<String, String[]> changes, Long operatorId) implements IssueNotificationEvent {}
 }

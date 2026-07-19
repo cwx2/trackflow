@@ -73,4 +73,10 @@ public class IssueNotificationEventListener {
         if (NotificationContext.isSilent()) return;
         notificationHelper.notifyFieldUpdated(event.issue(), event.fieldName(), event.oldValue(), event.newValue(), event.operatorId());
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleMultiFieldUpdated(IssueNotificationEvent.MultiFieldUpdated event) {
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyMultiFieldUpdated(event.issue(), event.changes(), event.operatorId());
+    }
 }
