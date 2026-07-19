@@ -197,17 +197,14 @@
               <a-link @click="editQueryForm.icon = ''" style="margin-left: 8px; font-size: 12px;">清除</a-link>
             </div>
           </a-form-item>
-          <a-form-item label="筛选条件">
+          <a-form-item label="查询">
             <div class="query-edit-filters">
-              <div v-if="editQueryFiltersPreview.length > 0" class="edit-filter-chips">
-                <div v-for="(f, i) in editQueryFiltersPreview" :key="i" class="preview-chip">
-                  {{ f }}
-                </div>
-              </div>
-              <span v-else class="preview-empty">无筛选条件（将返回所有工单）</span>
-              <a-checkbox v-model="editQueryForm.replaceFilters" style="margin-top: 8px;">
-                用当前筛选条件替换
-              </a-checkbox>
+              <a-input
+                v-model="editQueryForm.queryText"
+                placeholder="无筛选条件（将返回所有工单）"
+                allow-clear
+              />
+              <div class="query-edit-hint">格式：字段: 值，多个条件空格分隔（如 状态: 未关闭 负责人: 我）</div>
             </div>
           </a-form-item>
           <a-form-item label="固定到面板顶部">
@@ -895,27 +892,38 @@ const editQueryForm = reactive({
   pinned: false,
   shared: false,
   filters: [] as any[],
-  replaceFilters: false
+  queryText: ''
 })
 
-const editQueryFiltersPreview = computed(() => {
-  if (editQueryForm.replaceFilters) {
-    return createQueryFiltersPreview.value.map(f => `[新] ${f}`)
-  }
-  // Show existing filter conditions with human-readable labels
-  const fieldLabels: Record<string, string> = {
-    status: '状态', priority: '优先级', assignee: '负责人',
-    type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人'
-  }
-  const operatorLabels: Record<string, string> = {
-    eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭'
-  }
+// (editQueryFiltersPreview removed — replaced by editable queryText input)
 
-  return editQueryForm.filters.map((f: any) => {
-    const fieldLabel = fieldLabels[f.field] || f.field
+// ===== Query text ↔ Filters JSON conversion (YouTrack-style editable query) =====
+
+const FIELD_LABEL_TO_KEY: Record<string, string> = {
+  '状态': 'status', '优先级': 'priority', '负责人': 'assignee',
+  '类型': 'type', 'Sprint': 'sprint', 'sprint': 'sprint',
+  '项目': 'project', '报告人': 'reporter'
+}
+const FIELD_KEY_TO_LABEL: Record<string, string> = {
+  status: '状态', priority: '优先级', assignee: '负责人',
+  type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人'
+}
+
+/**
+ * Convert filter JSON array to human-readable query text.
+ * e.g. [{"field":"project","operator":"eq","value":["id"]}] → "项目: DE4"
+ */
+function filtersToQueryText(filters: any[]): string {
+  if (!filters || filters.length === 0) return ''
+  const parts: string[] = []
+  for (const f of filters) {
+    const fieldLabel = FIELD_KEY_TO_LABEL[f.field] || f.field
     const op = f.operator
 
-    if (op === 'open') return `${fieldLabel}: 未关闭`
+    if (op === 'open') {
+      parts.push(`${fieldLabel}: 未关闭`)
+      continue
+    }
 
     let values: string
     if (Array.isArray(f.value)) {
@@ -932,7 +940,7 @@ const editQueryFiltersPreview = computed(() => {
         }
         if (f.field === 'project') {
           const p = projectList.value.find(pr => pr.id === v)
-          return p ? p.name : v
+          return p ? (p.key || p.name) : v
         }
         return v
       }).join(', ')
@@ -940,10 +948,89 @@ const editQueryFiltersPreview = computed(() => {
       values = String(f.value || '')
     }
 
-    const opLabel = (op && op !== 'eq') ? ` ${operatorLabels[op] || op}` : ':'
-    return `${fieldLabel}${opLabel} ${values}`
-  }).filter((l: string) => l && l.trim())
-})
+    const opStr = (op === 'neq' || op === 'not_in') ? ' ≠' : ':'
+    parts.push(`${fieldLabel}${opStr} ${values}`)
+  }
+  return parts.join('  ')
+}
+
+/**
+ * Parse human-readable query text back into filter JSON array.
+ * e.g. "项目: DE4  状态: 未关闭" → [{"field":"project","operator":"eq","value":["id"]}, ...]
+ * 
+ * Supports: "字段: 值" and "字段 ≠ 值" patterns.
+ * Values are resolved back to IDs where possible.
+ */
+function queryTextToFilters(text: string): any[] {
+  if (!text || !text.trim()) return []
+  const filters: any[] = []
+
+  // Normalize Chinese colon
+  const normalized = text.replace(/：/g, ':')
+
+  // Use a simpler approach: split on double-space, then parse each segment
+  const segments = normalized.split(/\s{2,}/).filter(s => s.trim())
+  for (const seg of segments) {
+    // Try to match "field: value" or "field ≠ value"
+    const colonIdx = seg.indexOf(':')
+    const neqIdx = seg.indexOf('≠')
+    
+    let fieldPart: string
+    let valuePart: string
+    let isNegative = false
+
+    if (neqIdx > 0 && (colonIdx < 0 || neqIdx < colonIdx)) {
+      fieldPart = seg.substring(0, neqIdx).trim()
+      valuePart = seg.substring(neqIdx + 1).trim()
+      isNegative = true
+    } else if (colonIdx > 0) {
+      fieldPart = seg.substring(0, colonIdx).trim()
+      valuePart = seg.substring(colonIdx + 1).trim()
+    } else {
+      continue // Can't parse this segment
+    }
+
+    const fieldKey = FIELD_LABEL_TO_KEY[fieldPart] || fieldPart
+
+    // Handle special "未关闭" value
+    if (valuePart === '未关闭') {
+      filters.push({ field: fieldKey, operator: 'open', value: [] })
+      continue
+    }
+
+    // Split multiple values by comma
+    const values = valuePart.split(/[,，]/).map(v => v.trim()).filter(v => v)
+    
+    // Resolve readable values back to IDs
+    const resolvedValues = values.map(v => {
+      if (v === '我') return '${currentUser}'
+      if (fieldKey === 'project') {
+        const p = projectList.value.find(pr => pr.key === v || pr.name === v)
+        return p ? p.id : v
+      }
+      if (fieldKey === 'priority') {
+        const map: Record<string, string> = { '紧急': 'Critical', '高': 'High', '普通': 'Normal', '低': 'Low' }
+        return map[v] || v
+      }
+      if (fieldKey === 'type') {
+        const entry = Object.entries(issueTypeLabelMap).find(([, label]) => label === v)
+        return entry ? entry[0] : v
+      }
+      if (fieldKey === 'status') {
+        const st = statusCache.value.find(s => localizeStatusName(s.name) === v || s.name === v)
+        return st ? st.id : v
+      }
+      return v
+    })
+
+    const operator = isNegative
+      ? (resolvedValues.length > 1 ? 'not_in' : 'neq')
+      : (resolvedValues.length > 1 ? 'in' : 'eq')
+    
+    filters.push({ field: fieldKey, operator, value: resolvedValues })
+  }
+  return filters
+}
 
 function openEditQueryModal(q: any) {
   editQueryForm.id = q.id
@@ -951,13 +1038,13 @@ function openEditQueryModal(q: any) {
   editQueryForm.icon = q.icon || ''
   editQueryForm.pinned = q.pinned || false
   editQueryForm.shared = q.shared || false
-  editQueryForm.replaceFilters = false
-  // Parse filters from the panel item (stored as JSON string)
+  // Parse filters and convert to human-readable query text
   try {
     editQueryForm.filters = q.filters ? JSON.parse(q.filters) : []
   } catch {
     editQueryForm.filters = []
   }
+  editQueryForm.queryText = filtersToQueryText(editQueryForm.filters)
   showEditQueryModal.value = true
 }
 
@@ -968,15 +1055,20 @@ async function handleEditQuery() {
   }
   editQueryLoading.value = true
   try {
+    // Parse query text back to filters JSON
+    const newFilters = queryTextToFilters(editQueryForm.queryText)
+    const originalQueryText = filtersToQueryText(editQueryForm.filters)
+    const filtersChanged = editQueryForm.queryText.trim() !== originalQueryText.trim()
+
     const updateData: Record<string, any> = {
       name: editQueryForm.name.trim(),
       icon: editQueryForm.icon || '',
       pinned: editQueryForm.pinned,
       shared: editQueryForm.shared
     }
-    // If user chose to replace filters with current ones
-    if (editQueryForm.replaceFilters) {
-      updateData.filters = buildCurrentFilters()
+    // Always send the parsed filters (user may have edited the query text)
+    if (filtersChanged) {
+      updateData.filters = newFilters
     }
     await queryApi.update(editQueryForm.id, updateData)
     Message.success('查询已更新')
@@ -993,11 +1085,11 @@ async function handleEditQuery() {
           icon: editQueryForm.icon || '',
           pinned: editQueryForm.pinned,
           shared: editQueryForm.shared,
-          ...(editQueryForm.replaceFilters ? { filters: JSON.stringify(updateData.filters) } : {})
+          ...(filtersChanged ? { filters: JSON.stringify(newFilters) } : {})
         }
       }
-      // If filters were replaced, refresh the list with new filter conditions
-      if (editQueryForm.replaceFilters) {
+      // If filters were changed, refresh the list
+      if (filtersChanged) {
         refreshList()
       }
     }
@@ -2383,7 +2475,7 @@ function applyDashboardFilter() {
 
 /* Edit query modal */
 .query-edit-filters { display: flex; flex-direction: column; gap: 6px; }
-.edit-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.query-edit-hint { font-size: 11px; color: var(--tf-text-tertiary); margin-top: 2px; }
 .form-help-text { font-size: 12px; color: var(--tf-text-tertiary); margin-left: 8px; }
 
 /* Manage queries modal */
