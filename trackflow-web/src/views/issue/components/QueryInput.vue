@@ -17,9 +17,9 @@
     <div v-if="showDropdown && suggestions.length > 0" class="query-dropdown" ref="dropdownRef">
       <div
         v-for="(item, i) in suggestions"
-        :key="item.id"
+        :key="item.id + '-' + i"
         class="query-dropdown-item"
-        :class="{ active: activeIndex === i }"
+        :class="{ active: activeIndex === i, separator: item.isSeparator }"
         @mousedown.prevent="selectSuggestion(item)"
         @mouseenter="activeIndex = i"
       >
@@ -31,8 +31,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { issueApi, userApi, sprintApi } from '@/api'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { userApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
 
@@ -42,13 +42,17 @@ interface Suggestion {
   id: string
   label: string
   hint?: string
-  insertText: string  // What to insert when selected
+  insertText: string
+  isSeparator?: boolean
+  type: 'field' | 'value' | 'operator' | 'keyword'
 }
 
 interface FieldDef {
-  key: string
-  label: string       // Chinese display name
-  queryKey: string    // What appears in query text (e.g. "状态")
+  key: string         // Internal key for JSON filter (e.g. "status", "cf.123456")
+  label: string       // Display name for suggestions (e.g. "状态")
+  queryKey: string    // What user types in query (e.g. "状态")
+  valueType: 'enum' | 'user' | 'date' | 'text' | 'number' | 'boolean'
+  getValues?: () => Promise<Array<{ id: string; label: string }>> | Array<{ id: string; label: string }>
 }
 
 // ==================== Props & Emits ====================
@@ -58,23 +62,12 @@ const props = defineProps<{
   placeholder?: string
   statusList: IssueStatusVO[]
   projectList: ProjectVO[]
+  projectId?: string | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
 }>()
-
-// ==================== Field definitions ====================
-
-const FIELDS: FieldDef[] = [
-  { key: 'status', label: '状态', queryKey: '状态' },
-  { key: 'priority', label: '优先级', queryKey: '优先级' },
-  { key: 'assignee', label: '负责人', queryKey: '负责人' },
-  { key: 'reporter', label: '报告人', queryKey: '报告人' },
-  { key: 'type', label: '类型', queryKey: '类型' },
-  { key: 'sprint', label: 'Sprint', queryKey: 'Sprint' },
-  { key: 'project', label: '项目', queryKey: '项目' },
-]
 
 // ==================== State ====================
 
@@ -85,6 +78,100 @@ const showDropdown = ref(false)
 const activeIndex = ref(0)
 const suggestions = ref<Suggestion[]>([])
 const userCache = ref<Array<{ id: string; label: string }>>([])
+const customFields = ref<FieldDef[]>([])
+let blurTimeout: ReturnType<typeof setTimeout> | null = null
+
+// ==================== Built-in field definitions ====================
+
+function getBuiltinFields(): FieldDef[] {
+  return [
+    {
+      key: 'status', label: '状态', queryKey: '状态', valueType: 'enum',
+      getValues: () => {
+        const special = [{ id: '__open__', label: '未关闭' }, { id: '__closed__', label: '已关闭' }]
+        const statuses = props.statusList.map(s => ({ id: s.name, label: localizeStatusName(s.name) }))
+        return [...special, ...statuses]
+      }
+    },
+    {
+      key: 'priority', label: '优先级', queryKey: '优先级', valueType: 'enum',
+      getValues: () => [
+        { id: 'Critical', label: '紧急' },
+        { id: 'High', label: '高' },
+        { id: 'Normal', label: '普通' },
+        { id: 'Low', label: '低' },
+      ]
+    },
+    {
+      key: 'assignee', label: '负责人', queryKey: '负责人', valueType: 'user',
+      getValues: () => [{ id: 'me', label: '我' }, ...userCache.value]
+    },
+    {
+      key: 'reporter', label: '报告人', queryKey: '报告人', valueType: 'user',
+      getValues: () => [{ id: 'me', label: '我' }, ...userCache.value]
+    },
+    {
+      key: 'type', label: '类型', queryKey: '类型', valueType: 'enum',
+      getValues: () => Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
+    },
+    {
+      key: 'sprint', label: 'Sprint', queryKey: 'Sprint', valueType: 'enum',
+      getValues: () => [] // Loaded contextually
+    },
+    {
+      key: 'project', label: '项目', queryKey: '项目', valueType: 'enum',
+      getValues: () => props.projectList.map(p => ({ id: p.key || p.id, label: `${p.key} - ${p.name}` }))
+    },
+    {
+      key: 'dueDate', label: '截止日期', queryKey: '截止日期', valueType: 'date',
+      getValues: () => getDateKeywords()
+    },
+    {
+      key: 'createdAt', label: '创建日期', queryKey: '创建日期', valueType: 'date',
+      getValues: () => getDateKeywords()
+    },
+    {
+      key: 'updatedAt', label: '更新日期', queryKey: '更新日期', valueType: 'date',
+      getValues: () => getDateKeywords()
+    },
+    {
+      key: 'resolvedAt', label: '解决日期', queryKey: '解决日期', valueType: 'date',
+      getValues: () => getDateKeywords()
+    },
+    {
+      key: 'keyword', label: '关键词', queryKey: '关键词', valueType: 'text',
+      getValues: () => []
+    },
+  ]
+}
+
+function getDateKeywords(): Array<{ id: string; label: string }> {
+  return [
+    { id: 'today', label: '今天' },
+    { id: 'yesterday', label: '昨天' },
+    { id: 'this week', label: '本周' },
+    { id: 'last week', label: '上周' },
+    { id: 'this month', label: '本月' },
+    { id: 'last month', label: '上月' },
+  ]
+}
+
+// All available fields (built-in + custom)
+function getAllFields(): FieldDef[] {
+  return [...getBuiltinFields(), ...customFields.value]
+}
+
+// ==================== Operator syntax hints ====================
+
+function getOperatorHints(): Suggestion[] {
+  return [
+    { id: 'op-comma', label: ',', hint: '多值（或关系）', insertText: ', ', type: 'operator' },
+    { id: 'op-range', label: '..', hint: '值范围（日期/数值）', insertText: ' .. ', type: 'operator' },
+    { id: 'op-exclude', label: '-', hint: '排除值', insertText: '-', type: 'operator' },
+    { id: 'op-empty', label: '无', hint: '字段为空', insertText: '无', type: 'keyword' },
+    { id: 'op-any', label: '有', hint: '字段非空', insertText: '有', type: 'keyword' },
+  ]
+}
 
 // ==================== Input handling ====================
 
@@ -95,22 +182,20 @@ function onInput(e: Event) {
 }
 
 function onFocus() {
+  if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null }
   updateSuggestions()
 }
 
 function onBlur() {
-  // Delay to allow mousedown on dropdown items
-  setTimeout(() => {
+  blurTimeout = setTimeout(() => {
     showDropdown.value = false
+    blurTimeout = null
   }, 200)
 }
 
 function onKeydown(e: KeyboardEvent) {
   if (!showDropdown.value || suggestions.value.length === 0) {
-    // If Enter is pressed without dropdown, just let it through
-    if (e.key === 'Escape') {
-      showDropdown.value = false
-    }
+    if (e.key === 'Escape') showDropdown.value = false
     return
   }
 
@@ -144,34 +229,110 @@ function scrollActiveIntoView() {
   })
 }
 
-// ==================== Suggestion logic ====================
+// ==================== Context detection ====================
 
-function updateSuggestions() {
+interface CursorContext {
+  type: 'field' | 'value' | 'operator_hint'
+  partial: string
+  fieldDef?: FieldDef
+  inExclude?: boolean  // after "-" prefix
+}
+
+function getContextAtCursor(text: string, cursorPos: number): CursorContext {
+  const before = text.substring(0, cursorPos)
+  const allFields = getAllFields()
+
+  // Find all field:value segments by detecting known field queryKeys
+  const fieldPositions: Array<{ start: number; end: number; fieldDef: FieldDef }> = []
+  for (const f of allFields) {
+    const escaped = f.queryKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = new RegExp(`${escaped}[：:]\\s*`, 'g')
+    let m: RegExpExecArray | null
+    while ((m = pattern.exec(text)) !== null) {
+      fieldPositions.push({ start: m.index, end: m.index + m[0].length, fieldDef: f })
+    }
+  }
+  fieldPositions.sort((a, b) => a.start - b.start)
+
+  // Check if cursor is inside a field's value area
+  for (let i = 0; i < fieldPositions.length; i++) {
+    const fp = fieldPositions[i]
+    const nextStart = i + 1 < fieldPositions.length ? fieldPositions[i + 1].start : text.length
+    if (cursorPos >= fp.end && cursorPos <= nextStart) {
+      const valuePart = text.substring(fp.end, cursorPos)
+      // Check if after last comma (multi-value context)
+      const lastComma = valuePart.lastIndexOf(',')
+      const currentValue = lastComma >= 0 ? valuePart.substring(lastComma + 1).trim() : valuePart.trim()
+      const inExclude = currentValue.startsWith('-')
+      const partial = inExclude ? currentValue.substring(1) : currentValue
+
+      // If there's meaningful value text AND trailing space(s), user wants next field
+      const trimmedValue = valuePart.trimEnd()
+      const hasTrailingSpace = valuePart.length > trimmedValue.length && trimmedValue.length > 0
+      const afterLastComma = lastComma >= 0 ? valuePart.substring(lastComma + 1) : valuePart
+      const commaTrailing = lastComma >= 0 && afterLastComma.trim() === '' // Just typed comma + space
+
+      if (hasTrailingSpace && !commaTrailing && trimmedValue.length > 0) {
+        // User finished typing a value and pressed space → suggest new field
+        return { type: 'field', partial: '' }
+      }
+
+      return { type: 'value', partial, fieldDef: fp.fieldDef, inExclude }
+    }
+  }
+
+  // Cursor is not inside any field's value → typing a field name
+  const lastSpaceIdx = before.lastIndexOf(' ')
+  const partial = lastSpaceIdx >= 0 ? before.substring(lastSpaceIdx + 1) : before
+  return { type: 'field', partial: partial.trim() }
+}
+
+// ==================== Suggestion generation ====================
+
+async function updateSuggestions() {
   const input = inputRef.value
   if (!input) return
 
-  const text = props.modelValue || ''
+  const text = input.value || ''
   const cursorPos = input.selectionStart ?? text.length
-
-  // Determine context: what's around the cursor?
   const context = getContextAtCursor(text, cursorPos)
 
   if (context.type === 'field') {
-    // Suggest field names
     const kw = context.partial.toLowerCase()
     const usedFields = getUsedFields(text)
-    suggestions.value = FIELDS
+    const allFields = getAllFields()
+
+    const fieldSuggestions: Suggestion[] = allFields
       .filter(f => !usedFields.has(f.key))
       .filter(f => !kw || f.label.toLowerCase().includes(kw) || f.queryKey.toLowerCase().includes(kw))
+      .slice(0, 12)
       .map(f => ({
         id: f.key,
         label: `${f.queryKey}:`,
         hint: `按 ${f.label} 筛选`,
-        insertText: `${f.queryKey}: `
+        insertText: `${f.queryKey}: `,
+        type: 'field' as const
       }))
-  } else if (context.type === 'value') {
-    // Suggest values for the field
-    suggestions.value = getValueSuggestions(context.fieldKey, context.partial)
+
+    // Also suggest operators if text is non-empty
+    if (text.trim().length > 0 && !kw) {
+      suggestions.value = [...getOperatorHints(), ...fieldSuggestions]
+    } else {
+      suggestions.value = fieldSuggestions
+    }
+  } else if (context.type === 'value' && context.fieldDef) {
+    const values = await resolveFieldValues(context.fieldDef)
+    const kw = context.partial.toLowerCase()
+    suggestions.value = values
+      .filter(v => !kw || v.label.toLowerCase().includes(kw))
+      .slice(0, 15)
+      .map(v => ({
+        id: v.id,
+        label: v.label,
+        hint: undefined,
+        insertText: v.label,
+        type: 'value' as const
+      }))
   } else {
     suggestions.value = []
   }
@@ -180,70 +341,17 @@ function updateSuggestions() {
   activeIndex.value = 0
 }
 
-interface CursorContext {
-  type: 'field' | 'value' | 'none'
-  partial: string
-  fieldKey: string
-}
-
-function getContextAtCursor(text: string, cursorPos: number): CursorContext {
-  // Get text before cursor
-  const before = text.substring(0, cursorPos)
-
-  // Strategy: parse the text as segments separated by known field patterns
-  // A segment starts with a known field label followed by ":"
-  // Find all field positions in the full text
-  const fieldPositions: Array<{ start: number; end: number; key: string }> = []
-  for (const f of FIELDS) {
-    const pattern = new RegExp(`${f.queryKey}[：:]`, 'g')
-    let m: RegExpExecArray | null
-    while ((m = pattern.exec(text)) !== null) {
-      fieldPositions.push({ start: m.index, end: m.index + m[0].length, key: f.key })
-    }
-  }
-  fieldPositions.sort((a, b) => a.start - b.start)
-
-  // Find which segment the cursor is in
-  // If cursor is inside a "field: value" segment, we're editing a value
-  // If cursor is after the last segment's value, we might be starting a new field
-  
-  let currentSegmentField: string | null = null
-  for (let i = 0; i < fieldPositions.length; i++) {
-    const fp = fieldPositions[i]
-    const nextStart = i + 1 < fieldPositions.length ? fieldPositions[i + 1].start : text.length
-    if (cursorPos >= fp.end && cursorPos <= nextStart) {
-      // Cursor is in the value area of this field
-      const valueSoFar = text.substring(fp.end, cursorPos).trimStart()
-      currentSegmentField = fp.key
-      // Check if the last character typed is a space after some value text
-      // If user typed space after completing a value, they might want a new field
-      // Heuristic: if there's a trailing space and some non-space before it, suggest fields
-      const trimmedBefore = before.trimEnd()
-      const trailingSpaces = before.length - trimmedBefore.length
-      if (valueSoFar.length > 0 && trailingSpaces >= 1) {
-        // User finished a value and pressed space → suggest new field
-        // But only if the partial after the last space doesn't look like part of the value
-        const afterLastSpace = before.substring(before.lastIndexOf(' ') + 1)
-        // If after last space matches a partial field name, suggest fields
-        const isPartialField = FIELDS.some(f => f.queryKey.startsWith(afterLastSpace) || f.label.startsWith(afterLastSpace))
-        if (isPartialField || afterLastSpace === '') {
-          return { type: 'field', partial: afterLastSpace, fieldKey: '' }
-        }
-      }
-      return { type: 'value', partial: valueSoFar, fieldKey: currentSegmentField }
-    }
-  }
-
-  // Cursor is before the first field, or there are no fields
-  // Check if we have a partial field name
-  const lastSpaceIdx = before.lastIndexOf(' ')
-  const partial = lastSpaceIdx >= 0 ? before.substring(lastSpaceIdx + 1) : before
-  return { type: 'field', partial: partial.trim(), fieldKey: '' }
+async function resolveFieldValues(fieldDef: FieldDef): Promise<Array<{ id: string; label: string }>> {
+  if (!fieldDef.getValues) return []
+  const result = fieldDef.getValues()
+  if (result instanceof Promise) return await result
+  return result
 }
 
 function getUsedFields(text: string): Set<string> {
   const used = new Set<string>()
-  for (const f of FIELDS) {
+  const allFields = getAllFields()
+  for (const f of allFields) {
     if (text.includes(`${f.queryKey}:`) || text.includes(`${f.queryKey}：`)) {
       used.add(f.key)
     }
@@ -251,100 +359,62 @@ function getUsedFields(text: string): Set<string> {
   return used
 }
 
-function getValueSuggestions(fieldKey: string, partial: string): Suggestion[] {
-  const kw = partial.toLowerCase()
-  let options: Array<{ id: string; label: string }> = []
-
-  switch (fieldKey) {
-    case 'status':
-      options = props.statusList.map(s => ({
-        id: s.name,
-        label: localizeStatusName(s.name)
-      }))
-      // Add special "未关闭" option
-      options.unshift({ id: '__open__', label: '未关闭' })
-      break
-
-    case 'priority':
-      options = [
-        { id: 'Critical', label: priorityLabelMap['Critical'] || '紧急' },
-        { id: 'High', label: priorityLabelMap['High'] || '高' },
-        { id: 'Normal', label: priorityLabelMap['Normal'] || '普通' },
-        { id: 'Low', label: priorityLabelMap['Low'] || '低' },
-      ]
-      break
-
-    case 'type':
-      options = Object.entries(issueTypeLabelMap).map(([id, label]) => ({
-        id, label
-      }))
-      break
-
-    case 'assignee':
-    case 'reporter':
-      options = [{ id: 'me', label: '我' }, ...userCache.value]
-      break
-
-    case 'project':
-      options = props.projectList.map(p => ({
-        id: p.key || p.name,
-        label: p.key ? `${p.key} - ${p.name}` : p.name
-      }))
-      break
-
-    case 'sprint':
-      // Sprint values are contextual — just show hint
-      options = [{ id: '_hint', label: '输入 Sprint 名称' }]
-      break
-  }
-
-  if (kw) {
-    options = options.filter(o => o.label.toLowerCase().includes(kw))
-  }
-
-  return options.slice(0, 12).map(o => ({
-    id: o.id,
-    label: o.label,
-    insertText: o.label
-  }))
-}
-
 // ==================== Select suggestion ====================
 
 function selectSuggestion(item: Suggestion) {
+  if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null }
+
   const input = inputRef.value
   if (!input) return
 
-  const text = props.modelValue || ''
+  const text = input.value || ''
   const cursorPos = input.selectionStart ?? text.length
   const before = text.substring(0, cursorPos)
   const after = text.substring(cursorPos)
-
   const context = getContextAtCursor(text, cursorPos)
 
   let newText: string
   let newCursorPos: number
 
-  if (context.type === 'field') {
-    // Replace partial field text with selected field
+  if (item.type === 'operator') {
+    // Insert operator at cursor position
+    newText = before + item.insertText + after
+    newCursorPos = before.length + item.insertText.length
+  } else if (context.type === 'field') {
+    // Replace partial field text
     const lastSpaceIdx = before.lastIndexOf(' ')
     const prefix = lastSpaceIdx >= 0 ? before.substring(0, lastSpaceIdx + 1) : ''
     newText = `${prefix}${item.insertText}${after}`
     newCursorPos = (prefix + item.insertText).length
-  } else if (context.type === 'value') {
-    // Replace partial value with selected value, then add trailing space for next field
-    // Find the "field:" prefix in the current segment
-    const fieldPositions: Array<{ start: number; end: number }> = []
-    for (const f of FIELDS) {
-      const pattern = new RegExp(`${f.queryKey}[：:]\\s*`, 'g')
-      let m: RegExpExecArray | null
-      while ((m = pattern.exec(before)) !== null) {
-        fieldPositions.push({ start: m.index, end: m.index + m[0].length })
+  } else if (context.type === 'value' && context.fieldDef) {
+    // Replace partial value with selected value
+    // Find the field's colon position
+    const allFields = getAllFields()
+    let fieldEnd = -1
+    for (const f of allFields) {
+      const patterns = [`${f.queryKey}: `, `${f.queryKey}:`, `${f.queryKey}： `]
+      for (const p of patterns) {
+        const idx = before.lastIndexOf(p)
+        if (idx >= 0 && idx + p.length > fieldEnd) {
+          fieldEnd = idx + p.length
+        }
       }
     }
-    const lastField = fieldPositions[fieldPositions.length - 1]
-    if (lastField) {
-      const prefix = before.substring(0, lastField.end)
+
+    if (fieldEnd >= 0) {
+      const valuePart = before.substring(fieldEnd)
+      const lastComma = valuePart.lastIndexOf(',')
+      let replaceFrom: number
+      if (lastComma >= 0) {
+        replaceFrom = fieldEnd + lastComma + 1
+        // Preserve space after comma
+        const afterComma = valuePart.substring(lastComma + 1)
+        const leadingSpace = afterComma.match(/^\s*/)?.[0] || ''
+        replaceFrom += leadingSpace.length
+      } else {
+        replaceFrom = fieldEnd
+      }
+      const prefix = text.substring(0, replaceFrom)
       newText = `${prefix}${item.insertText} ${after.trimStart()}`
       newCursorPos = (prefix + item.insertText + ' ').length
     } else {
@@ -352,23 +422,25 @@ function selectSuggestion(item: Suggestion) {
       newCursorPos = newText.length
     }
   } else {
-    newText = text + item.insertText
-    newCursorPos = newText.length
+    newText = before + item.insertText + after
+    newCursorPos = before.length + item.insertText.length
   }
 
   emit('update:modelValue', newText)
+  if (inputRef.value) {
+    inputRef.value.value = newText
+  }
 
   nextTick(() => {
     if (inputRef.value) {
       inputRef.value.focus()
       inputRef.value.setSelectionRange(newCursorPos, newCursorPos)
     }
-    // After inserting, show next suggestions
-    nextTick(() => updateSuggestions())
+    setTimeout(() => updateSuggestions(), 50)
   })
 }
 
-// ==================== Load users cache ====================
+// ==================== Load dynamic data ====================
 
 async function loadUsers() {
   try {
@@ -381,8 +453,55 @@ async function loadUsers() {
   } catch { /* ignore */ }
 }
 
+async function loadCustomFields() {
+  try {
+    const pid = props.projectId
+    if (!pid) return
+    const res = await customFieldApi.listByProject(pid)
+    const fields = res.data || []
+    customFields.value = fields.map((f: any) => ({
+      key: `cf.${f.id}`,
+      label: f.name,
+      queryKey: f.name,
+      valueType: mapFieldFormat(f.fieldFormat),
+      getValues: () => {
+        if (f.fieldFormat === 'list' && f.options) {
+          return f.options.map((o: any) => ({ id: o.value, label: o.value }))
+        }
+        if (f.fieldFormat === 'user') {
+          return [{ id: 'me', label: '我' }, ...userCache.value]
+        }
+        if (f.fieldFormat === 'bool') {
+          return [{ id: 'true', label: '是' }, { id: 'false', label: '否' }]
+        }
+        if (f.fieldFormat === 'date' || f.fieldFormat === 'datetime') {
+          return getDateKeywords()
+        }
+        return []
+      }
+    }))
+  } catch { /* ignore */ }
+}
+
+function mapFieldFormat(format: string): FieldDef['valueType'] {
+  switch (format) {
+    case 'list': return 'enum'
+    case 'user': return 'user'
+    case 'date': case 'datetime': return 'date'
+    case 'int': case 'float': return 'number'
+    case 'bool': return 'boolean'
+    default: return 'text'
+  }
+}
+
+// Watch projectId changes to reload custom fields
+watch(() => props.projectId, () => {
+  loadCustomFields()
+})
+
 onMounted(() => {
   loadUsers()
+  loadCustomFields()
 })
 
 // Close dropdown on outside click
@@ -456,7 +575,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  max-height: 240px;
+  max-height: 280px;
   overflow-y: auto;
   background: var(--tf-bg-elevated, #2a2d33);
   border: 1px solid var(--tf-border);
@@ -477,6 +596,12 @@ onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick))
 .query-dropdown-item:hover,
 .query-dropdown-item.active {
   background: var(--tf-accent-bg);
+}
+
+.query-dropdown-item.separator {
+  border-top: 1px solid var(--tf-border);
+  margin-top: 4px;
+  padding-top: 8px;
 }
 
 .suggestion-label {

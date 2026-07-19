@@ -229,9 +229,7 @@ public class QueryExecutor {
                 if ("${currentUser}".equals(s) && currentUserId != null) {
                     return String.valueOf(currentUserId);
                 }
-                if ("${today}".equals(s)) {
-                    return java.time.LocalDate.now().toString();
-                }
+                // ${today} kept as-is — resolved later in applyDateFilter
                 return s;
             }).toList();
         }
@@ -290,18 +288,89 @@ public class QueryExecutor {
     }
 
     private void applyDateFilter(QueryWrapper<Issue> wrapper, String column, String operator, List<String> values) {
+        // Resolve relative date keywords to actual date ranges
+        List<String> resolvedValues = values.stream()
+                .map(this::resolveRelativeDate)
+                .toList();
+
         switch (operator) {
-            case "eq" -> wrapper.eq(column, values.get(0));
-            case "gt" -> wrapper.gt(column, values.get(0));
-            case "gte" -> wrapper.ge(column, values.get(0));
-            case "lt" -> wrapper.lt(column, values.get(0));
-            case "lte" -> wrapper.le(column, values.get(0));
+            case "eq" -> {
+                // For relative keywords that represent ranges (e.g. "this week"), use between
+                String[] range = resolveRelativeDateRange(values.get(0));
+                if (range != null) {
+                    wrapper.between(column, range[0], range[1]);
+                } else {
+                    wrapper.ge(column, resolvedValues.get(0) + " 00:00:00");
+                    wrapper.lt(column, resolvedValues.get(0) + " 23:59:59");
+                }
+            }
+            case "gt" -> wrapper.gt(column, resolvedValues.get(0) + " 23:59:59");
+            case "gte" -> wrapper.ge(column, resolvedValues.get(0) + " 00:00:00");
+            case "lt" -> wrapper.lt(column, resolvedValues.get(0) + " 00:00:00");
+            case "lte" -> wrapper.le(column, resolvedValues.get(0) + " 23:59:59");
             case "between" -> {
-                if (values.size() >= 2) {
-                    wrapper.between(column, values.get(0), values.get(1));
+                if (resolvedValues.size() >= 2) {
+                    wrapper.ge(column, resolvedValues.get(0) + " 00:00:00");
+                    wrapper.le(column, resolvedValues.get(1) + " 23:59:59");
                 }
             }
         }
+    }
+
+    /**
+     * 解析相对日期关键词为具体日期字符串 (yyyy-MM-dd)。
+     * 如果不是关键词，原样返回。
+     */
+    private String resolveRelativeDate(String value) {
+        if (value == null) return null;
+        java.time.LocalDate today = java.time.LocalDate.now();
+        return switch (value) {
+            case "${today}", "today", "今天" -> today.toString();
+            case "yesterday", "昨天" -> today.minusDays(1).toString();
+            case "this week", "本周" -> today.with(java.time.DayOfWeek.MONDAY).toString();
+            case "last week", "上周" -> today.minusWeeks(1).with(java.time.DayOfWeek.MONDAY).toString();
+            case "this month", "本月" -> today.withDayOfMonth(1).toString();
+            case "last month", "上月" -> today.minusMonths(1).withDayOfMonth(1).toString();
+            default -> value;
+        };
+    }
+
+    /**
+     * 解析相对日期关键词为日期范围 [start, end]。
+     * 返回 null 表示非范围关键词。
+     */
+    private String[] resolveRelativeDateRange(String value) {
+        if (value == null) return null;
+        java.time.LocalDate today = java.time.LocalDate.now();
+        return switch (value) {
+            case "${today}", "today", "今天" -> new String[]{today + " 00:00:00", today + " 23:59:59"};
+            case "yesterday", "昨天" -> {
+                var d = today.minusDays(1);
+                yield new String[]{d + " 00:00:00", d + " 23:59:59"};
+            }
+            case "this week", "本周" -> {
+                var start = today.with(java.time.DayOfWeek.MONDAY);
+                var end = start.plusDays(6);
+                yield new String[]{start + " 00:00:00", end + " 23:59:59"};
+            }
+            case "last week", "上周" -> {
+                var start = today.minusWeeks(1).with(java.time.DayOfWeek.MONDAY);
+                var end = start.plusDays(6);
+                yield new String[]{start + " 00:00:00", end + " 23:59:59"};
+            }
+            case "this month", "本月" -> {
+                var start = today.withDayOfMonth(1);
+                var end = today.withDayOfMonth(today.lengthOfMonth());
+                yield new String[]{start + " 00:00:00", end + " 23:59:59"};
+            }
+            case "last month", "上月" -> {
+                var lastMonth = today.minusMonths(1);
+                var start = lastMonth.withDayOfMonth(1);
+                var end = lastMonth.withDayOfMonth(lastMonth.lengthOfMonth());
+                yield new String[]{start + " 00:00:00", end + " 23:59:59"};
+            }
+            default -> null;
+        };
     }
 
     /**

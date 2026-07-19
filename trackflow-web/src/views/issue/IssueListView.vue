@@ -200,9 +200,10 @@
           <a-form-item label="查询">
             <QueryInput
               v-model="editQueryForm.queryText"
-              placeholder="输入查询条件... (如 状态: 未关闭)"
+              placeholder="输入查询条件... (如 状态: 未关闭  负责人: 我)"
               :status-list="statusCache"
               :project-list="projectList"
+              :project-id="activeProjectId"
             />
           </a-form-item>
           <a-form-item label="固定到面板顶部">
@@ -645,7 +646,7 @@ import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap } from '@/utils/fieldLabels'
+import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -741,16 +742,12 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
   }
   if (!Array.isArray(filters)) return []
 
-  const fieldLabels: Record<string, string> = {
-    status: '状态', priority: '优先级', assignee: '负责人',
-    type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人'
-  }
   const operatorLabels: Record<string, string> = {
     eq: '=', neq: '≠', in: '∈', not_in: '∉', contains: '包含', open: '未关闭'
   }
 
   return filters.map((f: any) => {
-    const fieldLabel = fieldLabels[f.field] || f.field
+    const fieldLabel = queryFieldKeyToLabel[f.field] || f.field
     const op = f.operator
 
     // Handle special "open" operator (means all non-closed statuses)
@@ -761,10 +758,7 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
       values = f.value.map((v: string) => {
         if (v === '${currentUser}') return '我'
         if (f.field === 'type') return issueTypeLabelMap[v] || v
-        if (f.field === 'priority') {
-          const map: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
-          return map[v] || v
-        }
+        if (f.field === 'priority') return priorityLabelMap[v] || v
         if (f.field === 'status') {
           const st = statusCache.value.find(s => s.code === v || s.id === v)
           return st ? localizeStatusName(st.name) : v
@@ -898,15 +892,7 @@ const editQueryForm = reactive({
 
 // ===== Query text ↔ Filters JSON conversion (YouTrack-style editable query) =====
 
-const FIELD_LABEL_TO_KEY: Record<string, string> = {
-  '状态': 'status', '优先级': 'priority', '负责人': 'assignee',
-  '类型': 'type', 'Sprint': 'sprint', 'sprint': 'sprint',
-  '项目': 'project', '报告人': 'reporter'
-}
-const FIELD_KEY_TO_LABEL: Record<string, string> = {
-  status: '状态', priority: '优先级', assignee: '负责人',
-  type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人'
-}
+// (Field label mappings imported from @/utils/fieldLabels: queryFieldKeyToLabel, queryFieldLabelToKey)
 
 /**
  * Convert filter JSON array to human-readable query text.
@@ -916,23 +902,29 @@ function filtersToQueryText(filters: any[]): string {
   if (!filters || filters.length === 0) return ''
   const parts: string[] = []
   for (const f of filters) {
-    const fieldLabel = FIELD_KEY_TO_LABEL[f.field] || f.field
+    // Resolve field label: built-in fields use queryFieldKeyToLabel, custom fields use their name
+    let fieldLabel: string
+    if (f.field.startsWith('cf.') || f.field.startsWith('customField.')) {
+      // Custom field: the field key is "cf.{id}", display as field name stored in filter
+      // If filter has a displayName property, use it; otherwise fallback to key
+      fieldLabel = f.displayName || f.field
+    } else {
+      fieldLabel = queryFieldKeyToLabel[f.field] || f.field
+    }
     const op = f.operator
 
-    if (op === 'open') {
-      parts.push(`${fieldLabel}: 未关闭`)
-      continue
-    }
+    // Special operators
+    if (op === 'open') { parts.push(`${fieldLabel}: 未关闭`); continue }
+    if (op === 'closed') { parts.push(`${fieldLabel}: 已关闭`); continue }
+    if (op === 'is_empty') { parts.push(`${fieldLabel}: 无`); continue }
+    if (op === 'is_not_empty') { parts.push(`${fieldLabel}: 有`); continue }
 
     let values: string
     if (Array.isArray(f.value)) {
       values = f.value.map((v: string) => {
         if (v === '${currentUser}') return '我'
         if (f.field === 'type') return issueTypeLabelMap[v] || v
-        if (f.field === 'priority') {
-          const map: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
-          return map[v] || v
-        }
+        if (f.field === 'priority') return priorityLabelMap[v] || v
         if (f.field === 'status') {
           const st = statusCache.value.find(s => s.code === v || s.id === v)
           return st ? localizeStatusName(st.name) : v
@@ -947,18 +939,31 @@ function filtersToQueryText(filters: any[]): string {
       values = String(f.value || '')
     }
 
-    const opStr = (op === 'neq' || op === 'not_in') ? ' ≠' : ':'
-    parts.push(`${fieldLabel}${opStr} ${values}`)
+    // Operator display
+    let prefix = ''
+    if (op === 'neq' || op === 'not_in') prefix = '-'
+
+    // Between renders as "field: val1 .. val2"
+    if (op === 'between' && Array.isArray(f.value) && f.value.length >= 2) {
+      parts.push(`${fieldLabel}: ${f.value[0]} .. ${f.value[1]}`)
+    } else {
+      parts.push(`${fieldLabel}: ${prefix}${values}`)
+    }
   }
   return parts.join('  ')
 }
 
 /**
  * Parse human-readable query text back into filter JSON array.
- * e.g. "项目: DE4  状态: 未关闭" → [{"field":"project","operator":"eq","value":["id"]}, ...]
- * 
- * Supports: "字段: 值" and "字段 ≠ 值" patterns.
- * Values are resolved back to IDs where possible.
+ * Supports YouTrack-style syntax:
+ * - "字段: 值" — basic filter
+ * - "字段: 值1, 值2" — multi-value (OR, operator: in)
+ * - "字段: -值" — exclude (operator: neq/not_in)
+ * - "字段: 值1 .. 值2" — range (operator: between)
+ * - "字段: 无" — is_empty
+ * - "字段: 有" — is_not_empty
+ * - "字段: 未关闭" — status open
+ * - "字段: 已关闭" — status closed
  */
 function queryTextToFilters(text: string): any[] {
   if (!text || !text.trim()) return []
@@ -967,68 +972,97 @@ function queryTextToFilters(text: string): any[] {
   // Normalize Chinese colon
   const normalized = text.replace(/：/g, ':')
 
-  // Use a simpler approach: split on double-space, then parse each segment
-  const segments = normalized.split(/\s{2,}/).filter(s => s.trim())
-  for (const seg of segments) {
-    // Try to match "field: value" or "field ≠ value"
-    const colonIdx = seg.indexOf(':')
-    const neqIdx = seg.indexOf('≠')
-    
-    let fieldPart: string
-    let valuePart: string
-    let isNegative = false
+  // Strategy: find all known field labels followed by ":" in the text
+  // Then extract value between current field's ":" and next field's start
+  const allFields = [...Object.keys(queryFieldLabelToKey)]
+  // Sort by length descending so longer names match first (e.g. "创建日期" before "日期")
+  allFields.sort((a, b) => b.length - a.length)
 
-    if (neqIdx > 0 && (colonIdx < 0 || neqIdx < colonIdx)) {
-      fieldPart = seg.substring(0, neqIdx).trim()
-      valuePart = seg.substring(neqIdx + 1).trim()
-      isNegative = true
-    } else if (colonIdx > 0) {
-      fieldPart = seg.substring(0, colonIdx).trim()
-      valuePart = seg.substring(colonIdx + 1).trim()
-    } else {
-      continue // Can't parse this segment
+  interface FieldMatch { field: string; valueStart: number; matchStart: number }
+  const matches: FieldMatch[] = []
+
+  for (const fieldLabel of allFields) {
+    // Find all occurrences of "fieldLabel:" in the text
+    let searchFrom = 0
+    while (true) {
+      const idx = normalized.indexOf(`${fieldLabel}:`, searchFrom)
+      if (idx < 0) break
+      // Make sure it's at start or after whitespace (not middle of another word)
+      const charBefore = idx > 0 ? normalized[idx - 1] : ' '
+      if (idx === 0 || charBefore === ' ') {
+        const valueStart = idx + fieldLabel.length + 1 // after ":"
+        // Skip optional space after colon
+        const afterColon = normalized.substring(valueStart)
+        const spaceMatch = afterColon.match(/^\s*/)
+        const actualValueStart = valueStart + (spaceMatch ? spaceMatch[0].length : 0)
+        matches.push({ field: fieldLabel, valueStart: actualValueStart, matchStart: idx })
+      }
+      searchFrom = idx + 1
+    }
+  }
+
+  // Sort by position in text
+  matches.sort((a, b) => a.matchStart - b.matchStart)
+
+  // Extract value for each field (from valueStart to next field's matchStart)
+  for (let i = 0; i < matches.length; i++) {
+    const { field: fieldLabel, valueStart } = matches[i]
+    const valueEnd = i + 1 < matches.length ? matches[i + 1].matchStart : normalized.length
+    let valuePart = normalized.substring(valueStart, valueEnd).trim()
+
+    const fieldKey = queryFieldLabelToKey[fieldLabel] || fieldLabel
+
+    // Handle special keywords
+    if (valuePart === '未关闭') { filters.push({ field: fieldKey, operator: 'open', value: [] }); continue }
+    if (valuePart === '已关闭') { filters.push({ field: fieldKey, operator: 'closed', value: [] }); continue }
+    if (valuePart === '无') { filters.push({ field: fieldKey, operator: 'is_empty', value: [] }); continue }
+    if (valuePart === '有') { filters.push({ field: fieldKey, operator: 'is_not_empty', value: [] }); continue }
+
+    // Check for range operator ".."
+    if (valuePart.includes('..')) {
+      const rangeParts = valuePart.split('..').map(p => p.trim())
+      if (rangeParts.length === 2 && rangeParts[0] && rangeParts[1]) {
+        filters.push({ field: fieldKey, operator: 'between', value: rangeParts })
+        continue
+      }
     }
 
-    const fieldKey = FIELD_LABEL_TO_KEY[fieldPart] || fieldPart
+    // Check for exclude prefix "-"
+    const isNegative = valuePart.startsWith('-')
+    if (isNegative) valuePart = valuePart.substring(1).trim()
 
-    // Handle special "未关闭" value
-    if (valuePart === '未关闭') {
-      filters.push({ field: fieldKey, operator: 'open', value: [] })
-      continue
-    }
-
-    // Split multiple values by comma
+    // Split by comma for multi-value
     const values = valuePart.split(/[,，]/).map(v => v.trim()).filter(v => v)
-    
-    // Resolve readable values back to IDs
-    const resolvedValues = values.map(v => {
-      if (v === '我') return '${currentUser}'
-      if (fieldKey === 'project') {
-        const p = projectList.value.find(pr => pr.key === v || pr.name === v)
-        return p ? p.id : v
-      }
-      if (fieldKey === 'priority') {
-        const map: Record<string, string> = { '紧急': 'Critical', '高': 'High', '普通': 'Normal', '低': 'Low' }
-        return map[v] || v
-      }
-      if (fieldKey === 'type') {
-        const entry = Object.entries(issueTypeLabelMap).find(([, label]) => label === v)
-        return entry ? entry[0] : v
-      }
-      if (fieldKey === 'status') {
-        const st = statusCache.value.find(s => localizeStatusName(s.name) === v || s.name === v)
-        return st ? st.id : v
-      }
-      return v
-    })
+    if (values.length === 0) continue
+
+    const resolvedValues = values.map(v => resolveValueToId(fieldKey, v))
 
     const operator = isNegative
       ? (resolvedValues.length > 1 ? 'not_in' : 'neq')
       : (resolvedValues.length > 1 ? 'in' : 'eq')
-    
+
     filters.push({ field: fieldKey, operator, value: resolvedValues })
   }
   return filters
+}
+
+/** Resolve a human-readable value back to its internal ID/key */
+function resolveValueToId(fieldKey: string, v: string): string {
+  if (v === '我') return '${currentUser}'
+  if (fieldKey === 'project') {
+    const p = projectList.value.find(pr => pr.key === v || pr.name === v)
+    return p ? p.id : v
+  }
+  if (fieldKey === 'priority') return priorityReverseLabelMap[v] || v
+  if (fieldKey === 'type') {
+    const entry = Object.entries(issueTypeLabelMap).find(([, label]) => label === v)
+    return entry ? entry[0] : v
+  }
+  if (fieldKey === 'status') {
+    const st = statusCache.value.find(s => localizeStatusName(s.name) === v || s.name === v)
+    return st ? st.id : v
+  }
+  return v
 }
 
 function openEditQueryModal(q: any) {
@@ -2162,8 +2196,7 @@ function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): 
           }
           case 'priority': {
             values.push(resolvedValue)
-            const priorityLabels: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
-            valueLabels.push(priorityLabels[resolvedValue] || resolvedValue)
+            valueLabels.push(priorityLabelMap[resolvedValue] || resolvedValue)
             break
           }
           case 'sprint': {

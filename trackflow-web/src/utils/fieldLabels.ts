@@ -226,3 +226,34 @@ export function localizeActionShort(action?: string | null): string {
   if (!action) return '操作了'
   return actionLabelMap[action]?.short || action
 }
+
+/**
+ * 查询字段的中文→英文反向映射（用于 queryTextToFilters 解析）
+ * 从 fieldLabelMap 中提取筛选相关字段的反向映射
+ */
+export const queryFieldLabelToKey: Record<string, string> = {
+  '状态': 'status', '优先级': 'priority', '负责人': 'assignee',
+  '类型': 'type', '迭代': 'sprint', 'Sprint': 'sprint', 'sprint': 'sprint',
+  '项目': 'project', '报告人': 'reporter',
+  '截止日期': 'dueDate', '创建日期': 'createdAt', '更新日期': 'updatedAt', '解决日期': 'resolvedAt',
+  '关键词': 'keyword',
+}
+
+/**
+ * 查询字段的英文→中文映射（用于 filtersToQueryText 展示）
+ */
+export const queryFieldKeyToLabel: Record<string, string> = {
+  status: '状态', priority: '优先级', assignee: '负责人',
+  type: '类型', sprint: 'Sprint', project: '项目', reporter: '报告人',
+  dueDate: '截止日期', createdAt: '创建日期', updatedAt: '更新日期', resolvedAt: '解决日期',
+  keyword: '关键词',
+}
+
+/**
+ * 优先级中文→英文反向映射
+ */
+export const priorityReverseLabelMap: Record<string, string> = Object.fromEntries(
+  Object.entries(priorityLabelMap)
+    .filter(([k]) => k[0] === k[0].toUpperCase()) // 只取 Pascal case 的键
+    .map(([k, v]) => [v, k])
+)
