@@ -20,7 +20,7 @@ public class WorkflowRuleDTO {
     /** 规则类型：on_change / on_schedule */
     private String ruleType;
 
-    @NotBlank(message = "触发事件不能为空")
+    /** 触发事件：on_change 时必填（issue_created / field_changed），on_schedule 时忽略 */
     private String triggerEvent;
 
     /** 触发字段名，NULL=所有字段 */

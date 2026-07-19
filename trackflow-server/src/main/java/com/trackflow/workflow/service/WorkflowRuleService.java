@@ -2,6 +2,7 @@ package com.trackflow.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -27,6 +28,7 @@ public class WorkflowRuleService {
 
     private final WorkflowRuleMapper ruleMapper;
     private final ObjectMapper objectMapper;
+    private final PermissionService permissionService;
 
     /**
      * 查询项目规则列表（含全局规则）
@@ -58,19 +60,17 @@ public class WorkflowRuleService {
         return toVO(rule);
     }
 
+    /** 合法的规则类型 */
+    private static final java.util.Set<String> VALID_RULE_TYPES =
+            java.util.Set.of("on_change", "on_schedule");
+
     /**
      * 创建规则
      */
     @Transactional
     public WorkflowRuleVO createRule(Long projectId, WorkflowRuleDTO dto) {
         String ruleType = dto.getRuleType() != null ? dto.getRuleType() : "on_change";
-        if ("on_change".equals(ruleType)) {
-            validateTriggerEvent(dto.getTriggerEvent());
-        } else if ("on_schedule".equals(ruleType)) {
-            validateCronExpression(dto.getCronExpression());
-        } else {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的规则类型: " + ruleType);
-        }
+        validateRuleTypeAndFields(ruleType, dto);
         validateJson(dto.getConditionJson(), "条件");
         validateJson(dto.getActionJson(), "动作");
 
@@ -79,8 +79,9 @@ public class WorkflowRuleService {
         rule.setName(dto.getName().trim());
         rule.setDescription(dto.getDescription());
         rule.setRuleType(ruleType);
-        rule.setTriggerEvent(dto.getTriggerEvent());
-        rule.setTriggerField(dto.getTriggerField());
+        // on_schedule 规则不使用 triggerEvent，强制设为 null 避免被 findEnabledRules 误匹配
+        rule.setTriggerEvent("on_change".equals(ruleType) ? dto.getTriggerEvent() : null);
+        rule.setTriggerField("on_change".equals(ruleType) ? dto.getTriggerField() : null);
         rule.setConditionJson(dto.getConditionJson());
         rule.setActionJson(dto.getActionJson());
         rule.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : true);
@@ -105,21 +106,19 @@ public class WorkflowRuleService {
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
+        checkRuleManagePermission(rule);
 
         String ruleType = dto.getRuleType() != null ? dto.getRuleType() : rule.getRuleType();
-        if ("on_change".equals(ruleType)) {
-            validateTriggerEvent(dto.getTriggerEvent());
-        } else if ("on_schedule".equals(ruleType)) {
-            validateCronExpression(dto.getCronExpression());
-        }
+        validateRuleTypeAndFields(ruleType, dto);
         validateJson(dto.getConditionJson(), "条件");
         validateJson(dto.getActionJson(), "动作");
 
         rule.setName(dto.getName().trim());
         rule.setDescription(dto.getDescription());
         rule.setRuleType(ruleType);
-        rule.setTriggerEvent(dto.getTriggerEvent());
-        rule.setTriggerField(dto.getTriggerField());
+        // on_schedule 规则不使用 triggerEvent，强制设为 null
+        rule.setTriggerEvent("on_change".equals(ruleType) ? dto.getTriggerEvent() : null);
+        rule.setTriggerField("on_change".equals(ruleType) ? dto.getTriggerField() : null);
         rule.setConditionJson(dto.getConditionJson());
         rule.setActionJson(dto.getActionJson());
         rule.setCronExpression(dto.getCronExpression());
@@ -145,6 +144,7 @@ public class WorkflowRuleService {
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
+        checkRuleManagePermission(rule);
         ruleMapper.deleteById(id);
         log.info("[WorkflowRule] Deleted rule '{}' (id={})", rule.getName(), id);
     }
@@ -158,6 +158,7 @@ public class WorkflowRuleService {
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
+        checkRuleManagePermission(rule);
         rule.setEnabled(!rule.getEnabled());
         rule.setUpdatedAt(LocalDateTime.now());
         ruleMapper.updateById(rule);
@@ -165,9 +166,55 @@ public class WorkflowRuleService {
         return toVO(rule);
     }
 
+    /**
+     * 校验当前用户是否有权限管理指定规则。
+     * <ul>
+     *   <li>全局规则（projectId == null）→ 需要 system:admin</li>
+     *   <li>项目规则（projectId != null）→ 需要 project:manage_workflow</li>
+     * </ul>
+     */
+    private void checkRuleManagePermission(WorkflowRule rule) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Long projectId = rule.getProjectId();
+        if (projectId == null) {
+            // 全局规则 → 需要系统管理员
+            if (!permissionService.isSystemAdmin(userId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "修改全局工作流规则需要系统管理员权限");
+            }
+        } else {
+            // 项目规则 → 需要 project:manage_workflow
+            if (!permissionService.hasPermission(userId, projectId, "project:manage_workflow")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权限管理该项目的工作流规则");
+            }
+        }
+    }
+
     // ============ 内部方法 ============
 
+    /**
+     * 统一校验规则类型和对应必填字段。
+     * <ul>
+     *   <li>on_change: triggerEvent 必填（issue_created / field_changed）</li>
+     *   <li>on_schedule: cronExpression 必填，triggerEvent 忽略</li>
+     * </ul>
+     */
+    private void validateRuleTypeAndFields(String ruleType, WorkflowRuleDTO dto) {
+        if (!VALID_RULE_TYPES.contains(ruleType)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的规则类型: " + ruleType + "，仅支持 on_change / on_schedule");
+        }
+        if ("on_change".equals(ruleType)) {
+            validateTriggerEvent(dto.getTriggerEvent());
+        } else if ("on_schedule".equals(ruleType)) {
+            validateCronExpression(dto.getCronExpression());
+        }
+    }
+
     private void validateTriggerEvent(String event) {
+        if (event == null || event.isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "on_change 规则的触发事件不能为空，仅支持 issue_created / field_changed");
+        }
         if (!"issue_created".equals(event) && !"field_changed".equals(event)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的触发事件: " + event + "，仅支持 issue_created / field_changed");
