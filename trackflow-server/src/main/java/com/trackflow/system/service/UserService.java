@@ -13,6 +13,7 @@ import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.dto.CreateUserDTO;
@@ -233,6 +234,19 @@ public class UserService {
         // 保护最后一个系统管理员
         if (isLastSystemAdmin(id)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "系统至少需要保留一个活跃管理员");
+        }
+
+        // 保护项目负责人：禁用前检查该用户是否为任何活跃项目的 lead
+        List<Project> ledProjects = projectMapper.selectList(
+                new LambdaQueryWrapper<Project>()
+                        .eq(Project::getLeadId, id)
+                        .eq(Project::getStatus, ProjectStatus.ACTIVE));
+        if (ledProjects != null && !ledProjects.isEmpty()) {
+            String projectNames = ledProjects.stream()
+                    .map(Project::getName)
+                    .collect(Collectors.joining("、"));
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "该用户是以下项目的负责人，请先转让负责人后再禁用：" + projectNames);
         }
 
         user.setStatus("disabled");

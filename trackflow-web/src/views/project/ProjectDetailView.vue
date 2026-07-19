@@ -67,9 +67,10 @@
               <icon-user-group class="meta-icon" />
               {{ project.memberCount }} 名成员
             </span>
-            <span v-if="project.leadName" class="meta-item lead-item" :class="{ editable: canEditProject && !isArchived }" @click="canEditProject && !isArchived && goToSettings()">
+            <span v-if="project.leadName" class="meta-item lead-item" :class="{ editable: canEditProject && !isArchived, 'lead-disabled': project.leadStatus === 'disabled' }" @click="canEditProject && !isArchived && goToSettings()">
               <icon-star class="meta-icon" />
               负责人：{{ project.leadName }}
+              <span v-if="project.leadStatus === 'disabled'" class="lead-disabled-badge">已禁用</span>
               <icon-edit v-if="canEditProject && !isArchived" class="edit-hint-icon" />
             </span>
             <span v-else-if="canEditProject && !isArchived" class="meta-item lead-item editable" @click="goToSettings()">
@@ -755,6 +756,23 @@ onMounted(() => {
 
 .lead-item {
   position: relative;
+}
+
+.lead-item.lead-disabled {
+  color: var(--tf-text-tertiary);
+}
+
+.lead-disabled-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--color-warning-light-2, rgba(209, 153, 34, 0.15));
+  color: var(--color-warning-6, #d29922);
+  margin-left: 4px;
+  font-weight: 500;
 }
 
 .lead-item.editable {

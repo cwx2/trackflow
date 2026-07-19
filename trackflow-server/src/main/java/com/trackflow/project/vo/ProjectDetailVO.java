@@ -21,4 +21,7 @@ public class ProjectDetailVO extends ProjectVO {
 
     /** 项目负责人显示名称 */
     private String leadName;
+
+    /** 项目负责人状态（active/disabled） */
+    private String leadStatus;
 }

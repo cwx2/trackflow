@@ -97,6 +97,8 @@ export interface ProjectDetailVO extends ProjectVO {
   memberCount?: number
   /** 项目负责人显示名称 */
   leadName?: string
+  /** 项目负责人状态（active/disabled） */
+  leadStatus?: string
 }
 
 export interface ProjectMemberVO {
