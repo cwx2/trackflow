@@ -124,7 +124,19 @@
             <label class="detail-label">分配的项目</label>
             <a-button size="mini" @click="showProjectDialog = true">管理项目</a-button>
           </div>
-          <div v-if="selectedAttr.projectIds && selectedAttr.projectIds.length > 0" class="projects-list">
+          <div v-if="selectedAttr.projects && selectedAttr.projects.length > 0" class="projects-list">
+            <span
+              v-for="proj in selectedAttr.projects"
+              :key="proj.id"
+              class="project-chip"
+              :class="{ 'project-deleted': proj.deleted }"
+            >
+              <template v-if="!proj.deleted">{{ proj.key }} - {{ proj.name }}</template>
+              <template v-else>{{ proj.name }}</template>
+            </span>
+          </div>
+          <div v-else-if="selectedAttr.projectIds && selectedAttr.projectIds.length > 0" class="projects-list">
+            <!-- Fallback: 后端未返回 projects 时（兼容旧数据） -->
             <span v-for="pid in selectedAttr.projectIds" :key="pid" class="project-chip">
               {{ projectNameMap[pid] || pid }}
             </span>
@@ -200,7 +212,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { workItemAttributeApi } from '@/api/timeEntry'
-import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
+import type { WorkItemAttributeVO, AttributeValueVO, AttributeProjectVO } from '@/api/timeEntry'
 import { projectApi } from '@/api'
 
 const loading = ref(true)
@@ -626,6 +638,12 @@ onMounted(() => {
   background: var(--tf-bg-elevated);
   color: var(--tf-text-secondary);
   border: 1px solid var(--tf-border-light);
+}
+
+.project-chip.project-deleted {
+  color: var(--tf-text-muted);
+  font-style: italic;
+  opacity: 0.7;
 }
 
 .no-projects {

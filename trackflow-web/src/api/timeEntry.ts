@@ -72,7 +72,15 @@ export interface WorkItemAttributeVO {
   updatedAt?: string
   values: AttributeValueVO[]
   projectIds?: string[]
+  projects?: AttributeProjectVO[]
   usageCount?: number
+}
+
+export interface AttributeProjectVO {
+  id: string
+  key?: string
+  name: string
+  deleted?: boolean
 }
 
 export const timeEntryApi = {

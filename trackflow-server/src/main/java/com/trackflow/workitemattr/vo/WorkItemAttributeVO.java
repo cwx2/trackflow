@@ -19,8 +19,11 @@ public class WorkItemAttributeVO {
     /** 可选值列表 */
     private List<AttributeValueVO> values;
 
-    /** 分配的项目 ID 列表 */
+    /** 分配的项目 ID 列表（向后兼容） */
     private List<String> projectIds;
+
+    /** 分配的项目详细信息列表 */
+    private List<AttributeProjectVO> projects;
 
     /** 使用量（有多少条工时记录引用了此属性） */
     private Integer usageCount;

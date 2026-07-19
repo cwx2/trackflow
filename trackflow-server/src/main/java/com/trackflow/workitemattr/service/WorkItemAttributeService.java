@@ -15,8 +15,11 @@ import com.trackflow.workitemattr.mapper.TimeEntryAttributeValueMapper;
 import com.trackflow.workitemattr.mapper.WorkItemAttributeMapper;
 import com.trackflow.workitemattr.mapper.WorkItemAttributeProjectMapper;
 import com.trackflow.workitemattr.mapper.WorkItemAttributeValueMapper;
+import com.trackflow.workitemattr.vo.AttributeProjectVO;
 import com.trackflow.workitemattr.vo.AttributeValueVO;
 import com.trackflow.workitemattr.vo.WorkItemAttributeVO;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,7 @@ public class WorkItemAttributeService {
     private final WorkItemAttributeValueMapper valueMapper;
     private final WorkItemAttributeProjectMapper projectMapper;
     private final TimeEntryAttributeValueMapper entryValueMapper;
+    private final ProjectMapper projMapper;
 
     /**
      * 内建属性 code → id 缓存（应用级缓存，应用启动后首次查询时填充）
@@ -100,6 +104,15 @@ public class WorkItemAttributeService {
                 Collectors.mapping(WorkItemAttributeProject::getProjectId, Collectors.toList())
         ));
 
+        // 批量查询关联的项目信息
+        Set<Long> allProjectIds = projectsMap.values().stream()
+                .flatMap(List::stream).collect(Collectors.toSet());
+        Map<Long, Project> projectInfoMap = new HashMap<>();
+        if (!allProjectIds.isEmpty()) {
+            List<Project> projects = projMapper.selectBatchIds(allProjectIds);
+            projects.forEach(p -> projectInfoMap.put(p.getId(), p));
+        }
+
         // 批量统计使用量
         Map<Long, Integer> usageMap = new HashMap<>();
         for (Long attrId : attrIds) {
@@ -124,6 +137,7 @@ public class WorkItemAttributeService {
             // 项目分配
             List<Long> pids = projectsMap.getOrDefault(attr.getId(), List.of());
             vo.setProjectIds(pids.stream().map(String::valueOf).toList());
+            vo.setProjects(pids.stream().map(pid -> toProjectVO(pid, projectInfoMap)).toList());
 
             // 使用量
             vo.setUsageCount(usageMap.getOrDefault(attr.getId(), 0));
@@ -159,7 +173,16 @@ public class WorkItemAttributeService {
         // 项目分配
         List<WorkItemAttributeProject> projects = projectMapper.selectList(
                 new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", id));
-        vo.setProjectIds(projects.stream().map(p -> String.valueOf(p.getProjectId())).toList());
+        List<Long> pids = projects.stream().map(WorkItemAttributeProject::getProjectId).toList();
+        vo.setProjectIds(pids.stream().map(String::valueOf).toList());
+
+        // 获取项目详细信息
+        Map<Long, Project> projectInfoMap = new HashMap<>();
+        if (!pids.isEmpty()) {
+            List<Project> projList = projMapper.selectBatchIds(pids);
+            projList.forEach(p -> projectInfoMap.put(p.getId(), p));
+        }
+        vo.setProjects(pids.stream().map(pid -> toProjectVO(pid, projectInfoMap)).toList());
 
         // 使用量
         Long usage = entryValueMapper.selectCount(
@@ -435,6 +458,25 @@ public class WorkItemAttributeService {
         vo.setName(val.getName());
         vo.setColor(val.getColor());
         vo.setPosition(val.getPosition());
+        return vo;
+    }
+
+    /**
+     * 将项目 ID 转为 AttributeProjectVO，处理项目不存在（已删除）的情况
+     */
+    private AttributeProjectVO toProjectVO(Long projectId, Map<Long, Project> projectInfoMap) {
+        AttributeProjectVO vo = new AttributeProjectVO();
+        vo.setId(String.valueOf(projectId));
+        Project project = projectInfoMap.get(projectId);
+        if (project != null) {
+            vo.setKey(project.getKey());
+            vo.setName(project.getName());
+            vo.setDeleted(false);
+        } else {
+            vo.setKey(null);
+            vo.setName("已删除的项目");
+            vo.setDeleted(true);
+        }
         return vo;
     }
 
