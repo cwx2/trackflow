@@ -87,6 +87,16 @@ public interface IssueMapper extends BaseMapper<Issue> {
     List<Map<String, Object>> selectIssueCountByStatus(@Param("projectId") Long projectId);
 
     /**
+     * 看板列聚合查询：一次性返回每个状态的工单数量和是否在工作流中。
+     * <p>
+     * 使用 CTE 合并原 selectDistinctStatusIdsByProject + selectIssueCountByStatus + selectWorkflowStatusIds
+     * 三条独立查询为一条 SQL，减少 DB 往返次数。
+     * <p>
+     * 返回行包含: status_id (Long), issue_count (int), in_workflow (boolean)
+     */
+    List<Map<String, Object>> selectBoardColumnAggregation(@Param("projectId") Long projectId);
+
+    /**
      * 燃尽图投影查询：只返回 id, created_at, resolved_at（不加载 title/description 等大字段）。
      * 用于 getBurndownData 性能优化。
      */

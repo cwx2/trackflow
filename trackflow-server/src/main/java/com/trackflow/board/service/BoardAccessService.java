@@ -8,8 +8,6 @@ import com.trackflow.common.exception.BusinessException;
 import static com.trackflow.common.exception.ErrorCode.ACCESS_DENIED;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.mapper.ProjectMemberMapper;
-import com.trackflow.system.entity.SysRole;
-import com.trackflow.system.mapper.SysRoleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,8 +16,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 看板访问控制服务。
@@ -50,7 +46,6 @@ public class BoardAccessService {
 
     private final BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final ProjectMemberMapper projectMemberMapper;
-    private final SysRoleMapper sysRoleMapper;
     private final PermissionService permissionService;
     private final ObjectMapper objectMapper;
 
@@ -121,18 +116,11 @@ public class BoardAccessService {
     }
 
     /**
-     * 获取用户在指定项目中的角色代码列表。
+     * 获取用户在指定项目中的角色代码列表（单次 JOIN 查询）。
      */
     private List<String> getUserProjectRoleCodes(Long userId, Long projectId) {
-        List<Long> roleIds = projectMemberMapper.selectRoleIdsByUserAndProject(userId, projectId);
-        if (roleIds == null || roleIds.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<SysRole> roles = sysRoleMapper.selectBatchIds(roleIds);
-        return roles.stream()
-                .map(SysRole::getCode)
-                .collect(Collectors.toList());
+        List<String> roleCodes = projectMemberMapper.selectRoleCodesByUserAndProject(userId, projectId);
+        return roleCodes != null ? roleCodes : Collections.emptyList();
     }
 
     /**

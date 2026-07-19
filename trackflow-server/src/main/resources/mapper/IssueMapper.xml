@@ -187,6 +187,32 @@
         GROUP BY status_id
     </select>
 
+    <!-- 看板列聚合查询：合并 status_count + workflow_status 为一条 CTE SQL -->
+    <select id="selectBoardColumnAggregation" resultType="java.util.Map">
+        WITH issue_counts AS (
+            SELECT status_id, COUNT(*) AS issue_count
+            FROM issue
+            WHERE project_id = #{projectId}
+              AND deleted_at IS NULL
+            GROUP BY status_id
+        ),
+        workflow_statuses AS (
+            SELECT DISTINCT status_id FROM (
+                SELECT old_status_id AS status_id FROM workflow_transition
+                WHERE project_id = #{projectId} OR project_id IS NULL
+                UNION
+                SELECT new_status_id AS status_id FROM workflow_transition
+                WHERE project_id = #{projectId} OR project_id IS NULL
+            ) t
+        )
+        SELECT s.id AS status_id,
+               COALESCE(ic.issue_count, 0) AS issue_count,
+               (ws.status_id IS NOT NULL) AS in_workflow
+        FROM issue_status s
+        LEFT JOIN issue_counts ic ON ic.status_id = s.id
+        LEFT JOIN workflow_statuses ws ON ws.status_id = s.id
+    </select>
+
     <!-- 燃尽图投影查询：只返回 id, created_at, resolved_at（性能优化） -->
     <select id="selectBurndownProjection" resultType="java.util.Map">
         SELECT id, created_at, resolved_at

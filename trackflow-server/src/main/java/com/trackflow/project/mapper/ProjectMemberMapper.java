@@ -22,4 +22,14 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
      */
     @Select("SELECT role_id FROM project_member WHERE user_id = #{userId} AND project_id = #{projectId}")
     List<Long> selectRoleIdsByUserAndProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
+    /**
+     * 获取用户在指定项目中的角色代码列表（单次 JOIN 查询，替代 selectRoleIdsByUserAndProject + selectBatchIds 两步操作）
+     */
+    @Select("""
+            SELECT r.code FROM project_member pm
+            JOIN sys_role r ON r.id = pm.role_id
+            WHERE pm.user_id = #{userId} AND pm.project_id = #{projectId}
+            """)
+    List<String> selectRoleCodesByUserAndProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
 }

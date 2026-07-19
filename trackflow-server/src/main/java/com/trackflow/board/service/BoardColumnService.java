@@ -200,6 +200,9 @@ public class BoardColumnService {
 
         Db.saveBatch(configs);
 
+        // 初始化后失效缓存（确保后续 getColumns 读到持久化数据）
+        invalidateCache(projectId);
+
         // 查询工单数量用于返回
         Map<Long, Integer> issueCountMap = getProjectIssueCountByStatus(projectId);
 
@@ -321,6 +324,9 @@ public class BoardColumnService {
         }
 
         Db.saveBatch(configs);
+
+        // 配置变更后失效缓存
+        invalidateCache(projectId);
     }
 
     // ========== Private methods ==========
