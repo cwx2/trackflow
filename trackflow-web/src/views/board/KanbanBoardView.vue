@@ -1332,7 +1332,10 @@ function onSprintChange() {
   // Track if user explicitly cleared the sprint selection (chose "所有迭代")
   userExplicitlySelectedAll = !selectedSprint.value
   syncUrlState()
-  loadBoard()
+  // Sprint change only affects issue filtering — no need to reload board columns,
+  // sprints list, card config, etc. This avoids re-fetching sprints which would
+  // cause Arco Select to re-render options and potentially clear the v-model value.
+  loadIssuesWithLoading()
 }
 const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
@@ -2609,6 +2612,9 @@ watch(() => route.query, (newQuery, oldQuery) => {
 
   suppressUrlSync = true
 
+  // Track whether any state actually changed (to avoid redundant loadBoard calls)
+  let stateChanged = false
+
   // 恢复项目
   if (queryProject) {
     const project = projects.value.find(p => p.key === queryProject)
@@ -2626,20 +2632,25 @@ watch(() => route.query, (newQuery, oldQuery) => {
     selectedProject.value = undefined
     selectedSprint.value = undefined
     issues.value = []
+    suppressUrlSync = false
+    return
   }
 
   // 恢复 Sprint
   if (querySprint !== selectedSprint.value) {
     selectedSprint.value = querySprint || undefined
+    stateChanged = true
   }
 
   // 恢复分组
   if (queryGroup && queryGroup !== swimlaneGroupBy.value) {
     swimlaneGroupBy.value = queryGroup as SwimlaneGroupBy
     localStorage.setItem(SWIMLANE_STORAGE_KEY, swimlaneGroupBy.value)
+    stateChanged = true
   } else if (!queryGroup && swimlaneGroupBy.value !== 'none') {
     swimlaneGroupBy.value = 'none'
     localStorage.setItem(SWIMLANE_STORAGE_KEY, 'none')
+    stateChanged = true
   }
 
   // 恢复负责人筛选
@@ -2650,12 +2661,13 @@ watch(() => route.query, (newQuery, oldQuery) => {
     } else {
       localStorage.removeItem(ASSIGNEE_FILTER_KEY)
     }
+    stateChanged = true
   }
 
   suppressUrlSync = false
 
-  // 如果只是 sprint/group/assignee 变化，重新加载数据
-  if (selectedProject.value) {
+  // 仅在实际状态发生变化时重新加载（避免与 onSprintChange/onProjectChange 的 loadBoard 重复调用）
+  if (stateChanged && selectedProject.value) {
     loadBoard()
   }
 })
