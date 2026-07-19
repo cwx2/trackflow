@@ -143,7 +143,19 @@ public class CustomFieldService {
         if (dto.getMaxLength() != null) entity.setMaxLength(dto.getMaxLength());
         if (dto.getRegexp() != null) entity.setRegexp(dto.getRegexp());
         if (dto.getIsMulti() != null && "list".equals(entity.getFieldFormat())) {
-            entity.setIsMulti(dto.getIsMulti());
+            // 检测 isMulti 是否实际变更
+            boolean currentIsMulti = Boolean.TRUE.equals(entity.getIsMulti());
+            if (dto.getIsMulti() != currentIsMulti) {
+                // 如果字段已有值数据，禁止切换单选/多选模式（参考 YouTrack：创建后不允许切换）
+                long valueCount = valueMapper.selectCount(
+                        new LambdaQueryWrapper<CustomFieldValue>()
+                                .eq(CustomFieldValue::getCustomFieldId, id));
+                if (valueCount > 0) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "该字段已被 " + valueCount + " 条工单数据使用，无法切换单选/多选模式。如需变更，请创建新字段并迁移数据。");
+                }
+                entity.setIsMulti(dto.getIsMulti());
+            }
         }
         if (dto.getIsHiddenInList() != null) entity.setIsHiddenInList(dto.getIsHiddenInList());
         definitionMapper.updateById(entity);

@@ -126,8 +126,15 @@
         <!-- list 类型选项管理 -->
         <template v-if="form.fieldFormat === 'list'">
           <a-form-item label="多值选择">
-            <a-switch v-model="form.isMulti" />
-            <div class="form-help">开启后允许选择多个选项值（如影响版本、标签等）</div>
+            <a-switch v-model="form.isMulti" :disabled="isMultiDisabled" />
+            <div class="form-help">
+              <template v-if="isMultiDisabled">
+                该字段已被工单使用，无法切换单选/多选模式
+              </template>
+              <template v-else>
+                开启后允许选择多个选项值（如影响版本、标签等）
+              </template>
+            </div>
           </a-form-item>
 
           <!-- 值集来源选择（仅创建模式显示） -->
@@ -261,6 +268,8 @@ const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
 const drawerVisible = ref(false)
 const editingId = ref<string | null>(null)
 const saving = ref(false)
+/** 编辑模式下字段已有数据时禁止切换 isMulti */
+const isMultiDisabled = ref(false)
 
 // Value set source (for list type create mode)
 const valueSetSource = ref<'new' | 'copy'>('new')
@@ -430,6 +439,7 @@ function handleCopyFrom() {
 
 function openCreate() {
   editingId.value = null
+  isMultiDisabled.value = false
   resetForm()
   loadEnumFields()
   drawerVisible.value = true
@@ -454,8 +464,15 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.issueTypes = record.issueTypes || []
   form.copyOptionsFromFieldId = undefined
   copyFromFieldId.value = null
+  // 检查字段是否有数据——有则禁止切换 isMulti
+  isMultiDisabled.value = false
   if (record.fieldFormat === 'list') {
     loadEnumFields()
+    customFieldApi.getUsage(record.id).then(res => {
+      if (res.data && res.data.valueCount > 0) {
+        isMultiDisabled.value = true
+      }
+    }).catch(() => { /* 查询失败时允许操作，后端兜底 */ })
   }
   drawerVisible.value = true
 }
