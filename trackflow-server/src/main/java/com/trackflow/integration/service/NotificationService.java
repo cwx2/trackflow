@@ -144,9 +144,11 @@ public class NotificationService {
         //   如果用户在等待期间已读 IAN，则跳过邮件（避免"已知道了还收到邮件"的冗余打扰）
         if (isNew && type == NotificationType.mention) {
             String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId);
-            dispatchEmail(userId, title, content, fullUrl);
-            // 标记 mention 通知邮件已发送（直接更新刚插入的记录）
-            markMailSent(userId, typeValue, resourceType, resourceId);
+            boolean sent = dispatchEmail(userId, title, content, fullUrl);
+            if (sent) {
+                // 仅在邮件实际发送成功后才标记——失败的由 NotificationMailScheduler 60秒后重试
+                markMailSent(userId, typeValue, resourceType, resourceId);
+            }
         }
     }
 
@@ -292,9 +294,11 @@ public class NotificationService {
         // - 其他类型：延迟发送，由 NotificationMailScheduler 处理
         if (!newNotificationUserIds.isEmpty() && type == NotificationType.mention) {
             String fullUrl = urlBuilder.buildFullUrl(resourceType, resourceId, projectId);
-            dispatchEmailBatch(newNotificationUserIds, title, content, fullUrl);
-            // 批量标记 mention 通知邮件已发送
-            markMailSentBatch(newNotificationUserIds, typeValue, resourceType, resourceId);
+            Set<Long> sentIds = dispatchEmailBatch(newNotificationUserIds, title, content, fullUrl);
+            if (!sentIds.isEmpty()) {
+                // 仅标记实际发送成功的用户——失败的由 NotificationMailScheduler 60秒后重试
+                markMailSentBatch(sentIds, typeValue, resourceType, resourceId);
+            }
         }
     }
 
@@ -421,16 +425,19 @@ public class NotificationService {
      * 批量分发邮件通知（仅对新建通知的用户）。
      * 批量查询用户信息和偏好，减少 DB 操作。
      * 跳过处于静音时段内的用户。
+     *
+     * @return 成功发送邮件的用户 ID 集合（不含被跳过或发送失败的用户）
      */
-    private void dispatchEmailBatch(Set<Long> userIds, String title, String content, String resourceUrl) {
+    private Set<Long> dispatchEmailBatch(Set<Long> userIds, String title, String content, String resourceUrl) {
+        Set<Long> successfulIds = new HashSet<>();
         try {
             if (!emailSendService.isEmailAvailable()) {
-                return;
+                return successfulIds;
             }
             // 批量查询用户
             List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
             if (users.isEmpty()) {
-                return;
+                return successfulIds;
             }
             // 批量查询全局偏好
             List<NotificationPreference> prefs = preferenceService.listGlobalByUserIds(userIds);
@@ -452,6 +459,7 @@ public class NotificationService {
                 }
                 try {
                     emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
+                    successfulIds.add(user.getId());
                 } catch (Exception e) {
                     log.warn("[Notification] 批量邮件发送异常: userId={}, error={}", user.getId(), e.getMessage());
                 }
@@ -459,40 +467,45 @@ public class NotificationService {
         } catch (Exception e) {
             log.warn("[Notification] 批量邮件分发异常（不影响站内通知）: error={}", e.getMessage());
         }
+        return successfulIds;
     }
 
     /**
      * 如果全局邮件通知已启用，且用户偏好中 emailEnabled=true，且用户有邮箱地址，
      * 且当前不在用户的静音时段内，则异步发送通知邮件。发送失败不影响站内通知。
+     *
+     * @return true 表示邮件成功发送，false 表示发送失败或被跳过（偏好关闭/无邮箱/静音时段等）
      */
-    private void dispatchEmail(Long userId, String title, String content, String resourceUrl) {
+    private boolean dispatchEmail(Long userId, String title, String content, String resourceUrl) {
         try {
             if (!emailSendService.isEmailAvailable()) {
-                return;
+                return false;
             }
             // 检查用户偏好是否开启了邮件
             var pref = preferenceService.getByUserId(userId);
             if (!Boolean.TRUE.equals(pref.getEmailEnabled())) {
-                return;
+                return false;
             }
             // 静音时段检查：在 quiet hours 内跳过邮件发送
             if (isInQuietHours(pref)) {
                 log.debug("[Notification] 用户处于静音时段，跳过邮件: userId={}, quietHours={}-{}",
                         userId, pref.getQuietHoursStart(), pref.getQuietHoursEnd());
-                return;
+                return false;
             }
             // 获取用户邮箱
             SysUser user = sysUserMapper.selectById(userId);
             if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
-                return;
+                return false;
             }
-            // 异步发送
+            // 发送邮件
             String subject = "[TrackFlow] " + title;
             String htmlContent = buildNotificationEmailContent(title, content, resourceUrl);
             emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
+            return true;
         } catch (Exception e) {
             log.warn("[Notification] 邮件分发异常（不影响站内通知）: userId={}, error={}",
                     userId, e.getMessage());
+            return false;
         }
     }
 
