@@ -71,6 +71,27 @@ public class ReportService {
         return reportMapper.selectList(wrapper);
     }
 
+    /**
+     * 创建报表（带权限校验）
+     * - projectId 非空：需要 project:edit 权限
+     * - projectId 为空（全局报表）：需要系统管理员权限
+     */
+    @Transactional
+    public ReportDefinition createWithAccessCheck(CreateReportDTO dto, Long userId) {
+        if (dto.getProjectId() != null) {
+            // 项目级报表：需要 project:edit 权限
+            if (!permissionService.hasPermission(userId, dto.getProjectId(), "project:edit")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "需要项目编辑权限才能创建项目报表");
+            }
+        } else {
+            // 全局报表：需要系统管理员权限
+            if (!permissionService.isSystemAdmin(userId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "全局报表仅系统管理员可创建");
+            }
+        }
+        return create(dto);
+    }
+
     @Transactional
     public ReportDefinition create(CreateReportDTO dto) {
         // 校验报表类型合法性

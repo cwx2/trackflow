@@ -1,7 +1,6 @@
 package com.trackflow.report.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -15,7 +14,9 @@ public class CreateReportDTO {
     @Size(max = 200, message = "报表名称不能超过200字符")
     private String name;
 
-    @NotNull(message = "项目ID不能为空")
+    /**
+     * 项目ID，为空表示创建全局报表（需要系统管理员权限）
+     */
     private Long projectId;
 
     /**

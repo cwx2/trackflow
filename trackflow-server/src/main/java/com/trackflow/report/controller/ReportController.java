@@ -40,9 +40,10 @@ public class ReportController {
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(#dto.projectId, 'project:edit')")
+    @PreAuthorize("isAuthenticated()")
     public R<ReportDefinitionVO> create(@Valid @RequestBody CreateReportDTO dto) {
-        return R.ok(reportConverter.toVO(reportService.create(dto)));
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(reportConverter.toVO(reportService.createWithAccessCheck(dto, userId)));
     }
 
     @PutMapping("/{id}")
