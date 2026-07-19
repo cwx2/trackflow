@@ -36,7 +36,7 @@
           <span class="nav-icon">⏱</span>
           <span class="nav-label">时间表</span>
         </router-link>
-        <router-link v-if="canViewReport" to="/reports" class="nav-item" :class="{ active: $route.name === 'Reports' }">
+        <router-link v-if="canViewReport" to="/reports" class="nav-item" :class="{ active: $route.path.startsWith('/reports') }">
           <span class="nav-icon">📈</span>
           <span class="nav-label">报表</span>
         </router-link>

@@ -92,21 +92,35 @@ const routes = [
       },
       {
         path: 'reports',
-        name: 'Reports',
-        component: () => import('@/views/report/ReportDashboardView.vue'),
-        meta: { requiresReport: true }
-      },
-      {
-        path: 'reports/saved',
-        name: 'SavedReports',
-        component: () => import('@/views/report/ReportListView.vue'),
-        meta: { requiresReport: true }
-      },
-      {
-        path: 'reports/dashboards',
-        name: 'CustomDashboards',
-        component: () => import('@/views/report/dashboard/CustomDashboardView.vue'),
-        meta: { requiresReport: true }
+        component: () => import('@/views/report/ReportContainerView.vue'),
+        meta: { requiresReport: true },
+        children: [
+          {
+            path: '',
+            name: 'ReportOverview',
+            component: () => import('@/views/report/ReportDashboardView.vue')
+          },
+          {
+            path: 'list',
+            name: 'ReportList',
+            component: () => import('@/views/report/ReportListView.vue')
+          },
+          {
+            path: 'time',
+            name: 'TimeReport',
+            component: () => import('@/views/report/TimeReportPage.vue')
+          },
+          {
+            path: 'estimation',
+            name: 'EstimationReport',
+            component: () => import('@/views/report/EstimationReportPage.vue')
+          },
+          {
+            path: 'dashboards',
+            name: 'CustomDashboards',
+            component: () => import('@/views/report/dashboard/CustomDashboardView.vue')
+          }
+        ]
       },
       {
         path: 'admin',

@@ -1,39 +1,7 @@
 <template>
   <div class="report-dashboard">
-    <!-- 页面头部 -->
-    <div class="dashboard-header">
-      <div class="header-left">
-        <h1 class="page-title">报表</h1>
-        <span class="page-desc">项目数据概览与可视化分析</span>
-      </div>
-    </div>
-
-    <!-- 标签页切换 -->
-    <div class="report-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        class="tab-btn"
-        :class="{ active: activeTab === tab.key }"
-        @click="activeTab = tab.key"
-      >
-        <span class="tab-icon">{{ tab.icon }}</span>
-        {{ tab.label }}
-      </button>
-      <router-link to="/reports/dashboards" class="tab-btn tab-link">
-        <span class="tab-icon">📋</span>
-        自定义仪表盘
-        <icon-right :size="12" style="margin-left: 2px; opacity: 0.5;" />
-      </router-link>
-      <router-link to="/reports/saved" class="tab-btn tab-link">
-        <span class="tab-icon">💾</span>
-        已保存报表
-        <icon-right :size="12" style="margin-left: 2px; opacity: 0.5;" />
-      </router-link>
-    </div>
-
-    <!-- 仪表盘 Tab -->
-    <div v-show="activeTab === 'dashboard'" class="tab-content">
+    <!-- 概览内容 -->
+    <div class="overview-content">
       <!-- 仪表盘筛选栏 -->
       <div class="dashboard-filters">
         <a-select
@@ -270,17 +238,7 @@
         </div>
       </div>
     </template>
-    </div><!-- end dashboard tab-content -->
-
-    <!-- 时间报表 Tab -->
-    <div v-show="activeTab === 'time'" class="tab-content">
-      <TimeReportTab ref="timeReportRef" :projects="projects" />
-    </div>
-
-    <!-- 预估对比 Tab -->
-    <div v-show="activeTab === 'estimation'" class="tab-content">
-      <EstimationReportTab ref="estimationReportRef" :projects="projects" />
-    </div>
+    </div><!-- end overview-content -->
   </div>
 </template>
 
@@ -298,9 +256,7 @@ import {
   ToolboxComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
-import TimeReportTab from './TimeReportTab.vue'
-import EstimationReportTab from './EstimationReportTab.vue'
-import { IconDownload, IconFile, IconPrinter, IconRight } from '@arco-design/web-vue/es/icon'
+import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
@@ -309,18 +265,6 @@ import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, ToolboxComponent])
-
-// ─── Tab 状态 ─────────────────────────────────────────
-
-const activeTab = ref<'dashboard' | 'time' | 'estimation'>('dashboard')
-const tabs = [
-  { key: 'dashboard', label: '仪表盘', icon: '📊' },
-  { key: 'time', label: '时间报表', icon: '⏱️' },
-  { key: 'estimation', label: '预估对比', icon: '📐' }
-] as const
-
-const timeReportRef = ref()
-const estimationReportRef = ref()
 
 // ─── 状态 ─────────────────────────────────────────────
 
@@ -1201,74 +1145,7 @@ function printReport() {
   padding: 24px 32px;
 }
 
-.dashboard-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* 标签页 */
-.report-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--tf-border-light);
-  padding-bottom: 0;
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-  margin-bottom: -1px;
-}
-
-.tab-btn:hover {
-  color: var(--tf-text-primary);
-}
-
-.tab-btn.active {
-  color: var(--tf-accent);
-  border-bottom-color: var(--tf-accent);
-}
-
-.tab-link {
-  text-decoration: none;
-  margin-left: auto;
-}
-
-.tab-link:first-of-type {
-  margin-left: auto;
-}
-
-.tab-link + .tab-link {
-  margin-left: 0;
-}
-
-.tab-icon {
-  font-size: 14px;
-}
-
-.tab-content {
+.overview-content {
   min-height: 0;
 }
 
@@ -1278,19 +1155,6 @@ function printReport() {
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-  letter-spacing: -0.3px;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
 }
 
 .sprint-active-badge {
@@ -1520,21 +1384,8 @@ function printReport() {
     overflow: visible;
   }
 
-  .dashboard-header .dashboard-filters {
+  .dashboard-filters {
     display: none;
-  }
-
-  .report-tabs {
-    display: none;
-  }
-
-  .page-title {
-    color: #000 !important;
-    font-size: 18px;
-  }
-
-  .page-desc {
-    color: #555 !important;
   }
 
   .overview-cards {

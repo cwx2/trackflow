@@ -2,10 +2,6 @@
   <div class="custom-dashboard-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <div class="header-left">
-        <h1 class="page-title">自定义仪表盘</h1>
-        <span class="page-desc">创建和管理个性化数据面板</span>
-      </div>
       <div class="header-right">
         <a-button type="primary" size="small" @click="showCreateModal = true">
           <template #icon><icon-plus /></template>
@@ -498,28 +494,9 @@ watch(showEditModal, (val) => {
 
 .page-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   margin-bottom: 16px;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-  letter-spacing: -0.3px;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
 }
 
 /* 仪表盘切换器 */

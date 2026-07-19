@@ -1,10 +1,6 @@
 <template>
   <div class="report-page">
     <div class="report-header">
-      <div class="header-left">
-        <h1 class="page-title">报表</h1>
-        <span class="page-desc">查看项目统计与进度报告</span>
-      </div>
       <div class="header-right" v-if="canCreateReport">
         <a-button type="primary" size="small" @click="openCreateModal">
           <template #icon><span class="btn-icon">➕</span></template>
@@ -136,6 +132,8 @@
             <a-option value="by_status">按状态分布</a-option>
             <a-option value="by_assignee">按负责人分布</a-option>
             <a-option value="by_priority">按优先级分布</a-option>
+            <a-option value="time_report">时间报表</a-option>
+            <a-option value="estimation_report">预估对比</a-option>
           </a-select>
         </a-form-item>
         <a-form-item label="分组依据">
@@ -376,6 +374,8 @@ function reportTypeLabel(type: string) {
     by_priority: '优先级分布',
     by_type: '类型分布',
     burndown: '燃尽图',
+    time_report: '时间报表',
+    estimation_report: '预估对比',
     custom: '自定义'
   }
   return map[type] || type
@@ -412,28 +412,9 @@ function formatTime(time: string) {
 
 .report-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   margin-bottom: 20px;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-  letter-spacing: -0.3px;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
 }
 
 .btn-icon {
