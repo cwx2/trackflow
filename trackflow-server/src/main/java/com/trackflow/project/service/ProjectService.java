@@ -968,6 +968,9 @@ public class ProjectService {
             com.baomidou.mybatisplus.extension.toolkit.Db.saveBatch(activities);
         }
 
+        // === 级联处理：停止该用户在此项目中的所有活跃计时器 ===
+        stopActiveTimersForUser(projectId, userId);
+
         // 删除成员记录
         memberMapper.delete(
                 new LambdaQueryWrapper<ProjectMember>()
@@ -1528,6 +1531,27 @@ public class ProjectService {
      */
     private void stopActiveTimersForProject(Long projectId) {
         List<TimeEntry> activeTimers = timeEntryMapper.selectActiveTimersByProjectId(projectId);
+        doStopActiveTimers(activeTimers, "项目 " + projectId + " 禁用时间追踪");
+    }
+
+    /**
+     * 停止指定用户在指定项目中的所有活跃计时器。
+     * 用于成员移除时的级联清理。
+     */
+    private void stopActiveTimersForUser(Long projectId, Long userId) {
+        List<TimeEntry> activeTimers = timeEntryMapper.selectList(
+                new LambdaQueryWrapper<TimeEntry>()
+                        .eq(TimeEntry::getProjectId, projectId)
+                        .eq(TimeEntry::getUserId, userId)
+                        .eq(TimeEntry::getOngoing, true)
+        );
+        doStopActiveTimers(activeTimers, "用户 " + userId + " 被移出项目 " + projectId);
+    }
+
+    /**
+     * 通用：停止一批活跃计时器，计算已用时长并保存。
+     */
+    private void doStopActiveTimers(List<TimeEntry> activeTimers, String reason) {
         if (activeTimers == null || activeTimers.isEmpty()) {
             return;
         }
@@ -1548,7 +1572,7 @@ public class ProjectService {
                 timeEntryMapper.atomicRefreshSpentHours(timer.getIssueId());
             }
         }
-        log.info("项目 {} 禁用时间追踪，自动停止 {} 个活跃计时器", projectId, activeTimers.size());
+        log.info("{}，自动停止 {} 个活跃计时器", reason, activeTimers.size());
     }
 
     // ========== 项目收藏 ==========
