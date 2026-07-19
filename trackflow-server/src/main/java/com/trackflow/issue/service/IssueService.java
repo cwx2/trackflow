@@ -12,6 +12,7 @@ import com.trackflow.common.model.PageResult;
 import com.trackflow.common.service.MinioService;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.common.util.SqlUtils;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
@@ -335,18 +336,19 @@ public class IssueService {
 
     /**
      * 关键词过滤：匹配 title、description、issue_key 或 assignee 的 display_name/username。
-     * 使用参数化查询防止 SQL 注入。
+     * 使用参数化查询防止 SQL 注入。LIKE 通配符已转义以确保字面匹配。
      */
     private void applyKeywordFilter(QueryWrapper<Issue> wrapper, String keyword) {
-        String likePattern = "%" + keyword + "%";
+        String escaped = SqlUtils.escapeLikePattern(keyword);
+        String likePattern = "%" + escaped + "%";
         wrapper.and(w -> w
-                .like("title", keyword)
+                .apply("title LIKE {0} ESCAPE '\\'", likePattern)
                 .or()
-                .like("description", keyword)
+                .apply("description LIKE {0} ESCAPE '\\'", likePattern)
                 .or()
-                .like("issue_key", keyword)
+                .apply("issue_key LIKE {0} ESCAPE '\\'", likePattern)
                 .or()
-                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} OR username LIKE {0})", likePattern)
+                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} ESCAPE '\\' OR username LIKE {0} ESCAPE '\\')", likePattern)
         );
     }
 

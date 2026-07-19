@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.common.util.SqlUtils;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.dto.IssueExportDTO;
 import com.trackflow.issue.entity.Issue;
@@ -172,13 +173,13 @@ public class IssueExportService {
         }
 
         if (dto.getKeyword() != null && !dto.getKeyword().isBlank()) {
-            String keyword = dto.getKeyword();
-            String likePattern = "%" + keyword + "%";
+            String escaped = SqlUtils.escapeLikePattern(dto.getKeyword());
+            String likePattern = "%" + escaped + "%";
             wrapper.and(w -> w
-                    .like("title", keyword)
-                    .or().like("description", keyword)
-                    .or().like("issue_key", keyword)
-                    .or().apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} OR username LIKE {0})", likePattern)
+                    .apply("title LIKE {0} ESCAPE '\\'", likePattern)
+                    .or().apply("description LIKE {0} ESCAPE '\\'", likePattern)
+                    .or().apply("issue_key LIKE {0} ESCAPE '\\'", likePattern)
+                    .or().apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} ESCAPE '\\' OR username LIKE {0} ESCAPE '\\')", likePattern)
             );
         }
 

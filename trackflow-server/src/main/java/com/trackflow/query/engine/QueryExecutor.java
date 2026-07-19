@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.common.util.SqlUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.service.StatusCacheHelper;
@@ -279,11 +280,11 @@ public class QueryExecutor {
 
     private void applyKeywordFilter(QueryWrapper<Issue> wrapper, List<String> values) {
         if (values.isEmpty()) return;
-        String kw = values.get(0);
+        String kw = SqlUtils.escapeLikePattern(values.get(0));
         wrapper.and(w -> w
-                .like("title", kw)
-                .or().like("description", kw)
-                .or().like("issue_key", kw)
+                .apply("title LIKE {0} ESCAPE '\\'", "%" + kw + "%")
+                .or().apply("description LIKE {0} ESCAPE '\\'", "%" + kw + "%")
+                .or().apply("issue_key LIKE {0} ESCAPE '\\'", "%" + kw + "%")
         );
     }
 
@@ -397,8 +398,8 @@ public class QueryExecutor {
             case "in" -> applyCustomFieldInFilter(wrapper, cfKey, values, false);
             case "not_in" -> applyCustomFieldInFilter(wrapper, cfKey, values, true);
             case "contains" -> wrapper.apply(
-                    "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value LIKE {1})",
-                    Long.parseLong(cfKey), "%" + values.get(0) + "%");
+                    "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value LIKE {1} ESCAPE '\\')",
+                    Long.parseLong(cfKey), "%" + SqlUtils.escapeLikePattern(values.get(0)) + "%");
             case "is_empty" -> wrapper.apply(
                     "NOT EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IS NOT NULL AND cfv.value != '')",
                     Long.parseLong(cfKey));
