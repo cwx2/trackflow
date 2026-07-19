@@ -69,6 +69,7 @@ export interface UpdateWidgetParams {
   title?: string
   config?: string
   reportId?: string
+  clearReportId?: boolean
   positionX?: number
   positionY?: number
   width?: number

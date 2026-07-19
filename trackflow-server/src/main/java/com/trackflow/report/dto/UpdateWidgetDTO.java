@@ -20,6 +20,9 @@ public class UpdateWidgetDTO {
     /** 关联报表 ID（报表类微件） */
     private Long reportId;
 
+    /** 是否清除关联报表（设为 true 时将 reportId 置空） */
+    private Boolean clearReportId;
+
     @Min(value = 0, message = "位置X不能为负")
     private Integer positionX;
 

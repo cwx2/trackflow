@@ -199,6 +199,66 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 微件配置弹窗 -->
+    <a-modal
+      v-model:visible="showWidgetConfigModal"
+      title="编辑微件配置"
+      :width="520"
+      @ok="handleWidgetConfigSave"
+      :ok-loading="savingWidgetConfig"
+      ok-text="保存"
+      cancel-text="取消"
+    >
+      <a-form :model="widgetConfigForm" layout="vertical">
+        <a-form-item label="标题">
+          <a-input v-model="widgetConfigForm.title" placeholder="微件标题" :max-length="100" />
+        </a-form-item>
+
+        <!-- number_card 配置 -->
+        <template v-if="editingWidgetType === 'number_card'">
+          <a-form-item label="数据来源">
+            <a-select v-model="widgetConfigForm.queryType" placeholder="选择统计指标" allow-clear>
+              <a-option value="total">工单总数</a-option>
+              <a-option value="open">待处理工单数</a-option>
+              <a-option value="closed">已完成工单数</a-option>
+              <a-option value="unassigned">未分配工单数</a-option>
+              <a-option value="overdue">已逾期工单数</a-option>
+              <a-option value="completion_rate">完成率 (%)</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="自定义数值（留空则自动从后端获取）">
+            <a-input-number v-model="widgetConfigForm.staticValue" placeholder="留空=动态数据" :min="0" style="width: 100%" />
+          </a-form-item>
+          <a-form-item label="副标签">
+            <a-input v-model="widgetConfigForm.label" placeholder="如「Open Bugs」" :max-length="50" />
+          </a-form-item>
+        </template>
+
+        <!-- report_distribution / report 配置 -->
+        <template v-if="editingWidgetType === 'report_distribution' || editingWidgetType === 'report'">
+          <a-form-item label="关联报表">
+            <a-select v-model="widgetConfigForm.reportId" placeholder="选择一个已保存的报表" allow-clear>
+              <a-option v-for="r in availableReports" :key="r.id" :value="r.id">
+                {{ r.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">关联后将自动展示该报表的图表数据</span>
+          </a-form-item>
+        </template>
+
+        <!-- note 配置 -->
+        <template v-if="editingWidgetType === 'note'">
+          <a-form-item label="内容">
+            <a-textarea
+              v-model="widgetConfigForm.noteContent"
+              placeholder="支持简单 HTML 标签"
+              :auto-size="{ minRows: 3, maxRows: 8 }"
+            />
+          </a-form-item>
+        </template>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -210,7 +270,9 @@ import {
   IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt
 } from '@arco-design/web-vue/es/icon'
 import { customDashboardApi } from '@/api'
+import { reportApi } from '@/api/report'
 import type { DashboardListVO, DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
+import type { ReportDefinitionVO } from '@/api/report'
 import WidgetCard from './WidgetCard.vue'
 
 // ─── 微件类型定义 ─────────────────────────────────────────
@@ -240,9 +302,31 @@ const currentDashboard = ref<DashboardDetailVO | null>(null)
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showAddWidgetModal = ref(false)
+const showWidgetConfigModal = ref(false)
 
 const createForm = ref({ name: '', description: '', shared: false })
 const editForm = ref({ name: '', description: '' })
+
+// Widget config editing state
+const editingWidget = ref<DashboardWidgetVO | null>(null)
+const editingWidgetType = ref<string>('')
+const savingWidgetConfig = ref(false)
+const availableReports = ref<ReportDefinitionVO[]>([])
+const widgetConfigForm = ref<{
+  title: string
+  queryType?: string
+  staticValue?: number
+  label?: string
+  reportId?: string
+  noteContent?: string
+}>({
+  title: '',
+  queryType: undefined,
+  staticValue: undefined,
+  label: '',
+  reportId: undefined,
+  noteContent: ''
+})
 
 // ─── 计算属性 ─────────────────────────────────────────
 
@@ -442,10 +526,16 @@ function confirmDelete() {
 async function addWidget(widgetType: string, defaultTitle: string) {
   if (!currentDashboard.value) return
   try {
+    // Default config based on widget type
+    let defaultConfig = '{}'
+    if (widgetType === 'number_card') {
+      defaultConfig = JSON.stringify({ queryType: 'open', label: '待处理' })
+    }
+
     await customDashboardApi.addWidget(currentDashboard.value.id, {
       widgetType,
       title: defaultTitle,
-      config: '{}',
+      config: defaultConfig,
       width: widgetType === 'number_card' ? 3 : 4,
       height: widgetType === 'number_card' ? 2 : 3
     })
@@ -466,8 +556,83 @@ async function addWidget(widgetType: string, defaultTitle: string) {
 }
 
 function editWidget(widget: DashboardWidgetVO) {
-  // TODO: 打开编辑弹窗（第三期 REQ-467-3 实现完整配置编辑）
-  Message.info('微件编辑功能将在下一期实现')
+  editingWidget.value = widget
+  editingWidgetType.value = widget.widgetType
+
+  // Parse current config
+  let config: Record<string, any> = {}
+  try {
+    config = widget.config ? JSON.parse(widget.config) : {}
+  } catch { /* empty */ }
+
+  widgetConfigForm.value = {
+    title: widget.title || '',
+    queryType: config.queryType || undefined,
+    staticValue: config.value ?? undefined,
+    label: config.label || '',
+    reportId: widget.reportId || undefined,
+    noteContent: config.content || ''
+  }
+
+  // Load reports if needed for report widgets
+  if (widget.widgetType === 'report_distribution' || widget.widgetType === 'report') {
+    loadAvailableReports()
+  }
+
+  showWidgetConfigModal.value = true
+}
+
+async function loadAvailableReports() {
+  try {
+    const res = await reportApi.list()
+    availableReports.value = res.data || []
+  } catch {
+    availableReports.value = []
+  }
+}
+
+async function handleWidgetConfigSave() {
+  if (!editingWidget.value || !currentDashboard.value) return
+  savingWidgetConfig.value = true
+  try {
+    const widget = editingWidget.value
+    const form = widgetConfigForm.value
+
+    // Build config JSON
+    let config: Record<string, any> = {}
+    if (widget.widgetType === 'number_card') {
+      if (form.queryType) config.queryType = form.queryType
+      if (form.staticValue != null) config.value = form.staticValue
+      if (form.label) config.label = form.label
+    } else if (widget.widgetType === 'note') {
+      if (form.noteContent) config.content = form.noteContent
+    }
+    // report_distribution / report: reportId is saved separately
+
+    const updateData: Record<string, any> = {
+      title: form.title || undefined,
+      config: JSON.stringify(config)
+    }
+
+    // Handle reportId for report widgets
+    if (widget.widgetType === 'report_distribution' || widget.widgetType === 'report') {
+      if (form.reportId) {
+        updateData.reportId = form.reportId
+      } else {
+        updateData.clearReportId = true
+      }
+    }
+
+    await customDashboardApi.updateWidget(currentDashboard.value.id, widget.id, updateData)
+    Message.success('微件配置已保存')
+    showWidgetConfigModal.value = false
+    // Reload dashboard detail to get updated widgets
+    await selectDashboard(currentDashboard.value.id)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    savingWidgetConfig.value = false
+  }
 }
 
 async function deleteWidget(widget: DashboardWidgetVO) {

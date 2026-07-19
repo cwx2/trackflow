@@ -233,7 +233,11 @@ public class CustomDashboardService {
 
         if (dto.getTitle() != null) widget.setTitle(dto.getTitle());
         if (dto.getConfig() != null) widget.setConfig(dto.getConfig());
-        if (dto.getReportId() != null) widget.setReportId(dto.getReportId());
+        if (dto.getReportId() != null) {
+            widget.setReportId(dto.getReportId());
+        } else if (Boolean.TRUE.equals(dto.getClearReportId())) {
+            widget.setReportId(null);
+        }
         if (dto.getPositionX() != null) widget.setPositionX(dto.getPositionX());
         if (dto.getPositionY() != null) widget.setPositionY(dto.getPositionY());
         if (dto.getWidth() != null) widget.setWidth(dto.getWidth());
