@@ -1,5 +1,6 @@
 package com.trackflow.auth.controller;
 
+import com.trackflow.auth.security.ApiKeyAuthenticationToken;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.auth.service.UserSyncService;
 import com.trackflow.auth.vo.UserInfoVO;
@@ -7,8 +8,12 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,10 +27,35 @@ public class AuthController {
 
     private final PermissionService permissionService;
     private final ProjectService projectService;
+    private final SysUserMapper sysUserMapper;
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public R<UserInfoVO> getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Long dbUserId = SecurityUtils.getCurrentUserId();
+
+        if (auth instanceof ApiKeyAuthenticationToken) {
+            // API Key 认证：从数据库获取用户信息
+            if (dbUserId == null) {
+                return R.fail(ErrorCode.AUTH_MISSING);
+            }
+            SysUser user = sysUserMapper.selectById(dbUserId);
+            if (user == null) {
+                return R.fail(ErrorCode.AUTH_MISSING);
+            }
+            UserInfoVO userInfo = UserInfoVO.builder()
+                    .userId(String.valueOf(user.getId()))
+                    .keycloakId(user.getKeycloakId())
+                    .username(user.getUsername())
+                    .displayName(user.getDisplayName())
+                    .email(user.getEmail())
+                    .authMethod("api_key")
+                    .build();
+            return R.ok(userInfo);
+        }
+
+        // JWT 认证（默认）
         Jwt jwt = SecurityUtils.getCurrentJwt();
         if (jwt == null) {
             return R.fail(ErrorCode.AUTH_MISSING);
@@ -35,15 +65,13 @@ public class AuthController {
         String nameClaim = jwt.getClaimAsString("name");
         String username = jwt.getClaimAsString("preferred_username");
 
-        // 获取数据库用户 ID（供前端资源级权限判断使用）
-        Long dbUserId = SecurityUtils.getCurrentUserId();
-
         UserInfoVO userInfo = UserInfoVO.builder()
                 .userId(dbUserId != null ? String.valueOf(dbUserId) : null)
                 .keycloakId(jwt.getSubject())
                 .username(username)
                 .displayName(UserSyncService.buildDisplayName(givenName, familyName, nameClaim, username))
                 .email(jwt.getClaimAsString("email"))
+                .authMethod("jwt")
                 .build();
         return R.ok(userInfo);
     }

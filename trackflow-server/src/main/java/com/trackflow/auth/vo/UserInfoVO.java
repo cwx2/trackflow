@@ -18,7 +18,7 @@ public class UserInfoVO {
     /** 数据库用户 ID（Long→String，前端可用于资源级权限判断） */
     private String userId;
 
-    /** Keycloak subject ID */
+    /** Keycloak subject ID（仅 JWT 认证时有值） */
     private String keycloakId;
 
     /** 登录用户名 */
@@ -29,4 +29,7 @@ public class UserInfoVO {
 
     /** 邮箱 */
     private String email;
+
+    /** 当前认证方式：jwt / api_key */
+    private String authMethod;
 }
