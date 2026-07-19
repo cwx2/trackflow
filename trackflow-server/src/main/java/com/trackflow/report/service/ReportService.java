@@ -103,9 +103,9 @@ public class ReportService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
 
-        // 项目成员检查
+        // 项目可访问性检查（读操作）
         if (source.getProjectId() != null) {
-            projectService.assertProjectMember(userId, source.getProjectId());
+            projectService.assertProjectAccessible(userId, source.getProjectId());
         }
 
         ReportDefinition cloned = new ReportDefinition();
@@ -128,9 +128,9 @@ public class ReportService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
 
-        // 项目成员检查
+        // 项目可访问性检查（读操作）
         if (report.getProjectId() != null) {
-            projectService.assertProjectMember(userId, report.getProjectId());
+            projectService.assertProjectAccessible(userId, report.getProjectId());
         }
 
         // 私有报表访问控制
@@ -292,7 +292,7 @@ public class ReportService {
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
 
         if (report.getProjectId() != null) {
-            projectService.assertProjectMember(userId, report.getProjectId());
+            projectService.assertProjectAccessible(userId, report.getProjectId());
         }
 
         if (!Boolean.TRUE.equals(report.getShared()) && !userId.equals(report.getCreatedBy())) {

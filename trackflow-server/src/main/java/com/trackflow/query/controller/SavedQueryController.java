@@ -51,7 +51,7 @@ public class SavedQueryController {
     public R<QueryPanelVO> getPanel(@RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
-            projectService.assertProjectMember(userId, projectId);
+            projectService.assertProjectAccessible(userId, projectId);
         }
         return R.ok(savedQueryService.getPanel(userId, projectId));
     }
@@ -208,7 +208,7 @@ public class SavedQueryController {
             @RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
-            projectService.assertProjectMember(userId, projectId);
+            projectService.assertProjectAccessible(userId, projectId);
         }
         @SuppressWarnings("unchecked")
         List<Number> rawIds = (List<Number>) body.get("queryIds");

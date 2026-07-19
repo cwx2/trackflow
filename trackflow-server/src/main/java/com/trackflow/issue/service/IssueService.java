@@ -202,8 +202,8 @@ public class IssueService {
         wrapper.isNull("deleted_at");
 
         if (query.getProjectId() != null) {
-            // 指定了 projectId，校验成员关系
-            projectService.assertProjectMember(currentUserId, query.getProjectId());
+            // 指定了 projectId，校验可访问性（兼容 internal/public 项目的非成员访问）
+            projectService.assertProjectAccessible(currentUserId, query.getProjectId());
             wrapper.eq("project_id", query.getProjectId());
         } else {
             // 未指定 projectId，自动限定为用户所属项目
@@ -367,7 +367,7 @@ public class IssueService {
 
         // 数据隔离：与 listByQuery 保持一致
         if (projectId != null) {
-            projectService.assertProjectMember(currentUserId, projectId);
+            projectService.assertProjectAccessible(currentUserId, projectId);
             wrapper.eq("project_id", projectId);
         } else {
             List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
@@ -467,7 +467,7 @@ public class IssueService {
     public Issue getByIdWithAccessCheck(Long id) {
         Issue issue = getById(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(currentUserId, issue.getProjectId());
+        projectService.assertProjectAccessible(currentUserId, issue.getProjectId());
         return issue;
     }
 
@@ -477,7 +477,7 @@ public class IssueService {
     public Issue getByKeyWithAccessCheck(String issueKey) {
         Issue issue = getByKey(issueKey);
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(currentUserId, issue.getProjectId());
+        projectService.assertProjectAccessible(currentUserId, issue.getProjectId());
         return issue;
     }
 
@@ -1535,7 +1535,7 @@ public class IssueService {
     public IssueDetailVO getDetailWithAccessCheck(Long id) {
         IssueDetailVO detail = getDetail(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(currentUserId, Long.parseLong(detail.getProjectId()));
+        projectService.assertProjectAccessible(currentUserId, Long.parseLong(detail.getProjectId()));
         return detail;
     }
 
@@ -1830,7 +1830,7 @@ public class IssueService {
      */
     public PageResult<IssueTrashVO> listTrash(Long projectId, int page, int pageSize) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(currentUserId, projectId);
+        projectService.assertProjectAccessible(currentUserId, projectId);
         Page<Map<String, Object>> p = new Page<>(page, pageSize);
         Page<Map<String, Object>> result = issueMapper.selectTrashPage(p, projectId);
 

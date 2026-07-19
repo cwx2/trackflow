@@ -115,7 +115,7 @@ public class IssueExportService {
         wrapper.isNull("deleted_at");
 
         if (dto.getProjectId() != null) {
-            projectService.assertProjectMember(currentUserId, dto.getProjectId());
+            projectService.assertProjectAccessible(currentUserId, dto.getProjectId());
             wrapper.eq("project_id", dto.getProjectId());
         } else {
             List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);

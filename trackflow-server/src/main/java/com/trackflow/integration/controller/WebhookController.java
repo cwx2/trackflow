@@ -37,7 +37,7 @@ public class WebhookController {
     @PreAuthorize("isAuthenticated()")
     public R<List<WebhookVO>> list(@RequestParam("projectId") Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(webhookConverter.toVOList(webhookService.listByProject(projectId)));
     }
 

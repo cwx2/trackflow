@@ -34,7 +34,7 @@ public class ReportController {
     public R<List<ReportDefinitionVO>> list(@RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
-            projectService.assertProjectMember(userId, projectId);
+            projectService.assertProjectAccessible(userId, projectId);
         }
         return R.ok(reportConverter.toVOList(reportService.list(projectId, userId)));
     }

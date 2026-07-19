@@ -1020,6 +1020,48 @@ public class ProjectService {
     }
 
     /**
+     * 校验用户是否可访问项目（读操作用）。
+     * 与 assertProjectMember 的区别：本方法兼容项目可见性（visibility）。
+     * - 系统管理员：直接放行
+     * - 项目成员：直接放行
+     * - 非成员但项目 visibility = internal/public：放行（已登录用户）
+     * - 非成员且项目 visibility = private：拒绝
+     *
+     * 适用场景：查看报表、查看工单列表、执行查询等只读操作。
+     * 写操作（创建工单/工时/Webhook）仍应使用 assertProjectMember。
+     *
+     * @param userId    当前用户 ID
+     * @param projectId 目标项目 ID
+     */
+    public void assertProjectAccessible(Long userId, Long projectId) {
+        if (userId == null || projectId == null) {
+            throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
+        }
+        // 系统管理员跳过校验
+        if (permissionService.isSystemAdmin(userId)) {
+            return;
+        }
+        // 检查是否为项目成员
+        Long count = memberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .eq(ProjectMember::getUserId, userId)
+        );
+        if (count > 0) {
+            return;
+        }
+        // 非成员：检查项目可见性
+        Project project = projectMapper.selectById(projectId);
+        if (project != null) {
+            ProjectVisibility visibility = project.getVisibility();
+            if (visibility == ProjectVisibility.INTERNAL || visibility == ProjectVisibility.PUBLIC) {
+                return; // 非成员但项目对已登录用户可见
+            }
+        }
+        throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
+    }
+
+    /**
      * 校验项目是否处于 active 状态。归档项目不允许写操作。
      *
      * @param projectId 目标项目 ID

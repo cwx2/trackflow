@@ -36,7 +36,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
-            projectService.assertProjectMember(userId, projectId);
+            projectService.assertProjectAccessible(userId, projectId);
         }
         return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate, userId));
     }
@@ -50,7 +50,7 @@ public class ReportStatisticsController {
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getStatusDistribution(projectId, sprintId));
     }
 
@@ -63,7 +63,7 @@ public class ReportStatisticsController {
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getPriorityDistribution(projectId, sprintId));
     }
 
@@ -77,7 +77,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getTrend(projectId, startDate, endDate));
     }
 
@@ -90,7 +90,7 @@ public class ReportStatisticsController {
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getWorkload(projectId, sprintId));
     }
 
@@ -103,7 +103,7 @@ public class ReportStatisticsController {
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getTypeDistribution(projectId, sprintId));
     }
 
@@ -116,7 +116,7 @@ public class ReportStatisticsController {
             @RequestParam("projectId") Long projectId,
             @RequestParam("sprintId") Long sprintId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getBurndown(projectId, sprintId));
     }
 
@@ -130,7 +130,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getCumulativeFlow(projectId, startDate, endDate));
     }
 
@@ -145,7 +145,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(value = "groupBy", required = false) String groupBy) {
         Long userId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectMember(userId, projectId);
+        projectService.assertProjectAccessible(userId, projectId);
         return R.ok(statisticsService.getResolutionTime(projectId, startDate, endDate, groupBy));
     }
 
@@ -162,7 +162,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
-            projectService.assertProjectMember(userId, projectId);
+            projectService.assertProjectAccessible(userId, projectId);
         }
         return R.ok(statisticsService.getTimeReport(projectId, startDate, endDate, userId));
     }
@@ -181,7 +181,7 @@ public class ReportStatisticsController {
             @RequestParam(value = "pageSize", defaultValue = "50") Integer pageSize) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
-            projectService.assertProjectMember(userId, projectId);
+            projectService.assertProjectAccessible(userId, projectId);
         }
         // 约束 pageSize 范围
         if (page < 1) page = 1;
