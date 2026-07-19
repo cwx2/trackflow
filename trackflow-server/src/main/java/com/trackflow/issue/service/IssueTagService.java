@@ -1,6 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -14,6 +15,7 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ public class IssueTagService {
     private final IssueTagRelationMapper tagRelationMapper;
     private final IssueMapper issueMapper;
     private final ProjectService projectService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 获取项目下所有标签
@@ -112,6 +115,14 @@ public class IssueTagService {
         relation.setTagId(tagId);
         relation.setCreatedAt(LocalDateTime.now());
         tagRelationMapper.insert(relation);
+
+        // 通知报告人和负责人标签变更
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "tags", null, tag.getName(), currentUserId));
+        }
     }
 
     /**
@@ -121,11 +132,22 @@ public class IssueTagService {
     public void removeTagFromIssue(Long issueId, Long tagId) {
         assertIssueProjectActive(issueId);
 
+        // 先获取标签名用于通知
+        IssueTag tag = tagMapper.selectById(tagId);
+
         tagRelationMapper.delete(
                 new LambdaQueryWrapper<IssueTagRelation>()
                         .eq(IssueTagRelation::getIssueId, issueId)
                         .eq(IssueTagRelation::getTagId, tagId)
         );
+
+        // 通知报告人和负责人标签移除
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null && tag != null) {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "tags", tag.getName(), null, currentUserId));
+        }
     }
 
     /**

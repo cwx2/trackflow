@@ -134,6 +134,14 @@
               />
             </div>
             <div class="event-item">
+              <span class="event-label">工单字段更新</span>
+              <a-switch
+                :model-value="item.pref.onIssueUpdated"
+                size="small"
+                @change="(v: boolean | string | number) => handleProjectPrefChange(item, 'onIssueUpdated', v as boolean)"
+              />
+            </div>
+            <div class="event-item">
               <span class="event-label">Sprint 启动</span>
               <a-switch
                 :model-value="item.pref.onSprintStarted"

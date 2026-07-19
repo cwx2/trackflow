@@ -24,6 +24,8 @@ public enum NotificationType {
     mention("提及"),
     /** 工单被移动到其他项目 */
     issue_moved("工单移动"),
+    /** 工单字段变更（priority/dueDate/description/sprint/parent/tags） */
+    issue_updated("工单更新"),
 
     // ===== Project 相关 =====
     /** 被添加到项目 */

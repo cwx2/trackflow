@@ -285,6 +285,9 @@ public class NotificationPreferenceService {
         if (dto.getOnIssueResolved() != null) {
             pref.setOnIssueResolved(dto.getOnIssueResolved());
         }
+        if (dto.getOnIssueUpdated() != null) {
+            pref.setOnIssueUpdated(dto.getOnIssueUpdated());
+        }
         if (dto.getOnSprintStarted() != null) {
             pref.setOnSprintStarted(dto.getOnSprintStarted());
         }
@@ -329,6 +332,7 @@ public class NotificationPreferenceService {
         pref.setOnIssueCommented(getDefaultBool("notification.default_on_issue_commented", true));
         pref.setOnMentioned(getDefaultBool("notification.default_on_mentioned", true));
         pref.setOnIssueResolved(getDefaultBool("notification.default_on_issue_resolved", true));
+        pref.setOnIssueUpdated(getDefaultBool("notification.default_on_issue_updated", true));
         pref.setOnSprintStarted(getDefaultBool("notification.default_on_sprint_started", false));
         pref.setOnSprintCompleted(getDefaultBool("notification.default_on_sprint_completed", false));
         pref.setOnProjectMemberChanged(getDefaultBool("notification.default_on_project_member_changed", true));

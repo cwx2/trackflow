@@ -10,7 +10,12 @@ import java.util.List;
 
 /**
  * 手动实现的 NotificationPreferenceConverter，覆盖 MapStruct 生成的旧版本。
- * 确保新增的 onDueDate/onOverdue/dueDateAdvanceDays 字段正确映射。
+ * <p>
+ * 原因：MapStruct 注解处理器需要 Maven compile 才能重新生成实现类。
+ * 在 IDEA 增量编译环境下，新增字段不会自动反映到生成的 Impl 中。
+ * 此手动实现确保 onIssueUpdated 等新字段正确映射。
+ * <p>
+ * TODO: 当下次运行 mvn compile 后，可删除此文件——生成的版本会自动包含新字段。
  */
 @Component
 @Primary
@@ -33,6 +38,7 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
         vo.setOnIssueCommented(entity.getOnIssueCommented());
         vo.setOnMentioned(entity.getOnMentioned());
         vo.setOnIssueResolved(entity.getOnIssueResolved());
+        vo.setOnIssueUpdated(entity.getOnIssueUpdated());
 
         // Sprint 事件
         vo.setOnSprintStarted(entity.getOnSprintStarted());
@@ -47,9 +53,11 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
         vo.setOnOverdue(entity.getOnOverdue());
         vo.setDueDateAdvanceDays(entity.getDueDateAdvanceDays());
 
-        // 其他
+        // 行为开关
         vo.setNotifyOwnChanges(entity.getNotifyOwnChanges());
         vo.setEmailEnabled(entity.getEmailEnabled());
+
+        // 静音时段
         vo.setQuietHoursStart(entity.getQuietHoursStart());
         vo.setQuietHoursEnd(entity.getQuietHoursEnd());
 
@@ -62,8 +70,8 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
             return null;
         }
         List<NotificationPreferenceVO> list = new ArrayList<>(entities.size());
-        for (NotificationPreference entity : entities) {
-            list.add(toVO(entity));
+        for (NotificationPreference pref : entities) {
+            list.add(toVO(pref));
         }
         return list;
     }

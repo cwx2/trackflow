@@ -9,6 +9,7 @@ export type NotificationType =
   | 'issue_auto_assigned'
   | 'issue_commented'
   | 'issue_status_changed'
+  | 'issue_updated'
   | 'mention'
   | 'issue_moved'
   | 'member_added'

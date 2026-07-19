@@ -58,6 +58,13 @@
               </div>
               <a-switch v-model="form.onIssueResolved" size="small" @change="handleSave" />
             </div>
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">工单字段更新</span>
+                <span class="event-desc">你参与的工单优先级、截止日期、描述、迭代、标签等字段变更时通知</span>
+              </div>
+              <a-switch v-model="form.onIssueUpdated" size="small" @change="handleSave" />
+            </div>
           </div>
         </div>
 
@@ -248,6 +255,7 @@ const form = reactive({
   onIssueCommented: true,
   onMentioned: true,
   onIssueResolved: true,
+  onIssueUpdated: true,
   onSprintStarted: false,
   onSprintCompleted: false,
   onProjectMemberChanged: true,
@@ -300,6 +308,7 @@ function applyData(data: NotificationPreferenceVO) {
   form.onIssueCommented = data.onIssueCommented
   form.onMentioned = data.onMentioned
   form.onIssueResolved = data.onIssueResolved
+  form.onIssueUpdated = data.onIssueUpdated
   form.onSprintStarted = data.onSprintStarted
   form.onSprintCompleted = data.onSprintCompleted
   form.onProjectMemberChanged = data.onProjectMemberChanged
@@ -330,6 +339,7 @@ function handleSave() {
         onIssueCommented: form.onIssueCommented,
         onMentioned: form.onMentioned,
         onIssueResolved: form.onIssueResolved,
+        onIssueUpdated: form.onIssueUpdated,
         onSprintStarted: form.onSprintStarted,
         onSprintCompleted: form.onSprintCompleted,
         onProjectMemberChanged: form.onProjectMemberChanged,

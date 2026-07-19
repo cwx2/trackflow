@@ -24,6 +24,8 @@ public class NotificationPreference implements Serializable {
     private Boolean onIssueCommented;
     private Boolean onMentioned;
     private Boolean onIssueResolved;
+    /** 通用字段变更（priority, dueDate, description, sprint, parent, tags） */
+    private Boolean onIssueUpdated;
 
     // Sprint 事件订阅开关
     private Boolean onSprintStarted;

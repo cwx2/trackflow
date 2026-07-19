@@ -10,6 +10,7 @@ export interface NotificationPreferenceVO {
   onIssueCommented: boolean
   onMentioned: boolean
   onIssueResolved: boolean
+  onIssueUpdated: boolean
   onSprintStarted: boolean
   onSprintCompleted: boolean
   onProjectMemberChanged: boolean
@@ -29,6 +30,7 @@ export interface UpdateNotificationPreferenceDTO {
   onIssueCommented?: boolean
   onMentioned?: boolean
   onIssueResolved?: boolean
+  onIssueUpdated?: boolean
   onSprintStarted?: boolean
   onSprintCompleted?: boolean
   onProjectMemberChanged?: boolean

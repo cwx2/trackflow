@@ -44,4 +44,18 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * 工单移动到其他项目通知事件
      */
     record Moved(Issue issue, Long sourceProjectId, Long targetProjectId, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 工单通用字段变更通知事件（priority, dueDate, description, sprint, parent, tags 等）。
+     * <p>
+     * 不同于 StatusChanged/Assigned 等有专门逻辑的事件，FieldUpdated 是一个通用事件，
+     * 用于所有"仅需告知相关人员有变更"的字段修改。
+     *
+     * @param issue       变更后的 Issue 实体
+     * @param fieldName   变更的字段名（如 "priority", "due_date", "description"）
+     * @param oldValue    旧值（显示用，可为 null）
+     * @param newValue    新值（显示用，可为 null）
+     * @param operatorId  操作者 ID
+     */
+    record FieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId) implements IssueNotificationEvent {}
 }

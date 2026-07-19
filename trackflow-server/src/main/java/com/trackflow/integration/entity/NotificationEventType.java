@@ -21,6 +21,8 @@ public enum NotificationEventType {
     ISSUE_COMMENTED(NotificationPreference::getOnIssueCommented),
     ISSUE_RESOLVED(NotificationPreference::getOnIssueResolved),
     MENTIONED(NotificationPreference::getOnMentioned),
+    /** 通用字段变更（priority, dueDate, description, sprint, parent, tags） */
+    ISSUE_UPDATED(NotificationPreference::getOnIssueUpdated),
 
     // ===== Sprint 相关 =====
     SPRINT_STARTED(NotificationPreference::getOnSprintStarted),

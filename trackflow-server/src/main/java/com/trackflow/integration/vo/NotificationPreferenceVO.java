@@ -15,6 +15,7 @@ public class NotificationPreferenceVO {
     private Boolean onIssueCommented;
     private Boolean onMentioned;
     private Boolean onIssueResolved;
+    private Boolean onIssueUpdated;
 
     // Sprint 事件订阅开关
     private Boolean onSprintStarted;

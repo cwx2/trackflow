@@ -61,4 +61,16 @@ public class IssueNotificationEventListener {
         if (NotificationContext.isSilent()) return;
         notificationHelper.notifyMoved(event.issue(), event.sourceProjectId(), event.targetProjectId(), event.operatorId());
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleCancelled(IssueNotificationEvent.Cancelled event) {
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyCancelled(event.issue(), event.operatorId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleFieldUpdated(IssueNotificationEvent.FieldUpdated event) {
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyFieldUpdated(event.issue(), event.fieldName(), event.oldValue(), event.newValue(), event.operatorId());
+    }
 }

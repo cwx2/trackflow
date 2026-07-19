@@ -29,6 +29,8 @@ public enum NotificationCategory {
             NotificationType.issue_auto_assigned,
             NotificationType.issue_commented,
             NotificationType.issue_status_changed,
+            NotificationType.issue_updated,
+            NotificationType.issue_moved,
             NotificationType.due_date_alert,
             NotificationType.overdue_alert
     )),

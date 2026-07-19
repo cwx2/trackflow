@@ -386,6 +386,125 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         }
     }
 
+    /**
+     * 工单取消/废弃通知：通知报告人和负责人。
+     * <p>
+     * 使用 ISSUE_STATUS_CHANGED 偏好（取消属于状态变更的特殊类型）。
+     */
+    @Async("notificationExecutor")
+    public void notifyCancelled(Issue issue, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) {
+                return;
+            }
+
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipientReasons.keySet(), NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
+            String operatorName = getUserDisplayName(operatorId);
+            String title = String.format("%s 已被取消", issue.getIssueKey());
+            String content = String.format("%s 取消了工单 [%s] %s",
+                    operatorName, issue.getIssueKey(), issue.getTitle());
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_status_changed, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送取消通知: issue={}, recipients={}",
+                    issue.getIssueKey(), enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送取消通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyCancelled", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 已被取消", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 已被取消", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_status_changed.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 通用字段变更通知：通知报告人和负责人。
+     * <p>
+     * 覆盖 priority、dueDate、description、sprint、parent、tags 等字段变更。
+     * 使用 ISSUE_UPDATED 偏好检查——用户可独立控制是否接收此类通知。
+     */
+    @Async("notificationExecutor")
+    public void notifyFieldUpdated(Issue issue, String fieldName, String oldValue, String newValue, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) {
+                return;
+            }
+
+            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
+                    recipientReasons.keySet(), NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) {
+                return;
+            }
+
+            String operatorName = getUserDisplayName(operatorId);
+            String fieldLabel = getFieldLabel(fieldName);
+            String title = String.format("%s %s已更新", issue.getIssueKey(), fieldLabel);
+
+            String content;
+            if (oldValue != null && newValue != null) {
+                content = String.format("%s 将工单 [%s] %s 的%s从「%s」变更为「%s」",
+                        operatorName, issue.getIssueKey(), issue.getTitle(), fieldLabel, oldValue, newValue);
+            } else if (newValue != null) {
+                content = String.format("%s 设置了工单 [%s] %s 的%s为「%s」",
+                        operatorName, issue.getIssueKey(), issue.getTitle(), fieldLabel, newValue);
+            } else if (oldValue != null) {
+                content = String.format("%s 清除了工单 [%s] %s 的%s（原值「%s」）",
+                        operatorName, issue.getIssueKey(), issue.getTitle(), fieldLabel, oldValue);
+            } else {
+                content = String.format("%s 更新了工单 [%s] %s 的%s",
+                        operatorName, issue.getIssueKey(), issue.getTitle(), fieldLabel);
+            }
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送字段变更通知: issue={}, field={}, recipients={}",
+                    issue.getIssueKey(), fieldName, enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送字段变更通知失败: issue={}, field={}, error={}",
+                    issue.getIssueKey(), fieldName, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyFieldUpdated", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s %s已更新", issue.getIssueKey(), getFieldLabel(fieldName)),
+                    String.format("工单 [%s] %s 的%s已变更", issue.getIssueKey(), issue.getTitle(), getFieldLabel(fieldName)),
+                    NotificationType.issue_updated.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 获取字段的中文显示标签。
+     */
+    private String getFieldLabel(String fieldName) {
+        return switch (fieldName) {
+            case "priority" -> "优先级";
+            case "due_date" -> "截止日期";
+            case "description" -> "描述";
+            case "sprint" -> "迭代";
+            case "parent" -> "父工单";
+            case "tags" -> "标签";
+            case "title" -> "标题";
+            case "issue_type" -> "类型";
+            case "estimated_hours" -> "预估工时";
+            default -> fieldName;
+        };
+    }
+
     private String getProjectName(Long projectId) {
         if (projectId == null) return "未知";
         try {
