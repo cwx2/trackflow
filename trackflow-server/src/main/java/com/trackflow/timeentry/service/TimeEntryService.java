@@ -22,6 +22,7 @@ import com.trackflow.timeentry.vo.TimeEntryUserVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -638,7 +639,13 @@ public class TimeEntryService {
         entry.setCreatedAt(LocalDateTime.now());
         entry.setUpdatedAt(LocalDateTime.now());
 
-        timeEntryMapper.insert(entry);
+        try {
+            timeEntryMapper.insert(entry);
+        } catch (DuplicateKeyException e) {
+            // 并发竞态：UNIQUE 部分索引 idx_time_entry_user_ongoing 拦截了重复的 ongoing 记录
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "已有一个正在运行的计时器，请先停止后再启动新的");
+        }
 
         // 保存工作项属性值
         if (dto.getAttributeValues() != null && !dto.getAttributeValues().isEmpty()) {
