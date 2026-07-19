@@ -85,8 +85,8 @@
 
         <!-- Widget 网格布局 -->
         <div v-if="currentDashboard.widgets.length > 0" class="widget-grid-container">
-          <grid-layout
-            v-model:layout="gridLayout"
+          <GridLayout
+            v-model:layout="widgetLayout"
             :col-num="12"
             :row-height="80"
             :margin="[16, 16]"
@@ -94,8 +94,8 @@
             :is-resizable="isOwner"
             @layout-updated="onLayoutUpdated"
           >
-            <grid-item
-              v-for="item in gridLayout"
+            <GridItem
+              v-for="item in widgetLayout"
               :key="item.i"
               :x="item.x"
               :y="item.y"
@@ -110,8 +110,8 @@
                 @edit="editWidget"
                 @delete="deleteWidget"
               />
-            </grid-item>
-          </grid-layout>
+            </GridItem>
+          </GridLayout>
         </div>
 
         <!-- 空微件状态 -->
@@ -250,7 +250,9 @@ const currentUserId = computed(() => {
   const user = localStorage.getItem('tf_user')
   if (!user) return ''
   try {
-    return JSON.parse(user).id || ''
+    const parsed = JSON.parse(user)
+    // Use database userId (matches backend VO ownerId), not Keycloak sub UUID
+    return parsed.userId || parsed.id || ''
   } catch { return '' }
 })
 
@@ -260,11 +262,14 @@ const isOwner = computed(() => {
 })
 
 // ─── Grid Layout ─────────────────────────────────────────
+// NOTE: Variable named "widgetLayout" (not "gridLayout") to avoid name collision
+// with the <grid-layout> component tag. Vue SFC compiler resolves <grid-layout>
+// to camelCase "gridLayout" which would conflict with a ref of that name.
 
-const gridLayout = ref<Array<{ i: string; x: number; y: number; w: number; h: number }>>([])
+const widgetLayout = ref<Array<{ i: string; x: number; y: number; w: number; h: number }>>([])
 
 function buildGridLayout(widgets: DashboardWidgetVO[]) {
-  gridLayout.value = widgets.map(w => ({
+  widgetLayout.value = widgets.map(w => ({
     i: w.id,
     x: w.positionX,
     y: w.positionY,
