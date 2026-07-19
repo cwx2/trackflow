@@ -21,6 +21,7 @@ import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,7 +74,14 @@ public class CustomFieldService {
         entity.setPosition(position);
         entity.setIsMulti("list".equals(dto.getFieldFormat()) && Boolean.TRUE.equals(dto.getIsMulti()));
         entity.setIsHiddenInList(Boolean.TRUE.equals(dto.getIsHiddenInList()));
-        definitionMapper.insert(entity);
+        try {
+            definitionMapper.insert(entity);
+        } catch (DataIntegrityViolationException ex) {
+            if (ex.getMessage() != null && ex.getMessage().contains("uk_custom_field_name")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "自定义字段名称已存在");
+            }
+            throw ex;
+        }
 
         if ("list".equals(dto.getFieldFormat())) {
             if (dto.getCopyOptionsFromFieldId() != null && (dto.getOptions() == null || dto.getOptions().isEmpty())) {
@@ -158,7 +166,14 @@ public class CustomFieldService {
             }
         }
         if (dto.getIsHiddenInList() != null) entity.setIsHiddenInList(dto.getIsHiddenInList());
-        definitionMapper.updateById(entity);
+        try {
+            definitionMapper.updateById(entity);
+        } catch (DataIntegrityViolationException ex) {
+            if (ex.getMessage() != null && ex.getMessage().contains("uk_custom_field_name")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "自定义字段名称已存在");
+            }
+            throw ex;
+        }
 
         if ("list".equals(entity.getFieldFormat()) && dto.getOptions() != null) {
             updateListOptions(id, dto.getOptions());
@@ -1298,7 +1313,12 @@ public class CustomFieldService {
                 }
             }
             case "bool" -> "true".equals(rawValue) ? "是" : "否";
-            default -> rawValue;
+            case "string", "text", "int", "float", "date", "datetime" -> rawValue;
+            default -> {
+                log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
+                        fieldDef.getFieldFormat(), fieldDef.getName(), fieldDef.getId());
+                yield rawValue;
+            }
         };
     }
 
@@ -1457,7 +1477,12 @@ public class CustomFieldService {
                 }
             }
             case "bool" -> { return "true".equals(rawValue) ? "是" : "否"; }
-            default -> { return rawValue; }
+            case "string", "text", "int", "float", "date", "datetime" -> { return rawValue; }
+            default -> {
+                log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
+                        field.getFieldFormat(), field.getName(), field.getId());
+                return rawValue;
+            }
         }
     }
 

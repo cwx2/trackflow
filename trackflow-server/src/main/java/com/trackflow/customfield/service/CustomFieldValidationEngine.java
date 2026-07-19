@@ -9,6 +9,7 @@ import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -24,6 +25,7 @@ import java.util.regex.PatternSyntaxException;
  * 自定义字段值验证引擎
  * 使用策略模式按 field_format 分发验证逻辑
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CustomFieldValidationEngine {
@@ -82,6 +84,11 @@ public class CustomFieldValidationEngine {
             case "bool" -> validateBool(field, value, errors);
             case "list" -> validateList(field, value, errors);
             case "user" -> validateUser(field, value, projectId, errors);
+            default -> {
+                log.error("Unsupported field_format '{}' for field '{}' (id={})",
+                        field.getFieldFormat(), field.getName(), field.getId());
+                errors.add(new FieldValidationError(field.getName(), "不支持的字段类型: " + field.getFieldFormat()));
+            }
         }
 
         return errors;
