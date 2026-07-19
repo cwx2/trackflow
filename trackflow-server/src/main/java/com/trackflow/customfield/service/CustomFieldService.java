@@ -1045,6 +1045,20 @@ public class CustomFieldService {
 
         if (orphanFieldIds.isEmpty()) return List.of();
 
+        // 在删除前，加载字段定义并为每个被清除的字段记录活动日志
+        Map<Long, CustomFieldDefinition> fieldMap = definitionMapper.selectBatchIds(orphanFieldIds)
+                .stream()
+                .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
+
+        for (Long fieldId : orphanFieldIds) {
+            CustomFieldDefinition field = fieldMap.get(fieldId);
+            String rawValue = currentValues.get(fieldId);
+            if (field != null && rawValue != null && !rawValue.isBlank()) {
+                String displayValue = resolveDisplayValue(field, rawValue);
+                recordCustomFieldActivity(issueId, field.getName(), displayValue, null);
+            }
+        }
+
         // 删除不再适用的字段值
         valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
                 .eq(CustomFieldValue::getIssueId, issueId)
@@ -1448,8 +1462,15 @@ public class CustomFieldService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "字段不适用于当前工单"));
 
-        // 验证值
-        List<CustomFieldValidationEngine.FieldValidationError> errors = validationEngine.validate(field, value, projectId);
+        // 加载项目级覆盖（用于必填性检查）
+        Map<Long, CustomFieldProject> projectOverrides = getProjectFieldConditions(projectId);
+        CustomFieldProject override = projectOverrides.get(customFieldId);
+        boolean effectiveRequired = isFieldRequired(field, override);
+
+        // 验证值（传入项目级必填覆盖）
+        Boolean requiredOverride = (override != null && override.getIsRequired() != null)
+                ? override.getIsRequired() : null;
+        List<CustomFieldValidationEngine.FieldValidationError> errors = validationEngine.validate(field, value, projectId, requiredOverride);
         if (!errors.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     errors.stream().map(e -> e.getField() + ": " + e.getMessage())
@@ -1463,8 +1484,8 @@ public class CustomFieldService {
             List<String> oldValues = getMultiValues(issueId, customFieldId);
             List<String> newValues = parseMultiValueInput(value);
 
-            // 清空值检查
-            if (newValues.isEmpty() && Boolean.TRUE.equals(field.getIsRequired())) {
+            // 清空值检查（考虑项目级必填覆盖）
+            if (newValues.isEmpty() && effectiveRequired) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, field.getName() + " 为必填项，不能清空");
             }
 
@@ -1503,8 +1524,8 @@ public class CustomFieldService {
             String oldValue = existing != null ? existing.getValue() : null;
 
             if (value == null || value.isBlank()) {
-                // 清空值：如果非必填，允许删除
-                if (Boolean.TRUE.equals(field.getIsRequired())) {
+                // 清空值：如果非必填，允许删除（考虑项目级必填覆盖）
+                if (effectiveRequired) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, field.getName() + " 为必填项，不能清空");
                 }
                 if (existing != null) {
