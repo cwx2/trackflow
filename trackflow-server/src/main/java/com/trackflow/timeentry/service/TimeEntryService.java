@@ -225,20 +225,26 @@ public class TimeEntryService {
 
         timeEntryMapper.updateById(entry);
 
-        // 更新工作项属性值
+        // 更新工作项属性值（先获取旧值用于活动日志）
+        Map<String, Map<String, String>> oldAttrValues = Map.of();
         if (dto.getAttributeValues() != null) {
+            oldAttrValues = workItemAttributeService.getTimeEntryAttributeValues(entry.getId());
             Map<Long, Long> attrValueMap = new HashMap<>();
             for (Map.Entry<String, String> av : dto.getAttributeValues().entrySet()) {
                 attrValueMap.put(Long.parseLong(av.getKey()), Long.parseLong(av.getValue()));
             }
             workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
         }
+        Map<String, Map<String, String>> newAttrValues = dto.getAttributeValues() != null
+                ? workItemAttributeService.getTimeEntryAttributeValues(entry.getId())
+                : oldAttrValues;
 
         // 记录活动日志（仅在工单未删除时记录）
         recordTimeUpdateActivity(userId, oldIssueId, entry.getIssueId(),
                 oldDuration, entry.getDuration(),
                 oldWorkDate, entry.getWorkDate(),
-                oldDescription, entry.getDescription());
+                oldDescription, entry.getDescription(),
+                oldAttrValues, newAttrValues);
 
         // 同步更新 issue.spent_hours（仅在工单未删除时）
         refreshIssueSpentHoursSafe(entry.getIssueId());
@@ -862,7 +868,9 @@ public class TimeEntryService {
     private void recordTimeUpdateActivity(Long userId, Long oldIssueId, Long newIssueId,
                                           int oldDuration, int newDuration,
                                           LocalDate oldWorkDate, LocalDate newWorkDate,
-                                          String oldDescription, String newDescription) {
+                                          String oldDescription, String newDescription,
+                                          Map<String, Map<String, String>> oldAttrValues,
+                                          Map<String, Map<String, String>> newAttrValues) {
         boolean issueChanged = !oldIssueId.equals(newIssueId);
 
         if (issueChanged) {
@@ -887,10 +895,56 @@ public class TimeEntryService {
             changes.add("描述: " + from + " → " + to);
         }
 
+        // 比较属性值变化（如 Work Type）
+        changes.addAll(buildAttributeChangeDescriptions(oldAttrValues, newAttrValues));
+
         if (!changes.isEmpty()) {
             String oldDetail = formatDuration(oldDuration);
             String newDetail = String.join("; ", changes);
             recordActivitySafe(oldIssueId, userId, "time_updated", "spent_time", oldDetail, newDetail);
+        }
+    }
+
+    /**
+     * 比较工时属性值变化，生成人类可读的变更描述列表。
+     * 支持属性新增、修改和移除三种情况。
+     */
+    private List<String> buildAttributeChangeDescriptions(Map<String, Map<String, String>> oldAttrValues,
+                                                          Map<String, Map<String, String>> newAttrValues) {
+        List<String> changes = new ArrayList<>();
+
+        // 收集所有涉及的属性 ID
+        Set<String> allAttrIds = new HashSet<>();
+        allAttrIds.addAll(oldAttrValues.keySet());
+        allAttrIds.addAll(newAttrValues.keySet());
+
+        for (String attrId : allAttrIds) {
+            Map<String, String> oldVal = oldAttrValues.get(attrId);
+            Map<String, String> newVal = newAttrValues.get(attrId);
+
+            String oldValueName = oldVal != null ? oldVal.get("valueName") : null;
+            String newValueName = newVal != null ? newVal.get("valueName") : null;
+
+            if (!Objects.equals(oldValueName, newValueName)) {
+                // 获取属性名称用于日志展示
+                String attrName = resolveAttributeName(attrId);
+                String from = oldValueName != null ? oldValueName : "无";
+                String to = newValueName != null ? newValueName : "无";
+                changes.add(attrName + ": " + from + " → " + to);
+            }
+        }
+
+        return changes;
+    }
+
+    /**
+     * 根据属性 ID 获取属性名称（用于活动日志展示）
+     */
+    private String resolveAttributeName(String attrId) {
+        try {
+            return workItemAttributeService.getAttributeNameById(Long.parseLong(attrId));
+        } catch (Exception e) {
+            return "属性#" + attrId;
         }
     }
 

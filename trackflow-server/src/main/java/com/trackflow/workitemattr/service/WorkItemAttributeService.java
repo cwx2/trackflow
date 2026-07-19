@@ -520,4 +520,16 @@ public class WorkItemAttributeService {
         entryValueMapper.delete(
                 new QueryWrapper<TimeEntryAttributeValue>().eq("time_entry_id", timeEntryId));
     }
+
+    /**
+     * 根据属性 ID 获取属性名称。
+     * 用于活动日志中的人类可读变更描述。
+     *
+     * @param attributeId 属性 ID
+     * @return 属性名称，如"工作类型"
+     */
+    public String getAttributeNameById(Long attributeId) {
+        WorkItemAttribute attr = attributeMapper.selectById(attributeId);
+        return attr != null ? attr.getName() : "未知属性";
+    }
 }
