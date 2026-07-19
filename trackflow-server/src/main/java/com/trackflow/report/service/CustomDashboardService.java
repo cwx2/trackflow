@@ -1,6 +1,7 @@
 package com.trackflow.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -12,6 +13,7 @@ import com.trackflow.report.dto.UpdateLayoutDTO;
 import com.trackflow.report.dto.UpdateWidgetDTO;
 import com.trackflow.report.entity.Dashboard;
 import com.trackflow.report.entity.DashboardWidget;
+import com.trackflow.report.entity.WidgetType;
 import com.trackflow.report.mapper.DashboardMapper;
 import com.trackflow.report.mapper.DashboardWidgetMapper;
 import com.trackflow.report.vo.DashboardDetailVO;
@@ -189,6 +191,12 @@ public class CustomDashboardService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以添加微件");
         }
 
+        // 校验 widgetType 合法性
+        if (!WidgetType.isValid(dto.getWidgetType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的微件类型: " + dto.getWidgetType() + "，允许值: " + WidgetType.allowedValues());
+        }
+
         // 计算 sortOrder（当前最大 + 1）
         Long maxSort = widgetMapper.selectCount(new LambdaQueryWrapper<DashboardWidget>()
                 .eq(DashboardWidget::getDashboardId, dashboardId));
@@ -292,11 +300,16 @@ public class CustomDashboardService {
 
     private Map<Long, Long> getWidgetCountMap(List<Long> dashboardIds) {
         if (dashboardIds.isEmpty()) return Map.of();
-        // 使用逐个查询简单实现，数据量不大
-        return dashboardIds.stream().collect(Collectors.toMap(
-                id -> id,
-                id -> widgetMapper.selectCount(new LambdaQueryWrapper<DashboardWidget>()
-                        .eq(DashboardWidget::getDashboardId, id))
+        // 单条 GROUP BY 查询替代逐 ID 循环，避免 N+1
+        List<Map<String, Object>> results = widgetMapper.selectMaps(
+                new QueryWrapper<DashboardWidget>()
+                        .select("dashboard_id", "COUNT(*) as cnt")
+                        .in("dashboard_id", dashboardIds)
+                        .groupBy("dashboard_id")
+        );
+        return results.stream().collect(Collectors.toMap(
+                m -> ((Number) m.get("dashboard_id")).longValue(),
+                m -> ((Number) m.get("cnt")).longValue()
         ));
     }
 }
