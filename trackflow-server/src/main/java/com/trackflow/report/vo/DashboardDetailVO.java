@@ -17,6 +17,7 @@ public class DashboardDetailVO {
     private String ownerId;
     private String ownerName;
     private Boolean shared;
+    private Integer layoutVersion;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

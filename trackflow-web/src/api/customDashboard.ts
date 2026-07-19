@@ -25,6 +25,7 @@ export interface DashboardDetailVO {
   ownerId: string
   ownerName: string
   shared: boolean
+  layoutVersion: number
   createdAt: string
   updatedAt: string
   widgets: DashboardWidgetVO[]
@@ -131,7 +132,7 @@ export const customDashboardApi = {
   },
 
   /** 批量更新布局（拖拽后保存） */
-  updateLayout(dashboardId: string, items: LayoutItem[]) {
-    return request.put<any, R<void>>(`/dashboards/${dashboardId}/layout`, { items })
+  updateLayout(dashboardId: string, items: LayoutItem[], version: number) {
+    return request.put<any, R<void>>(`/dashboards/${dashboardId}/layout`, { items, version })
   }
 }

@@ -386,9 +386,17 @@ async function saveLayout(layout: Array<{ i: string; x: number; y: number; w: nu
       width: item.w,
       height: item.h
     }))
-    await customDashboardApi.updateLayout(currentDashboard.value.id, items)
-  } catch {
-    // Silent fail for layout save
+    const version = currentDashboard.value.layoutVersion ?? 0
+    await customDashboardApi.updateLayout(currentDashboard.value.id, items, version)
+    // 乐观更新本地版本号
+    currentDashboard.value.layoutVersion = version + 1
+  } catch (e: any) {
+    if (e.response?.status === 409) {
+      Message.warning('布局已被其他操作修改，正在刷新...')
+      // 重新加载仪表盘详情以获取最新版本
+      await selectDashboard(currentDashboard.value!.id)
+    }
+    // 其他错误静默处理
   }
 }
 

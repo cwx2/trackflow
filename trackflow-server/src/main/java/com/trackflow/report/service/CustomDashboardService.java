@@ -3,6 +3,7 @@ package com.trackflow.report.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.report.converter.DashboardConverter;
@@ -91,6 +92,7 @@ public class CustomDashboardService {
         }
 
         DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
+        vo.setLayoutVersion(dashboard.getLayoutVersion() != null ? dashboard.getLayoutVersion() : 0);
 
         // 填充 owner 名称
         SysUser owner = sysUserMapper.selectById(dashboard.getOwnerId());
@@ -124,6 +126,7 @@ public class CustomDashboardService {
         log.info("Dashboard created: id={}, name={}, owner={}", dashboard.getId(), dashboard.getName(), userId);
 
         DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
+        vo.setLayoutVersion(0);
         SysUser owner = sysUserMapper.selectById(userId);
         vo.setOwnerName(owner != null ? owner.getDisplayName() : "");
         vo.setWidgets(List.of());
@@ -265,23 +268,49 @@ public class CustomDashboardService {
 
     /**
      * 批量更新 Widget 位置（拖拽后保存布局）
+     * 使用乐观锁防止并发覆盖，使用批量更新替代逐条 SQL。
      */
     @Transactional
     public void updateLayout(Long dashboardId, UpdateLayoutDTO dto, Long userId) {
-        assertDashboardOwner(dashboardId, userId);
-
-        for (UpdateLayoutDTO.LayoutItem item : dto.getItems()) {
-            LambdaUpdateWrapper<DashboardWidget> updateWrapper = new LambdaUpdateWrapper<DashboardWidget>()
-                    .eq(DashboardWidget::getId, item.getWidgetId())
-                    .eq(DashboardWidget::getDashboardId, dashboardId)
-                    .set(DashboardWidget::getPositionX, item.getPositionX())
-                    .set(DashboardWidget::getPositionY, item.getPositionY())
-                    .set(DashboardWidget::getWidth, item.getWidth())
-                    .set(DashboardWidget::getHeight, item.getHeight());
-            widgetMapper.update(null, updateWrapper);
+        // 1. 权限校验 + 乐观锁校验
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以操作");
         }
 
-        log.info("Dashboard layout updated: dashboardId={}, items={}", dashboardId, dto.getItems().size());
+        // 乐观锁：前端传入的版本号必须与当前一致
+        Integer currentVersion = dashboard.getLayoutVersion() != null ? dashboard.getLayoutVersion() : 0;
+        if (!currentVersion.equals(dto.getVersion())) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "布局已被其他操作修改，请刷新页面后重试");
+        }
+
+        // 2. 批量更新 widget 位置（Db.updateBatchById 一次批量执行，避免 N 次独立 SQL）
+        List<DashboardWidget> updates = dto.getItems().stream().map(item -> {
+            DashboardWidget w = new DashboardWidget();
+            w.setId(item.getWidgetId());
+            w.setPositionX(item.getPositionX());
+            w.setPositionY(item.getPositionY());
+            w.setWidth(item.getWidth());
+            w.setHeight(item.getHeight());
+            return w;
+        }).toList();
+
+        if (!updates.isEmpty()) {
+            Db.updateBatchById(updates);
+        }
+
+        // 3. 版本号 +1
+        LambdaUpdateWrapper<Dashboard> versionUpdate = new LambdaUpdateWrapper<Dashboard>()
+                .eq(Dashboard::getId, dashboardId)
+                .set(Dashboard::getLayoutVersion, currentVersion + 1);
+        dashboardMapper.update(null, versionUpdate);
+
+        log.info("Dashboard layout updated: dashboardId={}, items={}, version={}->{}",
+                dashboardId, dto.getItems().size(), currentVersion, currentVersion + 1);
     }
 
     // ─── 私有方法 ────────────────────────────────────────

@@ -18,6 +18,10 @@ public class UpdateLayoutDTO {
     @Valid
     private List<LayoutItem> items;
 
+    /** 乐观锁版本号（前端从 DashboardDetailVO 获取后回传） */
+    @NotNull(message = "版本号不能为空")
+    private Integer version;
+
     @Data
     public static class LayoutItem {
 

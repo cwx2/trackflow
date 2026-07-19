@@ -28,6 +28,9 @@ public class Dashboard implements Serializable {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String layout;
 
+    /** Optimistic lock version for layout updates */
+    private Integer layoutVersion;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
