@@ -9,6 +9,8 @@ import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.workflow.entity.WorkflowTransition;
+import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.CreateRoleDTO;
 import com.trackflow.system.dto.UpdateRoleDTO;
@@ -55,6 +57,7 @@ public class RoleService {
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMapper projectMapper;
     private final UserConverter userConverter;
+    private final WorkflowTransitionMapper workflowTransitionMapper;
 
     @Transactional
     public SysRole create(CreateRoleDTO dto) {
@@ -125,12 +128,39 @@ public class RoleService {
             throw new BusinessException(ErrorCode.BUILTIN_ROLE_PROTECTED);
         }
 
-        // 检查是否有用户关联
+        // 检查是否有全局用户关联（user_role 表）
         Long userCount = userRoleMapper.selectCount(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, id)
         );
         if (userCount > 0) {
-            throw new BusinessException(ErrorCode.ROLE_IN_USE);
+            throw new BusinessException(ErrorCode.ROLE_IN_USE,
+                    "该角色已分配给 " + userCount + " 位用户（全局角色），请先移除用户的角色分配后再删除");
+        }
+
+        // 检查是否有项目成员关联（project_member 表）
+        Long memberCount = projectMemberMapper.selectCount(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getRoleId, id)
+        );
+        if (memberCount > 0) {
+            // 查询具体有多少项目使用了该角色
+            List<ProjectMember> members = projectMemberMapper.selectList(
+                    new LambdaQueryWrapper<ProjectMember>()
+                            .select(ProjectMember::getProjectId)
+                            .eq(ProjectMember::getRoleId, id)
+                            .groupBy(ProjectMember::getProjectId)
+            );
+            long projectCount = members.size();
+            throw new BusinessException(ErrorCode.ROLE_IN_USE,
+                    "该角色已分配给 " + projectCount + " 个项目中的 " + memberCount + " 位成员，请先重新分配角色后再删除");
+        }
+
+        // 检查是否有工作流转换规则关联（workflow_transition 表）
+        Long transitionCount = workflowTransitionMapper.selectCount(
+                new LambdaQueryWrapper<WorkflowTransition>().eq(WorkflowTransition::getRoleId, id)
+        );
+        if (transitionCount > 0) {
+            throw new BusinessException(ErrorCode.ROLE_IN_USE,
+                    "该角色在 " + transitionCount + " 条工作流转换规则中被引用，请先删除相关工作流规则后再删除角色");
         }
 
         // 删除角色及其权限
