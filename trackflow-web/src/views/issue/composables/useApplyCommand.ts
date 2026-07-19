@@ -104,7 +104,7 @@ export function useApplyCommand(selectedIssues: Ref<IssueVO[]>) {
       // 并行加载所有上下文数据
       const [statusRes, ...otherResults] = await Promise.all([
         issueApi.listStatuses(),
-        ...projectIds.map(pid => projectApi.listMembers(pid)),
+        ...projectIds.map(pid => projectApi.listAssignableMembers(pid)),
         ...projectIds.map(pid => sprintApi.listByProject(pid)),
         ...projectIds.map(pid => tagApi.listProjectTags(pid)),
       ])

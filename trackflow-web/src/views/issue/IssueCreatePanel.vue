@@ -426,7 +426,7 @@ watch(() => props.visible, (val) => {
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
   if (!pid) { members.value = []; sprints.value = []; return }
-  try { const res = await projectApi.listMembers(pid); members.value = res.data || [] } catch { members.value = [] }
+  try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
   try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed') } catch { sprints.value = [] }
 }
 

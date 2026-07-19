@@ -1947,6 +1947,10 @@ public class IssueService {
         if (!projectService.isProjectMember(assigneeId, projectId)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的负责人不是该项目的成员");
         }
+        // 校验被分配者必须拥有 issue:edit 权限（排除观察者等不可分配角色）
+        if (!projectService.isAssignableMember(assigneeId, projectId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的负责人角色不具备处理工单的权限，无法被分配");
+        }
     }
 
     /**

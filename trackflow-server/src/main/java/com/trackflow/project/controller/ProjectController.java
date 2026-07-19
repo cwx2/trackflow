@@ -157,6 +157,17 @@ public class ProjectController {
         return R.ok(projectService.listMembersVO(projectId));
     }
 
+    /**
+     * 获取可分配工单的成员列表（仅拥有 issue:edit 权限的成员）。
+     * 用于负责人选择下拉列表，排除观察者等不可分配角色。
+     */
+    @GetMapping("/{id}/assignable-members")
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<List<ProjectMemberVO>> listAssignableMembers(@PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
+        return R.ok(projectService.listAssignableMembersVO(projectId));
+    }
+
     @PostMapping("/{id}/members")
     @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
     public R<Void> addMember(@PathVariable("id") String id, @Valid @RequestBody AddMemberDTO dto) {

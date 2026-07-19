@@ -69,6 +69,11 @@ export const projectApi = {
     return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`, config)
   },
 
+  /** 获取可分配工单的成员列表（排除观察者等不具备 issue:edit 权限的角色） */
+  listAssignableMembers(projectId: string, config?: RequestOptions) {
+    return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/assignable-members`, config)
+  },
+
   /** 添加项目成员（支持多角色） */
   addMember(projectId: string, data: { userId: string; roleIds: number[] }) {
     return request.post<any, R<void>>(`/projects/${projectId}/members`, data)

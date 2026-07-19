@@ -379,9 +379,9 @@ async function loadRelatedData() {
     if (needTransitions) {
       promises.push(issueApi.getAvailableTransitions(id))
     }
-    // 仅在有分配权限时加载成员列表（编辑负责人的下拉选项）
+    // 仅在有分配权限时加载可分配成员列表（编辑负责人的下拉选项，排除观察者等角色）
     if (needMemberOptions) {
-      promises.push(projectApi.listMembers(pid))
+      promises.push(projectApi.listAssignableMembers(pid))
     }
     // 仅在有迭代编辑权限时加载 Sprint 列表（编辑迭代的下拉选项）
     if (needSprintOptions) {

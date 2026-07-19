@@ -695,6 +695,89 @@ public class ProjectService {
     }
 
     /**
+     * 获取项目中可被分配工单的成员列表。
+     * 仅返回拥有 issue:edit 权限的成员（排除观察者、测试人员等不具备编辑能力的角色）。
+     * 系统管理员即使不是项目成员也可被分配（拥有全部权限）。
+     */
+    public List<ProjectMemberVO> listAssignableMembersVO(Long projectId) {
+        // 查询项目中拥有 issue:edit 权限的成员 user_id
+        List<Long> assignableUserIds = memberMapper.selectUserIdsWithPermission(projectId, "issue:edit");
+        if (assignableUserIds.isEmpty()) return List.of();
+
+        // 获取用户信息
+        var users = userMapper.selectBatchIds(assignableUserIds);
+        Map<Long, SysUser> userMap = users.stream()
+                .filter(u -> !"disabled".equals(u.getStatus()))
+                .collect(java.util.stream.Collectors.toMap(SysUser::getId, u -> u));
+
+        if (userMap.isEmpty()) return List.of();
+
+        // 获取这些用户的成员记录（用于填充角色信息）
+        List<ProjectMember> members = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)
+                        .in(ProjectMember::getUserId, userMap.keySet())
+        );
+
+        // 获取角色名称
+        List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
+        var roles = roleMapper.selectBatchIds(roleIds);
+        Map<Long, String> roleNameMap = roles.stream()
+                .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+
+        // 按 userId 聚合
+        Map<Long, List<ProjectMember>> membersByUser = members.stream()
+                .collect(java.util.stream.Collectors.groupingBy(ProjectMember::getUserId));
+
+        return membersByUser.entrySet().stream()
+                .filter(entry -> userMap.containsKey(entry.getKey()))
+                .map(entry -> {
+                    Long userId = entry.getKey();
+                    List<ProjectMember> userMembers = entry.getValue();
+                    ProjectMember first = userMembers.get(0);
+
+                    ProjectMemberVO vo = new ProjectMemberVO();
+                    vo.setId(first.getId() != null ? first.getId().toString() : null);
+                    vo.setProjectId(first.getProjectId() != null ? first.getProjectId().toString() : null);
+                    vo.setUserId(userId.toString());
+                    vo.setRoleId(first.getRoleId() != null ? first.getRoleId().toString() : null);
+                    List<String> allRoleIds = userMembers.stream()
+                            .map(m -> m.getRoleId().toString())
+                            .toList();
+                    vo.setRoleIds(allRoleIds);
+                    List<String> allRoleNames = userMembers.stream()
+                            .map(m -> roleNameMap.getOrDefault(m.getRoleId(), ""))
+                            .filter(name -> !name.isEmpty())
+                            .toList();
+                    vo.setRoleNames(allRoleNames);
+                    vo.setJoinedAt(userMembers.stream()
+                            .map(ProjectMember::getJoinedAt)
+                            .filter(Objects::nonNull)
+                            .min(LocalDateTime::compareTo)
+                            .orElse(null));
+                    var user = userMap.get(userId);
+                    if (user != null) {
+                        vo.setUsername(user.getUsername());
+                        vo.setDisplayName(user.getDisplayName());
+                        vo.setEmail(user.getEmail());
+                    }
+                    return vo;
+                }).toList();
+    }
+
+    /**
+     * 检查指定用户在项目中是否可被分配工单（拥有 issue:edit 权限）。
+     */
+    public boolean isAssignableMember(Long userId, Long projectId) {
+        if (userId == null || projectId == null) return false;
+        // 系统管理员始终可被分配
+        if (permissionService.isSystemAdmin(userId)) return true;
+        // 检查是否在可分配成员列表中
+        List<Long> assignableUserIds = memberMapper.selectUserIdsWithPermission(projectId, "issue:edit");
+        return assignableUserIds.contains(userId);
+    }
+
+    /**
      * 添加项目成员（支持多角色）
      */
     @Transactional

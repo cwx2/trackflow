@@ -414,11 +414,11 @@ watch(showAssignDropdown, async (visible) => {
     memberSearch.value = ''
     memberLoading.value = true
     try {
-      // 获取选中 Issue 所属项目的成员
+      // 获取选中 Issue 所属项目的可分配成员（排除观察者等角色）
       const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId))]
       const allMembers: ProjectMemberVO[] = []
       for (const pid of projectIds) {
-        const res = await projectApi.listMembers(pid)
+        const res = await projectApi.listAssignableMembers(pid)
         allMembers.push(...(res.data || []))
       }
       // 去重 by userId

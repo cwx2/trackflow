@@ -1782,7 +1782,7 @@ async function openAssigneeEdit(issue: IssueVO) {
   assigneeSearch.value = ''
   assigneeOptionsLoading.value = true
   try {
-    const res = await projectApi.listMembers(issue.projectId)
+    const res = await projectApi.listAssignableMembers(issue.projectId)
     assigneeOptions.value = res.data || []
   } catch {
     assigneeOptions.value = []

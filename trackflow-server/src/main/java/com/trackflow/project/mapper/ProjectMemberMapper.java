@@ -32,4 +32,15 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
             WHERE pm.user_id = #{userId} AND pm.project_id = #{projectId}
             """)
     List<String> selectRoleCodesByUserAndProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
+    /**
+     * 获取项目中拥有指定权限的成员 user_id 列表（去重）。
+     * 用于过滤可分配成员——仅具有 issue:edit 权限的角色成员可被分配工单。
+     */
+    @Select("""
+            SELECT DISTINCT pm.user_id FROM project_member pm
+            JOIN role_permission rp ON rp.role_id = pm.role_id
+            WHERE pm.project_id = #{projectId} AND rp.permission = #{permission}
+            """)
+    List<Long> selectUserIdsWithPermission(@Param("projectId") Long projectId, @Param("permission") String permission);
 }
