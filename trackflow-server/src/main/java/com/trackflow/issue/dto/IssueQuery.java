@@ -15,6 +15,7 @@ public class IssueQuery extends PageQuery {
     private String statusId;       // Supports single ID or comma-separated IDs
     private String priority;       // Supports single value or comma-separated values
     private String assigneeId;     // Supports single ID or comma-separated IDs
+    private String assigneeName;   // Filter by assignee display name (exact match via sub-query)
     private Long reporterId;
     private String sprintId;       // Supports single ID or comma-separated IDs
     private String issueType;      // Supports single value or comma-separated values

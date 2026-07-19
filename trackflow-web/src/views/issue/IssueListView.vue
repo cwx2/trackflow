@@ -2328,7 +2328,7 @@ onMounted(async () => {
   }
 
   // Handle dashboard filter params (statusId, statusCode, statusCategory, label, sprint, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe) {
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.projectId) {
     applyDashboardFilter()
   } else {
     refreshList()
@@ -2392,6 +2392,21 @@ function applyDashboardFilter() {
     }
   }
 
+  // statusName: 按状态英文名匹配（从报表图表下钻时使用）
+  if (route.query.statusName) {
+    const name = String(route.query.statusName)
+    const matchedStatus = statusCache.value.find(st => st.name === name)
+    if (matchedStatus) {
+      filters.statusId = matchedStatus.id
+      chips.push({
+        fieldKey: 'status',
+        operator: 'any_of',
+        values: [matchedStatus.id],
+        valueLabels: [matchedStatus.name]
+      })
+    }
+  }
+
   // statusCategory: 状态分类（如 'open', 'in_progress', 'done'）
   if (route.query.statusCategory) {
     const category = String(route.query.statusCategory)
@@ -2436,6 +2451,49 @@ function applyDashboardFilter() {
       values: [String(route.query.sprint)],
       valueLabels: ['Sprint']
     })
+  }
+
+  // priority: 优先级（如 'Normal', 'High'）
+  if (route.query.priority) {
+    const priority = String(route.query.priority)
+    filters.priority = priority
+    chips.push({
+      fieldKey: 'priority',
+      operator: 'equals',
+      values: [priority],
+      valueLabels: [priority]
+    })
+  }
+
+  // issueType: 工单类型（如 'Bug', 'Task', 'Feature'）
+  if (route.query.issueType) {
+    const issueType = String(route.query.issueType)
+    filters.issueType = issueType
+    chips.push({
+      fieldKey: 'type',
+      operator: 'equals',
+      values: [issueType],
+      valueLabels: [issueType]
+    })
+  }
+
+  // assigneeName: 按负责人名称筛选
+  if (route.query.assigneeName) {
+    const name = String(route.query.assigneeName)
+    filters.assigneeName = name
+    chips.push({
+      fieldKey: 'assignee',
+      operator: 'equals',
+      values: [name],
+      valueLabels: [name]
+    })
+  }
+
+  // projectId: 项目筛选（从报表页面跳转时带入）
+  if (route.query.projectId) {
+    const pid = String(route.query.projectId)
+    filterProject.value = pid
+    activeProjectId.value = pid
   }
 
   // Set display label

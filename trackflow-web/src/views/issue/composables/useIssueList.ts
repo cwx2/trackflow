@@ -14,6 +14,7 @@ export interface IssueListFilters {
   statusId?: string
   priority?: string
   assigneeId?: string
+  assigneeName?: string
   sprintId?: string
   issueType?: string
   keyword?: string
@@ -84,6 +85,7 @@ export function useIssueList() {
       if (filters.statusId) params.statusId = filters.statusId
       if (filters.priority) params.priority = filters.priority
       if (filters.assigneeId) params.assigneeId = filters.assigneeId
+      if (filters.assigneeName) params.assigneeName = filters.assigneeName
       if (filters.sprintId) params.sprintId = filters.sprintId
       if (filters.issueType) params.issueType = filters.issueType
       if (filters.keyword) params.keyword = filters.keyword

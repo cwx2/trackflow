@@ -112,7 +112,7 @@
               <a-skeleton-shape shape="circle" :style="{ width: '160px', height: '160px', margin: '20px auto' }" />
             </a-skeleton>
           </div>
-          <v-chart v-else-if="chartsData && chartsData.statusDistribution.items.length > 0" :option="statusChartOption" autoresize class="chart-instance" />
+          <v-chart v-else-if="chartsData && chartsData.statusDistribution.items.length > 0" :option="statusChartOption" autoresize class="chart-instance chart-clickable" @click="handleStatusChartClick" />
           <div v-else class="chart-empty">
             <span class="chart-empty-icon">🍩</span>
             <span class="chart-empty-text">暂无工单数据</span>
@@ -132,7 +132,7 @@
               <a-skeleton-shape shape="square" :style="{ width: '100%', height: '200px' }" />
             </a-skeleton>
           </div>
-          <v-chart v-else-if="chartsData && chartsData.workload.items.length > 0" :option="workloadChartOption" autoresize class="chart-instance" />
+          <v-chart v-else-if="chartsData && chartsData.workload.items.length > 0" :option="workloadChartOption" autoresize class="chart-instance chart-clickable" @click="handleWorkloadChartClick" />
           <div v-else class="chart-empty">
             <span class="chart-empty-icon">👥</span>
             <span class="chart-empty-text">暂无负载数据</span>
@@ -701,6 +701,42 @@ function navigateToQuery(type: string) {
   router.push(`/?${query}`)
 }
 
+/** 状态分布图点击 — 跳转到对应状态的工单列表 */
+function handleStatusChartClick(params: any) {
+  if (!params || !params.data) return
+  const item = chartsData.value?.statusDistribution.items.find(
+    i => localizeStatusName(i.name) === params.name || i.name === params.name
+  )
+  if (item) {
+    const query: Record<string, string> = {
+      statusName: item.name,
+      label: localizeStatusName(item.name)
+    }
+    if (selectedProjectId.value && selectedProjectId.value !== '__all__') {
+      query.projectId = selectedProjectId.value
+    }
+    router.push({ path: '/issues', query })
+  }
+}
+
+/** 团队负载图点击 — 跳转到对应负责人的工单列表 */
+function handleWorkloadChartClick(params: any) {
+  if (!params || params.dataIndex == null) return
+  const items = chartsData.value?.workload.items
+  if (!items) return
+  const item = items[params.dataIndex]
+  if (item && item.name) {
+    const query: Record<string, string> = {
+      assigneeName: item.name,
+      label: item.name
+    }
+    if (selectedProjectId.value && selectedProjectId.value !== '__all__') {
+      query.projectId = selectedProjectId.value
+    }
+    router.push({ path: '/issues', query })
+  }
+}
+
 // Init
 onMounted(() => {
   loadProjects()
@@ -911,6 +947,10 @@ onMounted(() => {
 .chart-instance {
   width: 100%;
   height: 220px;
+}
+
+.chart-clickable {
+  cursor: pointer;
 }
 
 .chart-card.chart-wide .chart-instance {

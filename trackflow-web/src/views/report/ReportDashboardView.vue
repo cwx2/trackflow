@@ -78,15 +78,15 @@
     <template v-else-if="dashboardData">
       <!-- 概览卡片 -->
       <div class="overview-cards">
-        <div class="stat-card">
+        <div class="stat-card stat-card-clickable" @click="drillDownOverview('total')">
           <div class="stat-value">{{ dashboardData.overview.total }}</div>
           <div class="stat-label">工单总数</div>
         </div>
-        <div class="stat-card stat-open">
+        <div class="stat-card stat-open stat-card-clickable" @click="drillDownOverview('open')">
           <div class="stat-value">{{ dashboardData.overview.open }}</div>
           <div class="stat-label">进行中</div>
         </div>
-        <div class="stat-card stat-done">
+        <div class="stat-card stat-done stat-card-clickable" @click="drillDownOverview('closed')">
           <div class="stat-value">{{ dashboardData.overview.closed }}</div>
           <div class="stat-label">已完成</div>
         </div>
@@ -94,7 +94,7 @@
           <div class="stat-value">{{ dashboardData.overview.completionRate }}%</div>
           <div class="stat-label">完成率</div>
         </div>
-        <div class="stat-card stat-overdue" v-if="dashboardData.overview.overdue > 0">
+        <div class="stat-card stat-overdue stat-card-clickable" v-if="dashboardData.overview.overdue > 0" @click="drillDownOverview('overdue')">
           <div class="stat-value">{{ dashboardData.overview.overdue }}</div>
           <div class="stat-label">已逾期</div>
         </div>
@@ -109,7 +109,7 @@
             <span class="chart-subtitle">各状态工单占比</span>
           </div>
           <div class="chart-body">
-            <v-chart :option="statusChartOption" autoresize class="chart-instance" />
+            <v-chart :option="statusChartOption" autoresize class="chart-instance chart-clickable" @click="handleStatusChartClick" />
           </div>
         </div>
 
@@ -120,7 +120,7 @@
             <span class="chart-subtitle">各优先级工单数量</span>
           </div>
           <div class="chart-body">
-            <v-chart :option="priorityChartOption" autoresize class="chart-instance" />
+            <v-chart :option="priorityChartOption" autoresize class="chart-instance chart-clickable" @click="handlePriorityChartClick" />
           </div>
         </div>
 
@@ -131,7 +131,7 @@
             <span class="chart-subtitle">Bug / Task / Feature 占比</span>
           </div>
           <div class="chart-body">
-            <v-chart :option="typeChartOption" autoresize class="chart-instance" />
+            <v-chart :option="typeChartOption" autoresize class="chart-instance chart-clickable" @click="handleTypeChartClick" />
           </div>
         </div>
 
@@ -142,7 +142,7 @@
             <span class="chart-subtitle">按负责人统计工单数</span>
           </div>
           <div class="chart-body">
-            <v-chart :option="workloadChartOption" autoresize class="chart-instance" />
+            <v-chart :option="workloadChartOption" autoresize class="chart-instance chart-clickable" @click="handleWorkloadChartClick" />
           </div>
         </div>
 
@@ -244,6 +244,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -265,6 +266,8 @@ import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, ToolboxComponent])
+
+const router = useRouter()
 
 // ─── 状态 ─────────────────────────────────────────────
 
@@ -732,6 +735,96 @@ const projectComparisonChartOption = computed(() => {
 
 // ─── 数据加载 ─────────────────────────────────────────
 
+// ─── 图表下钻（点击跳转到工单列表） ─────────────────────
+
+/** 构建跳转到工单列表的查询参数 */
+function buildDrillDownQuery(params: Record<string, string>): Record<string, string> {
+  const query: Record<string, string> = { ...params }
+  // 如果选择了具体项目，带上 projectId
+  if (selectedProjectId.value && selectedProjectId.value !== '__all__') {
+    query.projectId = selectedProjectId.value
+  }
+  return query
+}
+
+/** 跳转到工单列表 */
+function navigateToDrillDown(params: Record<string, string>) {
+  router.push({ path: '/issues', query: buildDrillDownQuery(params) })
+}
+
+/** 概览卡片点击下钻 */
+function drillDownOverview(type: 'total' | 'open' | 'closed' | 'overdue') {
+  switch (type) {
+    case 'total':
+      navigateToDrillDown({ label: '全部工单' })
+      break
+    case 'open':
+      navigateToDrillDown({ statusCategory: 'in_progress', label: '进行中' })
+      break
+    case 'closed':
+      navigateToDrillDown({ statusCategory: 'done', label: '已完成' })
+      break
+    case 'overdue':
+      navigateToDrillDown({ overdue: 'true', label: '已逾期' })
+      break
+  }
+}
+
+/** 状态分布图点击 — 按具体状态筛选 */
+function handleStatusChartClick(params: any) {
+  if (!params || !params.data) return
+  const item = dashboardData.value?.statusDistribution.items.find(
+    i => localizeStatusName(i.name) === params.name || i.name === params.name
+  )
+  if (item) {
+    // Pass statusName which will be resolved to status ID in IssueListView
+    navigateToDrillDown({
+      statusName: item.name,
+      label: localizeStatusName(item.name)
+    })
+  }
+}
+
+/** 优先级分布图点击 — 按优先级筛选 */
+function handlePriorityChartClick(params: any) {
+  if (!params || params.dataIndex == null) return
+  const labels = dashboardData.value?.priorityDistribution.labels
+  if (!labels) return
+  const priorityName = labels[params.dataIndex]
+  if (priorityName) {
+    navigateToDrillDown({
+      priority: priorityName,
+      label: priorityLabelMap[priorityName] || priorityName
+    })
+  }
+}
+
+/** 类型分布图点击 — 按工单类型筛选 */
+function handleTypeChartClick(params: any) {
+  if (!params || !params.data) return
+  const typeName = params.data.name || params.name
+  if (typeName) {
+    navigateToDrillDown({
+      issueType: typeName,
+      label: typeName
+    })
+  }
+}
+
+/** 团队负载图点击 — 按负责人筛选 */
+function handleWorkloadChartClick(params: any) {
+  if (!params || params.dataIndex == null) return
+  const items = dashboardData.value?.workload.items
+  if (!items) return
+  const item = items[params.dataIndex]
+  if (item && item.name) {
+    navigateToDrillDown({
+      assigneeName: item.name,
+      label: item.name
+    })
+  }
+}
+
 // Resolution time group-by state
 const resolutionTimeGroupBy = ref<string | undefined>(undefined)
 const resolutionTimeGroupDetails = ref<{ name: string; avgHours: number; medianHours: number; count: number }[]>([])
@@ -1179,6 +1272,17 @@ function printReport() {
   text-align: center;
 }
 
+.stat-card-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.stat-card-clickable:hover {
+  border-color: var(--tf-accent);
+  background: var(--tf-bg-hover);
+  transform: translateY(-1px);
+}
+
 .stat-value {
   font-size: 24px;
   font-weight: 700;
@@ -1258,6 +1362,10 @@ function printReport() {
 .chart-instance {
   width: 100%;
   height: 240px;
+}
+
+.chart-clickable {
+  cursor: pointer;
 }
 
 .chart-card-wide .chart-instance {

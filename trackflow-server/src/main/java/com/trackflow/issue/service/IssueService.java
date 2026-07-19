@@ -219,6 +219,10 @@ public class IssueService {
         applyFilter(wrapper, "priority", query.getPriority(), false);
         // assigneeId: supports single or comma-separated
         applyFilter(wrapper, "assignee_id", query.getAssigneeId(), true);
+        // assigneeName: lookup by display name (used by report drill-down)
+        if (query.getAssigneeName() != null && !query.getAssigneeName().isBlank()) {
+            wrapper.apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name = {0})", query.getAssigneeName().trim());
+        }
         if (query.getReporterId() != null) wrapper.eq("reporter_id", query.getReporterId());
         // sprintId: supports single or comma-separated
         applyFilter(wrapper, "sprint_id", query.getSprintId(), true);
