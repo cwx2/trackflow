@@ -429,15 +429,15 @@ async function loadProject() {
       router.replace({ path: `/projects/${project.value!.key}` })
     }
 
-    // 使用解析后的数字 ID 调用后续 API
-    const projectId = project.value!.id
+    // 使用项目 Key 调用后续 API（后端统一支持 Key/ID 标识符）
+    const projectIdentifier = project.value!.key || project.value!.id
     // 并行加载权限、成员和角色
     await Promise.all([
-      loadPerms(projectId),
-      loadMembers(projectId),
+      loadPerms(projectIdentifier),
+      loadMembers(projectIdentifier),
       loadRoles(),
-      loadStatistics(projectId),
-      loadActivities(projectId)
+      loadStatistics(projectIdentifier),
+      loadActivities(projectIdentifier)
     ])
   } catch (e: any) {
     if (e.response?.status === 403) {
@@ -616,7 +616,7 @@ async function handleRestore() {
     cancelText: '取消',
     onOk: async () => {
       try {
-        await projectApi.restore(project.value!.id)
+        await projectApi.restore(project.value!.key)
         Message.success('项目已恢复为活跃状态')
         await loadProject()
       } catch (e: any) {

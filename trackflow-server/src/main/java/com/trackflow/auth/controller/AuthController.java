@@ -6,6 +6,7 @@ import com.trackflow.auth.vo.UserInfoVO;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,6 +21,7 @@ import java.util.Set;
 public class AuthController {
 
     private final PermissionService permissionService;
+    private final ProjectService projectService;
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -51,9 +53,10 @@ public class AuthController {
      */
     @GetMapping("/my-permissions")
     @PreAuthorize("isAuthenticated()")
-    public R<Set<String>> getMyPermissions(@RequestParam("projectId") Long projectId) {
+    public R<Set<String>> getMyPermissions(@RequestParam("projectId") String projectId) {
+        Long resolvedProjectId = projectService.resolveProjectId(projectId);
         Long userId = SecurityUtils.getCurrentUserId();
-        Set<String> permissions = new HashSet<>(permissionService.getProjectPermissions(userId, projectId));
+        Set<String> permissions = new HashSet<>(permissionService.getProjectPermissions(userId, resolvedProjectId));
         // 合并全局权限
         permissions.addAll(permissionService.getPermissions(userId));
         return R.ok(permissions);

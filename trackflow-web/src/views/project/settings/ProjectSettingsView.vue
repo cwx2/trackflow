@@ -137,9 +137,9 @@ async function loadProject() {
       router.replace({ path: `/projects/${project.value.key}/settings`, query: route.query })
     }
 
-    // 加载权限（使用解析后的数字 ID）
+    // 加载权限（使用项目 Key）
     try {
-      projectPerms.value = await loadProjectPermissions(project.value.id)
+      projectPerms.value = await loadProjectPermissions(project.value.key || project.value.id)
     } catch {
       projectPerms.value = new Set()
     }

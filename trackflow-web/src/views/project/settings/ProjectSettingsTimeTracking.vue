@@ -95,7 +95,7 @@ onMounted(async () => {
 async function loadSettings() {
   loading.value = true
   try {
-    const res = await projectApi.getTimeTrackingSettings(props.project.id)
+    const res = await projectApi.getTimeTrackingSettings(props.project.key)
     if (res.code === 0 && res.data) {
       enabled.value = res.data.enabled
     }
@@ -109,7 +109,7 @@ async function loadSettings() {
 async function handleToggle(val: boolean | string | number) {
   const newEnabled = val as boolean
   try {
-    const res = await projectApi.updateTimeTrackingSettings(props.project.id, { enabled: newEnabled })
+    const res = await projectApi.updateTimeTrackingSettings(props.project.key, { enabled: newEnabled })
     if (res.code === 0 && res.data) {
       enabled.value = res.data.enabled
       Message.success(newEnabled ? '时间追踪已启用' : '时间追踪已禁用')

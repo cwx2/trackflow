@@ -649,6 +649,7 @@ const showEditDialog = ref(false)
 const editSaving = ref(false)
 const editForm = reactive({
   id: '',
+  key: '',
   name: '',
   description: '',
   leadId: '' as string | undefined
@@ -666,6 +667,7 @@ const deleting = ref(false)
 const deleteConfirmKey = ref('')
 const deleteTarget = ref<{
   id: string
+  key: string
   projectName: string
   projectKey: string
   issueCount: number
@@ -763,7 +765,7 @@ async function toggleFavorite(project: any) {
   // 乐观更新
   project.favorited = !previousState
   try {
-    const res = await projectApi.toggleFavorite(project.id)
+    const res = await projectApi.toggleFavorite(project.key)
     if (res.code === 0 && res.data) {
       project.favorited = res.data.favorited
     }
@@ -780,6 +782,7 @@ function goToProject(project: any) {
 
 function editProject(project: any) {
   editForm.id = project.id
+  editForm.key = project.key
   editForm.name = project.name
   editForm.description = project.description || ''
   editForm.leadId = project.leadId || undefined
@@ -790,10 +793,10 @@ function editProject(project: any) {
 }
 
 async function loadEditMembers() {
-  if (editMembers.value.length > 0 || !editForm.id) return
+  if (editMembers.value.length > 0 || !editForm.key) return
   editMembersLoading.value = true
   try {
-    const res = await projectApi.listMembers(editForm.id)
+    const res = await projectApi.listMembers(editForm.key)
     editMembers.value = res.data || []
   } catch {
     editMembers.value = []
@@ -807,7 +810,7 @@ function manageMembers(project: any) {
   activities.value = []
   activityPage.value = 1
   activityHasMore.value = false
-  loadProjectMembers(project.id)
+  loadProjectMembers(project.key)
   loadProjectRoles()
   showMembersDialog.value = true
 }
@@ -821,7 +824,7 @@ function archiveProject(project: any) {
     hideCancel: false,
     onOk: async () => {
       try {
-        await projectApi.archive(project.id)
+        await projectApi.archive(project.key)
         projects.value = projects.value.filter(p => p.id !== project.id)
         Message.success('项目已归档')
         // 刷新已归档计数
@@ -879,7 +882,7 @@ async function loadArchivedProjects() {
 async function restoreProject(project: any) {
   restoringId.value = project.id
   try {
-    await projectApi.restore(project.id)
+    await projectApi.restore(project.key)
     Message.success(`项目「${project.name}」已恢复`)
     // 从已归档列表移除
     archivedProjects.value = archivedProjects.value.filter(p => p.id !== project.id)
@@ -897,9 +900,9 @@ async function restoreProject(project: any) {
 async function confirmDeleteProject(project: any) {
   // 调用预检查接口获取受影响数据
   try {
-    const res = await projectApi.deletePreCheck(project.id)
+    const res = await projectApi.deletePreCheck(project.key)
     if (res.code === 0 && res.data) {
-      deleteTarget.value = { id: project.id, ...res.data }
+      deleteTarget.value = { id: project.id, key: project.key, ...res.data }
       deleteConfirmKey.value = ''
       showDeleteDialog.value = true
     }
@@ -913,7 +916,7 @@ async function handleDeleteBeforeOk(done: (closed: boolean) => void) {
   if (deleteConfirmKey.value !== deleteTarget.value.projectKey) { done(false); return }
   deleting.value = true
   try {
-    await projectApi.delete(deleteTarget.value.id, deleteConfirmKey.value)
+    await projectApi.delete(deleteTarget.value.key, deleteConfirmKey.value)
     projects.value = projects.value.filter(p => p.id !== deleteTarget.value!.id)
     Message.success('项目已永久删除')
     deleteTarget.value = null
@@ -985,7 +988,7 @@ async function handleEditBeforeOk(done: (closed: boolean) => void) {
   }
   editSaving.value = true
   try {
-    await projectApi.update(editForm.id, {
+    await projectApi.update(editForm.key, {
       name: editForm.name,
       description: editForm.description || undefined,
       leadId: editForm.leadId || undefined
@@ -1040,7 +1043,7 @@ async function loadProjectRoles() {
 async function addMember() {
   if (!addMemberForm.userId || !currentProject.value || addMemberForm.roleIds.length === 0) return
   try {
-    await projectApi.addMember(currentProject.value.id, {
+    await projectApi.addMember(currentProject.value.key, {
       userId: addMemberForm.userId,
       roleIds: addMemberForm.roleIds.map(Number)
     })
@@ -1048,7 +1051,7 @@ async function addMember() {
     addMemberForm.userId = undefined
     addMemberForm.roleIds = []
     showAddMember.value = false
-    loadProjectMembers(currentProject.value.id)
+    loadProjectMembers(currentProject.value.key)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '添加失败')
   }
@@ -1058,7 +1061,7 @@ async function confirmRemoveMember(record: any) {
   if (!currentProject.value) return
   try {
     // 预检：查询该成员被分配的工单数量
-    const res = await projectApi.getAssignedIssueCount(currentProject.value.id, record.userId)
+    const res = await projectApi.getAssignedIssueCount(currentProject.value.key, record.userId)
     const count = res.data?.count || 0
     const memberName = record.displayName || record.username
 
@@ -1093,14 +1096,14 @@ async function confirmRemoveMember(record: any) {
 async function removeMember(userId: string) {
   if (!currentProject.value) return
   try {
-    const res = await projectApi.removeMember(currentProject.value.id, userId)
+    const res = await projectApi.removeMember(currentProject.value.key, userId)
     const affectedCount = res.data?.affectedIssueCount || 0
     if (affectedCount > 0) {
       Message.success(`成员已移除，${affectedCount} 个工单的负责人已自动取消分配`)
     } else {
       Message.success('成员已移除')
     }
-    loadProjectMembers(currentProject.value.id)
+    loadProjectMembers(currentProject.value.key)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '移除失败')
   }
@@ -1109,13 +1112,13 @@ async function removeMember(userId: string) {
 async function changeMemberRole(userId: string, roleIds: string[]) {
   if (!currentProject.value) return
   try {
-    await projectApi.updateMemberRole(currentProject.value.id, userId, roleIds.map(Number))
+    await projectApi.updateMemberRole(currentProject.value.key, userId, roleIds.map(Number))
     Message.success('角色已更新')
-    loadProjectMembers(currentProject.value.id)
+    loadProjectMembers(currentProject.value.key)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新失败')
     // 刷新列表恢复正确状态
-    loadProjectMembers(currentProject.value.id)
+    loadProjectMembers(currentProject.value.key)
   }
 }
 
@@ -1132,7 +1135,7 @@ async function loadActivities() {
   activityLoading.value = true
   activityPage.value = 1
   try {
-    const res = await projectApi.listActivities(currentProject.value.id, { page: 1, pageSize: 20 })
+    const res = await projectApi.listActivities(currentProject.value.key, { page: 1, pageSize: 20 })
     if (res.code === 0 && res.data) {
       activities.value = res.data.list || []
       activityHasMore.value = (res.data.pagination?.page ?? 1) < (res.data.pagination?.totalPages ?? 1)
@@ -1148,7 +1151,7 @@ async function loadMoreActivities() {
   if (!currentProject.value) return
   activityPage.value++
   try {
-    const res = await projectApi.listActivities(currentProject.value.id, { page: activityPage.value, pageSize: 20 })
+    const res = await projectApi.listActivities(currentProject.value.key, { page: activityPage.value, pageSize: 20 })
     if (res.code === 0 && res.data) {
       activities.value.push(...(res.data.list || []))
       activityHasMore.value = (res.data.pagination?.page ?? 1) < (res.data.pagination?.totalPages ?? 1)

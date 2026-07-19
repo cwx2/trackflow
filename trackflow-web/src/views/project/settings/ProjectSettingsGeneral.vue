@@ -279,7 +279,7 @@ async function loadMembersIfNeeded() {
   if (membersLoaded.value) return
   membersLoading.value = true
   try {
-    const res = await projectApi.listMembers(props.project.id)
+    const res = await projectApi.listMembers(props.project.key)
     memberList.value = res.data || []
     membersLoaded.value = true
   } catch {
@@ -302,11 +302,11 @@ async function saveBasicInfo() {
     if (form.description !== (props.project.description || '')) updateData.description = form.description || undefined
     if (form.leadId !== (props.project.leadId || undefined)) updateData.leadId = form.leadId || undefined
 
-    await projectApi.update(props.project.id, updateData)
+    await projectApi.update(props.project.key, updateData)
     Message.success('项目设置已保存')
 
     // Reload project detail to get updated data
-    const detailRes = await projectApi.getDetail(props.project.id)
+    const detailRes = await projectApi.getDetail(props.project.key)
     emit('updated', detailRes.data)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '保存失败')
@@ -338,11 +338,11 @@ async function changeVisibility(value: string) {
 
 async function doVisibilityUpdate(value: string) {
   try {
-    await projectApi.update(props.project.id, { visibility: value })
+    await projectApi.update(props.project.key, { visibility: value })
     currentVisibility.value = value as any
     Message.success('可见性已更新')
     // Reload project
-    const detailRes = await projectApi.getDetail(props.project.id)
+    const detailRes = await projectApi.getDetail(props.project.key)
     emit('updated', detailRes.data)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新可见性失败')

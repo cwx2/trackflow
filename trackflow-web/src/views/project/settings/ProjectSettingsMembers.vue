@@ -302,7 +302,7 @@ function formatActivityText(act: ProjectActivityVO): string {
 async function loadMembers() {
   membersLoading.value = true
   try {
-    const res = await projectApi.listMembers(props.project.id)
+    const res = await projectApi.listMembers(props.project.key)
     members.value = res.data || []
   } catch {
     members.value = []
@@ -353,7 +353,7 @@ async function addMember() {
   if (!addForm.userId || addForm.roleIds.length === 0) return
   adding.value = true
   try {
-    await projectApi.addMember(props.project.id, {
+    await projectApi.addMember(props.project.key, {
       userId: addForm.userId,
       roleIds: addForm.roleIds.map(id => Number(id))
     })
@@ -376,7 +376,7 @@ async function changeMemberRole(userId: string, roleIds: string[]) {
     return
   }
   try {
-    await projectApi.updateMemberRole(props.project.id, userId, roleIds.map(id => Number(id)))
+    await projectApi.updateMemberRole(props.project.key, userId, roleIds.map(id => Number(id)))
     Message.success('角色已更新')
     await loadMembers()
   } catch (e: any) {
@@ -388,7 +388,7 @@ async function changeMemberRole(userId: string, roleIds: string[]) {
 async function confirmRemoveMember(member: ProjectMemberVO) {
   // First check assigned issues
   try {
-    const res = await projectApi.getAssignedIssueCount(props.project.id, member.userId)
+    const res = await projectApi.getAssignedIssueCount(props.project.key, member.userId)
     const count = res.data?.count || 0
 
     const content = count > 0
@@ -402,7 +402,7 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
       cancelText: '取消',
       onOk: async () => {
         try {
-          await projectApi.removeMember(props.project.id, member.userId)
+          await projectApi.removeMember(props.project.key, member.userId)
           Message.success('成员已移除')
           usersLoaded.value = false
           await loadMembers()
@@ -420,7 +420,7 @@ async function confirmRemoveMember(member: ProjectMemberVO) {
       cancelText: '取消',
       onOk: async () => {
         try {
-          await projectApi.removeMember(props.project.id, member.userId)
+          await projectApi.removeMember(props.project.key, member.userId)
           Message.success('成员已移除')
           usersLoaded.value = false
           await loadMembers()
