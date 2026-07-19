@@ -376,6 +376,9 @@ public class WorkItemAttributeService {
 
         // 插入新值
         if (attributeValueMap != null && !attributeValueMap.isEmpty()) {
+            // 批量校验 valueId 归属关系
+            validateAttributeValueOwnership(attributeValueMap);
+
             for (Map.Entry<Long, Long> entry : attributeValueMap.entrySet()) {
                 TimeEntryAttributeValue teav = new TimeEntryAttributeValue();
                 teav.setTimeEntryId(timeEntryId);
@@ -383,6 +386,43 @@ public class WorkItemAttributeService {
                 teav.setValueId(entry.getValue());
                 teav.setCreatedAt(LocalDateTime.now());
                 entryValueMapper.insert(teav);
+            }
+        }
+    }
+
+    /**
+     * 批量校验属性值归属关系：每个 valueId 必须属于对应的 attributeId
+     */
+    private void validateAttributeValueOwnership(Map<Long, Long> attributeValueMap) {
+        // 收集所有 valueId，批量查询
+        List<Long> valueIds = new ArrayList<>(attributeValueMap.values());
+        List<WorkItemAttributeValue> values = valueMapper.selectBatchIds(valueIds);
+
+        // 构建 valueId → attributeId 的映射
+        Map<Long, Long> valueToAttributeMap = values.stream()
+                .collect(Collectors.toMap(WorkItemAttributeValue::getId, WorkItemAttributeValue::getAttributeId));
+
+        for (Map.Entry<Long, Long> entry : attributeValueMap.entrySet()) {
+            Long attrId = entry.getKey();
+            Long valId = entry.getValue();
+
+            // 校验属性存在
+            if (attributeMapper.selectById(attrId) == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "属性不存在: " + attrId);
+            }
+
+            // 校验值存在
+            Long actualAttrId = valueToAttributeMap.get(valId);
+            if (actualAttrId == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "属性值不存在: " + valId);
+            }
+
+            // 校验归属关系
+            if (!actualAttrId.equals(attrId)) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "属性值 " + valId + " 不属于属性 " + attrId);
             }
         }
     }
