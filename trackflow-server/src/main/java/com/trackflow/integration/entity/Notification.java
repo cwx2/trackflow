@@ -27,4 +27,11 @@ public class Notification implements Serializable {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer aggregationCount;
+    /**
+     * 邮件是否已发送（延迟投递模型）。
+     * false = 待发邮件（定时任务在聚合窗口结束后检查并发送）。
+     * true = 已发送或已跳过（用户已读 IAN 则跳过）。
+     */
+    private Boolean mailSent;
+    private LocalDateTime mailSentAt;
 }

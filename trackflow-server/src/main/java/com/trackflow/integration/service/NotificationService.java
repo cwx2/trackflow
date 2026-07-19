@@ -48,16 +48,16 @@ public class NotificationService {
     private int aggregationMinutes;
 
     /**
-     * 创建通知（含聚合去重逻辑）。
+     * 创建通知（含聚合去重逻辑 + 延迟邮件投递）。
      * <p>
      * 聚合规则：在 aggregation-minutes 时间窗口内，若存在同一 userId + type + resourceType + resourceId
      * 的未读通知，则更新该条通知的 title/content/actorId/updatedAt，并递增 aggregationCount，
-     * 重置 isRead=false。否则新建一条通知。
+     * 重置 isRead=false 和 mailSent=false。否则新建一条通知。
      * <p>
-     * 邮件发送规则：站内通知创建/聚合后，若全局 emailEnabled 且用户偏好 emailEnabled，
-     * 异步发送邮件通知（仅新建时发送，聚合更新不重复发邮件）。
-     * <p>
-     * 参考 OpenProject 的 update_or_create_notification 设计。
+     * 邮件发送规则（两阶段模型，参考 OpenProject WorkflowJob）：
+     * - mention 类型：立即发送邮件（紧急，不等待聚合窗口）
+     * - 其他类型：延迟发送，由 {@link NotificationMailScheduler} 在聚合窗口结束后处理
+     *   如果用户在等待期间已读 IAN（站内通知），则跳过邮件
      *
      * @param userId       接收者用户ID
      * @param actorId      触发者用户ID（系统自动通知时为 null）
@@ -109,6 +109,9 @@ public class NotificationService {
             existing.setUpdatedAt(LocalDateTime.now());
             existing.setAggregationCount(
                     (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
+            // 聚合时重置 mailSent=false，让定时任务在聚合窗口结束后重新评估是否需要发邮件
+            existing.setMailSent(false);
+            existing.setMailSentAt(null);
             // 聚合时不覆盖 reason（保留第一次的 reason）
             notificationMapper.updateById(existing);
             log.debug("[Notification] 聚合通知: id={}, userId={}, type={}, resourceId={}, count={}",
@@ -126,15 +129,21 @@ public class NotificationService {
             n.setResourceType(resourceType);
             n.setResourceId(resourceId);
             n.setIsRead(false);
+            n.setMailSent(false);
             n.setCreatedAt(LocalDateTime.now());
             n.setAggregationCount(1);
             notificationMapper.insert(n);
             isNew = true;
         }
 
-        // 邮件发送（仅新建通知时触发，聚合更新不重复发送邮件）
-        if (isNew) {
+        // 邮件发送策略（参考 OpenProject WorkflowJob 两阶段模型）：
+        // - mention 类型：立即发送邮件（用户可能不在线但需紧急关注）
+        // - 其他类型：延迟发送，由 NotificationMailScheduler 定时任务在聚合窗口结束后处理
+        //   如果用户在等待期间已读 IAN，则跳过邮件（避免"已知道了还收到邮件"的冗余打扰）
+        if (isNew && type == NotificationType.mention) {
             dispatchEmail(userId, title, content);
+            // 标记 mention 通知邮件已发送（直接更新刚插入的记录）
+            markMailSent(userId, typeValue, resourceType, resourceId);
         }
     }
 
@@ -237,6 +246,9 @@ public class NotificationService {
                 existing.setUpdatedAt(LocalDateTime.now());
                 existing.setAggregationCount(
                         (existing.getAggregationCount() != null ? existing.getAggregationCount() : 1) + 1);
+                // 聚合时重置 mailSent=false，让定时任务在聚合窗口结束后重新评估
+                existing.setMailSent(false);
+                existing.setMailSentAt(null);
                 toUpdate.add(existing);
             } else {
                 // 新建通知
@@ -251,6 +263,7 @@ public class NotificationService {
                 n.setResourceType(resourceType);
                 n.setResourceId(resourceId);
                 n.setIsRead(false);
+                n.setMailSent(false);
                 n.setCreatedAt(LocalDateTime.now());
                 n.setAggregationCount(1);
                 toInsert.add(n);
@@ -270,9 +283,13 @@ public class NotificationService {
             log.debug("[Notification] 批量聚合更新通知: count={}, type={}", toUpdate.size(), typeValue);
         }
 
-        // 批量邮件分发（仅新建通知的用户）
-        if (!newNotificationUserIds.isEmpty()) {
+        // 邮件发送策略（与 notify() 一致）：
+        // - mention 类型：立即批量发送邮件
+        // - 其他类型：延迟发送，由 NotificationMailScheduler 处理
+        if (!newNotificationUserIds.isEmpty() && type == NotificationType.mention) {
             dispatchEmailBatch(newNotificationUserIds, title, content);
+            // 批量标记 mention 通知邮件已发送
+            markMailSentBatch(newNotificationUserIds, typeValue, resourceType, resourceId);
         }
     }
 
@@ -303,6 +320,96 @@ public class NotificationService {
             result.putIfAbsent(n.getUserId(), n);
         }
         return result;
+    }
+
+    /**
+     * 标记单个用户的通知邮件已发送（用于 mention 立即发送后标记）。
+     */
+    private void markMailSent(Long userId, String type, String resourceType, Long resourceId) {
+        Notification update = new Notification();
+        update.setMailSent(true);
+        update.setMailSentAt(LocalDateTime.now());
+        notificationMapper.update(update,
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getType, type)
+                        .eq(Notification::getResourceType, resourceType)
+                        .eq(Notification::getResourceId, resourceId)
+                        .eq(Notification::getMailSent, false)
+        );
+    }
+
+    /**
+     * 批量标记通知邮件已发送（用于 mention 批量立即发送后标记）。
+     */
+    private void markMailSentBatch(Collection<Long> userIds, String type, String resourceType, Long resourceId) {
+        if (userIds.isEmpty()) return;
+        Notification update = new Notification();
+        update.setMailSent(true);
+        update.setMailSentAt(LocalDateTime.now());
+        notificationMapper.update(update,
+                new LambdaQueryWrapper<Notification>()
+                        .in(Notification::getUserId, userIds)
+                        .eq(Notification::getType, type)
+                        .eq(Notification::getResourceType, resourceType)
+                        .eq(Notification::getResourceId, resourceId)
+                        .eq(Notification::getMailSent, false)
+        );
+    }
+
+    /**
+     * 查询聚合窗口已结束且邮件未发送的未读通知（供 NotificationMailScheduler 使用）。
+     * <p>
+     * 条件：mail_sent=false AND is_read=false AND created_at < NOW() - aggregation_minutes
+     * 聚合通知看 updated_at（聚合窗口最后更新时间），新建通知看 created_at。
+     *
+     * @param limit 一次最多处理条数
+     * @return 待发邮件的通知列表
+     */
+    public List<Notification> findPendingMailNotifications(int limit) {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(aggregationMinutes);
+        return notificationMapper.selectList(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getMailSent, false)
+                        .eq(Notification::getIsRead, false)
+                        // 聚合窗口已结束：COALESCE(updated_at, created_at) < cutoff
+                        .apply("COALESCE(updated_at, created_at) < {0}", cutoff)
+                        .orderByAsc(Notification::getCreatedAt)
+                        .last("LIMIT " + limit)
+        );
+    }
+
+    /**
+     * 查询邮件未发送但用户已读的通知（IAN 已读抑制邮件）。
+     * 这些通知用户已在站内看过，不需要再发邮件——直接标记 mail_sent=true。
+     *
+     * @return 被抑制的通知数量
+     */
+    @Transactional
+    public int suppressReadNotificationMails() {
+        Notification update = new Notification();
+        update.setMailSent(true);
+        update.setMailSentAt(LocalDateTime.now());
+        return Math.toIntExact(notificationMapper.update(update,
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getMailSent, false)
+                        .eq(Notification::getIsRead, true)
+        ));
+    }
+
+    /**
+     * 批量标记通知邮件已发送（按 ID 列表）。
+     */
+    @Transactional
+    public void markMailSentByIds(Collection<Long> notificationIds) {
+        if (notificationIds.isEmpty()) return;
+        Notification update = new Notification();
+        update.setMailSent(true);
+        update.setMailSentAt(LocalDateTime.now());
+        notificationMapper.update(update,
+                new LambdaQueryWrapper<Notification>()
+                        .in(Notification::getId, notificationIds)
+        );
     }
 
     /**
