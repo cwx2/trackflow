@@ -188,16 +188,26 @@
           当前项目共 {{ boardTotalCount }} 个工单，看板仅展示前 {{ issues.length }} 个。请使用搜索或筛选缩小范围。
         </span>
       </div>
-      <!-- 隐藏列中有工单的提示 -->
-      <div v-if="hiddenIssueColumns.length > 0 && !loading" class="board-hidden-issues-banner">
-        <span class="hidden-issues-icon">👁️‍🗨️</span>
+      <!-- 隐藏列中有工单的警告提示 -->
+      <div v-if="hiddenIssueColumns.length > 0 && !loading && !showAllColumns" class="board-hidden-issues-banner">
+        <span class="hidden-issues-icon">⚠️</span>
         <span class="hidden-issues-text">
-          有工单存在于已隐藏的列中：{{ hiddenIssueColumns.map(c => localizeStatusName(c.statusName)).join('、') }}。
-          <template v-if="canEditBoard">
-            <a-link size="small" @click="showSettings = true">打开列设置</a-link> 查看或调整。
-          </template>
-          <span v-else>请联系项目管理员调整列配置。</span>
+          <strong>{{ hiddenIssueTotalCount }} 个工单</strong>处于未显示的状态列中（{{ hiddenIssueColumnsDetail }}）。
         </span>
+        <div class="hidden-issues-actions">
+          <a-button size="mini" type="outline" @click="showAllColumns = true">显示全部列</a-button>
+          <a-button v-if="canEditBoard" size="mini" type="text" @click="showSettings = true">列设置</a-button>
+        </div>
+      </div>
+      <!-- 临时显示全部列时的收起提示 -->
+      <div v-if="showAllColumns && hiddenIssueColumns.length > 0 && !loading" class="board-hidden-issues-banner board-hidden-issues-banner--info">
+        <span class="hidden-issues-icon">ℹ️</span>
+        <span class="hidden-issues-text">
+          已临时显示全部列（含 {{ hiddenIssueColumns.length }} 个隐藏列）。
+        </span>
+        <div class="hidden-issues-actions">
+          <a-button size="mini" type="outline" @click="showAllColumns = false">恢复配置</a-button>
+        </div>
       </div>
       <div class="board-main-area">
         <!-- Backlog 面板 -->
@@ -694,9 +704,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Message, Notification } from '@arco-design/web-vue'
+import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi, queryApi, projectApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
+import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/composables/usePermission'
@@ -1306,6 +1317,7 @@ async function loadIssuesWithLoading() {
 function onProjectChange() {
   keyword.value = ''
   selectedSprint.value = undefined
+  showAllColumns.value = false  // 切换项目时重置临时显示
   userExplicitlySelectedAll = false  // Reset: allow auto-select for new project
   // 切换项目时：保留 'me' 筛选，但清除指定用户 ID（因为不同项目的成员不同）
   if (assigneeFilter.value && assigneeFilter.value !== 'me') {
@@ -1353,7 +1365,7 @@ const visibleStatuses = computed(() => {
     return statuses.value
   }
   return allColumnConfigs.value
-    .filter(c => c.visible)
+    .filter(c => c.visible || showAllColumns.value)
     .map(c => ({
       id: c.statusId,
       name: c.statusName,
@@ -1468,6 +1480,21 @@ const boardStatusIdsForBacklog = computed(() => {
 // 隐藏列中有工单的列（用于提示 banner）
 const hiddenIssueColumns = computed(() => {
   return allColumnConfigs.value.filter(c => !c.visible && c.hasHiddenIssues)
+})
+
+// 临时显示全部列（不修改持久化配置）
+const showAllColumns = ref(false)
+
+// 隐藏工单总数
+const hiddenIssueTotalCount = computed(() => {
+  return hiddenIssueColumns.value.reduce((sum, c) => sum + (c.issueCount || 0), 0)
+})
+
+// 隐藏列详情文字（状态名:数量）
+const hiddenIssueColumnsDetail = computed(() => {
+  return hiddenIssueColumns.value
+    .map(c => `${localizeStatusName(c.statusName)} ${c.issueCount || 0}个`)
+    .join('、')
 })
 
 // 被手动展开的空列集合
@@ -1825,6 +1852,51 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   try {
     const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
 
+    if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+      // WIP 超限：回滚乐观更新，弹确认框
+      issue.statusId = oldStatusId
+      transitioningIssueIds.value.delete(issue.id)
+      Modal.warning({
+        title: 'WIP 限制',
+        content: res.message,
+        okText: '继续移入',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: async () => {
+          // 用户确认后重试（带 forceWip）
+          issue.statusId = targetStatusId
+          transitioningIssueIds.value.add(issue.id)
+          try {
+            const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, undefined, true)
+            if (forceRes.code === 0) {
+              const newVersion = extractVersion(forceRes.data)
+              if (newVersion != null) issue.version = newVersion
+              else issue.version = (issue.version || 0) + 1
+              showActionFeedback(forceRes.data)
+              pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
+            } else {
+              issue.statusId = oldStatusId
+              Message.error(forceRes.message || '状态变更失败')
+            }
+          } catch (e2: any) {
+            issue.statusId = oldStatusId
+            Message.error(e2.response?.data?.message || '状态变更失败')
+          } finally {
+            transitioningIssueIds.value.delete(issue.id)
+          }
+        }
+      })
+      return
+    }
+
+    if (res.code !== 0) {
+      // 其他非成功响应
+      issue.statusId = oldStatusId
+      Message.error(res.message || '状态变更失败')
+      transitioningIssueIds.value.delete(issue.id)
+      return
+    }
+
     // 同步更新本地版本号（后端返回 TransitStatusResultVO）
     const newVersion = extractVersion(res.data)
     if (newVersion != null) {
@@ -1837,32 +1909,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     // 显示自动分配反馈
     showActionFeedback(res.data)
 
-    const undoEntry: UndoEntry = {
-      issueId: issue.id,
-      issueKey: issue.issueKey,
-      oldStatusId: oldStatusId,
-      newStatusId: targetStatusId,
-      oldStatusName: statuses.value.find(s => s.id === oldStatusId)?.name || '',
-      newStatusName: targetStatus?.name || '',
-      timestamp: Date.now()
-    }
-    undoStack.value.push(undoEntry)
-
-    const notifId = `undo-${issue.id}-${Date.now()}`
-    Notification.success({
-      id: notifId,
-      title: '状态变更成功',
-      content: `${issue.issueKey} 已移至「${localizeStatusName(targetStatus?.name)}」`,
-      duration: UNDO_TIMEOUT,
-      closable: true,
-      footer: () => h('button', {
-        class: 'undo-btn',
-        onClick: () => {
-          undoTransition(undoEntry)
-          Notification.remove(notifId)
-        }
-      }, '↩ 撤销 (Ctrl+Z)')
-    })
+    pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
   } catch (e: any) {
     issue.statusId = oldStatusId
     const errMsg = e.response?.data?.message || '状态变更失败'
@@ -1931,6 +1978,36 @@ function getActiveSprintId(): string | undefined {
 }
 
 // ===== 撤销逻辑 =====
+
+/** 推送撤销通知（复用于正常拖拽和强制 WIP 确认后的成功路径） */
+function pushUndoNotification(issue: IssueVO, oldStatusId: string, newStatusId: string, targetStatus: IssueStatusVO | undefined) {
+  const undoEntry: UndoEntry = {
+    issueId: issue.id,
+    issueKey: issue.issueKey,
+    oldStatusId: oldStatusId,
+    newStatusId: newStatusId,
+    oldStatusName: statuses.value.find(s => s.id === oldStatusId)?.name || '',
+    newStatusName: targetStatus?.name || '',
+    timestamp: Date.now()
+  }
+  undoStack.value.push(undoEntry)
+
+  const notifId = `undo-${issue.id}-${Date.now()}`
+  Notification.success({
+    id: notifId,
+    title: '状态变更成功',
+    content: `${issue.issueKey} 已移至「${localizeStatusName(targetStatus?.name)}」`,
+    duration: UNDO_TIMEOUT,
+    closable: true,
+    footer: () => h('button', {
+      class: 'undo-btn',
+      onClick: () => {
+        undoTransition(undoEntry)
+        Notification.remove(notifId)
+      }
+    }, '↩ 撤销 (Ctrl+Z)')
+  })
+}
 
 async function undoTransition(entry: UndoEntry) {
   const issue = issues.value.find(i => i.id === entry.issueId)
@@ -3702,11 +3779,16 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(var(--primary-6), 0.06);
-  border: 1px solid rgba(var(--primary-6), 0.2);
+  background: rgba(var(--warning-6), 0.08);
+  border: 1px solid rgba(var(--warning-6), 0.3);
   border-radius: 6px;
   margin: 0 16px 8px;
   flex-shrink: 0;
+}
+
+.board-hidden-issues-banner--info {
+  background: rgba(var(--primary-6), 0.06);
+  border-color: rgba(var(--primary-6), 0.2);
 }
 
 .hidden-issues-icon {
@@ -3718,5 +3800,18 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--color-text-2);
   line-height: 1.4;
+  flex: 1;
+}
+
+.hidden-issues-text strong {
+  color: var(--color-text-1);
+  font-weight: 600;
+}
+
+.hidden-issues-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>
