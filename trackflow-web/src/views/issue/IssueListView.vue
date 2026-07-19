@@ -198,14 +198,12 @@
             </div>
           </a-form-item>
           <a-form-item label="查询">
-            <div class="query-edit-filters">
-              <a-input
-                v-model="editQueryForm.queryText"
-                placeholder="无筛选条件（将返回所有工单）"
-                allow-clear
-              />
-              <div class="query-edit-hint">格式：字段: 值，多个条件空格分隔（如 状态: 未关闭 负责人: 我）</div>
-            </div>
+            <QueryInput
+              v-model="editQueryForm.queryText"
+              placeholder="输入查询条件... (如 状态: 未关闭)"
+              :status-list="statusCache"
+              :project-list="projectList"
+            />
           </a-form-item>
           <a-form-item label="固定到面板顶部">
             <a-switch v-model="editQueryForm.pinned" />
@@ -655,6 +653,7 @@ import IssueCreatePanel from './IssueCreatePanel.vue'
 import IssuePreviewDrawer from '../board/IssuePreviewDrawer.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import FilterBar from './components/FilterBar.vue'
+import QueryInput from './components/QueryInput.vue'
 import ApplyCommandDialog from './components/ApplyCommandDialog.vue'
 import ViewSettingsMenu from './components/ViewSettingsMenu.vue'
 import IssueListLayout from './components/IssueListLayout.vue'
@@ -2474,8 +2473,6 @@ function applyDashboardFilter() {
 .preview-empty { font-size: 12px; color: var(--tf-text-tertiary); }
 
 /* Edit query modal */
-.query-edit-filters { display: flex; flex-direction: column; gap: 6px; }
-.query-edit-hint { font-size: 11px; color: var(--tf-text-tertiary); margin-top: 2px; }
 .form-help-text { font-size: 12px; color: var(--tf-text-tertiary); margin-left: 8px; }
 
 /* Manage queries modal */
