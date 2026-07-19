@@ -72,12 +72,12 @@
           >
             <div
               class="query-item"
-              :class="{ active: activeQueryId === q.id, 'query-highlight': q.icon && q.count > 0 }"
+              :class="{ active: activeQueryId === q.id }"
               @click="selectQuery(q)"
             >
               <span class="query-icon" v-if="q.icon">{{ q.icon }}</span>
               <span class="query-name">{{ q.name }}</span>
-              <span class="query-count" :class="{ 'count-accent': q.icon && q.count > 0 }">{{ formatCount(q.count) }}</span>
+              <span class="query-count">{{ formatCount(q.count) }}</span>
               <span
                 class="query-action-btn"
                 title="更多操作"
@@ -964,10 +964,8 @@ async function handleEditQuery() {
           ...(editQueryForm.replaceFilters ? { filters: JSON.stringify(updateData.filters) } : {})
         }
       }
-      // If filters were replaced, re-render the FilterBar chips and refresh list
-      if (editQueryForm.replaceFilters && activeQueryObj.value) {
-        const chips = parseSavedQueryFilters(activeQueryObj.value.filters)
-        filterBarRef.value?.setFilters(chips)
+      // If filters were replaced, refresh the list with new filter conditions
+      if (editQueryForm.replaceFilters) {
         refreshList()
       }
     }
@@ -2090,15 +2088,9 @@ function selectQuery(q: any) {
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
-  // For owned queries: parse and show editable filter chips in FilterBar
-  // For non-owned queries: stay in search mode, readonly conditions shown on chip click
-  if (isOwnQuery(q)) {
-    const chips = parseSavedQueryFilters(q.filters)
-    filterBarRef.value?.setFilters(chips)
-  } else {
-    // Clear any existing filters and keep in search mode
-    filterBarRef.value?.clearAll()
-  }
+  // YouTrack style: clicking a saved query only shows the query name chip in search bar
+  // Does NOT expand filter conditions — user must click the chip to see/edit conditions
+  filterBarRef.value?.clearAll()
 
   refreshList()
 }
@@ -2324,10 +2316,7 @@ function applyDashboardFilter() {
 .query-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .query-item.active .query-name { color: var(--tf-accent); }
 .query-count { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; margin-left: 8px; }
-.query-count.count-accent { color: var(--tf-accent); font-weight: 600; }
 .query-icon { font-size: 12px; flex-shrink: 0; margin-right: 4px; }
-.query-item.query-highlight { background: var(--tf-accent-bg); border-left: 2px solid var(--tf-accent); padding-left: 6px; }
-.query-item.query-highlight .query-name { color: var(--tf-accent); font-weight: 500; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
 
 /* Icon picker */
