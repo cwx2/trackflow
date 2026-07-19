@@ -85,4 +85,16 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * 查询项目中各状态的工单数量（用于看板列设置的智能推荐）
      */
     List<Map<String, Object>> selectIssueCountByStatus(@Param("projectId") Long projectId);
+
+    /**
+     * 燃尽图投影查询：只返回 id, created_at, resolved_at（不加载 title/description 等大字段）。
+     * 用于 getBurndownData 性能优化。
+     */
+    List<Map<String, Object>> selectBurndownProjection(@Param("sprintId") Long sprintId);
+
+    /**
+     * 批量查询工单的 created_at 时间（消除 N+1）。
+     * 用于获取已移出 Sprint 的工单进入时间。
+     */
+    List<Map<String, Object>> selectCreatedAtByIds(@Param("issueIds") List<Long> issueIds);
 }

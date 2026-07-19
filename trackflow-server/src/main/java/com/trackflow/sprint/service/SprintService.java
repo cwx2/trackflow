@@ -39,9 +39,11 @@ import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -217,6 +219,8 @@ public class SprintService {
         );
 
         // 批量记录活动日志
+        String oldId = String.valueOf(activeSprint.getId());
+        String newId = String.valueOf(newSprint.getId());
         String oldName = activeSprint.getName();
         String newName = newSprint.getName();
         List<IssueActivity> activities = openIssueIds.stream().map(issueId -> {
@@ -225,8 +229,10 @@ public class SprintService {
             activity.setUserId(currentUserId);
             activity.setAction("updated");
             activity.setFieldName("sprint");
-            activity.setOldValue(oldName);
-            activity.setNewValue(newName);
+            activity.setOldValue(oldId);
+            activity.setNewValue(newId);
+            activity.setOldDisplayValue(oldName);
+            activity.setNewDisplayValue(newName);
             activity.setCreatedAt(now);
             return activity;
         }).toList();
@@ -459,6 +465,8 @@ public class SprintService {
             );
 
             // 批量记录活动日志：sprint 字段变更
+            String oldSprintIdStr = String.valueOf(sprint.getId());
+            String newSprintIdStr = newSprintId != null ? String.valueOf(newSprintId) : null;
             String oldSprintName = sprint.getName();
             String finalNewSprintName = newSprintName;
             List<IssueActivity> activities = openIssueIds.stream().map(issueId -> {
@@ -467,8 +475,10 @@ public class SprintService {
                 activity.setUserId(currentUserId);
                 activity.setAction("updated");
                 activity.setFieldName("sprint");
-                activity.setOldValue(oldSprintName);
-                activity.setNewValue(finalNewSprintName);
+                activity.setOldValue(oldSprintIdStr);
+                activity.setNewValue(newSprintIdStr);
+                activity.setOldDisplayValue(oldSprintName);
+                activity.setNewDisplayValue(finalNewSprintName);
                 activity.setCreatedAt(now);
                 return activity;
             }).toList();
@@ -640,6 +650,8 @@ public class SprintService {
             );
 
             // 批量记录活动日志：sprint 字段变更
+            String oldSprintIdStr = String.valueOf(sprint.getId());
+            String newSprintIdStr = newSprintId != null ? String.valueOf(newSprintId) : null;
             String oldSprintName = sprint.getName();
             String finalNewSprintName = newSprintName;
             List<IssueActivity> activities = issueIds.stream().map(issueId -> {
@@ -648,8 +660,10 @@ public class SprintService {
                 activity.setUserId(currentUserId);
                 activity.setAction("updated");
                 activity.setFieldName("sprint");
-                activity.setOldValue(oldSprintName);
-                activity.setNewValue(finalNewSprintName);
+                activity.setOldValue(oldSprintIdStr);
+                activity.setNewValue(newSprintIdStr);
+                activity.setOldDisplayValue(oldSprintName);
+                activity.setNewDisplayValue(finalNewSprintName);
                 activity.setCreatedAt(now);
                 return activity;
             }).toList();
@@ -705,23 +719,23 @@ public class SprintService {
         long totalDays = sprintStart.until(sprintEnd).getDays();
         if (totalDays <= 0) totalDays = 1;
 
-        // 查询当前 Sprint 中所有未删除的工单（当前快照）
-        List<Issue> currentIssues = issueMapper.selectList(new LambdaQueryWrapper<Issue>()
-                .eq(Issue::getSprintId, sprintId)
-                .isNull(Issue::getDeletedAt));
+        // 投影查询：只返回 id, created_at, resolved_at（不加载 title/description 等大字段）
+        List<Map<String, Object>> projections = issueMapper.selectBurndownProjection(sprintId);
 
-        // 查询所有"移入"此 Sprint 的活动记录（new_value = sprint name）
-        String sprintName = sprint.getName();
-        List<IssueActivity> movedInActivities = activityMapper.selectList(
-                new LambdaQueryWrapper<IssueActivity>()
-                        .eq(IssueActivity::getFieldName, "sprint")
-                        .eq(IssueActivity::getNewValue, sprintName));
+        // 将投影结果转为轻量数据结构
+        record IssueBurndownData(Long id, LocalDateTime createdAt, LocalDateTime resolvedAt) {}
+        List<IssueBurndownData> currentIssues = projections.stream()
+                .map(row -> new IssueBurndownData(
+                        ((Number) row.get("id")).longValue(),
+                        (LocalDateTime) row.get("created_at"),
+                        (LocalDateTime) row.get("resolved_at")
+                ))
+                .toList();
 
-        // 查询所有"移出"此 Sprint 的活动记录（old_value = sprint name）
-        List<IssueActivity> movedOutActivities = activityMapper.selectList(
-                new LambdaQueryWrapper<IssueActivity>()
-                        .eq(IssueActivity::getFieldName, "sprint")
-                        .eq(IssueActivity::getOldValue, sprintName));
+        // 使用投影查询获取 sprint 活动记录（利用部分索引加速）
+        String sprintIdStr = String.valueOf(sprintId);
+        List<IssueActivity> movedInActivities = activityMapper.selectMovedInBySprint(sprintIdStr);
+        List<IssueActivity> movedOutActivities = activityMapper.selectMovedOutBySprint(sprintIdStr);
 
         // 构建每天的范围变化：addedByDay, removedByDay
         Map<LocalDate, Long> addedByDay = new LinkedHashMap<>();
@@ -737,22 +751,42 @@ public class SprintService {
                         (a, b) -> b.isAfter(a) ? b : a  // 多次移入取最新
                 ));
 
-        for (Issue issue : currentIssues) {
+        // 构建 currentIssues 的 ID 集合用于快速查找
+        Set<Long> currentIssueIds = currentIssues.stream()
+                .map(IssueBurndownData::id)
+                .collect(Collectors.toSet());
+
+        for (IssueBurndownData issue : currentIssues) {
             LocalDate enteredDate;
-            LocalDateTime movedInAt = movedInMap.get(issue.getId());
+            LocalDateTime movedInAt = movedInMap.get(issue.id());
             if (movedInAt != null) {
                 enteredDate = movedInAt.toLocalDate();
             } else {
                 // 没有移入记录 = 创建时就在此 Sprint
-                enteredDate = issue.getCreatedAt().toLocalDate();
+                enteredDate = issue.createdAt().toLocalDate();
             }
             addedByDay.merge(enteredDate, 1L, Long::sum);
         }
 
-        // 对于已移出 Sprint 的工单，记录移出日期和进入日期
-        // 进入日期需要另一条活动记录或 issue.created_at，但工单不在此 Sprint 了无法直接查
-        // 简化：已移出的工单，进入时间无法精确获取（可能已被删除/移到其他Sprint）
-        // 但可通过 movedOut 活动记录找到对应的 movedIn 记录
+        // 批量获取已移出工单的 createdAt（消除 N+1）
+        List<Long> movedOutIssueIdsNeedingCreatedAt = movedOutActivities.stream()
+                .filter(a -> !currentIssueIds.contains(a.getIssueId()))
+                .filter(a -> !movedInMap.containsKey(a.getIssueId()))
+                .map(IssueActivity::getIssueId)
+                .distinct()
+                .toList();
+
+        Map<Long, LocalDateTime> movedOutCreatedAtMap = new HashMap<>();
+        if (!movedOutIssueIdsNeedingCreatedAt.isEmpty()) {
+            List<Map<String, Object>> createdAtRows = issueMapper.selectCreatedAtByIds(movedOutIssueIdsNeedingCreatedAt);
+            for (Map<String, Object> row : createdAtRows) {
+                Long issueId = ((Number) row.get("id")).longValue();
+                LocalDateTime createdAt = (LocalDateTime) row.get("created_at");
+                movedOutCreatedAtMap.put(issueId, createdAt);
+            }
+        }
+
+        // 处理已移出 Sprint 的工单
         for (IssueActivity movedOut : movedOutActivities) {
             LocalDate removedDate = movedOut.getCreatedAt().toLocalDate();
             removedByDay.merge(removedDate, 1L, Long::sum);
@@ -760,26 +794,24 @@ public class SprintService {
             // 检查该工单是否有对应的"移入"记录
             LocalDateTime correspondingMovedIn = movedInMap.get(movedOut.getIssueId());
             if (correspondingMovedIn != null) {
-                // 已经在 addedByDay 中（如果工单后来又移回来了）不需重复
                 // 只处理"当前不在此Sprint"的情况
-                if (currentIssues.stream().noneMatch(i -> i.getId().equals(movedOut.getIssueId()))) {
+                if (!currentIssueIds.contains(movedOut.getIssueId())) {
                     addedByDay.merge(correspondingMovedIn.toLocalDate(), 1L, Long::sum);
                 }
             } else {
                 // 没有移入记录 = 直接创建时在此 Sprint，后来被移出
-                // 用 issue.created_at 获取进入时间
-                Issue movedOutIssue = issueMapper.selectById(movedOut.getIssueId());
-                if (movedOutIssue != null) {
-                    addedByDay.merge(movedOutIssue.getCreatedAt().toLocalDate(), 1L, Long::sum);
+                LocalDateTime createdAt = movedOutCreatedAtMap.get(movedOut.getIssueId());
+                if (createdAt != null) {
+                    addedByDay.merge(createdAt.toLocalDate(), 1L, Long::sum);
                 }
             }
         }
 
         // 按解决日期分组统计每天关闭的工单数（只包含当前在 Sprint 中的工单）
         Map<LocalDate, Long> resolvedByDay = currentIssues.stream()
-                .filter(i -> i.getResolvedAt() != null)
+                .filter(i -> i.resolvedAt() != null)
                 .collect(Collectors.groupingBy(
-                        i -> i.getResolvedAt().toLocalDate(),
+                        i -> i.resolvedAt().toLocalDate(),
                         Collectors.counting()
                 ));
 

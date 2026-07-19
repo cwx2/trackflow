@@ -569,17 +569,21 @@ public class IssueService {
             if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")) {
                 throw new BusinessException(ErrorCode.ACCESS_DENIED, "修改迭代需要 sprint:edit 权限");
             }
+            String oldSprintId = null;
             String oldSprintName = null;
             if (issue.getSprintId() != null) {
                 var oldSprint = sprintMapper.selectById(issue.getSprintId());
+                oldSprintId = String.valueOf(issue.getSprintId());
                 oldSprintName = oldSprint != null ? oldSprint.getName() : null;
             }
+            String newSprintId = null;
             String newSprintName = null;
             if (dto.getSprintId() != 0) {
                 var newSprint = sprintMapper.selectById(dto.getSprintId());
+                newSprintId = String.valueOf(dto.getSprintId());
                 newSprintName = newSprint != null ? newSprint.getName() : null;
             }
-            recordActivity(id, currentUserId, "updated", "sprint", oldSprintName, newSprintName);
+            recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
             issue.setSprintId(dto.getSprintId());
         }
         if (dto.getParentId() != null) {
@@ -772,7 +776,8 @@ public class IssueService {
             String oldSprintName = null;
             var oldSprint = sprintMapper.selectById(oldSprintId);
             if (oldSprint != null) oldSprintName = oldSprint.getName();
-            recordActivity(issueId, currentUserId, "updated", "sprint", oldSprintName, null);
+            recordActivity(issueId, currentUserId, "updated", "sprint",
+                    String.valueOf(oldSprintId), null, oldSprintName, null);
         }
 
         // Assignee 清空活动记录（如果因移动被清空）
@@ -1913,6 +1918,12 @@ public class IssueService {
 
     private void recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue) {
+        recordActivity(issueId, userId, action, fieldName, oldValue, newValue, null, null);
+    }
+
+    private void recordActivity(Long issueId, Long userId, String action,
+                                String fieldName, String oldValue, String newValue,
+                                String oldDisplayValue, String newDisplayValue) {
         IssueActivity activity = new IssueActivity();
         activity.setIssueId(issueId);
         activity.setUserId(userId);
@@ -1920,6 +1931,8 @@ public class IssueService {
         activity.setFieldName(fieldName);
         activity.setOldValue(oldValue);
         activity.setNewValue(newValue);
+        activity.setOldDisplayValue(oldDisplayValue);
+        activity.setNewDisplayValue(newDisplayValue);
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
     }

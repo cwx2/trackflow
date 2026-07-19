@@ -22,6 +22,10 @@ public class IssueActivity implements Serializable {
     private String fieldName;
     private String oldValue;
     private String newValue;
+    /** 旧值的人类可读展示文本（当 oldValue 存储 ID 时，此字段存储对应名称） */
+    private String oldDisplayValue;
+    /** 新值的人类可读展示文本（当 newValue 存储 ID 时，此字段存储对应名称） */
+    private String newDisplayValue;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String detail;
     private LocalDateTime createdAt;

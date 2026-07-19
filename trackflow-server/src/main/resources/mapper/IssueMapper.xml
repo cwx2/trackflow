@@ -4,10 +4,10 @@
 
     <!-- ========== 可复用 SQL 片段 ========== -->
 
-    <!-- assignee 活动记录值：V46 迁移后直接存储显示名，无需 JOIN 解析 -->
+    <!-- 活动记录展示值：优先使用 display 列（存储人类可读名称），回退到 value 列 -->
     <sql id="activity_value_columns">
-        a.old_value,
-        a.new_value
+        COALESCE(a.old_display_value, a.old_value) AS old_value,
+        COALESCE(a.new_display_value, a.new_value) AS new_value
     </sql>
 
     <!-- ========== 查询 ========== -->
@@ -185,6 +185,24 @@
         WHERE project_id = #{projectId}
           AND deleted_at IS NULL
         GROUP BY status_id
+    </select>
+
+    <!-- 燃尽图投影查询：只返回 id, created_at, resolved_at（性能优化） -->
+    <select id="selectBurndownProjection" resultType="java.util.Map">
+        SELECT id, created_at, resolved_at
+        FROM issue
+        WHERE sprint_id = #{sprintId}
+          AND deleted_at IS NULL
+    </select>
+
+    <!-- 批量查询工单 created_at（消除 N+1） -->
+    <select id="selectCreatedAtByIds" resultType="java.util.Map">
+        SELECT id, created_at
+        FROM issue
+        WHERE id IN
+        <foreach collection="issueIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
     </select>
 
 </mapper>
