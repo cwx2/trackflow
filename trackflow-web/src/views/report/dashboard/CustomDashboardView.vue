@@ -56,7 +56,7 @@
               {{ currentDashboard.description }}
             </span>
           </div>
-          <div class="toolbar-right">
+          <div class="toolbar-right" v-if="isOwner">
             <a-button size="small" @click="showAddWidgetModal = true">
               <template #icon><icon-plus /></template>
               添加微件
@@ -117,12 +117,18 @@
         <!-- 空微件状态 -->
         <div v-else class="empty-widgets">
           <div class="empty-icon">📊</div>
-          <h3 class="empty-title">仪表盘还没有微件</h3>
-          <p class="empty-desc">点击"添加微件"为仪表盘添加数据展示组件。</p>
-          <a-button type="primary" size="small" @click="showAddWidgetModal = true">
-            <template #icon><icon-plus /></template>
-            添加微件
-          </a-button>
+          <template v-if="isOwner">
+            <h3 class="empty-title">仪表盘还没有微件</h3>
+            <p class="empty-desc">点击"添加微件"为仪表盘添加数据展示组件。</p>
+            <a-button type="primary" size="small" @click="showAddWidgetModal = true">
+              <template #icon><icon-plus /></template>
+              添加微件
+            </a-button>
+          </template>
+          <template v-else>
+            <h3 class="empty-title">仪表盘暂无内容</h3>
+            <p class="empty-desc">仪表盘创建者尚未添加微件。</p>
+          </template>
         </div>
       </template>
     </div>
@@ -444,7 +450,13 @@ async function addWidget(widgetType: string, defaultTitle: string) {
     // 更新列表中的 widget count
     await loadDashboards()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加失败')
+    showAddWidgetModal.value = false
+    const status = e.response?.status
+    if (status === 403) {
+      Message.error('只有仪表盘创建者可以添加微件')
+    } else {
+      Message.error(e.response?.data?.message || '添加失败')
+    }
   }
 }
 
