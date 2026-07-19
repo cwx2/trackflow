@@ -15,7 +15,7 @@ public interface ProjectMapper extends BaseMapper<Project> {
     /**
      * 查询指定项目中 issue_key 序号的实际最大值
      */
-    @Select("SELECT MAX(CAST(SUBSTRING(issue_key FROM '([0-9]+)$') AS INT)) FROM issue WHERE project_id = #{projectId} AND issue_key ~ '^[A-Z0-9]+-[0-9]+$'")
+    @Select("SELECT MAX(CAST(SUBSTRING(issue_key FROM '([0-9]+)$') AS INT)) FROM issue WHERE project_id = #{projectId} AND issue_key ~ '^[A-Z][A-Z0-9_]*-[0-9]+$'")
     Integer selectMaxIssueSequence(@Param("projectId") Long projectId);
 
     /**
