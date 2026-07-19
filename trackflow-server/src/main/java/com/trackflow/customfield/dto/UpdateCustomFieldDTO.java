@@ -29,6 +29,9 @@ public class UpdateCustomFieldDTO {
     /** list 类型的选项（全量替换） */
     private List<OptionItem> options;
 
+    /** 从已有字段追加选项（list 类型有效）。指定源字段 ID，会将其活跃选项追加到当前字段的选项列表中（跳过已存在的同名选项）。 */
+    private Long copyOptionsFromFieldId;
+
     /** 关联的项目 ID 列表（全量替换） */
     private List<Long> projectIds;
 

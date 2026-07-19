@@ -129,7 +129,60 @@
             <a-switch v-model="form.isMulti" />
             <div class="form-help">开启后允许选择多个选项值（如影响版本、标签等）</div>
           </a-form-item>
-          <a-form-item label="选项列表">
+
+          <!-- 值集来源选择（仅创建模式显示） -->
+          <a-form-item v-if="!editingId" label="值集来源">
+            <a-radio-group v-model="valueSetSource" type="button" size="small">
+              <a-radio value="new">新建值集</a-radio>
+              <a-radio value="copy">从已有字段复制</a-radio>
+            </a-radio-group>
+          </a-form-item>
+
+          <!-- 从已有字段复制：选择源字段 -->
+          <a-form-item v-if="valueSetSource === 'copy' && !editingId" label="选择源字段">
+            <a-select
+              v-model="form.copyOptionsFromFieldId"
+              placeholder="选择一个枚举类型字段"
+              allow-clear
+              @change="onSourceFieldChange"
+            >
+              <a-option v-for="f in enumFieldList" :key="f.id" :value="f.id">
+                {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
+              </a-option>
+            </a-select>
+            <div class="form-help">选择后将复制该字段的所有选项作为独立副本，后续修改互不影响</div>
+          </a-form-item>
+
+          <!-- 编辑模式下的"从其他字段复制值"操作 -->
+          <a-form-item v-if="editingId" label="从其他字段复制值">
+            <div class="copy-from-row">
+              <a-select
+                v-model="copyFromFieldId"
+                placeholder="选择源字段追加选项"
+                allow-clear
+                style="flex: 1"
+              >
+                <a-option v-for="f in enumFieldList.filter(x => x.id !== editingId)" :key="f.id" :value="f.id">
+                  {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
+                </a-option>
+              </a-select>
+              <a-button type="outline" size="small" :disabled="!copyFromFieldId" @click="handleCopyFrom">
+                复制
+              </a-button>
+            </div>
+            <div class="form-help">将源字段的选项追加到当前选项列表中（跳过同名选项）</div>
+          </a-form-item>
+
+          <!-- 选项预览（从字段复制后） -->
+          <a-form-item v-if="valueSetSource === 'copy' && !editingId && previewOptions.length > 0" label="选项预览">
+            <div class="options-preview">
+              <a-tag v-for="opt in previewOptions" :key="opt.value" size="small" :color="opt.color || undefined">
+                {{ opt.value }}
+              </a-tag>
+            </div>
+          </a-form-item>
+
+          <a-form-item :label="valueSetSource === 'copy' && !editingId ? '调整选项（可修改复制后的选项）' : '选项列表'">
             <div class="options-list">
               <div v-for="(opt, idx) in form.options" :key="idx" class="option-row">
                 <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" />
@@ -209,6 +262,12 @@ const drawerVisible = ref(false)
 const editingId = ref<string | null>(null)
 const saving = ref(false)
 
+// Value set source (for list type create mode)
+const valueSetSource = ref<'new' | 'copy'>('new')
+const enumFieldList = ref<CustomFieldDefinitionVO[]>([])
+const previewOptions = ref<Array<{ value: string; color?: string }>>([])
+const copyFromFieldId = ref<string | null>(null)
+
 const form = reactive({
   name: '',
   fieldFormat: 'string' as string,
@@ -222,7 +281,8 @@ const form = reactive({
   regexp: '',
   options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string }>,
   projectIds: [] as string[],
-  issueTypes: [] as string[]
+  issueTypes: [] as string[],
+  copyOptionsFromFieldId: undefined as string | undefined
 })
 
 /** 预定义颜色方案（14 种） */
@@ -306,11 +366,72 @@ function resetForm() {
   form.options = []
   form.projectIds = []
   form.issueTypes = []
+  form.copyOptionsFromFieldId = undefined
+  valueSetSource.value = 'new'
+  previewOptions.value = []
+  copyFromFieldId.value = null
+}
+
+async function loadEnumFields() {
+  try {
+    const res = await customFieldApi.listEnumFields()
+    enumFieldList.value = res.data || []
+  } catch {
+    enumFieldList.value = []
+  }
+}
+
+function onSourceFieldChange(fieldId: string | null) {
+  if (!fieldId) {
+    previewOptions.value = []
+    form.options = []
+    form.copyOptionsFromFieldId = undefined
+    return
+  }
+  form.copyOptionsFromFieldId = fieldId
+  const sourceField = enumFieldList.value.find(f => f.id === fieldId)
+  if (sourceField && sourceField.options) {
+    const activeOptions = sourceField.options.filter(o => !o.isArchived)
+    previewOptions.value = activeOptions.map(o => ({ value: o.value, color: o.color }))
+    // 预填充到 form.options 以便用户可以在保存前调整
+    form.options = activeOptions.map(o => ({
+      value: o.value,
+      isDefault: o.isDefault || false,
+      color: o.color || undefined
+    }))
+  }
+}
+
+function handleCopyFrom() {
+  if (!copyFromFieldId.value) return
+  const sourceField = enumFieldList.value.find(f => f.id === copyFromFieldId.value)
+  if (!sourceField || !sourceField.options) return
+
+  const existingValues = new Set(form.options.map(o => o.value))
+  const activeOptions = sourceField.options.filter(o => !o.isArchived)
+  let addedCount = 0
+  for (const opt of activeOptions) {
+    if (!existingValues.has(opt.value)) {
+      form.options.push({
+        value: opt.value,
+        isDefault: false,
+        color: opt.color || undefined
+      })
+      addedCount++
+    }
+  }
+  if (addedCount > 0) {
+    Message.success(`已追加 ${addedCount} 个选项`)
+  } else {
+    Message.info('所有选项已存在，无需追加')
+  }
+  copyFromFieldId.value = null
 }
 
 function openCreate() {
   editingId.value = null
   resetForm()
+  loadEnumFields()
   drawerVisible.value = true
 }
 
@@ -331,6 +452,11 @@ function openEdit(record: CustomFieldDefinitionVO) {
     .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
+  form.copyOptionsFromFieldId = undefined
+  copyFromFieldId.value = null
+  if (record.fieldFormat === 'list') {
+    loadEnumFields()
+  }
   drawerVisible.value = true
 }
 
@@ -550,5 +676,21 @@ onMounted(() => {
 .color-palette-clear.active {
   border-color: var(--tf-accent);
   color: var(--tf-accent);
+}
+
+.copy-from-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.options-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  background: var(--tf-bg-body);
+  border-radius: 4px;
+  border: 1px solid var(--tf-border);
 }
 </style>

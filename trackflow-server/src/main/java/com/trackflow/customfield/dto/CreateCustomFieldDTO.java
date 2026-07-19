@@ -32,6 +32,9 @@ public class CreateCustomFieldDTO {
     /** list 类型的选项值列表 */
     private List<OptionItem> options;
 
+    /** 从已有字段复制选项（list 类型有效）。指定源字段 ID，会复制其所有活跃选项作为新字段的初始值集。 */
+    private Long copyOptionsFromFieldId;
+
     /** 关联的项目 ID 列表（is_for_all=false 时使用） */
     private List<Long> projectIds;
 
