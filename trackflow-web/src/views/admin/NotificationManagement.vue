@@ -37,6 +37,55 @@
             <div class="stat-label">本周发送</div>
           </div>
         </div>
+
+        <!-- 发件箱状态 -->
+        <div v-if="outboxStats" class="outbox-summary">
+          <h3 class="dist-title">📤 通知发件箱</h3>
+          <div class="outbox-status-row">
+            <span class="outbox-badge outbox-badge--pending" v-if="outboxStats.pending > 0">
+              待重试: {{ outboxStats.pending }}
+            </span>
+            <span class="outbox-badge outbox-badge--failed" v-if="outboxStats.failed > 0">
+              失败: {{ outboxStats.failed }}
+            </span>
+            <span class="outbox-badge outbox-badge--ok" v-if="outboxStats.pending === 0 && outboxStats.failed === 0">
+              ✓ 无异常
+            </span>
+            <span class="outbox-completed" v-if="outboxStats.completed > 0">
+              已恢复: {{ outboxStats.completed }}
+            </span>
+          </div>
+          <!-- 失败队列列表 -->
+          <div v-if="outboxItems.length > 0" class="outbox-list">
+            <div
+              v-for="item in outboxItems"
+              :key="item.id"
+              class="outbox-item"
+            >
+              <div class="outbox-item-info">
+                <span class="outbox-event-type">{{ item.eventType }}</span>
+                <span class="outbox-item-status" :class="`outbox-item-status--${item.status}`">
+                  {{ item.status === 'pending' ? '待重试' : item.status === 'failed' ? '失败' : '已完成' }}
+                </span>
+                <span class="outbox-item-retry">重试 {{ item.retryCount }}/{{ item.maxRetries }}</span>
+              </div>
+              <div class="outbox-item-error" v-if="item.errorMessage">
+                {{ item.errorMessage }}
+              </div>
+              <div class="outbox-item-actions">
+                <a-button
+                  v-if="item.status === 'failed'"
+                  size="mini"
+                  @click="retryOutboxItem(item.id)"
+                >
+                  重试
+                </a-button>
+                <span class="outbox-item-time">{{ formatTime(item.createdAt) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div v-if="Object.keys(stats.typeDistribution).length > 0" class="type-distribution">
           <h3 class="dist-title">类型分布</h3>
           <div class="dist-bars">
@@ -361,7 +410,7 @@
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { notificationAdminApi } from '@/api/notificationAdmin'
-import type { NotificationSettingsVO, NotificationStatsVO, EmailConfigVO } from '@/api/notificationAdmin'
+import type { NotificationSettingsVO, NotificationStatsVO, EmailConfigVO, NotificationOutboxVO, OutboxStats } from '@/api/notificationAdmin'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -408,6 +457,9 @@ const stats = reactive<NotificationStatsVO>({
 })
 
 let originalSettings: NotificationSettingsVO | null = null
+
+const outboxStats = ref<OutboxStats | null>(null)
+const outboxItems = ref<NotificationOutboxVO[]>([])
 
 const emailConfigStatus = computed(() => {
   if (emailConfig.host && emailConfig.port && emailConfig.fromAddress) {
@@ -603,7 +655,47 @@ function resetForm() {
   }
 }
 
-onMounted(loadData)
+function formatTime(dateStr: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+async function loadOutboxData() {
+  try {
+    const [statsRes, listRes] = await Promise.all([
+      notificationAdminApi.getOutboxStats(),
+      notificationAdminApi.listOutbox({ status: 'failed', page: 1, pageSize: 10 })
+    ])
+    if (statsRes.code === 0 && statsRes.data) {
+      outboxStats.value = statsRes.data
+    }
+    if (listRes.code === 0 && listRes.data) {
+      outboxItems.value = listRes.data.list
+    }
+  } catch (e) {
+    // 静默失败（outbox 功能为可选增强）
+  }
+}
+
+async function retryOutboxItem(id: string) {
+  try {
+    const res = await notificationAdminApi.retryOutboxItem(id)
+    if (res.code === 0) {
+      Message.success('已重新加入重试队列')
+      await loadOutboxData()
+    } else {
+      Message.error(res.message || '重试失败')
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '重试失败')
+  }
+}
+
+onMounted(async () => {
+  await loadData()
+  await loadOutboxData()
+})
 </script>
 
 <style scoped>

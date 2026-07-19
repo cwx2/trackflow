@@ -3,6 +3,7 @@ package com.trackflow.sprint.service;
 import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationType;
+import com.trackflow.integration.service.NotificationOutboxWriter;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.project.mapper.ProjectMemberMapper;
@@ -32,16 +33,19 @@ public class SprintNotificationHelper extends AbstractNotificationHelper {
 
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
+    private final NotificationOutboxWriter outboxWriter;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public SprintNotificationHelper(NotificationService notificationService,
                                     NotificationPreferenceService preferenceService,
+                                    NotificationOutboxWriter outboxWriter,
                                     ProjectMemberMapper projectMemberMapper,
                                     SysUserMapper sysUserMapper) {
         super(sysUserMapper, projectMemberMapper);
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
+        this.outboxWriter = outboxWriter;
     }
 
     /**
@@ -88,6 +92,12 @@ public class SprintNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[SprintNotification] 发送Sprint激活通知失败: sprint={}, error={}",
                     sprint.getName(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifySprintActivated", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("Sprint「%s」已启动", sprint.getName()),
+                    String.format("Sprint「%s」已启动", sprint.getName()),
+                    NotificationType.sprint_started.name(), null,
+                    "sprint", sprint.getId(), sprint.getProjectId()));
         }
     }
 
@@ -135,6 +145,12 @@ public class SprintNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[SprintNotification] 发送Sprint完成通知失败: sprint={}, error={}",
                     sprint.getName(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifySprintCompleted", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("Sprint「%s」已完成", sprint.getName()),
+                    String.format("Sprint「%s」已完成，共完成 %d 个工单", sprint.getName(), completedIssues),
+                    NotificationType.sprint_completed.name(), null,
+                    "sprint", sprint.getId(), sprint.getProjectId()));
         }
     }
 

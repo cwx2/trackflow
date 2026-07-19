@@ -5,6 +5,7 @@ import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
+import com.trackflow.integration.service.NotificationOutboxWriter;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.issue.entity.Issue;
@@ -40,12 +41,14 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
 
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
+    private final NotificationOutboxWriter outboxWriter;
     private final IssueCommentMapper commentMapper;
     private final IssueStatusMapper statusMapper;
     private final ProjectMapper projectMapper;
 
     public IssueNotificationHelper(NotificationService notificationService,
                                    NotificationPreferenceService preferenceService,
+                                   NotificationOutboxWriter outboxWriter,
                                    IssueCommentMapper commentMapper,
                                    IssueStatusMapper statusMapper,
                                    ProjectMapper projectMapper,
@@ -53,6 +56,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         super(sysUserMapper, null); // IssueNotificationHelper 不需要 ProjectMemberMapper
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
+        this.outboxWriter = outboxWriter;
         this.commentMapper = commentMapper;
         this.statusMapper = statusMapper;
         this.projectMapper = projectMapper;
@@ -90,6 +94,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送分配通知失败: issue={}, assignee={}, error={}",
                     issue.getIssueKey(), assigneeId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyAssigned", e, outboxWriter.buildNotifyParams(
+                    assigneeId, operatorId,
+                    String.format("你被分配了工单 %s", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 被分配给了你", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_assigned.name(), NotificationReason.assigned.name(),
+                    "issue", issue.getId(), issue.getProjectId()));
         }
     }
 
@@ -132,6 +142,13 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送评论通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
+            // 评论通知涉及多用户，无法精确重构参数，保存概要信息供管理员审查
+            outboxWriter.saveForRetry("notifyCommented", e, outboxWriter.buildNotifyParams(
+                    null, commenterId,
+                    String.format("%s 有新评论", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 中有新评论", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_commented.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
         }
     }
 
@@ -190,6 +207,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送状态变更通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyStatusChanged", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 状态变更", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 状态已变更", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_status_changed.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
         }
     }
 
@@ -224,6 +247,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送创建通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyCreated", e, outboxWriter.buildNotifyParams(
+                    issue.getAssigneeId(), creatorId,
+                    String.format("你被分配了新工单 %s", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 被创建并分配给了你", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_assigned.name(), NotificationReason.assigned.name(),
+                    "issue", issue.getId(), issue.getProjectId()));
         }
     }
 
@@ -299,6 +328,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送@提及通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyMentioned", e, outboxWriter.buildNotifyParams(
+                    null, commenterId,
+                    String.format("评论中被提及: %s", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 的评论中有 @提及", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.mention.name(), NotificationReason.mentioned.name(),
+                    "issue", issue.getId(), issue.getProjectId()));
         }
     }
 
@@ -342,6 +377,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[IssueNotification] 发送移动通知失败: issue={}, error={}",
                     issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyMoved", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 已移动到其他项目", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 已被移动", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_moved.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
         }
     }
 

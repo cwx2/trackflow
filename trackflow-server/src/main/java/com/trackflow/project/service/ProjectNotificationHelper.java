@@ -4,6 +4,7 @@ import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
+import com.trackflow.integration.service.NotificationOutboxWriter;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.project.mapper.ProjectMemberMapper;
@@ -32,13 +33,16 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
 
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
+    private final NotificationOutboxWriter outboxWriter;
 
     public ProjectNotificationHelper(NotificationService notificationService,
                                      NotificationPreferenceService preferenceService,
+                                     NotificationOutboxWriter outboxWriter,
                                      ProjectMemberMapper memberMapper) {
         super(null, memberMapper); // ProjectNotificationHelper 不需要 SysUserMapper
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
+        this.outboxWriter = outboxWriter;
     }
 
     // ==================== 成员变更通知 ====================
@@ -65,6 +69,11 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送成员添加通知失败: project={}, user={}, error={}",
                     projectId, userId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyMemberAdded", e, outboxWriter.buildNotifyParams(
+                    userId, operatorId, "你已被添加到项目",
+                    String.format("你已被添加到项目「%s」，角色为「%s」", projectName, roleNames),
+                    NotificationType.member_added.name(), NotificationReason.member.name(),
+                    "project", projectId, projectId));
         }
     }
 
@@ -90,6 +99,11 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送角色变更通知失败: project={}, user={}, error={}",
                     projectId, userId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyRoleChanged", e, outboxWriter.buildNotifyParams(
+                    userId, operatorId, "你的项目角色已变更",
+                    String.format("你在项目「%s」中的角色已变更为「%s」", projectName, newRoleNames),
+                    NotificationType.role_changed.name(), NotificationReason.member.name(),
+                    "project", projectId, projectId));
         }
     }
 
@@ -115,6 +129,11 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送成员移除通知失败: project={}, user={}, error={}",
                     projectId, userId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyMemberRemoved", e, outboxWriter.buildNotifyParams(
+                    userId, operatorId, "你已被移出项目",
+                    String.format("你已被移出项目「%s」", projectName),
+                    NotificationType.member_removed.name(), NotificationReason.member.name(),
+                    "project", projectId, projectId));
         }
     }
 
@@ -142,6 +161,11 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送新负责人通知失败: project={}, newLead={}, error={}",
                     projectId, newLeadId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyNewLead", e, outboxWriter.buildNotifyParams(
+                    newLeadId, operatorId, "你已成为项目负责人",
+                    String.format("你已成为项目「%s」的负责人", projectName),
+                    NotificationType.lead_changed.name(), NotificationReason.assigned.name(),
+                    "project", projectId, projectId));
         }
     }
 
@@ -167,6 +191,11 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送旧负责人通知失败: project={}, oldLead={}, error={}",
                     projectId, oldLeadId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyOldLead", e, outboxWriter.buildNotifyParams(
+                    oldLeadId, operatorId, "项目负责人已变更",
+                    String.format("项目「%s」的负责人已变更为「%s」", projectName, newLeadName),
+                    NotificationType.lead_changed.name(), NotificationReason.member.name(),
+                    "project", projectId, projectId));
         }
     }
 
@@ -205,6 +234,10 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送生命周期通知失败: project={}, type={}, error={}",
                     projectId, type, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyLifecycleEvent", e, outboxWriter.buildNotifyParams(
+                    null, operatorId, title, content,
+                    type.name(), null,
+                    "project", projectId, projectId));
         }
     }
 
@@ -235,6 +268,11 @@ public class ProjectNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             log.error("[ProjectNotification] 发送项目删除通知失败: project={}, error={}",
                     projectId, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyProjectDeleted", e, outboxWriter.buildNotifyParams(
+                    null, operatorId, "项目已被删除",
+                    String.format("项目「%s」(%s) 已被删除", projectName, projectKey),
+                    NotificationType.project_deleted.name(), null,
+                    "project", projectId, projectId));
         }
     }
 

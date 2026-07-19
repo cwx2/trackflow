@@ -1,5 +1,5 @@
 import request from './request'
-import type { R } from './types'
+import type { R, PageResult } from './types'
 
 // === 通知管理设置 ===
 
@@ -73,6 +73,27 @@ export interface SendTestEmailDTO {
   toAddress: string
 }
 
+// === 通知发件箱（Outbox）类型 ===
+
+export interface NotificationOutboxVO {
+  id: string
+  eventType: string
+  payload: string
+  status: 'pending' | 'failed' | 'completed'
+  retryCount: number
+  maxRetries: number
+  nextRetryAt: string | null
+  errorMessage: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface OutboxStats {
+  pending: number
+  failed: number
+  completed: number
+}
+
 export const notificationAdminApi = {
   /** 获取全局通知设置 */
   getSettings() {
@@ -102,5 +123,22 @@ export const notificationAdminApi = {
   /** 发送测试邮件 */
   sendTestEmail(data: SendTestEmailDTO) {
     return request.post<any, R<void>>('/admin/notifications/email-config/test', data)
+  },
+
+  // === 通知发件箱（Outbox）管理 ===
+
+  /** 查看通知发件箱列表 */
+  listOutbox(params?: { status?: string; page?: number; pageSize?: number }) {
+    return request.get<any, R<PageResult<NotificationOutboxVO>>>('/admin/notifications/outbox', { params })
+  },
+
+  /** 获取发件箱统计 */
+  getOutboxStats() {
+    return request.get<any, R<OutboxStats>>('/admin/notifications/outbox/stats')
+  },
+
+  /** 手动重试一条失败的通知 */
+  retryOutboxItem(id: string) {
+    return request.post<any, R<void>>(`/admin/notifications/outbox/${id}/retry`)
   }
 }
