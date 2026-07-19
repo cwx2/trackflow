@@ -1645,9 +1645,15 @@ public class ProjectService {
             int elapsedMinutes = (int) java.time.Duration.between(timer.getCreatedAt(), now).toMinutes();
             int duration = Math.max(1, elapsedMinutes); // 至少 1 分钟
 
+            // 跨天处理：保留原始 workDate，清除 startTime（与 TimeEntryService.stopTimer 逻辑一致）
+            boolean crossDay = timer.getWorkDate() != null && !timer.getWorkDate().equals(java.time.LocalDate.now());
+            if (crossDay) {
+                timer.setStartTime(null);
+            }
+            // 同天：workDate 和 startTime 均保持不变
+
             timer.setDuration(duration);
             timer.setOngoing(false);
-            timer.setWorkDate(java.time.LocalDate.now());
             timer.setUpdatedAt(now);
             timeEntryMapper.updateById(timer);
 

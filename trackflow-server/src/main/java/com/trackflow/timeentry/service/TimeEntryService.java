@@ -695,8 +695,16 @@ public class TimeEntryService {
             finalDuration = Math.max(1, calculatedDuration); // 至少 1 分钟
         }
 
-        // 停止计时器时，work_date 更新为当前日期（处理跨天情况）
-        entry.setWorkDate(LocalDate.now());
+        // 跨天处理（对齐 OpenProject：spent_on 保持启动日不修改）
+        // 如果计时器跨天（启动日 != 当前日期），清除 startTime（无法用单一 startTime 表达跨天场景）
+        // workDate 保持为计时器启动时的日期（"工作发生在那天"语义）
+        boolean crossDay = !entry.getWorkDate().equals(LocalDate.now());
+        if (crossDay) {
+            // 跨天：保留原始 workDate，清除 startTime
+            entry.setStartTime(null);
+        }
+        // 同天：workDate 和 startTime 均保持不变
+
         entry.setDuration(finalDuration);
         entry.setOngoing(false);
         entry.setUpdatedAt(LocalDateTime.now());
