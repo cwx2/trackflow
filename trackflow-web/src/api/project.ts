@@ -119,6 +119,11 @@ export const projectApi = {
     return request.put<any, R<{ enabled: boolean }>>(`/projects/${projectId}/time-tracking-settings`, data)
   },
 
+  /** 获取禁用时间追踪的影响评估 */
+  getTimeTrackingDisableImpact(projectId: string) {
+    return request.get<any, R<{ totalTimeEntries: number; affectedUsers: number; activeTimers: number }>>(`/projects/${projectId}/time-tracking-settings/disable-impact`)
+  },
+
   /** 获取项目可复制模块的概要统计 */
   getCopySummary(projectId: string) {
     return request.get<any, R<Record<string, number>>>(`/projects/${projectId}/copy-summary`)

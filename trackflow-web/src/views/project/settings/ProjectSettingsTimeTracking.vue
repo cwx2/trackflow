@@ -27,7 +27,8 @@
           </div>
           <a-switch
             :model-value="enabled"
-            :disabled="!canManage || isArchived"
+            :disabled="!canManage || isArchived || toggling"
+            :loading="toggling"
             @change="handleToggle"
           />
         </div>
@@ -69,13 +70,70 @@
         </div>
       </div>
     </template>
+
+    <!-- 禁用确认对话框 -->
+    <a-modal
+      v-model:visible="disableModalVisible"
+      :title="'确认禁用时间追踪'"
+      :ok-text="'确认禁用'"
+      :cancel-text="'取消'"
+      :ok-button-props="{ status: 'danger' }"
+      :ok-loading="disabling"
+      :mask-closable="false"
+      @ok="confirmDisable"
+      @cancel="cancelDisable"
+    >
+      <div class="disable-modal-content">
+        <div class="impact-summary">
+          <div class="impact-icon-row">
+            <icon-exclamation-circle-fill class="impact-warning-icon" />
+            <span class="impact-title">此操作将影响以下数据</span>
+          </div>
+
+          <div v-if="impactLoading" class="impact-loading">
+            <a-spin :size="20" />
+            <span>正在评估影响...</span>
+          </div>
+
+          <div v-else class="impact-stats">
+            <div class="impact-stat-row">
+              <span class="stat-label">工时记录</span>
+              <span class="stat-value">{{ impact.totalTimeEntries }} 条</span>
+            </div>
+            <div class="impact-stat-row">
+              <span class="stat-label">涉及成员</span>
+              <span class="stat-value">{{ impact.affectedUsers }} 人</span>
+            </div>
+            <div v-if="impact.activeTimers > 0" class="impact-stat-row impact-stat-warning">
+              <span class="stat-label">活跃计时器</span>
+              <span class="stat-value">{{ impact.activeTimers }} 个（将被自动停止）</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="impact-description">
+          <p>禁用后：</p>
+          <ul>
+            <li>团队成员将无法在该项目的工单上记录工时</li>
+            <li v-if="impact.activeTimers > 0">正在进行的 {{ impact.activeTimers }} 个计时器将被自动停止并保存已用时长</li>
+            <li>已有工时记录将保留，不会被删除</li>
+            <li>重新启用后所有功能恢复正常</li>
+          </ul>
+        </div>
+
+        <div class="impact-reversible">
+          <icon-sync class="reversible-icon" />
+          <span>此操作可逆——重新启用后数据完全恢复</span>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconLock, IconInfoCircle, IconCheckCircle } from '@arco-design/web-vue/es/icon'
+import { IconLock, IconInfoCircle, IconCheckCircle, IconExclamationCircleFill, IconSync } from '@arco-design/web-vue/es/icon'
 import { projectApi } from '@/api'
 import type { ProjectDetailVO } from '@/api/types'
 
@@ -87,6 +145,17 @@ const props = defineProps<{
 
 const loading = ref(true)
 const enabled = ref(true)
+const toggling = ref(false)
+
+// Disable confirmation modal state
+const disableModalVisible = ref(false)
+const disabling = ref(false)
+const impactLoading = ref(false)
+const impact = ref({
+  totalTimeEntries: 0,
+  affectedUsers: 0,
+  activeTimers: 0
+})
 
 onMounted(async () => {
   await loadSettings()
@@ -108,6 +177,44 @@ async function loadSettings() {
 
 async function handleToggle(val: boolean | string | number) {
   const newEnabled = val as boolean
+  if (newEnabled) {
+    // 启用：直接执行，无需确认
+    await doToggle(true)
+  } else {
+    // 禁用：弹出确认对话框 + 影响评估
+    toggling.value = true
+    disableModalVisible.value = true
+    impactLoading.value = true
+    try {
+      const res = await projectApi.getTimeTrackingDisableImpact(props.project.key)
+      if (res.code === 0 && res.data) {
+        impact.value = res.data
+      }
+    } catch {
+      // 即使获取影响失败，也允许继续禁用
+      impact.value = { totalTimeEntries: 0, affectedUsers: 0, activeTimers: 0 }
+    } finally {
+      impactLoading.value = false
+      toggling.value = false
+    }
+  }
+}
+
+async function confirmDisable() {
+  disabling.value = true
+  try {
+    await doToggle(false)
+    disableModalVisible.value = false
+  } finally {
+    disabling.value = false
+  }
+}
+
+function cancelDisable() {
+  disableModalVisible.value = false
+}
+
+async function doToggle(newEnabled: boolean) {
   try {
     const res = await projectApi.updateTimeTrackingSettings(props.project.key, { enabled: newEnabled })
     if (res.code === 0 && res.data) {
@@ -255,6 +362,119 @@ async function handleToggle(val: boolean | string | number) {
 .feature-icon {
   font-size: 16px;
   color: var(--color-success-6, #3fb950);
+  flex-shrink: 0;
+}
+
+/* Disable modal */
+.disable-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.impact-summary {
+  padding: 16px;
+  background: var(--tf-bg-surface, var(--color-fill-1));
+  border-radius: 6px;
+  border: 1px solid var(--tf-border, var(--color-border));
+}
+
+.impact-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.impact-warning-icon {
+  font-size: 18px;
+  color: var(--color-warning-6, #d29922);
+}
+
+.impact-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.impact-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  padding: 8px 0;
+}
+
+.impact-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.impact-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--tf-bg-elevated, var(--color-fill-2));
+  border-radius: 4px;
+}
+
+.impact-stat-warning {
+  background: color-mix(in srgb, var(--color-warning-6, #d29922) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning-6, #d29922) 20%, transparent);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+}
+
+.stat-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.impact-stat-warning .stat-value {
+  color: var(--color-warning-6, #d29922);
+}
+
+.impact-description {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+  line-height: 1.6;
+}
+
+.impact-description p {
+  margin: 0 0 4px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.impact-description ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.impact-description li {
+  margin-bottom: 4px;
+}
+
+.impact-reversible {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--color-success-6, #3fb950) 8%, transparent);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-success-6, #3fb950);
+}
+
+.reversible-icon {
+  font-size: 14px;
   flex-shrink: 0;
 }
 </style>

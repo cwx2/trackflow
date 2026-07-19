@@ -62,4 +62,24 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
             @Param("workTypeAttributeId") Long workTypeAttributeId,
             @Param("currentUserId") Long currentUserId
     );
+
+    /**
+     * 统计项目的工时记录总数（不含 ongoing）
+     */
+    int countByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 统计项目涉及的不同用户数
+     */
+    int countDistinctUsersByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 统计项目中正在进行的计时器数量
+     */
+    int countActiveTimersByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 查询项目中所有活跃的计时器（ongoing=true）
+     */
+    List<TimeEntry> selectActiveTimersByProjectId(@Param("projectId") Long projectId);
 }

@@ -260,6 +260,17 @@ public class ProjectController {
         return R.ok(vo);
     }
 
+    /**
+     * 获取禁用时间追踪的影响评估（在前端显示确认对话框前调用）
+     */
+    @GetMapping("/{id}/time-tracking-settings/disable-impact")
+    @PreAuthorize("@perm.checkProject(#id, 'project:edit')")
+    public R<com.trackflow.project.vo.TimeTrackingDisableImpactVO> getTimeTrackingDisableImpact(
+            @PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
+        return R.ok(projectService.getTimeTrackingDisableImpact(projectId));
+    }
+
     // ========== 项目收藏 ==========
 
     /**

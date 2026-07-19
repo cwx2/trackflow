@@ -1456,11 +1456,57 @@ public class ProjectService {
     }
 
     /**
+     * 获取禁用时间追踪功能的影响评估。
+     */
+    public com.trackflow.project.vo.TimeTrackingDisableImpactVO getTimeTrackingDisableImpact(Long projectId) {
+        // 确保项目存在
+        getById(projectId);
+        var vo = new com.trackflow.project.vo.TimeTrackingDisableImpactVO();
+        vo.setTotalTimeEntries(timeEntryMapper.countByProjectId(projectId));
+        vo.setAffectedUsers(timeEntryMapper.countDistinctUsersByProjectId(projectId));
+        vo.setActiveTimers(timeEntryMapper.countActiveTimersByProjectId(projectId));
+        return vo;
+    }
+
+    /**
      * 更新项目时间追踪启用/禁用设置。
+     * 禁用时自动停止该项目所有活跃计时器。
      */
     @Transactional
     public void updateTimeTrackingEnabled(Long projectId, boolean enabled) {
+        if (!enabled) {
+            // 禁用时：自动停止所有活跃计时器
+            stopActiveTimersForProject(projectId);
+        }
         updateProjectSetting(projectId, "timeTrackingEnabled", enabled);
+    }
+
+    /**
+     * 停止项目中所有活跃计时器，计算已用时长并保存。
+     */
+    private void stopActiveTimersForProject(Long projectId) {
+        List<TimeEntry> activeTimers = timeEntryMapper.selectActiveTimersByProjectId(projectId);
+        if (activeTimers == null || activeTimers.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (TimeEntry timer : activeTimers) {
+            // 计算从创建时间到现在的分钟数
+            int elapsedMinutes = (int) java.time.Duration.between(timer.getCreatedAt(), now).toMinutes();
+            int duration = Math.max(1, elapsedMinutes); // 至少 1 分钟
+
+            timer.setDuration(duration);
+            timer.setOngoing(false);
+            timer.setWorkDate(java.time.LocalDate.now());
+            timer.setUpdatedAt(now);
+            timeEntryMapper.updateById(timer);
+
+            // 更新工单的 spent_hours
+            if (timer.getIssueId() != null) {
+                timeEntryMapper.atomicRefreshSpentHours(timer.getIssueId());
+            }
+        }
+        log.info("项目 {} 禁用时间追踪，自动停止 {} 个活跃计时器", projectId, activeTimers.size());
     }
 
     // ========== 项目收藏 ==========

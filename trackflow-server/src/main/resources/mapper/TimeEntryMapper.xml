@@ -118,4 +118,35 @@
         ORDER BY t.work_date ASC, t.start_time ASC, t.created_at ASC
     </select>
 
+    <!-- 统计项目的工时记录总数（不含 ongoing） -->
+    <select id="countByProjectId" resultType="int">
+        SELECT COUNT(*)
+        FROM time_entry
+        WHERE project_id = #{projectId}
+          AND ongoing = false
+    </select>
+
+    <!-- 统计项目涉及的不同用户数 -->
+    <select id="countDistinctUsersByProjectId" resultType="int">
+        SELECT COUNT(DISTINCT user_id)
+        FROM time_entry
+        WHERE project_id = #{projectId}
+    </select>
+
+    <!-- 统计项目中正在进行的计时器数量 -->
+    <select id="countActiveTimersByProjectId" resultType="int">
+        SELECT COUNT(*)
+        FROM time_entry
+        WHERE project_id = #{projectId}
+          AND ongoing = true
+    </select>
+
+    <!-- 查询项目中所有活跃计时器 -->
+    <select id="selectActiveTimersByProjectId" resultType="com.trackflow.timeentry.entity.TimeEntry">
+        SELECT *
+        FROM time_entry
+        WHERE project_id = #{projectId}
+          AND ongoing = true
+    </select>
+
 </mapper>
