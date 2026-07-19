@@ -32,6 +32,7 @@ export const fieldLabelMap: Record<string, string> = {
   reporter: '报告人',
   reporterId: '报告人',
   reporter_id: '报告人',
+  action_rule: '自动化规则',
   issue_key: '工单编号',
   issueKey: '工单编号',
   project: '项目',
@@ -190,6 +191,8 @@ export function localizeFieldValue(fieldName?: string | null, value?: string | n
  * 同时覆盖后端可能返回的长形式（created）和短形式（create）。
  */
 export const actionLabelMap: Record<string, { short: string; full: string }> = {
+  // 操作类型 action 中文映射（统一维护）
+  action_rule_executed: { short: '执行了规则', full: '自动执行了规则' },
   create: { short: '创建了', full: '创建了此工单' },
   created: { short: '创建了', full: '创建了此工单' },
   update: { short: '更新了', full: '修改了工单' },

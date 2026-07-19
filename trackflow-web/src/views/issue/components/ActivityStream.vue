@@ -66,6 +66,9 @@
               <template v-if="item.action === 'created'">创建了此工单</template>
               <template v-else-if="item.action === 'deleted'">删除了此工单</template>
               <template v-else-if="item.action === 'restored'">恢复了此工单</template>
+              <template v-else-if="item.action === 'action_rule_executed'">
+                <span class="system-event-badge">⚡</span> 规则「<span class="val-new">{{ item.to }}</span>」自动执行
+              </template>
               <template v-else-if="item.action === 'time_logged'">
                 <span class="time-badge">⏱</span> 记录了工时: <span class="val-new">{{ item.to }}</span>
               </template>
@@ -383,6 +386,7 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .val-old { text-decoration: line-through; color: var(--tf-text-muted); }
 .val-new { color: var(--tf-accent); font-weight: 500; }
 .time-badge { font-size: 13px; }
+.system-event-badge { font-size: 13px; }
 
 .empty { color: var(--tf-text-muted); font-size: 12px; text-align: center; padding: 24px 0; }
 </style>

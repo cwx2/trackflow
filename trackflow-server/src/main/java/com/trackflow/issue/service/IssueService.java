@@ -2015,6 +2015,11 @@ public class IssueService {
     private void recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue,
                                 String oldDisplayValue, String newDisplayValue) {
+        // Skip no-op changes: if both old and new values are present and identical, don't record
+        if (oldValue != null && newValue != null && oldValue.equals(newValue)
+                && "updated".equals(action)) {
+            return;
+        }
         IssueActivity activity = new IssueActivity();
         activity.setIssueId(issueId);
         activity.setUserId(userId);

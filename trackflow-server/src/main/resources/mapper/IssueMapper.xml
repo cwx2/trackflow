@@ -62,6 +62,8 @@
         FROM issue_activity a
         LEFT JOIN sys_user u ON u.id = a.user_id
         WHERE a.issue_id = #{issueId}
+          <!-- 过滤 no-op 变更（old_value == new_value 的无效记录） -->
+          AND NOT (a.old_value IS NOT NULL AND a.new_value IS NOT NULL AND a.old_value = a.new_value)
         ORDER BY a.created_at ASC
     </select>
 
@@ -80,6 +82,7 @@
         <foreach collection="issueIds" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>
+          AND NOT (a.old_value IS NOT NULL AND a.new_value IS NOT NULL AND a.old_value = a.new_value)
         ORDER BY a.created_at DESC
         LIMIT #{limit}
     </select>
@@ -99,6 +102,7 @@
         <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
             #{pid}
         </foreach>
+          AND NOT (a.old_value IS NOT NULL AND a.new_value IS NOT NULL AND a.old_value = a.new_value)
         ORDER BY a.created_at DESC
         LIMIT #{limit}
     </select>

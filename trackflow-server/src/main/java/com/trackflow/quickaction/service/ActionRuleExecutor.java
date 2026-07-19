@@ -360,6 +360,12 @@ public class ActionRuleExecutor {
     }
 
     private void recordFieldChange(Long issueId, Long userId, String field, String oldVal, String newVal) {
+        // Skip no-op changes (value didn't actually change)
+        if (Objects.equals(oldVal, newVal)) {
+            log.debug("[ActionRuleExecutor] 跳过无变化的字段记录: issue={}, field={}, value={}",
+                    issueId, field, oldVal);
+            return;
+        }
         IssueActivity activity = new IssueActivity();
         activity.setIssueId(issueId);
         activity.setUserId(userId);
