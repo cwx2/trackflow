@@ -1,6 +1,8 @@
 package com.trackflow.auth.security;
 
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -38,21 +40,37 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
      * <p>
      * 用于 @PreAuthorize("@perm.checkProject(#identifier, 'project:view')")
      * identifier 可以是项目 Key（如 "TF1"）或数字 ID 字符串
+     * <p>
+     * 如果项目不存在，抛出 BusinessException(RESOURCE_NOT_FOUND) → 返回 404，
+     * 而非返回 false 导致 AccessDeniedException → 403（避免泄露项目存在性信息）。
      */
     public boolean checkProject(String identifier, String permission) {
         if (identifier == null || identifier.isBlank()) return false;
         Long projectId = resolveProjectIdForPerm(identifier);
-        if (projectId == null) return false;
         return check(projectId, permission);
     }
 
     /**
-     * 解析项目标识符为数据库 ID（用于权限检查）
+     * 解析项目标识符为数据库 ID（用于权限检查）。
+     * <p>
+     * 与 ProjectService.resolveProjectId 行为一致：验证存在性，不存在则抛 404。
+     * 这避免了权限检查返回 403 而实际应为 404 的问题。
+     *
+     * @throws BusinessException RESOURCE_NOT_FOUND 当项目不存在时
      */
     private Long resolveProjectIdForPerm(String identifier) {
         // 尝试按数字 ID 解析
         try {
-            return Long.parseLong(identifier);
+            Long id = Long.parseLong(identifier);
+            // 必须验证存在性，防止对不存在的 ID 返回 403（应为 404）
+            Long count = projectMapper.selectCount(
+                    new LambdaQueryWrapper<com.trackflow.project.entity.Project>()
+                            .eq(com.trackflow.project.entity.Project::getId, id)
+            );
+            if (count == null || count == 0) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            }
+            return id;
         } catch (NumberFormatException e) {
             // 非数字，按 key 查询
         }
@@ -61,7 +79,10 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
                         .select(com.trackflow.project.entity.Project::getId)
                         .apply("LOWER(\"key\") = LOWER({0})", identifier)
         );
-        return project != null ? project.getId() : null;
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + identifier);
+        }
+        return project.getId();
     }
 
     /**
