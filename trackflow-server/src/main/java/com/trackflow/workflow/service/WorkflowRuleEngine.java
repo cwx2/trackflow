@@ -60,6 +60,7 @@ public class WorkflowRuleEngine {
      * 触发 on-field-changed 规则。
      * <p>
      * 从 DB 重新加载 issue 实体，过滤匹配 changedField 的规则后执行。
+     * oldValue 传递给条件评估，支持 old_value_equals 等操作符。
      */
     @Transactional
     public void fireOnFieldChanged(Long issueId, Long projectId, String changedField, String oldValue) {
@@ -77,7 +78,7 @@ public class WorkflowRuleEngine {
                 .toList();
         if (matching.isEmpty()) return;
 
-        evaluateAndExecute(matching, issue);
+        evaluateAndExecute(matching, issue, changedField, oldValue);
     }
 
     /**
@@ -101,13 +102,17 @@ public class WorkflowRuleEngine {
                 .filter(r -> r.getTriggerField() == null || r.getTriggerField().equals(changedField))
                 .toList();
         if (matching.isEmpty()) return;
-        evaluateAndExecute(matching, issue);
+        evaluateAndExecute(matching, issue, changedField, oldValue);
     }
 
     private void evaluateAndExecute(List<WorkflowRule> rules, Issue issue) {
+        evaluateAndExecute(rules, issue, null, null);
+    }
+
+    private void evaluateAndExecute(List<WorkflowRule> rules, Issue issue, String changedField, String oldValue) {
         for (WorkflowRule rule : rules) {
             try {
-                if (evaluateConditions(rule, issue)) {
+                if (evaluateConditions(rule, issue, changedField, oldValue)) {
                     executeActions(rule, issue);
                 }
             } catch (Exception e) {
@@ -117,14 +122,14 @@ public class WorkflowRuleEngine {
         }
     }
 
-    private boolean evaluateConditions(WorkflowRule rule, Issue issue) {
+    private boolean evaluateConditions(WorkflowRule rule, Issue issue, String changedField, String oldValue) {
         String json = rule.getConditionJson();
         if (json == null || json.isBlank() || "[]".equals(json.trim())) return true;
         try {
             JsonNode arr = objectMapper.readTree(json);
             if (!arr.isArray()) return true;
             for (JsonNode cond : arr) {
-                if (!evalCondition(cond, issue)) return false;
+                if (!evalCondition(cond, issue, changedField, oldValue)) return false;
             }
             return true;
         } catch (Exception e) {
@@ -133,11 +138,34 @@ public class WorkflowRuleEngine {
         }
     }
 
-    private boolean evalCondition(JsonNode cond, Issue issue) {
+    private boolean evalCondition(JsonNode cond, Issue issue, String changedField, String oldValue) {
         String field = textOf(cond, "field");
         String op = textOf(cond, "operator");
         String expected = textOf(cond, "value");
         if (field == null || op == null) return true;
+
+        // old_value_* 操作符：对变更字段的旧值进行评估
+        if (op.startsWith("old_value_")) {
+            // 仅当条件中的 field 与实际变更的字段匹配时，才能使用 oldValue
+            String resolvedOldValue;
+            if (field.equals(changedField) || field.equals(triggerFieldAlias(changedField))) {
+                resolvedOldValue = oldValue;
+            } else {
+                // 条件针对的字段与当前触发字段不同，oldValue 不适用——跳过此条件（视为通过）
+                return true;
+            }
+            if ("old_value_equals".equals(op)) return Objects.equals(resolvedOldValue, expected);
+            if ("old_value_not_equals".equals(op)) return !Objects.equals(resolvedOldValue, expected);
+            if ("old_value_in".equals(op)) {
+                if (resolvedOldValue == null || expected == null) return false;
+                return new HashSet<>(Arrays.asList(expected.split(","))).contains(resolvedOldValue);
+            }
+            if ("old_value_is_empty".equals(op)) return resolvedOldValue == null || resolvedOldValue.isBlank();
+            if ("old_value_is_not_empty".equals(op)) return resolvedOldValue != null && !resolvedOldValue.isBlank();
+            return true;
+        }
+
+        // 标准操作符：对 issue 当前字段值进行评估
         String actual = fieldValue(issue, field);
         if ("equals".equals(op)) return Objects.equals(actual, expected);
         if ("not_equals".equals(op)) return !Objects.equals(actual, expected);
@@ -149,6 +177,25 @@ public class WorkflowRuleEngine {
         if ("is_empty".equals(op)) return actual == null || actual.isBlank();
         if ("is_not_empty".equals(op)) return actual != null && !actual.isBlank();
         return true;
+    }
+
+    /**
+     * 将触发字段名映射到可能的别名，以支持条件中使用不同命名风格。
+     * 例如触发 "assignee" 但条件中写 "assignee_id" 也应匹配。
+     */
+    private String triggerFieldAlias(String triggerField) {
+        if (triggerField == null) return null;
+        return switch (triggerField) {
+            case "assignee" -> "assignee_id";
+            case "assignee_id" -> "assignee";
+            case "sprint" -> "sprint_id";
+            case "sprint_id" -> "sprint";
+            case "status" -> "status_id";
+            case "status_id" -> "status";
+            case "type" -> "issue_type";
+            case "issue_type" -> "type";
+            default -> null;
+        };
     }
 
     private String fieldValue(Issue issue, String field) {

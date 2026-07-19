@@ -510,6 +510,27 @@ public class IssueService {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         boolean statusAutoReset = false;
 
+        // 收集旧值快照——在字段赋值之前记录，供规则引擎事件使用
+        Map<String, String> oldValues = new java.util.HashMap<>();
+        if (dto.getTitle() != null) {
+            oldValues.put("title", issue.getTitle());
+        }
+        if (dto.getIssueType() != null) {
+            oldValues.put("issue_type", issue.getIssueType());
+        }
+        if (dto.getPriority() != null) {
+            oldValues.put("priority", issue.getPriority());
+        }
+        if (dto.getAssigneeId() != null) {
+            oldValues.put("assignee", issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null);
+        }
+        if (dto.getSprintId() != null) {
+            oldValues.put("sprint", issue.getSprintId() != null ? String.valueOf(issue.getSprintId()) : null);
+        }
+        if (dto.getDueDate() != null) {
+            oldValues.put("due_date", issue.getDueDate() != null ? issue.getDueDate().toString() : null);
+        }
+
         if (dto.getTitle() != null) {
             String trimmedTitle = dto.getTitle().trim();
             if (trimmedTitle.isEmpty()) {
@@ -523,6 +544,9 @@ public class IssueService {
                     issue.getDescription() != null ? "（已有内容）" : null,
                     dto.getDescription() != null ? "（已更新）" : null);
             issue.setDescription(dto.getDescription());
+            // 通知报告人和负责人描述变更（不传具体内容，仅告知有变更）
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "description", null, null, currentUserId));
         }
         if (dto.getIssueType() != null && !dto.getIssueType().equals(issue.getIssueType())) {
             String oldType = issue.getIssueType();
@@ -554,8 +578,14 @@ public class IssueService {
             issue.setIssueType(newType);
         }
         if (dto.getPriority() != null) {
-            recordActivity(id, currentUserId, "updated", "priority", issue.getPriority(), dto.getPriority());
+            String oldPriority = issue.getPriority();
+            recordActivity(id, currentUserId, "updated", "priority", oldPriority, dto.getPriority());
             issue.setPriority(dto.getPriority());
+            // 通知报告人和负责人优先级变更
+            if (!dto.getPriority().equals(oldPriority)) {
+                eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                        issue, "priority", oldPriority, dto.getPriority(), currentUserId));
+            }
         }
         if (dto.getAssigneeId() != null) {
             // 校验 assignee 是否为有效的项目成员（assigneeId=0 表示取消分配，跳过校验）
@@ -593,6 +623,9 @@ public class IssueService {
             }
             recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
             issue.setSprintId(dto.getSprintId());
+            // 通知报告人和负责人迭代变更
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "sprint", oldSprintName, newSprintName, currentUserId));
         }
         if (dto.getParentId() != null) {
             Long oldParentId = issue.getParentId();
@@ -610,6 +643,9 @@ public class IssueService {
             }
             recordActivity(id, currentUserId, "updated", "parent", oldParentKey, newParentKey);
             issue.setParentId(dto.getParentId());
+            // 通知报告人和负责人父工单变更
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "parent", oldParentKey, newParentKey, currentUserId));
 
             // parentId 变更：刷新旧父和新父的祖先链
             Long newParentId = dto.getParentId() == 0 ? null : dto.getParentId();
@@ -621,10 +657,13 @@ public class IssueService {
             }
         }
         if (dto.getDueDate() != null) {
-            recordActivity(id, currentUserId, "updated", "due_date",
-                    issue.getDueDate() != null ? issue.getDueDate().toString() : null,
-                    dto.getDueDate().toString());
+            String oldDueDateStr = issue.getDueDate() != null ? issue.getDueDate().toString() : null;
+            String newDueDateStr = dto.getDueDate().toString();
+            recordActivity(id, currentUserId, "updated", "due_date", oldDueDateStr, newDueDateStr);
             issue.setDueDate(dto.getDueDate());
+            // 通知报告人和负责人截止日期变更
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "due_date", oldDueDateStr, newDueDateStr, currentUserId));
         }
         if (dto.getEstimatedHours() != null) {
             recordActivity(id, currentUserId, "updated", "estimated_hours",
@@ -653,7 +692,7 @@ public class IssueService {
         issueMapper.updateById(issue);
 
         // 触发 on-field-changed 自动化规则（通过事件，解耦）
-        fireFieldChangeRules(issue, dto);
+        fireFieldChangeRules(issue, dto, oldValues);
 
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_updated"));
@@ -1929,26 +1968,30 @@ public class IssueService {
 
     /**
      * 触发字段变更自动化规则：检查 DTO 中哪些字段被实际修改了，对每个变更字段触发规则。
-     * 事件仅传递 ID，规则引擎在事务提交后异步从 DB 重新加载最新实体执行。
+     * 事件仅传递 ID + oldValue，规则引擎在事务提交后异步从 DB 重新加载最新实体执行。
+     *
+     * @param issue     已更新的工单实体
+     * @param dto       更新请求 DTO
+     * @param oldValues 字段名 → 旧值 Map（在字段赋值前收集）
      */
-    private void fireFieldChangeRules(Issue issue, UpdateIssueDTO dto) {
+    private void fireFieldChangeRules(Issue issue, UpdateIssueDTO dto, Map<String, String> oldValues) {
         if (dto.getIssueType() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "issue_type", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "issue_type", oldValues.get("issue_type")));
         }
         if (dto.getPriority() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "priority", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "priority", oldValues.get("priority")));
         }
         if (dto.getAssigneeId() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "assignee", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "assignee", oldValues.get("assignee")));
         }
         if (dto.getSprintId() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "sprint", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "sprint", oldValues.get("sprint")));
         }
         if (dto.getTitle() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "title", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "title", oldValues.get("title")));
         }
         if (dto.getDueDate() != null) {
-            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "due_date", null));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(issue.getId(), issue.getProjectId(), "due_date", oldValues.get("due_date")));
         }
     }
 
