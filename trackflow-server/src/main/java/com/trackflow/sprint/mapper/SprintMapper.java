@@ -19,6 +19,12 @@ public interface SprintMapper extends BaseMapper<Sprint> {
     List<SprintVO> selectSprintsWithStats(@Param("projectId") Long projectId);
 
     /**
+     * 查询单个 Sprint，带工单统计数据。
+     * 复用列表查询的统计逻辑，确保数据一致性。
+     */
+    SprintVO selectSprintWithStats(@Param("sprintId") Long sprintId);
+
+    /**
      * 查询 Sprint 中未关闭的工单 ID 列表（通过 JOIN issue_status 判断 is_closed = false）
      */
     List<Long> selectOpenIssueIds(@Param("sprintId") Long sprintId);

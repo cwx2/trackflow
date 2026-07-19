@@ -47,7 +47,7 @@ public class SprintController {
     @GetMapping("/api/v1/sprints/{id}")
     @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
     public R<SprintVO> getById(@PathVariable("id") Long id) {
-        return R.ok(sprintConverter.toVO(sprintService.getById(id)));
+        return R.ok(sprintService.getByIdWithStats(id));
     }
 
     @PutMapping("/api/v1/sprints/{id}")

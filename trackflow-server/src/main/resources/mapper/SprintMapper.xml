@@ -60,6 +60,40 @@
             s.created_at DESC
     </select>
 
+    <!-- 带工单统计的单个 Sprint 查询（复用 selectSprintsWithStats 的统计逻辑） -->
+    <select id="selectSprintWithStats" resultMap="sprintWithStatsMap">
+        SELECT
+            s.id,
+            s.project_id,
+            s.name,
+            s.goal,
+            s.status,
+            s.start_date,
+            s.end_date,
+            s.created_at,
+            COALESCE(stats.total_issues, 0) AS total_issues,
+            COALESCE(stats.done_issues, 0) AS done_issues,
+            COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
+            COALESCE(stats.todo_issues, 0) AS todo_issues,
+            COALESCE(stats.overdue_issues, 0) AS overdue_issues
+        FROM sprint s
+        LEFT JOIN (
+            SELECT
+                i.sprint_id,
+                COUNT(*) AS total_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues
+            FROM issue i
+            LEFT JOIN issue_status ist ON ist.id = i.status_id
+            WHERE i.deleted_at IS NULL
+              AND i.sprint_id = #{sprintId}
+            GROUP BY i.sprint_id
+        ) stats ON stats.sprint_id = s.id
+        WHERE s.id = #{sprintId}
+    </select>
+
     <!-- 查询 Sprint 中未关闭工单的 ID 列表 -->
     <select id="selectOpenIssueIds" resultType="java.lang.Long">
         SELECT i.id

@@ -111,6 +111,17 @@ public class SprintService {
     }
 
     /**
+     * 查询单个 Sprint，带工单统计数据（与列表接口统计逻辑一致）。
+     * 供 Controller 的 getById 端点使用。
+     */
+    public SprintVO getByIdWithStats(Long id) {
+        SprintVO vo = sprintMapper.selectSprintWithStats(id);
+        if (vo == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
+        computeStatusHint(vo, LocalDate.now());
+        return vo;
+    }
+
+    /**
      * 检查同项目内 Sprint 名称唯一性（大小写不敏感）。
      * 参考 OpenProject: validates :name, uniqueness: { scope: [:project_id], case_sensitive: false }
      *
