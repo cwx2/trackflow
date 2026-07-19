@@ -26,16 +26,31 @@
         <a-select
           v-model="selectedSprint"
           placeholder="所有迭代"
-          style="width: 180px"
+          style="width: 220px"
           size="small"
           allow-clear
           :disabled="!selectedProject"
           @change="onSprintChange"
         >
-          <a-option v-for="s in sprints" :key="s.id" :value="s.id">
-            {{ s.name }}
+          <a-option v-for="s in sprints" :key="s.id" :value="s.id" :class="{ 'sprint-option--active': isActiveSprint(s) }">
+            <span class="sprint-option-content">
+              <span class="sprint-option-name" :class="{ 'sprint-option-name--active': isActiveSprint(s) }">{{ s.name }}</span>
+              <span v-if="isActiveSprint(s)" class="sprint-option-badge sprint-option-badge--active">当前</span>
+              <span v-else-if="s.status === 'planned'" class="sprint-option-badge sprint-option-badge--planned">计划</span>
+              <span v-else-if="s.status === 'completed'" class="sprint-option-badge sprint-option-badge--completed">完成</span>
+            </span>
           </a-option>
         </a-select>
+        <!-- Sprint 剩余天数倒计时 -->
+        <span v-if="sprintRemainingDays !== null" class="sprint-countdown" :class="{ 'sprint-countdown--urgent': sprintRemainingDays <= 3, 'sprint-countdown--overdue': sprintRemainingDays < 0 }">
+          <template v-if="sprintRemainingDays > 0">剩余 {{ sprintRemainingDays }} 天</template>
+          <template v-else-if="sprintRemainingDays === 0">今天结束</template>
+          <template v-else>已超期 {{ Math.abs(sprintRemainingDays) }} 天</template>
+        </span>
+        <!-- No active sprint hint -->
+        <span v-else-if="selectedProject && sprints.length > 0 && !activeSprint && !selectedSprint" class="sprint-no-active-hint">
+          暂无活跃迭代
+        </span>
         <a-divider direction="vertical" style="margin: 0 4px" />
         <!-- Swimlane 分组选择 -->
         <a-select
@@ -81,6 +96,33 @@
           >{{ size.label }}</button>
         </div>
         <a-divider direction="vertical" style="margin: 0 4px" />
+        <!-- 负责人筛选 -->
+        <div class="assignee-filter-group">
+          <button
+            class="my-issues-btn"
+            :class="{ 'my-issues-btn--active': assigneeFilter === 'me' }"
+            :aria-pressed="assigneeFilter === 'me'"
+            title="仅显示我的工单"
+            @click="toggleMyIssues"
+          >
+            👤 仅我的
+          </button>
+          <a-select
+            v-model="assigneeFilter"
+            placeholder="负责人"
+            size="small"
+            style="width: 130px"
+            allow-clear
+            :disabled="!selectedProject"
+            @change="onAssigneeFilterChange"
+          >
+            <a-option value="me">👤 我的</a-option>
+            <a-option v-for="m in projectMembers" :key="m.userId" :value="m.userId">
+              {{ m.displayName }}
+            </a-option>
+          </a-select>
+        </div>
+        <a-divider direction="vertical" style="margin: 0 4px" />
         <div class="search-wrapper">
           <a-input
             v-model="keyword"
@@ -97,7 +139,7 @@
             </template>
           </a-input>
           <transition name="fade">
-            <span v-if="isSearchActive" class="search-active-badge">
+            <span v-if="isSearchActive || assigneeFilter" class="search-active-badge">
               筛选中
             </span>
           </transition>
@@ -653,9 +695,10 @@
 import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Notification } from '@arco-design/web-vue'
-import { issueApi, sprintApi, boardApi, workflowApi, queryApi } from '@/api'
+import { issueApi, sprintApi, boardApi, workflowApi, queryApi, projectApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
 import { useProjectStore } from '@/stores/project'
+import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
@@ -747,9 +790,67 @@ const selectedProject = computed({
 // 权限控制
 const { canChangeStatus, canCreateIssue, canDeleteIssue } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
+/** 用户是否手动清除了 Sprint 选择（区分"未选择"和"显式选全部"） */
+let userExplicitlySelectedAll = false
 const keyword = ref('')
 const loading = ref(false)
 const { projects, projectLoadState, loadProjects } = useProjectList()
+
+// ===== 负责人筛选 =====
+const authStore = useAuthStore()
+const ASSIGNEE_FILTER_KEY = 'tf_kanban_assignee_filter'
+const assigneeFilter = ref<string | undefined>(localStorage.getItem(ASSIGNEE_FILTER_KEY) || undefined)
+const projectMembers = ref<Array<{ userId: string; displayName: string }>>([])
+
+/** 当前生效的 assigneeId（me → 当前用户数据库 ID，其他 → 原值） */
+const effectiveAssigneeId = computed(() => {
+  if (!assigneeFilter.value) return undefined
+  if (assigneeFilter.value === 'me') return authStore.user?.userId || undefined
+  return assigneeFilter.value
+})
+
+/** 切换"仅显示我的"按钮 */
+function toggleMyIssues() {
+  if (assigneeFilter.value === 'me') {
+    assigneeFilter.value = undefined
+    localStorage.removeItem(ASSIGNEE_FILTER_KEY)
+  } else {
+    assigneeFilter.value = 'me'
+    localStorage.setItem(ASSIGNEE_FILTER_KEY, 'me')
+  }
+  syncUrlState()
+  loadIssuesWithLoading()
+}
+
+/** 负责人下拉变化 */
+function onAssigneeFilterChange(val: string | undefined) {
+  assigneeFilter.value = val || undefined
+  if (val) {
+    localStorage.setItem(ASSIGNEE_FILTER_KEY, val)
+  } else {
+    localStorage.removeItem(ASSIGNEE_FILTER_KEY)
+  }
+  syncUrlState()
+  loadIssuesWithLoading()
+}
+
+/** 加载项目成员列表（用于负责人筛选下拉） */
+async function loadProjectMembers() {
+  if (!selectedProject.value) {
+    projectMembers.value = []
+    return
+  }
+  try {
+    const res = await projectApi.listAssignableMembers(selectedProject.value)
+    projectMembers.value = (res.data || []).map(m => ({
+      userId: m.userId,
+      displayName: m.displayName
+    }))
+  } catch {
+    projectMembers.value = []
+  }
+}
+
 const currentProjectName = computed(() => {
   if (!selectedProject.value) return ''
   const p = projects.value.find(proj => proj.id === selectedProject.value)
@@ -784,6 +885,9 @@ function syncUrlState() {
   if (swimlaneGroupBy.value && swimlaneGroupBy.value !== 'none') {
     query.group = swimlaneGroupBy.value
   }
+  if (assigneeFilter.value) {
+    query.assignee = assigneeFilter.value
+  }
   router.replace({ query })
 }
 
@@ -796,6 +900,7 @@ function restoreFromUrl(): boolean {
   const queryProject = route.query.project as string | undefined
   const querySprint = route.query.sprint as string | undefined
   const queryGroup = route.query.group as string | undefined
+  const queryAssignee = route.query.assignee as string | undefined
 
   let restoredProject = false
 
@@ -819,6 +924,12 @@ function restoreFromUrl(): boolean {
   if (queryGroup && ['none', 'assignee', 'priority', 'type', 'sprint', 'tag'].includes(queryGroup)) {
     swimlaneGroupBy.value = queryGroup as SwimlaneGroupBy
     localStorage.setItem(SWIMLANE_STORAGE_KEY, queryGroup)
+  }
+
+  // 恢复负责人筛选（URL 优先于 localStorage）
+  if (queryAssignee) {
+    assigneeFilter.value = queryAssignee
+    localStorage.setItem(ASSIGNEE_FILTER_KEY, queryAssignee)
   }
 
   return restoredProject
@@ -1114,6 +1225,44 @@ function onDragLeaveSwimlane(event: DragEvent) {
   dragOverSwimlaneKey.value = null
 }
 
+// ===== Sprint 选择器辅助 =====
+
+/** 当前选中的 Sprint 对象 */
+const currentSelectedSprint = computed(() => {
+  if (!selectedSprint.value) return null
+  return sprints.value.find(s => s.id === selectedSprint.value) || null
+})
+
+/** 当前活跃 Sprint（status=active 或日期范围包含今天的 planned Sprint） */
+const activeSprint = computed(() => {
+  const active = sprints.value.find(s => s.status === 'active')
+  if (active) return active
+  // Fallback: planned sprint covering today
+  const today = new Date().toISOString().split('T')[0]
+  return sprints.value.find(s =>
+    s.status === 'planned' && s.startDate && s.endDate &&
+    s.startDate <= today && s.endDate >= today
+  )
+})
+
+/** Sprint 剩余天数（选中的 Sprint 有 endDate 且是"当前"Sprint 时显示） */
+const sprintRemainingDays = computed(() => {
+  const sprint = currentSelectedSprint.value
+  if (!sprint || !sprint.endDate) return null
+  // Only show countdown for the "current" sprint (active or date-range planned)
+  if (sprint.id !== activeSprint.value?.id) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const endDate = new Date(sprint.endDate + 'T00:00:00')
+  const diff = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  return diff
+})
+
+/** 判断某 Sprint 是否为当前活跃 Sprint（用于下拉列表标记"当前"） */
+function isActiveSprint(sprint: SprintVO): boolean {
+  return sprint.id === activeSprint.value?.id
+}
+
 // 搜索相关
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const isSearchActive = computed(() => keyword.value.trim().length > 0)
@@ -1157,11 +1306,19 @@ async function loadIssuesWithLoading() {
 function onProjectChange() {
   keyword.value = ''
   selectedSprint.value = undefined
+  userExplicitlySelectedAll = false  // Reset: allow auto-select for new project
+  // 切换项目时：保留 'me' 筛选，但清除指定用户 ID（因为不同项目的成员不同）
+  if (assigneeFilter.value && assigneeFilter.value !== 'me') {
+    assigneeFilter.value = undefined
+    localStorage.removeItem(ASSIGNEE_FILTER_KEY)
+  }
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   syncUrlState()
   loadBoard()
 }
 function onSprintChange() {
+  // Track if user explicitly cleared the sprint selection (chose "所有迭代")
+  userExplicitlySelectedAll = !selectedSprint.value
   syncUrlState()
   loadBoard()
 }
@@ -1770,8 +1927,7 @@ async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
 
 /** Get the active sprint ID for the current project */
 function getActiveSprintId(): string | undefined {
-  const activeSprint = sprints.value.find(s => s.status === 'active')
-  return activeSprint?.id
+  return activeSprint.value?.id
 }
 
 // ===== 撤销逻辑 =====
@@ -2008,7 +2164,42 @@ async function loadSprints() {
   if (!selectedProject.value) { sprints.value = []; return }
   try {
     const res = await sprintApi.listByProject(selectedProject.value)
-    sprints.value = res.data || []
+    const rawSprints = res.data || []
+
+    // Sort sprints: active first, then planned, then completed; within group by startDate desc
+    const statusOrder: Record<string, number> = { active: 0, planned: 1, completed: 2 }
+    rawSprints.sort((a, b) => {
+      const orderA = statusOrder[a.status] ?? 9
+      const orderB = statusOrder[b.status] ?? 9
+      if (orderA !== orderB) return orderA - orderB
+      // Within same status group: by startDate descending (most recent first)
+      const dateA = a.startDate || ''
+      const dateB = b.startDate || ''
+      return dateB.localeCompare(dateA)
+    })
+    sprints.value = rawSprints
+
+    // Auto-select active sprint if no explicit user/URL selection
+    // Logic (following YouTrack): active > (planned with earliest start date that hasn't ended)
+    if (!selectedSprint.value && !userExplicitlySelectedAll) {
+      const activeSprintItem = rawSprints.find(s => s.status === 'active')
+      if (activeSprintItem) {
+        selectedSprint.value = activeSprintItem.id
+        syncUrlState()
+      } else {
+        // Fallback: find a planned sprint whose date range contains today
+        const today = new Date().toISOString().split('T')[0]
+        const currentDateSprint = rawSprints.find(s =>
+          s.status === 'planned' && s.startDate && s.endDate &&
+          s.startDate <= today && s.endDate >= today
+        )
+        if (currentDateSprint) {
+          selectedSprint.value = currentDateSprint.id
+          syncUrlState()
+        }
+        // If no current sprint found, leave as "所有迭代" (sprint-no-active-hint will show)
+      }
+    }
   } catch {
     sprints.value = []
     Message.error('加载迭代列表失败')
@@ -2040,7 +2231,7 @@ async function loadBoard() {
   loadCollapsedColumnsState()
   loading.value = true
   try {
-    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior()])
+    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers()])
     await loadIssues()
   } catch {
     issues.value = []
@@ -2096,6 +2287,10 @@ async function loadIssues() {
     if (keyword.value) {
       filters.push({ field: 'keyword', operator: 'contains', value: [keyword.value] })
     }
+    // 如果有负责人筛选，追加
+    if (effectiveAssigneeId.value) {
+      filters.push({ field: 'assignee', operator: 'eq', value: [effectiveAssigneeId.value] })
+    }
     // 服务端过滤已完成工单保留天数：使用 resolvedAt gte 过滤
     // QueryExecutor 支持 resolvedAt 日期字段，但这里的语义是"排除 resolved_at < cutoff 的已完成工单"
     // 需要通过 status open + (resolvedAt gte cutoff) 组合实现
@@ -2130,8 +2325,7 @@ async function loadIssues() {
     // Board Behavior: 确定 sprint 过滤参数
     let effectiveSprintId = selectedSprint.value || undefined
     if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
-      const activeSprint = sprints.value.find(s => s.status === 'active')
-      effectiveSprintId = activeSprint?.id
+      effectiveSprintId = activeSprint.value?.id
       // 如果没有活跃 Sprint，显示为空（无工单匹配）
       if (!effectiveSprintId) {
         issues.value = []
@@ -2146,6 +2340,7 @@ async function loadIssues() {
       const res = await issueApi.list({
         projectId: selectedProject.value,
         sprintId: effectiveSprintId,
+        assigneeId: effectiveAssigneeId.value || undefined,
         keyword: keyword.value || undefined,
         excludeDoneBefore,
         page,
@@ -2326,6 +2521,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
   const queryProject = newQuery.project as string | undefined
   const querySprint = newQuery.sprint as string | undefined
   const queryGroup = newQuery.group as string | undefined
+  const queryAssignee = newQuery.assignee as string | undefined
 
   suppressUrlSync = true
 
@@ -2362,9 +2558,19 @@ watch(() => route.query, (newQuery, oldQuery) => {
     localStorage.setItem(SWIMLANE_STORAGE_KEY, 'none')
   }
 
+  // 恢复负责人筛选
+  if (queryAssignee !== assigneeFilter.value) {
+    assigneeFilter.value = queryAssignee || undefined
+    if (queryAssignee) {
+      localStorage.setItem(ASSIGNEE_FILTER_KEY, queryAssignee)
+    } else {
+      localStorage.removeItem(ASSIGNEE_FILTER_KEY)
+    }
+  }
+
   suppressUrlSync = false
 
-  // 如果只是 sprint/group 变化，重新加载数据
+  // 如果只是 sprint/group/assignee 变化，重新加载数据
   if (selectedProject.value) {
     loadBoard()
   }
@@ -2404,6 +2610,47 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ===== 负责人筛选 ===== */
+.assignee-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.my-issues-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+
+.my-issues-btn:hover {
+  background: var(--color-fill-2);
+  border-color: rgb(var(--primary-6));
+  color: rgb(var(--primary-6));
+}
+
+.my-issues-btn--active {
+  background: rgba(var(--primary-6), 0.1);
+  border-color: rgb(var(--primary-6));
+  color: rgb(var(--primary-6));
+  font-weight: 600;
+}
+
+.my-issues-btn--active:hover {
+  background: rgba(var(--primary-6), 0.15);
 }
 
 .search-wrapper {
@@ -2453,6 +2700,77 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--color-text-1);
   margin: 0;
+}
+
+/* ===== Sprint Selector Styles ===== */
+.sprint-option-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.sprint-option-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sprint-option-name--active {
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.sprint-option-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sprint-option-badge--active {
+  color: rgb(var(--success-6));
+  background: rgba(var(--success-6), 0.1);
+  font-weight: 500;
+}
+
+.sprint-option-badge--planned {
+  color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.08);
+}
+
+.sprint-option-badge--completed {
+  color: var(--color-text-4);
+  background: var(--color-fill-2);
+}
+
+.sprint-countdown {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.sprint-countdown--urgent {
+  color: rgb(var(--warning-6));
+  background: rgba(var(--warning-6), 0.1);
+}
+
+.sprint-countdown--overdue {
+  color: rgb(var(--danger-6));
+  background: rgba(var(--danger-6), 0.1);
+}
+
+.sprint-no-active-hint {
+  font-size: 11px;
+  color: var(--color-text-4);
+  white-space: nowrap;
+  font-style: italic;
 }
 
 /* ===== Progress Indicator (mini bar chart) ===== */
