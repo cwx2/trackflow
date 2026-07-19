@@ -1,6 +1,7 @@
 package com.trackflow.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.system.entity.ApiKey;
@@ -42,6 +43,7 @@ public class ApiKeyService {
     private final SysPermissionMapper sysPermissionMapper;
     private final SystemAuditService systemAuditService;
     private final ObjectMapper objectMapper;
+    private final PermissionService permissionService;
 
     /**
      * 创建 API Key
@@ -65,7 +67,7 @@ public class ApiKeyService {
 
         // 校验：permissions 合法性
         if (permissions != null && !permissions.isEmpty()) {
-            validatePermissions(permissions);
+            validatePermissions(permissions, userId);
         }
 
         // 生成 key
@@ -172,10 +174,14 @@ public class ApiKeyService {
     }
 
     /**
-     * 校验 permissions 列表合法性：每个值必须存在于 sys_permission 表中
+     * 校验 permissions 列表合法性：
+     * 1. 每个值必须存在于 sys_permission 表中
+     * 2. 用户必须实际持有这些权限（最小权限原则）
+     *    - system:admin 用户可以指定任何已定义的权限
+     *    - 普通用户只能指定自己拥有的权限（全局 + 任一项目）
      */
-    private void validatePermissions(List<String> permissions) {
-        // 查询所有已定义的权限 code
+    private void validatePermissions(List<String> permissions, Long userId) {
+        // CHECK 1: permissions 全部存在于 sys_permission 表
         List<SysPermission> allPermissions = sysPermissionMapper.selectList(
                 new LambdaQueryWrapper<SysPermission>().eq(SysPermission::getEnabled, true)
         );
@@ -183,7 +189,6 @@ public class ApiKeyService {
                 .map(SysPermission::getCode)
                 .collect(Collectors.toSet());
 
-        // 找出非法的 permission 值
         List<String> invalidPermissions = permissions.stream()
                 .filter(p -> !validCodes.contains(p))
                 .collect(Collectors.toList());
@@ -191,6 +196,26 @@ public class ApiKeyService {
         if (!invalidPermissions.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "以下权限代码不存在：" + String.join(", ", invalidPermissions));
+        }
+
+        // CHECK 2: 用户必须实际持有这些权限
+        // system:admin 拥有所有权限，无需逐项校验
+        if (permissionService.isSystemAdmin(userId)) {
+            return;
+        }
+
+        // 获取用户的全局权限
+        Set<String> userGlobalPerms = permissionService.getPermissions(userId);
+
+        // 找出用户全局权限中不包含的 permission，再检查项目级
+        List<String> exceededPerms = permissions.stream()
+                .filter(p -> !userGlobalPerms.contains(p)
+                        && !permissionService.hasPermissionInAnyProject(userId, p))
+                .collect(Collectors.toList());
+
+        if (!exceededPerms.isEmpty()) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                    "不能为 API Key 指定您未拥有的权限：" + String.join(", ", exceededPerms));
         }
     }
 
