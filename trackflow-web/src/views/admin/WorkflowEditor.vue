@@ -48,8 +48,16 @@
           >{{ role.name }}</a-option>
         </a-select>
 
-        <a-button type="primary" :loading="saving" @click="saveMatrix">
-          保存工作流
+        <a-button
+          :type="isDirty ? 'primary' : 'secondary'"
+          :loading="saving"
+          :disabled="!isDirty"
+          @click="saveMatrix"
+        >
+          <template v-if="isDirty">
+            保存工作流 ({{ pendingChangesCount }})
+          </template>
+          <template v-else>保存工作流</template>
         </a-button>
         <a-button @click="showHistory = true">
           <template #icon><icon-history /></template>
@@ -109,6 +117,12 @@
       <span class="toolbar-stats">
         {{ filteredStatuses.length }} / {{ statuses.length }} 个状态
       </span>
+    </div>
+
+    <!-- 未保存变更提示条 -->
+    <div v-show="activeMainTab === 'matrix' && isDirty" class="dirty-banner">
+      <icon-info-circle />
+      <span>已修改 {{ pendingChangesCount }} 条转换规则，尚未保存</span>
     </div>
 
     <a-spin v-show="activeMainTab === 'matrix'" :loading="loading" tip="加载中...">
@@ -266,7 +280,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconSettings, IconInfoCircle, IconHistory, IconSearch } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
@@ -301,6 +316,33 @@ const highlightCol = ref<number | null>(null)
 
 // 转换矩阵 Set: "fromId-toId"
 const allowedTransitions = reactive(new Set<string>())
+
+// Dirty state 管理：保存初始加载的快照，用于对比当前状态
+const originalTransitions = reactive(new Set<string>())
+
+// 是否有未保存的变更
+const isDirty = computed(() => {
+  if (allowedTransitions.size !== originalTransitions.size) return true
+  for (const key of allowedTransitions) {
+    if (!originalTransitions.has(key)) return true
+  }
+  for (const key of originalTransitions) {
+    if (!allowedTransitions.has(key)) return true
+  }
+  return false
+})
+
+// 变更数量统计（新增 + 移除的规则条数）
+const pendingChangesCount = computed(() => {
+  let count = 0
+  for (const key of allowedTransitions) {
+    if (!originalTransitions.has(key)) count++
+  }
+  for (const key of originalTransitions) {
+    if (!allowedTransitions.has(key)) count++
+  }
+  return count
+})
 
 // 乐观锁版本号（从 GET 接口获取，保存时回传）
 const matrixVersion = ref<number | null>(null)
@@ -460,9 +502,52 @@ function onActionRefresh() {
   loadActionPaths()
 }
 
-function onFilterChange() {
+// 记录上一次成功加载的筛选条件（用于取消时恢复）
+const lastLoadedFilters = reactive({
+  project: '0',
+  type: '*',
+  role: '',
+  mode: 'normal' as 'normal' | 'author' | 'assignee'
+})
+
+function snapshotFilters() {
+  lastLoadedFilters.project = selectedProject.value
+  lastLoadedFilters.type = selectedType.value
+  lastLoadedFilters.role = selectedRole.value
+  lastLoadedFilters.mode = selectedMode.value
+}
+
+function revertFilters() {
+  selectedProject.value = lastLoadedFilters.project
+  selectedType.value = lastLoadedFilters.type
+  selectedRole.value = lastLoadedFilters.role
+  selectedMode.value = lastLoadedFilters.mode
+}
+
+function doFilterChange() {
+  snapshotFilters()
   loadMatrix()
   loadActionPaths()
+}
+
+function onFilterChange() {
+  if (isDirty.value) {
+    const count = pendingChangesCount.value
+    Modal.confirm({
+      title: '未保存的变更',
+      content: '您有 ' + count + ' 条未保存的转换规则变更，切换筛选条件将丢弃这些变更。确定要继续吗？',
+      okText: '丢弃变更',
+      cancelText: '取消',
+      onOk() {
+        doFilterChange()
+      },
+      onCancel() {
+        revertFilters()
+      }
+    })
+    return
+  }
+  doFilterChange()
 }
 
 async function loadStatuses() {
@@ -532,14 +617,18 @@ async function loadMatrix() {
     const transitions = matrix?.transitions || []
 
     allowedTransitions.clear()
+    originalTransitions.clear()
     for (const t of transitions) {
-      allowedTransitions.add(`${t.oldStatusId}-${t.newStatusId}`)
+      const key = `${t.oldStatusId}-${t.newStatusId}`
+      allowedTransitions.add(key)
+      originalTransitions.add(key)
     }
 
     // 记录版本号用于乐观锁
     matrixVersion.value = matrix?.version ?? null
   } catch {
     allowedTransitions.clear()
+    originalTransitions.clear()
     matrixVersion.value = null
     Message.error('加载工作流数据失败')
   } finally {
@@ -602,6 +691,43 @@ async function saveMatrix() {
 onMounted(async () => {
   await Promise.all([loadStatuses(), loadProjects(), loadRoles(), loadIssueTypes()])
   await Promise.all([loadMatrix(), loadActionPaths()])
+  snapshotFilters()
+
+  // 浏览器关闭/刷新时提示
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (isDirty.value) {
+    e.preventDefault()
+    // 现代浏览器不再显示自定义消息，但需要设置 returnValue
+    e.returnValue = ''
+  }
+}
+
+// Vue Router 离开页面前拦截
+onBeforeRouteLeave(() => {
+  if (!isDirty.value) {
+    return true
+  }
+  return new Promise<boolean>((resolve) => {
+    Modal.confirm({
+      title: '未保存的变更',
+      content: '您有未保存的工作流变更，确定要离开吗？离开后变更将丢失。',
+      okText: '离开页面',
+      cancelText: '留在此页',
+      onOk() {
+        resolve(true)
+      },
+      onCancel() {
+        resolve(false)
+      }
+    })
+  })
 })
 </script>
 
@@ -881,5 +1007,25 @@ onMounted(async () => {
   color: var(--text-muted);
   vertical-align: middle;
   cursor: help;
+}
+
+/* 未保存变更提示条 */
+.dirty-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(var(--arcoblue-6), 0.08);
+  border: 1px solid rgba(var(--arcoblue-6), 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgb(var(--arcoblue-6));
+  animation: fadeIn 200ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
