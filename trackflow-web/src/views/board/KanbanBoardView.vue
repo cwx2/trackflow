@@ -331,12 +331,12 @@
                 <template v-else>
                   <div class="column-empty-icon">📭</div>
                   <div class="column-empty-text">该状态下暂无工单</div>
-                  <div class="column-empty-hint">拖拽工单到此列或创建新工单</div>
+                  <div class="column-empty-hint">{{ isClosedStatus(status) ? '拖拽工单到此列' : '拖拽工单到此列或创建新工单' }}</div>
                 </template>
               </div>
               <!-- 内联快速创建卡片 -->
               <div
-                v-if="canCreateIssue && !isDragging"
+                v-if="canCreateIssue && !isDragging && !isClosedStatus(status)"
                 class="add-card-area"
               >
                 <div
@@ -566,7 +566,7 @@
                     </div>
                     <!-- Swimlane 内联快速创建卡片 -->
                     <div
-                      v-if="canCreateIssue && !isDragging"
+                      v-if="canCreateIssue && !isDragging && !isClosedStatus(status)"
                       class="add-card-area add-card-area--swimlane"
                     >
                       <div
@@ -2375,6 +2375,13 @@ function setAddCardInputRef(el: any, _statusId: string, _laneKey: string) {
   if (el) {
     nextTick(() => el.focus())
   }
+}
+
+/** 判断某状态是否为终态（已完成/已取消），终态列不允许直接创建卡片 */
+function isClosedStatus(status: { category?: string; isClosed?: boolean }): boolean {
+  if (status.isClosed) return true
+  const cat = status.category?.toLowerCase()
+  return cat === 'done' || cat === 'cancelled'
 }
 
 /** 开始添加卡片：展开内联表单 */
