@@ -190,32 +190,55 @@ function getContextAtCursor(text: string, cursorPos: number): CursorContext {
   // Get text before cursor
   const before = text.substring(0, cursorPos)
 
-  // Check if we're after a "field:" pattern (typing a value)
-  // Match the last "字段: " before cursor
-  const fieldValueMatch = before.match(/(\S+)[：:]\s*([^:：]*)$/)
-  if (fieldValueMatch) {
-    const fieldLabel = fieldValueMatch[1]
-    const valuePart = fieldValueMatch[2]
-    const field = FIELDS.find(f => f.queryKey === fieldLabel || f.label === fieldLabel)
-    if (field) {
-      return { type: 'value', partial: valuePart.trim(), fieldKey: field.key }
+  // Strategy: parse the text as segments separated by known field patterns
+  // A segment starts with a known field label followed by ":"
+  // Find all field positions in the full text
+  const fieldPositions: Array<{ start: number; end: number; key: string }> = []
+  for (const f of FIELDS) {
+    const pattern = new RegExp(`${f.queryKey}[：:]`, 'g')
+    let m: RegExpExecArray | null
+    while ((m = pattern.exec(text)) !== null) {
+      fieldPositions.push({ start: m.index, end: m.index + m[0].length, key: f.key })
+    }
+  }
+  fieldPositions.sort((a, b) => a.start - b.start)
+
+  // Find which segment the cursor is in
+  // If cursor is inside a "field: value" segment, we're editing a value
+  // If cursor is after the last segment's value, we might be starting a new field
+  
+  let currentSegmentField: string | null = null
+  for (let i = 0; i < fieldPositions.length; i++) {
+    const fp = fieldPositions[i]
+    const nextStart = i + 1 < fieldPositions.length ? fieldPositions[i + 1].start : text.length
+    if (cursorPos >= fp.end && cursorPos <= nextStart) {
+      // Cursor is in the value area of this field
+      const valueSoFar = text.substring(fp.end, cursorPos).trimStart()
+      currentSegmentField = fp.key
+      // Check if the last character typed is a space after some value text
+      // If user typed space after completing a value, they might want a new field
+      // Heuristic: if there's a trailing space and some non-space before it, suggest fields
+      const trimmedBefore = before.trimEnd()
+      const trailingSpaces = before.length - trimmedBefore.length
+      if (valueSoFar.length > 0 && trailingSpaces >= 1) {
+        // User finished a value and pressed space → suggest new field
+        // But only if the partial after the last space doesn't look like part of the value
+        const afterLastSpace = before.substring(before.lastIndexOf(' ') + 1)
+        // If after last space matches a partial field name, suggest fields
+        const isPartialField = FIELDS.some(f => f.queryKey.startsWith(afterLastSpace) || f.label.startsWith(afterLastSpace))
+        if (isPartialField || afterLastSpace === '') {
+          return { type: 'field', partial: afterLastSpace, fieldKey: '' }
+        }
+      }
+      return { type: 'value', partial: valueSoFar, fieldKey: currentSegmentField }
     }
   }
 
-  // Check if we're at the beginning of a new token (typing a field name)
-  // This is when: at start, after double-space, or after a complete "field: value" segment
-  const lastSegment = before.split(/\s{2,}/).pop() || ''
-  // If lastSegment doesn't contain ":" we're typing a field name
-  if (!lastSegment.includes(':') && !lastSegment.includes('：')) {
-    return { type: 'field', partial: lastSegment.trim(), fieldKey: '' }
-  }
-
-  // After a completed value, if there's trailing spaces, suggest new field
-  if (/[：:]\s*\S+\s+$/.test(before) || /\s{2,}$/.test(before)) {
-    return { type: 'field', partial: '', fieldKey: '' }
-  }
-
-  return { type: 'none', partial: '', fieldKey: '' }
+  // Cursor is before the first field, or there are no fields
+  // Check if we have a partial field name
+  const lastSpaceIdx = before.lastIndexOf(' ')
+  const partial = lastSpaceIdx >= 0 ? before.substring(lastSpaceIdx + 1) : before
+  return { type: 'field', partial: partial.trim(), fieldKey: '' }
 }
 
 function getUsedFields(text: string): Set<string> {
@@ -304,20 +327,28 @@ function selectSuggestion(item: Suggestion) {
 
   if (context.type === 'field') {
     // Replace partial field text with selected field
-    const lastSeparatorIdx = Math.max(before.lastIndexOf('  '), -1)
-    const prefix = before.substring(0, lastSeparatorIdx + 1)
-    const trailingSpace = prefix && !prefix.endsWith(' ') ? '  ' : ''
-    newText = `${prefix}${trailingSpace}${item.insertText}${after}`
-    newCursorPos = (prefix + trailingSpace + item.insertText).length
+    const lastSpaceIdx = before.lastIndexOf(' ')
+    const prefix = lastSpaceIdx >= 0 ? before.substring(0, lastSpaceIdx + 1) : ''
+    newText = `${prefix}${item.insertText}${after}`
+    newCursorPos = (prefix + item.insertText).length
   } else if (context.type === 'value') {
-    // Replace partial value with selected value
-    const fieldMatch = before.match(/^(.*\S+[：:]\s*)([^:：]*)$/)
-    if (fieldMatch) {
-      const prefix = fieldMatch[1]
-      newText = `${prefix}${item.insertText}${after}`
-      newCursorPos = (prefix + item.insertText).length
+    // Replace partial value with selected value, then add trailing space for next field
+    // Find the "field:" prefix in the current segment
+    const fieldPositions: Array<{ start: number; end: number }> = []
+    for (const f of FIELDS) {
+      const pattern = new RegExp(`${f.queryKey}[：:]\\s*`, 'g')
+      let m: RegExpExecArray | null
+      while ((m = pattern.exec(before)) !== null) {
+        fieldPositions.push({ start: m.index, end: m.index + m[0].length })
+      }
+    }
+    const lastField = fieldPositions[fieldPositions.length - 1]
+    if (lastField) {
+      const prefix = before.substring(0, lastField.end)
+      newText = `${prefix}${item.insertText} ${after.trimStart()}`
+      newCursorPos = (prefix + item.insertText + ' ').length
     } else {
-      newText = text + item.insertText
+      newText = text + item.insertText + ' '
       newCursorPos = newText.length
     }
   } else {
@@ -332,12 +363,8 @@ function selectSuggestion(item: Suggestion) {
       inputRef.value.focus()
       inputRef.value.setSelectionRange(newCursorPos, newCursorPos)
     }
-    // After inserting a field, immediately show value suggestions
-    if (context.type === 'field') {
-      nextTick(() => updateSuggestions())
-    } else {
-      showDropdown.value = false
-    }
+    // After inserting, show next suggestions
+    nextTick(() => updateSuggestions())
   })
 }
 
