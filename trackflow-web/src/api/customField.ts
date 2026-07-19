@@ -25,6 +25,7 @@ export const customFieldApi = {
     maxLength?: number
     regexp?: string
     options?: Array<{ value: string; isDefault?: boolean; color?: string }>
+    copyOptionsFromFieldId?: string
     projectIds?: string[]
     issueTypes?: string[]
   }) {
@@ -57,6 +58,11 @@ export const customFieldApi = {
   /** 获取字段使用情况（删除前影响分析） */
   getUsage(id: string) {
     return request.get<any, R<CustomFieldUsageVO>>(`/admin/custom-fields/${id}/usage`)
+  },
+
+  /** 获取所有枚举类型字段列表（用于"从已有字段复制选项"下拉） */
+  listEnumFields() {
+    return request.get<any, R<CustomFieldDefinitionVO[]>>('/admin/custom-fields/enum-fields')
   },
 
   /** 排序自定义字段 */
@@ -139,5 +145,12 @@ export const customFieldApi = {
     defaultValue: string | null
   }) {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/override`, data)
+  },
+
+  // ========== 内联添加选项值 ==========
+
+  /** 内联添加枚举字段选项值（工单详情页/创建表单快捷入口） */
+  addOption(projectId: string, fieldId: string, data: { value: string; color?: string }) {
+    return request.post<any, R<CustomFieldOptionVO>>(`/projects/${projectId}/custom-fields/${fieldId}/options`, data)
   }
 }

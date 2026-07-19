@@ -55,7 +55,25 @@
                   <span class="item-text">{{ opt.label }}</span>
                   <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
                 </div>
-                <div v-if="getFilteredOptions(field).length === 0" class="dropdown-empty">无匹配项</div>
+                <div v-if="getFilteredOptions(field).length === 0 && !addingOption" class="dropdown-empty">无匹配项</div>
+                <!-- 内联添加新选项入口 -->
+                <template v-if="field.canAddOption">
+                  <div v-if="!addingOption" class="dropdown-add-option" @click.stop="startAddOption()">
+                    <span class="add-icon">+</span>
+                    <span class="add-text">添加新值</span>
+                  </div>
+                  <div v-else class="dropdown-add-input" @click.stop>
+                    <input
+                      ref="newOptionInputRef"
+                      v-model="newOptionValue"
+                      class="add-option-field"
+                      placeholder="输入新值名称"
+                      @keyup.enter="confirmAddOption(field)"
+                      @keyup.escape="cancelAddOption()"
+                    />
+                    <button class="input-btn add-option-btn" :disabled="!newOptionValue.trim()" @click="confirmAddOption(field)">添加</button>
+                  </div>
+                </template>
               </div>
               <!-- 多选列表 -->
               <div class="dropdown-list" v-if="field.editType === 'multi-select'">
@@ -69,7 +87,25 @@
                   <span class="item-check">{{ multiSelectedValues.includes(opt.value) ? '✓' : '' }}</span>
                   <span class="item-text">{{ opt.label }}</span>
                 </div>
-                <div v-if="getFilteredOptions(field).length === 0" class="dropdown-empty">无匹配项</div>
+                <div v-if="getFilteredOptions(field).length === 0 && !addingOption" class="dropdown-empty">无匹配项</div>
+                <!-- 内联添加新选项入口 -->
+                <template v-if="field.canAddOption">
+                  <div v-if="!addingOption" class="dropdown-add-option" @click.stop="startAddOption()">
+                    <span class="add-icon">+</span>
+                    <span class="add-text">添加新值</span>
+                  </div>
+                  <div v-else class="dropdown-add-input" @click.stop>
+                    <input
+                      ref="newOptionInputRef"
+                      v-model="newOptionValue"
+                      class="add-option-field"
+                      placeholder="输入新值名称"
+                      @keyup.enter="confirmAddOption(field)"
+                      @keyup.escape="cancelAddOption()"
+                    />
+                    <button class="input-btn add-option-btn" :disabled="!newOptionValue.trim()" @click="confirmAddOption(field)">添加</button>
+                  </div>
+                </template>
                 <div class="dropdown-actions">
                   <button class="input-btn multi-confirm" @click="commitMultiSelect(field)">确定</button>
                 </div>
@@ -151,6 +187,10 @@ export interface SidebarField {
   rawValues?: string[]
   /** 时间进度指示器数据（预估工时字段专用） */
   progress?: TimeProgress
+  /** 是否允许内联添加新选项（仅 list 类型字段，有权限时为 true） */
+  canAddOption?: boolean
+  /** 自定义字段 ID（用于添加选项 API） */
+  customFieldId?: string
 }
 
 export interface StatusInfo {
@@ -170,6 +210,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   transition: [target: StatusInfo]
   'edit-field': [fieldKey: string, newValue: string | string[]]
+  'add-option': [fieldId: string, value: string]
 }>()
 
 const editingKey = ref<string | null>(null)
@@ -178,11 +219,17 @@ const inputValue = ref('')
 const searchInputRef = ref<HTMLInputElement[]>()
 /** 多值字段编辑状态：当前选中的值列表 */
 const multiSelectedValues = ref<string[]>([])
-
+/** 内联添加选项模式 */
+const addingOption = ref(false)
+const newOptionValue = ref('')
+const addOptionLoading = ref(false)
+const newOptionInputRef = ref<HTMLInputElement[]>()
 function openEdit(field: SidebarField) {
   editingKey.value = field.key
   searchText.value = ''
   inputValue.value = field.rawValue || ''
+  addingOption.value = false
+  newOptionValue.value = ''
   // 初始化多值状态
   if (field.editType === 'multi-select') {
     multiSelectedValues.value = [...(field.rawValues || [])]
@@ -232,6 +279,30 @@ function toggleMultiOption(value: string) {
 function commitMultiSelect(field: SidebarField) {
   emit('edit-field', field.key, [...multiSelectedValues.value])
   editingKey.value = null
+}
+
+function startAddOption() {
+  addingOption.value = true
+  newOptionValue.value = ''
+  nextTick(() => {
+    if (newOptionInputRef.value?.[0]) newOptionInputRef.value[0].focus()
+  })
+}
+
+function cancelAddOption() {
+  addingOption.value = false
+  newOptionValue.value = ''
+}
+
+function confirmAddOption(field: SidebarField) {
+  const val = newOptionValue.value.trim()
+  if (!val || !field.customFieldId) return
+  addOptionLoading.value = true
+  emit('add-option', field.customFieldId, val)
+  // Reset state — parent will reload field defs and options
+  addingOption.value = false
+  newOptionValue.value = ''
+  addOptionLoading.value = false
 }
 </script>
 
@@ -481,5 +552,57 @@ function commitMultiSelect(field: SidebarField) {
 .multi-confirm {
   padding: 4px 10px;
   font-size: 11px;
+}
+
+/* ===== Inline Add Option ===== */
+.dropdown-add-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tf-accent);
+  border-top: 1px solid var(--tf-border-light);
+  transition: background 120ms;
+}
+.dropdown-add-option:hover {
+  background: var(--tf-bg-hover);
+}
+.dropdown-add-option .add-icon {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+.dropdown-add-option .add-text {
+  font-size: 12px;
+}
+.dropdown-add-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--tf-border-light);
+}
+.add-option-field {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--tf-border);
+  border-radius: 4px;
+  background: var(--tf-bg-body);
+  color: var(--tf-text-primary);
+  font-size: 12px;
+  outline: none;
+}
+.add-option-field:focus {
+  border-color: var(--tf-accent);
+}
+.add-option-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.add-option-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

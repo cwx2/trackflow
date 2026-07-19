@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+
 @RequiredArgsConstructor
 public class CustomFieldService {
 
@@ -74,18 +75,23 @@ public class CustomFieldService {
         entity.setIsHiddenInList(Boolean.TRUE.equals(dto.getIsHiddenInList()));
         definitionMapper.insert(entity);
 
-        if ("list".equals(dto.getFieldFormat()) && dto.getOptions() != null) {
-            for (int i = 0; i < dto.getOptions().size(); i++) {
-                CreateCustomFieldDTO.OptionItem opt = dto.getOptions().get(i);
-                CustomFieldOption option = new CustomFieldOption();
-                option.setCustomFieldId(entity.getId());
-                option.setValue(opt.getValue());
-                option.setPosition(i);
-                option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
-                option.setColor(opt.getColor());
-                option.setCreatedAt(LocalDateTime.now());
-                option.setUpdatedAt(LocalDateTime.now());
-                optionMapper.insert(option);
+        if ("list".equals(dto.getFieldFormat())) {
+            if (dto.getCopyOptionsFromFieldId() != null && (dto.getOptions() == null || dto.getOptions().isEmpty())) {
+                // 从已有字段复制选项
+                copyOptionsFromField(entity.getId(), dto.getCopyOptionsFromFieldId());
+            } else if (dto.getOptions() != null) {
+                for (int i = 0; i < dto.getOptions().size(); i++) {
+                    CreateCustomFieldDTO.OptionItem opt = dto.getOptions().get(i);
+                    CustomFieldOption option = new CustomFieldOption();
+                    option.setCustomFieldId(entity.getId());
+                    option.setValue(opt.getValue());
+                    option.setPosition(i);
+                    option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
+                    option.setColor(opt.getColor());
+                    option.setCreatedAt(LocalDateTime.now());
+                    option.setUpdatedAt(LocalDateTime.now());
+                    optionMapper.insert(option);
+                }
             }
         }
 
@@ -144,6 +150,11 @@ public class CustomFieldService {
 
         if ("list".equals(entity.getFieldFormat()) && dto.getOptions() != null) {
             updateListOptions(id, dto.getOptions());
+        }
+
+        // 从其他字段追加选项（仅当 options 未提供时触发复制）
+        if ("list".equals(entity.getFieldFormat()) && dto.getCopyOptionsFromFieldId() != null && dto.getOptions() == null) {
+            appendOptionsFromField(id, dto.getCopyOptionsFromFieldId());
         }
 
         if (dto.getProjectIds() != null) {
@@ -464,6 +475,109 @@ public class CustomFieldService {
      * 检查指定选项 ID 是否被任何工单的 custom_field_value 引用。
      * list 字段值存储方式：单选存 option ID 字符串，多选存逗号分隔的 ID 列表。
      */
+    /**
+     * 从已有字段复制全部活跃选项到新字段（创建时使用）。
+     * 参考 YouTrack "Existing set" 功能——创建独立副本。
+     *
+     * @param targetFieldId 目标字段 ID（刚创建的字段）
+     * @param sourceFieldId 源字段 ID（复制选项来源）
+     */
+    private void copyOptionsFromField(Long targetFieldId, Long sourceFieldId) {
+        CustomFieldDefinition sourceField = definitionMapper.selectById(sourceFieldId);
+        if (sourceField == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段不存在");
+        }
+        if (!"list".equals(sourceField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段不是枚举类型，无法复制选项");
+        }
+
+        // 获取源字段所有活跃选项
+        List<CustomFieldOption> sourceOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, sourceFieldId)
+                        .eq(CustomFieldOption::getIsArchived, false)
+                        .orderByAsc(CustomFieldOption::getPosition));
+
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < sourceOptions.size(); i++) {
+            CustomFieldOption src = sourceOptions.get(i);
+            CustomFieldOption copy = new CustomFieldOption();
+            copy.setCustomFieldId(targetFieldId);
+            copy.setValue(src.getValue());
+            copy.setPosition(i);
+            copy.setIsDefault(src.getIsDefault());
+            copy.setColor(src.getColor());
+            copy.setIsArchived(false);
+            copy.setCreatedAt(now);
+            copy.setUpdatedAt(now);
+            optionMapper.insert(copy);
+        }
+
+        log.info("Copied {} options from field {} to new field {}", sourceOptions.size(), sourceFieldId, targetFieldId);
+    }
+
+    /**
+     * 从已有字段追加选项到当前字段（编辑时使用，"Copy values from" 功能）。
+     * 跳过已存在的同名选项，只追加新选项。
+     *
+     * @param targetFieldId 目标字段 ID
+     * @param sourceFieldId 源字段 ID
+     */
+    private void appendOptionsFromField(Long targetFieldId, Long sourceFieldId) {
+        CustomFieldDefinition sourceField = definitionMapper.selectById(sourceFieldId);
+        if (sourceField == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段不存在");
+        }
+        if (!"list".equals(sourceField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段不是枚举类型，无法复制选项");
+        }
+
+        // 获取目标字段已有选项值（用于去重）
+        List<CustomFieldOption> existingOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, targetFieldId));
+        Set<String> existingValues = existingOptions.stream()
+                .map(CustomFieldOption::getValue)
+                .collect(Collectors.toSet());
+
+        // 获取当前最大 position
+        int maxPosition = existingOptions.stream()
+                .filter(o -> !o.getIsArchived())
+                .mapToInt(CustomFieldOption::getPosition)
+                .max()
+                .orElse(-1);
+
+        // 获取源字段活跃选项
+        List<CustomFieldOption> sourceOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, sourceFieldId)
+                        .eq(CustomFieldOption::getIsArchived, false)
+                        .orderByAsc(CustomFieldOption::getPosition));
+
+        LocalDateTime now = LocalDateTime.now();
+        int added = 0;
+        for (CustomFieldOption src : sourceOptions) {
+            if (existingValues.contains(src.getValue())) {
+                continue; // 跳过同名选项
+            }
+            maxPosition++;
+            CustomFieldOption copy = new CustomFieldOption();
+            copy.setCustomFieldId(targetFieldId);
+            copy.setValue(src.getValue());
+            copy.setPosition(maxPosition);
+            copy.setIsDefault(false); // 追加的选项不设为默认
+            copy.setColor(src.getColor());
+            copy.setIsArchived(false);
+            copy.setCreatedAt(now);
+            copy.setUpdatedAt(now);
+            optionMapper.insert(copy);
+            added++;
+        }
+
+        log.info("Appended {} options from field {} to field {} (skipped {} duplicates)",
+                added, sourceFieldId, targetFieldId, sourceOptions.size() - added);
+    }
+
     private boolean isOptionReferenced(Long customFieldId, Long optionId) {
         String idStr = String.valueOf(optionId);
         // 精确匹配单选值，或者作为多选中的一部分
@@ -1420,6 +1534,115 @@ public class CustomFieldService {
         }
         wrapper.orderByAsc(CustomFieldDefinition::getPosition);
         return definitionMapper.selectPage(page, wrapper);
+    }
+
+    /**
+     * 获取所有枚举类型（list）字段定义列表。
+     * 用于"从已有字段复制选项"功能的下拉数据源。
+     */
+    public List<CustomFieldDefinition> listEnumFields() {
+        return definitionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getFieldFormat, "list")
+                        .orderByAsc(CustomFieldDefinition::getPosition));
+    }
+
+    /**
+     * 内联添加枚举字段选项值（工单详情页/创建表单快捷入口）。
+     * 参考 YouTrack: 在工单编辑时直接添加新值到枚举字段。
+     *
+     * 逻辑：
+     * 1. 校验字段存在且为 list 类型
+     * 2. 校验字段在该项目中可用
+     * 3. 检查是否有同名选项（活跃或归档）
+     * 4. 如有同名归档选项 → 恢复；如有同名活跃选项 → 报错
+     * 5. 否则新建选项（position = max + 1）
+     */
+    @Transactional
+    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color) {
+        // 1. 校验字段存在且为 list 类型
+        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+        }
+        if (!"list".equals(field.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有枚举类型字段支持添加选项值");
+        }
+
+        // 2. 校验字段在该项目中可用（全局字段或已关联到项目）
+        if (!field.getIsForAll()) {
+            CustomFieldProject mapping = projectMapper.selectOne(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                            .eq(CustomFieldProject::getProjectId, projectId));
+            if (mapping == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "该字段未关联到此项目");
+            }
+        }
+
+        // 3. 检查是否有同名选项
+        List<CustomFieldOption> existingOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, fieldId)
+                        .eq(CustomFieldOption::getValue, value.trim()));
+
+        for (CustomFieldOption existing : existingOptions) {
+            if (!Boolean.TRUE.equals(existing.getIsArchived())) {
+                // 同名活跃选项已存在
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "选项值\"" + value.trim() + "\"已存在");
+            }
+        }
+
+        // 4. 如有同名归档选项 → 恢复
+        CustomFieldOption archivedSameName = existingOptions.stream()
+                .filter(o -> Boolean.TRUE.equals(o.getIsArchived()))
+                .findFirst()
+                .orElse(null);
+
+        if (archivedSameName != null) {
+            // 计算新 position（append 到末尾）
+            int maxPosition = getMaxOptionPosition(fieldId);
+            archivedSameName.setPosition(maxPosition + 1);
+            archivedSameName.setIsArchived(false);
+            archivedSameName.setIsDefault(false);
+            if (color != null) {
+                archivedSameName.setColor(color);
+            }
+            archivedSameName.setUpdatedAt(LocalDateTime.now());
+            optionMapper.updateById(archivedSameName);
+            log.info("Inline add option: reactivated archived option {} (value='{}'), fieldId={}, projectId={}",
+                    archivedSameName.getId(), value.trim(), fieldId, projectId);
+            return archivedSameName;
+        }
+
+        // 5. 新建选项
+        int maxPosition = getMaxOptionPosition(fieldId);
+        CustomFieldOption option = new CustomFieldOption();
+        option.setCustomFieldId(fieldId);
+        option.setValue(value.trim());
+        option.setPosition(maxPosition + 1);
+        option.setIsDefault(false);
+        option.setColor(color);
+        option.setIsArchived(false);
+        option.setCreatedAt(LocalDateTime.now());
+        option.setUpdatedAt(LocalDateTime.now());
+        optionMapper.insert(option);
+        log.info("Inline add option: created new option {} (value='{}'), fieldId={}, projectId={}",
+                option.getId(), value.trim(), fieldId, projectId);
+        return option;
+    }
+
+    /**
+     * 获取字段选项列表中的最大 position 值
+     */
+    private int getMaxOptionPosition(Long fieldId) {
+        List<CustomFieldOption> allOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, fieldId)
+                        .eq(CustomFieldOption::getIsArchived, false)
+                        .orderByDesc(CustomFieldOption::getPosition)
+                        .last("LIMIT 1"));
+        return allOptions.isEmpty() ? -1 : allOptions.get(0).getPosition();
     }
 
     public List<CustomFieldOption> getOptions(Long fieldId) {

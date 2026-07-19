@@ -190,6 +190,15 @@
                 allow-clear
               >
                 <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <template #footer v-if="canAddFieldOption">
+                  <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
+                    <span class="add-icon">+</span> 添加新值
+                  </div>
+                  <div class="select-add-input" v-else @click.stop>
+                    <input v-model="newOptionInput" class="add-opt-field" placeholder="输入新值" @keyup.enter="confirmAddOptionInSelect(cf)" @keyup.escape="cancelAddOptionInSelect()" />
+                    <button class="add-opt-btn" :disabled="!newOptionInput.trim()" @click="confirmAddOptionInSelect(cf)">添加</button>
+                  </div>
+                </template>
               </a-select>
               <!-- list (单值模式) -->
               <a-select
@@ -202,6 +211,15 @@
                 @change="clearFieldError(cf.id)"
               >
                 <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <template #footer v-if="canAddFieldOption">
+                  <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
+                    <span class="add-icon">+</span> 添加新值
+                  </div>
+                  <div class="select-add-input" v-else @click.stop>
+                    <input v-model="newOptionInput" class="add-opt-field" placeholder="输入新值" @keyup.enter="confirmAddOptionInSelect(cf)" @keyup.escape="cancelAddOptionInSelect()" />
+                    <button class="add-opt-btn" :disabled="!newOptionInput.trim()" @click="confirmAddOptionInSelect(cf)">添加</button>
+                  </div>
+                </template>
               </a-select>
               <!-- user -->
               <a-select
@@ -253,8 +271,9 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDown, IconAttachment } from '@arco-design/web-vue/es/icon'
-import { projectApi, issueApi, sprintApi } from '@/api'
+import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
+import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
@@ -301,6 +320,35 @@ const { fields: customFields, values: customFieldValues, loading: cfLoading, val
 // 自定义字段校验错误（inline 显示）
 const cfValidationErrors = ref<Record<string, string>>({})
 
+// 内联添加选项功能
+const { hasPermission: hasProjectPerm } = usePermission(() => form.projectId)
+const canAddFieldOption = computed(() => hasProjectPerm('project:manage_custom_fields'))
+const addingOptionFieldId = ref<string | null>(null)
+const newOptionInput = ref('')
+
+function startAddOptionInSelect(fieldId: string) {
+  addingOptionFieldId.value = fieldId
+  newOptionInput.value = ''
+}
+
+function cancelAddOptionInSelect() {
+  addingOptionFieldId.value = null
+  newOptionInput.value = ''
+}
+
+async function confirmAddOptionInSelect(cf: CustomFieldDefinitionVO) {
+  const val = newOptionInput.value.trim()
+  if (!val || !form.projectId) return
+  try {
+    await customFieldApi.addOption(form.projectId, cf.id, { value: val })
+    Message.success(`已添加选项"${val}"`)
+    // Reload custom fields to get the new option
+    await resetCustomFields()
+    cancelAddOptionInSelect()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '添加选项失败')
+  }
+}
 /**
  * 根据字段类型和配置生成占位文字
  * 优先使用 effectiveDefaultValue 作为引导提示（类似 YouTrack Empty Value Name）
@@ -536,6 +584,50 @@ onMounted(() => {
   transition: background-color 100ms;
 }
 .split-menu-item:hover { background: var(--color-fill-2, #f2f3f5); }
+
+/* Inline add option in select footer */
+.select-add-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tf-accent, rgb(var(--primary-6)));
+  border-top: 1px solid var(--color-border-2, var(--tf-border-light));
+  transition: background 120ms;
+}
+.select-add-option:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
+.select-add-option .add-icon { font-size: 14px; font-weight: 600; }
+.select-add-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--color-border-2, var(--tf-border-light));
+}
+.add-opt-field {
+  flex: 1;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border, var(--tf-border));
+  border-radius: 4px;
+  background: var(--color-bg-2, var(--tf-bg-body));
+  color: var(--color-text-1, var(--tf-text-primary));
+  font-size: 12px;
+  outline: none;
+}
+.add-opt-field:focus { border-color: var(--tf-accent, rgb(var(--primary-6))); }
+.add-opt-btn {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  background: var(--tf-accent, rgb(var(--primary-6)));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.add-opt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 
 <style>

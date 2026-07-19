@@ -86,6 +86,7 @@
         :fields="sidebarFields"
         @transition="onTransition"
         @edit-field="onEditField"
+        @add-option="onAddOption"
       />
     </div>
   </div>
@@ -245,6 +246,9 @@ const currentUserId = computed(() => authStore.user?.userId || '')
 
 /** 是否可以管理他人评论 */
 const canManageComments = computed(() => hasProjectPermission('issue:manage_comments'))
+
+/** 是否可以管理自定义字段（用于内联添加选项） */
+const canManageCustomFieldsComputed = computed(() => hasProjectPermission('project:manage_custom_fields'))
 
 /** 是否为 Issue 的创建者或负责人 */
 const isIssueOwner = computed(() => {
@@ -615,7 +619,9 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       rawValue,
       rawValues: isMulti ? rawValues : undefined,
       readonly: !canEdit || cf.editable === false,
-      options
+      options,
+      canAddOption: cf.fieldFormat === 'list' && canManageCustomFieldsComputed.value,
+      customFieldId: cf.id
     }
   })
 }
@@ -912,6 +918,20 @@ function parseDurationText(text: string): number | null {
     if (!isNaN(num)) total = Math.round(num * 60)
   }
   return total > 0 ? total : null
+}
+
+async function onAddOption(fieldId: string, value: string) {
+  if (!issue.value) return
+  try {
+    await customFieldApi.addOption(issue.value.projectId, fieldId, { value })
+    // Reload custom field definitions to get the new option in the list
+    const pid = issue.value.projectId
+    const cfRes = await customFieldApi.listByProject(pid, issue.value.issueType)
+    customFieldDefs.value = cfRes.data || []
+    Message.success(`已添加选项"${value}"`)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '添加选项失败')
+  }
 }
 
 async function onEditField(key: string, newValue: string | string[]) {

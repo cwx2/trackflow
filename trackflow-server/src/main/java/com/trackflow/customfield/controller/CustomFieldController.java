@@ -18,6 +18,7 @@ import com.trackflow.customfield.entity.CustomFieldProject;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
+import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -101,6 +102,24 @@ public class CustomFieldController {
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<CustomFieldUsageVO> getUsage(@PathVariable("id") Long id) {
         return R.ok(customFieldService.getUsage(id));
+    }
+
+    /**
+     * 获取所有枚举类型字段的选项摘要（用于"从已有字段复制选项"下拉列表）
+     */
+    @GetMapping("/admin/custom-fields/enum-fields")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<List<CustomFieldDefinitionVO>> listEnumFields() {
+        List<CustomFieldDefinition> fields = customFieldService.listEnumFields();
+        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
+        // 批量加载选项
+        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
+        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
+        for (int i = 0; i < fields.size(); i++) {
+            Long fieldId = fields.get(i).getId();
+            voList.get(i).setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+        }
+        return R.ok(voList);
     }
 
     @PutMapping("/admin/custom-fields/reorder")
@@ -267,6 +286,23 @@ public class CustomFieldController {
             @Valid @RequestBody ReorderProjectFieldsDTO dto) {
         customFieldService.reorderProjectFields(projectId, dto.getFieldIds());
         return R.ok();
+    }
+
+    // ========== 内联添加选项值（工单编辑时快捷添加）==========
+
+    /**
+     * 为枚举类型字段添加一个新选项值。
+     * 用于工单详情页/创建表单中，有权限的用户直接在下拉中添加新值。
+     * 参考 YouTrack: "Wherever you can change the value for a field, there is an option to add a new value to the set."
+     */
+    @PostMapping("/projects/{projectId}/custom-fields/{fieldId}/options")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<CustomFieldOptionVO> addOption(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody com.trackflow.customfield.dto.AddOptionDTO dto) {
+        CustomFieldOption option = customFieldService.addOptionInline(projectId, fieldId, dto.getValue(), dto.getColor());
+        return R.ok(converter.toOptionVO(option));
     }
 
     // ========== 条件显示配置端点 ==========
