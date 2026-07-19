@@ -159,8 +159,7 @@ public class ProjectCopyService {
                 new LambdaQueryWrapper<BoardColumnConfig>().eq(BoardColumnConfig::getProjectId, sourceProjectId))));
         summary.put("actions", Math.toIntExact(transitionActionMapper.selectCount(
                 new LambdaQueryWrapper<TransitionAction>().eq(TransitionAction::getProjectId, sourceProjectId))));
-        summary.put("members", Math.toIntExact(projectMemberMapper.selectCount(
-                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, sourceProjectId))));
+        summary.put("members", projectMemberMapper.countDistinctUsers(sourceProjectId));
         summary.put("queries", Math.toIntExact(savedQueryMapper.selectCount(
                 new LambdaQueryWrapper<SavedQuery>()
                         .eq(SavedQuery::getProjectId, sourceProjectId)

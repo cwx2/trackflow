@@ -43,4 +43,10 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
             WHERE pm.project_id = #{projectId} AND rp.permission = #{permission}
             """)
     List<Long> selectUserIdsWithPermission(@Param("projectId") Long projectId, @Param("permission") String permission);
+
+    /**
+     * 统计项目中的唯一成员数量（一个用户可能有多角色，只计一次）。
+     */
+    @Select("SELECT COUNT(DISTINCT user_id) FROM project_member WHERE project_id = #{projectId}")
+    int countDistinctUsers(@Param("projectId") Long projectId);
 }

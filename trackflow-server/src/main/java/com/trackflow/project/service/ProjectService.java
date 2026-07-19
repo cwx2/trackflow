@@ -313,11 +313,9 @@ public class ProjectService {
         // 使用 Converter 映射基础字段
         ProjectDetailVO vo = projectConverter.toDetailVO(project);
 
-        // 查询成员总数
-        Long memberCount = memberMapper.selectCount(
-                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
-        );
-        vo.setMemberCount(memberCount.intValue());
+        // 查询唯一成员总数（一个用户多角色只计一次）
+        int memberCount = memberMapper.countDistinctUsers(projectId);
+        vo.setMemberCount(memberCount);
 
         // 查询当前用户在项目中的角色（当前模型：一个用户在一个项目中只有唯一角色）
         if (currentUserId != null) {
@@ -1303,11 +1301,9 @@ public class ProjectService {
                         .eq(Sprint::getProjectId, projectId));
         vo.setSprintCount((int) sprintCount);
 
-        // 成员数量
-        long memberCount = memberMapper.selectCount(
-                new LambdaQueryWrapper<ProjectMember>()
-                        .eq(ProjectMember::getProjectId, projectId));
-        vo.setMemberCount((int) memberCount);
+        // 成员数量（唯一用户数）
+        int memberCount = memberMapper.countDistinctUsers(projectId);
+        vo.setMemberCount(memberCount);
 
         // 工时记录数量
         long timeEntryCount = timeEntryMapper.selectCount(
