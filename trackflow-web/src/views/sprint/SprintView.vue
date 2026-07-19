@@ -573,6 +573,43 @@
         <p style="margin-top: 12px; color: var(--color-text-3);">正在获取迭代信息…</p>
       </div>
     </a-modal>
+
+    <!-- 日期重叠确认弹窗 -->
+    <a-modal
+      v-model:visible="showOverlapConfirm"
+      title="日期重叠警告"
+      :width="520"
+      ok-text="确认继续"
+      cancel-text="取消"
+      @ok="confirmOverlapAndProceed"
+      @cancel="showOverlapConfirm = false"
+    >
+      <div class="overlap-warning-content">
+        <div class="overlap-warning-header">
+          <span class="overlap-warning-icon">⚠️</span>
+          <span class="overlap-warning-title">
+            {{ overlapContext === 'create' ? '新建迭代' : '修改后的迭代' }}日期与以下已有迭代存在重叠：
+          </span>
+        </div>
+        <div class="overlap-sprint-list" v-if="overlapWarning">
+          <div
+            v-for="(sprint, index) in overlapWarning.overlappingSprints"
+            :key="index"
+            class="overlap-sprint-item"
+          >
+            <span class="overlap-sprint-name">{{ sprint.name }}</span>
+            <span class="overlap-sprint-dates">{{ sprint.startDate }} ~ {{ sprint.endDate }}</span>
+            <span class="overlap-sprint-status" :class="sprint.status">
+              {{ sprint.status === 'active' ? '进行中' : '计划中' }}
+            </span>
+          </div>
+        </div>
+        <div class="overlap-warning-hint">
+          <p>重叠的迭代可能影响"当前 Sprint"的自动检测和工单归属。</p>
+          <p>如果确定要继续，请点击"确认继续"。</p>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -584,7 +621,8 @@ import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
-import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewVO } from '@/api/types'
+import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
+import { ERROR_CODES } from '@/api/error-codes'
 import SprintBurndownChart from './SprintBurndownChart.vue'
 
 const router = useRouter()
@@ -654,6 +692,11 @@ const createForm = reactive({
   moveUnresolvedIssues: false,
   setAsDefault: false
 })
+
+// ===== 日期重叠确认 =====
+const showOverlapConfirm = ref(false)
+const overlapWarning = ref<SprintOverlapWarning | null>(null)
+const overlapContext = ref<'create' | 'edit'>('create')
 
 const activeSprints = computed(() => sprints.value.filter(s => s.status === 'active' || s.status === 'Active'))
 const plannedSprints = computed(() => sprints.value.filter(s => s.status === 'planned' || s.status === 'Planned'))
@@ -912,6 +955,10 @@ async function handleCreate() {
     Message.warning('开始日期必须早于结束日期')
     return
   }
+  await doCreate(false)
+}
+
+async function doCreate(confirmOverlap: boolean) {
   creating.value = true
   try {
     await sprintApi.create(selectedProject.value!, {
@@ -920,7 +967,8 @@ async function handleCreate() {
       startDate: createForm.startDate || undefined,
       endDate: createForm.endDate || undefined,
       moveUnresolvedIssues: createForm.moveUnresolvedIssues || undefined,
-      setAsDefault: createForm.setAsDefault || undefined
+      setAsDefault: createForm.setAsDefault || undefined,
+      confirmOverlap: confirmOverlap || undefined
     })
     Message.success('迭代创建成功')
     showCreate.value = false
@@ -932,9 +980,26 @@ async function handleCreate() {
     createForm.setAsDefault = false
     loadSprints()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+    const code = e.response?.data?.code
+    if (code === ERROR_CODES.SPRINT_DATE_OVERLAP) {
+      // 检测到日期重叠，显示确认弹窗
+      overlapWarning.value = e.response.data.data as SprintOverlapWarning
+      overlapContext.value = 'create'
+      showOverlapConfirm.value = true
+    } else {
+      Message.error(e.response?.data?.message || '创建失败')
+    }
   } finally {
     creating.value = false
+  }
+}
+
+function confirmOverlapAndProceed() {
+  showOverlapConfirm.value = false
+  if (overlapContext.value === 'create') {
+    doCreate(true)
+  } else {
+    doUpdate(true)
   }
 }
 
@@ -960,6 +1025,10 @@ async function handleUpdate() {
       return
     }
   }
+  await doUpdate(false)
+}
+
+async function doUpdate(confirmOverlap: boolean) {
   updating.value = true
   try {
     const data: Record<string, any> = {
@@ -970,12 +1039,22 @@ async function handleUpdate() {
       data.startDate = editForm.startDate || null
       data.endDate = editForm.endDate || null
     }
+    if (confirmOverlap) {
+      data.confirmOverlap = true
+    }
     await sprintApi.update(editingSprintId.value, data)
     Message.success('迭代更新成功')
     showEdit.value = false
     loadSprints()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
+    const code = e.response?.data?.code
+    if (code === ERROR_CODES.SPRINT_DATE_OVERLAP) {
+      overlapWarning.value = e.response.data.data as SprintOverlapWarning
+      overlapContext.value = 'edit'
+      showOverlapConfirm.value = true
+    } else {
+      Message.error(e.response?.data?.message || '更新失败')
+    }
   } finally {
     updating.value = false
   }
@@ -1562,5 +1641,79 @@ onMounted(async () => {
   background: var(--color-fill-2);
   padding: 1px 6px;
   border-radius: 8px;
+}
+
+/* ===== 日期重叠确认弹窗 ===== */
+.overlap-warning-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.overlap-warning-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.overlap-warning-icon {
+  font-size: 18px;
+  line-height: 1.4;
+}
+.overlap-warning-title {
+  font-size: 13px;
+  color: var(--color-text-1);
+  line-height: 1.5;
+}
+.overlap-sprint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-fill-1);
+  border-radius: 6px;
+}
+.overlap-sprint-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  background: var(--color-bg-2);
+  border-radius: 4px;
+}
+.overlap-sprint-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overlap-sprint-dates {
+  font-size: 12px;
+  color: var(--color-text-3);
+  white-space: nowrap;
+}
+.overlap-sprint-status {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.overlap-sprint-status.active {
+  color: var(--color-success-6);
+  background: var(--color-success-1);
+}
+.overlap-sprint-status.planned {
+  color: var(--color-primary-6);
+  background: var(--color-primary-1);
+}
+.overlap-warning-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
+  line-height: 1.6;
+}
+.overlap-warning-hint p {
+  margin: 0;
 }
 </style>

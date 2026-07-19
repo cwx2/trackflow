@@ -22,6 +22,7 @@ export const sprintApi = {
     endDate?: string
     moveUnresolvedIssues?: boolean
     setAsDefault?: boolean
+    confirmOverlap?: boolean
   }) {
     return request.post<any, R<SprintVO>>(`/projects/${projectId}/sprints`, data)
   },

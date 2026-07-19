@@ -732,3 +732,13 @@ export interface CreationPreviewVO {
   /** 当前默认 Sprint 的名称（如有） */
   defaultSprintName?: string
 }
+
+// ========== Sprint 日期重叠警告 ==========
+export interface SprintOverlapWarning {
+  overlappingSprints: Array<{
+    name: string
+    startDate: string
+    endDate: string
+    status: string
+  }>
+}

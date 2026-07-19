@@ -21,12 +21,10 @@ import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
+import com.trackflow.sprint.vo.SprintOverlapWarningVO;
 import com.trackflow.sprint.vo.SprintVO;
-import com.trackflow.project.entity.Project;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -56,7 +54,6 @@ public class SprintService {
     private final IssueActivityMapper activityMapper;
     private final ProjectService projectService;
     private final ProjectActivityService projectActivityService;
-    private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -153,6 +150,62 @@ public class SprintService {
         }
     }
 
+    /**
+     * 检测 Sprint 日期是否与同项目已有的计划中/进行中 Sprint 日期重叠。
+     * 已完成的 Sprint 不参与重叠检测。
+     * <p>
+     * 参考 YouTrack：允许创建重叠 Sprint，但 YouTrack 文档明确警告重叠会影响"当前 Sprint"检测。
+     * TrackFlow 采用"警告但允许"策略：检测到重叠时抛出 SPRINT_DATE_OVERLAP 异常（code=40913），
+     * 前端显示确认弹窗后带 confirmOverlap=true 重新提交。
+     *
+     * @param projectId 项目 ID
+     * @param startDate 新 Sprint 的开始日期
+     * @param endDate   新 Sprint 的结束日期
+     * @param excludeId 排除的 Sprint ID（编辑时排除自身），创建时传 null
+     */
+    private void checkDateOverlap(Long projectId, LocalDate startDate, LocalDate endDate, Long excludeId) {
+        // 只有两个日期都存在时才进行重叠检测
+        if (startDate == null || endDate == null) {
+            return;
+        }
+
+        // 查询同项目中 planned 或 active 状态的 Sprint（排除自身）
+        LambdaQueryWrapper<Sprint> wrapper = new LambdaQueryWrapper<Sprint>()
+                .eq(Sprint::getProjectId, projectId)
+                .in(Sprint::getStatus, SprintStatus.PLANNED, SprintStatus.ACTIVE)
+                .isNotNull(Sprint::getStartDate)
+                .isNotNull(Sprint::getEndDate);
+        if (excludeId != null) {
+            wrapper.ne(Sprint::getId, excludeId);
+        }
+        List<Sprint> existingSprints = sprintMapper.selectList(wrapper);
+
+        // 检测日期范围重叠：两个区间 [A_start, A_end] 和 [B_start, B_end] 重叠条件：
+        // A_start <= B_end AND A_end >= B_start
+        List<SprintOverlapWarningVO.OverlappingSprint> overlapping = existingSprints.stream()
+                .filter(existing -> !startDate.isAfter(existing.getEndDate()) && !endDate.isBefore(existing.getStartDate()))
+                .map(existing -> new SprintOverlapWarningVO.OverlappingSprint(
+                        existing.getName(),
+                        existing.getStartDate().toString(),
+                        existing.getEndDate().toString(),
+                        existing.getStatus().getValue()
+                ))
+                .toList();
+
+        if (!overlapping.isEmpty()) {
+            SprintOverlapWarningVO warningVO = new SprintOverlapWarningVO();
+            warningVO.setOverlappingSprints(overlapping);
+
+            // 构造用户友好的警告消息
+            String sprintNames = overlapping.stream()
+                    .map(s -> String.format("'%s' (%s ~ %s)", s.getName(), s.getStartDate(), s.getEndDate()))
+                    .collect(Collectors.joining("、"));
+            String message = String.format("新迭代的日期与 %s 存在重叠。重叠的迭代可能影响「当前 Sprint」的自动检测和工单归属。", sprintNames);
+
+            throw new BusinessException(ErrorCode.SPRINT_DATE_OVERLAP, message, warningVO);
+        }
+    }
+
     @Transactional
     public Sprint create(Long projectId, CreateSprintDTO dto) {
         // 归档项目不允许创建 Sprint
@@ -171,6 +224,11 @@ public class SprintService {
 
         // 日期合理性校验（与 update 保持一致）
         validateDateRange(sprint.getStartDate(), sprint.getEndDate());
+
+        // 日期重叠检测：未确认时抛异常，前端确认后带 confirmOverlap=true 跳过
+        if (!Boolean.TRUE.equals(dto.getConfirmOverlap())) {
+            checkDateOverlap(projectId, sprint.getStartDate(), sprint.getEndDate(), null);
+        }
 
         sprintMapper.insert(sprint);
 
@@ -347,6 +405,12 @@ public class SprintService {
 
         // 日期合理性校验：如果两个日期都存在，开始必须早于结束
         validateDateRange(sprint.getStartDate(), sprint.getEndDate());
+
+        // 日期重叠检测：仅在日期有变更且未确认时触发
+        boolean dateChanged = (dto.getStartDate() != null || dto.getEndDate() != null);
+        if (dateChanged && !Boolean.TRUE.equals(dto.getConfirmOverlap())) {
+            checkDateOverlap(sprint.getProjectId(), sprint.getStartDate(), sprint.getEndDate(), id);
+        }
 
         sprintMapper.updateById(sprint);
 

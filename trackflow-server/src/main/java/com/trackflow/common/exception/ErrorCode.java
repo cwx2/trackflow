@@ -45,6 +45,7 @@ public enum ErrorCode {
     ROLE_CODE_DUPLICATE(40904, 409, "角色编码已存在"),
     PROJECT_KEY_DUPLICATE(40905, 409, "项目标识已存在"),
     CLOSE_CONFIRMATION_REQUIRED(40910, 409, "关闭前需要用户确认"),
+    SPRINT_DATE_OVERLAP(40913, 409, "Sprint 日期与已有迭代重叠"),
     WORKFLOW_VERSION_CONFLICT(40911, 409, "工作流已被其他人修改，请刷新后重试"),
     BOARD_CONFIG_VERSION_CONFLICT(40912, 409, "看板配置已被其他人修改，请刷新后重试"),
 

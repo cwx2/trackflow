@@ -43,10 +43,13 @@ public class GlobalExceptionHandler {
      * 业务异常
      */
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<R<Void>> handleBusinessException(BusinessException ex) {
+    public ResponseEntity<R<Object>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception: code={}, message={}", ex.getCode(), ex.getMessage());
-        return ResponseEntity.status(ex.getHttpStatus())
-                .body(R.fail(ex.getCode(), ex.getMessage()));
+        R<Object> response = R.fail(ex.getCode(), ex.getMessage());
+        if (ex.getData() != null) {
+            response.setData(ex.getData());
+        }
+        return ResponseEntity.status(ex.getHttpStatus()).body(response);
     }
 
     /**
