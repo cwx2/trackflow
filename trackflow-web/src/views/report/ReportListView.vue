@@ -96,14 +96,62 @@
         <div v-if="reportData[report.id]" class="card-chart" @click.stop>
           <div class="chart-summary">
             <span class="chart-total">共 {{ reportData[report.id].total }} 个工单</span>
-            <span class="chart-group">按 {{ groupByLabel(reportData[report.id].groupBy) }} 分组</span>
+            <span class="chart-group" v-if="!reportData[report.id].secondGroupBy">
+              按 {{ groupByLabel(reportData[report.id].groupBy) }} 分组
+            </span>
+            <span class="chart-group" v-else>
+              {{ groupByLabel(reportData[report.id].groupBy) }} × {{ groupByLabel(reportData[report.id].secondGroupBy!) }}
+            </span>
           </div>
-          <div class="chart-container">
+          <!-- 单维度图表 -->
+          <div v-if="!reportData[report.id].secondGroupBy" class="chart-container">
             <v-chart
               :option="buildChartOption(reportData[report.id])"
               autoresize
               class="report-chart-instance"
             />
+          </div>
+          <!-- 双维度：堆叠条形图 + 矩阵表格 -->
+          <div v-else class="cross-report-container">
+            <div class="chart-container">
+              <v-chart
+                :option="buildCrossChartOption(reportData[report.id])"
+                autoresize
+                class="report-chart-instance"
+              />
+            </div>
+            <div class="matrix-table-wrapper">
+              <table class="matrix-table">
+                <thead>
+                  <tr>
+                    <th class="matrix-corner">
+                      {{ groupByLabel(reportData[report.id].groupBy) }} ＼ {{ groupByLabel(reportData[report.id].secondGroupBy!) }}
+                    </th>
+                    <th
+                      v-for="col in reportData[report.id].secondLabels"
+                      :key="col"
+                      class="matrix-col-header"
+                    >{{ localizeLabel(col, reportData[report.id].secondGroupBy!) }}</th>
+                    <th class="matrix-col-header matrix-row-total">合计</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(row, rowIdx) in reportData[report.id].matrix"
+                    :key="rowIdx"
+                  >
+                    <td class="matrix-row-header">{{ localizeLabel(reportData[report.id].labels[rowIdx], reportData[report.id].groupBy) }}</td>
+                    <td
+                      v-for="(cell, colIdx) in row"
+                      :key="colIdx"
+                      class="matrix-cell"
+                      :class="{ 'has-value': cell > 0 }"
+                    >{{ cell || '—' }}</td>
+                    <td class="matrix-cell matrix-row-total">{{ row.reduce((a: number, b: number) => a + b, 0) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -151,8 +199,19 @@
             <a-option value="assignee">负责人</a-option>
             <a-option value="priority">优先级</a-option>
             <a-option value="type">工单类型</a-option>
+            <a-option value="project">项目</a-option>
           </a-select>
           <span v-if="isGroupByLocked" class="form-hint">已根据报表类型自动设置</span>
+        </a-form-item>
+        <a-form-item label="第二分组维度（交叉分析）">
+          <a-select v-model="form.secondGroupBy" placeholder="不使用（单维度）" allow-clear>
+            <a-option
+              v-for="dim in availableSecondDimensions"
+              :key="dim.value"
+              :value="dim.value"
+            >{{ dim.label }}</a-option>
+          </a-select>
+          <span class="form-hint">选择后将生成双维度交叉矩阵（如"状态 × 负责人"）</span>
         </a-form-item>
         <a-form-item label="共享">
           <a-switch v-model="form.shared" />
@@ -211,6 +270,7 @@ const form = reactive({
   projectId: '' as string,
   type: 'by_status',
   groupBy: 'status',
+  secondGroupBy: '' as string,
   shared: false,
   refreshInterval: 0
 })
@@ -259,10 +319,29 @@ const typeToGroupByMap: Record<string, string> = {
 /** 当 type 有固定的 groupBy 映射时，禁用 groupBy 选择 */
 const isGroupByLocked = computed(() => form.type in typeToGroupByMap)
 
+/** 可选的第二维度列表（排除已选的主维度） */
+const allDimensions = [
+  { value: 'status', label: '状态' },
+  { value: 'assignee', label: '负责人' },
+  { value: 'priority', label: '优先级' },
+  { value: 'type', label: '工单类型' },
+  { value: 'project', label: '项目' }
+]
+const availableSecondDimensions = computed(() => {
+  return allDimensions.filter(d => d.value !== form.groupBy)
+})
+
 // type 变化时自动锁定 groupBy
 watch(() => form.type, (newType) => {
   if (newType in typeToGroupByMap) {
     form.groupBy = typeToGroupByMap[newType]
+  }
+})
+
+// groupBy 变化时，如果与 secondGroupBy 相同则清除
+watch(() => form.groupBy, (newGroupBy) => {
+  if (form.secondGroupBy === newGroupBy) {
+    form.secondGroupBy = ''
   }
 })
 
@@ -361,6 +440,9 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const configObj: Record<string, any> = { groupBy: form.groupBy }
+    if (form.secondGroupBy) {
+      configObj.secondGroupBy = form.secondGroupBy
+    }
     if (form.refreshInterval > 0) {
       configObj.refreshInterval = form.refreshInterval
     }
@@ -420,9 +502,11 @@ function startEdit(report: ReportDefinitionVO) {
   try {
     const config = report.config ? JSON.parse(report.config) : {}
     form.groupBy = config.groupBy || 'status'
+    form.secondGroupBy = config.secondGroupBy || ''
     form.refreshInterval = config.refreshInterval || 0
   } catch {
     form.groupBy = 'status'
+    form.secondGroupBy = ''
     form.refreshInterval = 0
   }
 
@@ -483,6 +567,7 @@ function resetForm() {
   form.projectId = ''
   form.type = 'by_status'
   form.groupBy = 'status'
+  form.secondGroupBy = ''
   form.shared = false
   form.refreshInterval = 0
 }
@@ -507,7 +592,8 @@ function groupByLabel(groupBy: string) {
     status: '状态',
     assignee: '负责人',
     priority: '优先级',
-    type: '工单类型'
+    type: '工单类型',
+    project: '项目'
   }
   return map[groupBy] || groupBy
 }
@@ -754,6 +840,60 @@ function buildBarVerticalOption(data: ReportDataVO, c: typeof chartColors.value)
         itemStyle: { color: colors[idx], borderRadius: [3, 3, 0, 0] }
       }))
     }]
+  }
+}
+
+/**
+ * 双维度交叉模式：堆叠条形图
+ * X 轴 = 主维度（labels），每个堆叠系列 = 第二维度（secondLabels）
+ */
+function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
+  const c = chartColors.value
+  const primaryLabels = data.labels.map(l => localizeLabel(l, data.groupBy))
+  const secondaryLabels = data.secondLabels || []
+
+  // 每个第二维度值对应一个 series
+  const series = secondaryLabels.map((secLabel, secIdx) => ({
+    name: localizeLabel(secLabel, data.secondGroupBy || ''),
+    type: 'bar',
+    stack: 'cross',
+    barWidth: '55%',
+    emphasis: { focus: 'series' },
+    itemStyle: { color: palette[secIdx % palette.length], borderRadius: secIdx === secondaryLabels.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0] },
+    data: data.matrix ? data.matrix.map(row => row[secIdx] || 0) : []
+  }))
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 }
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: c.textColor, fontSize: 11 },
+      itemWidth: 10,
+      itemHeight: 10
+    },
+    grid: { left: 80, right: 16, top: 8, bottom: 36 },
+    xAxis: {
+      type: 'category',
+      data: primaryLabels,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: { color: c.textColor, fontSize: 11, width: 70, overflow: 'truncate' },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+    },
+    series
   }
 }
 </script>
@@ -1017,5 +1157,69 @@ function buildBarVerticalOption(data: ReportDataVO, c: typeof chartColors.value)
 
 .menu-danger {
   color: var(--tf-danger);
+}
+
+/* 双维度交叉报表 */
+.cross-report-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.matrix-table-wrapper {
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid var(--tf-border-light);
+}
+
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.matrix-table th,
+.matrix-table td {
+  padding: 6px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--tf-border-light);
+}
+
+.matrix-table th {
+  background: var(--tf-bg-surface);
+  color: var(--tf-text-secondary);
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.matrix-corner {
+  text-align: left !important;
+  font-size: 10px;
+  color: var(--tf-text-tertiary);
+  min-width: 100px;
+}
+
+.matrix-row-header {
+  text-align: left !important;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  background: var(--tf-bg-surface);
+}
+
+.matrix-cell {
+  color: var(--tf-text-tertiary);
+  min-width: 48px;
+}
+
+.matrix-cell.has-value {
+  color: var(--tf-text-primary);
+  font-weight: 500;
+}
+
+.matrix-row-total {
+  font-weight: 600;
+  color: var(--tf-accent) !important;
+  border-left: 1px solid var(--tf-border-light);
 }
 </style>
