@@ -76,4 +76,41 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param operatorId  操作者 ID
      */
     record MultiFieldUpdated(Issue issue, java.util.Map<String, String[]> changes, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 附件上传通知事件。
+     *
+     * @param issue      所属工单
+     * @param fileName   上传的文件名
+     * @param operatorId 操作者 ID
+     */
+    record AttachmentAdded(Issue issue, String fileName, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 工单关联变更通知事件（创建或删除关联）。
+     *
+     * @param issue         操作的工单（触发侧）
+     * @param targetIssueKey 目标工单 key
+     * @param linkType      关联类型（如 blocks, relates_to）
+     * @param added         true=创建关联, false=删除关联
+     * @param operatorId    操作者 ID
+     */
+    record LinkChanged(Issue issue, String targetIssueKey, String linkType, boolean added, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 工时记录通知事件。
+     *
+     * @param issue           所属工单
+     * @param durationMinutes 记录的时长（分钟）
+     * @param operatorId      操作者 ID（实际执行记录的人）
+     */
+    record TimeLogged(Issue issue, int durationMinutes, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 工单恢复通知事件（从回收站还原）。
+     *
+     * @param issue      恢复后的工单
+     * @param operatorId 操作者 ID
+     */
+    record Restored(Issue issue, Long operatorId) implements IssueNotificationEvent {}
 }

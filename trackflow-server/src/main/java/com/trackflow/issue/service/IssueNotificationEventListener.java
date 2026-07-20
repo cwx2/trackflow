@@ -92,4 +92,34 @@ public class IssueNotificationEventListener {
         if (NotificationContext.isSilent()) return;
         notificationHelper.notifyMultiFieldUpdated(event.issue(), event.changes(), event.operatorId());
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleAttachmentAdded(IssueNotificationEvent.AttachmentAdded event) {
+        // 自动关注：上传附件后
+        watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyAttachmentAdded(event.issue(), event.fileName(), event.operatorId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleLinkChanged(IssueNotificationEvent.LinkChanged event) {
+        // 自动关注：修改关联后
+        watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyLinkChanged(event.issue(), event.targetIssueKey(), event.linkType(), event.added(), event.operatorId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleTimeLogged(IssueNotificationEvent.TimeLogged event) {
+        // 自动关注：记录工时后
+        watcherService.autoWatchOnUpdate(event.issue().getId(), event.operatorId());
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyTimeLogged(event.issue(), event.durationMinutes(), event.operatorId());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleRestored(IssueNotificationEvent.Restored event) {
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyRestored(event.issue(), event.operatorId());
+    }
 }

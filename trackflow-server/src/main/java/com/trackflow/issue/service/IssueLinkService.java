@@ -3,6 +3,7 @@ package com.trackflow.issue.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.CreateIssueLinkDTO;
@@ -18,6 +19,7 @@ import com.trackflow.issue.vo.IssueLinkVO;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,7 @@ public class IssueLinkService {
     private final IssueConverter issueConverter;
     private final ProjectService projectService;
     private final StatusCacheHelper statusCacheHelper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 需要检测循环依赖的有向关联类型 */
     private static final Set<String> DIRECTED_LINK_TYPES = Set.of("blocks", "parent_of");
@@ -145,6 +148,12 @@ public class IssueLinkService {
                 null, linkType + " " + targetIssue.getIssueKey());
         recordActivity(targetIssueId, currentUserId, "link_added", "link",
                 null, reverseType + " " + sourceIssue.getIssueKey());
+
+        // 发布通知事件（双向：source 和 target 的负责人/关注者都应收到通知）
+        eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
+                sourceIssue, targetIssue.getIssueKey(), linkType, true, currentUserId));
+        eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
+                targetIssue, sourceIssue.getIssueKey(), reverseType, true, currentUserId));
     }
 
     /**
@@ -177,6 +186,14 @@ public class IssueLinkService {
                 linkType + " " + targetKey, null);
         recordActivity(link.getTargetIssueId(), currentUserId, "link_removed", "link",
                 reverseType + " " + sourceKey, null);
+
+        // 发布通知事件（双向）
+        if (sourceIssue != null && targetIssue != null) {
+            eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
+                    sourceIssue, targetKey, linkType, false, currentUserId));
+            eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
+                    targetIssue, sourceKey, reverseType, false, currentUserId));
+        }
     }
 
     /**

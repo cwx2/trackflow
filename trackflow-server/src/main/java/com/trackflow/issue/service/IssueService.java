@@ -1244,6 +1244,11 @@ public class IssueService {
                 }
                 issueMapper.restoreById(issueId);
                 recordActivity(issueId, currentUserId, "restored", null, null, null);
+                // 发布恢复通知事件
+                Issue restoredIssue = issueMapper.selectById(issueId);
+                if (restoredIssue != null) {
+                    eventPublisher.publishEvent(new IssueNotificationEvent.Restored(restoredIssue, currentUserId));
+                }
                 result.addSuccess();
             } catch (Exception e) {
                 result.addFailure(issueId, "?", "恢复失败");
@@ -1730,6 +1735,9 @@ public class IssueService {
         // 记录活动
         recordActivity(issueId, currentUserId, "attachment_added", "attachment", null, safeFileName);
 
+        // 发布通知事件
+        eventPublisher.publishEvent(new IssueNotificationEvent.AttachmentAdded(issue, safeFileName, currentUserId));
+
         return attachment;
     }
 
@@ -1881,6 +1889,12 @@ public class IssueService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "恢复失败，工单不在回收站中");
         }
         recordActivity(id, SecurityUtils.getCurrentUserId(), "restored", null, null, null);
+
+        // 发布恢复通知事件（restoreById 已清除 deleted_at，此时可正常查询）
+        Issue restoredIssue = issueMapper.selectById(id);
+        if (restoredIssue != null) {
+            eventPublisher.publishEvent(new IssueNotificationEvent.Restored(restoredIssue, SecurityUtils.getCurrentUserId()));
+        }
 
         // 恢复后刷新父工单的派生属性
         Object parentIdObj = row.get("parent_id");

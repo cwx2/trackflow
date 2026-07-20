@@ -580,6 +580,190 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         }
     }
 
+    // ==================== 附件/关联/工时/恢复 通知方法 ====================
+
+    /**
+     * 附件上传通知：通知负责人、报告人和关注者。
+     */
+    @Async("notificationExecutor")
+    public void notifyAttachmentAdded(Issue issue, String fileName, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) return;
+
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) return;
+
+            String operatorName = getUserDisplayName(operatorId);
+            String title = String.format("%s 新增附件", issue.getIssueKey());
+            String content = String.format("%s 向工单 [%s] %s 上传了附件「%s」",
+                    operatorName, issue.getIssueKey(), issue.getTitle(), fileName);
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送附件上传通知: issue={}, file={}, recipients={}",
+                    issue.getIssueKey(), fileName, enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送附件上传通知失败: issue={}, file={}, error={}",
+                    issue.getIssueKey(), fileName, e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyAttachmentAdded", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 新增附件", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 新增附件「%s」", issue.getIssueKey(), issue.getTitle(), fileName),
+                    NotificationType.issue_updated.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 关联变更通知：通知负责人、报告人和关注者。
+     */
+    @Async("notificationExecutor")
+    public void notifyLinkChanged(Issue issue, String targetIssueKey, String linkType, boolean added, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) return;
+
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) return;
+
+            String operatorName = getUserDisplayName(operatorId);
+            String action = added ? "添加了关联" : "移除了关联";
+            String title = String.format("%s %s", issue.getIssueKey(), action);
+            String content = String.format("%s %s工单 [%s] %s 与 %s 的「%s」关联",
+                    operatorName, added ? "为" : "移除了", issue.getIssueKey(), issue.getTitle(),
+                    targetIssueKey, getLinkTypeLabel(linkType));
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送关联变更通知: issue={}, target={}, type={}, added={}, recipients={}",
+                    issue.getIssueKey(), targetIssueKey, linkType, added, enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送关联变更通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyLinkChanged", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 关联变更", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 的关联已变更", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_updated.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 工时记录通知：通知负责人、报告人和关注者。
+     */
+    @Async("notificationExecutor")
+    public void notifyTimeLogged(Issue issue, int durationMinutes, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) return;
+
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) return;
+
+            String operatorName = getUserDisplayName(operatorId);
+            String durationStr = formatDurationMinutes(durationMinutes);
+            String title = String.format("%s 记录了工时", issue.getIssueKey());
+            String content = String.format("%s 为工单 [%s] %s 记录了 %s 工时",
+                    operatorName, issue.getIssueKey(), issue.getTitle(), durationStr);
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送工时记录通知: issue={}, duration={}min, recipients={}",
+                    issue.getIssueKey(), durationMinutes, enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送工时记录通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyTimeLogged", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 记录了工时", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 记录了工时", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_updated.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 工单恢复通知：通知原负责人、报告人和关注者。
+     */
+    @Async("notificationExecutor")
+    public void notifyRestored(Issue issue, Long operatorId) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? operatorId : null;
+            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            if (recipientReasons.isEmpty()) return;
+
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) return;
+
+            String operatorName = getUserDisplayName(operatorId);
+            String title = String.format("%s 已恢复", issue.getIssueKey());
+            String content = String.format("%s 从回收站恢复了工单 [%s] %s",
+                    operatorName, issue.getIssueKey(), issue.getTitle());
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
+                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送工单恢复通知: issue={}, recipients={}",
+                    issue.getIssueKey(), enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送工单恢复通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyRestored", e, outboxWriter.buildNotifyParams(
+                    null, operatorId,
+                    String.format("%s 已恢复", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 已恢复", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_updated.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 获取关联类型的中文标签。
+     */
+    private String getLinkTypeLabel(String linkType) {
+        return switch (linkType) {
+            case "blocks" -> "阻塞";
+            case "blocked_by" -> "被阻塞";
+            case "duplicates" -> "重复";
+            case "duplicated_by" -> "被重复";
+            case "parent_of" -> "父工单";
+            case "child_of" -> "子工单";
+            case "relates_to" -> "关联";
+            default -> linkType;
+        };
+    }
+
+    /**
+     * 格式化分钟数为人类可读的时长字符串。
+     */
+    private String formatDurationMinutes(int minutes) {
+        if (minutes < 60) {
+            return minutes + "分钟";
+        }
+        int hours = minutes / 60;
+        int remainMinutes = minutes % 60;
+        if (remainMinutes == 0) {
+            return hours + "小时";
+        }
+        return hours + "小时" + remainMinutes + "分钟";
+    }
+
     /**
      * 获取字段的中文显示标签。
      */
