@@ -23,6 +23,13 @@ public class ReportConfig {
     private ReportFilters filters;
     private ReportTimeRange timeRange;
 
+    /**
+     * 自动刷新间隔（秒）。
+     * 0 或 null 表示不自动刷新（手动刷新）。
+     * 常见值：600（10分钟）、3600（1小时）、86400（每天）。
+     */
+    private Integer refreshInterval;
+
     @Data
     public static class ReportFilters {
         private List<String> statuses;
@@ -84,6 +91,12 @@ public class ReportConfig {
             timeRange.setStartDate((String) timeRangeMap.get("startDate"));
             timeRange.setEndDate((String) timeRangeMap.get("endDate"));
             config.setTimeRange(timeRange);
+        }
+
+        // 解析 refreshInterval
+        Object refreshObj = map.get("refreshInterval");
+        if (refreshObj instanceof Number num) {
+            config.setRefreshInterval(num.intValue());
         }
 
         return config;

@@ -404,6 +404,10 @@ public class ReportService {
             result.setAppliedFilters(buildFilterSummary(config));
         }
 
+        // 设置计算时间和刷新间隔
+        result.setCalculatedAt(LocalDateTime.now());
+        result.setRefreshInterval(config.getRefreshInterval());
+
         return result;
     }
 

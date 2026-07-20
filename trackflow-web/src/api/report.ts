@@ -46,6 +46,10 @@ export interface ReportDataVO {
   total: number
   /** 应用的筛选条件摘要 */
   appliedFilters?: Record<string, any>
+  /** 数据计算时间（ISO 格式） */
+  calculatedAt?: string
+  /** 自动刷新间隔（秒），null/0 表示不自动刷新 */
+  refreshInterval?: number | null
 }
 
 /**

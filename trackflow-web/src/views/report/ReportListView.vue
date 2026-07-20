@@ -77,7 +77,19 @@
         <h3 class="card-title">{{ report.name }}</h3>
         <div class="card-meta">
           <span v-if="report.shared" class="meta-shared">🔗 已共享</span>
-          <span class="meta-time">{{ formatTime(report.createdAt) }}</span>
+          <span v-if="reportData[report.id]?.calculatedAt" class="meta-calculated">
+            ⏱ {{ formatRelativeTime(reportData[report.id].calculatedAt) }}
+          </span>
+          <span v-else class="meta-time">{{ formatTime(report.createdAt) }}</span>
+          <button
+            v-if="reportData[report.id]"
+            class="card-refresh-btn"
+            title="手动刷新数据"
+            :class="{ 'is-refreshing': refreshingId === report.id }"
+            @click.stop="refreshReport(report)"
+          >
+            🔄
+          </button>
         </div>
 
         <!-- 报表数据（展开后）— ECharts 图表 -->
@@ -146,6 +158,16 @@
           <a-switch v-model="form.shared" />
           <span class="form-hint">共享后项目其他成员也可查看此报表</span>
         </a-form-item>
+        <a-form-item label="自动刷新周期">
+          <a-select v-model="form.refreshInterval" placeholder="选择刷新频率">
+            <a-option :value="0">手动刷新（不自动）</a-option>
+            <a-option :value="600">每 10 分钟</a-option>
+            <a-option :value="1800">每 30 分钟</a-option>
+            <a-option :value="3600">每小时</a-option>
+            <a-option :value="86400">每天</a-option>
+          </a-select>
+          <span class="form-hint">设置报表数据自动重新计算的频率</span>
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -177,6 +199,8 @@ const projects = ref<ProjectVO[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
 const reportData = ref<Record<string, ReportDataVO>>({})
 const executingId = ref<string | null>(null)
+const refreshingId = ref<string | null>(null)
+const autoRefreshTimers = ref<Record<string, ReturnType<typeof setInterval>>>({})
 
 // 创建/编辑相关
 const showFormModal = ref(false)
@@ -187,7 +211,8 @@ const form = reactive({
   projectId: '' as string,
   type: 'by_status',
   groupBy: 'status',
-  shared: false
+  shared: false,
+  refreshInterval: 0
 })
 
 /** 是否有创建报表权限（system:admin 或 nav:report_create） */
@@ -266,16 +291,56 @@ async function executeReport(report: ReportDefinitionVO) {
   // Toggle: 如果已有数据则折叠
   if (reportData.value[report.id]) {
     delete reportData.value[report.id]
+    clearAutoRefresh(report.id)
     return
   }
   executingId.value = report.id
   try {
     const res = await reportApi.execute(report.id)
     reportData.value[report.id] = res.data
+    // 设置自动刷新定时器
+    setupAutoRefresh(report.id, res.data?.refreshInterval)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '执行报表失败')
   } finally {
     executingId.value = null
+  }
+}
+
+/** 手动刷新报表数据 */
+async function refreshReport(report: ReportDefinitionVO) {
+  refreshingId.value = report.id
+  try {
+    const res = await reportApi.execute(report.id)
+    reportData.value[report.id] = res.data
+    // 重置自动刷新定时器
+    setupAutoRefresh(report.id, res.data?.refreshInterval)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '刷新报表失败')
+  } finally {
+    refreshingId.value = null
+  }
+}
+
+/** 设置自动刷新定时器 */
+function setupAutoRefresh(reportId: string, interval?: number | null) {
+  clearAutoRefresh(reportId)
+  if (!interval || interval <= 0) return
+  autoRefreshTimers.value[reportId] = setInterval(async () => {
+    try {
+      const res = await reportApi.execute(reportId)
+      reportData.value[reportId] = res.data
+    } catch {
+      // 自动刷新失败不打扰用户
+    }
+  }, interval * 1000)
+}
+
+/** 清除自动刷新定时器 */
+function clearAutoRefresh(reportId: string) {
+  if (autoRefreshTimers.value[reportId]) {
+    clearInterval(autoRefreshTimers.value[reportId])
+    delete autoRefreshTimers.value[reportId]
   }
 }
 
@@ -295,7 +360,11 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const config = JSON.stringify({ groupBy: form.groupBy })
+    const configObj: Record<string, any> = { groupBy: form.groupBy }
+    if (form.refreshInterval > 0) {
+      configObj.refreshInterval = form.refreshInterval
+    }
+    const config = JSON.stringify(configObj)
 
     if (editingReport.value) {
       // 编辑模式
@@ -351,8 +420,10 @@ function startEdit(report: ReportDefinitionVO) {
   try {
     const config = report.config ? JSON.parse(report.config) : {}
     form.groupBy = config.groupBy || 'status'
+    form.refreshInterval = config.refreshInterval || 0
   } catch {
     form.groupBy = 'status'
+    form.refreshInterval = 0
   }
 
   showFormModal.value = true
@@ -413,6 +484,7 @@ function resetForm() {
   form.type = 'by_status'
   form.groupBy = 'status'
   form.shared = false
+  form.refreshInterval = 0
 }
 
 function reportTypeLabel(type: string) {
@@ -444,6 +516,22 @@ function formatTime(time: string) {
   if (!time) return ''
   const d = new Date(time)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** 格式化相对时间（"刚刚"/"X分钟前"/"X小时前"等） */
+function formatRelativeTime(time?: string) {
+  if (!time) return ''
+  const d = new Date(time)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return '刚刚计算'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin} 分钟前计算`
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `${diffHour} 小时前计算`
+  const diffDay = Math.floor(diffHour / 24)
+  return `${diffDay} 天前计算`
 }
 
 // ─── ECharts 主题色（动态读取 CSS 变量，适配亮色/暗色主题） ─────────
@@ -481,6 +569,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   themeObserver?.disconnect()
+  // 清理所有自动刷新定时器
+  Object.keys(autoRefreshTimers.value).forEach(clearAutoRefresh)
 })
 
 // ─── 图表预设色板 ─────────────────────────────────────
@@ -823,6 +913,45 @@ function buildBarVerticalOption(data: ReportDataVO, c: typeof chartColors.value)
 
 .meta-shared {
   color: var(--tf-accent);
+}
+
+.meta-calculated {
+  color: var(--tf-text-tertiary);
+  font-size: 11px;
+}
+
+.card-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  margin-left: auto;
+}
+
+.report-card:hover .card-refresh-btn {
+  opacity: 1;
+}
+
+.card-refresh-btn:hover {
+  background: var(--tf-bg-hover);
+}
+
+.card-refresh-btn.is-refreshing {
+  opacity: 1;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* 图表区域 */

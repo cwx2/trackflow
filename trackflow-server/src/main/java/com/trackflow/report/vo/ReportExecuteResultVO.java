@@ -2,6 +2,7 @@ package com.trackflow.report.vo;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -50,4 +51,10 @@ public class ReportExecuteResultVO {
 
     /** 应用的筛选条件摘要（方便前端展示） */
     private Map<String, Object> appliedFilters;
+
+    /** 数据计算时间（ISO 格式时间戳） */
+    private LocalDateTime calculatedAt;
+
+    /** 自动刷新间隔（秒），null/0 表示不自动刷新 */
+    private Integer refreshInterval;
 }

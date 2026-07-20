@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart } from 'echarts/charts'
@@ -524,17 +524,44 @@ async function refreshData() {
 
 // ─── Lifecycle ────────────────────────────────────────
 
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+function setupAutoRefreshTimer() {
+  clearAutoRefreshTimer()
+  const config = parsedConfig.value
+  const interval = config.refreshInterval
+  if (!interval || interval <= 0) return
+  autoRefreshTimer = setInterval(() => {
+    refreshData()
+  }, interval * 1000)
+}
+
+function clearAutoRefreshTimer() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
+}
+
 onMounted(() => {
-  loadData()
+  loadData().then(() => {
+    setupAutoRefreshTimer()
+  })
 })
 
 // Watch widget changes (e.g., after config edit)
 watch(() => props.widget?.config, () => {
-  refreshData()
+  refreshData().then(() => {
+    setupAutoRefreshTimer()
+  })
 }, { deep: true })
 
 watch(() => props.widget?.reportId, () => {
   refreshData()
+})
+
+onBeforeUnmount(() => {
+  clearAutoRefreshTimer()
 })
 </script>
 
