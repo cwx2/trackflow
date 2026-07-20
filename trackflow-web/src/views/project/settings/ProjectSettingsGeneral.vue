@@ -192,6 +192,7 @@ import {
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { invalidateProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
 
 const props = defineProps<{
@@ -340,6 +341,8 @@ async function doVisibilityUpdate(value: string) {
   try {
     await projectApi.update(props.project.key, { visibility: value })
     currentVisibility.value = value as any
+    // Invalidate permission cache — visibility change affects NonMember permissions
+    invalidateProjectPermissions(props.project.id)
     Message.success('可见性已更新')
     // Reload project
     const detailRes = await projectApi.getDetail(props.project.key)

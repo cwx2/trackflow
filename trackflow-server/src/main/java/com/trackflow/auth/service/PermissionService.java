@@ -153,6 +153,27 @@ public class PermissionService {
     }
 
     /**
+     * 失效指定项目的所有用户权限缓存。
+     * <p>
+     * 当项目 visibility 变更时调用——因为 NonMember/Anonymous 权限基于 visibility 动态授予，
+     * 变更后必须清除所有用户在该项目上的缓存，强制下次请求重新计算。
+     * <p>
+     * 使用 SCAN 匹配 perm:user:project:*:{projectId} 模式，避免 KEYS 阻塞。
+     *
+     * @param projectId 项目 ID
+     * @return 清除的缓存 key 数量
+     */
+    public int invalidateCacheForProject(Long projectId) {
+        String pattern = PROJECT_CACHE_KEY_PREFIX + "*:" + projectId;
+        Set<String> keys = scanKeys(pattern);
+        if (!keys.isEmpty()) {
+            redisTemplate.unlink(keys);
+            log.debug("Permission cache invalidated for project {}: {} keys removed", projectId, keys.size());
+        }
+        return keys.size();
+    }
+
+    /**
      * 失效拥有指定角色的所有用户的权限缓存
      */
     public void invalidateCacheForRole(Long roleId) {

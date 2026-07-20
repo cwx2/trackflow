@@ -404,15 +404,44 @@ public class ProjectService {
         if (dto.getVisibility() != null) {
             ProjectVisibility newVisibility = ProjectVisibility.fromValue(dto.getVisibility());
             if (newVisibility != project.getVisibility()) {
-                String oldVisibility = project.getVisibility().getValue();
+                ProjectVisibility oldVisibility = project.getVisibility();
+                String oldVisibilityValue = oldVisibility.getValue();
                 project.setVisibility(newVisibility);
-                // 发布事件，由 ProjectCacheEventListener 在事务提交后执行 Redis SCAN 清理
+
+                // 发布事件，由 ProjectCacheEventListener 在事务提交后执行缓存清理
                 eventPublisher.publishEvent(new com.trackflow.common.event.ProjectVisibilityChangedEvent(
-                        id, oldVisibility, newVisibility.getValue()));
+                        id, oldVisibilityValue, newVisibility.getValue()));
+
+                // 计算权限影响范围（非成员用户数）
+                long totalUsers = userMapper.selectCount(
+                        new LambdaQueryWrapper<SysUser>()
+                                .eq(SysUser::getStatus, "active"));
+                long memberCount = memberMapper.selectCount(
+                        new LambdaQueryWrapper<ProjectMember>()
+                                .eq(ProjectMember::getProjectId, id));
+                long affectedNonMembers = Math.max(0, totalUsers - memberCount);
+
                 Map<String, Object> detail = new java.util.LinkedHashMap<>();
                 detail.put("field", "visibility");
-                detail.put("old_value", oldVisibility);
+                detail.put("old_value", oldVisibilityValue);
                 detail.put("new_value", newVisibility.getValue());
+                detail.put("affected_non_members", affectedNonMembers);
+
+                // 权限扩散警告：private → internal/public
+                if (oldVisibility == ProjectVisibility.PRIVATE
+                        && (newVisibility == ProjectVisibility.INTERNAL || newVisibility == ProjectVisibility.PUBLIC)) {
+                    detail.put("security_impact", "permissions_expanded");
+                    detail.put("permissions_granted", "issue:view,issue:comment,query:create,report:view,sprint:view,project:view");
+                    log.warn("Project visibility expanded (projectId={}, {} → {}): {} non-member users now have NonMember permissions",
+                            id, oldVisibilityValue, newVisibility.getValue(), affectedNonMembers);
+                }
+                // 权限收紧：internal/public → private
+                else if (newVisibility == ProjectVisibility.PRIVATE) {
+                    detail.put("security_impact", "permissions_revoked");
+                    log.info("Project visibility restricted (projectId={}, {} → {}): {} non-member users lost access",
+                            id, oldVisibilityValue, newVisibility.getValue(), affectedNonMembers);
+                }
+
                 projectActivityService.log(id, currentUserId, "change_visibility", null, detail);
             }
         }
