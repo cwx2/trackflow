@@ -269,8 +269,35 @@
           </a-form-item>
 
           <a-form-item :label="valueSetSource === 'copy' && !editingId ? '调整选项（可修改复制后的选项）' : '选项列表'">
+            <!-- 排序工具栏 -->
+            <div v-if="form.options.length > 1" class="options-sort-toolbar">
+              <a-button size="mini" type="text" @click="sortOptionsByName('asc')">
+                <template #icon><icon-sort-ascending /></template>
+                按名称升序
+              </a-button>
+              <a-button size="mini" type="text" @click="sortOptionsByName('desc')">
+                <template #icon><icon-sort-descending /></template>
+                按名称降序
+              </a-button>
+            </div>
             <div class="options-list">
-              <div v-for="(opt, idx) in form.options" :key="idx" class="option-row">
+              <div
+                v-for="(opt, idx) in form.options"
+                :key="opt.id || `new-${idx}`"
+                class="option-row"
+                :class="{
+                  'option-row--dragging': optionDragIndex === idx,
+                  'option-row--drop-above': optionDropIndex === idx && optionDropPosition === 'above',
+                  'option-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below'
+                }"
+                :draggable="form.options.length > 1"
+                @dragstart="onOptionDragStart($event, idx)"
+                @dragover="onOptionDragOver($event, idx)"
+                @dragleave="onOptionDragLeave"
+                @drop="onOptionDrop($event, idx)"
+                @dragend="onOptionDragEnd"
+              >
+                <span v-if="form.options.length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
                 <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" />
                 <a-trigger trigger="click" :popup-translate="[0, 4]">
                   <span
@@ -648,6 +675,96 @@ function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolea
   form.options.splice(idx, 1)
 }
 
+// ========== 选项拖拽排序 ==========
+
+const optionDragIndex = ref<number | null>(null)
+const optionDropIndex = ref<number | null>(null)
+const optionDropPosition = ref<'above' | 'below' | null>(null)
+
+function onOptionDragStart(event: DragEvent, index: number) {
+  optionDragIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onOptionDragOver(event: DragEvent, index: number) {
+  event.preventDefault()
+  if (optionDragIndex.value === null || optionDragIndex.value === index) {
+    optionDropIndex.value = null
+    optionDropPosition.value = null
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const midY = rect.top + rect.height / 2
+  optionDropIndex.value = index
+  optionDropPosition.value = event.clientY < midY ? 'above' : 'below'
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onOptionDragLeave() {
+  optionDropIndex.value = null
+  optionDropPosition.value = null
+}
+
+function onOptionDrop(event: DragEvent, targetIndex: number) {
+  event.preventDefault()
+  if (optionDragIndex.value === null || optionDragIndex.value === targetIndex) {
+    resetOptionDragState()
+    return
+  }
+  const items = [...form.options]
+  const [draggedItem] = items.splice(optionDragIndex.value, 1)
+
+  let insertAt = targetIndex
+  if (optionDragIndex.value < targetIndex) {
+    insertAt = optionDropPosition.value === 'above' ? targetIndex - 1 : targetIndex
+  } else {
+    insertAt = optionDropPosition.value === 'above' ? targetIndex : targetIndex + 1
+  }
+  items.splice(insertAt, 0, draggedItem)
+  form.options = items
+
+  // 如果在编辑模式且所有选项都有 ID，调用后端排序 API 即时保存
+  if (editingId.value && items.every(o => o.id)) {
+    customFieldApi.reorderOptions(editingId.value, items.map(o => o.id!)).catch(() => {
+      // 静默失败，保存时会再次同步
+    })
+  }
+
+  resetOptionDragState()
+}
+
+function onOptionDragEnd() {
+  resetOptionDragState()
+}
+
+function resetOptionDragState() {
+  optionDragIndex.value = null
+  optionDropIndex.value = null
+  optionDropPosition.value = null
+}
+
+// ========== 选项按名称排序 ==========
+
+function sortOptionsByName(direction: 'asc' | 'desc') {
+  const sorted = [...form.options].sort((a, b) => {
+    const cmp = a.value.localeCompare(b.value, undefined, { sensitivity: 'base' })
+    return direction === 'asc' ? cmp : -cmp
+  })
+  form.options = sorted
+
+  // 编辑模式下即时保存排序
+  if (editingId.value && sorted.every(o => o.id)) {
+    customFieldApi.reorderOptions(editingId.value, sorted.map(o => o.id!)).catch(() => {
+      // 静默失败
+    })
+  }
+}
+
 async function handleSave() {
   if (!form.name.trim()) {
     Message.warning('请输入字段名称')
@@ -897,6 +1014,12 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.options-sort-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
 .options-list {
   display: flex;
   flex-direction: column;
@@ -907,6 +1030,46 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 150ms, box-shadow 150ms;
+}
+
+.option-row[draggable="true"] {
+  cursor: grab;
+}
+
+.option-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.option-row--dragging {
+  opacity: 0.4;
+  background: var(--tf-bg-surface);
+}
+
+.option-row--drop-above {
+  box-shadow: 0 -2px 0 0 var(--tf-accent);
+}
+
+.option-row--drop-below {
+  box-shadow: 0 2px 0 0 var(--tf-accent);
+}
+
+.option-drag-handle {
+  cursor: grab;
+  color: var(--tf-text-quaternary);
+  font-size: 14px;
+  user-select: none;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 3px;
+  transition: color 150ms, background 150ms;
+}
+
+.option-drag-handle:hover {
+  color: var(--tf-text-secondary);
+  background: var(--tf-bg-hover);
 }
 
 .option-usage-count {

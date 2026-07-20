@@ -413,6 +413,34 @@ public class CustomFieldService {
     }
 
     /**
+     * 重新排序枚举字段的选项值。
+     * 仅更新 position 字段，不改变选项内容。
+     *
+     * @param fieldId   字段 ID
+     * @param optionIds 按新顺序排列的选项 ID 列表
+     */
+    public void reorderOptions(Long fieldId, List<Long> optionIds) {
+        // 验证字段存在且为列表类型
+        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
+        if (field == null) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+        }
+        if (!"list".equals(field.getFieldFormat())) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项排序");
+        }
+
+        // 批量更新 position
+        for (int i = 0; i < optionIds.size(); i++) {
+            CustomFieldOption option = new CustomFieldOption();
+            option.setId(optionIds.get(i));
+            option.setPosition(i);
+            optionMapper.updateById(option);
+        }
+    }
+
+    /**
      * 更新列表类型字段的选项（保持选项 ID 稳定性）。
      * <p>
      * 策略：

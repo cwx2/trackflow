@@ -85,6 +85,11 @@ export const customFieldApi = {
     return request.put<any, R<void>>('/admin/custom-fields/reorder', { ids })
   },
 
+  /** 排序枚举字段的选项值 */
+  reorderOptions(fieldId: string, optionIds: string[]) {
+    return request.put<any, R<void>>(`/admin/custom-fields/${fieldId}/options/reorder`, { optionIds })
+  },
+
   // ========== 项目级读取 ==========
 
   /** 获取项目可用的自定义字段 */

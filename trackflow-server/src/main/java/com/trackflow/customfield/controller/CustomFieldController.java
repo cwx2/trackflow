@@ -126,6 +126,18 @@ public class CustomFieldController {
     }
 
     /**
+     * 重新排序枚举字段的选项值。
+     * 传入按新顺序排列的选项 ID 列表，后端更新 position。
+     */
+    @PutMapping("/admin/custom-fields/{id}/options/reorder")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<Void> reorderOptions(@PathVariable("id") Long id,
+                                  @Valid @RequestBody com.trackflow.customfield.dto.ReorderOptionsDTO dto) {
+        customFieldService.reorderOptions(id, dto.getOptionIds());
+        return R.ok();
+    }
+
+    /**
      * 获取"Fields in Projects"矩阵数据：按项目分组展示每个项目关联的自定义字段。
      * 包含全局字段和项目专属字段。
      */
