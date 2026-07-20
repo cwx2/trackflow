@@ -6,17 +6,22 @@
 
     <!-- 项目过滤条件 -->
     <sql id="projectFilter">
-        <if test="projectIds != null and projectIds.size() > 0">
-            <if test="projectIds.size() == 1">
-                AND i.project_id = #{projectIds[0]}
-            </if>
-            <if test="projectIds.size() > 1">
-                AND i.project_id IN
-                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
-                    #{pid}
-                </foreach>
-            </if>
-        </if>
+        <choose>
+            <when test="projectIds != null and projectIds.size() > 0">
+                <if test="projectIds.size() == 1">
+                    AND i.project_id = #{projectIds[0]}
+                </if>
+                <if test="projectIds.size() > 1">
+                    AND i.project_id IN
+                    <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+                        #{pid}
+                    </foreach>
+                </if>
+            </when>
+            <when test="projectIds != null and projectIds.size() == 0">
+                AND 1=0 <!-- 空列表 = 无权限 = 返回空集 -->
+            </when>
+        </choose>
     </sql>
 
     <!-- Sprint 过滤条件 -->
@@ -164,17 +169,22 @@
         FROM issue i
         JOIN project p ON p.id = i.project_id
         WHERE i.deleted_at IS NULL
-        <if test="projectIds != null and projectIds.size() > 0">
-            <if test="projectIds.size() == 1">
-                AND i.project_id = #{projectIds[0]}
-            </if>
-            <if test="projectIds.size() > 1">
-                AND i.project_id IN
-                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
-                    #{pid}
-                </foreach>
-            </if>
-        </if>
+        <choose>
+            <when test="projectIds != null and projectIds.size() > 0">
+                <if test="projectIds.size() == 1">
+                    AND i.project_id = #{projectIds[0]}
+                </if>
+                <if test="projectIds.size() > 1">
+                    AND i.project_id IN
+                    <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+                        #{pid}
+                    </foreach>
+                </if>
+            </when>
+            <when test="projectIds != null and projectIds.size() == 0">
+                AND 1=0
+            </when>
+        </choose>
         GROUP BY p.id, p.name, p.key
         ORDER BY total DESC
     </select>
@@ -404,10 +414,15 @@
         WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
           AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND t.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         GROUP BY t.user_id, u.display_name
         ORDER BY total_minutes DESC
     </select>
@@ -423,10 +438,15 @@
         WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
           AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND t.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         GROUP BY t.project_id, p.name
         ORDER BY total_minutes DESC
     </select>
@@ -442,10 +462,15 @@
         WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
           AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND t.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         GROUP BY COALESCE(wiav.name, '未分类')
         ORDER BY total_minutes DESC
     </select>
@@ -459,10 +484,15 @@
         WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
           AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND t.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         GROUP BY t.work_date
         ORDER BY t.work_date ASC
     </select>
@@ -479,10 +509,15 @@
         WHERE t.work_date >= #{startDate}::date
           AND t.work_date &lt;= #{endDate}::date
           AND NOT EXISTS (SELECT 1 FROM issue i WHERE i.id = t.issue_id AND i.deleted_at IS NOT NULL)
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND t.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         GROUP BY p.name, u.display_name
         ORDER BY p.name ASC, total_minutes DESC
     </select>
@@ -503,10 +538,15 @@
         WHERE i.deleted_at IS NULL
           AND i.estimated_hours IS NOT NULL
           AND i.estimated_hours > 0
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND i.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         ORDER BY (COALESCE(i.spent_hours, 0) / i.estimated_hours) DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
@@ -518,10 +558,15 @@
         WHERE i.deleted_at IS NULL
           AND i.estimated_hours IS NOT NULL
           AND i.estimated_hours > 0
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND i.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
     </select>
 
     <!-- 预估对比报表：按项目聚合汇总 -->
@@ -536,10 +581,15 @@
         WHERE i.deleted_at IS NULL
           AND i.estimated_hours IS NOT NULL
           AND i.estimated_hours > 0
-          <if test="projectIds != null and projectIds.size() > 0">
-              AND i.project_id IN
-              <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
-          </if>
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND i.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
         GROUP BY p.name
         ORDER BY estimated_hours_sum DESC
     </select>
@@ -548,17 +598,26 @@
 
     <!-- 可复用：报表筛选条件片段 -->
     <sql id="reportFilters">
-        <if test="params.projectIds != null and params.projectIds.size() > 0">
-            <if test="params.projectIds.size() == 1">
-                AND i.project_id = #{params.projectIds[0]}
-            </if>
-            <if test="params.projectIds.size() > 1">
-                AND i.project_id IN
-                <foreach collection="params.projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
-            </if>
-        </if>
+        <choose>
+            <when test="params.projectIds != null and params.projectIds.size() > 0">
+                <if test="params.projectIds.size() == 1">
+                    AND i.project_id = #{params.projectIds[0]}
+                </if>
+                <if test="params.projectIds.size() > 1">
+                    AND i.project_id IN
+                    <foreach collection="params.projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+                </if>
+            </when>
+            <when test="params.projectIds != null and params.projectIds.size() == 0">
+                AND 1=0 <!-- 空列表 = 无权限 = 返回空集 -->
+            </when>
+        </choose>
         <if test="params.sprintId != null">
             AND i.sprint_id = #{params.sprintId}
+        </if>
+        <if test="params.activeSprintIds != null and params.activeSprintIds.size() > 0">
+            AND i.sprint_id IN
+            <foreach collection="params.activeSprintIds" item="asid" open="(" separator="," close=")">#{asid}</foreach>
         </if>
         <if test="params.statuses != null and params.statuses.size() > 0">
             AND s.name IN
@@ -567,6 +626,25 @@
         <if test="params.statusesExclude != null and params.statusesExclude.size() > 0">
             AND s.name NOT IN
             <foreach collection="params.statusesExclude" item="se" open="(" separator="," close=")">#{se}</foreach>
+        </if>
+        <if test="params.onlyClosedStatus != null and params.onlyClosedStatus">
+            AND i.status_id IN
+            <foreach collection="params.closedStatusIds" item="csid" open="(" separator="," close=")">#{csid}</foreach>
+        </if>
+        <if test="params.excludeClosedStatus != null and params.excludeClosedStatus">
+            AND i.status_id NOT IN
+            <foreach collection="params.closedStatusIds" item="csid" open="(" separator="," close=")">#{csid}</foreach>
+        </if>
+        <if test="params.unassigned != null and params.unassigned">
+            AND i.assignee_id IS NULL
+        </if>
+        <if test="params.overdue != null and params.overdue">
+            AND i.due_date IS NOT NULL
+            AND i.due_date &lt; CURRENT_DATE
+            <if test="params.closedStatusIds != null and params.closedStatusIds.size() > 0">
+                AND i.status_id NOT IN
+                <foreach collection="params.closedStatusIds" item="csid" open="(" separator="," close=")">#{csid}</foreach>
+            </if>
         </if>
         <if test="params.priorities != null and params.priorities.size() > 0">
             AND i.priority IN

@@ -568,6 +568,11 @@ public class ReportStatisticsService {
             // 系统管理员：改为显式查询所有活跃项目 ID（走索引而非全表扫描）
             ids = projectService.getAllActiveProjectIds();
         }
+        // 防护：用户无任何可访问项目时，使用 sentinel 值确保 SQL IN (-1) 返回空集
+        // 而非跳过项目过滤条件导致全表扫描数据泄露
+        if (ids.isEmpty()) {
+            return List.of(-1L);
+        }
         return ids;
     }
 

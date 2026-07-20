@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.dto.UpdateReportDTO;
@@ -18,6 +19,9 @@ import com.trackflow.report.entity.ReportType;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.mapper.result.*;
+import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.entity.SprintStatus;
+import com.trackflow.sprint.mapper.SprintMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +42,8 @@ public class ReportService {
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
     private final PermissionService permissionService;
+    private final StatusCacheHelper statusCacheHelper;
+    private final SprintMapper sprintMapper;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离）
@@ -357,6 +363,11 @@ public class ReportService {
             // 系统管理员：显式查询所有活跃项目 ID（走索引而非全表扫描）
             ids = projectService.getAllActiveProjectIds();
         }
+        // 防护：用户无任何可访问项目时，使用 sentinel 值确保 SQL IN (-1) 返回空集
+        // 而非跳过项目过滤条件导致全表扫描数据泄露
+        if (ids.isEmpty()) {
+            return List.of(-1L);
+        }
         return ids;
     }
 
@@ -533,6 +544,56 @@ public class ReportService {
                     params.put("assigneeIds", assigneeIds);
                 }
             }
+
+            // ── 语义快捷筛选 ──
+
+            // statusClosed: true=仅已关闭, false=排除已关闭
+            if (filters.getStatusClosed() != null) {
+                Set<Long> closedIds = statusCacheHelper.getClosedStatusIds();
+                if (!closedIds.isEmpty()) {
+                    if (Boolean.TRUE.equals(filters.getStatusClosed())) {
+                        params.put("closedStatusIds", closedIds);
+                        params.put("onlyClosedStatus", true);
+                    } else {
+                        params.put("closedStatusIds", closedIds);
+                        params.put("excludeClosedStatus", true);
+                    }
+                }
+            }
+
+            // unassigned: true=仅未分配
+            if (Boolean.TRUE.equals(filters.getUnassigned())) {
+                params.put("unassigned", true);
+            }
+
+            // overdue: true=仅逾期（due_date < today 且未关闭）
+            if (Boolean.TRUE.equals(filters.getOverdue())) {
+                params.put("overdue", true);
+                // 需要排除已关闭的工单
+                Set<Long> closedIds = statusCacheHelper.getClosedStatusIds();
+                if (!closedIds.isEmpty()) {
+                    params.put("closedStatusIds", closedIds);
+                }
+            }
+
+            // activeSprint: true=仅当前活跃 Sprint 的工单
+            if (Boolean.TRUE.equals(filters.getActiveSprint())) {
+                // 查询所有活跃 Sprint（跨项目），取第一个
+                LambdaQueryWrapper<Sprint> sprintQuery = new LambdaQueryWrapper<>();
+                sprintQuery.eq(Sprint::getStatus, SprintStatus.ACTIVE);
+                if (projectIds != null && !projectIds.isEmpty()) {
+                    sprintQuery.in(Sprint::getProjectId, projectIds);
+                }
+                List<Sprint> activeSprints = sprintMapper.selectList(sprintQuery);
+                if (!activeSprints.isEmpty()) {
+                    List<Long> activeSprintIds = activeSprints.stream()
+                            .map(Sprint::getId).toList();
+                    params.put("activeSprintIds", activeSprintIds);
+                } else {
+                    // 没有活跃 Sprint，返回空结果（sprintId 设为不存在的值）
+                    params.put("sprintId", -1L);
+                }
+            }
         }
 
         return params;
@@ -560,6 +621,10 @@ public class ReportService {
             if (filters.getIssueTypes() != null) summary.put("issueTypes", filters.getIssueTypes());
             if (filters.getAssignees() != null) summary.put("assignees", filters.getAssignees());
             if (filters.getSprintId() != null) summary.put("sprintId", filters.getSprintId());
+            if (filters.getStatusClosed() != null) summary.put("statusClosed", filters.getStatusClosed());
+            if (Boolean.TRUE.equals(filters.getUnassigned())) summary.put("unassigned", true);
+            if (Boolean.TRUE.equals(filters.getOverdue())) summary.put("overdue", true);
+            if (Boolean.TRUE.equals(filters.getActiveSprint())) summary.put("activeSprint", true);
         }
         return summary;
     }
