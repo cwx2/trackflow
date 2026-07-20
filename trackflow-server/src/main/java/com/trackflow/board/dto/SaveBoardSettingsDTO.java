@@ -40,4 +40,8 @@ public class SaveBoardSettingsDTO {
     @NotNull(message = "基本设置不能为空")
     @Valid
     private UpdateBoardGeneralConfigDTO generalConfig;
+
+    /** 图表配置（可选，为 null 时不更新） */
+    @Valid
+    private UpdateBoardChartConfigDTO chartConfig;
 }

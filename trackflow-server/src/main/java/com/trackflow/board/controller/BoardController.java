@@ -2,18 +2,21 @@ package com.trackflow.board.controller;
 
 import com.trackflow.board.dto.SaveBoardSettingsDTO;
 import com.trackflow.board.dto.UpdateBoardCardConfigDTO;
+import com.trackflow.board.dto.UpdateBoardChartConfigDTO;
 import com.trackflow.board.dto.UpdateBoardColumnMergeDTO;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.dto.UpdateBoardGeneralConfigDTO;
 import com.trackflow.board.dto.UpdateBoardSwimlaneConfigDTO;
 import com.trackflow.board.service.BoardAccessService;
 import com.trackflow.board.service.BoardCardConfigService;
+import com.trackflow.board.service.BoardChartConfigService;
 import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
 import com.trackflow.board.service.BoardConfigVersionService;
 import com.trackflow.board.service.BoardGeneralConfigService;
 import com.trackflow.board.service.BoardSwimlaneConfigService;
 import com.trackflow.board.vo.BoardCardConfigVO;
+import com.trackflow.board.vo.BoardChartConfigVO;
 import com.trackflow.board.vo.BoardColumnMergeGroupVO;
 import com.trackflow.board.vo.BoardColumnVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
@@ -34,6 +37,7 @@ public class BoardController {
 
     private final BoardColumnService boardColumnService;
     private final BoardCardConfigService boardCardConfigService;
+    private final BoardChartConfigService boardChartConfigService;
     private final BoardSwimlaneConfigService boardSwimlaneConfigService;
     private final BoardColumnMergeService boardColumnMergeService;
     private final BoardGeneralConfigService boardGeneralConfigService;
@@ -202,6 +206,35 @@ public class BoardController {
         return R.ok();
     }
 
+    // ========== 图表配置 ==========
+
+    /**
+     * 获取项目看板图表配置（图表类型 + 计算方式 + 过滤器）。
+     * 如果项目尚未配置，返回默认值。
+     * 需要看板查看权限。
+     */
+    @GetMapping("/chart-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<BoardChartConfigVO> getChartConfig(@RequestParam("projectId") Long projectId) {
+        boardAccessService.checkViewAccess(projectId);
+        BoardChartConfigVO config = boardChartConfigService.getChartConfig(projectId);
+        return R.ok(config);
+    }
+
+    /**
+     * 保存项目看板图表配置。
+     * 需要看板编辑权限。
+     */
+    @PutMapping("/chart-config")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    public R<Void> saveChartConfig(
+            @RequestParam("projectId") Long projectId,
+            @Valid @RequestBody UpdateBoardChartConfigDTO dto) {
+        boardAccessService.checkEditAccess(projectId);
+        boardChartConfigService.saveChartConfig(projectId, dto);
+        return R.ok();
+    }
+
     // ========== 批量保存 ==========
 
     /**
@@ -229,6 +262,11 @@ public class BoardController {
         boardSwimlaneConfigService.saveSwimlaneConfig(projectId, dto.getSwimlaneConfig());
         boardColumnMergeService.saveColumnMerges(projectId, dto.getColumnMerges());
         boardGeneralConfigService.saveGeneralConfig(projectId, dto.getGeneralConfig());
+
+        // 图表配置为可选，有值时才保存
+        if (dto.getChartConfig() != null) {
+            boardChartConfigService.saveChartConfig(projectId, dto.getChartConfig());
+        }
 
         return R.ok();
     }

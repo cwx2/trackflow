@@ -682,6 +682,23 @@ export interface BoardSwimlaneConfigVO {
   groupByField: string
 }
 
+// ========== 看板图表配置 ==========
+
+export interface BoardChartConfigVO {
+  /** 图表类型: burndown / cumulative_flow */
+  chartType: string
+  /** Burndown 计算方式: issue_count / estimation / work_items */
+  burndownCalculation: string
+  /** Issue 过滤器模式: all_cards / custom */
+  issueFilterMode: string
+  /** 自定义过滤条件 */
+  issueFilterQuery: string | null
+  /** 当前估算字段 ID */
+  estimationFieldId: string | null
+  /** 原始估算字段 ID */
+  originalEstimationFieldId: string | null
+}
+
 // ========== 看板列合并配置 ==========
 
 export interface BoardColumnMergeGroupVO {

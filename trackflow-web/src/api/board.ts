@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO } from './types'
+import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO } from './types'
 
 /**
  * 看板模块 API
@@ -74,6 +74,27 @@ export const boardApi = {
     })
   },
 
+  /** 获取项目看板图表配置（图表类型 + 计算方式） */
+  getChartConfig(projectId: string) {
+    return request.get<any, R<BoardChartConfigVO>>('/boards/chart-config', {
+      params: { projectId }
+    })
+  },
+
+  /** 保存项目看板图表配置 */
+  saveChartConfig(projectId: string, data: {
+    chartType: string
+    burndownCalculation: string
+    issueFilterMode: string
+    issueFilterQuery?: string | null
+    estimationFieldId?: number | null
+    originalEstimationFieldId?: number | null
+  }) {
+    return request.put<any, R<void>>('/boards/chart-config', data, {
+      params: { projectId }
+    })
+  },
+
   /** 获取项目看板基本设置（名称 + 访问权限） */
   getGeneralConfig(projectId: string) {
     return request.get<any, R<BoardGeneralConfigVO>>('/boards/general-config', {
@@ -100,6 +121,7 @@ export const boardApi = {
     swimlaneConfig: { groupByField: string }
     columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
     generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null }
+    chartConfig?: { chartType: string; burndownCalculation: string; issueFilterMode: string; issueFilterQuery?: string | null; estimationFieldId?: number | null; originalEstimationFieldId?: number | null }
   }) {
     return request.put<any, R<void>>('/boards/settings', data, {
       params: { projectId }

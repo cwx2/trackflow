@@ -169,6 +169,25 @@
           @update:merge-groups="editableMergeGroups = $event"
         />
       </a-tab-pane>
+
+      <!-- 图表设置 标签页 -->
+      <a-tab-pane key="chart" title="图表">
+        <ChartSettingsPanel
+          :chart-type="editableChartType"
+          :burndown-calculation="editableBurndownCalculation"
+          :issue-filter-mode="editableIssueFilterMode"
+          :issue-filter-query="editableIssueFilterQuery"
+          :estimation-field-id="editableEstimationFieldId"
+          :original-estimation-field-id="editableOriginalEstimationFieldId"
+          :project-id="props.projectId"
+          @update:chart-type="editableChartType = $event"
+          @update:burndown-calculation="editableBurndownCalculation = $event"
+          @update:issue-filter-mode="editableIssueFilterMode = $event"
+          @update:issue-filter-query="editableIssueFilterQuery = $event"
+          @update:estimation-field-id="editableEstimationFieldId = $event"
+          @update:original-estimation-field-id="editableOriginalEstimationFieldId = $event"
+        />
+      </a-tab-pane>
     </a-tabs>
   </a-drawer>
 </template>
@@ -180,6 +199,7 @@ import { boardApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import CardSettingsPanel from './CardSettingsPanel.vue'
+import ChartSettingsPanel from './ChartSettingsPanel.vue'
 import GeneralSettingsPanel from './GeneralSettingsPanel.vue'
 import SwimlaneSettingsPanel from './SwimlaneSettingsPanel.vue'
 
@@ -240,6 +260,13 @@ const editableDoneRetentionDays = ref<number | null>(null)
 const editableSwimlaneGroupBy = ref('none')
 const editableMergeGroups = ref<MergeGroupLocal[]>([])
 
+// 图表设置状态
+const editableChartType = ref('burndown')
+const editableBurndownCalculation = ref('issue_count')
+const editableIssueFilterMode = ref('all_cards')
+const editableIssueFilterQuery = ref<string | null>(null)
+const editableEstimationFieldId = ref<string | null>(null)
+const editableOriginalEstimationFieldId = ref<string | null>(null)
 // 乐观锁版本号（从 getGeneralConfig 响应中获取）
 const configVersion = ref<number>(0)
 
@@ -301,6 +328,26 @@ watch(() => props.visible, async (newVisible) => {
       }
     } catch {
       editableSwimlaneGroupBy.value = 'none'
+    }
+
+    // 加载图表配置
+    try {
+      const res = await boardApi.getChartConfig(props.projectId)
+      if (res.data) {
+        editableChartType.value = res.data.chartType || 'burndown'
+        editableBurndownCalculation.value = res.data.burndownCalculation || 'issue_count'
+        editableIssueFilterMode.value = res.data.issueFilterMode || 'all_cards'
+        editableIssueFilterQuery.value = res.data.issueFilterQuery ?? null
+        editableEstimationFieldId.value = res.data.estimationFieldId ?? null
+        editableOriginalEstimationFieldId.value = res.data.originalEstimationFieldId ?? null
+      }
+    } catch {
+      editableChartType.value = 'burndown'
+      editableBurndownCalculation.value = 'issue_count'
+      editableIssueFilterMode.value = 'all_cards'
+      editableIssueFilterQuery.value = null
+      editableEstimationFieldId.value = null
+      editableOriginalEstimationFieldId.value = null
     }
 
     // 加载列合并配置
@@ -529,12 +576,13 @@ function resetDragState() {
  */
 async function reloadAllConfigs() {
   try {
-    const [colRes, cardRes, swimRes, mergeRes, generalRes] = await Promise.all([
+    const [colRes, cardRes, swimRes, mergeRes, generalRes, chartRes] = await Promise.all([
       boardApi.getColumns(props.projectId),
       boardApi.getCardConfig(props.projectId),
       boardApi.getSwimlaneConfig(props.projectId),
       boardApi.getColumnMerges(props.projectId),
-      boardApi.getGeneralConfig(props.projectId)
+      boardApi.getGeneralConfig(props.projectId),
+      boardApi.getChartConfig(props.projectId)
     ])
 
     // 更新列配置
@@ -579,6 +627,16 @@ async function reloadAllConfigs() {
       editableFilterQuery.value = generalRes.data.filterQuery ?? null
       editableDoneRetentionDays.value = generalRes.data.doneRetentionDays ?? null
       configVersion.value = generalRes.data.configVersion ?? 0
+    }
+
+    // 更新图表配置
+    if (chartRes.data) {
+      editableChartType.value = chartRes.data.chartType || 'burndown'
+      editableBurndownCalculation.value = chartRes.data.burndownCalculation || 'issue_count'
+      editableIssueFilterMode.value = chartRes.data.issueFilterMode || 'all_cards'
+      editableIssueFilterQuery.value = chartRes.data.issueFilterQuery ?? null
+      editableEstimationFieldId.value = chartRes.data.estimationFieldId ?? null
+      editableOriginalEstimationFieldId.value = chartRes.data.originalEstimationFieldId ?? null
     }
   } catch {
     Message.error('重新加载配置失败，请手动刷新页面')
@@ -654,6 +712,14 @@ async function handleSave() {
         filterMode: editableFilterMode.value,
         filterQuery: editableFilterQuery.value,
         doneRetentionDays: editableDoneRetentionDays.value
+      },
+      chartConfig: {
+        chartType: editableChartType.value,
+        burndownCalculation: editableBurndownCalculation.value,
+        issueFilterMode: editableIssueFilterMode.value,
+        issueFilterQuery: editableIssueFilterQuery.value,
+        estimationFieldId: editableEstimationFieldId.value ? Number(editableEstimationFieldId.value) : null,
+        originalEstimationFieldId: editableOriginalEstimationFieldId.value ? Number(editableOriginalEstimationFieldId.value) : null
       }
     })
 
