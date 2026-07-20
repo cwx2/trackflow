@@ -8,6 +8,7 @@ export interface DashboardParams {
   sprintId?: string
   startDate?: string  // ISO date string
   endDate?: string
+  filter?: string     // JSON-encoded filter conditions (same as issue list)
 }
 
 export interface OverviewData {

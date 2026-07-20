@@ -82,6 +82,28 @@ public class QueryExecutor {
     }
 
     /**
+     * 仅返回匹配筛选条件的工单 ID 列表（用于报表 Issue filter 功能）
+     * 带项目权限过滤，最大返回 10000 条（超出截断——报表场景已足够）
+     */
+    public List<Long> executeFilterToIds(List<Map<String, Object>> filters, List<Long> accessibleProjectIds) {
+        if (filters == null || filters.isEmpty()) {
+            return null; // null 表示无筛选，不限制
+        }
+        QueryWrapper<Issue> wrapper = buildWrapper(filters);
+        wrapper.select("id");
+        if (accessibleProjectIds != null) {
+            if (accessibleProjectIds.isEmpty()) {
+                return List.of(-1L);
+            }
+            wrapper.in("project_id", accessibleProjectIds);
+        }
+        wrapper.last("LIMIT 10000");
+        return issueMapper.selectObjs(wrapper).stream()
+                .map(obj -> ((Number) obj).longValue())
+                .toList();
+    }
+
+    /**
      * 计数查询（不分页，只返回匹配数量）
      */
     public long count(List<Map<String, Object>> filters) {

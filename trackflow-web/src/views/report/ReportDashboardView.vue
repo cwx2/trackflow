@@ -35,6 +35,35 @@
           :shortcuts="dateShortcuts"
           @change="loadDashboard"
         />
+        <!-- Issue Filter 输入框 -->
+        <a-input
+          v-model="issueFilterText"
+          placeholder="Issue filter（如 type: Bug, assignee: zhangwei）"
+          size="small"
+          allow-clear
+          style="width: 280px"
+          @press-enter="applyIssueFilter"
+          @clear="clearIssueFilter"
+        >
+          <template #prefix><icon-filter /></template>
+        </a-input>
+        <a-button
+          v-if="issueFilterText && issueFilterText !== appliedFilterText"
+          size="small"
+          type="primary"
+          @click="applyIssueFilter"
+        >
+          应用筛选
+        </a-button>
+        <a-tag
+          v-if="appliedFilterText"
+          closable
+          size="small"
+          color="arcoblue"
+          @close="clearIssueFilter"
+        >
+          {{ appliedFilterText }}
+        </a-tag>
         <a-dropdown v-if="dashboardData" trigger="click">
           <a-button size="small" type="outline">
             <template #icon><icon-download /></template>
@@ -257,7 +286,7 @@ import {
   ToolboxComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
+import { IconDownload, IconFile, IconPrinter, IconFilter } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
@@ -278,6 +307,9 @@ const selectedProjectId = ref<string>('__all__')
 const selectedSprintId = ref<string | undefined>(undefined)
 const dateRange = ref<string[] | undefined>(undefined)
 const dashboardData = ref<DashboardData | null>(null)
+const issueFilterText = ref('')
+const appliedFilterText = ref('')
+const appliedFilterJson = ref<string | undefined>(undefined)
 let themeObserver: MutationObserver | null = null
 
 const dateShortcuts = [
@@ -289,6 +321,71 @@ const dateShortcuts = [
 
 function today() { return new Date() }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d }
+
+// ─── Issue Filter 解析 ────────────────────────────────────────
+
+/**
+ * 将简单的 "field: value, field: value" 文本解析为 QueryExecutor 的 JSON filter 格式
+ * 支持格式：
+ *   type: Bug
+ *   assignee: zhangwei
+ *   priority: High
+ *   status: open
+ *   keyword: 关键词
+ */
+function parseIssueFilterText(text: string): object[] | null {
+  if (!text || !text.trim()) return null
+  const filters: object[] = []
+  // Split by comma or space-separated "field: value" pairs
+  const parts = text.split(/[,;]\s*|\s+(?=\w+\s*:)/)
+  for (const part of parts) {
+    const match = part.match(/^\s*(\w+)\s*:\s*(.+?)\s*$/)
+    if (match) {
+      const [, field, value] = match
+      const fieldMap: Record<string, string> = {
+        type: 'type',
+        assignee: 'assignee',
+        priority: 'priority',
+        status: 'status',
+        reporter: 'reporter',
+        sprint: 'sprint',
+        keyword: 'keyword',
+        tag: 'tag'
+      }
+      const mappedField = fieldMap[field.toLowerCase()] || field
+      if (mappedField === 'status' && (value === 'open' || value === 'closed')) {
+        filters.push({ field: mappedField, operator: value, value: [value] })
+      } else {
+        filters.push({ field: mappedField, operator: 'eq', value: [value] })
+      }
+    } else if (part.trim()) {
+      // Plain text without "field:" prefix — treat as keyword
+      filters.push({ field: 'keyword', operator: 'contains', value: [part.trim()] })
+    }
+  }
+  return filters.length > 0 ? filters : null
+}
+
+function applyIssueFilter() {
+  const text = issueFilterText.value.trim()
+  if (!text) {
+    clearIssueFilter()
+    return
+  }
+  const filters = parseIssueFilterText(text)
+  if (filters) {
+    appliedFilterText.value = text
+    appliedFilterJson.value = JSON.stringify(filters)
+    loadDashboard()
+  }
+}
+
+function clearIssueFilter() {
+  issueFilterText.value = ''
+  appliedFilterText.value = ''
+  appliedFilterJson.value = undefined
+  loadDashboard()
+}
 
 // ─── 主题色（动态读取 CSS 变量，适配亮色/暗色/护眼主题） ─────────
 
@@ -1111,6 +1208,10 @@ async function loadDashboard() {
     if (dateRange.value && dateRange.value.length === 2) {
       params.startDate = formatDate(dateRange.value[0])
       params.endDate = formatDate(dateRange.value[1])
+    }
+    // Issue filter
+    if (appliedFilterJson.value) {
+      params.filter = appliedFilterJson.value
     }
     const res = await reportStatisticsApi.dashboard(params)
     dashboardData.value = res.data

@@ -31,6 +31,16 @@
         </if>
     </sql>
 
+    <!-- Issue IDs 过滤条件（用于 Issue filter 功能） -->
+    <sql id="issueIdsFilter">
+        <if test="issueIds != null and issueIds.size() > 0">
+            AND i.id IN
+            <foreach collection="issueIds" item="iid" open="(" separator="," close=")">
+                #{iid}
+            </foreach>
+        </if>
+    </sql>
+
     <!-- ========== 状态分布 ========== -->
     <select id="selectStatusDistribution" resultType="com.trackflow.report.mapper.result.StatusDistributionRow">
         SELECT s.name AS status_name,
@@ -43,6 +53,7 @@
         WHERE i.deleted_at IS NULL
         <include refid="projectFilter"/>
         <include refid="sprintFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY s.id, s.name, s.color, s.category, s.sort_order
         ORDER BY s.sort_order
     </select>
@@ -55,6 +66,7 @@
         WHERE i.deleted_at IS NULL
         <include refid="projectFilter"/>
         <include refid="sprintFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY COALESCE(i.priority, 'Normal')
     </select>
 
@@ -66,6 +78,7 @@
         WHERE i.deleted_at IS NULL
         <include refid="projectFilter"/>
         <include refid="sprintFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY COALESCE(i.issue_type, 'Task')
         ORDER BY cnt DESC
     </select>
@@ -85,6 +98,7 @@
         WHERE i.deleted_at IS NULL
         <include refid="projectFilter"/>
         <include refid="sprintFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY i.assignee_id, u.display_name
         ORDER BY total DESC
     </select>
@@ -114,6 +128,7 @@
         WHERE i.deleted_at IS NULL
         <include refid="projectFilter"/>
         <include refid="sprintFilter"/>
+        <include refid="issueIdsFilter"/>
     </select>
 
     <!-- ========== 趋势-创建 ========== -->
@@ -125,6 +140,7 @@
           AND i.created_at >= #{startDate}
           AND i.created_at &lt;= #{endDate}
         <include refid="projectFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY CAST(i.created_at AS DATE)
         ORDER BY day
     </select>
@@ -139,6 +155,7 @@
           AND i.resolved_at >= #{startDate}
           AND i.resolved_at &lt;= #{endDate}
         <include refid="projectFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY CAST(i.resolved_at AS DATE)
         ORDER BY day
     </select>
@@ -185,6 +202,7 @@
                 AND 1=0
             </when>
         </choose>
+        <include refid="issueIdsFilter"/>
         GROUP BY p.id, p.name, p.key
         ORDER BY total DESC
     </select>
@@ -221,6 +239,7 @@
             WHERE i.deleted_at IS NULL
               AND i.created_at &lt; (#{endDate}::timestamp + interval '1 day')
             <include refid="projectFilter"/>
+            <include refid="issueIdsFilter"/>
         ),
         -- 每个工单的初始状态：取第一条 status 活动的 old_value，无活动则取当前状态名
         first_status_change AS (
@@ -344,6 +363,7 @@
           AND i.resolved_at >= #{startDate}
           AND i.resolved_at &lt;= #{endDate}
         <include refid="projectFilter"/>
+        <include refid="issueIdsFilter"/>
         <if test="useWeekGrouping">
         GROUP BY date_trunc('week', i.resolved_at)
         ORDER BY date_trunc('week', i.resolved_at)
@@ -383,6 +403,7 @@
           AND i.resolved_at >= #{startDate}
           AND i.resolved_at &lt;= #{endDate}
         <include refid="projectFilter"/>
+        <include refid="issueIdsFilter"/>
         GROUP BY
         <choose>
             <when test="groupBy == 'type'">

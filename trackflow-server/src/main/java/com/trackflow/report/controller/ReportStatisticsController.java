@@ -1,8 +1,10 @@
 package com.trackflow.report.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.report.service.ReportStatisticsService;
 import com.trackflow.report.vo.*;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 报表统计数据 API — 提供仪表盘图表所需的统计数据
@@ -22,10 +26,13 @@ public class ReportStatisticsController {
 
     private final ReportStatisticsService statisticsService;
     private final ProjectService projectService;
+    private final QueryExecutor queryExecutor;
+    private final ObjectMapper objectMapper;
 
     /**
      * 获取仪表盘全量统计数据（一次请求获取所有图表数据）
      * projectId 可选：不传时返回用户有权限的全部项目聚合数据
+     * filter 可选：JSON 数组格式的 Issue 筛选条件（与工单列表的筛选语法相同）
      */
     @GetMapping("/dashboard")
     @PreAuthorize("isAuthenticated()")
@@ -33,12 +40,15 @@ public class ReportStatisticsController {
             @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "filter", required = false) String filter) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate, userId));
+        // 解析 Issue filter 条件为匹配的工单 ID 列表
+        List<Long> issueIds = resolveIssueFilter(filter, projectId, userId);
+        return R.ok(statisticsService.getDashboardData(projectId, sprintId, startDate, endDate, userId, issueIds));
     }
 
     /**
@@ -188,5 +198,30 @@ public class ReportStatisticsController {
         if (pageSize < 1) pageSize = 1;
         if (pageSize > 200) pageSize = 200;
         return R.ok(statisticsService.getEstimationReport(projectId, userId, page, pageSize));
+    }
+
+    // ─── Helper: 解析 Issue filter 为工单 ID 列表 ──────────────────────
+
+    @SuppressWarnings("unchecked")
+    private List<Long> resolveIssueFilter(String filter, Long projectId, Long userId) {
+        if (filter == null || filter.isBlank()) {
+            return null; // null 表示无筛选
+        }
+        try {
+            // filter 是 JSON 数组字符串，解析为 List<Map<String, Object>>
+            List<Map<String, Object>> filters = objectMapper.readValue(filter,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            if (filters.isEmpty()) {
+                return null;
+            }
+            // 获取用户可访问的项目 ID 列表
+            List<Long> accessibleProjectIds = projectId != null
+                    ? List.of(projectId)
+                    : projectService.getAccessibleProjectIds(userId);
+            return queryExecutor.executeFilterToIds(filters, accessibleProjectIds);
+        } catch (Exception e) {
+            // 无法解析的 filter 忽略，不筛选
+            return null;
+        }
     }
 }

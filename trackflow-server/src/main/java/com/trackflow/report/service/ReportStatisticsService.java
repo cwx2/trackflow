@@ -60,14 +60,17 @@ public class ReportStatisticsService {
      * 获取仪表盘全量数据（一次请求，前端缓存分发）
      * 支持 Redis 短期缓存（90s TTL）
      */
-    public DashboardVO getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate, Long userId) {
+    public DashboardVO getDashboardData(Long projectId, Long sprintId, LocalDate startDate, LocalDate endDate, Long userId, List<Long> issueIds) {
         List<Long> projectIds = resolveProjectIds(projectId, userId);
 
-        // 尝试从缓存获取（key 包含 projectIds hash，确保不同权限用户缓存隔离）
-        String cacheKey = buildCacheKey(projectId, sprintId, startDate, endDate, projectIds);
-        DashboardVO cached = getFromCache(cacheKey);
-        if (cached != null) {
-            return cached;
+        // 当有 Issue filter 时，跳过缓存（filter 组合太多，缓存命中率低）
+        if (issueIds == null) {
+            // 尝试从缓存获取（key 包含 projectIds hash，确保不同权限用户缓存隔离）
+            String cacheKey = buildCacheKey(projectId, sprintId, startDate, endDate, projectIds);
+            DashboardVO cached = getFromCache(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
         }
 
         // 缓存未命中，构建数据
@@ -77,25 +80,28 @@ public class ReportStatisticsService {
         List<Long> closedStatusIds = new ArrayList<>(statusCacheHelper.getClosedStatusIds());
 
         DashboardVO dashboard = new DashboardVO();
-        dashboard.setStatusDistribution(buildStatusDistribution(projectIds, sprintId));
-        dashboard.setPriorityDistribution(buildPriorityDistribution(projectIds, sprintId));
-        dashboard.setTypeDistribution(buildTypeDistribution(projectIds, sprintId));
-        dashboard.setWorkload(buildWorkload(projectIds, sprintId, closedStatusIds));
-        dashboard.setTrend(buildTrend(projectIds, startDate, endDate));
+        dashboard.setStatusDistribution(buildStatusDistribution(projectIds, sprintId, issueIds));
+        dashboard.setPriorityDistribution(buildPriorityDistribution(projectIds, sprintId, issueIds));
+        dashboard.setTypeDistribution(buildTypeDistribution(projectIds, sprintId, issueIds));
+        dashboard.setWorkload(buildWorkload(projectIds, sprintId, closedStatusIds, issueIds));
+        dashboard.setTrend(buildTrend(projectIds, startDate, endDate, issueIds));
         if (sprintId != null) {
             dashboard.setBurndown(buildBurndown(projectId, sprintId));
         }
-        dashboard.setOverview(buildOverview(projectIds, sprintId, closedStatusIds));
+        dashboard.setOverview(buildOverview(projectIds, sprintId, closedStatusIds, issueIds));
         // 跨项目对比：仅"全部项目"模式下（projectId == null 且有多个项目）返回
         if (projectId == null) {
-            dashboard.setProjectComparison(buildProjectComparison(projectIds, closedStatusIds));
+            dashboard.setProjectComparison(buildProjectComparison(projectIds, closedStatusIds, issueIds));
         }
         // 累积流图和解决时间分析
-        dashboard.setCumulativeFlow(buildCumulativeFlow(projectIds, startDate, endDate));
-        dashboard.setResolutionTime(buildResolutionTime(projectIds, startDate, endDate, null));
+        dashboard.setCumulativeFlow(buildCumulativeFlow(projectIds, startDate, endDate, issueIds));
+        dashboard.setResolutionTime(buildResolutionTime(projectIds, startDate, endDate, null, issueIds));
 
-        // 写入缓存
-        putToCache(cacheKey, dashboard);
+        // 只有无 filter 时才写入缓存
+        if (issueIds == null) {
+            String cacheKey = buildCacheKey(projectId, sprintId, startDate, endDate, projectIds);
+            putToCache(cacheKey, dashboard);
+        }
 
         return dashboard;
     }
@@ -113,28 +119,28 @@ public class ReportStatisticsService {
      */
     public OverviewVO getOverview(List<Long> projectIds, Long sprintId) {
         List<Long> closedStatusIds = new ArrayList<>(statusCacheHelper.getClosedStatusIds());
-        return buildOverview(projectIds, sprintId, closedStatusIds);
+        return buildOverview(projectIds, sprintId, closedStatusIds, null);
     }
 
     public StatusDistributionVO getStatusDistribution(Long projectId, Long sprintId) {
-        return buildStatusDistribution(List.of(projectId), sprintId);
+        return buildStatusDistribution(List.of(projectId), sprintId, null);
     }
 
     public PriorityDistributionVO getPriorityDistribution(Long projectId, Long sprintId) {
-        return buildPriorityDistribution(List.of(projectId), sprintId);
+        return buildPriorityDistribution(List.of(projectId), sprintId, null);
     }
 
     public TypeDistributionVO getTypeDistribution(Long projectId, Long sprintId) {
-        return buildTypeDistribution(List.of(projectId), sprintId);
+        return buildTypeDistribution(List.of(projectId), sprintId, null);
     }
 
     public WorkloadVO getWorkload(Long projectId, Long sprintId) {
         List<Long> closedStatusIds = new ArrayList<>(statusCacheHelper.getClosedStatusIds());
-        return buildWorkload(List.of(projectId), sprintId, closedStatusIds);
+        return buildWorkload(List.of(projectId), sprintId, closedStatusIds, null);
     }
 
     public TrendVO getTrend(Long projectId, LocalDate startDate, LocalDate endDate) {
-        return buildTrend(List.of(projectId), startDate, endDate);
+        return buildTrend(List.of(projectId), startDate, endDate, null);
     }
 
     public BurndownVO getBurndown(Long projectId, Long sprintId) {
@@ -142,17 +148,17 @@ public class ReportStatisticsService {
     }
 
     public CumulativeFlowVO getCumulativeFlow(Long projectId, LocalDate startDate, LocalDate endDate) {
-        return buildCumulativeFlow(projectId != null ? List.of(projectId) : null, startDate, endDate);
+        return buildCumulativeFlow(projectId != null ? List.of(projectId) : null, startDate, endDate, null);
     }
 
     public ResolutionTimeVO getResolutionTime(Long projectId, LocalDate startDate, LocalDate endDate, String groupBy) {
-        return buildResolutionTime(projectId != null ? List.of(projectId) : null, startDate, endDate, groupBy);
+        return buildResolutionTime(projectId != null ? List.of(projectId) : null, startDate, endDate, groupBy, null);
     }
 
     // ─── Internal build methods (SQL aggregation) ────────────────────────
 
-    private StatusDistributionVO buildStatusDistribution(List<Long> projectIds, Long sprintId) {
-        List<StatusDistributionRow> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, sprintId);
+    private StatusDistributionVO buildStatusDistribution(List<Long> projectIds, Long sprintId, List<Long> issueIds) {
+        List<StatusDistributionRow> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, sprintId, issueIds);
 
         List<StatusDistributionVO.StatusItem> items = new ArrayList<>();
         long total = 0;
@@ -173,8 +179,8 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private PriorityDistributionVO buildPriorityDistribution(List<Long> projectIds, Long sprintId) {
-        List<PriorityDistributionRow> rows = reportStatisticsMapper.selectPriorityDistribution(projectIds, sprintId);
+    private PriorityDistributionVO buildPriorityDistribution(List<Long> projectIds, Long sprintId, List<Long> issueIds) {
+        List<PriorityDistributionRow> rows = reportStatisticsMapper.selectPriorityDistribution(projectIds, sprintId, issueIds);
 
         Map<String, Long> grouped = new HashMap<>();
         long total = 0;
@@ -211,8 +217,8 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private TypeDistributionVO buildTypeDistribution(List<Long> projectIds, Long sprintId) {
-        List<TypeDistributionRow> rows = reportStatisticsMapper.selectTypeDistribution(projectIds, sprintId);
+    private TypeDistributionVO buildTypeDistribution(List<Long> projectIds, Long sprintId, List<Long> issueIds) {
+        List<TypeDistributionRow> rows = reportStatisticsMapper.selectTypeDistribution(projectIds, sprintId, issueIds);
 
         Map<String, String> typeColors = Map.of(
                 "Bug", "#f85149",
@@ -241,10 +247,10 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private WorkloadVO buildWorkload(List<Long> projectIds, Long sprintId, List<Long> closedStatusIds) {
+    private WorkloadVO buildWorkload(List<Long> projectIds, Long sprintId, List<Long> closedStatusIds, List<Long> issueIds) {
         // 如果没有关闭状态，传一个不可能的 ID 避免 SQL 语法错误
         List<Long> safeClosedIds = closedStatusIds.isEmpty() ? List.of(-1L) : closedStatusIds;
-        List<WorkloadRow> rows = reportStatisticsMapper.selectWorkload(projectIds, sprintId, safeClosedIds);
+        List<WorkloadRow> rows = reportStatisticsMapper.selectWorkload(projectIds, sprintId, safeClosedIds, issueIds);
 
         List<WorkloadVO.WorkloadItem> items = new ArrayList<>();
         long total = 0;
@@ -269,10 +275,10 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private OverviewVO buildOverview(List<Long> projectIds, Long sprintId, List<Long> closedStatusIds) {
+    private OverviewVO buildOverview(List<Long> projectIds, Long sprintId, List<Long> closedStatusIds, List<Long> issueIds) {
         List<Long> safeClosedIds = closedStatusIds.isEmpty() ? List.of(-1L) : closedStatusIds;
         OverviewRow row = reportStatisticsMapper.selectOverview(
-                projectIds, sprintId, safeClosedIds, LocalDateTime.now());
+                projectIds, sprintId, safeClosedIds, LocalDateTime.now(), issueIds);
 
         if (row == null) {
             OverviewVO vo = new OverviewVO();
@@ -301,7 +307,7 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private TrendVO buildTrend(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
+    private TrendVO buildTrend(List<Long> projectIds, LocalDate startDate, LocalDate endDate, List<Long> issueIds) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
@@ -313,8 +319,8 @@ public class ReportStatisticsService {
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        List<TrendRow> createdRows = reportStatisticsMapper.selectCreatedTrend(projectIds, start, end);
-        List<TrendRow> resolvedRows = reportStatisticsMapper.selectResolvedTrend(projectIds, start, end);
+        List<TrendRow> createdRows = reportStatisticsMapper.selectCreatedTrend(projectIds, start, end, issueIds);
+        List<TrendRow> resolvedRows = reportStatisticsMapper.selectResolvedTrend(projectIds, start, end, issueIds);
 
         // 转为 Map 方便按日期查找
         Map<LocalDate, Long> createdByDay = new HashMap<>();
@@ -365,10 +371,10 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private ProjectComparisonVO buildProjectComparison(List<Long> projectIds, List<Long> closedStatusIds) {
+    private ProjectComparisonVO buildProjectComparison(List<Long> projectIds, List<Long> closedStatusIds, List<Long> issueIds) {
         List<Long> safeClosedIds = closedStatusIds.isEmpty() ? List.of(-1L) : closedStatusIds;
         List<ProjectComparisonRow> rows = reportStatisticsMapper.selectProjectComparison(
-                projectIds, safeClosedIds, LocalDateTime.now());
+                projectIds, safeClosedIds, LocalDateTime.now(), issueIds);
 
         List<ProjectComparisonVO.ProjectStatItem> items = new ArrayList<>();
         for (ProjectComparisonRow row : rows) {
@@ -397,7 +403,7 @@ public class ReportStatisticsService {
      */
     private static final int CUMULATIVE_FLOW_MAX_DAYS = 90;
 
-    private CumulativeFlowVO buildCumulativeFlow(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
+    private CumulativeFlowVO buildCumulativeFlow(List<Long> projectIds, LocalDate startDate, LocalDate endDate, List<Long> issueIds) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
@@ -409,7 +415,7 @@ public class ReportStatisticsService {
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        List<CumulativeFlowRow> rows = reportStatisticsMapper.selectCumulativeFlow(projectIds, start, end);
+        List<CumulativeFlowRow> rows = reportStatisticsMapper.selectCumulativeFlow(projectIds, start, end, issueIds);
 
         if (rows.isEmpty()) {
             CumulativeFlowVO empty = new CumulativeFlowVO();
@@ -466,7 +472,7 @@ public class ReportStatisticsService {
         return vo;
     }
 
-    private ResolutionTimeVO buildResolutionTime(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy) {
+    private ResolutionTimeVO buildResolutionTime(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy, List<Long> issueIds) {
         if (endDate == null) endDate = LocalDate.now();
         if (startDate == null) startDate = endDate.minusDays(29);
 
@@ -483,7 +489,7 @@ public class ReportStatisticsService {
         boolean useWeekGrouping = daysBetween >= 28;
 
         List<ResolutionTimeTrendRow> rows = reportStatisticsMapper.selectResolutionTimeTrend(
-                projectIds, start, end, useWeekGrouping);
+                projectIds, start, end, useWeekGrouping, issueIds);
 
         List<String> dates = new ArrayList<>();
         List<Double> avgHours = new ArrayList<>();
@@ -535,7 +541,7 @@ public class ReportStatisticsService {
                         "不支持的分组维度: " + groupBy + "，允许值: " + String.join(", ", RESOLUTION_TIME_GROUP_BY_VALUES));
             }
             List<ResolutionTimeGroupRow> groupRows = reportStatisticsMapper.selectResolutionTimeByGroup(
-                    projectIds, start, end, groupBy);
+                    projectIds, start, end, groupBy, issueIds);
             for (ResolutionTimeGroupRow row : groupRows) {
                 ResolutionTimeVO.GroupDetail detail = new ResolutionTimeVO.GroupDetail();
                 detail.setName(row.getGroupName());

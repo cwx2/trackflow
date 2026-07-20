@@ -19,21 +19,24 @@ public interface ReportStatisticsMapper {
      */
     List<StatusDistributionRow> selectStatusDistribution(
             @Param("projectIds") List<Long> projectIds,
-            @Param("sprintId") Long sprintId);
+            @Param("sprintId") Long sprintId,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 优先级分布：GROUP BY priority
      */
     List<PriorityDistributionRow> selectPriorityDistribution(
             @Param("projectIds") List<Long> projectIds,
-            @Param("sprintId") Long sprintId);
+            @Param("sprintId") Long sprintId,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 类型分布：GROUP BY issue_type
      */
     List<TypeDistributionRow> selectTypeDistribution(
             @Param("projectIds") List<Long> projectIds,
-            @Param("sprintId") Long sprintId);
+            @Param("sprintId") Long sprintId,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 工作负载：GROUP BY assignee_id，统计总数、已关闭数
@@ -41,7 +44,8 @@ public interface ReportStatisticsMapper {
     List<WorkloadRow> selectWorkload(
             @Param("projectIds") List<Long> projectIds,
             @Param("sprintId") Long sprintId,
-            @Param("closedStatusIds") List<Long> closedStatusIds);
+            @Param("closedStatusIds") List<Long> closedStatusIds,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 概览统计：单条 SQL 一次返回 total/open/closed/unassigned/overdue
@@ -50,7 +54,8 @@ public interface ReportStatisticsMapper {
             @Param("projectIds") List<Long> projectIds,
             @Param("sprintId") Long sprintId,
             @Param("closedStatusIds") List<Long> closedStatusIds,
-            @Param("now") LocalDateTime now);
+            @Param("now") LocalDateTime now,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 趋势-创建：按日期分组计数 created_at
@@ -58,7 +63,8 @@ public interface ReportStatisticsMapper {
     List<TrendRow> selectCreatedTrend(
             @Param("projectIds") List<Long> projectIds,
             @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+            @Param("endDate") LocalDateTime endDate,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 趋势-解决：按日期分组计数 resolved_at
@@ -66,7 +72,8 @@ public interface ReportStatisticsMapper {
     List<TrendRow> selectResolvedTrend(
             @Param("projectIds") List<Long> projectIds,
             @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+            @Param("endDate") LocalDateTime endDate,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 跨项目对比：GROUP BY project_id
@@ -74,7 +81,8 @@ public interface ReportStatisticsMapper {
     List<ProjectComparisonRow> selectProjectComparison(
             @Param("projectIds") List<Long> projectIds,
             @Param("closedStatusIds") List<Long> closedStatusIds,
-            @Param("now") LocalDateTime now);
+            @Param("now") LocalDateTime now,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 累积流图：利用 generate_series + 窗口函数，一条 SQL 返回每日各状态工单数
@@ -83,7 +91,8 @@ public interface ReportStatisticsMapper {
     List<CumulativeFlowRow> selectCumulativeFlow(
             @Param("projectIds") List<Long> projectIds,
             @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+            @Param("endDate") LocalDateTime endDate,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 解决时间：查询已解决工单的创建和解决时间，在 SQL 层计算耗时
@@ -93,7 +102,8 @@ public interface ReportStatisticsMapper {
             @Param("projectIds") List<Long> projectIds,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
-            @Param("useWeekGrouping") boolean useWeekGrouping);
+            @Param("useWeekGrouping") boolean useWeekGrouping,
+            @Param("issueIds") List<Long> issueIds);
 
     /**
      * 解决时间分组明细：按 type/priority/assignee 分组统计解决耗时
@@ -102,7 +112,8 @@ public interface ReportStatisticsMapper {
             @Param("projectIds") List<Long> projectIds,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
-            @Param("groupBy") String groupBy);
+            @Param("groupBy") String groupBy,
+            @Param("issueIds") List<Long> issueIds);
 
     // ─── 时间报表聚合查询 ─────────────────────────────────────────
 
