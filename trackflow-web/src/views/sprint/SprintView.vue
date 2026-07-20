@@ -100,22 +100,22 @@
             <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
           </div>
           <div class="progress-stats">
-            <span class="stat-item done">
+            <span class="stat-item done stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'done')">
               <span class="stat-dot"></span>
               完成 {{ sprint.doneIssues }}
             </span>
-            <span class="stat-item in-progress">
+            <span class="stat-item in-progress stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'in_progress')">
               <span class="stat-dot"></span>
               进行中 {{ sprint.inProgressIssues }}
             </span>
-            <span class="stat-item todo">
+            <span class="stat-item todo stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'open')">
               <span class="stat-dot"></span>
               待办 {{ sprint.todoIssues }}
             </span>
-            <span class="stat-item total">
+            <span class="stat-item total stat-clickable" @click.stop="viewSprintIssues(sprint)">
               共 {{ sprint.totalIssues }} 个工单
             </span>
-            <span class="stat-item overdue" v-if="sprint.overdueIssues > 0">
+            <span class="stat-item overdue stat-clickable" v-if="sprint.overdueIssues > 0" @click.stop="viewOverdueIssues(sprint)">
               <span class="stat-dot"></span>
               逾期 {{ sprint.overdueIssues }}
             </span>
@@ -189,19 +189,19 @@
             <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
           </div>
           <div class="progress-stats">
-            <span class="stat-item done">
+            <span class="stat-item done stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'done')">
               <span class="stat-dot"></span>
               完成 {{ sprint.doneIssues }}
             </span>
-            <span class="stat-item in-progress">
+            <span class="stat-item in-progress stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'in_progress')">
               <span class="stat-dot"></span>
               进行中 {{ sprint.inProgressIssues }}
             </span>
-            <span class="stat-item todo">
+            <span class="stat-item todo stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'open')">
               <span class="stat-dot"></span>
               待办 {{ sprint.todoIssues }}
             </span>
-            <span class="stat-item total">
+            <span class="stat-item total stat-clickable" @click.stop="viewSprintIssues(sprint)">
               共 {{ sprint.totalIssues }} 个工单
             </span>
             <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
@@ -272,19 +272,19 @@
             <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
           </div>
           <div class="progress-stats">
-            <span class="stat-item done">
+            <span class="stat-item done stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'done')">
               <span class="stat-dot"></span>
               完成 {{ sprint.doneIssues }}
             </span>
-            <span class="stat-item in-progress" v-if="sprint.inProgressIssues > 0">
+            <span class="stat-item in-progress stat-clickable" v-if="sprint.inProgressIssues > 0" @click.stop="viewIssuesByCategory(sprint, 'in_progress')">
               <span class="stat-dot"></span>
               进行中 {{ sprint.inProgressIssues }}
             </span>
-            <span class="stat-item todo" v-if="sprint.todoIssues > 0">
+            <span class="stat-item todo stat-clickable" v-if="sprint.todoIssues > 0" @click.stop="viewIssuesByCategory(sprint, 'open')">
               <span class="stat-dot"></span>
               待办 {{ sprint.todoIssues }}
             </span>
-            <span class="stat-item total">
+            <span class="stat-item total stat-clickable" @click.stop="viewSprintIssues(sprint)">
               共 {{ sprint.totalIssues }} 个工单
             </span>
           </div>
@@ -838,6 +838,37 @@ function viewUnassignedIssues(sprint: SprintVO) {
   router.push({ path: '/issues', query })
 }
 
+function viewIssuesByCategory(sprint: SprintVO, category: 'done' | 'in_progress' | 'open') {
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const categoryLabels: Record<string, string> = {
+    done: '已完成',
+    in_progress: '进行中',
+    open: '待办'
+  }
+  const query: Record<string, string> = {
+    sprint: sprint.id,
+    statusCategory: category,
+    label: `${sprint.name} - ${categoryLabels[category]}工单`
+  }
+  if (currentProject) {
+    query.project = currentProject.key
+  }
+  router.push({ path: '/issues', query })
+}
+
+function viewOverdueIssues(sprint: SprintVO) {
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const query: Record<string, string> = {
+    sprint: sprint.id,
+    overdue: 'true',
+    label: `${sprint.name} - 逾期工单`
+  }
+  if (currentProject) {
+    query.project = currentProject.key
+  }
+  router.push({ path: '/issues', query })
+}
+
 function toggleCompletedBurndown(sprintId: string) {
   const set = new Set(expandedCompletedSprints.value)
   if (set.has(sprintId)) {
@@ -1338,6 +1369,15 @@ function syncUrlProjectParam() {
 .stat-item.overdue {
   color: rgb(var(--danger-6));
   font-weight: 500;
+}
+.stat-clickable {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.stat-clickable:hover {
+  background: var(--color-fill-2);
 }
 .stat-item.unassigned {
   color: rgb(var(--warning-6));
