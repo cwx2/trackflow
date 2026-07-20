@@ -1,6 +1,7 @@
 package com.trackflow.integration.service;
 
 import com.trackflow.integration.entity.Notification;
+import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -97,12 +98,33 @@ public class NotificationMailScheduler {
                 continue;
             }
 
-            // 检查用户邮件偏好
+            // 检查用户邮件偏好（总开关）
             NotificationPreference pref = prefMap.get(key.userId());
             if (pref != null && !Boolean.TRUE.equals(pref.getEmailEnabled())) {
-                // 用户关闭了邮件通知
+                // 用户关闭了邮件通知总开关
                 sentNotificationIds.addAll(notifications.stream().map(Notification::getId).toList());
                 emailsSkipped += notifications.size();
+                continue;
+            }
+
+            // Per-event 邮件渠道检查：过滤出该用户允许发邮件的通知
+            List<Notification> emailAllowed = new ArrayList<>();
+            List<Notification> emailDenied = new ArrayList<>();
+            for (Notification n : notifications) {
+                NotificationEventType eventType = mapToEventType(n.getType());
+                if (eventType == null || pref == null
+                        || NotificationPreferenceService.isEmailEnabledForEvent(pref, eventType)) {
+                    emailAllowed.add(n);
+                } else {
+                    emailDenied.add(n);
+                }
+            }
+            // Per-event 被拒绝的通知标记为已发送（跳过）
+            if (!emailDenied.isEmpty()) {
+                sentNotificationIds.addAll(emailDenied.stream().map(Notification::getId).toList());
+                emailsSkipped += emailDenied.size();
+            }
+            if (emailAllowed.isEmpty()) {
                 continue;
             }
 
@@ -114,9 +136,9 @@ public class NotificationMailScheduler {
 
             try {
                 // 取最新的一条作为邮件主内容（聚合后的通知标题/内容已是最新）
-                Notification latest = notifications.stream()
+                Notification latest = emailAllowed.stream()
                         .max(Comparator.comparing(n -> n.getUpdatedAt() != null ? n.getUpdatedAt() : n.getCreatedAt()))
-                        .orElse(notifications.get(0));
+                        .orElse(emailAllowed.get(0));
 
                 // 构建资源直链（优先使用已存储的 resourceUrl，兜底动态构建）
                 String resourceFullUrl = null;
@@ -129,9 +151,9 @@ public class NotificationMailScheduler {
                 String subject = "[TrackFlow] " + latest.getTitle();
                 String htmlContent;
 
-                if (notifications.size() > 1 || (latest.getAggregationCount() != null && latest.getAggregationCount() > 1)) {
+                if (emailAllowed.size() > 1 || (latest.getAggregationCount() != null && latest.getAggregationCount() > 1)) {
                     // 多条通知或聚合通知 → 发送汇总邮件
-                    int totalChanges = notifications.stream()
+                    int totalChanges = emailAllowed.stream()
                             .mapToInt(n -> n.getAggregationCount() != null ? n.getAggregationCount() : 1)
                             .sum();
                     htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges, resourceFullUrl);
@@ -141,7 +163,7 @@ public class NotificationMailScheduler {
                 }
 
                 emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
-                sentNotificationIds.addAll(notifications.stream().map(Notification::getId).toList());
+                sentNotificationIds.addAll(emailAllowed.stream().map(Notification::getId).toList());
                 emailsSent++;
             } catch (Exception e) {
                 log.warn("[NotificationMail] 邮件发送失败: userId={}, resourceType={}, resourceId={}, error={}",
@@ -242,6 +264,32 @@ public class NotificationMailScheduler {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * 将 Notification.type（NotificationType enum name）映射到 NotificationEventType。
+     * <p>
+     * NotificationType 是细粒度的（如 issue_assigned, issue_auto_assigned），
+     * NotificationEventType 是偏好粒度的（如 ISSUE_ASSIGNED 涵盖手动+自动分配）。
+     *
+     * @return 对应的 NotificationEventType，无法映射时返回 null（视为允许发邮件）
+     */
+    private NotificationEventType mapToEventType(String notificationType) {
+        if (notificationType == null) return null;
+        return switch (notificationType) {
+            case "issue_assigned", "issue_auto_assigned" -> NotificationEventType.ISSUE_ASSIGNED;
+            case "issue_status_changed" -> NotificationEventType.ISSUE_STATUS_CHANGED;
+            case "issue_commented" -> NotificationEventType.ISSUE_COMMENTED;
+            case "mention" -> NotificationEventType.MENTIONED;
+            case "issue_updated", "issue_moved" -> NotificationEventType.ISSUE_UPDATED;
+            case "sprint_started" -> NotificationEventType.SPRINT_STARTED;
+            case "sprint_completed" -> NotificationEventType.SPRINT_COMPLETED;
+            case "member_added", "member_removed", "role_changed", "lead_changed" -> NotificationEventType.PROJECT_MEMBER_CHANGED;
+            case "project_archived", "project_restored", "project_deleted" -> NotificationEventType.PROJECT_LIFECYCLE;
+            case "due_date_alert" -> NotificationEventType.DUE_DATE_APPROACHING;
+            case "overdue_alert" -> NotificationEventType.OVERDUE;
+            default -> null; // 新增的通知类型未映射时，默认允许发邮件
+        };
     }
 
     /**

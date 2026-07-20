@@ -20,6 +20,20 @@ export interface NotificationPreferenceVO {
   dueDateAdvanceDays: number
   notifyOwnChanges: boolean
   emailEnabled: boolean
+  // Per-event 邮件渠道控制
+  emailOnIssueAssigned: boolean
+  emailOnIssueStatusChanged: boolean
+  emailOnIssueCommented: boolean
+  emailOnMentioned: boolean
+  emailOnIssueResolved: boolean
+  emailOnIssueUpdated: boolean
+  emailOnSprintStarted: boolean
+  emailOnSprintCompleted: boolean
+  emailOnProjectMemberChanged: boolean
+  emailOnProjectLifecycle: boolean
+  emailOnDueDate: boolean
+  emailOnOverdue: boolean
+  emailOnWatchedUpdated: boolean
   quietHoursStart: string | null
   quietHoursEnd: string | null
   // Watched 通知开关
@@ -47,6 +61,20 @@ export interface UpdateNotificationPreferenceDTO {
   dueDateAdvanceDays?: number
   notifyOwnChanges?: boolean
   emailEnabled?: boolean
+  // Per-event 邮件渠道控制
+  emailOnIssueAssigned?: boolean
+  emailOnIssueStatusChanged?: boolean
+  emailOnIssueCommented?: boolean
+  emailOnMentioned?: boolean
+  emailOnIssueResolved?: boolean
+  emailOnIssueUpdated?: boolean
+  emailOnSprintStarted?: boolean
+  emailOnSprintCompleted?: boolean
+  emailOnProjectMemberChanged?: boolean
+  emailOnProjectLifecycle?: boolean
+  emailOnDueDate?: boolean
+  emailOnOverdue?: boolean
+  emailOnWatchedUpdated?: boolean
   quietHoursStart?: string | null
   quietHoursEnd?: string | null
   // Watched 通知开关

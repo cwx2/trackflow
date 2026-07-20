@@ -78,6 +78,55 @@ public class NotificationPreferenceService {
     }
 
     /**
+     * 检查用户对指定事件类型的邮件通知是否启用。
+     * <p>
+     * 判断顺序：
+     * 1. 全局 emailEnabled 总开关必须开启
+     * 2. 该事件类型的 per-event 邮件开关必须开启
+     * <p>
+     * 支持"项目级覆盖全局"逻辑。
+     *
+     * @param userId    用户 ID
+     * @param eventType 通知事件类型
+     * @param projectId 项目 ID（可为 null）
+     * @return true 表示该事件类型应发送邮件
+     */
+    public boolean isEmailEnabledForEvent(Long userId, NotificationEventType eventType, Long projectId) {
+        try {
+            NotificationPreference pref = getApplicable(userId, projectId);
+            // 总开关未开 → 不发邮件
+            if (!Boolean.TRUE.equals(pref.getEmailEnabled())) {
+                return false;
+            }
+            // per-event 邮件开关
+            return eventType.isEmailEnabled(pref);
+        } catch (Exception e) {
+            log.warn("[NotificationPreference] 查询邮件偏好失败: userId={}, eventType={}, projectId={}, 默认不发邮件",
+                    userId, eventType, projectId, e);
+            return false; // 邮件查询失败时默认不发（保守策略，避免骚扰用户）
+        }
+    }
+
+    /**
+     * 检查用户偏好是否允许为特定通知类型发送邮件（直接传入偏好对象，避免重复查询）。
+     * <p>
+     * 用于批量场景（如 NotificationMailScheduler），调用方已批量查询了偏好。
+     *
+     * @param pref      用户偏好（可为 null，null 视为默认不发邮件）
+     * @param eventType 通知事件类型
+     * @return true 表示该事件类型应发送邮件
+     */
+    public static boolean isEmailEnabledForEvent(NotificationPreference pref, NotificationEventType eventType) {
+        if (pref == null) {
+            return false;
+        }
+        if (!Boolean.TRUE.equals(pref.getEmailEnabled())) {
+            return false;
+        }
+        return eventType.isEmailEnabled(pref);
+    }
+
+    /**
      * 批量检查哪些用户对指定事件类型的通知偏好启用（批量通知发送场景）。
      * <p>
      * 对每个用户执行"项目级覆盖全局"逻辑，返回允许接收通知的用户 ID 集合。
@@ -315,6 +364,46 @@ public class NotificationPreferenceService {
         if (dto.getEmailEnabled() != null) {
             pref.setEmailEnabled(dto.getEmailEnabled());
         }
+        // Per-event 邮件渠道控制
+        if (dto.getEmailOnIssueAssigned() != null) {
+            pref.setEmailOnIssueAssigned(dto.getEmailOnIssueAssigned());
+        }
+        if (dto.getEmailOnIssueStatusChanged() != null) {
+            pref.setEmailOnIssueStatusChanged(dto.getEmailOnIssueStatusChanged());
+        }
+        if (dto.getEmailOnIssueCommented() != null) {
+            pref.setEmailOnIssueCommented(dto.getEmailOnIssueCommented());
+        }
+        if (dto.getEmailOnMentioned() != null) {
+            pref.setEmailOnMentioned(dto.getEmailOnMentioned());
+        }
+        if (dto.getEmailOnIssueResolved() != null) {
+            pref.setEmailOnIssueResolved(dto.getEmailOnIssueResolved());
+        }
+        if (dto.getEmailOnIssueUpdated() != null) {
+            pref.setEmailOnIssueUpdated(dto.getEmailOnIssueUpdated());
+        }
+        if (dto.getEmailOnSprintStarted() != null) {
+            pref.setEmailOnSprintStarted(dto.getEmailOnSprintStarted());
+        }
+        if (dto.getEmailOnSprintCompleted() != null) {
+            pref.setEmailOnSprintCompleted(dto.getEmailOnSprintCompleted());
+        }
+        if (dto.getEmailOnProjectMemberChanged() != null) {
+            pref.setEmailOnProjectMemberChanged(dto.getEmailOnProjectMemberChanged());
+        }
+        if (dto.getEmailOnProjectLifecycle() != null) {
+            pref.setEmailOnProjectLifecycle(dto.getEmailOnProjectLifecycle());
+        }
+        if (dto.getEmailOnDueDate() != null) {
+            pref.setEmailOnDueDate(dto.getEmailOnDueDate());
+        }
+        if (dto.getEmailOnOverdue() != null) {
+            pref.setEmailOnOverdue(dto.getEmailOnOverdue());
+        }
+        if (dto.getEmailOnWatchedUpdated() != null) {
+            pref.setEmailOnWatchedUpdated(dto.getEmailOnWatchedUpdated());
+        }
         // 静音时段允许设置为 null（清除）
         pref.setQuietHoursStart(dto.getQuietHoursStart());
         pref.setQuietHoursEnd(dto.getQuietHoursEnd());
@@ -361,6 +450,20 @@ public class NotificationPreferenceService {
         pref.setDueDateAdvanceDays(getDefaultInt("notification.default_due_date_advance_days", 1));
         pref.setNotifyOwnChanges(getDefaultBool("notification.default_notify_own_changes", false));
         pref.setEmailEnabled(getDefaultBool("notification.default_email_enabled", false));
+        // Per-event 邮件渠道默认值：重要事件默认开启，普通事件默认关闭
+        pref.setEmailOnIssueAssigned(true);
+        pref.setEmailOnIssueStatusChanged(true);
+        pref.setEmailOnIssueCommented(false);
+        pref.setEmailOnMentioned(true);
+        pref.setEmailOnIssueResolved(true);
+        pref.setEmailOnIssueUpdated(false);
+        pref.setEmailOnSprintStarted(false);
+        pref.setEmailOnSprintCompleted(false);
+        pref.setEmailOnProjectMemberChanged(true);
+        pref.setEmailOnProjectLifecycle(false);
+        pref.setEmailOnDueDate(true);
+        pref.setEmailOnOverdue(true);
+        pref.setEmailOnWatchedUpdated(false);
         // Watched 通知开关默认开启
         pref.setOnWatchedUpdated(true);
         // 自动关注行为默认值

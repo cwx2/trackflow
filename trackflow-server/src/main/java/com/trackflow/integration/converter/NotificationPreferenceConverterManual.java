@@ -57,6 +57,21 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
         vo.setNotifyOwnChanges(entity.getNotifyOwnChanges());
         vo.setEmailEnabled(entity.getEmailEnabled());
 
+        // Per-event 邮件渠道控制
+        vo.setEmailOnIssueAssigned(entity.getEmailOnIssueAssigned());
+        vo.setEmailOnIssueStatusChanged(entity.getEmailOnIssueStatusChanged());
+        vo.setEmailOnIssueCommented(entity.getEmailOnIssueCommented());
+        vo.setEmailOnMentioned(entity.getEmailOnMentioned());
+        vo.setEmailOnIssueResolved(entity.getEmailOnIssueResolved());
+        vo.setEmailOnIssueUpdated(entity.getEmailOnIssueUpdated());
+        vo.setEmailOnSprintStarted(entity.getEmailOnSprintStarted());
+        vo.setEmailOnSprintCompleted(entity.getEmailOnSprintCompleted());
+        vo.setEmailOnProjectMemberChanged(entity.getEmailOnProjectMemberChanged());
+        vo.setEmailOnProjectLifecycle(entity.getEmailOnProjectLifecycle());
+        vo.setEmailOnDueDate(entity.getEmailOnDueDate());
+        vo.setEmailOnOverdue(entity.getEmailOnOverdue());
+        vo.setEmailOnWatchedUpdated(entity.getEmailOnWatchedUpdated());
+
         // 静音时段
         vo.setQuietHoursStart(entity.getQuietHoursStart());
         vo.setQuietHoursEnd(entity.getQuietHoursEnd());

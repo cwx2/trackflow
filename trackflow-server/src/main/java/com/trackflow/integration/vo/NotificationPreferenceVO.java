@@ -33,8 +33,23 @@ public class NotificationPreferenceVO {
     // 自己的操作是否通知自己
     private Boolean notifyOwnChanges;
 
-    // 邮件通知渠道
+    // 邮件通知渠道（总开关）
     private Boolean emailEnabled;
+
+    // Per-event 邮件渠道控制
+    private Boolean emailOnIssueAssigned;
+    private Boolean emailOnIssueStatusChanged;
+    private Boolean emailOnIssueCommented;
+    private Boolean emailOnMentioned;
+    private Boolean emailOnIssueResolved;
+    private Boolean emailOnIssueUpdated;
+    private Boolean emailOnSprintStarted;
+    private Boolean emailOnSprintCompleted;
+    private Boolean emailOnProjectMemberChanged;
+    private Boolean emailOnProjectLifecycle;
+    private Boolean emailOnDueDate;
+    private Boolean emailOnOverdue;
+    private Boolean emailOnWatchedUpdated;
 
     // 静音时段
     private String quietHoursStart;

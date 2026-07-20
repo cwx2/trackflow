@@ -16,42 +16,56 @@ import java.util.function.Function;
 public enum NotificationEventType {
 
     // ===== Issue 相关 =====
-    ISSUE_ASSIGNED(NotificationPreference::getOnIssueAssigned),
-    ISSUE_STATUS_CHANGED(NotificationPreference::getOnIssueStatusChanged),
-    ISSUE_COMMENTED(NotificationPreference::getOnIssueCommented),
-    ISSUE_RESOLVED(NotificationPreference::getOnIssueResolved),
-    MENTIONED(NotificationPreference::getOnMentioned),
+    ISSUE_ASSIGNED(NotificationPreference::getOnIssueAssigned, NotificationPreference::getEmailOnIssueAssigned),
+    ISSUE_STATUS_CHANGED(NotificationPreference::getOnIssueStatusChanged, NotificationPreference::getEmailOnIssueStatusChanged),
+    ISSUE_COMMENTED(NotificationPreference::getOnIssueCommented, NotificationPreference::getEmailOnIssueCommented),
+    ISSUE_RESOLVED(NotificationPreference::getOnIssueResolved, NotificationPreference::getEmailOnIssueResolved),
+    MENTIONED(NotificationPreference::getOnMentioned, NotificationPreference::getEmailOnMentioned),
     /** 通用字段变更（priority, dueDate, description, sprint, parent, tags） */
-    ISSUE_UPDATED(NotificationPreference::getOnIssueUpdated),
+    ISSUE_UPDATED(NotificationPreference::getOnIssueUpdated, NotificationPreference::getEmailOnIssueUpdated),
 
     // ===== Sprint 相关 =====
-    SPRINT_STARTED(NotificationPreference::getOnSprintStarted),
-    SPRINT_COMPLETED(NotificationPreference::getOnSprintCompleted),
+    SPRINT_STARTED(NotificationPreference::getOnSprintStarted, NotificationPreference::getEmailOnSprintStarted),
+    SPRINT_COMPLETED(NotificationPreference::getOnSprintCompleted, NotificationPreference::getEmailOnSprintCompleted),
 
     // ===== Project 相关 =====
-    PROJECT_MEMBER_CHANGED(NotificationPreference::getOnProjectMemberChanged),
-    PROJECT_LIFECYCLE(NotificationPreference::getOnProjectLifecycle),
+    PROJECT_MEMBER_CHANGED(NotificationPreference::getOnProjectMemberChanged, NotificationPreference::getEmailOnProjectMemberChanged),
+    PROJECT_LIFECYCLE(NotificationPreference::getOnProjectLifecycle, NotificationPreference::getEmailOnProjectLifecycle),
 
     // ===== Date Alert 相关 =====
-    DUE_DATE_APPROACHING(NotificationPreference::getOnDueDate),
-    OVERDUE(NotificationPreference::getOnOverdue),
+    DUE_DATE_APPROACHING(NotificationPreference::getOnDueDate, NotificationPreference::getEmailOnDueDate),
+    OVERDUE(NotificationPreference::getOnOverdue, NotificationPreference::getEmailOnOverdue),
 
     // ===== Watcher 相关 =====
     /** 用户关注的工单有更新 */
-    WATCHED(NotificationPreference::getOnWatchedUpdated);
+    WATCHED(NotificationPreference::getOnWatchedUpdated, NotificationPreference::getEmailOnWatchedUpdated);
 
     private final Function<NotificationPreference, Boolean> extractor;
+    private final Function<NotificationPreference, Boolean> emailExtractor;
 
-    NotificationEventType(Function<NotificationPreference, Boolean> extractor) {
+    NotificationEventType(Function<NotificationPreference, Boolean> extractor,
+                          Function<NotificationPreference, Boolean> emailExtractor) {
         this.extractor = extractor;
+        this.emailExtractor = emailExtractor;
     }
 
     /**
-     * 检查给定偏好中此事件类型是否启用。
+     * 检查给定偏好中此事件类型的站内通知是否启用。
      * null 视为未设置，按默认发送处理（返回 true）。
      */
     public boolean isEnabled(NotificationPreference pref) {
         Boolean value = extractor.apply(pref);
+        return !Boolean.FALSE.equals(value);
+    }
+
+    /**
+     * 检查给定偏好中此事件类型的邮件通知是否启用。
+     * <p>
+     * 注意：此方法仅检查 per-event 邮件开关，调用方还需检查全局 emailEnabled 总开关。
+     * null 视为未设置，按默认发送处理（返回 true）。
+     */
+    public boolean isEmailEnabled(NotificationPreference pref) {
+        Boolean value = emailExtractor.apply(pref);
         return !Boolean.FALSE.equals(value);
     }
 }

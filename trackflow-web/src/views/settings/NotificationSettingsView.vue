@@ -166,7 +166,7 @@
       <!-- 通知渠道 -->
       <div class="settings-section">
         <h3 class="section-title">通知渠道</h3>
-        <p class="section-desc">配置通知的接收方式。</p>
+        <p class="section-desc">配置通知的接收方式。站内通知始终启用；邮件通知可按事件类型独立控制。</p>
 
         <div class="channel-items">
           <div class="channel-item">
@@ -174,7 +174,7 @@
               <span class="channel-icon">🔔</span>
               <div class="channel-text">
                 <span class="channel-label">站内通知</span>
-                <span class="channel-desc">通过系统内通知中心接收</span>
+                <span class="channel-desc">通过系统内通知中心接收（始终启用）</span>
               </div>
             </div>
             <a-tag color="green" size="small">始终启用</a-tag>
@@ -196,6 +196,83 @@
             <a-tag v-if="!emailAvailable && emailStatusReason" size="small" color="orangered" class="email-unavailable-tag">
               {{ emailStatusReason }}
             </a-tag>
+          </div>
+        </div>
+
+        <!-- Per-event 邮件渠道控制 -->
+        <div v-if="form.emailEnabled && emailAvailable" class="email-per-event">
+          <div class="email-per-event-header">
+            <span class="email-per-event-title">📬 邮件通知事件选择</span>
+            <span class="email-per-event-desc">选择哪些事件除站内通知外还通过邮件发送，确保重要事件不遗漏。</span>
+          </div>
+          <div class="email-event-list">
+            <div class="email-event-group">
+              <div class="email-event-group-title">工单事件</div>
+              <div class="email-event-items">
+                <div class="email-event-item">
+                  <span class="email-event-label">工单分配给我</span>
+                  <a-switch v-model="form.emailOnIssueAssigned" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">工单状态变更</span>
+                  <a-switch v-model="form.emailOnIssueStatusChanged" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">新评论</span>
+                  <a-switch v-model="form.emailOnIssueCommented" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">@提及我</span>
+                  <a-switch v-model="form.emailOnMentioned" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">我报告的工单被解决</span>
+                  <a-switch v-model="form.emailOnIssueResolved" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">工单字段更新</span>
+                  <a-switch v-model="form.emailOnIssueUpdated" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">关注的工单有更新</span>
+                  <a-switch v-model="form.emailOnWatchedUpdated" size="small" @change="handleSave" />
+                </div>
+              </div>
+            </div>
+            <div class="email-event-group">
+              <div class="email-event-group-title">项目与迭代</div>
+              <div class="email-event-items">
+                <div class="email-event-item">
+                  <span class="email-event-label">Sprint 启动</span>
+                  <a-switch v-model="form.emailOnSprintStarted" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">Sprint 完成</span>
+                  <a-switch v-model="form.emailOnSprintCompleted" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">成员变更</span>
+                  <a-switch v-model="form.emailOnProjectMemberChanged" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">项目归档/恢复</span>
+                  <a-switch v-model="form.emailOnProjectLifecycle" size="small" @change="handleSave" />
+                </div>
+              </div>
+            </div>
+            <div class="email-event-group">
+              <div class="email-event-group-title">日期提醒</div>
+              <div class="email-event-items">
+                <div class="email-event-item">
+                  <span class="email-event-label">即将到期</span>
+                  <a-switch v-model="form.emailOnDueDate" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">已逾期</span>
+                  <a-switch v-model="form.emailOnOverdue" size="small" @change="handleSave" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -310,6 +387,20 @@ const form = reactive({
   onProjectLifecycle: true,
   notifyOwnChanges: false,
   emailEnabled: false,
+  // Per-event 邮件渠道控制
+  emailOnIssueAssigned: true,
+  emailOnIssueStatusChanged: true,
+  emailOnIssueCommented: false,
+  emailOnMentioned: true,
+  emailOnIssueResolved: true,
+  emailOnIssueUpdated: false,
+  emailOnSprintStarted: false,
+  emailOnSprintCompleted: false,
+  emailOnProjectMemberChanged: true,
+  emailOnProjectLifecycle: false,
+  emailOnDueDate: true,
+  emailOnOverdue: true,
+  emailOnWatchedUpdated: false,
   quietHoursStart: null as string | null,
   quietHoursEnd: null as string | null,
   onWatchedUpdated: true,
@@ -368,6 +459,20 @@ function applyData(data: NotificationPreferenceVO) {
   form.onProjectLifecycle = data.onProjectLifecycle
   form.notifyOwnChanges = data.notifyOwnChanges
   form.emailEnabled = data.emailEnabled
+  // Per-event 邮件渠道控制
+  form.emailOnIssueAssigned = data.emailOnIssueAssigned ?? true
+  form.emailOnIssueStatusChanged = data.emailOnIssueStatusChanged ?? true
+  form.emailOnIssueCommented = data.emailOnIssueCommented ?? false
+  form.emailOnMentioned = data.emailOnMentioned ?? true
+  form.emailOnIssueResolved = data.emailOnIssueResolved ?? true
+  form.emailOnIssueUpdated = data.emailOnIssueUpdated ?? false
+  form.emailOnSprintStarted = data.emailOnSprintStarted ?? false
+  form.emailOnSprintCompleted = data.emailOnSprintCompleted ?? false
+  form.emailOnProjectMemberChanged = data.emailOnProjectMemberChanged ?? true
+  form.emailOnProjectLifecycle = data.emailOnProjectLifecycle ?? false
+  form.emailOnDueDate = data.emailOnDueDate ?? true
+  form.emailOnOverdue = data.emailOnOverdue ?? true
+  form.emailOnWatchedUpdated = data.emailOnWatchedUpdated ?? false
   form.quietHoursStart = data.quietHoursStart
   form.quietHoursEnd = data.quietHoursEnd
   form.onWatchedUpdated = data.onWatchedUpdated ?? true
@@ -404,6 +509,20 @@ function handleSave() {
         onProjectLifecycle: form.onProjectLifecycle,
         notifyOwnChanges: form.notifyOwnChanges,
         emailEnabled: form.emailEnabled,
+        // Per-event 邮件渠道控制
+        emailOnIssueAssigned: form.emailOnIssueAssigned,
+        emailOnIssueStatusChanged: form.emailOnIssueStatusChanged,
+        emailOnIssueCommented: form.emailOnIssueCommented,
+        emailOnMentioned: form.emailOnMentioned,
+        emailOnIssueResolved: form.emailOnIssueResolved,
+        emailOnIssueUpdated: form.emailOnIssueUpdated,
+        emailOnSprintStarted: form.emailOnSprintStarted,
+        emailOnSprintCompleted: form.emailOnSprintCompleted,
+        emailOnProjectMemberChanged: form.emailOnProjectMemberChanged,
+        emailOnProjectLifecycle: form.emailOnProjectLifecycle,
+        emailOnDueDate: form.emailOnDueDate,
+        emailOnOverdue: form.emailOnOverdue,
+        emailOnWatchedUpdated: form.emailOnWatchedUpdated,
         quietHoursStart: form.quietHoursStart,
         quietHoursEnd: form.quietHoursEnd,
         onWatchedUpdated: form.onWatchedUpdated,
@@ -623,6 +742,72 @@ function formatMutedTime(dateStr: string): string {
 .email-unavailable-tag {
   margin-left: 8px;
   opacity: 0.85;
+}
+
+/* Per-event 邮件渠道控制 */
+.email-per-event {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--tf-bg-surface, #22252a);
+  border-radius: 6px;
+  border: 1px solid var(--tf-border-light);
+}
+
+.email-per-event-header {
+  margin-bottom: 16px;
+}
+
+.email-per-event-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  margin-bottom: 4px;
+}
+
+.email-per-event-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.email-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.email-event-group-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.email-event-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.email-event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: background-color 150ms;
+}
+
+.email-event-item:hover {
+  background: var(--tf-bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+.email-event-label {
+  font-size: 12px;
+  color: var(--tf-text-primary);
 }
 
 /* 静音时段 */
