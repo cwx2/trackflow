@@ -352,36 +352,92 @@
       </div>
     </template>
 
-    <!-- 附加字段弹窗 -->
+    <!-- 附加字段弹窗（双视图：选择已有 / 新建字段） -->
     <a-modal
       v-model:visible="attachDialogVisible"
-      :title="`添加字段到「${attachTarget?.projectName || ''}」`"
-      :width="420"
-      :ok-loading="attaching"
-      ok-text="添加"
-      @ok="handleAttach"
-      @cancel="attachDialogVisible = false"
+      :title="attachMode === 'select'
+        ? `添加字段到「${attachTarget?.projectName || ''}」`
+        : `新建字段并添加到「${attachTarget?.projectName || ''}」`"
+      :width="attachMode === 'select' ? 420 : 520"
+      :ok-loading="attaching || creatingField"
+      :ok-text="attachMode === 'select' ? '添加' : '创建并添加'"
+      @ok="attachMode === 'select' ? handleAttach() : handleCreateAndAttach()"
+      @cancel="closeAttachDialog"
+      unmount-on-close
     >
-      <a-select
-        v-model="selectedFieldToAttach"
-        placeholder="选择要添加的字段"
-        allow-search
-        :loading="loadingAvailable"
-      >
-        <a-option v-for="f in availableFields" :key="f.id" :value="f.id">
-          {{ f.name }}（{{ formatType(f.fieldFormat) }}）
-        </a-option>
-      </a-select>
-      <div v-if="availableFields.length === 0 && !loadingAvailable" class="no-available-hint">
-        所有非全局字段已添加到此项目
-      </div>
+      <!-- 选择已有字段模式 -->
+      <template v-if="attachMode === 'select'">
+        <a-select
+          v-model="selectedFieldToAttach"
+          placeholder="选择要添加的字段"
+          allow-search
+          :loading="loadingAvailable"
+        >
+          <a-option v-for="f in availableFields" :key="f.id" :value="f.id">
+            {{ f.name }}（{{ formatType(f.fieldFormat) }}）
+          </a-option>
+        </a-select>
+        <div v-if="availableFields.length === 0 && !loadingAvailable" class="no-available-hint">
+          <span>所有非全局字段已添加到此项目。</span>
+          <a class="create-field-link" @click="switchToCreateMode">创建新字段</a>
+        </div>
+        <div v-else class="attach-footer-hint">
+          <span>找不到需要的字段？</span>
+          <a class="create-field-link" @click="switchToCreateMode">新建字段</a>
+        </div>
+      </template>
+
+      <!-- 新建字段模式 -->
+      <template v-else>
+        <div class="create-mode-back" @click="switchToSelectMode">
+          <icon-left /> 返回选择已有字段
+        </div>
+        <a-form :model="createForm" layout="vertical" size="small" class="create-field-form">
+          <a-form-item label="字段名称" required>
+            <a-input v-model="createForm.name" placeholder="例如: 到期版本" :max-length="256" />
+          </a-form-item>
+          <a-form-item label="字段类型" required>
+            <a-select v-model="createForm.fieldFormat" placeholder="选择字段类型">
+              <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="必填">
+            <a-switch v-model="createForm.isRequired" />
+          </a-form-item>
+          <!-- list 类型选项管理 -->
+          <template v-if="createForm.fieldFormat === 'list'">
+            <a-form-item label="多值选择">
+              <a-switch v-model="createForm.isMulti" />
+              <div class="form-help">开启后允许选择多个选项值</div>
+            </a-form-item>
+            <a-form-item label="选项列表">
+              <div class="options-list">
+                <div v-for="(opt, idx) in createForm.options" :key="idx" class="option-row">
+                  <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" />
+                  <a-checkbox v-model="opt.isDefault" size="small">默认</a-checkbox>
+                  <a-button type="text" size="mini" status="danger" @click="createForm.options.splice(idx, 1)">
+                    <icon-delete />
+                  </a-button>
+                </div>
+                <a-button type="dashed" size="mini" long @click="createForm.options.push({ value: '', isDefault: false })">
+                  <template #icon><icon-plus /></template>
+                  添加选项
+                </a-button>
+              </div>
+            </a-form-item>
+          </template>
+          <div class="create-form-info">
+            <icon-info-circle /> 字段将以「项目级」方式创建（非全局），自动关联到「{{ attachTarget?.projectName }}」项目。
+          </div>
+        </a-form>
+      </template>
     </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { IconSearch, IconRight, IconPlus, IconFolder, IconFile } from '@arco-design/web-vue/es/icon'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { IconSearch, IconRight, IconPlus, IconFolder, IconFile, IconLeft, IconDelete, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import type { ProjectFieldsVO, FieldSummaryVO, CustomFieldDefinitionVO } from '@/api/types'
@@ -407,6 +463,29 @@ const selectedFieldToAttach = ref<string | null>(null)
 const availableFields = ref<CustomFieldDefinitionVO[]>([])
 const loadingAvailable = ref(false)
 const attaching = ref(false)
+const attachMode = ref<'select' | 'create'>('select')
+
+// Create field form state (for inline create in attach dialog)
+const creatingField = ref(false)
+const createForm = reactive({
+  name: '',
+  fieldFormat: 'string' as string,
+  isRequired: false,
+  isMulti: false,
+  options: [] as Array<{ value: string; isDefault: boolean }>
+})
+
+const fieldTypeOptions = [
+  { value: 'string', label: '文本(单行)' },
+  { value: 'text', label: '文本(多行/Markdown)' },
+  { value: 'int', label: '整数' },
+  { value: 'float', label: '小数' },
+  { value: 'date', label: '日期' },
+  { value: 'datetime', label: '日期时间' },
+  { value: 'bool', label: '布尔' },
+  { value: 'list', label: '列表(枚举)' },
+  { value: 'user', label: '用户' }
+]
 
 const fieldTypeLabels: Record<string, string> = {
   string: '文本(单行)',
@@ -620,6 +699,8 @@ async function loadData() {
 async function openAttachDialog(project: ProjectFieldsVO) {
   attachTarget.value = project
   selectedFieldToAttach.value = null
+  attachMode.value = 'select'
+  resetCreateForm()
   attachDialogVisible.value = true
   loadingAvailable.value = true
   try {
@@ -630,6 +711,29 @@ async function openAttachDialog(project: ProjectFieldsVO) {
   } finally {
     loadingAvailable.value = false
   }
+}
+
+function closeAttachDialog() {
+  attachDialogVisible.value = false
+  attachMode.value = 'select'
+  resetCreateForm()
+}
+
+function switchToCreateMode() {
+  attachMode.value = 'create'
+  resetCreateForm()
+}
+
+function switchToSelectMode() {
+  attachMode.value = 'select'
+}
+
+function resetCreateForm() {
+  createForm.name = ''
+  createForm.fieldFormat = 'string'
+  createForm.isRequired = false
+  createForm.isMulti = false
+  createForm.options = []
 }
 
 async function handleAttach() {
@@ -647,6 +751,55 @@ async function handleAttach() {
     Message.error(e.response?.data?.message || '添加失败')
   } finally {
     attaching.value = false
+  }
+}
+
+async function handleCreateAndAttach() {
+  if (!attachTarget.value) return
+  if (!createForm.name.trim()) {
+    Message.warning('请输入字段名称')
+    return
+  }
+  if (!createForm.fieldFormat) {
+    Message.warning('请选择字段类型')
+    return
+  }
+  if (createForm.fieldFormat === 'list') {
+    const validOptions = createForm.options.filter(o => o.value.trim())
+    if (validOptions.length === 0) {
+      Message.warning('列表类型字段至少需要一个选项')
+      return
+    }
+  }
+
+  creatingField.value = true
+  try {
+    // Create field with isForAll=false and pre-select the current project
+    const createPayload: any = {
+      name: createForm.name.trim(),
+      fieldFormat: createForm.fieldFormat,
+      isRequired: createForm.isRequired,
+      isForAll: false,
+      projectIds: [attachTarget.value.projectId]
+    }
+    if (createForm.fieldFormat === 'list') {
+      createPayload.isMulti = createForm.isMulti
+      createPayload.options = createForm.options
+        .filter(o => o.value.trim())
+        .map(o => ({ value: o.value.trim(), isDefault: o.isDefault }))
+    }
+
+    await customFieldApi.create(createPayload)
+    Message.success('字段创建成功并已添加到项目')
+    attachDialogVisible.value = false
+    attachMode.value = 'select'
+    resetCreateForm()
+    loadData()
+    emit('field-created')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '创建失败')
+  } finally {
+    creatingField.value = false
   }
 }
 
@@ -668,6 +821,10 @@ function handleDetach(projectId: string, fieldId: string, fieldName: string, pro
     }
   })
 }
+
+const emit = defineEmits<{
+  (e: 'field-created'): void
+}>()
 
 onMounted(loadData)
 
@@ -930,8 +1087,82 @@ defineExpose({ refresh: loadData })
 }
 
 .no-available-hint {
-  margin-top: 8px;
+  margin-top: 12px;
   font-size: 12px;
   color: var(--tf-text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+}
+
+.attach-footer-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.create-field-link {
+  color: var(--tf-accent);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+}
+.create-field-link:hover {
+  text-decoration: underline;
+}
+
+.create-mode-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--tf-accent);
+  cursor: pointer;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+.create-mode-back:hover {
+  text-decoration: underline;
+}
+
+.create-field-form {
+  margin-top: 0;
+}
+
+.create-field-form .form-help {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.create-field-form .options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.create-field-form .option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.create-form-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.08));
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  line-height: 1.5;
+}
+.create-form-info svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--tf-accent);
 }
 </style>
