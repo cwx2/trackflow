@@ -87,6 +87,7 @@ public class ProjectService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
+    private final com.trackflow.system.service.GlobalMemberService globalMemberService;
 
     /**
      * 创建项目
@@ -146,6 +147,9 @@ public class ProjectService {
 
         // 根据模板类型初始化项目（工作流、看板列配置等）
         projectInitializationService.initialize(project.getId(), dto.getTemplate());
+
+        // 同步全局分配的成员到新项目
+        globalMemberService.syncGlobalMembersToProject(project.getId());
 
         return project;
     }

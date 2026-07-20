@@ -199,6 +199,50 @@
               </div>
             </div>
 
+            <!-- 全局项目角色区域 -->
+            <div class="role-section">
+              <div class="role-section-header">
+                <h4 class="role-section-title">全局项目角色</h4>
+                <span class="role-section-hint">在所有项目中自动生效（含新建项目）</span>
+              </div>
+
+              <div class="global-project-role-list">
+                <div v-for="gm in userGlobalMembers" :key="gm.id" class="global-project-role-item">
+                  <div class="global-project-role-info">
+                    <span class="global-tag">全局</span>
+                    <span class="global-project-role-name">{{ gm.roleName }}</span>
+                    <span class="global-project-role-code">{{ gm.roleCode }}</span>
+                  </div>
+                  <button class="btn-icon-sm danger" title="撤销全局分配" @click="revokeGlobalMember(gm)">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
+                    </svg>
+                  </button>
+                </div>
+                <div v-if="userGlobalMembers.length === 0" class="role-empty-inline">
+                  无全局项目角色
+                </div>
+              </div>
+
+              <!-- 添加全局项目角色 -->
+              <div class="add-global-member-section">
+                <button v-if="!showAddGlobalMember" class="btn-text-sm" @click="showAddGlobalMember = true">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
+                    <path d="M8 1a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 018 1z"/>
+                  </svg>
+                  添加全局项目角色
+                </button>
+                <div v-else class="add-global-member-form">
+                  <select v-model="addGlobalRoleId" class="add-project-select">
+                    <option value="">选择角色...</option>
+                    <option v-for="r in availableGlobalProjectRoles" :key="r.id" :value="r.id">{{ r.name }}</option>
+                  </select>
+                  <button class="btn-sm-action" :disabled="!addGlobalRoleId" @click="assignGlobalMember">确认</button>
+                  <button class="btn-sm-action secondary" @click="showAddGlobalMember = false; addGlobalRoleId = ''">取消</button>
+                </div>
+              </div>
+            </div>
+
             <!-- 项目角色区域 -->
             <div class="role-section">
               <div class="role-section-header">
@@ -268,8 +312,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Modal, Message } from '@arco-design/web-vue'
-import { userApi, projectApi } from '@/api'
+import { userApi, projectApi, globalMemberApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
+import type { GlobalMemberVO } from '@/api/globalMember'
 import request from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
 
@@ -325,6 +370,17 @@ const allProjects = ref<any[]>([])
 const showAddProject = ref(false)
 const addProjectId = ref('')
 const addProjectRoleId = ref('')
+
+// 全局项目角色
+const userGlobalMembers = ref<GlobalMemberVO[]>([])
+const showAddGlobalMember = ref(false)
+const addGlobalRoleId = ref('')
+
+/** 可添加的全局项目角色（排除已分配的） */
+const availableGlobalProjectRoles = computed(() => {
+  const assignedRoleIds = new Set(userGlobalMembers.value.map(gm => gm.roleId))
+  return projectRoles.value.filter((r: any) => !assignedRoleIds.has(String(r.id)))
+})
 
 /** 可添加的项目（排除用户已加入的） */
 const availableProjects = computed(() => {
@@ -497,15 +553,22 @@ async function openRoleDialog(user: any) {
   showAddProject.value = false
   addProjectId.value = ''
   addProjectRoleId.value = ''
+  showAddGlobalMember.value = false
+  addGlobalRoleId.value = ''
 
   try {
-    const res = await userApi.getProfile(user.id)
-    const profile = res.data
+    const [profileRes, globalMembersRes] = await Promise.all([
+      userApi.getProfile(user.id),
+      globalMemberApi.listByUser(user.id)
+    ])
+    const profile = profileRes.data
     userRoleIds.value = profile?.globalRoles?.map((r: any) => r.id) || []
     userProjectRoles.value = profile?.projectRoles || []
+    userGlobalMembers.value = globalMembersRes.data || []
   } catch (e) {
     userRoleIds.value = []
     userProjectRoles.value = []
+    userGlobalMembers.value = []
   } finally {
     roleLoading.value = false
   }
@@ -595,6 +658,49 @@ function cancelAddProject() {
   showAddProject.value = false
   addProjectId.value = ''
   addProjectRoleId.value = ''
+}
+
+async function assignGlobalMember() {
+  const userId = selectedUser.value?.id
+  if (!userId || !addGlobalRoleId.value) return
+
+  try {
+    await globalMemberApi.assign({ userId, roleId: addGlobalRoleId.value })
+    Message.success('全局项目角色已分配')
+    // 刷新全局成员列表
+    const res = await globalMemberApi.listByUser(userId)
+    userGlobalMembers.value = res.data || []
+    showAddGlobalMember.value = false
+    addGlobalRoleId.value = ''
+    // 同时刷新项目角色（因为已同步到所有项目）
+    await refreshProjectRoles()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '分配失败')
+  }
+}
+
+async function revokeGlobalMember(gm: GlobalMemberVO) {
+  const userId = selectedUser.value?.id
+  if (!userId) return
+
+  Modal.confirm({
+    title: '撤销全局项目角色',
+    content: `确定撤销该用户的全局「${gm.roleName}」角色吗？该用户将从所有项目中移除此角色。`,
+    okText: '撤销',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    async onOk() {
+      try {
+        await globalMemberApi.revoke(userId, gm.roleId)
+        Message.success('全局项目角色已撤销')
+        userGlobalMembers.value = userGlobalMembers.value.filter(m => m.id !== gm.id)
+        // 同时刷新项目角色
+        await refreshProjectRoles()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '撤销失败')
+      }
+    }
+  })
 }
 
 async function refreshProjectRoles() {
@@ -801,6 +907,19 @@ onMounted(() => {
 /* Role badges */
 .role-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; background: rgba(88,166,255,0.12); color: var(--accent-blue); font-size: 11px; font-weight: 500; border-radius: 3px; white-space: nowrap; margin-right: 4px; }
 .text-muted { color: var(--text-muted); font-size: var(--font-size-sm); }
+
+/* Global Project Role Section */
+.role-section-hint { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.global-project-role-list { display: flex; flex-direction: column; gap: 4px; }
+.global-project-role-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 150ms; }
+.global-project-role-item:hover { background: var(--bg-hover); }
+.global-project-role-info { display: flex; align-items: center; gap: 8px; }
+.global-tag { font-size: 10px; font-weight: 600; color: #3fb950; background: rgba(63,185,80,0.1); padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
+.global-project-role-name { font-size: var(--font-size-sm); color: var(--text-primary); font-weight: 500; }
+.global-project-role-code { font-size: var(--font-size-xs); color: var(--text-muted); }
+.role-empty-inline { font-size: var(--font-size-xs); color: var(--text-muted); padding: 4px 0; }
+.add-global-member-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-light); }
+.add-global-member-form { display: flex; align-items: center; gap: 8px; }
 
 /* Sortable columns */
 .col-sortable { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; user-select: none; transition: color 150ms; }

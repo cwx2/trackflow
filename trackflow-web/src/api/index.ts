@@ -35,6 +35,7 @@ export { integrationAdminApi } from './integrationAdmin'
 export { workflowRuleApi } from './workflowRule'
 export { workflowDefinitionApi } from './workflowDefinition'
 export { issueTemplateApi } from './issueTemplate'
+export { globalMemberApi } from './globalMember'
 
 // 类型导出
 export type * from './types'

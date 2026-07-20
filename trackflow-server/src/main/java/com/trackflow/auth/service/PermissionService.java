@@ -4,6 +4,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectVisibility;
+import com.trackflow.system.mapper.GlobalMemberMapper;
 import com.trackflow.system.mapper.RolePermissionMapper;
 import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
@@ -49,6 +50,7 @@ public class PermissionService {
     private final UserRoleMapper userRoleMapper;
     private final UserGroupRoleMapper userGroupRoleMapper;
     private final ProjectMapper projectMapper;
+    private final GlobalMemberMapper globalMemberMapper;
 
     /**
      * 检查用户是否拥有指定权限（全局 + 项目级）
@@ -279,7 +281,7 @@ public class PermissionService {
     }
 
     /**
-     * 从数据库加载用户在项目中的权限（直接成员角色 + 组继承）
+     * 从数据库加载用户在项目中的权限（直接成员角色 + 组继承 + 全局分配角色）
      */
     private Set<String> loadProjectPermissionsFromDb(Long userId, Long projectId) {
         Set<String> permissions = new HashSet<>();
@@ -291,6 +293,10 @@ public class PermissionService {
         // 2. 通过用户组继承的项目级权限
         List<String> groupPerms = userGroupRoleMapper.selectProjectPermissionsByUserAndProject(userId, projectId);
         permissions.addAll(groupPerms);
+
+        // 3. 通过全局项目角色分配获得的权限（global_member 表）
+        List<String> globalMemberPerms = globalMemberMapper.selectGlobalMemberPermissions(userId);
+        permissions.addAll(globalMemberPerms);
 
         return permissions;
     }
