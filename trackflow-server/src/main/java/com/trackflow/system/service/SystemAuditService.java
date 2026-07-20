@@ -2,6 +2,8 @@ package com.trackflow.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.system.dto.AuditLogQuery;
@@ -16,8 +18,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -113,8 +117,14 @@ public class SystemAuditService {
 
     /**
      * 分页查询审计日志
+     * <p>
+     * 强制时间范围限制：查询范围不能超过 365 天。
+     * 如果未指定时间范围，默认查询最近 30 天。
      */
     public PageResult<AuditLogVO> list(AuditLogQuery query) {
+        // 强制时间范围限制
+        enforceTimeRangeLimit(query);
+
         LambdaQueryWrapper<SysAuditLog> wrapper = new LambdaQueryWrapper<>();
 
         if (query.getAction() != null && !query.getAction().isBlank()) {
@@ -211,5 +221,125 @@ public class SystemAuditService {
 
         return new PageResult<>(voList, page.getTotal(),
                 (int) page.getCurrent(), (int) page.getSize());
+    }
+
+    /**
+     * 导出指定时间范围的审计日志为 CSV 格式字符串
+     *
+     * @param startDate 开始日期
+     * @param endDate   结束日期
+     * @return CSV 内容
+     */
+    public String exportAuditLogsCsv(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "导出审计日志必须指定开始日期和结束日期");
+        }
+
+        long daysBetween = ChronoUnit.DAYS.between(startDate, endDate);
+        if (daysBetween > 365) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "导出时间范围不能超过 365 天");
+        }
+        if (daysBetween < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "开始日期不能晚于结束日期");
+        }
+
+        LocalDateTime startTime = startDate.atStartOfDay();
+        LocalDateTime endTime = endDate.atTime(LocalTime.MAX);
+
+        List<SysAuditLog> records = auditLogMapper.selectByTimeRange(startTime, endTime);
+
+        // 批量查询用户名（用于 operator 列）
+        Set<Long> userIds = new HashSet<>();
+        for (SysAuditLog record : records) {
+            if (record.getOperatorId() != null) {
+                userIds.add(record.getOperatorId());
+            }
+        }
+        Map<Long, String> userNameMap = Collections.emptyMap();
+        if (!userIds.isEmpty()) {
+            userNameMap = userMapper.selectBatchIds(userIds).stream()
+                    .collect(Collectors.toMap(SysUser::getId,
+                            u -> u.getDisplayName() != null ? u.getDisplayName() : u.getUsername()));
+        }
+
+        // 构建 CSV
+        StringBuilder csv = new StringBuilder();
+        csv.append("ID,操作者,操作者ID,操作类型,目标类型,目标ID,IP地址,User-Agent,时间,详情\n");
+
+        Map<Long, String> finalUserNameMap = userNameMap;
+        for (SysAuditLog record : records) {
+            csv.append(escapeCsvField(String.valueOf(record.getId()))).append(',');
+            csv.append(escapeCsvField(record.getOperatorId() != null
+                    ? finalUserNameMap.getOrDefault(record.getOperatorId(), "") : "")).append(',');
+            csv.append(escapeCsvField(record.getOperatorId() != null
+                    ? String.valueOf(record.getOperatorId()) : "")).append(',');
+            csv.append(escapeCsvField(record.getAction())).append(',');
+            csv.append(escapeCsvField(record.getTargetType() != null ? record.getTargetType() : "")).append(',');
+            csv.append(escapeCsvField(record.getTargetId() != null
+                    ? String.valueOf(record.getTargetId()) : "")).append(',');
+            csv.append(escapeCsvField(record.getIpAddress() != null ? record.getIpAddress() : "")).append(',');
+            csv.append(escapeCsvField(record.getUserAgent() != null ? record.getUserAgent() : "")).append(',');
+            csv.append(escapeCsvField(record.getCreatedAt() != null
+                    ? record.getCreatedAt().toString() : "")).append(',');
+            csv.append(escapeCsvField(record.getDetails() != null ? record.getDetails() : ""));
+            csv.append('\n');
+        }
+
+        return csv.toString();
+    }
+
+    /**
+     * 获取审计日志导出记录总数（用于前端提示）
+     */
+    public long countByTimeRange(LocalDate startDate, LocalDate endDate) {
+        LocalDateTime startTime = startDate.atStartOfDay();
+        LocalDateTime endTime = endDate.atTime(LocalTime.MAX);
+        return auditLogMapper.selectCount(
+                new LambdaQueryWrapper<SysAuditLog>()
+                        .ge(SysAuditLog::getCreatedAt, startTime)
+                        .le(SysAuditLog::getCreatedAt, endTime));
+    }
+
+    // --- private helpers ---
+
+    /**
+     * 强制时间范围限制：
+     * - 如果未指定日期范围，默认最近 30 天
+     * - 如果指定的范围超过 365 天，截断为 365 天
+     */
+    private void enforceTimeRangeLimit(AuditLogQuery query) {
+        LocalDate today = LocalDate.now();
+
+        if (query.getStartDate() == null && query.getEndDate() == null) {
+            // 未指定范围：默认最近 30 天
+            query.setStartDate(today.minusDays(30));
+            query.setEndDate(today);
+        } else if (query.getStartDate() == null) {
+            // 只指定了结束日期：从结束日期往前推 365 天
+            query.setStartDate(query.getEndDate().minusDays(365));
+        } else if (query.getEndDate() == null) {
+            // 只指定了开始日期：到今天为止
+            query.setEndDate(today);
+        }
+
+        // 检查范围不超过 365 天
+        long daysBetween = ChronoUnit.DAYS.between(query.getStartDate(), query.getEndDate());
+        if (daysBetween > 365) {
+            // 截断：保留 endDate 不变，调整 startDate
+            query.setStartDate(query.getEndDate().minusDays(365));
+        }
+    }
+
+    /**
+     * CSV 字段转义：包含逗号、引号或换行的字段需要用引号包裹
+     */
+    private String escapeCsvField(String field) {
+        if (field == null) {
+            return "";
+        }
+        if (field.contains(",") || field.contains("\"") || field.contains("\n") || field.contains("\r")) {
+            return "\"" + field.replace("\"", "\"\"") + "\"";
+        }
+        return field;
     }
 }
