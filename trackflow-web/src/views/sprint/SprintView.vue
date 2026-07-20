@@ -151,10 +151,11 @@
       </div>
 
       <!-- Planned Sprints -->
-      <div v-for="sprint in plannedSprints" :key="sprint.id" class="sprint-card planned">
+      <div v-for="sprint in plannedSprints" :key="sprint.id" class="sprint-card planned" :class="{ 'sprint-current': !hasActiveSprint && sprint.id === currentSprintId }">
         <div class="sprint-header">
           <div class="sprint-info">
-            <span class="sprint-status-badge planned">计划中</span>
+            <span class="sprint-status-badge planned" v-if="hasActiveSprint || sprint.id !== currentSprintId">计划中</span>
+            <span class="sprint-status-badge current" v-else>当前</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
           </div>
           <div class="sprint-dates" v-if="sprint.startDate">
@@ -638,8 +639,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
@@ -651,6 +652,7 @@ import SprintBurndownChart from './SprintBurndownChart.vue'
 import SprintAssigneeDistribution from './SprintAssigneeDistribution.vue'
 
 const router = useRouter()
+const route = useRoute()
 const projectStore = useProjectStore()
 
 const selectedProject = computed({
@@ -733,6 +735,23 @@ const nextStartableSprint = computed(() => {
 const selectedProjectKey = computed(() => {
   const p = projects.value.find(proj => proj.id === selectedProject.value)
   return p?.key || undefined
+})
+
+/**
+ * "当前 Sprint" 检测逻辑（参照 YouTrack）：
+ * - 如果有 active Sprint，它就是当前 Sprint
+ * - 如果没有 active，从 planned 中找"最早开始日期的未完成 Sprint"
+ * - 相同开始日期时，选结束日期最晚的
+ */
+const currentSprintId = computed<string | null>(() => {
+  if (activeSprints.value.length > 0) {
+    return activeSprints.value[0].id
+  }
+  // From planned sprints (already sorted by start_date ASC from backend)
+  if (plannedSprints.value.length > 0) {
+    return plannedSprints.value[0].id
+  }
+  return null
 })
 
 // ===== 工具函数 =====
@@ -1106,11 +1125,50 @@ async function doUpdate(confirmOverlap: boolean) {
 onMounted(async () => {
   await loadProjects()
 
-  // 如果已有选中的项目（从 Store 恢复或自动选择），自动加载迭代
+  // 1. 从 URL query 恢复项目选择（优先级最高）
+  const queryProject = route.query.project as string | undefined
+  if (queryProject && projects.value.length > 0) {
+    // URL 中使用 project key（如 DE4），需要转为 ID
+    const matchedByKey = projects.value.find(p => p.key === queryProject)
+    if (matchedByKey) {
+      projectStore.selectProject(matchedByKey.id)
+    }
+  }
+
+  // 2. 如果已有选中的项目（从 Store 恢复、URL 恢复或自动选择），自动加载迭代
   if (selectedProject.value) {
     loadSprints()
+    // 同步 URL（如果 URL 中没有 project 参数）
+    syncUrlProjectParam()
   }
 })
+
+/**
+ * 项目选择变化时同步 URL 参数
+ */
+watch(selectedProject, (val) => {
+  if (val) {
+    syncUrlProjectParam()
+  } else {
+    // 清除 URL 中的 project 参数
+    const query = { ...route.query }
+    delete query.project
+    router.replace({ query })
+  }
+})
+
+/**
+ * 将当前选中的项目 key 同步到 URL query 参数
+ */
+function syncUrlProjectParam() {
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  if (currentProject) {
+    const currentQueryProject = route.query.project
+    if (currentQueryProject !== currentProject.key) {
+      router.replace({ query: { ...route.query, project: currentProject.key } })
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -1158,6 +1216,9 @@ onMounted(async () => {
 .sprint-card.active {
   border-left: 3px solid rgb(var(--primary-6));
 }
+.sprint-card.sprint-current {
+  border-left: 3px solid rgb(var(--success-6));
+}
 .sprint-card.completed {
   opacity: 0.7;
 }
@@ -1184,6 +1245,7 @@ onMounted(async () => {
 }
 .sprint-status-badge.active { background: rgba(var(--primary-6), 0.1); color: rgb(var(--primary-6)); }
 .sprint-status-badge.planned { background: rgba(var(--warning-6), 0.1); color: rgb(var(--warning-6)); }
+.sprint-status-badge.current { background: rgba(var(--success-6), 0.1); color: rgb(var(--success-6)); font-weight: 600; }
 .sprint-status-badge.completed { background: var(--color-fill-2); color: var(--color-text-3); }
 
 .sprint-name {

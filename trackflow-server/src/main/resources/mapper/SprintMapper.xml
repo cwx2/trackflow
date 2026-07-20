@@ -60,6 +60,14 @@
                 WHEN 'planned' THEN 2
                 WHEN 'completed' THEN 3
             END,
+            CASE
+                WHEN s.status = 'planned' THEN s.start_date
+                ELSE NULL
+            END ASC NULLS LAST,
+            CASE
+                WHEN s.status != 'planned' THEN s.start_date
+                ELSE NULL
+            END DESC NULLS LAST,
             s.created_at DESC
     </select>
 
