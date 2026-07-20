@@ -103,7 +103,7 @@
     <a-button type="primary" size="small" @click="loadAll">重试</a-button>
   </div>
 
-  <IssueCreatePanel :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" />
+  <IssueCreatePanel ref="createPanelRef" :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" />
 
   <!-- Move Issue Modal -->
   <MoveIssueModal
@@ -162,7 +162,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
@@ -193,6 +193,7 @@ const tabStore = useTabStore()
 const timerStore = useTimerStore()
 const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
+const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
 const showTimeDialog = ref(false)
 const timeSaving = ref(false)
@@ -1042,6 +1043,24 @@ function priorityDot(p: string) {
   const m: Record<string, string> = { Critical: '#f44336', High: '#ff9800', Normal: '#4caf50', Low: '#9e9e9e' }
   return m[p] || '#666'
 }
+
+// 路由守卫：离开时检查克隆创建面板是否有未保存数据
+onBeforeRouteLeave((_to, _from, next) => {
+  const panel = createPanelRef.value
+  if (showCreatePanel.value && panel && panel.isDirty) {
+    Modal.confirm({
+      title: '有未保存的更改',
+      content: '创建工单表单中有未保存的内容，确定要离开吗？',
+      okText: '放弃更改',
+      cancelText: '继续编辑',
+      simple: false,
+      onOk: () => { next() },
+      onCancel: () => { next(false) }
+    })
+  } else {
+    next()
+  }
+})
 </script>
 
 <style scoped>

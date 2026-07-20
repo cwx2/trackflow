@@ -292,8 +292,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
@@ -424,6 +424,37 @@ function clearFieldError(fieldId: string) {
 
 const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 
+/**
+ * 表单脏数据检测
+ * 当标题、描述或任何属性被修改时，认为表单有未保存的数据
+ */
+const isDirty = computed(() => {
+  if (form.title.trim()) return true
+  if (form.description && form.description.trim()) return true
+  if (form.assigneeId) return true
+  if (form.sprintId) return true
+  if (form.dueDate) return true
+  if (form.estimatedHours != null && form.estimatedHours > 0) return true
+  // 检查自定义字段是否有值
+  if (Object.values(customFieldValues.value).some(v => v && String(v).trim())) return true
+  return false
+})
+
+// 暴露 isDirty 供父组件路由守卫使用
+defineExpose({ isDirty })
+
+// beforeunload 监听：浏览器关闭/刷新时提示
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (props.visible && isDirty.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
 // 接收外部传入的 projectId
 watch(() => props.projectId, (val) => {
   if (val) {
@@ -437,6 +468,7 @@ watch(() => props.projectId, (val) => {
 
 watch(() => props.visible, (val) => {
   if (val) {
+    window.addEventListener('beforeunload', handleBeforeUnload)
     loadProjects()
     // Pre-fill form if clone data is provided
     if (props.cloneData) {
@@ -447,6 +479,8 @@ watch(() => props.visible, (val) => {
       form.priority = props.cloneData.priority
       onProjectChange(props.cloneData.projectId)
     }
+  } else {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
   }
 })
 
@@ -488,7 +522,38 @@ function clearTemplate() {
 }
 
 function close() {
+  if (isDirty.value) {
+    Modal.confirm({
+      title: '有未保存的更改',
+      content: '当前表单中有未保存的内容，确定要离开吗？',
+      okText: '放弃更改',
+      cancelText: '继续编辑',
+      simple: false,
+      onOk: () => {
+        doClose()
+      }
+    })
+  } else {
+    doClose()
+  }
+}
+
+/** 真正关闭面板并重置表单 */
+function doClose() {
+  resetForm()
   emit('update:visible', false)
+}
+
+/** 重置表单到初始状态 */
+function resetForm() {
+  form.title = ''
+  form.description = ''
+  form.assigneeId = undefined
+  form.sprintId = undefined
+  form.dueDate = ''
+  form.estimatedHours = undefined
+  selectedTemplateId.value = null
+  cfValidationErrors.value = {}
 }
 
 function onSplitSelect(action: string) {
@@ -500,8 +565,9 @@ function onSplitSelect(action: string) {
 async function submitAndClose() {
   const success = await doSubmit()
   if (success) {
+    resetForm()  // 先重置表单，确保 isDirty 为 false
     emit('created')
-    close()
+    emit('update:visible', false)
   }
 }
 

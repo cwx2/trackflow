@@ -617,7 +617,7 @@
     </section>
 
     <!-- Create issue panel -->
-    <IssueCreatePanel v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" @created="refreshList" />
+    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" @created="refreshList" />
 
     <!-- Sidebar preview drawer -->
     <IssuePreviewDrawer
@@ -640,7 +640,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
@@ -1418,6 +1418,7 @@ function onQueryChipClick() {
 // Quick create
 const showInlineCreate = ref(false)
 const showCreatePanel = ref(false)
+const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 const quickCreating = ref(false)
 const quickForm = reactive({
   projectId: undefined as string | undefined,
@@ -2524,6 +2525,24 @@ function applyDashboardFilter() {
   globalFilterParams.value = filters
   refreshList()
 }
+
+// 路由守卫：离开时检查创建面板是否有未保存数据
+onBeforeRouteLeave((_to, _from, next) => {
+  const panel = createPanelRef.value
+  if (showCreatePanel.value && panel && panel.isDirty) {
+    Modal.confirm({
+      title: '有未保存的更改',
+      content: '创建工单表单中有未保存的内容，确定要离开吗？',
+      okText: '放弃更改',
+      cancelText: '继续编辑',
+      simple: false,
+      onOk: () => { next() },
+      onCancel: () => { next(false) }
+    })
+  } else {
+    next()
+  }
+})
 </script>
 
 <style scoped>
