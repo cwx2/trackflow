@@ -710,7 +710,17 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private Map<Long, NotificationReason> collectCommentRecipientsWithReason(Issue issue, Long excludeUserId) {
         Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
 
-        // Watcher 优先级最低，先加入（后续会被更高优先级覆盖）
+        // 项目订阅者优先级最低（先加入，后续会被更高优先级覆盖）
+        try {
+            Set<Long> projectSubscribers = subscriptionService.findSubscribersByProject(issue.getProjectId(), "onCommented");
+            for (Long id : projectSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] 项目订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Watcher 优先级高于项目订阅
         List<Long> watcherIds = watcherMapper.selectWatcherUserIds(issue.getId());
         if (watcherIds != null) {
             for (Long id : watcherIds) {
@@ -762,7 +772,17 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private Map<Long, NotificationReason> collectStatusChangeRecipientsWithReason(Issue issue, Long excludeUserId) {
         Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
 
-        // Watcher 优先级最低
+        // 项目订阅者优先级最低（先加入，后续会被更高优先级覆盖）
+        try {
+            Set<Long> projectSubscribers = subscriptionService.findSubscribersByProject(issue.getProjectId(), "onUpdated");
+            for (Long id : projectSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] 项目订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Watcher 优先级高于项目订阅
         List<Long> watcherIds = watcherMapper.selectWatcherUserIds(issue.getId());
         if (watcherIds != null) {
             for (Long id : watcherIds) {

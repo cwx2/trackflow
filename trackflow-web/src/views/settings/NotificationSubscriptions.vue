@@ -77,16 +77,17 @@
           <a-radio-group v-model="addForm.sourceType" size="small">
             <a-radio value="tag">标签</a-radio>
             <a-radio value="saved_query">保存搜索</a-radio>
+            <a-radio value="project">项目</a-radio>
           </a-radio-group>
         </div>
 
         <div class="form-field">
           <label class="form-label">
-            {{ addForm.sourceType === 'tag' ? '选择标签' : '选择保存搜索' }}
+            {{ addForm.sourceType === 'tag' ? '选择标签' : addForm.sourceType === 'saved_query' ? '选择保存搜索' : '选择项目' }}
           </label>
           <a-select
             v-model="addForm.sourceId"
-            :placeholder="addForm.sourceType === 'tag' ? '选择一个标签' : '选择一个保存搜索'"
+            :placeholder="addForm.sourceType === 'tag' ? '选择一个标签' : addForm.sourceType === 'saved_query' ? '选择一个保存搜索' : '选择一个项目'"
             allow-search
             size="small"
           >
@@ -131,9 +132,10 @@ const subscriptions = ref<NotificationSubscriptionVO[]>([])
 // Source options for the add dialog
 const tags = ref<Array<{ id: string; name: string }>>([])
 const savedQueries = ref<Array<{ id: string; name: string }>>([])
+const projects = ref<Array<{ id: string; name: string }>>([])
 
 const addForm = reactive({
-  sourceType: 'tag' as 'tag' | 'saved_query',
+  sourceType: 'tag' as 'tag' | 'saved_query' | 'project',
   sourceId: '' as string,
   events: {
     onCreated: true,
@@ -155,7 +157,9 @@ const eventKeys: Array<{ key: keyof SubscriptionEventsVO; label: string; short: 
 ]
 
 const sourceOptions = computed(() => {
-  return addForm.sourceType === 'tag' ? tags.value : savedQueries.value
+  if (addForm.sourceType === 'tag') return tags.value
+  if (addForm.sourceType === 'saved_query') return savedQueries.value
+  return projects.value
 })
 
 onMounted(async () => {
@@ -183,12 +187,15 @@ async function loadSubscriptions() {
 
 async function loadSourceOptions() {
   try {
-    // Load tags from all projects the user has access to
+    // Load projects
     const projectRes = await projectApi.list()
     if (projectRes.code === 0 && projectRes.data) {
-      const projects = Array.isArray(projectRes.data) ? projectRes.data : (projectRes.data as any).list || []
+      const projectList = Array.isArray(projectRes.data) ? projectRes.data : (projectRes.data as any).list || []
+      projects.value = projectList.map((p: any) => ({ id: String(p.id), name: p.name || p.key }))
+
+      // Load tags from all projects
       const allTags: Array<{ id: string; name: string }> = []
-      for (const p of projects.slice(0, 10)) { // limit to 10 projects for performance
+      for (const p of projectList.slice(0, 10)) { // limit to 10 projects for performance
         try {
           const tagRes = await tagApi.listProjectTags(String(p.id))
           if (tagRes.code === 0 && tagRes.data) {
@@ -234,6 +241,7 @@ async function loadSourceOptions() {
 function getSourceIcon(sub: NotificationSubscriptionVO): string {
   if (sub.sourceType === 'builtin') return '⭐'
   if (sub.sourceType === 'tag') return '🏷️'
+  if (sub.sourceType === 'project') return '📁'
   return '🔍'
 }
 

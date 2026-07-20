@@ -38,4 +38,12 @@ public interface NotificationSubscriptionMapper extends BaseMapper<NotificationS
             "WHERE source_type = 'builtin' AND builtin_key = #{builtinKey} " +
             "AND (events->>#{eventKey})::boolean = true")
     List<Long> selectUserIdsByBuiltinAndEvent(@Param("builtinKey") String builtinKey, @Param("eventKey") String eventKey);
+
+    /**
+     * 查询订阅了指定项目的所有用户ID列表。
+     */
+    @Select("SELECT DISTINCT user_id FROM notification_subscription " +
+            "WHERE source_type = 'project' AND source_id = #{projectId} " +
+            "AND (events->>#{eventKey})::boolean = true")
+    List<Long> selectUserIdsByProjectAndEvent(@Param("projectId") Long projectId, @Param("eventKey") String eventKey);
 }

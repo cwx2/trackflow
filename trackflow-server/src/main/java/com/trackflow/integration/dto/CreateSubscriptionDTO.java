@@ -12,7 +12,7 @@ public class CreateSubscriptionDTO {
 
     /** 订阅来源类型 */
     @NotBlank(message = "来源类型不能为空")
-    @Pattern(regexp = "tag|saved_query", message = "来源类型必须是 tag 或 saved_query")
+    @Pattern(regexp = "tag|saved_query|project", message = "来源类型必须是 tag、saved_query 或 project")
     private String sourceType;
 
     /** 来源 ID（标签ID 或 保存搜索ID） */

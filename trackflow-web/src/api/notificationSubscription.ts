@@ -16,7 +16,7 @@ export interface NotificationSubscriptionVO {
   id: string
   userId: string
   name: string
-  sourceType: 'tag' | 'saved_query' | 'builtin'
+  sourceType: 'tag' | 'saved_query' | 'builtin' | 'project'
   sourceId: string | null
   sourceName: string
   builtinKey: string | null
@@ -27,7 +27,7 @@ export interface NotificationSubscriptionVO {
 }
 
 export interface CreateSubscriptionDTO {
-  sourceType: 'tag' | 'saved_query'
+  sourceType: 'tag' | 'saved_query' | 'project'
   sourceId: string
   events?: Partial<SubscriptionEventsVO>
 }

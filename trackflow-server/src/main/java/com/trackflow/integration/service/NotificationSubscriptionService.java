@@ -12,6 +12,8 @@ import com.trackflow.integration.vo.NotificationSubscriptionVO;
 import com.trackflow.integration.vo.SubscriptionEventsVO;
 import com.trackflow.issue.entity.IssueTag;
 import com.trackflow.issue.mapper.IssueTagMapper;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.query.entity.SavedQuery;
 import com.trackflow.query.mapper.SavedQueryMapper;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class NotificationSubscriptionService {
     private final NotificationSubscriptionMapper subscriptionMapper;
     private final IssueTagMapper tagMapper;
     private final SavedQueryMapper savedQueryMapper;
+    private final ProjectMapper projectMapper;
     private final ObjectMapper objectMapper;
 
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
@@ -124,6 +127,12 @@ public class NotificationSubscriptionService {
                 throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "保存搜索不存在");
             }
             name = "搜索: " + query.getName();
+        } else if ("project".equals(dto.getSourceType())) {
+            Project project = projectMapper.selectById(sourceId);
+            if (project == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            }
+            name = "项目: " + project.getName();
         } else {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的来源类型");
         }
@@ -221,6 +230,21 @@ public class NotificationSubscriptionService {
         return ids != null ? new HashSet<>(ids) : Collections.emptySet();
     }
 
+    /**
+     * 根据项目ID查找所有订阅了该项目的用户ID列表。
+     *
+     * @param projectId 项目ID
+     * @param eventKey  事件键（"onCreated"/"onUpdated"/"onResolved"/"onCommented"）
+     * @return 匹配的用户 ID 集合
+     */
+    public Set<Long> findSubscribersByProject(Long projectId, String eventKey) {
+        if (projectId == null) {
+            return Collections.emptySet();
+        }
+        List<Long> ids = subscriptionMapper.selectUserIdsByProjectAndEvent(projectId, eventKey);
+        return ids != null ? new HashSet<>(ids) : Collections.emptySet();
+    }
+
     // ==================== 私有方法 ====================
 
     private NotificationSubscriptionVO toVO(NotificationSubscription sub) {
@@ -267,6 +291,10 @@ public class NotificationSubscriptionService {
         if ("saved_query".equals(sub.getSourceType())) {
             SavedQuery query = savedQueryMapper.selectById(sub.getSourceId());
             return query != null ? query.getName() : "已删除的搜索";
+        }
+        if ("project".equals(sub.getSourceType())) {
+            Project project = projectMapper.selectById(sub.getSourceId());
+            return project != null ? project.getName() : "已删除的项目";
         }
         return "";
     }
