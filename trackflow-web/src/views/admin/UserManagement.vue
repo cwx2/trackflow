@@ -578,13 +578,17 @@ async function toggleRole(roleId: number) {
   const userId = selectedUser.value?.id
   if (!userId) return
   const roleIdStr = String(roleId)
+  const role = globalRoles.value.find((r: any) => String(r.id) === roleIdStr)
+  const roleName = role?.name || '角色'
   try {
     if (userRoleIds.value.includes(roleIdStr)) {
       await userApi.removeRole(userId, roleIdStr)
       userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
+      Message.success(`已移除全局角色「${roleName}」`)
     } else {
       await userApi.assignRole(userId, roleIdStr)
       userRoleIds.value.push(roleIdStr)
+      Message.success(`已分配全局角色「${roleName}」`)
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
@@ -603,11 +607,14 @@ async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: st
     // 刷新项目角色数据
     pr.roleName = newRole.name
     pr.roleCode = newRole.code
+    const userName = selectedUser.value?.displayName || selectedUser.value?.username
     if (affectedCount > 0) {
-      Message.success(`角色已更新，已清空 ${affectedCount} 个工单的负责人`)
+      Message.success(`角色已更新：${userName} 在 ${pr.projectName} 的角色已变更为「${newRole.name}」，已清空 ${affectedCount} 个工单的负责人`)
+    } else {
+      Message.success(`角色已更新：${userName} 在 ${pr.projectName} 的角色已变更为「${newRole.name}」`)
     }
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '修改角色失败')
+    Message.error(e.response?.data?.message || '角色更新失败')
     // 重新加载以回滚UI
     await refreshProjectRoles()
   }
@@ -646,6 +653,9 @@ async function addToProject() {
       userId,
       roleIds: [Number(addProjectRoleId.value)]
     })
+    const project = allProjects.value.find(p => String(p.id) === addProjectId.value)
+    const role = projectRoles.value.find((r: any) => String(r.id) === addProjectRoleId.value)
+    Message.success(`已添加到项目「${project?.name || ''}」，角色：${role?.name || ''}`)
     // 刷新项目角色
     await refreshProjectRoles()
     cancelAddProject()
