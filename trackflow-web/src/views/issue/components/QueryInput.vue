@@ -32,7 +32,7 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { userApi, customFieldApi } from '@/api'
+import { projectApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
 
@@ -444,11 +444,34 @@ function selectSuggestion(item: Suggestion) {
 
 async function loadUsers() {
   try {
-    const res = await userApi.list({ pageSize: 50 })
-    const users = res.data?.list || []
-    userCache.value = users.map((u: any) => ({
-      id: u.displayName || u.username,
-      label: u.displayName || u.username
+    let members: Array<{ displayName?: string; username: string }> = []
+
+    if (props.projectId) {
+      // Single project selected — load its members
+      const res = await projectApi.listMembers(props.projectId, { _silent403: true })
+      members = res.data || []
+    } else {
+      // All projects mode — aggregate members from all visible projects (deduplicated)
+      const results = await Promise.allSettled(
+        props.projectList.map(p => projectApi.listMembers(p.id, { _silent403: true }))
+      )
+      const seen = new Set<string>()
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.data) {
+          for (const m of result.value.data) {
+            const key = m.displayName || m.username
+            if (!seen.has(key)) {
+              seen.add(key)
+              members.push(m)
+            }
+          }
+        }
+      }
+    }
+
+    userCache.value = members.map((m: any) => ({
+      id: m.displayName || m.username,
+      label: m.displayName || m.username
     }))
   } catch { /* ignore */ }
 }
@@ -494,9 +517,10 @@ function mapFieldFormat(format: string): FieldDef['valueType'] {
   }
 }
 
-// Watch projectId changes to reload custom fields
+// Watch projectId changes to reload custom fields and users
 watch(() => props.projectId, () => {
   loadCustomFields()
+  loadUsers()
 })
 
 onMounted(() => {

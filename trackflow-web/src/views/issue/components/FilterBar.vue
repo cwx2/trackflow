@@ -178,8 +178,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
-import { issueApi, projectApi, sprintApi, userApi } from '@/api'
-import type { IssueStatusVO, ProjectVO, SprintVO, UserVO } from '@/api/types'
+import { projectApi, sprintApi } from '@/api'
+import type { IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
 
 // ==================== Types ====================
@@ -537,13 +537,35 @@ async function loadValueOptions(fieldKey: string) {
         break
 
       case 'assignee': {
-        // Load all users
-        const res = await userApi.list({ pageSize: 100 })
-        const users = res.data?.list || []
-        valueOptions.value = users.map((u: UserVO) => ({
-          id: u.id,
-          label: u.displayName || u.username
-        }))
+        // Load project members (uses project:view permission, accessible to all project members)
+        const assigneeProjectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
+        const assigneePid = assigneeProjectFilter?.values[0] || props.projectId
+        if (assigneePid) {
+          const res = await projectApi.listMembers(assigneePid, { _silent403: true })
+          const members = res.data || []
+          valueOptions.value = members.map((m: any) => ({
+            id: m.userId,
+            label: m.displayName || m.username
+          }))
+        } else {
+          // All projects mode — aggregate members from visible projects (deduplicated)
+          const allMembers: ValueOption[] = []
+          const seen = new Set<string>()
+          const results = await Promise.allSettled(
+            props.projectList.slice(0, 10).map(p => projectApi.listMembers(p.id, { _silent403: true }))
+          )
+          for (const result of results) {
+            if (result.status === 'fulfilled' && result.value.data) {
+              for (const m of result.value.data) {
+                if (!seen.has(m.userId)) {
+                  seen.add(m.userId)
+                  allMembers.push({ id: m.userId, label: m.displayName || m.username })
+                }
+              }
+            }
+          }
+          valueOptions.value = allMembers
+        }
         break
       }
 
