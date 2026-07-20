@@ -48,6 +48,7 @@ public class UserController {
     @GetMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<PageResult<UserVO>> list(
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "username", required = false) String username,
             @RequestParam(value = "displayName", required = false) String displayName,
             @RequestParam(value = "email", required = false) String email,
@@ -61,7 +62,7 @@ public class UserController {
         Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort,
                 Set.of("id", "username", "display_name", "email", "status",
                         "org_id", "created_at", "updated_at", "last_login_at"));
-        Page<SysUser> result = userService.list(pageObj, username, displayName, email, orgId, status, banStatus);
+        Page<SysUser> result = userService.list(pageObj, keyword, username, displayName, email, orgId, status, banStatus);
 
         List<UserVO> voList = userConverter.toVOList(result.getRecords());
 

@@ -164,7 +164,7 @@ async function handleUserSearch(keyword: string) {
   if (!keyword || keyword.length < 1) return
   userLoading.value = true
   try {
-    const res = await userApi.list({ displayName: keyword, pageSize: 20 })
+    const res = await userApi.list({ keyword, pageSize: 20 })
     userOptions.value = res.data?.list || []
   } catch {
     userOptions.value = []

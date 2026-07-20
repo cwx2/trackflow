@@ -119,10 +119,11 @@
               <div v-for="role in detailData.roles" :key="role.id" class="role-item">
                 <div class="role-info">
                   <span class="role-name-tag">{{ role.roleName }}</span>
-                  <span class="role-scope" v-if="role.projectId">
-                    项目: {{ role.projectName }} ({{ role.projectKey }})
+                  <span class="role-scope global" v-if="role.scope === 'global'">全局</span>
+                  <span class="role-scope all-projects" v-else-if="role.scope === 'all_projects'">所有项目</span>
+                  <span class="role-scope" v-else-if="role.projectId">
+                    {{ role.projectName }} ({{ role.projectKey }})
                   </span>
-                  <span class="role-scope global" v-else>全局</span>
                 </div>
                 <button class="btn-sm danger" @click="removeRole(role)">移除</button>
               </div>
@@ -189,13 +190,41 @@
             </select>
           </div>
           <div class="form-row" v-if="selectedRoleType === 'project'">
-            <label class="form-label">项目 *</label>
-            <select v-model="roleFormData.projectId" class="form-input">
-              <option value="">请选择项目</option>
-              <option v-for="project in availableProjects" :key="project.id" :value="project.id">
-                {{ project.name }} ({{ project.key }})
-              </option>
-            </select>
+            <label class="form-label">作用域 *</label>
+            <div class="scope-options">
+              <label class="scope-option" :class="{ active: roleFormData.scopeMode === 'global' }">
+                <input type="radio" v-model="roleFormData.scopeMode" value="global" />
+                <span class="scope-label">全局（所有项目）</span>
+                <span class="scope-desc">角色对所有现有及未来新建的项目生效</span>
+              </label>
+              <label class="scope-option" :class="{ active: roleFormData.scopeMode === 'projects' }">
+                <input type="radio" v-model="roleFormData.scopeMode" value="projects" />
+                <span class="scope-label">指定项目</span>
+                <span class="scope-desc">选择一个或多个项目</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-row" v-if="selectedRoleType === 'project' && roleFormData.scopeMode === 'projects'">
+            <label class="form-label">选择项目 *</label>
+            <div class="project-checklist">
+              <label
+                v-for="project in availableProjects"
+                :key="project.id"
+                class="project-check-item"
+                :class="{ selected: roleFormData.selectedProjectIds.includes(project.id) }"
+              >
+                <input
+                  type="checkbox"
+                  :value="project.id"
+                  v-model="roleFormData.selectedProjectIds"
+                  class="project-checkbox"
+                />
+                <span class="project-check-label">{{ project.name }} ({{ project.key }})</span>
+              </label>
+            </div>
+            <div class="selected-count" v-if="roleFormData.selectedProjectIds.length > 0">
+              已选择 {{ roleFormData.selectedProjectIds.length }} 个项目
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -259,7 +288,7 @@ const selectedUserIds = ref<string[]>([])
 const showAddRoleDialog = ref(false)
 const availableRoles = ref<any[]>([])
 const availableProjects = ref<ProjectVO[]>([])
-const roleFormData = ref({ roleId: '', projectId: '' })
+const roleFormData = ref({ roleId: '', scopeMode: 'global' as 'global' | 'projects', selectedProjectIds: [] as string[] })
 const selectedRoleType = ref('')
 
 // ===== 删除确认 =====
@@ -268,7 +297,11 @@ const deletingGroup = ref<UserGroupVO | null>(null)
 
 const canSubmitRole = computed(() => {
   if (!roleFormData.value.roleId) return false
-  if (selectedRoleType.value === 'project' && !roleFormData.value.projectId) return false
+  if (selectedRoleType.value === 'project') {
+    if (roleFormData.value.scopeMode === 'projects' && roleFormData.value.selectedProjectIds.length === 0) {
+      return false
+    }
+  }
   return true
 })
 
@@ -349,7 +382,7 @@ async function searchUsers() {
     return
   }
   try {
-    const res = await userApi.list({ displayName: memberSearchKeyword.value, page: 1, pageSize: 20 })
+    const res = await userApi.list({ keyword: memberSearchKeyword.value, page: 1, pageSize: 20 })
     if (res.code === 0) {
       // 过滤掉已是组成员的用户
       const existingIds = detailData.value?.members.map(m => m.userId) || []
@@ -416,20 +449,30 @@ async function loadRolesAndProjects() {
 function onRoleChange() {
   const role = availableRoles.value.find((r: any) => String(r.id) === roleFormData.value.roleId)
   selectedRoleType.value = role?.roleType || ''
-  if (selectedRoleType.value !== 'project') {
-    roleFormData.value.projectId = ''
-  }
+  // Reset scope selection when role changes
+  roleFormData.value.scopeMode = 'global'
+  roleFormData.value.selectedProjectIds = []
 }
 
 async function submitAssignRole() {
   try {
+    const isProjectRole = selectedRoleType.value === 'project'
+    const isGlobalScope = isProjectRole && roleFormData.value.scopeMode === 'global'
+    const projectIds = isProjectRole && roleFormData.value.scopeMode === 'projects'
+      ? roleFormData.value.selectedProjectIds
+      : undefined
+
     await groupApi.assignRole(currentGroupId.value, {
       roleId: roleFormData.value.roleId,
-      projectId: roleFormData.value.projectId || undefined
+      globalScope: isGlobalScope || undefined,
+      projectIds: projectIds
     })
-    Message.success('角色已分配')
+
+    const scopeLabel = isGlobalScope ? '（所有项目）' :
+      projectIds ? `（${projectIds.length} 个项目）` : ''
+    Message.success(`角色已分配${scopeLabel}`)
     showAddRoleDialog.value = false
-    roleFormData.value = { roleId: '', projectId: '' }
+    roleFormData.value = { roleId: '', scopeMode: 'global', selectedProjectIds: [] }
     selectedRoleType.value = ''
     await reloadDetail()
     await loadGroups()
@@ -561,6 +604,25 @@ select.form-input { cursor: pointer; }
 .role-name-tag { font-size: 12px; font-weight: 500; padding: 2px 8px; background: var(--tf-bg-elevated); border-radius: 3px; color: var(--tf-text-primary); }
 .role-scope { font-size: 11px; color: var(--tf-text-tertiary); }
 .role-scope.global { color: var(--tf-accent); }
+.role-scope.all-projects { color: var(--color-success, #3fb950); font-weight: 500; }
+
+/* Scope options (radio group) */
+.scope-options { display: flex; flex-direction: column; gap: 8px; }
+.scope-option { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--tf-border-light); border-radius: 6px; cursor: pointer; transition: all .15s; }
+.scope-option:hover { background: var(--tf-bg-hover); }
+.scope-option.active { border-color: var(--tf-accent); background: color-mix(in srgb, var(--tf-accent) 8%, transparent); }
+.scope-option input[type="radio"] { margin-top: 2px; accent-color: var(--tf-accent); }
+.scope-label { font-size: 13px; font-weight: 500; color: var(--tf-text-primary); flex: 1; }
+.scope-desc { width: 100%; font-size: 11px; color: var(--tf-text-tertiary); margin-left: 22px; }
+
+/* Project checklist */
+.project-checklist { max-height: 200px; overflow-y: auto; border: 1px solid var(--tf-border-light); border-radius: 6px; }
+.project-check-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background .1s; border-bottom: 1px solid var(--tf-border-light); }
+.project-check-item:last-child { border-bottom: none; }
+.project-check-item:hover { background: var(--tf-bg-hover); }
+.project-check-item.selected { background: color-mix(in srgb, var(--tf-accent) 8%, transparent); }
+.project-checkbox { accent-color: var(--tf-accent); }
+.project-check-label { font-size: 13px; color: var(--tf-text-primary); }
 
 /* Add member dialog */
 .user-search-results { max-height: 240px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--tf-border-light); border-radius: 6px; }

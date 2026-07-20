@@ -161,7 +161,7 @@ function handleSearch(keyword: string) {
 
       // 并行搜索用户和用户组
       const [usersRes, groupsRes] = await Promise.all([
-        userApi.list({ displayName: keyword, page: 1, pageSize: 10 }),
+        userApi.list({ keyword, page: 1, pageSize: 10 }),
         groupApi.list({ keyword, page: 1, pageSize: 10 })
       ])
 

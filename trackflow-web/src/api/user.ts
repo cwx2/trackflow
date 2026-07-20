@@ -7,7 +7,7 @@ import type { R, PageResult, UserVO } from './types'
 export const userApi = {
   /** 用户列表 */
   list(params?: {
-    username?: string; displayName?: string; email?: string
+    keyword?: string; username?: string; displayName?: string; email?: string
     orgId?: string; status?: string; banStatus?: string
     page?: number; pageSize?: number; sort?: string
   }) {

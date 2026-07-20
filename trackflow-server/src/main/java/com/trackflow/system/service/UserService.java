@@ -174,9 +174,20 @@ public class UserService {
     /**
      * 分页查询用户列表
      */
-    public Page<SysUser> list(Page<SysUser> page, String username, String displayName,
+    public Page<SysUser> list(Page<SysUser> page, String keyword, String username, String displayName,
                               String email, Long orgId, String status, String banStatus) {
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
+
+        // keyword: unified search across username, displayName, email (OR condition)
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            wrapper.and(w -> w
+                    .like(SysUser::getUsername, kw)
+                    .or().like(SysUser::getDisplayName, kw)
+                    .or().like(SysUser::getEmail, kw)
+            );
+        }
+
         if (username != null && !username.isBlank()) {
             wrapper.like(SysUser::getUsername, username);
         }
