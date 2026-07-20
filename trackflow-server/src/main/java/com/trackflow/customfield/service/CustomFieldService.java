@@ -898,11 +898,17 @@ public class CustomFieldService {
                 continue;
             }
 
+            // 条件显示评估：如果字段有条件且条件不满足，跳过默认值填充和必填校验
+            CustomFieldProject mapping = projectOverrides.get(field.getId());
+            if (!isFieldConditionMet(mapping, merged)) {
+                continue;
+            }
+
             // 尝试应用默认值（项目级优先）
-            String defaultVal = resolveDefaultValueWithOverride(field, projectOverrides.get(field.getId()));
+            String defaultVal = resolveDefaultValueWithOverride(field, mapping);
             if (defaultVal != null && !defaultVal.isBlank()) {
                 merged.put(field.getId(), defaultVal);
-            } else if (isFieldRequired(field, projectOverrides.get(field.getId()))) {
+            } else if (isFieldRequired(field, mapping)) {
                 // 必填字段无默认值且用户未提供 → 报错
                 errors.add(new CustomFieldValidationEngine.FieldValidationError(
                         field.getName(), "此字段为必填项"));
@@ -980,6 +986,30 @@ public class CustomFieldService {
         return Boolean.TRUE.equals(field.getIsRequired());
     }
 
+    /**
+     * 评估字段的条件显示规则是否满足。
+     * 如果字段没有配置条件（conditionFieldId 为 null），返回 true（始终显示）。
+     * 如果配置了条件，检查条件源字段的当前值是否在 conditionValues 列表中。
+     *
+     * @param mapping 项目字段映射（含 conditionFieldId 和 conditionValues）
+     * @param currentValues 当前字段值集合（key = fieldId, value = 字段值）
+     * @return true 表示字段应显示（条件满足或无条件），false 表示字段应隐藏
+     */
+    private boolean isFieldConditionMet(CustomFieldProject mapping, Map<Long, String> currentValues) {
+        if (mapping == null || mapping.getConditionFieldId() == null) {
+            return true; // 无条件配置，始终显示
+        }
+        String conditionFieldValue = currentValues.get(mapping.getConditionFieldId());
+        if (conditionFieldValue == null || conditionFieldValue.isBlank()) {
+            return false; // 条件源字段无值，条件不满足，字段应隐藏
+        }
+        List<String> conditionValues = parseJsonArray(mapping.getConditionValues());
+        if (conditionValues.isEmpty()) {
+            return true; // conditionValues 为空视为无条件限制
+        }
+        return conditionValues.contains(conditionFieldValue);
+    }
+
     @Transactional
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
         if (fieldValues == null || fieldValues.isEmpty()) return;
@@ -1020,7 +1050,12 @@ public class CustomFieldService {
         }
 
         for (CustomFieldDefinition field : applicableFields) {
-            if (isFieldRequired(field, projectOverrides.get(field.getId())) && !fieldValues.containsKey(field.getId())) {
+            // 条件显示评估：如果字段有条件且条件不满足，跳过必填校验
+            CustomFieldProject mapping = projectOverrides.get(field.getId());
+            if (!isFieldConditionMet(mapping, fieldValues)) {
+                continue;
+            }
+            if (isFieldRequired(field, mapping) && !fieldValues.containsKey(field.getId())) {
                 allErrors.add(new CustomFieldValidationEngine.FieldValidationError(
                         field.getName(), "此字段为必填项"));
             }
@@ -1312,6 +1347,49 @@ public class CustomFieldService {
             return new HashMap<>();
         }
 
+        // 4.5 应用 visibleToRoles 过滤：确保当前用户只能看到有权查看的字段值
+        Set<Long> projectIds = new HashSet<>(issueProjectMap.values());
+        // 加载所有涉及项目的字段可见性配置
+        Map<Long, Map<Long, CustomFieldProject>> projectConditionsMap = new HashMap<>();
+        if (!projectIds.isEmpty()) {
+            List<CustomFieldProject> allMappings = projectMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .in(CustomFieldProject::getProjectId, projectIds));
+            for (CustomFieldProject cfp : allMappings) {
+                projectConditionsMap
+                        .computeIfAbsent(cfp.getProjectId(), k -> new HashMap<>())
+                        .put(cfp.getCustomFieldId(), cfp);
+            }
+        }
+        // 获取当前用户在各项目中的角色（缓存避免重复查询）
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        boolean isSystemAdmin = currentUserId != null &&
+                permissionService.hasGlobalPermission(currentUserId, "system:admin");
+        Map<Long, List<Long>> userRolesPerProject = new HashMap<>();
+        if (!isSystemAdmin && currentUserId != null) {
+            for (Long pid : projectIds) {
+                userRolesPerProject.put(pid, projectMemberMapper.selectRoleIdsByUserAndProject(currentUserId, pid));
+            }
+        }
+        // 过滤不可见的字段值
+        if (!isSystemAdmin) {
+            applicableValues = applicableValues.stream()
+                    .filter(v -> {
+                        Long projectId = issueProjectMap.get(v.getIssueId());
+                        if (projectId == null) return true;
+                        Map<Long, CustomFieldProject> conditions = projectConditionsMap.get(projectId);
+                        if (conditions == null) return true; // 无限制配置
+                        CustomFieldProject mapping = conditions.get(v.getCustomFieldId());
+                        List<Long> visibleRoles = mapping != null ? parseRoleIds(mapping.getVisibleToRoles()) : null;
+                        List<Long> userRoles = userRolesPerProject.getOrDefault(projectId, List.of());
+                        return isVisibleToUser(visibleRoles, userRoles);
+                    })
+                    .toList();
+            if (applicableValues.isEmpty()) {
+                return new HashMap<>();
+            }
+        }
+
         // 5. 预加载 list 类型字段的选项映射 (optionId → optionValue) 和 (optionId → color)
         Set<Long> listFieldIds = fieldDefMap.values().stream()
                 .filter(f -> "list".equals(f.getFieldFormat()))
@@ -1478,6 +1556,12 @@ public class CustomFieldService {
         if (allValues.isEmpty()) return List.of();
 
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+
+        // 应用 visibleToRoles 过滤：确保当前用户只能看到有权查看的字段值
+        Map<Long, CustomFieldProject> conditionsMap = getProjectFieldConditions(projectId);
+        List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
+        applicableFields = filterFieldsByVisibility(applicableFields, conditionsMap, userRoleIds);
+
         Map<Long, CustomFieldDefinition> fieldMap = applicableFields.stream()
                 .collect(Collectors.toMap(CustomFieldDefinition::getId, f -> f));
 
