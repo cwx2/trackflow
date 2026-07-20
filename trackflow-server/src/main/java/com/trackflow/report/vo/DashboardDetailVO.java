@@ -18,6 +18,8 @@ public class DashboardDetailVO {
     private String ownerName;
     private Boolean shared;
     private Integer layoutVersion;
+    /** 精细化共享对象数量 */
+    private Integer shareCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

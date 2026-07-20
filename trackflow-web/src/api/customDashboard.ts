@@ -26,6 +26,7 @@ export interface DashboardDetailVO {
   ownerName: string
   shared: boolean
   layoutVersion: number
+  shareCount: number
   createdAt: string
   updatedAt: string
   widgets: DashboardWidgetVO[]
@@ -39,6 +40,7 @@ export interface DashboardListVO {
   ownerName: string
   shared: boolean
   widgetCount: number
+  shareCount: number
   createdAt: string
   updatedAt: string
 }
@@ -83,6 +85,27 @@ export interface LayoutItem {
   positionY: number
   width: number
   height: number
+}
+
+// ─── Share Types ───────────────────────────────────────
+
+export interface DashboardShareVO {
+  id: string
+  targetType: 'user' | 'group'
+  targetId: string
+  targetName: string
+  permission: 'view' | 'edit'
+  createdAt: string
+}
+
+export interface ShareTarget {
+  targetType: 'user' | 'group'
+  targetId: number
+  permission: 'view' | 'edit'
+}
+
+export interface ShareDashboardParams {
+  targets: ShareTarget[]
 }
 
 // ─── API ───────────────────────────────────────────────
@@ -134,5 +157,22 @@ export const customDashboardApi = {
   /** 批量更新布局（拖拽后保存） */
   updateLayout(dashboardId: string, items: LayoutItem[], version: number) {
     return request.put<any, R<void>>(`/dashboards/${dashboardId}/layout`, { items, version })
+  },
+
+  // ─── Share API ─────────────────────────────────────────
+
+  /** 获取仪表盘共享列表 */
+  getShares(dashboardId: string) {
+    return request.get<any, R<DashboardShareVO[]>>(`/dashboards/${dashboardId}/shares`)
+  },
+
+  /** 设置仪表盘共享（覆盖模式） */
+  setShares(dashboardId: string, data: ShareDashboardParams) {
+    return request.put<any, R<DashboardShareVO[]>>(`/dashboards/${dashboardId}/shares`, data)
+  },
+
+  /** 移除单条共享 */
+  removeShare(dashboardId: string, shareId: string) {
+    return request.delete<any, R<void>>(`/dashboards/${dashboardId}/shares/${shareId}`)
   }
 }

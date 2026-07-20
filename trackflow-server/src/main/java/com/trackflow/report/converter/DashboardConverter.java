@@ -18,6 +18,7 @@ public interface DashboardConverter extends BaseConverter {
     @Mapping(target = "ownerId", expression = "java(longToString(entity.getOwnerId()))")
     @Mapping(target = "ownerName", ignore = true)
     @Mapping(target = "widgetCount", ignore = true)
+    @Mapping(target = "shareCount", ignore = true)
     DashboardListVO toListVO(Dashboard entity);
 
     List<DashboardListVO> toListVOList(List<Dashboard> entities);
@@ -26,6 +27,7 @@ public interface DashboardConverter extends BaseConverter {
     @Mapping(target = "ownerId", expression = "java(longToString(entity.getOwnerId()))")
     @Mapping(target = "ownerName", ignore = true)
     @Mapping(target = "widgets", ignore = true)
+    @Mapping(target = "shareCount", ignore = true)
     DashboardDetailVO toDetailVO(Dashboard entity);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")

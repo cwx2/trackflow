@@ -175,7 +175,10 @@
         </a-form-item>
 
         <a-form-item label="默认值">
-          <a-input v-model="form.defaultValue" placeholder="可选" />
+          <DefaultValueInput
+            v-model="form.defaultValue"
+            :field-format="form.fieldFormat"
+          />
         </a-form-item>
 
         <!-- string 类型额外配置 -->
@@ -341,13 +344,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
+import DefaultValueInput from './components/DefaultValueInput.vue'
 
 const activeTab = ref('list')
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
@@ -491,6 +495,13 @@ function resetForm() {
   copyFromFieldId.value = null
   optionUsageMap.value = {}
 }
+
+// Reset defaultValue when field format changes during creation
+watch(() => form.fieldFormat, (newFormat, oldFormat) => {
+  if (!editingId.value && oldFormat && newFormat !== oldFormat) {
+    form.defaultValue = ''
+  }
+})
 
 async function loadEnumFields() {
   try {

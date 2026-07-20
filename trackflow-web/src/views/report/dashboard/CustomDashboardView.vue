@@ -55,6 +55,10 @@
             <span v-if="currentDashboard.description" class="dashboard-desc">
               {{ currentDashboard.description }}
             </span>
+            <span v-if="currentDashboard.shareCount && currentDashboard.shareCount > 0" class="share-badge" @click="isOwner && (showShareModal = true)">
+              <icon-share-alt :size="12" />
+              已共享给 {{ currentDashboard.shareCount }} 个对象
+            </span>
           </div>
           <div class="toolbar-right" v-if="isOwner">
             <a-button size="small" @click="showAddWidgetModal = true">
@@ -70,9 +74,13 @@
                   <template #icon><icon-edit /></template>
                   编辑仪表盘
                 </a-doption>
+                <a-doption @click="showShareModal = true">
+                  <template #icon><icon-share-alt /></template>
+                  共享设置
+                </a-doption>
                 <a-doption @click="toggleShared">
                   <template #icon><icon-share-alt /></template>
-                  {{ currentDashboard.shared ? '取消共享' : '设为共享' }}
+                  {{ currentDashboard.shared ? '取消全局共享' : '全局共享' }}
                 </a-doption>
                 <a-doption class="danger-option" @click="confirmDelete">
                   <template #icon><icon-delete /></template>
@@ -259,6 +267,13 @@
         </template>
       </a-form>
     </a-modal>
+
+    <!-- 共享设置弹窗 -->
+    <ShareDashboardModal
+      v-model:visible="showShareModal"
+      :dashboard-id="currentDashboard?.id || ''"
+      @saved="onShareSaved"
+    />
   </div>
 </template>
 
@@ -274,6 +289,7 @@ import { reportApi } from '@/api/report'
 import type { DashboardListVO, DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
 import type { ReportDefinitionVO } from '@/api/report'
 import WidgetCard from './WidgetCard.vue'
+import ShareDashboardModal from './ShareDashboardModal.vue'
 
 // ─── 微件类型定义 ─────────────────────────────────────────
 
@@ -303,6 +319,7 @@ const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showAddWidgetModal = ref(false)
 const showWidgetConfigModal = ref(false)
+const showShareModal = ref(false)
 
 const createForm = ref({ name: '', description: '', shared: false })
 const editForm = ref({ name: '', description: '' })
@@ -499,11 +516,19 @@ async function toggleShared() {
     await customDashboardApi.update(currentDashboard.value.id, {
       shared: !currentDashboard.value.shared
     })
-    Message.success(currentDashboard.value.shared ? '已取消共享' : '已设为共享')
+    Message.success(currentDashboard.value.shared ? '已取消全局共享' : '已设为全局共享')
     await loadDashboards()
     await selectDashboard(currentDashboard.value.id)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+async function onShareSaved() {
+  // 共享设置保存后刷新仪表盘详情以更新 shareCount
+  if (currentDashboard.value) {
+    await selectDashboard(currentDashboard.value.id)
+    await loadDashboards()
   }
 }
 
@@ -765,6 +790,24 @@ watch(showEditModal, (val) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--tf-accent);
+  background: color-mix(in srgb, var(--tf-accent) 10%, transparent);
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  white-space: nowrap;
+}
+
+.share-badge:hover {
+  background: color-mix(in srgb, var(--tf-accent) 18%, transparent);
 }
 
 .toolbar-right {

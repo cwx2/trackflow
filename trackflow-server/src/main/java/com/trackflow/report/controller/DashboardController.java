@@ -4,12 +4,14 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.report.dto.CreateDashboardDTO;
 import com.trackflow.report.dto.CreateWidgetDTO;
+import com.trackflow.report.dto.ShareDashboardDTO;
 import com.trackflow.report.dto.UpdateDashboardDTO;
 import com.trackflow.report.dto.UpdateLayoutDTO;
 import com.trackflow.report.dto.UpdateWidgetDTO;
 import com.trackflow.report.service.CustomDashboardService;
 import com.trackflow.report.vo.DashboardDetailVO;
 import com.trackflow.report.vo.DashboardListVO;
+import com.trackflow.report.vo.DashboardShareVO;
 import com.trackflow.report.vo.DashboardWidgetVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +80,42 @@ public class DashboardController {
         dashboardService.delete(id, userId);
         return R.ok();
     }
+
+    // ─── 共享管理 ────────────────────────────────────────
+
+    /**
+     * 获取仪表盘的共享列表
+     */
+    @GetMapping("/{id}/shares")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<DashboardShareVO>> getShares(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(dashboardService.getShares(id, userId));
+    }
+
+    /**
+     * 设置仪表盘共享（覆盖模式）
+     */
+    @PutMapping("/{id}/shares")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<DashboardShareVO>> setShares(@PathVariable("id") Long id,
+                                                @Valid @RequestBody ShareDashboardDTO dto) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(dashboardService.setShares(id, dto, userId));
+    }
+
+    /**
+     * 移除单条共享
+     */
+    @DeleteMapping("/{id}/shares/{shareId}")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> removeShare(@PathVariable("id") Long id, @PathVariable("shareId") Long shareId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        dashboardService.removeShare(id, shareId, userId);
+        return R.ok();
+    }
+
+    // ─── Widget 管理 ────────────────────────────────────────
 
     /**
      * 添加 Widget 到仪表盘

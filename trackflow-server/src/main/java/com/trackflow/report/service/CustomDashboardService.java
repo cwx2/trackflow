@@ -9,27 +9,31 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.report.converter.DashboardConverter;
 import com.trackflow.report.dto.CreateDashboardDTO;
 import com.trackflow.report.dto.CreateWidgetDTO;
+import com.trackflow.report.dto.ShareDashboardDTO;
 import com.trackflow.report.dto.UpdateDashboardDTO;
 import com.trackflow.report.dto.UpdateLayoutDTO;
 import com.trackflow.report.dto.UpdateWidgetDTO;
 import com.trackflow.report.entity.Dashboard;
+import com.trackflow.report.entity.DashboardShare;
 import com.trackflow.report.entity.DashboardWidget;
 import com.trackflow.report.entity.WidgetType;
 import com.trackflow.report.mapper.DashboardMapper;
+import com.trackflow.report.mapper.DashboardShareMapper;
 import com.trackflow.report.mapper.DashboardWidgetMapper;
 import com.trackflow.report.vo.DashboardDetailVO;
 import com.trackflow.report.vo.DashboardListVO;
+import com.trackflow.report.vo.DashboardShareVO;
 import com.trackflow.report.vo.DashboardWidgetVO;
-import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.entity.UserGroup;
+import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.mapper.UserGroupMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -42,35 +46,55 @@ public class CustomDashboardService {
 
     private final DashboardMapper dashboardMapper;
     private final DashboardWidgetMapper widgetMapper;
+    private final DashboardShareMapper shareMapper;
     private final DashboardConverter dashboardConverter;
     private final SysUserMapper sysUserMapper;
+    private final UserGroupMapper userGroupMapper;
 
     /**
-     * 获取仪表盘列表（当前用户拥有的 + 共享的）
+     * 获取仪表盘列表（当前用户拥有的 + 全局共享的 + 精确共享给我的）
      */
     public List<DashboardListVO> list(Long userId) {
+        // 查询精确共享给当前用户的仪表盘 ID
+        List<Long> sharedToMeIds = shareMapper.selectAccessibleDashboardIds(userId);
+
         LambdaQueryWrapper<Dashboard> wrapper = new LambdaQueryWrapper<Dashboard>()
                 .eq(Dashboard::getOwnerId, userId)
                 .or()
-                .eq(Dashboard::getShared, true)
-                .orderByDesc(Dashboard::getUpdatedAt);
+                .eq(Dashboard::getShared, true);
+
+        if (!sharedToMeIds.isEmpty()) {
+            wrapper.or().in(Dashboard::getId, sharedToMeIds);
+        }
+
+        wrapper.orderByDesc(Dashboard::getUpdatedAt);
 
         List<Dashboard> dashboards = dashboardMapper.selectList(wrapper);
+
+        // 去重（一个仪表盘可能同时满足多个条件）
+        dashboards = dashboards.stream()
+                .collect(Collectors.toMap(Dashboard::getId, d -> d, (a, b) -> a))
+                .values().stream()
+                .sorted(Comparator.comparing(Dashboard::getUpdatedAt).reversed())
+                .collect(Collectors.toList());
+
         List<DashboardListVO> voList = dashboardConverter.toListVOList(dashboards);
 
-        // 填充 owner 姓名 + widget 数量
+        // 填充 owner 姓名 + widget 数量 + share 数量
         if (!voList.isEmpty()) {
             Set<Long> ownerIds = dashboards.stream().map(Dashboard::getOwnerId).collect(Collectors.toSet());
             Map<Long, String> ownerNames = getOwnerNameMap(ownerIds);
 
             List<Long> dashboardIds = dashboards.stream().map(Dashboard::getId).collect(Collectors.toList());
             Map<Long, Long> widgetCounts = getWidgetCountMap(dashboardIds);
+            Map<Long, Long> shareCounts = getShareCountMap(dashboardIds);
 
             for (int i = 0; i < voList.size(); i++) {
                 Dashboard entity = dashboards.get(i);
                 DashboardListVO vo = voList.get(i);
                 vo.setOwnerName(ownerNames.getOrDefault(entity.getOwnerId(), ""));
                 vo.setWidgetCount(widgetCounts.getOrDefault(entity.getId(), 0L).intValue());
+                vo.setShareCount(shareCounts.getOrDefault(entity.getId(), 0L).intValue());
             }
         }
 
@@ -86,8 +110,10 @@ public class CustomDashboardService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
         }
 
-        // 权限检查：owner 或共享仪表盘可查看
-        if (!dashboard.getOwnerId().equals(userId) && !Boolean.TRUE.equals(dashboard.getShared())) {
+        // 权限检查：owner 或全局共享 或精确共享
+        if (!dashboard.getOwnerId().equals(userId)
+                && !Boolean.TRUE.equals(dashboard.getShared())
+                && shareMapper.countAccessByUser(dashboardId, userId) == 0) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问该仪表盘");
         }
 
@@ -97,6 +123,11 @@ public class CustomDashboardService {
         // 填充 owner 名称
         SysUser owner = sysUserMapper.selectById(dashboard.getOwnerId());
         vo.setOwnerName(owner != null ? owner.getDisplayName() : "");
+
+        // 填充共享数量
+        Long shareCount = shareMapper.selectCount(new LambdaQueryWrapper<DashboardShare>()
+                .eq(DashboardShare::getDashboardId, dashboardId));
+        vo.setShareCount(shareCount.intValue());
 
         // 查询 widgets
         LambdaQueryWrapper<DashboardWidget> widgetWrapper = new LambdaQueryWrapper<DashboardWidget>()
@@ -127,6 +158,7 @@ public class CustomDashboardService {
 
         DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
         vo.setLayoutVersion(0);
+        vo.setShareCount(0);
         SysUser owner = sysUserMapper.selectById(userId);
         vo.setOwnerName(owner != null ? owner.getDisplayName() : "");
         vo.setWidgets(List.of());
@@ -161,7 +193,7 @@ public class CustomDashboardService {
     }
 
     /**
-     * 删除仪表盘（只有 owner 可删除，级联删除 widget）
+     * 删除仪表盘（只有 owner 可删除，级联删除 widget 和 share）
      */
     @Transactional
     public void delete(Long dashboardId, Long userId) {
@@ -173,26 +205,144 @@ public class CustomDashboardService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以删除");
         }
 
-        // 先删 widgets（DB 有 ON DELETE CASCADE，但显式删除更清晰）
+        // 先删 widgets 和 shares（DB 有 ON DELETE CASCADE，但显式删除更清晰）
         widgetMapper.delete(new LambdaQueryWrapper<DashboardWidget>()
                 .eq(DashboardWidget::getDashboardId, dashboardId));
+        shareMapper.delete(new LambdaQueryWrapper<DashboardShare>()
+                .eq(DashboardShare::getDashboardId, dashboardId));
         dashboardMapper.deleteById(dashboardId);
 
         log.info("Dashboard deleted: id={}, owner={}", dashboardId, userId);
     }
+
+    // ─── 共享管理 ────────────────────────────────────────
+
+    /**
+     * 设置仪表盘共享（覆盖模式：传入全量共享列表）
+     */
+    @Transactional
+    public List<DashboardShareVO> setShares(Long dashboardId, ShareDashboardDTO dto, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以管理共享");
+        }
+
+        // 删除现有共享记录
+        shareMapper.delete(new LambdaQueryWrapper<DashboardShare>()
+                .eq(DashboardShare::getDashboardId, dashboardId));
+
+        // 批量新增
+        List<DashboardShare> shares = dto.getTargets().stream().map(t -> {
+            DashboardShare share = new DashboardShare();
+            share.setDashboardId(dashboardId);
+            share.setTargetType(t.getTargetType());
+            share.setTargetId(t.getTargetId());
+            share.setPermission(t.getPermission() != null ? t.getPermission() : "view");
+            share.setCreatedBy(userId);
+            return share;
+        }).toList();
+
+        if (!shares.isEmpty()) {
+            Db.saveBatch(shares);
+        }
+
+        log.info("Dashboard shares updated: dashboardId={}, targets={}", dashboardId, shares.size());
+        return getShares(dashboardId, userId);
+    }
+
+    /**
+     * 获取仪表盘的共享列表
+     */
+    public List<DashboardShareVO> getShares(Long dashboardId, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        // 只有 owner 可以查看完整共享列表
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以查看共享设置");
+        }
+
+        List<DashboardShare> shares = shareMapper.selectList(
+                new LambdaQueryWrapper<DashboardShare>()
+                        .eq(DashboardShare::getDashboardId, dashboardId)
+                        .orderByAsc(DashboardShare::getTargetType)
+                        .orderByAsc(DashboardShare::getCreatedAt));
+
+        // 批量查询目标名称
+        Set<Long> userIds = shares.stream()
+                .filter(s -> "user".equals(s.getTargetType()))
+                .map(DashboardShare::getTargetId)
+                .collect(Collectors.toSet());
+        Set<Long> groupIds = shares.stream()
+                .filter(s -> "group".equals(s.getTargetType()))
+                .map(DashboardShare::getTargetId)
+                .collect(Collectors.toSet());
+
+        Map<Long, String> userNames = Map.of();
+        if (!userIds.isEmpty()) {
+            List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
+            userNames = users.stream().collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+        }
+
+        Map<Long, String> groupNames = Map.of();
+        if (!groupIds.isEmpty()) {
+            List<UserGroup> groups = userGroupMapper.selectBatchIds(groupIds);
+            groupNames = groups.stream().collect(Collectors.toMap(UserGroup::getId, UserGroup::getName, (a, b) -> a));
+        }
+
+        Map<Long, String> finalUserNames = userNames;
+        Map<Long, String> finalGroupNames = groupNames;
+
+        return shares.stream().map(s -> {
+            DashboardShareVO vo = new DashboardShareVO();
+            vo.setId(String.valueOf(s.getId()));
+            vo.setTargetType(s.getTargetType());
+            vo.setTargetId(String.valueOf(s.getTargetId()));
+            vo.setPermission(s.getPermission());
+            vo.setCreatedAt(s.getCreatedAt());
+            if ("user".equals(s.getTargetType())) {
+                vo.setTargetName(finalUserNames.getOrDefault(s.getTargetId(), "未知用户"));
+            } else {
+                vo.setTargetName(finalGroupNames.getOrDefault(s.getTargetId(), "未知用户组"));
+            }
+            return vo;
+        }).toList();
+    }
+
+    /**
+     * 移除单条共享
+     */
+    @Transactional
+    public void removeShare(Long dashboardId, Long shareId, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (!dashboard.getOwnerId().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以管理共享");
+        }
+
+        DashboardShare share = shareMapper.selectById(shareId);
+        if (share == null || !share.getDashboardId().equals(dashboardId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "共享记录不存在");
+        }
+
+        shareMapper.deleteById(shareId);
+        log.info("Dashboard share removed: dashboardId={}, shareId={}", dashboardId, shareId);
+    }
+
+    // ─── Widget 操作 ────────────────────────────────────────
 
     /**
      * 添加 Widget 到仪表盘
      */
     @Transactional
     public DashboardWidgetVO addWidget(Long dashboardId, CreateWidgetDTO dto, Long userId) {
-        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
-        if (dashboard == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
-        }
-        if (!dashboard.getOwnerId().equals(userId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以添加微件");
-        }
+        assertCanEdit(dashboardId, userId);
 
         // 校验 widgetType 合法性
         if (!WidgetType.isValid(dto.getWidgetType())) {
@@ -227,7 +377,7 @@ public class CustomDashboardService {
      */
     @Transactional
     public DashboardWidgetVO updateWidget(Long dashboardId, Long widgetId, UpdateWidgetDTO dto, Long userId) {
-        assertDashboardOwner(dashboardId, userId);
+        assertCanEdit(dashboardId, userId);
 
         DashboardWidget widget = widgetMapper.selectById(widgetId);
         if (widget == null || !widget.getDashboardId().equals(dashboardId)) {
@@ -255,7 +405,7 @@ public class CustomDashboardService {
      */
     @Transactional
     public void deleteWidget(Long dashboardId, Long widgetId, Long userId) {
-        assertDashboardOwner(dashboardId, userId);
+        assertCanEdit(dashboardId, userId);
 
         DashboardWidget widget = widgetMapper.selectById(widgetId);
         if (widget == null || !widget.getDashboardId().equals(dashboardId)) {
@@ -277,9 +427,9 @@ public class CustomDashboardService {
         if (dashboard == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
         }
-        if (!dashboard.getOwnerId().equals(userId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以操作");
-        }
+
+        // 允许 owner 或有 edit 权限的用户操作布局
+        assertCanEdit(dashboardId, userId);
 
         // 乐观锁：前端传入的版本号必须与当前一致
         Integer currentVersion = dashboard.getLayoutVersion() != null ? dashboard.getLayoutVersion() : 0;
@@ -315,14 +465,22 @@ public class CustomDashboardService {
 
     // ─── 私有方法 ────────────────────────────────────────
 
-    private void assertDashboardOwner(Long dashboardId, Long userId) {
+    /**
+     * 校验用户是否有编辑权限（owner 或 share 权限为 edit）
+     */
+    private void assertCanEdit(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
         }
-        if (!dashboard.getOwnerId().equals(userId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以操作");
+        if (dashboard.getOwnerId().equals(userId)) {
+            return; // owner 始终可编辑
         }
+        // 检查是否有 edit 权限的共享
+        if (shareMapper.countEditAccessByUser(dashboardId, userId) > 0) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.ACCESS_DENIED, "无编辑权限");
     }
 
     private Map<Long, String> getOwnerNameMap(Set<Long> userIds) {
@@ -336,6 +494,20 @@ public class CustomDashboardService {
         // 单条 GROUP BY 查询替代逐 ID 循环，避免 N+1
         List<Map<String, Object>> results = widgetMapper.selectMaps(
                 new QueryWrapper<DashboardWidget>()
+                        .select("dashboard_id", "COUNT(*) as cnt")
+                        .in("dashboard_id", dashboardIds)
+                        .groupBy("dashboard_id")
+        );
+        return results.stream().collect(Collectors.toMap(
+                m -> ((Number) m.get("dashboard_id")).longValue(),
+                m -> ((Number) m.get("cnt")).longValue()
+        ));
+    }
+
+    private Map<Long, Long> getShareCountMap(List<Long> dashboardIds) {
+        if (dashboardIds.isEmpty()) return Map.of();
+        List<Map<String, Object>> results = shareMapper.selectMaps(
+                new QueryWrapper<DashboardShare>()
                         .select("dashboard_id", "COUNT(*) as cnt")
                         .in("dashboard_id", dashboardIds)
                         .groupBy("dashboard_id")
