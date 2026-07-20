@@ -34,16 +34,21 @@
       <!-- 无活跃 Sprint 警告条 -->
       <div v-if="!hasActiveSprint && plannedSprints.length > 0" class="no-active-sprint-warning">
         <span class="warning-bar-icon">⚠️</span>
-        <span class="warning-bar-text">当前没有活跃的迭代。请开始一个已计划的迭代以跟踪团队工作进度。</span>
-        <a-button
-          size="mini"
-          type="primary"
-          class="warning-bar-action"
-          :disabled="!nextStartableSprint"
-          @click="nextStartableSprint && activateSprint(nextStartableSprint.id)"
-        >
-          开始迭代
-        </a-button>
+        <span class="warning-bar-text">{{ noActiveSprintMessage }}</span>
+        <!-- 有编辑权限：显示操作按钮 -->
+        <a-tooltip v-if="canEditSprint" :content="warningBarActivateTooltip">
+          <a-button
+            size="mini"
+            type="primary"
+            class="warning-bar-action"
+            :disabled="!nextStartableSprint"
+            @click="nextStartableSprint && activateSprint(nextStartableSprint.id)"
+          >
+            开始迭代
+          </a-button>
+        </a-tooltip>
+        <!-- 无编辑权限：显示信息提示 -->
+        <span v-else class="warning-bar-hint">{{ noPermissionHint }}</span>
       </div>
 
       <!-- Active Sprints -->
@@ -732,6 +737,43 @@ const hasActiveSprint = computed(() => activeSprints.value.length > 0)
 const nextStartableSprint = computed(() => {
   return plannedSprints.value.find(s => !isSprintNotStartable(s)) || null
 })
+
+/**
+ * 警告栏文本——包含下一个 Sprint 的上下文信息
+ */
+const noActiveSprintMessage = computed(() => {
+  const next = plannedSprints.value[0]
+  if (next?.startDate) {
+    return `当前没有活跃的迭代。下一个迭代「${next.name}」计划于 ${formatDate(next.startDate)} 开始。`
+  }
+  return '当前没有活跃的迭代。请开始一个已计划的迭代以跟踪团队工作进度。'
+})
+
+/**
+ * 警告栏中「开始迭代」按钮的 tooltip（有权限用户）
+ */
+const warningBarActivateTooltip = computed<string | undefined>(() => {
+  if (!nextStartableSprint.value) {
+    // 所有 planned sprint 都不能启动——告知原因
+    const next = plannedSprints.value[0]
+    if (next?.startDate) {
+      return `开始日期（${formatDate(next.startDate)}）尚未到达`
+    }
+    if (next?.endDate) {
+      return `结束日期（${formatDate(next.endDate)}）已过期，无法激活`
+    }
+    return '当前没有可启动的迭代'
+  }
+  return `启动迭代「${nextStartableSprint.value.name}」`
+})
+
+/**
+ * 无权限用户看到的提示——告知谁可以启动
+ */
+const noPermissionHint = computed(() => {
+  return '需要由技术负责人或项目管理员启动迭代'
+})
+
 const selectedProjectKey = computed(() => {
   const p = projects.value.find(proj => proj.id === selectedProject.value)
   return p?.key || undefined
@@ -1757,6 +1799,12 @@ function syncUrlProjectParam() {
 }
 .warning-bar-action {
   flex-shrink: 0;
+}
+.warning-bar-hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-3);
+  font-style: italic;
 }
 
 /* ===== 已完成 Sprint 折叠区域 ===== */
