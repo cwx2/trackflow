@@ -2,6 +2,7 @@ package com.trackflow.timeentry.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -134,6 +135,9 @@ public class TimeEntryService {
 
         // 发布报表缓存失效事件（工时变更影响 TimeReport/EstimationReport 等统计）
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "time_entry_created"));
+
+        // 发布工时通知事件（通知负责人和关注者）
+        eventPublisher.publishEvent(new IssueNotificationEvent.TimeLogged(issue, dto.getDuration(), currentUserId));
 
         return entry;
     }
@@ -795,13 +799,14 @@ public class TimeEntryService {
     }
 
     /**
-     * 计算从 createdAt 到现在经过的分钟数。
-     * 参考 OpenProject: ((Time.zone.now.to_i - created_at.to_i) / 3600.0).round(2)
+     * 计算从 createdAt 到现在经过的分钟数（向上取整）。
+     * 参考 YouTrack：不足 1 分钟向上取整为 1m，61 秒记为 2m。
      */
     private int calculateElapsedMinutes(LocalDateTime createdAt) {
         if (createdAt == null) return 0;
         long seconds = java.time.Duration.between(createdAt, LocalDateTime.now()).getSeconds();
-        return (int) (seconds / 60);
+        if (seconds <= 0) return 0;
+        return (int) Math.ceil(seconds / 60.0);
     }
 
     /**
