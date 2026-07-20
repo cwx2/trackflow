@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, SprintVO, SprintBurndownVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
+import type { R, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -70,5 +70,10 @@ export const sprintApi = {
   /** 获取 Sprint 燃尽图数据 */
   burndown(id: string) {
     return request.get<any, R<SprintBurndownVO>>(`/sprints/${id}/burndown`)
+  },
+
+  /** 获取 Sprint 负责人工作量分布 */
+  assigneeDistribution(id: string) {
+    return request.get<any, R<SprintAssigneeDistributionVO>>(`/sprints/${id}/assignee-distribution`)
   }
 }

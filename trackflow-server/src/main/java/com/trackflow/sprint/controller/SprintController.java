@@ -11,6 +11,7 @@ import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
+import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
 import com.trackflow.sprint.vo.SprintVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -91,5 +92,11 @@ public class SprintController {
     @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
     public R<BurndownVO> burndown(@PathVariable("id") Long id) {
         return R.ok(sprintService.getBurndownData(id));
+    }
+
+    @GetMapping("/api/v1/sprints/{id}/assignee-distribution")
+    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
+    public R<SprintAssigneeDistributionVO> assigneeDistribution(@PathVariable("id") Long id) {
+        return R.ok(sprintService.getAssigneeDistribution(id));
     }
 }

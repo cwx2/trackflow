@@ -21,6 +21,7 @@ import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
+import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
 import com.trackflow.sprint.vo.SprintOverlapWarningVO;
 import com.trackflow.sprint.vo.SprintVO;
 import com.trackflow.project.service.ProjectActivityService;
@@ -116,6 +117,53 @@ public class SprintService {
         if (vo == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
         computeStatusHint(vo, LocalDate.now());
         return vo;
+    }
+
+    /**
+     * 获取 Sprint 中按负责人分组的工单分布统计。
+     * 技术负责人用于评估 Sprint 工作分配均衡性。
+     */
+    public SprintAssigneeDistributionVO getAssigneeDistribution(Long sprintId) {
+        Sprint sprint = getById(sprintId);
+        List<Map<String, Object>> rows = sprintMapper.selectAssigneeDistribution(sprintId);
+
+        SprintAssigneeDistributionVO result = new SprintAssigneeDistributionVO();
+        result.setSprintId(String.valueOf(sprint.getId()));
+        result.setSprintName(sprint.getName());
+
+        List<SprintAssigneeDistributionVO.AssigneeItem> assignees = new ArrayList<>();
+        int totalIssues = 0;
+        int unassignedCount = 0;
+
+        for (Map<String, Object> row : rows) {
+            Object userIdObj = row.get("user_id");
+            String displayName = (String) row.get("display_name");
+            int issueCount = ((Number) row.get("issue_count")).intValue();
+            int doneCount = ((Number) row.get("done_count")).intValue();
+            int inProgressCount = ((Number) row.get("in_progress_count")).intValue();
+            int todoCount = ((Number) row.get("todo_count")).intValue();
+
+            totalIssues += issueCount;
+
+            if (userIdObj == null) {
+                // 未分配负责人的统计
+                unassignedCount = issueCount;
+            } else {
+                SprintAssigneeDistributionVO.AssigneeItem item = new SprintAssigneeDistributionVO.AssigneeItem();
+                item.setUserId(String.valueOf(userIdObj));
+                item.setDisplayName(displayName != null ? displayName : "未知用户");
+                item.setIssueCount(issueCount);
+                item.setDoneCount(doneCount);
+                item.setInProgressCount(inProgressCount);
+                item.setTodoCount(todoCount);
+                assignees.add(item);
+            }
+        }
+
+        result.setTotalIssues(totalIssues);
+        result.setUnassignedCount(unassignedCount);
+        result.setAssignees(assignees);
+        return result;
     }
 
     /**

@@ -133,4 +133,22 @@
         ORDER BY i.created_at ASC
     </select>
 
+    <!-- 按负责人分组的工单统计 -->
+    <select id="selectAssigneeDistribution" resultType="java.util.HashMap">
+        SELECT
+            CAST(i.assignee_id AS VARCHAR) AS user_id,
+            u.display_name,
+            COUNT(*) AS issue_count,
+            COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_count,
+            COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_count,
+            COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_count
+        FROM issue i
+        LEFT JOIN issue_status ist ON ist.id = i.status_id
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        WHERE i.sprint_id = #{sprintId}
+          AND i.deleted_at IS NULL
+        GROUP BY i.assignee_id, u.display_name
+        ORDER BY COUNT(*) DESC
+    </select>
+
 </mapper>

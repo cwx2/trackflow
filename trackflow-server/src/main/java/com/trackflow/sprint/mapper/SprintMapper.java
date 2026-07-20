@@ -33,4 +33,10 @@ public interface SprintMapper extends BaseMapper<Sprint> {
      * 查询 Sprint 中未关闭的工单详细信息（用于完成预览）
      */
     List<CompletionPreviewVO.OpenIssueItem> selectOpenIssuesForCompletion(@Param("sprintId") Long sprintId);
+
+    /**
+     * 查询 Sprint 中按负责人分组的工单统计。
+     * 返回 Map 列表，每项包含 user_id、display_name 及各状态统计数。
+     */
+    List<java.util.Map<String, Object>> selectAssigneeDistribution(@Param("sprintId") Long sprintId);
 }

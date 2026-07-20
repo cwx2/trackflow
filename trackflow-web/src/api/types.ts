@@ -384,6 +384,25 @@ export interface SprintBurndownVO {
   forecastDate: string | null
 }
 
+/** Sprint 负责人工作量分布 */
+export interface SprintAssigneeDistributionVO {
+  sprintId: string
+  sprintName: string
+  totalIssues: number
+  unassignedCount: number
+  assignees: SprintAssigneeItem[]
+}
+
+/** 负责人分布中的单项 */
+export interface SprintAssigneeItem {
+  userId: string
+  displayName: string
+  issueCount: number
+  doneCount: number
+  inProgressCount: number
+  todoCount: number
+}
+
 // ========== 用户/角色/组织 ==========
 export interface UserVO {
   id: string

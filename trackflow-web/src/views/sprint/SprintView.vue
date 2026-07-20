@@ -130,6 +130,14 @@
           :is-completed="false"
         />
 
+        <!-- 负责人分布 -->
+        <SprintAssigneeDistribution
+          v-if="sprint.totalIssues > 0"
+          :sprint-id="sprint.id"
+          :sprint-name="sprint.name"
+          :project-key="selectedProjectKey"
+        />
+
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
@@ -196,6 +204,14 @@
         <div class="sprint-no-issues" v-else>
           <span class="no-issues-text">暂无工单</span>
         </div>
+
+        <!-- 负责人分布 -->
+        <SprintAssigneeDistribution
+          v-if="sprint.totalIssues > 0"
+          :sprint-id="sprint.id"
+          :sprint-name="sprint.name"
+          :project-key="selectedProjectKey"
+        />
 
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
@@ -624,6 +640,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import SprintBurndownChart from './SprintBurndownChart.vue'
+import SprintAssigneeDistribution from './SprintAssigneeDistribution.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -704,6 +721,10 @@ const completedSprints = computed(() => sprints.value.filter(s => s.status === '
 const hasActiveSprint = computed(() => activeSprints.value.length > 0)
 const nextStartableSprint = computed(() => {
   return plannedSprints.value.find(s => !isSprintNotStartable(s)) || null
+})
+const selectedProjectKey = computed(() => {
+  const p = projects.value.find(proj => proj.id === selectedProject.value)
+  return p?.key || undefined
 })
 
 // ===== 工具函数 =====
