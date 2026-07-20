@@ -295,7 +295,21 @@
                   </template>
                 </a-trigger>
                 <a-checkbox v-model="opt.isDefault" size="small">默认</a-checkbox>
-                <a-button type="text" size="mini" status="danger" @click="form.options.splice(idx, 1)">
+                <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
+                <span
+                  v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
+                  class="option-usage-count"
+                  :class="{ 'option-unused': optionUsageMap[opt.id] === 0 }"
+                  :title="optionUsageMap[opt.id] > 0 ? `被 ${optionUsageMap[opt.id]} 个工单引用` : '未被任何工单使用'"
+                >
+                  {{ optionUsageMap[opt.id] > 0 ? optionUsageMap[opt.id] : '未使用' }}
+                </span>
+                <a-button
+                  type="text" size="mini" status="danger"
+                  :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
+                  :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
+                  @click="handleDeleteOption(opt, idx)"
+                >
                   <icon-delete />
                 </a-button>
               </div>
@@ -331,7 +345,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
-import type { CustomFieldDefinitionVO, CustomFieldUsageVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 
@@ -353,6 +367,8 @@ const editingId = ref<string | null>(null)
 const saving = ref(false)
 /** 编辑模式下字段已有数据时禁止切换 isMulti */
 const isMultiDisabled = ref(false)
+/** 编辑模式下每个选项的引用计数映射 {optionId: issueCount} */
+const optionUsageMap = ref<Record<string, number>>({})
 
 // Value set source (for list type create mode)
 const valueSetSource = ref<'new' | 'copy'>('new')
@@ -473,6 +489,7 @@ function resetForm() {
   valueSetSource.value = 'new'
   previewOptions.value = []
   copyFromFieldId.value = null
+  optionUsageMap.value = {}
 }
 
 async function loadEnumFields() {
@@ -567,8 +584,31 @@ function openEdit(record: CustomFieldDefinitionVO) {
         isMultiDisabled.value = true
       }
     }).catch(() => { /* 查询失败时允许操作，后端兜底 */ })
+    // 加载逐选项使用统计
+    customFieldApi.getOptionUsage(record.id).then(res => {
+      if (res.data) {
+        const map: Record<string, number> = {}
+        for (const item of res.data) {
+          map[item.optionId] = item.issueCount
+        }
+        optionUsageMap.value = map
+      }
+    }).catch(() => { optionUsageMap.value = {} })
   }
   drawerVisible.value = true
+}
+
+function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolean; color?: string }, idx: number) {
+  // 如果选项有 ID 且有引用，阻止删除并提示
+  if (editingId.value && opt.id && optionUsageMap.value[opt.id] !== undefined && optionUsageMap.value[opt.id] > 0) {
+    Modal.warning({
+      title: '无法删除',
+      content: `该选项"${opt.value}"被 ${optionUsageMap.value[opt.id]} 个工单使用，无法直接删除。请先归档该选项或将引用迁移到其他选项。`,
+      okText: '我知道了'
+    })
+    return
+  }
+  form.options.splice(idx, 1)
 }
 
 async function handleSave() {
@@ -824,6 +864,27 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.option-usage-count {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  white-space: nowrap;
+  min-width: 36px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--tf-bg-surface);
+}
+
+.option-usage-count:not(.option-unused) {
+  color: var(--tf-accent);
+  font-weight: 500;
+}
+
+.option-unused {
+  color: var(--tf-text-quaternary);
+  font-style: italic;
 }
 
 .color-swatch {

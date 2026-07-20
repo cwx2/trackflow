@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO } from './types'
+import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO } from './types'
 
 /**
  * 自定义字段模块 API
@@ -58,6 +58,11 @@ export const customFieldApi = {
   /** 获取字段使用情况（删除前影响分析） */
   getUsage(id: string) {
     return request.get<any, R<CustomFieldUsageVO>>(`/admin/custom-fields/${id}/usage`)
+  },
+
+  /** 获取枚举字段逐选项使用统计 */
+  getOptionUsage(id: string) {
+    return request.get<any, R<OptionUsageItemVO[]>>(`/admin/custom-fields/${id}/option-usage`)
   },
 
   /** 获取单个字段详情 */

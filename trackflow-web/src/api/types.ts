@@ -500,6 +500,14 @@ export interface CustomFieldUsageVO {
   optionCount: number
 }
 
+/** 单个选项的使用统计 */
+export interface OptionUsageItemVO {
+  optionId: string
+  optionValue: string
+  color: string | null
+  issueCount: number
+}
+
 /** "Fields in Projects" 矩阵视图——按项目分组展示关联的自定义字段 */
 export interface ProjectFieldsVO {
   projectId: string

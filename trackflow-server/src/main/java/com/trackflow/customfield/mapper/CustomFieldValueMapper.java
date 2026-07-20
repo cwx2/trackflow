@@ -4,7 +4,11 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.trackflow.customfield.entity.CustomFieldValue;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+
+import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface CustomFieldValueMapper extends BaseMapper<CustomFieldValue> {
@@ -25,4 +29,14 @@ public interface CustomFieldValueMapper extends BaseMapper<CustomFieldValue> {
      */
     @Update("SELECT pg_advisory_xact_lock(1, hashtext(#{issueId} || ':' || #{customFieldId}))")
     void acquireSingleValueLock(@Param("issueId") long issueId, @Param("customFieldId") long customFieldId);
+
+    /**
+     * 按选项值分组统计引用的工单数量。
+     * custom_field_value.value 对于 list 类型存储 option ID。
+     * 返回 [{option_id: "xxx", issue_count: 5}, ...]
+     */
+    @Select("SELECT value AS option_id, COUNT(DISTINCT issue_id) AS issue_count " +
+            "FROM custom_field_value WHERE custom_field_id = #{customFieldId} " +
+            "GROUP BY value")
+    List<Map<String, Object>> countIssuesByOption(@Param("customFieldId") long customFieldId);
 }

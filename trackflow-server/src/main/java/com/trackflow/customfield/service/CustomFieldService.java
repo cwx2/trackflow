@@ -13,6 +13,7 @@ import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.customfield.vo.OptionUsageItemVO;
 import com.trackflow.customfield.vo.ProjectFieldsVO;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
@@ -326,6 +327,48 @@ public class CustomFieldService {
                         .eq(CustomFieldOption::getCustomFieldId, id)));
 
         return usage;
+    }
+
+    /**
+     * 获取枚举字段逐选项使用统计。
+     * 返回每个选项被多少个工单引用（DISTINCT issue_id 计数）。
+     */
+    public List<OptionUsageItemVO> getOptionUsage(Long id) {
+        CustomFieldDefinition def = definitionMapper.selectById(id);
+        if (def == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+        if (!"list".equals(def.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "仅枚举(list)类型字段支持逐选项统计");
+        }
+
+        // 查询所有选项（含已归档的）
+        List<CustomFieldOption> allOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, id)
+                        .orderByAsc(CustomFieldOption::getPosition));
+
+        if (allOptions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 一次查询获取所有选项的引用计数（按 option ID 分组，COUNT DISTINCT issue_id）
+        List<Map<String, Object>> usageCounts = valueMapper.countIssuesByOption(id);
+        Map<String, Long> optionCountMap = new HashMap<>();
+        for (Map<String, Object> row : usageCounts) {
+            String optionId = String.valueOf(row.get("option_id"));
+            long count = ((Number) row.get("issue_count")).longValue();
+            optionCountMap.put(optionId, count);
+        }
+
+        // 组装结果
+        List<OptionUsageItemVO> result = new ArrayList<>();
+        for (CustomFieldOption option : allOptions) {
+            String optionIdStr = String.valueOf(option.getId());
+            long count = optionCountMap.getOrDefault(optionIdStr, 0L);
+            result.add(new OptionUsageItemVO(optionIdStr, option.getValue(), option.getColor(), count));
+        }
+        return result;
     }
 
     /**

@@ -20,6 +20,7 @@ import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
 import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
+import com.trackflow.customfield.vo.OptionUsageItemVO;
 import com.trackflow.customfield.vo.ProjectFieldsVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -115,6 +116,12 @@ public class CustomFieldController {
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<CustomFieldUsageVO> getUsage(@PathVariable("id") Long id) {
         return R.ok(customFieldService.getUsage(id));
+    }
+
+    @GetMapping("/admin/custom-fields/{id}/option-usage")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<List<OptionUsageItemVO>> getOptionUsage(@PathVariable("id") Long id) {
+        return R.ok(customFieldService.getOptionUsage(id));
     }
 
     /**
