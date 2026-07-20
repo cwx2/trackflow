@@ -72,12 +72,20 @@
         </div>
 
         <!-- 计时器 badge -->
-        <div v-if="timerStore.isRunning" class="footer-item timer-badge" @click="showTimerPopover = !showTimerPopover">
+        <div
+          v-if="timerStore.isRunning"
+          class="footer-item timer-badge"
+          :title="`${timerStore.issueKey} ${timerStore.issueTitle} — ${timerStore.elapsedDisplay}`"
+          @click="showTimerPopover = !showTimerPopover"
+        >
           <span class="nav-icon timer-icon-wrap">
             ⏱
             <span class="timer-pulse"></span>
           </span>
-          <span class="nav-label timer-elapsed">{{ timerStore.elapsedDisplay }}</span>
+          <span class="nav-label timer-badge-label">
+            <span class="timer-badge-key">{{ timerStore.issueKey }}</span>
+            <span class="timer-elapsed">{{ timerStore.elapsedDisplay }}</span>
+          </span>
         </div>
         <!-- 计时器快捷面板 -->
         <div v-if="showTimerPopover && timerStore.isRunning" class="timer-popover">
@@ -657,11 +665,30 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   50% { opacity: 0.6; transform: scale(1.3); }
 }
 
+.timer-badge-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.timer-badge-key {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-accent, #58a6ff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
 .timer-elapsed {
   font-size: 11px;
   font-weight: 500;
   color: var(--tf-success, #3fb950);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ===== 计时器弹出面板 ===== */

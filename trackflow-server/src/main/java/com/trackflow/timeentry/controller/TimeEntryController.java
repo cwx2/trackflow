@@ -295,6 +295,17 @@ public class TimeEntryController {
         vo.setCreatedAt(entry.getCreatedAt() != null ? entry.getCreatedAt().toString() : null);
         vo.setUpdatedAt(entry.getUpdatedAt() != null ? entry.getUpdatedAt().toString() : null);
 
+        // 工单信息（issueKey + issueTitle），计时器 badge 全局显示需要
+        try {
+            var issue = issueService.getById(entry.getIssueId());
+            vo.setIssueKey(issue.getIssueKey());
+            vo.setIssueTitle(issue.getTitle());
+            vo.setIssueDeleted(false);
+        } catch (Exception e) {
+            // 工单可能已被删除，标记为已删除
+            vo.setIssueDeleted(true);
+        }
+
         // loggedBy 信息
         if (entry.getLoggedBy() != null) {
             vo.setLoggedBy(String.valueOf(entry.getLoggedBy()));
