@@ -1,9 +1,9 @@
 package com.trackflow.report.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
@@ -11,26 +11,34 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
+import com.trackflow.report.dto.ShareReportDTO;
 import com.trackflow.report.dto.UpdateReportDTO;
 import com.trackflow.report.entity.ReportConfig;
 import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.entity.ReportGroupBy;
+import com.trackflow.report.entity.ReportShare;
 import com.trackflow.report.entity.ReportType;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
+import com.trackflow.report.mapper.ReportShareMapper;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.mapper.result.*;
+import com.trackflow.report.vo.ReportExecuteResultVO;
+import com.trackflow.report.vo.ReportShareVO;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.entity.UserGroup;
+import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.mapper.UserGroupMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.trackflow.report.vo.ReportExecuteResultVO;
-
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -39,17 +47,23 @@ public class ReportService {
 
     private final ReportDefinitionMapper reportMapper;
     private final ReportStatisticsMapper reportStatisticsMapper;
+    private final ReportShareMapper reportShareMapper;
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
     private final PermissionService permissionService;
     private final StatusCacheHelper statusCacheHelper;
     private final SprintMapper sprintMapper;
+    private final SysUserMapper sysUserMapper;
+    private final UserGroupMapper userGroupMapper;
 
     /**
-     * 报表列表（带项目成员过滤 + 私有报表隔离）
-     * 返回条件：自己创建的 OR shared=true，且属于用户可访问的项目范围
+     * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
+     * 返回条件：自己创建的 OR shared=true OR 通过 report_share 共享给自己，且属于用户可访问的项目范围
      */
     public List<ReportDefinition> list(Long projectId, Long userId) {
+        // 查询用户通过精细化共享可访问的报表 ID
+        List<Long> sharedToMeIds = reportShareMapper.selectAccessibleReportIds(userId);
+
         LambdaQueryWrapper<ReportDefinition> wrapper = new LambdaQueryWrapper<>();
         if (projectId != null) {
             wrapper.and(w -> w.eq(ReportDefinition::getProjectId, projectId)
@@ -69,9 +83,14 @@ public class ReportService {
             // 系统管理员不加项目限制
         }
 
-        // 私有报表隔离：只能看到自己创建的私有报表，或共享的报表
-        wrapper.and(w -> w.eq(ReportDefinition::getShared, true)
-                .or().eq(ReportDefinition::getCreatedBy, userId));
+        // 私有报表隔离：自己创建 OR 公开共享 OR 精细化共享给自己
+        wrapper.and(w -> {
+            w.eq(ReportDefinition::getShared, true)
+                    .or().eq(ReportDefinition::getCreatedBy, userId);
+            if (!sharedToMeIds.isEmpty()) {
+                w.or().in(ReportDefinition::getId, sharedToMeIds);
+            }
+        });
 
         wrapper.orderByAsc(ReportDefinition::getName);
         return reportMapper.selectList(wrapper);
@@ -160,8 +179,10 @@ public class ReportService {
             projectService.assertProjectAccessible(userId, report.getProjectId());
         }
 
-        // 私有报表访问控制
-        if (!Boolean.TRUE.equals(report.getShared()) && !userId.equals(report.getCreatedBy())) {
+        // 私有报表访问控制（含精细化共享）
+        if (!Boolean.TRUE.equals(report.getShared())
+                && !userId.equals(report.getCreatedBy())
+                && reportShareMapper.countAccessByUser(id, userId) == 0) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
@@ -186,9 +207,13 @@ public class ReportService {
                 throw new BusinessException(ErrorCode.ACCESS_DENIED, "系统预置报表只有系统管理员可以修改");
             }
         } else {
-            // 权限校验：创建者可修改自己的报表
+            // 权限校验：创建者可修改，精细化共享 edit 权限用户可修改
             if (!userId.equals(report.getCreatedBy())) {
-                if (report.getProjectId() != null) {
+                // 先检查是否有 edit 共享权限
+                if (reportShareMapper.countEditAccessByUser(id, userId) > 0) {
+                    // 有 edit 权限，允许修改（但不允许修改共享设置本身）
+                    // 共享设置只能由创建者管理
+                } else if (report.getProjectId() != null) {
                     if (!permissionService.hasPermission(userId, report.getProjectId(), "project:edit")) {
                         throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只有报表创建者或项目管理员可以修改此报表");
                     }
@@ -309,7 +334,153 @@ public class ReportService {
             }
         }
 
+        // 删除共享记录（DB 有 ON DELETE CASCADE，但显式删除更清晰）
+        reportShareMapper.delete(new LambdaQueryWrapper<ReportShare>()
+                .eq(ReportShare::getReportId, id));
         reportMapper.deleteById(id);
+    }
+
+    // ─── 共享管理 ────────────────────────────────────────
+
+    /**
+     * 设置报表共享（覆盖模式：传入全量共享列表）
+     */
+    @Transactional
+    public List<ReportShareVO> setShares(Long reportId, ShareReportDTO dto, Long userId) {
+        ReportDefinition report = reportMapper.selectById(reportId);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+        // 只有报表创建者可以管理共享
+        if (!report.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以管理共享");
+        }
+
+        // 删除现有共享记录
+        reportShareMapper.delete(new LambdaQueryWrapper<ReportShare>()
+                .eq(ReportShare::getReportId, reportId));
+
+        // 批量新增
+        List<ReportShare> shares = dto.getTargets().stream().map(t -> {
+            ReportShare share = new ReportShare();
+            share.setReportId(reportId);
+            share.setTargetType(t.getTargetType());
+            share.setTargetId(t.getTargetId());
+            share.setPermission(t.getPermission() != null ? t.getPermission() : "view");
+            share.setCreatedBy(userId);
+            return share;
+        }).toList();
+
+        if (!shares.isEmpty()) {
+            Db.saveBatch(shares);
+        }
+
+        log.info("Report shares updated: reportId={}, targets={}", reportId, shares.size());
+        return getShares(reportId, userId);
+    }
+
+    /**
+     * 获取报表的共享列表
+     */
+    public List<ReportShareVO> getShares(Long reportId, Long userId) {
+        ReportDefinition report = reportMapper.selectById(reportId);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+        // 只有创建者可以查看完整共享列表
+        if (!report.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以查看共享设置");
+        }
+
+        List<ReportShare> shares = reportShareMapper.selectList(
+                new LambdaQueryWrapper<ReportShare>()
+                        .eq(ReportShare::getReportId, reportId)
+                        .orderByAsc(ReportShare::getTargetType)
+                        .orderByAsc(ReportShare::getCreatedAt));
+
+        // 批量查询目标名称
+        Set<Long> userIds = shares.stream()
+                .filter(s -> "user".equals(s.getTargetType()))
+                .map(ReportShare::getTargetId)
+                .collect(Collectors.toSet());
+        Set<Long> groupIds = shares.stream()
+                .filter(s -> "group".equals(s.getTargetType()))
+                .map(ReportShare::getTargetId)
+                .collect(Collectors.toSet());
+
+        Map<Long, String> userNames = Map.of();
+        if (!userIds.isEmpty()) {
+            List<SysUser> users = sysUserMapper.selectBatchIds(userIds);
+            userNames = users.stream().collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
+        }
+
+        Map<Long, String> groupNames = Map.of();
+        if (!groupIds.isEmpty()) {
+            List<UserGroup> groups = userGroupMapper.selectBatchIds(groupIds);
+            groupNames = groups.stream().collect(Collectors.toMap(UserGroup::getId, UserGroup::getName, (a, b) -> a));
+        }
+
+        Map<Long, String> finalUserNames = userNames;
+        Map<Long, String> finalGroupNames = groupNames;
+
+        return shares.stream().map(s -> {
+            ReportShareVO vo = new ReportShareVO();
+            vo.setId(String.valueOf(s.getId()));
+            vo.setTargetType(s.getTargetType());
+            vo.setTargetId(String.valueOf(s.getTargetId()));
+            vo.setPermission(s.getPermission());
+            vo.setCreatedAt(s.getCreatedAt());
+            if ("user".equals(s.getTargetType())) {
+                vo.setTargetName(finalUserNames.getOrDefault(s.getTargetId(), "未知用户"));
+            } else {
+                vo.setTargetName(finalGroupNames.getOrDefault(s.getTargetId(), "未知用户组"));
+            }
+            return vo;
+        }).toList();
+    }
+
+    /**
+     * 移除单条共享
+     */
+    @Transactional
+    public void removeShare(Long reportId, Long shareId, Long userId) {
+        ReportDefinition report = reportMapper.selectById(reportId);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+        if (!report.getCreatedBy().equals(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以管理共享");
+        }
+
+        ReportShare share = reportShareMapper.selectById(shareId);
+        if (share == null || !share.getReportId().equals(reportId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "共享记录不存在");
+        }
+        reportShareMapper.deleteById(shareId);
+        log.info("Report share removed: reportId={}, shareId={}", reportId, shareId);
+    }
+
+    /**
+     * 获取报表的共享数量
+     */
+    public int getShareCount(Long reportId) {
+        Long count = reportShareMapper.selectCount(
+                new LambdaQueryWrapper<ReportShare>().eq(ReportShare::getReportId, reportId));
+        return count != null ? count.intValue() : 0;
+    }
+
+    /**
+     * 检查用户是否拥有报表的编辑权限（创建者 / edit 共享 / 项目管理员 / 系统管理员）
+     */
+    public boolean hasEditPermission(Long reportId, Long userId) {
+        ReportDefinition report = reportMapper.selectById(reportId);
+        if (report == null) return false;
+        if (userId.equals(report.getCreatedBy())) return true;
+        if (reportShareMapper.countEditAccessByUser(reportId, userId) > 0) return true;
+        if (report.getProjectId() != null) {
+            return permissionService.hasPermission(userId, report.getProjectId(), "project:edit");
+        }
+        return permissionService.isSystemAdmin(userId);
     }
 
     /**
@@ -324,7 +495,9 @@ public class ReportService {
             projectService.assertProjectAccessible(userId, report.getProjectId());
         }
 
-        if (!Boolean.TRUE.equals(report.getShared()) && !userId.equals(report.getCreatedBy())) {
+        if (!Boolean.TRUE.equals(report.getShared())
+                && !userId.equals(report.getCreatedBy())
+                && reportShareMapper.countAccessByUser(id, userId) == 0) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 

@@ -10,6 +10,7 @@ export interface ReportDefinitionVO {
   shared: boolean
   isSystem: boolean
   createdBy: string
+  shareCount: number
   createdAt: string
   updatedAt: string
 }
@@ -27,6 +28,27 @@ export interface UpdateReportParams {
   type?: string
   config?: string
   shared?: boolean
+}
+
+// ─── Share Types ───────────────────────────────────────
+
+export interface ReportShareVO {
+  id: string
+  targetType: 'user' | 'group'
+  targetId: string
+  targetName: string
+  permission: 'view' | 'edit'
+  createdAt: string
+}
+
+export interface ReportShareTarget {
+  targetType: 'user' | 'group'
+  targetId: number
+  permission: 'view' | 'edit'
+}
+
+export interface ShareReportParams {
+  targets: ReportShareTarget[]
 }
 
 export interface ReportDataVO {
@@ -93,5 +115,22 @@ export const reportApi = {
       params: { format: 'csv' },
       responseType: 'blob'
     })
+  },
+
+  // ─── Share API ─────────────────────────────────────────
+
+  /** 获取报表共享列表 */
+  getShares(id: string) {
+    return request.get<any, R<ReportShareVO[]>>(`/reports/${id}/shares`)
+  },
+
+  /** 设置报表共享（覆盖模式） */
+  setShares(id: string, data: ShareReportParams) {
+    return request.put<any, R<ReportShareVO[]>>(`/reports/${id}/shares`, data)
+  },
+
+  /** 移除单条共享 */
+  removeShare(id: string, shareId: string) {
+    return request.delete<any, R<void>>(`/reports/${id}/shares/${shareId}`)
   }
 }

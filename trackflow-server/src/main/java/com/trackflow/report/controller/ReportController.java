@@ -5,10 +5,12 @@ import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.converter.ReportConverter;
 import com.trackflow.report.dto.CreateReportDTO;
+import com.trackflow.report.dto.ShareReportDTO;
 import com.trackflow.report.dto.UpdateReportDTO;
 import com.trackflow.report.service.ReportService;
 import com.trackflow.report.vo.ReportDefinitionVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
+import com.trackflow.report.vo.ReportShareVO;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +38,12 @@ public class ReportController {
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        return R.ok(reportConverter.toVOList(reportService.list(projectId, userId)));
+        List<ReportDefinitionVO> voList = reportConverter.toVOList(reportService.list(projectId, userId));
+        // 填充共享数量
+        for (ReportDefinitionVO vo : voList) {
+            vo.setShareCount(reportService.getShareCount(Long.parseLong(vo.getId())));
+        }
+        return R.ok(voList);
     }
 
     @PostMapping
@@ -107,5 +114,39 @@ public class ReportController {
             writer.write(csv);
             writer.flush();
         }
+    }
+
+    // ─── 共享管理 ────────────────────────────────────────
+
+    /**
+     * 获取报表的共享列表
+     */
+    @GetMapping("/{id}/shares")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<ReportShareVO>> getShares(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(reportService.getShares(id, userId));
+    }
+
+    /**
+     * 设置报表共享（覆盖模式）
+     */
+    @PutMapping("/{id}/shares")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<ReportShareVO>> setShares(@PathVariable("id") Long id,
+                                            @Valid @RequestBody ShareReportDTO dto) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(reportService.setShares(id, dto, userId));
+    }
+
+    /**
+     * 移除单条共享
+     */
+    @DeleteMapping("/{id}/shares/{shareId}")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> removeShare(@PathVariable("id") Long id, @PathVariable("shareId") Long shareId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        reportService.removeShare(id, shareId, userId);
+        return R.ok();
     }
 }

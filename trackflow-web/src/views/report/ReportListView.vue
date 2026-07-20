@@ -61,6 +61,9 @@
                 <a-doption v-if="canEditReport(report)" @click="startEdit(report)">
                   <span class="menu-item"><span class="menu-icon">✏️</span>编辑</span>
                 </a-doption>
+                <a-doption v-if="canShareReport(report)" @click="openShareModal(report)">
+                  <span class="menu-item"><span class="menu-icon">🔗</span>共享设置</span>
+                </a-doption>
                 <a-doption @click="cloneReport(report)">
                   <span class="menu-item"><span class="menu-icon">📋</span>克隆</span>
                 </a-doption>
@@ -77,6 +80,7 @@
         <h3 class="card-title">{{ report.name }}</h3>
         <div class="card-meta">
           <span v-if="report.shared" class="meta-shared">🔗 已共享</span>
+          <span v-else-if="report.shareCount > 0" class="meta-shared">🔗 {{ report.shareCount }} 人</span>
           <span v-if="reportData[report.id]?.calculatedAt" class="meta-calculated">
             ⏱ {{ formatRelativeTime(reportData[report.id].calculatedAt) }}
           </span>
@@ -229,6 +233,13 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 共享设置弹窗 -->
+    <ShareReportModal
+      v-model:visible="showShareModal"
+      :report-id="shareReportId"
+      @saved="onShareSaved"
+    />
   </div>
 </template>
 
@@ -244,6 +255,7 @@ import { reportApi } from '@/api/report'
 import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
+import ShareReportModal from './ShareReportModal.vue'
 import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 import type { ProjectVO } from '@/api/types'
 
@@ -281,6 +293,10 @@ const canCreateReport = computed(() => {
   return authStore.hasGlobalPermission('nav:report_create')
 })
 
+// 共享弹窗状态
+const showShareModal = ref(false)
+const shareReportId = ref('')
+
 /** 是否可管理指定报表（显示编辑/删除菜单） */
 function canManageReport(report: ReportDefinitionVO): boolean {
   // 系统报表只有系统管理员可编辑
@@ -307,6 +323,24 @@ function canEditReport(report: ReportDefinitionVO): boolean {
 function canDeleteReport(report: ReportDefinitionVO): boolean {
   if (report.isSystem) return false
   return canCreateReport.value
+}
+
+/** 是否可管理共享（仅创建者） */
+function canShareReport(report: ReportDefinitionVO): boolean {
+  if (report.isSystem) return false
+  // 只有报表创建者可以管理共享
+  return report.createdBy === authStore.user?.id
+}
+
+/** 打开共享设置弹窗 */
+function openShareModal(report: ReportDefinitionVO) {
+  shareReportId.value = report.id
+  showShareModal.value = true
+}
+
+/** 共享保存后刷新列表 */
+async function onShareSaved() {
+  await loadReports()
 }
 
 /** type → groupBy 自动映射 */
