@@ -8,7 +8,8 @@ export const userApi = {
   /** 用户列表 */
   list(params?: {
     username?: string; displayName?: string; email?: string
-    orgId?: string; status?: string; page?: number; pageSize?: number
+    orgId?: string; status?: string; banStatus?: string
+    page?: number; pageSize?: number; sort?: string
   }) {
     return request.get<any, R<PageResult<UserVO>>>('/users', { params })
   },

@@ -31,6 +31,7 @@ import com.trackflow.system.mapper.UserGroupMemberMapper;
 import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
 import com.trackflow.system.vo.UserProfileVO;
+import com.trackflow.system.vo.UserVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -216,6 +217,48 @@ public class UserService {
         return userRoleMapper.selectList(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId)
         ).stream().map(UserRole::getRoleId).toList();
+    }
+
+    /**
+     * 批量获取多个用户的全局角色映射
+     * <p>
+     * 用于列表页展示，避免 N+1 查询。
+     *
+     * @param userIds 用户 ID 列表
+     * @return Map: userId → List<GlobalRoleInfo>
+     */
+    public Map<Long, List<UserVO.GlobalRoleInfo>> batchGetGlobalRoles(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // 1. 批量查询 user_role 表
+        List<UserRole> userRoles = userRoleMapper.selectList(
+                new LambdaQueryWrapper<UserRole>().in(UserRole::getUserId, userIds)
+        );
+        if (userRoles.isEmpty()) {
+            return Map.of();
+        }
+
+        // 2. 收集所有涉及的 role_id，一次性查出角色信息
+        List<Long> roleIds = userRoles.stream().map(UserRole::getRoleId).distinct().toList();
+        Map<Long, SysRole> roleMap = roleMapper.selectBatchIds(roleIds).stream()
+                .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+        // 3. 按 userId 分组组装结果
+        Map<Long, List<UserVO.GlobalRoleInfo>> result = new java.util.HashMap<>();
+        for (UserRole ur : userRoles) {
+            SysRole role = roleMap.get(ur.getRoleId());
+            if (role != null) {
+                result.computeIfAbsent(ur.getUserId(), k -> new ArrayList<>())
+                        .add(new UserVO.GlobalRoleInfo(
+                                String.valueOf(role.getId()),
+                                role.getName(),
+                                role.getCode()
+                        ));
+            }
+        }
+        return result;
     }
 
     /**

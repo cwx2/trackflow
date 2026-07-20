@@ -23,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -62,8 +63,20 @@ public class UserController {
                         "org_id", "created_at", "updated_at", "last_login_at"));
         Page<SysUser> result = userService.list(pageObj, username, displayName, email, orgId, status, banStatus);
 
+        List<UserVO> voList = userConverter.toVOList(result.getRecords());
+
+        // 批量填充全局角色信息（避免 N+1）
+        if (!result.getRecords().isEmpty()) {
+            List<Long> userIds = result.getRecords().stream().map(SysUser::getId).toList();
+            Map<Long, List<UserVO.GlobalRoleInfo>> rolesMap = userService.batchGetGlobalRoles(userIds);
+            for (int i = 0; i < voList.size(); i++) {
+                Long userId = result.getRecords().get(i).getId();
+                voList.get(i).setGlobalRoles(rolesMap.getOrDefault(userId, List.of()));
+            }
+        }
+
         PageResult<UserVO> pageResult = new PageResult<>(
-                userConverter.toVOList(result.getRecords()), result.getTotal(),
+                voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
         return R.ok(pageResult);
     }

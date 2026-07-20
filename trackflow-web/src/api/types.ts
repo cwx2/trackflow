@@ -398,6 +398,13 @@ export interface UserVO {
   bannedByName?: string
   lastLoginAt?: string
   createdAt: string
+  globalRoles?: GlobalRoleInfo[]
+}
+
+export interface GlobalRoleInfo {
+  id: string
+  name: string
+  code: string
 }
 
 export interface RoleVO {

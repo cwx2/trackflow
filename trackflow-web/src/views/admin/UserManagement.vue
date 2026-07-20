@@ -31,10 +31,21 @@
     <!-- 用户列表 -->
     <div class="data-table">
       <div class="table-header">
-        <div class="col" style="width:240px">用户</div>
+        <div class="col" style="width:240px">
+          <span class="col-sortable" :class="{ active: sortField === 'displayName' }" @click="toggleSort('displayName')">
+            用户
+            <svg v-if="sortField === 'displayName'" class="sort-icon" :class="{ desc: sortDesc }" width="10" height="10" viewBox="0 0 10 10"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
+          </span>
+        </div>
         <div class="col" style="flex:1">邮箱</div>
+        <div class="col" style="width:140px">全局角色</div>
         <div class="col" style="width:80px">状态</div>
-        <div class="col" style="width:150px">最近登录</div>
+        <div class="col" style="width:150px">
+          <span class="col-sortable" :class="{ active: sortField === 'lastLoginAt' }" @click="toggleSort('lastLoginAt')">
+            最近登录
+            <svg v-if="sortField === 'lastLoginAt'" class="sort-icon" :class="{ desc: sortDesc }" width="10" height="10" viewBox="0 0 10 10"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
+          </span>
+        </div>
         <div class="col" style="width:120px">操作</div>
       </div>
       <div class="table-body">
@@ -49,6 +60,12 @@
             </div>
           </div>
           <div class="col" style="flex:1">{{ user.email || '—' }}</div>
+          <div class="col" style="width:140px">
+            <template v-if="user.globalRoles && user.globalRoles.length > 0">
+              <span v-for="role in user.globalRoles" :key="role.id" class="role-badge">{{ role.name }}</span>
+            </template>
+            <span v-else class="text-muted">—</span>
+          </div>
           <div class="col" style="width:80px">
             <span class="status-tag" :class="user.status">{{ user.status === 'active' ? '启用' : getBanStatusLabel(user.banStatus) }}</span>
           </div>
@@ -268,6 +285,21 @@ const loading = ref(false)
 
 const filters = reactive({ keyword: '', status: '', banStatus: '' })
 
+// 排序状态
+const sortField = ref('createdAt')
+const sortDesc = ref(true)
+
+function toggleSort(field: string) {
+  if (sortField.value === field) {
+    sortDesc.value = !sortDesc.value
+  } else {
+    sortField.value = field
+    sortDesc.value = true
+  }
+  page.value = 1
+  loadUsers()
+}
+
 // 创建用户
 const showCreateDialog = ref(false)
 const creating = ref(false)
@@ -313,6 +345,10 @@ async function loadUsers() {
     if (filters.keyword) params.username = filters.keyword
     if (filters.status) params.status = filters.status
     if (filters.banStatus) params.banStatus = filters.banStatus
+    // 排序参数：-fieldName 降序，fieldName 升序
+    if (sortField.value) {
+      params.sort = (sortDesc.value ? '-' : '') + sortField.value
+    }
     const res = await userApi.list(params)
     users.value = res.data?.list || []
     total.value = res.data?.pagination?.total || 0
@@ -757,4 +793,15 @@ onMounted(() => {
 .btn-sm-action:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-sm-action.secondary { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); }
 .btn-sm-action.secondary:hover { background: var(--bg-hover); }
+
+/* Role badges */
+.role-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; background: rgba(88,166,255,0.12); color: var(--accent-blue); font-size: 11px; font-weight: 500; border-radius: 3px; white-space: nowrap; margin-right: 4px; }
+.text-muted { color: var(--text-muted); font-size: var(--font-size-sm); }
+
+/* Sortable columns */
+.col-sortable { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; user-select: none; transition: color 150ms; }
+.col-sortable:hover { color: var(--text-primary); }
+.col-sortable.active { color: var(--accent-blue); }
+.sort-icon { transition: transform 150ms; }
+.sort-icon.desc { transform: rotate(180deg); }
 </style>
