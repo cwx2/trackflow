@@ -47,9 +47,10 @@
           <template v-else-if="sprintRemainingDays === 0">今天结束</template>
           <template v-else>已超期 {{ Math.abs(sprintRemainingDays) }} 天</template>
         </span>
-        <!-- No active sprint hint -->
+        <!-- No active sprint hint with next sprint info -->
         <span v-else-if="selectedProject && sprints.length > 0 && !activeSprint && !selectedSprint" class="sprint-no-active-hint">
           暂无活跃迭代
+          <span v-if="nextPlannedSprintHint" class="sprint-next-hint">· {{ nextPlannedSprintHint }}</span>
         </span>
         <a-divider direction="vertical" style="margin: 0 4px" />
         <!-- Swimlane 分组选择 -->
@@ -163,6 +164,9 @@
           <span v-if="boardDoneRetentionDays !== null" class="behavior-chip">
             ✅ 完成{{ boardDoneRetentionDays }}天内
           </span>
+          <span v-else-if="isSmartDefaultDoneRetentionActive" class="behavior-chip behavior-chip--auto">
+            ✅ 自动隐藏14天前完成
+          </span>
         </div>
         <a-tooltip :content="showBacklog ? '收起 Backlog' : '展开 Backlog'">
           <a-button
@@ -189,6 +193,28 @@
 
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
+      <!-- 无活跃 Sprint 引导横幅 -->
+      <div v-if="showNoActiveSprintGuidance && !loading" class="board-guidance-banner">
+        <div class="guidance-icon">📋</div>
+        <div class="guidance-content">
+          <div class="guidance-title">当前没有活跃迭代</div>
+          <div class="guidance-desc">
+            <template v-if="nextPlannedSprint">
+              下一个迭代「{{ nextPlannedSprint.name }}」将于 {{ formatSprintDate(nextPlannedSprint.startDate) }} 开始。
+            </template>
+            <template v-else>
+              暂无计划中的迭代。
+            </template>
+            <span v-if="!effectiveDoneRetentionDays">已自动隐藏超过 14 天的已完成工单。</span>
+          </div>
+        </div>
+        <div class="guidance-actions">
+          <a-button v-if="nextPlannedSprint" size="mini" type="primary" @click="selectNextPlannedSprint">
+            查看 {{ nextPlannedSprint.name }}
+          </a-button>
+          <a-button size="mini" type="outline" @click="dismissGuidance">知道了</a-button>
+        </div>
+      </div>
       <!-- 截断提示：工单数超过安全上限 -->
       <div v-if="boardTruncated && !loading" class="board-truncated-banner">
         <span class="truncated-icon">⚠️</span>
@@ -984,7 +1010,12 @@ const displayBoardName = computed(() => {
 
 /** 当前是否有 Board Behavior 过滤生效 */
 const isBehaviorFilterActive = computed(() => {
-  return boardFilterMode.value !== 'all' || boardDoneRetentionDays.value !== null
+  return boardFilterMode.value !== 'all' || boardDoneRetentionDays.value !== null || isSmartDefaultDoneRetentionActive.value
+})
+
+/** 智能默认 14 天保留是否在生效（无配置 + 无活跃 Sprint + 无手动选择 Sprint） */
+const isSmartDefaultDoneRetentionActive = computed(() => {
+  return boardDoneRetentionDays.value === null && !activeSprint.value && !selectedSprint.value
 })
 
 // ===== Backlog 面板 =====
@@ -1302,6 +1333,78 @@ function isActiveSprint(sprint: SprintVO): boolean {
   return sprint.id === activeSprint.value?.id
 }
 
+// ===== 无活跃 Sprint 引导 =====
+
+/** 下一个计划中的 Sprint（最近的未来 planned Sprint） */
+const nextPlannedSprint = computed(() => {
+  if (activeSprint.value) return null
+  const today = new Date().toISOString().split('T')[0]
+  // 找到开始日期在今天之后的 planned Sprint，取最近的一个
+  const futurePlanned = sprints.value
+    .filter(s => s.status === 'planned' && s.startDate && s.startDate > today)
+    .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
+  return futurePlanned.length > 0 ? futurePlanned[0] : null
+})
+
+/** 工具栏中显示的下一个 Sprint 提示文字 */
+const nextPlannedSprintHint = computed(() => {
+  const sprint = nextPlannedSprint.value
+  if (!sprint || !sprint.startDate) return ''
+  const startDate = new Date(sprint.startDate + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const daysUntil = Math.ceil((startDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (daysUntil <= 0) return `${sprint.name} 今天开始`
+  if (daysUntil === 1) return `${sprint.name} 明天开始`
+  return `${sprint.name} ${daysUntil} 天后开始`
+})
+
+/** 引导横幅 dismissed 状态（localStorage 存储，基于项目+会话） */
+const GUIDANCE_DISMISSED_KEY = 'tf_kanban_guidance_dismissed'
+const guidanceDismissed = ref(false)
+
+/** 是否显示无活跃 Sprint 引导横幅 */
+const showNoActiveSprintGuidance = computed(() => {
+  if (guidanceDismissed.value) return false
+  if (!selectedProject.value) return false
+  if (activeSprint.value) return false
+  if (selectedSprint.value) return false // 用户已手动选了某个 Sprint
+  if (boardFilterMode.value === 'active_sprint') return false // 已在 Sprint 模式（有对应空状态）
+  if (sprints.value.length === 0) return false
+  if (issues.value.length === 0) return false
+  return true
+})
+
+/** 关闭引导横幅 */
+function dismissGuidance() {
+  guidanceDismissed.value = true
+  // 当前会话记忆（刷新页面时重新显示，切换项目时重置）
+  sessionStorage.setItem(`${GUIDANCE_DISMISSED_KEY}_${selectedProject.value}`, 'true')
+}
+
+/** 选择下一个计划 Sprint */
+function selectNextPlannedSprint() {
+  if (nextPlannedSprint.value) {
+    selectedSprint.value = nextPlannedSprint.value.id
+    userExplicitlySelectedAll = false
+    syncUrlState()
+    loadIssuesWithLoading()
+    guidanceDismissed.value = true
+  }
+}
+
+/** 格式化 Sprint 日期（用于引导横幅） */
+function formatSprintDate(dateStr: string | undefined): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+/** 有效的完成工单保留天数（服务端配置 > 默认 14 天） */
+const effectiveDoneRetentionDays = computed(() => {
+  return boardDoneRetentionDays.value
+})
+
 // 搜索相关
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const isSearchActive = computed(() => keyword.value.trim().length > 0)
@@ -1367,6 +1470,7 @@ function onProjectChange() {
   selectedSprint.value = undefined
   showAllColumns.value = false  // 切换项目时重置临时显示
   userExplicitlySelectedAll = false  // Reset: allow auto-select for new project
+  guidanceDismissed.value = false  // Reset guidance for new project
   // 切换项目时：保留 'me' 筛选，但清除指定用户 ID（因为不同项目的成员不同）
   if (assigneeFilter.value && assigneeFilter.value !== 'me') {
     assigneeFilter.value = undefined
@@ -2400,6 +2504,8 @@ async function loadBoard() {
   if (!selectedProject.value) { issues.value = []; return }
   expandedEmptyColumns.value.clear()
   loadCollapsedColumnsState()
+  // Restore guidance dismissed state from sessionStorage
+  guidanceDismissed.value = sessionStorage.getItem(`${GUIDANCE_DISMISSED_KEY}_${selectedProject.value}`) === 'true'
   loading.value = true
   try {
     await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers()])
@@ -2430,9 +2536,13 @@ async function loadIssues() {
   let total = 0
 
   // 计算 excludeDoneBefore 截止日期（服务端过滤已完成工单保留天数）
+  // 智能默认：当无活跃 Sprint 且未配置保留天数时，自动应用 14 天保留（避免全量已完成工单堆积）
   let excludeDoneBefore: string | undefined
-  if (boardDoneRetentionDays.value !== null && boardDoneRetentionDays.value > 0) {
-    const cutoffDate = new Date(Date.now() - boardDoneRetentionDays.value * 24 * 60 * 60 * 1000)
+  const DEFAULT_DONE_RETENTION_DAYS = 14
+  const effectiveRetention = boardDoneRetentionDays.value ??
+    (!activeSprint.value && !selectedSprint.value ? DEFAULT_DONE_RETENTION_DAYS : null)
+  if (effectiveRetention !== null && effectiveRetention > 0) {
+    const cutoffDate = new Date(Date.now() - effectiveRetention * 24 * 60 * 60 * 1000)
     excludeDoneBefore = cutoffDate.toISOString().split('T')[0] // yyyy-MM-dd
   }
 
@@ -2873,6 +2983,11 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
+.behavior-chip--auto {
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.15s;
@@ -2958,6 +3073,15 @@ onUnmounted(() => {
   color: var(--color-text-4);
   white-space: nowrap;
   font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sprint-next-hint {
+  color: rgb(var(--primary-6));
+  font-style: normal;
+  font-weight: 500;
 }
 
 /* ===== Progress Indicator (mini bar chart) ===== */
@@ -3877,6 +4001,49 @@ onUnmounted(() => {
 
 .card-type-spacer {
   flex: 1;
+}
+
+/* ===== 无活跃 Sprint 引导横幅 ===== */
+.board-guidance-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(var(--primary-6), 0.06);
+  border: 1px solid rgba(var(--primary-6), 0.2);
+  border-radius: 6px;
+  margin: 0 16px 8px;
+  flex-shrink: 0;
+}
+
+.guidance-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.guidance-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.guidance-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-1);
+  margin-bottom: 2px;
+}
+
+.guidance-desc {
+  font-size: 12px;
+  color: var(--color-text-3);
+  line-height: 1.5;
+}
+
+.guidance-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* ===== 截断提示横幅 ===== */
