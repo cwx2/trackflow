@@ -166,16 +166,18 @@ function handleFilterModeChange(mode: string) {
 }
 
 onMounted(async () => {
+  if (!props.projectId) return
   try {
-    // 获取 integer 类型的自定义字段
-    const intRes = await customFieldApi.list({ fieldFormat: 'integer', pageSize: 100 })
-    const floatRes = await customFieldApi.list({ fieldFormat: 'float', pageSize: 100 })
-    const intFields = intRes.data?.list || []
-    const floatFields = floatRes.data?.list || []
-    numericFields.value = [...intFields, ...floatFields].map((f: any) => ({
-      id: String(f.id),
-      name: f.name
-    }))
+    // 使用项目级端点获取自定义字段（无需管理员权限）
+    const res = await customFieldApi.listByProject(props.projectId)
+    const allFields = res.data || []
+    // 过滤出数字类型字段（integer 和 float）
+    numericFields.value = allFields
+      .filter((f: any) => f.fieldFormat === 'integer' || f.fieldFormat === 'float')
+      .map((f: any) => ({
+        id: String(f.id),
+        name: f.name
+      }))
   } catch {
     // 加载失败时估算字段列表为空，不影响其他配置
     numericFields.value = []
