@@ -109,6 +109,12 @@ export function usePermission(
         permissions.value = new Set()
         return
       }
+      // 先同步检查缓存——如果缓存命中，无需设置 loading 状态，避免按钮闪烁
+      const cached = projectPermissionsCache.get(projectId)
+      if (cached && isCacheValid(cached)) {
+        permissions.value = cached.permissions
+        return
+      }
       loading.value = true
       try {
         permissions.value = await loadProjectPermissions(projectId)
@@ -122,11 +128,11 @@ export function usePermission(
   /**
    * 检查是否拥有指定权限
    * system:admin 自动拥有所有权限
-   * 权限加载中时返回 true（乐观策略，后端兜底），避免按钮闪烁
+   * 权限加载中时返回 false（悲观策略），避免无权用户看到闪烁的操作按钮
    */
   function hasPermission(permission: string): boolean {
     if (authStore.hasGlobalPermission('system:admin')) return true
-    if (loading.value) return true // 加载中不隐藏按钮，避免 UI 闪烁
+    if (loading.value) return false // 加载中隐藏操作按钮，避免无权用户看到闪烁
     return permissions.value.has(permission)
   }
 

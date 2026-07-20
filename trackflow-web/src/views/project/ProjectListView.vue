@@ -607,12 +607,12 @@ async function loadProjectPermissionsForList() {
 /**
  * 判断当前用户是否能管理指定项目（编辑/成员管理/归档）
  * system:admin 直接返回 true
- * 未加载权限时返回 true（乐观策略，后端兜底）
+ * 未加载权限时返回 false（悲观策略），避免无权用户看到闪烁的操作按钮
  */
 function canManageProject(project: any): boolean {
   if (authStore.hasGlobalPermission('system:admin')) return true
   const perms = projectPermCache.value[project.id]
-  if (!perms) return true // 未加载时默认允许，后端兜底
+  if (!perms) return false // 未加载时隐藏操作按钮，避免闪烁
   return perms.has('project:edit') || perms.has('project:manage_members')
 }
 
