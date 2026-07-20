@@ -70,7 +70,7 @@ public class UserSyncFilter extends OncePerRequestFilter {
                 if (isUserBlacklisted(user.getId())) {
                     log.warn("Request blocked by Redis blacklist: userId={}, username={}",
                             user.getId(), user.getUsername());
-                    logLoginFailedFromJwt(request, "user_disabled_blacklisted");
+                    logSessionBlocked(user, request, "user_disabled");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
@@ -187,6 +187,25 @@ public class UserSyncFilter extends OncePerRequestFilter {
             );
         } catch (Exception e) {
             log.warn("Failed to log auth failure event: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 记录会话被阻断事件（用户被禁用后使用旧 JWT 请求）。
+     * 区分于 login_failed：login_failed 是认证阶段失败，
+     * session_blocked 是已认证用户因账号状态变化而被拦截。
+     */
+    private void logSessionBlocked(SysUser user, HttpServletRequest request, String reason) {
+        try {
+            systemAuditService.logAuthEvent(
+                    "session_blocked",
+                    user.getId(),
+                    WebUtils.getClientIp(request),
+                    request.getHeader("User-Agent"),
+                    Map.of("method", "jwt", "reason", reason, "username", user.getUsername())
+            );
+        } catch (Exception e) {
+            log.warn("Failed to log session_blocked event: {}", e.getMessage());
         }
     }
 

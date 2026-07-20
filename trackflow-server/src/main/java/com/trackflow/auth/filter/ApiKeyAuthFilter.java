@@ -45,6 +45,19 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
     private final SystemAuditService systemAuditService;
 
+    /**
+     * API Key 认证失败的原因枚举（内部使用，用于区分审计事件类型）
+     */
+    private enum ApiKeyFailureReason {
+        /** Key 过期 */
+        EXPIRED,
+        /** Key 不存在、hash 不匹配、用户被禁用等通用失败 */
+        INVALID
+    }
+
+    /** ThreadLocal 用于传递认证失败的具体原因 */
+    private static final ThreadLocal<ApiKeyFailureReason> failureReason = new ThreadLocal<>();
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -57,12 +70,21 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
             if (token.startsWith(API_KEY_PREFIX)) {
                 // API Key 认证
+                failureReason.remove();
                 if (authenticateWithApiKey(token, request)) {
                     filterChain.doFilter(request, response);
                     return;
                 } else {
-                    // 记录 API Key 认证失败
-                    logApiKeyFailed(request, token);
+                    // 根据失败原因记录不同的审计事件
+                    ApiKeyFailureReason reason = failureReason.get();
+                    failureReason.remove();
+
+                    if (reason == ApiKeyFailureReason.EXPIRED) {
+                        logApiKeyExpired(request, token);
+                    } else {
+                        logApiKeyFailed(request, token);
+                    }
+
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
@@ -97,6 +119,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         // 验证过期
         if (apiKey.getExpiresAt() != null && apiKey.getExpiresAt().isBefore(LocalDateTime.now())) {
+            failureReason.set(ApiKeyFailureReason.EXPIRED);
             return false;
         }
 
@@ -155,12 +178,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 记录 API Key 认证失败事件
+     * 记录 API Key 认证失败事件（通用失败：key 不存在、hash 不匹配、用户被禁用）
      */
     private void logApiKeyFailed(HttpServletRequest request, String token) {
         try {
             Map<String, Object> details = new HashMap<>();
             details.put("method", "api_key");
+            details.put("reason", "invalid");
             // 只记录前缀，不泄露完整 token
             if (token.length() > 11) {
                 details.put("key_prefix", token.substring(0, 11) + "...");
@@ -175,6 +199,30 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             );
         } catch (Exception e) {
             log.warn("Failed to log api_key_failed event: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 记录 API Key 过期事件（区分于通用认证失败）
+     */
+    private void logApiKeyExpired(HttpServletRequest request, String token) {
+        try {
+            Map<String, Object> details = new HashMap<>();
+            details.put("method", "api_key");
+            details.put("reason", "expired");
+            if (token.length() > 11) {
+                details.put("key_prefix", token.substring(0, 11) + "...");
+            }
+
+            systemAuditService.logAuthEvent(
+                    "api_key_expired",
+                    null,
+                    WebUtils.getClientIp(request),
+                    request.getHeader("User-Agent"),
+                    details
+            );
+        } catch (Exception e) {
+            log.warn("Failed to log api_key_expired event: {}", e.getMessage());
         }
     }
 

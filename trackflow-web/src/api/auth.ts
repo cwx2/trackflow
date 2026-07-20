@@ -18,5 +18,13 @@ export const authApi = {
   /** 获取当前用户的全局权限列表 */
   getMyGlobalPermissions() {
     return request.get<any, R<string[]>>('/auth/my-global-permissions')
+  },
+
+  /**
+   * 通知后端记录 logout 审计事件（best-effort，fire-and-forget）。
+   * 前端在跳转 Keycloak logout 之前调用。
+   */
+  notifyLogout() {
+    return request.post<any, R<void>>('/auth/logout')
   }
 }

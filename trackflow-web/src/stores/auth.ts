@@ -320,6 +320,12 @@ export const useAuthStore = defineStore('auth', () => {
    * @param reason 登出原因提示信息（可选，存在时说明是被动登出如 token 过期）
    */
   function logout(reason?: string) {
+    // 主动登出时先通知后端记录审计事件（best-effort, fire-and-forget）
+    // 必须在清除 token 之前调用，否则请求无法携带认证信息
+    if (!reason && accessToken.value) {
+      authApi.notifyLogout().catch(() => { /* ignore - best effort */ })
+    }
+
     clearRefreshTimer()
     stopTokenCheckInterval()
     clearStorage()

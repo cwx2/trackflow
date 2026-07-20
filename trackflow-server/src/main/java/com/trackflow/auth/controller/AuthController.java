@@ -7,10 +7,14 @@ import com.trackflow.auth.vo.UserInfoVO;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.common.util.WebUtils;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.service.SystemAuditService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,8 +22,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -28,6 +34,7 @@ public class AuthController {
     private final PermissionService permissionService;
     private final ProjectService projectService;
     private final SysUserMapper sysUserMapper;
+    private final SystemAuditService systemAuditService;
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -106,5 +113,35 @@ public class AuthController {
             return R.fail(ErrorCode.AUTH_MISSING);
         }
         return R.ok(permissionService.getNavigationPermissions(userId));
+    }
+
+    /**
+     * 前端主动登出通知端点。
+     * 前端在跳转 Keycloak logout 之前调用此接口，记录 logout 审计事件。
+     * <p>
+     * 此接口为 best-effort：前端不等待响应（fire-and-forget），
+     * 如果调用失败，Keycloak Back-Channel Logout 作为兜底。
+     */
+    @PostMapping("/logout")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> logout(HttpServletRequest request) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            return R.ok();
+        }
+
+        SysUser user = sysUserMapper.selectById(userId);
+        String username = user != null ? user.getUsername() : "unknown";
+
+        systemAuditService.logAuthEvent(
+                "logout",
+                userId,
+                WebUtils.getClientIp(request),
+                request.getHeader("User-Agent"),
+                Map.of("method", "user_initiated", "username", username)
+        );
+
+        log.info("User logout recorded: userId={}, username={}", userId, username);
+        return R.ok();
     }
 }
