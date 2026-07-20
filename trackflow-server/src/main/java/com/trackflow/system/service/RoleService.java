@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
 import com.trackflow.project.mapper.ProjectMapper;
@@ -218,7 +219,12 @@ public class RoleService {
     }
 
     /**
-     * 替换角色的所有权限
+     * 替换角色的所有权限。
+     * <p>
+     * 权限提权保护（参考 YouTrack）：
+     * - 操作者只能添加自己已持有的权限到角色中
+     * - 移除权限不受此限制（只要有 manage_roles 权限即可移除任何权限）
+     * - system_admin 用户不受此限制（拥有所有权限）
      */
     @Transactional
     public void replacePermissions(Long id, List<String> permissions) {
@@ -229,10 +235,14 @@ public class RoleService {
             throw new BusinessException(ErrorCode.BUILTIN_ROLE_PROTECTED);
         }
 
-        // 记录旧权限（审计用）
+        // 记录旧权限（审计用 + 提权检查用）
         List<String> oldPermissions = rolePermissionMapper.selectList(
                 new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRoleId, id)
         ).stream().map(RolePermission::getPermission).collect(Collectors.toList());
+
+        // 提权保护：检查操作者是否有权授予新增的权限
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        checkPrivilegeEscalation(currentUserId, oldPermissions, permissions);
 
         // 删除旧权限
         rolePermissionMapper.delete(
@@ -255,6 +265,55 @@ public class RoleService {
                 Map.of("roleName", role.getName(),
                         "oldPermissions", oldPermissions,
                         "newPermissions", permissions));
+    }
+
+    /**
+     * 提权保护检查：操作者只能添加自己已持有的权限。
+     * <p>
+     * 规则（参考 YouTrack privilege escalation protection）：
+     * - 找出相对于旧权限"新增的权限"（newPerms - oldPerms）
+     * - 如果新增的权限中有操作者不持有的 → 拒绝并记录审计
+     * - 移除权限不受此限制
+     * - system_admin 不受此限制
+     *
+     * @param operatorId     操作者用户 ID
+     * @param oldPermissions 角色当前已有权限
+     * @param newPermissions 请求设置的目标权限
+     */
+    private void checkPrivilegeEscalation(Long operatorId, List<String> oldPermissions, List<String> newPermissions) {
+        // system_admin 不受限制
+        if (permissionService.isSystemAdmin(operatorId)) {
+            return;
+        }
+
+        // 计算新增的权限（新列表中有、旧列表中没有的）
+        Set<String> oldSet = new HashSet<>(oldPermissions);
+        Set<String> addedPermissions = newPermissions.stream()
+                .filter(p -> !oldSet.contains(p))
+                .collect(Collectors.toSet());
+
+        if (addedPermissions.isEmpty()) {
+            return; // 没有新增权限（只是移除），允许
+        }
+
+        // 获取操作者持有的所有权限（全局 + 所有项目级）
+        Set<String> operatorPermissions = new HashSet<>(permissionService.getPermissions(operatorId));
+        operatorPermissions.addAll(permissionService.getAllProjectPermissionsForUser(operatorId));
+
+        // 检查新增权限是否都在操作者的权限集中
+        Set<String> unauthorizedPermissions = addedPermissions.stream()
+                .filter(p -> !operatorPermissions.contains(p))
+                .collect(Collectors.toSet());
+
+        if (!unauthorizedPermissions.isEmpty()) {
+            // 记录失败的提权尝试
+            systemAuditService.log("privilege_escalation_attempt", "role", null,
+                    Map.of("operatorId", operatorId,
+                            "attemptedPermissions", new ArrayList<>(unauthorizedPermissions)));
+
+            throw new BusinessException(ErrorCode.PRIVILEGE_ESCALATION_DENIED,
+                    "您不能授予自己不持有的权限: " + String.join(", ", unauthorizedPermissions));
+        }
     }
 
     /**
@@ -316,6 +375,21 @@ public class RoleService {
             result.computeIfAbsent(perm.getCategory(), k -> new ArrayList<>()).add(perm.getCode());
         }
         return result;
+    }
+
+    /**
+     * 获取当前操作者可授予的权限集合。
+     * - system_admin 返回含 "*" 的特殊集合（表示可授予所有权限）
+     * - 其他用户返回其全局权限 + 所有项目级权限的合集
+     */
+    public Set<String> getGrantablePermissions() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (permissionService.isSystemAdmin(userId)) {
+            return Set.of("*");
+        }
+        Set<String> permissions = new HashSet<>(permissionService.getPermissions(userId));
+        permissions.addAll(permissionService.getAllProjectPermissionsForUser(userId));
+        return permissions;
     }
 
     /**

@@ -105,10 +105,22 @@
           <div v-for="group in filteredPermissionGroups" :key="group.category" class="perm-group">
             <h4 class="perm-category">{{ CATEGORY_LABELS[group.category] || group.category }}</h4>
             <div class="perm-list">
-              <label v-for="perm in group.permissions" :key="perm.code" class="perm-item" :class="{ readonly: permRole?.builtin }">
-                <input type="checkbox" :checked="rolePerms.includes(perm.code)" @change="togglePerm(perm.code)" :disabled="permRole?.builtin" />
+              <label
+                v-for="perm in group.permissions"
+                :key="perm.code"
+                class="perm-item"
+                :class="{ readonly: permRole?.builtin, ungrantable: !permRole?.builtin && !rolePerms.includes(perm.code) && !canGrantPermission(perm.code) }"
+                :title="!permRole?.builtin && !canGrantPermission(perm.code) && !rolePerms.includes(perm.code) ? getUngrantableTooltip(perm.code) : ''"
+              >
+                <input
+                  type="checkbox"
+                  :checked="rolePerms.includes(perm.code)"
+                  @change="togglePerm(perm.code)"
+                  :disabled="permRole?.builtin || (!rolePerms.includes(perm.code) && !canGrantPermission(perm.code))"
+                />
                 <span class="perm-name">{{ perm.name }}</span>
                 <span class="perm-code">{{ perm.code }}</span>
+                <span v-if="!permRole?.builtin && !canGrantPermission(perm.code) && !rolePerms.includes(perm.code)" class="perm-lock">🔒</span>
               </label>
             </div>
           </div>
@@ -248,6 +260,8 @@ const showPermDialog = ref(false)
 const permRole = ref<any>(null)
 const rolePerms = ref<string[]>([])
 const permissionGroups = ref<PermissionGroup[]>([])
+const grantablePermissions = ref<Set<string>>(new Set())
+const isFullAdmin = ref(false) // operator is system_admin (can grant everything)
 
 /**
  * 根据角色类型过滤可见的权限组：
@@ -293,6 +307,44 @@ async function loadPermissionDefinitions() {
     const res: any = await request.get('/roles/permission-definitions')
     permissionGroups.value = res.data || []
   } catch (e) { permissionGroups.value = [] }
+}
+
+async function loadGrantablePermissions() {
+  try {
+    const res: any = await request.get('/roles/my-grantable-permissions')
+    const perms: string[] = res.data || []
+    if (perms.includes('*')) {
+      isFullAdmin.value = true
+      grantablePermissions.value = new Set()
+    } else {
+      isFullAdmin.value = false
+      grantablePermissions.value = new Set(perms)
+    }
+  } catch (e) {
+    isFullAdmin.value = false
+    grantablePermissions.value = new Set()
+  }
+}
+
+/**
+ * 判断操作者是否可以授予指定权限。
+ * - 如果权限已经在角色中（非新增），允许（保持）
+ * - 如果是 system_admin，允许所有
+ * - 否则检查操作者是否持有该权限
+ */
+function canGrantPermission(permCode: string): boolean {
+  if (isFullAdmin.value) return true
+  // 如果操作者持有该权限，则可以授予
+  if (grantablePermissions.value.has(permCode)) return true
+  return false
+}
+
+/**
+ * 获取不可授予权限的 tooltip 文本
+ */
+function getUngrantableTooltip(permCode: string): string {
+  if (canGrantPermission(permCode)) return ''
+  return '您不能授予自己不持有的权限'
 }
 
 function openCreateDialog() {
@@ -374,9 +426,11 @@ async function openPermDialog(role: any) {
 }
 
 function togglePerm(perm: string) {
+  // 移除权限始终允许，添加权限需要检查 grantability
   if (rolePerms.value.includes(perm)) {
     rolePerms.value = rolePerms.value.filter(p => p !== perm)
   } else {
+    if (!canGrantPermission(perm)) return // 不可授予则不响应
     rolePerms.value.push(perm)
   }
 }
@@ -404,6 +458,7 @@ async function openUsersDialog(role: any) {
 onMounted(() => {
   loadRoles()
   loadPermissionDefinitions()
+  loadGrantablePermissions()
 })
 </script>
 
@@ -463,6 +518,9 @@ onMounted(() => {
 .hint-text { font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.5; }
 .perm-item.readonly { opacity: 0.6; cursor: not-allowed; }
 .perm-item.readonly input { cursor: not-allowed; }
+.perm-item.ungrantable { opacity: 0.5; cursor: not-allowed; }
+.perm-item.ungrantable input { cursor: not-allowed; }
+.perm-lock { font-size: 11px; margin-left: 4px; opacity: 0.7; }
 
 /* Clone dialog */
 .clone-hint { font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5; }

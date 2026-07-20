@@ -32,6 +32,7 @@ public enum ErrorCode {
     WORKFLOW_TRANSITION_DENIED(40302, 403, "当前角色不允许执行此状态转换"),
     USER_DISABLED(40303, 403, "用户账号已被禁用"),
     BUILTIN_ROLE_PROTECTED(40304, 403, "内置角色不允许修改"),
+    PRIVILEGE_ESCALATION_DENIED(40305, 403, "您不能授予自己不持有的权限"),
 
     // Not Found (404xx)
     RESOURCE_NOT_FOUND(40400, 404, "资源不存在"),

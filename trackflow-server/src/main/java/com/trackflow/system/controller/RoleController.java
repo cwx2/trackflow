@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -118,6 +119,17 @@ public class RoleController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<Map<String, List<String>>> getAllPermissions() {
         return R.ok(roleService.getAllPermissions());
+    }
+
+    /**
+     * 获取当前操作者持有的所有权限（用于前端提权保护 UI）。
+     * 返回操作者的全局权限 + 所有项目级权限的合集。
+     * system_admin 返回 ["*"] 表示拥有所有权限。
+     */
+    @GetMapping("/my-grantable-permissions")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<Set<String>> getMyGrantablePermissions() {
+        return R.ok(roleService.getGrantablePermissions());
     }
 
     /**
