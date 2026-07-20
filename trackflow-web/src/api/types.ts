@@ -503,6 +503,7 @@ export interface CustomFieldUsageVO {
   issueCount: number
   valueCount: number
   projectCount: number
+  isForAll: boolean
   issueTypeCount: number
   optionCount: number
 }

@@ -127,7 +127,7 @@
                 <div class="detail-stats">
                   <span>{{ detailUsage.issueCount }} 个工单</span>
                   <span>{{ detailUsage.valueCount }} 条值</span>
-                  <span>{{ detailUsage.projectCount }} 个项目</span>
+                  <span>{{ detailUsage.projectCount }} 个项目<template v-if="detailUsage.isForAll">（全局）</template></span>
                 </div>
               </div>
             </div>
@@ -135,7 +135,7 @@
         </div>
       </a-tab-pane>
       <a-tab-pane key="projects" title="Fields in Projects">
-        <FieldsInProjects ref="fieldsInProjectsRef" />
+        <FieldsInProjects ref="fieldsInProjectsRef" @field-created="loadList" />
       </a-tab-pane>
     </a-tabs>
 
@@ -715,9 +715,12 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
 
     if (usage.issueCount === 0) {
       // 无引用——简单确认
+      const projectInfo = usage.isForAll
+        ? `该字段为全局字段，当前适用于所有 ${usage.projectCount} 个项目。`
+        : ''
       Modal.warning({
         title: '确认删除',
-        content: `确定要删除自定义字段「${record.name}」？此操作不可撤销。`,
+        content: `${projectInfo}确定要删除自定义字段「${record.name}」？此操作不可撤销。`,
         okText: '删除字段',
         cancelText: '取消',
         hideCancel: false,
@@ -725,9 +728,12 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
       })
     } else {
       // 有工单引用——危险确认
+      const projectInfo = usage.isForAll
+        ? `（全局字段，覆盖所有 ${usage.projectCount} 个项目）`
+        : ''
       Modal.error({
         title: '⚠️ 删除将导致数据丢失',
-        content: `字段「${record.name}」当前被 ${usage.issueCount} 个工单使用（共 ${usage.valueCount} 条值记录）。删除后这些数据将永久丢失且不可恢复。`,
+        content: `字段「${record.name}」${projectInfo}当前被 ${usage.issueCount} 个工单使用（共 ${usage.valueCount} 条值记录）。删除后这些数据将永久丢失且不可恢复。`,
         okText: `确认删除（影响 ${usage.issueCount} 个工单）`,
         cancelText: '取消',
         hideCancel: false,

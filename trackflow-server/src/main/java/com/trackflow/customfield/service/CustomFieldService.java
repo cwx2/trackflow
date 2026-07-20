@@ -296,7 +296,8 @@ public class CustomFieldService {
      * 用于删除前展示影响范围。
      */
     public CustomFieldUsageVO getUsage(Long id) {
-        if (definitionMapper.selectById(id) == null) {
+        CustomFieldDefinition field = definitionMapper.selectById(id);
+        if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
 
@@ -314,9 +315,15 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldValue>()
                         .eq(CustomFieldValue::getCustomFieldId, id)));
 
-        usage.setProjectCount(projectMapper.selectCount(
-                new LambdaQueryWrapper<CustomFieldProject>()
-                        .eq(CustomFieldProject::getCustomFieldId, id)));
+        // 项目数量：全局字段 = 系统中所有项目数；非全局字段 = 明确关联的项目数
+        usage.setIsForAll(Boolean.TRUE.equals(field.getIsForAll()));
+        if (Boolean.TRUE.equals(field.getIsForAll())) {
+            usage.setProjectCount(projectEntityMapper.selectCount(null));
+        } else {
+            usage.setProjectCount(projectMapper.selectCount(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getCustomFieldId, id)));
+        }
 
         usage.setIssueTypeCount(issueTypeMapper.selectCount(
                 new LambdaQueryWrapper<CustomFieldIssueType>()
