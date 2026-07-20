@@ -358,6 +358,8 @@ export interface SprintVO {
   todoIssues: number
   /** 逾期工单数 */
   overdueIssues: number
+  /** 未分配负责人的工单数 */
+  unassignedIssues: number
 }
 
 /** Sprint 燃尽图数据 */

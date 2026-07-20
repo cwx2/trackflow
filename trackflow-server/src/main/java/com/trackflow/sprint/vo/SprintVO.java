@@ -40,4 +40,6 @@ public class SprintVO {
     private int todoIssues;
     /** 有逾期工单（due_date < today 且 is_closed = false） */
     private int overdueIssues;
+    /** 未分配负责人的工单数（assignee_id IS NULL） */
+    private int unassignedIssues;
 }

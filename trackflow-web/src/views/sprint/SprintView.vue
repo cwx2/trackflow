@@ -119,6 +119,10 @@
               <span class="stat-dot"></span>
               逾期 {{ sprint.overdueIssues }}
             </span>
+            <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
+              <span class="stat-dot"></span>
+              未分配 {{ sprint.unassignedIssues }}
+            </span>
           </div>
         </div>
 
@@ -198,6 +202,10 @@
             </span>
             <span class="stat-item total">
               共 {{ sprint.totalIssues }} 个工单
+            </span>
+            <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
+              <span class="stat-dot"></span>
+              未分配 {{ sprint.unassignedIssues }}
             </span>
           </div>
         </div>
@@ -800,6 +808,20 @@ function viewSprintIssues(sprint: SprintVO) {
   router.push({ path: '/issues', query })
 }
 
+function viewUnassignedIssues(sprint: SprintVO) {
+  // 跳转到 Issue 列表，筛选该 Sprint + 未分配负责人
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const query: Record<string, string> = {
+    sprint: sprint.id,
+    assignee: 'unassigned',
+    label: `${sprint.name} - 未分配工单`
+  }
+  if (currentProject) {
+    query.project = currentProject.key
+  }
+  router.push({ path: '/issues', query })
+}
+
 function toggleCompletedBurndown(sprintId: string) {
   const set = new Set(expandedCompletedSprints.value)
   if (set.has(sprintId)) {
@@ -1258,6 +1280,17 @@ onMounted(async () => {
   color: rgb(var(--danger-6));
   font-weight: 500;
 }
+.stat-item.unassigned {
+  color: rgb(var(--warning-6));
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.stat-item.unassigned:hover {
+  background: rgba(var(--warning-6), 0.08);
+}
 
 .stat-dot {
   width: 8px;
@@ -1268,6 +1301,7 @@ onMounted(async () => {
 .stat-item.in-progress .stat-dot { background: #58a6ff; }
 .stat-item.todo .stat-dot { background: var(--color-fill-3); }
 .stat-item.overdue .stat-dot { background: rgb(var(--danger-6)); }
+.stat-item.unassigned .stat-dot { background: rgb(var(--warning-6)); }
 
 /* ===== 其他 ===== */
 .sprint-no-issues {

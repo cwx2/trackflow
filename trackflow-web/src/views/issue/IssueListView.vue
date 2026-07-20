@@ -2329,7 +2329,7 @@ onMounted(async () => {
   }
 
   // Handle dashboard filter params (statusId, statusCode, statusCategory, label, sprint, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.projectId) {
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
     applyDashboardFilter()
   } else {
     refreshList()
@@ -2487,6 +2487,17 @@ function applyDashboardFilter() {
       operator: 'equals',
       values: [name],
       valueLabels: [name]
+    })
+  }
+
+  // assignee=unassigned: 筛选未分配负责人的工单
+  if (route.query.assignee === 'unassigned') {
+    filters.assigneeId = 'none'
+    chips.push({
+      fieldKey: 'assignee',
+      operator: 'equals',
+      values: ['none'],
+      valueLabels: ['未分配']
     })
   }
 

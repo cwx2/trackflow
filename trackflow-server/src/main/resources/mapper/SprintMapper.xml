@@ -17,6 +17,7 @@
         <result property="inProgressIssues" column="in_progress_issues"/>
         <result property="todoIssues" column="todo_issues"/>
         <result property="overdueIssues" column="overdue_issues"/>
+        <result property="unassignedIssues" column="unassigned_issues"/>
     </resultMap>
 
     <!-- 带工单统计的 Sprint 列表查询 -->
@@ -34,7 +35,8 @@
             COALESCE(stats.done_issues, 0) AS done_issues,
             COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
             COALESCE(stats.todo_issues, 0) AS todo_issues,
-            COALESCE(stats.overdue_issues, 0) AS overdue_issues
+            COALESCE(stats.overdue_issues, 0) AS overdue_issues,
+            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues
         FROM sprint s
         LEFT JOIN (
             SELECT
@@ -43,7 +45,8 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
-                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues
             FROM issue i
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
@@ -75,7 +78,8 @@
             COALESCE(stats.done_issues, 0) AS done_issues,
             COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
             COALESCE(stats.todo_issues, 0) AS todo_issues,
-            COALESCE(stats.overdue_issues, 0) AS overdue_issues
+            COALESCE(stats.overdue_issues, 0) AS overdue_issues,
+            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues
         FROM sprint s
         LEFT JOIN (
             SELECT
@@ -84,7 +88,8 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
-                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues
             FROM issue i
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
