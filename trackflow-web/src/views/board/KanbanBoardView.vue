@@ -341,7 +341,10 @@
                 </div>
                 <!-- Card metadata fields based on card config -->
                 <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
-                  <span v-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
+                  <a-tooltip v-if="isCardFieldVisible('dueDate') && issue.dueDate && getCardDueDateClass(issue)" :content="getCardDueDateTooltip(issue)" position="top" mini>
+                    <span class="card-meta-tag" :class="getCardDueDateClass(issue)">📅 {{ issue.dueDate.slice(5) }}</span>
+                  </a-tooltip>
+                  <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
                   <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
                   <span v-if="isCardFieldVisible('estimatedHours')" class="card-meta-tag"><!-- placeholder for future --></span>
                 </div>
@@ -584,7 +587,10 @@
                       </div>
                       <!-- Card metadata fields based on card config -->
                       <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
-                        <span v-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
+                        <a-tooltip v-if="isCardFieldVisible('dueDate') && issue.dueDate && getCardDueDateClass(issue)" :content="getCardDueDateTooltip(issue)" position="top" mini>
+                          <span class="card-meta-tag" :class="getCardDueDateClass(issue)">📅 {{ issue.dueDate.slice(5) }}</span>
+                        </a-tooltip>
+                        <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
                         <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
                       </div>
                       <div class="card-footer">
@@ -762,6 +768,7 @@ import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
+import { getDueDateInfo } from '@/utils/dueDate'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
@@ -827,6 +834,32 @@ function getCardColorClass(issue: IssueVO): string {
     return `kanban-card--color-type-${t}`
   }
   return ''
+}
+
+/** 获取卡片截止日期的状态 class */
+function getCardDueDateClass(issue: IssueVO): string {
+  if (!issue.dueDate) return ''
+  const isClosed = isIssueResolved(issue.statusId)
+  const info = getDueDateInfo(issue.dueDate, isClosed)
+  if (info.status === 'overdue') return 'card-meta-tag--overdue'
+  if (info.status === 'due-soon') return 'card-meta-tag--due-soon'
+  return ''
+}
+
+/** 获取卡片截止日期的 tooltip */
+function getCardDueDateTooltip(issue: IssueVO): string {
+  if (!issue.dueDate) return ''
+  const isClosed = isIssueResolved(issue.statusId)
+  const info = getDueDateInfo(issue.dueDate, isClosed)
+  return info.tooltip
+}
+
+/** 判断工单是否已关闭（用于截止日期颜色判断——已关闭的工单不显示逾期警告） */
+function isIssueResolved(statusId: string): boolean {
+  const config = allColumnConfigs.value.find(c => c.statusId === statusId)
+  if (config) return config.statusCategory === 'done' || config.statusCategory === 'cancelled'
+  const status = statuses.value.find(s => s.id === statusId)
+  return status?.isClosed === true
 }
 
 /** 根据 sprintId 获取 Sprint 名称 */
@@ -4003,6 +4036,18 @@ onUnmounted(() => {
 
 .card-meta-tag:empty {
   display: none;
+}
+
+.card-meta-tag--overdue {
+  color: var(--tf-danger, #f85149) !important;
+  background: rgba(248, 81, 73, 0.1) !important;
+  font-weight: 500;
+}
+
+.card-meta-tag--due-soon {
+  color: var(--tf-warning, #d29922) !important;
+  background: rgba(210, 153, 34, 0.1) !important;
+  font-weight: 500;
 }
 
 .card-type-spacer {

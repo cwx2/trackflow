@@ -65,7 +65,12 @@
         </div>
         <div class="preview-field" v-if="detail.dueDate">
           <span class="field-label">截止日期</span>
-          <span class="field-value">{{ detail.dueDate }}</span>
+          <span class="field-value" :class="dueDateFieldClass">
+            {{ detail.dueDate }}
+            <span v-if="dueDateInfo.status !== 'normal'" class="due-date-hint" :class="'due-date-hint--' + dueDateInfo.status">
+              {{ dueDateInfo.tooltip }}
+            </span>
+          </span>
         </div>
         <div class="preview-field" v-if="timeTrackingEnabled && detail.estimatedHours">
           <span class="field-label">预估工时</span>
@@ -162,6 +167,8 @@ import type { IssueDetailVO, IssueCommentVO } from '@/api/types'
 import TimeProgressIndicator from '@/views/issue/components/TimeProgressIndicator.vue'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
+import { getDueDateInfo } from '@/utils/dueDate'
+import type { DueDateInfo } from '@/utils/dueDate'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
 
 const props = defineProps<{
@@ -183,6 +190,18 @@ const comments = ref<IssueCommentVO[]>([])
 const timeTrackingEnabled = ref(true)
 
 const statusColor = computed(() => detail.value?.status?.color || 'var(--color-fill-4)')
+
+const dueDateInfo = computed<DueDateInfo>(() => {
+  if (!detail.value?.dueDate) return { status: 'normal', diffDays: Infinity, tooltip: '' }
+  const isClosed = detail.value?.status?.isClosed === true
+  return getDueDateInfo(detail.value.dueDate, isClosed)
+})
+
+const dueDateFieldClass = computed(() => {
+  if (dueDateInfo.value.status === 'overdue') return 'field-value--overdue'
+  if (dueDateInfo.value.status === 'due-soon') return 'field-value--due-soon'
+  return ''
+})
 
 const renderedDescription = computed(() => {
   if (!detail.value?.description) return ''
@@ -408,6 +427,33 @@ function renderCommentContent(content: string): string {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.field-value--overdue {
+  color: var(--tf-danger, #f85149);
+  font-weight: 500;
+}
+
+.field-value--due-soon {
+  color: var(--tf-warning, #d29922);
+  font-weight: 500;
+}
+
+.due-date-hint {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.due-date-hint--overdue {
+  color: var(--tf-danger, #f85149);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.due-date-hint--due-soon {
+  color: var(--tf-warning, #d29922);
+  background: rgba(210, 153, 34, 0.1);
 }
 
 /* Tags */
