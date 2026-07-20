@@ -107,6 +107,13 @@ const menuItems: AdminMenuItem[] = [
     permission: 'system:manage_roles'
   },
   {
+    path: '/admin/workflow-definitions',
+    icon: '📋',
+    title: '工作流定义',
+    description: '管理命名工作流定义，支持克隆、项目绑定/解绑',
+    permission: 'system:manage_roles'
+  },
+  {
     path: '/admin/custom-fields',
     icon: '📝',
     title: '自定义字段',

@@ -135,6 +135,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
+        path: 'admin/workflow-definitions',
+        name: 'WorkflowDefinitions',
+        component: () => import('@/views/admin/WorkflowDefinitionView.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+      },
+      {
         path: 'admin/users',
         name: 'UserManagement',
         component: () => import('@/views/admin/UserManagement.vue'),

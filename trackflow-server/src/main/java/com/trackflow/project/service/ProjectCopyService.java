@@ -214,6 +214,7 @@ public class ProjectCopyService {
             t.setAuthor(src.getAuthor());
             t.setAssignee(src.getAssignee());
             t.setConditions(src.getConditions());
+            t.setWorkflowDefinitionId(src.getWorkflowDefinitionId());
             workflowTransitionMapper.insert(t);
             copied++;
         }

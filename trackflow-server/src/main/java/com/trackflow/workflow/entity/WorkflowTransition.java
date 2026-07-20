@@ -34,4 +34,7 @@ public class WorkflowTransition implements Serializable {
 
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String conditions;
+
+    /** 所属工作流定义 ID（迁移过渡期可空） */
+    private Long workflowDefinitionId;
 }

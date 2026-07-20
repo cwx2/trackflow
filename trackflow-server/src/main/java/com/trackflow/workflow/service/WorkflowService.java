@@ -22,9 +22,13 @@ import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.entity.WorkflowVersion;
+import com.trackflow.workflow.entity.WorkflowDefinition;
+import com.trackflow.workflow.entity.ProjectWorkflow;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import com.trackflow.workflow.mapper.WorkflowVersionMapper;
+import com.trackflow.workflow.mapper.WorkflowDefinitionMapper;
+import com.trackflow.workflow.mapper.ProjectWorkflowMapper;
 import com.trackflow.workflow.mapper.TransitionActionMapper;
 import com.trackflow.workflow.entity.TransitionAction;
 import com.trackflow.workflow.vo.WorkflowMatrixVO;
@@ -60,6 +64,9 @@ public class WorkflowService {
     private final PermissionService permissionService;
     private final ObjectMapper objectMapper;
     private final TransitionActionMapper transitionActionMapper;
+
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final ProjectWorkflowMapper projectWorkflowMapper;
 
     /**
      * 不再使用 ownership 限制。
@@ -315,6 +322,10 @@ public class WorkflowService {
             t.setRoleId(roleId);
             t.setAuthor(effectiveAuthor);
             t.setAssignee(effectiveAssignee);
+            // 自动关联工作流定义（如果项目有绑定）
+            if (t.getWorkflowDefinitionId() == null) {
+                t.setWorkflowDefinitionId(resolveWorkflowDefinitionId(projectId));
+            }
             transitionMapper.insert(t);
         }
 
@@ -776,6 +787,36 @@ public class WorkflowService {
                 log.warn("Failed to record action auto-disable activity: {}", e.getMessage());
             }
         }
+    }
+
+    /**
+     * 解析项目对应的工作流定义 ID。
+     * <p>
+     * 优先使用项目绑定的工作流定义，如果项目没有绑定则使用系统默认工作流。
+     * 如果连系统默认工作流都不存在，返回 null（向后兼容）。
+     */
+    private Long resolveWorkflowDefinitionId(Long projectId) {
+        if (projectId == null) {
+            // 全局规则：使用默认工作流
+            WorkflowDefinition defaultDef = workflowDefinitionMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowDefinition>()
+                            .eq(WorkflowDefinition::getIsDefault, true)
+                            .last("LIMIT 1"));
+            return defaultDef != null ? defaultDef.getId() : null;
+        }
+
+        // 项目级规则：查找项目绑定的工作流定义
+        List<Long> defIds = projectWorkflowMapper.selectDefinitionIdsByProjectId(projectId);
+        if (!defIds.isEmpty()) {
+            return defIds.get(0); // 使用第一个绑定的工作流定义
+        }
+
+        // Fallback: 使用系统默认工作流
+        WorkflowDefinition defaultDef = workflowDefinitionMapper.selectOne(
+                new LambdaQueryWrapper<WorkflowDefinition>()
+                        .eq(WorkflowDefinition::getIsDefault, true)
+                        .last("LIMIT 1"));
+        return defaultDef != null ? defaultDef.getId() : null;
     }
 
     /**
