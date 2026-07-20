@@ -138,6 +138,19 @@ public class CustomFieldController {
     }
 
     /**
+     * 归档或取消归档枚举字段的某个选项。
+     * 归档后选项不出现在工单编辑时的下拉列表中，但已有工单的值仍保留。
+     */
+    @PutMapping("/admin/custom-fields/{id}/options/{optionId}/archive")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<Void> archiveOption(@PathVariable("id") Long id,
+                                 @PathVariable("optionId") Long optionId,
+                                 @RequestParam("archived") boolean archived) {
+        customFieldService.setOptionArchived(id, optionId, archived);
+        return R.ok();
+    }
+
+    /**
      * 获取"Fields in Projects"矩阵数据：按项目分组展示每个项目关联的自定义字段。
      * 包含全局字段和项目专属字段。
      */

@@ -90,6 +90,13 @@ export const customFieldApi = {
     return request.put<any, R<void>>(`/admin/custom-fields/${fieldId}/options/reorder`, { optionIds })
   },
 
+  /** 归档/取消归档枚举字段的选项值 */
+  archiveOption(fieldId: string, optionId: string, archived: boolean) {
+    return request.put<any, R<void>>(`/admin/custom-fields/${fieldId}/options/${optionId}/archive`, null, {
+      params: { archived }
+    })
+  },
+
   // ========== 项目级读取 ==========
 
   /** 获取项目可用的自定义字段 */

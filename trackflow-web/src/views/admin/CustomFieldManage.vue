@@ -113,13 +113,21 @@
               </div>
               <div v-if="selectedField.options && selectedField.options.length > 0" class="detail-section">
                 <span class="detail-label">选项列表</span>
+                <div class="detail-options-header">
+                  <a-switch
+                    v-model="showArchivedInDetail"
+                    size="small"
+                  />
+                  <span class="detail-options-toggle-label">显示已归档</span>
+                </div>
                 <div class="detail-options">
                   <a-tag
-                    v-for="opt in selectedField.options.filter(o => !o.isArchived)"
+                    v-for="opt in detailFilteredOptions"
                     :key="opt.id"
                     size="small"
                     :color="opt.color || undefined"
-                  >{{ opt.value }}</a-tag>
+                    :class="{ 'option-archived-tag': opt.isArchived }"
+                  >{{ opt.value }}<template v-if="opt.isArchived"> (归档)</template></a-tag>
                 </div>
               </div>
               <div v-if="detailUsage" class="detail-section">
@@ -279,27 +287,33 @@
                 <template #icon><icon-sort-descending /></template>
                 按名称降序
               </a-button>
+              <div v-if="editingId && archivedOptionCount > 0" class="options-archive-toggle">
+                <a-switch v-model="showArchivedInDrawer" size="small" />
+                <span class="archive-toggle-label">显示已归档 ({{ archivedOptionCount }})</span>
+              </div>
             </div>
             <div class="options-list">
               <div
-                v-for="(opt, idx) in form.options"
+                v-for="(opt, idx) in visibleFormOptions"
                 :key="opt.id || `new-${idx}`"
                 class="option-row"
                 :class="{
                   'option-row--dragging': optionDragIndex === idx,
                   'option-row--drop-above': optionDropIndex === idx && optionDropPosition === 'above',
-                  'option-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below'
+                  'option-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below',
+                  'option-row--archived': opt.isArchived
                 }"
-                :draggable="form.options.length > 1"
+                :draggable="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1"
                 @dragstart="onOptionDragStart($event, idx)"
                 @dragover="onOptionDragOver($event, idx)"
                 @dragleave="onOptionDragLeave"
                 @drop="onOptionDrop($event, idx)"
                 @dragend="onOptionDragEnd"
               >
-                <span v-if="form.options.length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
-                <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" />
-                <a-trigger trigger="click" :popup-translate="[0, 4]">
+                <span v-if="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
+                <span v-else-if="opt.isArchived" class="option-archived-icon" title="已归档">📦</span>
+                <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" :disabled="opt.isArchived" />
+                <a-trigger v-if="!opt.isArchived" trigger="click" :popup-translate="[0, 4]">
                   <span
                     class="color-swatch"
                     :style="{ background: opt.color || 'transparent', border: opt.color ? 'none' : '1px dashed var(--tf-border)' }"
@@ -324,7 +338,7 @@
                     </div>
                   </template>
                 </a-trigger>
-                <a-checkbox v-model="opt.isDefault" size="small">默认</a-checkbox>
+                <a-checkbox v-if="!opt.isArchived" v-model="opt.isDefault" size="small">默认</a-checkbox>
                 <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
                 <span
                   v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
@@ -334,7 +348,26 @@
                 >
                   {{ optionUsageMap[opt.id] > 0 ? optionUsageMap[opt.id] : '未使用' }}
                 </span>
+                <!-- 归档/取消归档按钮 -->
                 <a-button
+                  v-if="editingId && opt.id && !opt.isArchived"
+                  type="text" size="mini"
+                  title="归档（隐藏选项但保留已有数据）"
+                  @click.stop="handleArchiveOption(opt)"
+                >
+                  <icon-eye-invisible />
+                </a-button>
+                <a-button
+                  v-if="editingId && opt.id && opt.isArchived"
+                  type="text" size="mini" status="success"
+                  title="取消归档（恢复选项可选）"
+                  @click.stop="handleUnarchiveOption(opt)"
+                >
+                  <icon-eye />
+                </a-button>
+                <!-- 删除按钮（仅非归档选项显示） -->
+                <a-button
+                  v-if="!opt.isArchived"
                   type="text" size="mini" status="danger"
                   :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
                   :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
@@ -417,6 +450,26 @@ const issueTypeCheckboxOptions = computed<CheckboxOption[]>(() =>
 const selectedField = ref<CustomFieldDefinitionVO | null>(null)
 const detailUsage = ref<CustomFieldUsageVO | null>(null)
 const fieldsInProjectsRef = ref<InstanceType<typeof FieldsInProjects> | null>(null)
+const showArchivedInDetail = ref(false)
+const showArchivedInDrawer = ref(false)
+
+/** 侧边栏选项过滤 */
+const detailFilteredOptions = computed(() => {
+  if (!selectedField.value?.options) return []
+  if (showArchivedInDetail.value) return selectedField.value.options
+  return selectedField.value.options.filter(o => !o.isArchived)
+})
+
+/** 编辑抽屉中可见的选项（归档的根据开关显示/隐藏） */
+const visibleFormOptions = computed(() => {
+  if (showArchivedInDrawer.value) return form.options
+  return form.options.filter(o => !o.isArchived)
+})
+
+/** 编辑抽屉中归档选项数量（用于显示提示） */
+const archivedOptionCount = computed(() => {
+  return form.options.filter(o => o.isArchived).length
+})
 
 // Drawer state
 const drawerVisible = ref(false)
@@ -444,7 +497,7 @@ const form = reactive({
   minLength: 0,
   maxLength: 0,
   regexp: '',
-  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string }>,
+  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }>,
   projectIds: [] as string[],
   issueTypes: [] as string[],
   copyOptionsFromFieldId: undefined as string | undefined
@@ -547,6 +600,7 @@ function resetForm() {
   previewOptions.value = []
   copyFromFieldId.value = null
   optionUsageMap.value = {}
+  showArchivedInDrawer.value = false
 }
 
 // Reset defaultValue when field format changes during creation
@@ -633,8 +687,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.maxLength = record.maxLength
   form.regexp = record.regexp || ''
   form.options = (record.options || [])
-    .filter(o => !o.isArchived)
-    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
+    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
   form.copyOptionsFromFieldId = undefined
@@ -662,7 +715,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   drawerVisible.value = true
 }
 
-function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolean; color?: string }, idx: number) {
+function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }, idx: number) {
   // 如果选项有 ID 且有引用，阻止删除并提示
   if (editingId.value && opt.id && optionUsageMap.value[opt.id] !== undefined && optionUsageMap.value[opt.id] > 0) {
     Modal.warning({
@@ -672,7 +725,40 @@ function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolea
     })
     return
   }
-  form.options.splice(idx, 1)
+  // 从 visibleFormOptions 中的 index 映射到 form.options 中的 index
+  const realIdx = form.options.indexOf(opt as any)
+  if (realIdx >= 0) {
+    form.options.splice(realIdx, 1)
+  } else {
+    form.options.splice(idx, 1)
+  }
+}
+
+async function handleArchiveOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }) {
+  if (!editingId.value || !opt.id) return
+  try {
+    await customFieldApi.archiveOption(editingId.value, opt.id, true)
+    opt.isArchived = true
+    opt.isDefault = false
+    Message.success(`选项"${opt.value}"已归档`)
+    // 刷新列表中的数据
+    loadList()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '归档失败')
+  }
+}
+
+async function handleUnarchiveOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }) {
+  if (!editingId.value || !opt.id) return
+  try {
+    await customFieldApi.archiveOption(editingId.value, opt.id, false)
+    opt.isArchived = false
+    Message.success(`选项"${opt.value}"已恢复`)
+    // 刷新列表中的数据
+    loadList()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '恢复失败')
+  }
 }
 
 // ========== 选项拖拽排序 ==========
@@ -789,7 +875,7 @@ async function handleSave() {
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
         options: form.fieldFormat === 'list'
-          ? form.options.map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
+          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
           : undefined,
         projectIds: form.isForAll ? [] : form.projectIds,
         issueTypes: form.issueTypes
@@ -995,6 +1081,23 @@ onMounted(() => {
   gap: 4px;
 }
 
+.detail-options-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.detail-options-toggle-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.option-archived-tag {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
 .detail-stats {
   display: flex;
   flex-direction: column;
@@ -1018,6 +1121,19 @@ onMounted(() => {
   display: flex;
   gap: 4px;
   margin-bottom: 8px;
+  align-items: center;
+}
+
+.options-archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.archive-toggle-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
 }
 
 .options-list {
@@ -1054,6 +1170,23 @@ onMounted(() => {
 
 .option-row--drop-below {
   box-shadow: 0 2px 0 0 var(--tf-accent);
+}
+
+.option-row--archived {
+  opacity: 0.6;
+  background: var(--tf-bg-body);
+  border: 1px dashed var(--tf-border);
+}
+
+.option-row--archived .option-drag-handle {
+  visibility: hidden;
+}
+
+.option-archived-icon {
+  font-size: 12px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .option-drag-handle {

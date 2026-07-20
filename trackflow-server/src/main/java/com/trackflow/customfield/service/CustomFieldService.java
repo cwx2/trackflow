@@ -441,6 +441,42 @@ public class CustomFieldService {
     }
 
     /**
+     * 设置选项的归档状态。
+     * 归档后选项不出现在工单编辑时的下拉列表中，但已有工单的值仍保留。
+     */
+    @Transactional
+    public void setOptionArchived(Long fieldId, Long optionId, boolean archived) {
+        CustomFieldDefinition field = definitionMapper.selectById(fieldId);
+        if (field == null) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
+        }
+        if (!"list".equals(field.getFieldFormat())) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项归档");
+        }
+
+        CustomFieldOption option = optionMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getId, optionId)
+                        .eq(CustomFieldOption::getCustomFieldId, fieldId));
+        if (option == null) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "选项不存在");
+        }
+
+        option.setIsArchived(archived);
+        if (archived) {
+            // 归档选项排最后
+            option.setPosition(Integer.MAX_VALUE);
+        }
+        option.setUpdatedAt(LocalDateTime.now());
+        optionMapper.updateById(option);
+
+        log.info("Custom field option {} {} (fieldId={})", optionId, archived ? "archived" : "unarchived", fieldId);
+    }
+
+    /**
      * 更新列表类型字段的选项（保持选项 ID 稳定性）。
      * <p>
      * 策略：
