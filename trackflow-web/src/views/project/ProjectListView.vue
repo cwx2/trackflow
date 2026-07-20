@@ -1112,8 +1112,13 @@ async function removeMember(userId: string) {
 async function changeMemberRole(userId: string, roleIds: string[]) {
   if (!currentProject.value) return
   try {
-    await projectApi.updateMemberRole(currentProject.value.key, userId, roleIds.map(Number))
-    Message.success('角色已更新')
+    const res = await projectApi.updateMemberRole(currentProject.value.key, userId, roleIds.map(Number))
+    const affectedCount = res.data?.affectedIssueCount || 0
+    if (affectedCount > 0) {
+      Message.success(`角色已更新，已清空 ${affectedCount} 个工单的负责人（因角色变更后该用户不再可被分配）`)
+    } else {
+      Message.success('角色已更新')
+    }
     loadProjectMembers(currentProject.value.key)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新失败')

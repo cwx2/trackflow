@@ -530,8 +530,13 @@ function revokeProjectRole(pr: UserProfileProjectRoleInfo) {
           const remainingRoleIds = directRolesInProject
             .filter(r => r.roleId !== pr.roleId)
             .map(r => Number(r.roleId))
-          await projectApi.updateMemberRole(pr.projectId, userId.value, remainingRoleIds)
-          Message.success('角色已撤销')
+          const res = await projectApi.updateMemberRole(pr.projectId, userId.value, remainingRoleIds)
+          const affectedCount = res.data?.affectedIssueCount || 0
+          if (affectedCount > 0) {
+            Message.success(`角色已撤销，已清空 ${affectedCount} 个工单的负责人`)
+          } else {
+            Message.success('角色已撤销')
+          }
           await loadProfile()
         } catch (e: any) {
           Message.error(e.response?.data?.message || '撤销失败')

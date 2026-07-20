@@ -179,14 +179,14 @@ public class ProjectController {
 
     @PutMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
-    public R<Void> updateMemberRole(@PathVariable("id") String id, @PathVariable("userId") Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
+    public R<Map<String, Object>> updateMemberRole(@PathVariable("id") String id, @PathVariable("userId") Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
         Long projectId = projectService.resolveProjectId(id);
         List<Long> effectiveRoleIds = dto.getEffectiveRoleIds();
         if (effectiveRoleIds.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
         }
-        projectService.updateMemberRoles(projectId, userId, effectiveRoleIds);
-        return R.ok();
+        int affectedIssueCount = projectService.updateMemberRoles(projectId, userId, effectiveRoleIds);
+        return R.ok(Map.of("affectedIssueCount", affectedIssueCount));
     }
 
     @DeleteMapping("/{id}/members/{userId}")

@@ -81,7 +81,7 @@ export const projectApi = {
 
   /** 更新成员角色（全量替换） */
   updateMemberRole(projectId: string, userId: string, roleIds: number[]) {
-    return request.put<any, R<void>>(`/projects/${projectId}/members/${userId}`, { roleIds })
+    return request.put<any, R<{ affectedIssueCount: number }>>(`/projects/${projectId}/members/${userId}`, { roleIds })
   },
 
   /** 查询成员被分配的工单数量（移除前预检） */

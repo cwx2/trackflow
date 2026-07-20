@@ -63,6 +63,7 @@ import java.util.Set;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+
 public class ProjectService {
 
     private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
@@ -888,15 +889,16 @@ public class ProjectService {
      * 更新成员角色（全量替换：设置用户在项目中的角色列表）
      */
     @Transactional
-    public void updateMemberRole(Long projectId, Long userId, Long roleId) {
-        updateMemberRoles(projectId, userId, List.of(roleId));
+    public int updateMemberRole(Long projectId, Long userId, Long roleId) {
+        return updateMemberRoles(projectId, userId, List.of(roleId));
     }
 
     /**
      * 更新成员角色（多角色版本：全量替换）
+     * @return 因角色降级而被清空 assignee 的工单数量
      */
     @Transactional
-    public void updateMemberRoles(Long projectId, Long userId, List<Long> newRoleIds) {
+    public int updateMemberRoles(Long projectId, Long userId, List<Long> newRoleIds) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
         if (ProjectStatus.ACTIVE != project.getStatus()) {
@@ -995,6 +997,55 @@ public class ProjectService {
             eventPublisher.publishEvent(new ProjectNotificationEvent.RoleChanged(userId, currentUserId, projectId,
                     project.getName(), String.join(", ", newRoleNames)));
         }
+
+        // === 级联处理：如果用户失去 issue:edit 权限，清空其作为 assignee 的工单 ===
+        int affectedIssueCount = 0;
+        if (!toRemove.isEmpty()) {
+            // 检查用户在新角色下是否仍有 issue:edit 权限
+            List<Long> usersWithEditPermission = memberMapper.selectUserIdsWithPermission(projectId, "issue:edit");
+            if (!usersWithEditPermission.contains(userId)) {
+                // 用户已失去 issue:edit 权限 — 清空其在该项目中的 assignee 引用
+                List<Issue> assignedIssues = issueMapper.selectList(
+                        new LambdaQueryWrapper<Issue>()
+                                .select(Issue::getId)
+                                .eq(Issue::getProjectId, projectId)
+                                .eq(Issue::getAssigneeId, userId)
+                                .isNull(Issue::getDeletedAt)
+                );
+                affectedIssueCount = assignedIssues.size();
+                if (affectedIssueCount > 0) {
+                    LocalDateTime clearTime = LocalDateTime.now();
+                    // 批量更新 assignee_id 为 null
+                    issueMapper.update(null,
+                            new LambdaUpdateWrapper<Issue>()
+                                    .eq(Issue::getProjectId, projectId)
+                                    .eq(Issue::getAssigneeId, userId)
+                                    .isNull(Issue::getDeletedAt)
+                                    .set(Issue::getAssigneeId, null)
+                                    .set(Issue::getUpdatedAt, clearTime)
+                                    .set(Issue::getUpdatedBy, currentUserId)
+                    );
+                    // 批量插入活动日志
+                    List<IssueActivity> activities = assignedIssues.stream().map(issue -> {
+                        IssueActivity activity = new IssueActivity();
+                        activity.setIssueId(issue.getId());
+                        activity.setUserId(currentUserId);
+                        activity.setAction("field_change");
+                        activity.setFieldName("assignee_id");
+                        activity.setOldValue(userId.toString());
+                        activity.setNewValue(null);
+                        activity.setDetail("{\"reason\":\"role_downgrade\"}");
+                        activity.setCreatedAt(clearTime);
+                        return activity;
+                    }).toList();
+                    com.baomidou.mybatisplus.extension.toolkit.Db.saveBatch(activities);
+                    log.info("角色降级清空 assignee：projectId={}, userId={}, affectedIssues={}",
+                            projectId, userId, affectedIssueCount);
+                }
+            }
+        }
+
+        return affectedIssueCount;
     }
 
     /**

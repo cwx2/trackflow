@@ -376,8 +376,13 @@ async function changeMemberRole(userId: string, roleIds: string[]) {
     return
   }
   try {
-    await projectApi.updateMemberRole(props.project.key, userId, roleIds.map(id => Number(id)))
-    Message.success('角色已更新')
+    const res = await projectApi.updateMemberRole(props.project.key, userId, roleIds.map(id => Number(id)))
+    const affectedCount = res.data?.affectedIssueCount || 0
+    if (affectedCount > 0) {
+      Message.success(`角色已更新，已清空 ${affectedCount} 个工单的负责人（因角色变更后该用户不再可被分配）`)
+    } else {
+      Message.success('角色已更新')
+    }
     await loadMembers()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新角色失败')

@@ -535,10 +535,14 @@ async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: st
   if (!newRole) return
 
   try {
-    await projectApi.updateMemberRole(pr.projectId, userId, [Number(newRole.id)])
+    const res = await projectApi.updateMemberRole(pr.projectId, userId, [Number(newRole.id)])
+    const affectedCount = res.data?.affectedIssueCount || 0
     // 刷新项目角色数据
     pr.roleName = newRole.name
     pr.roleCode = newRole.code
+    if (affectedCount > 0) {
+      Message.success(`角色已更新，已清空 ${affectedCount} 个工单的负责人`)
+    }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '修改角色失败')
     // 重新加载以回滚UI
