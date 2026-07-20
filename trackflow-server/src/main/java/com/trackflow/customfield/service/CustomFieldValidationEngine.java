@@ -192,9 +192,11 @@ public class CustomFieldValidationEngine {
                     Long optionId = Long.parseLong(trimmed);
                     boolean exists = optionMapper.exists(new LambdaQueryWrapper<CustomFieldOption>()
                             .eq(CustomFieldOption::getCustomFieldId, field.getId())
-                            .eq(CustomFieldOption::getId, optionId));
+                            .eq(CustomFieldOption::getId, optionId)
+                            .eq(CustomFieldOption::getIsArchived, false));
                     if (!exists) {
-                        errors.add(new FieldValidationError(field.getName(), "无效的选项值: " + trimmed));
+                        String errorMsg = resolveOptionError(field, optionId, trimmed);
+                        errors.add(new FieldValidationError(field.getName(), errorMsg));
                         return;
                     }
                 } catch (NumberFormatException e) {
@@ -208,14 +210,31 @@ public class CustomFieldValidationEngine {
                 Long optionId = Long.parseLong(value);
                 boolean exists = optionMapper.exists(new LambdaQueryWrapper<CustomFieldOption>()
                         .eq(CustomFieldOption::getCustomFieldId, field.getId())
-                        .eq(CustomFieldOption::getId, optionId));
+                        .eq(CustomFieldOption::getId, optionId)
+                        .eq(CustomFieldOption::getIsArchived, false));
                 if (!exists) {
-                    errors.add(new FieldValidationError(field.getName(), "无效的选项值"));
+                    String errorMsg = resolveOptionError(field, optionId, value);
+                    errors.add(new FieldValidationError(field.getName(), errorMsg));
                 }
             } catch (NumberFormatException e) {
                 errors.add(new FieldValidationError(field.getName(), "无效的选项值"));
             }
         }
+    }
+
+    /**
+     * 区分选项验证失败原因：不存在 vs 已归档
+     * 仅在验证失败时执行二次查询，不影响正常路径性能
+     */
+    private String resolveOptionError(CustomFieldDefinition field, Long optionId, String displayValue) {
+        boolean existsAsArchived = optionMapper.exists(new LambdaQueryWrapper<CustomFieldOption>()
+                .eq(CustomFieldOption::getCustomFieldId, field.getId())
+                .eq(CustomFieldOption::getId, optionId)
+                .eq(CustomFieldOption::getIsArchived, true));
+        if (existsAsArchived) {
+            return "选项已归档，不可选择: " + displayValue;
+        }
+        return "无效的选项值: " + displayValue;
     }
 
     private void validateUser(CustomFieldDefinition field, String value, Long projectId, List<FieldValidationError> errors) {
