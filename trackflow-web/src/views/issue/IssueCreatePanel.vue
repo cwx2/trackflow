@@ -99,13 +99,13 @@
           </div>
           <div class="prop-row">
             <span class="prop-label">Sprint</span>
-            <a-select v-model="form.sprintId" placeholder="未排期" size="small" allow-clear>
+            <a-select v-model="form.sprintId" :placeholder="form.projectId ? '未排期' : '请先选择项目'" size="small" allow-clear :disabled="!form.projectId">
               <a-option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</a-option>
             </a-select>
           </div>
           <div class="prop-row">
             <span class="prop-label">负责人</span>
-            <a-select v-model="form.assigneeId" placeholder="未分配" size="small" allow-clear allow-search>
+            <a-select v-model="form.assigneeId" :placeholder="form.projectId ? '未分配' : '请先选择项目'" size="small" allow-clear allow-search :disabled="!form.projectId">
               <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
             </a-select>
           </div>
@@ -249,8 +249,9 @@
                 v-else-if="cf.fieldFormat === 'user'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
-                :placeholder="getFieldPlaceholder(cf)"
+                :placeholder="form.projectId ? getFieldPlaceholder(cf) : '请先选择项目'"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
+                :disabled="!form.projectId"
                 allow-clear
                 allow-search
                 @change="clearFieldError(cf.id)"
