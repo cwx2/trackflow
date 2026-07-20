@@ -3,6 +3,7 @@ package com.trackflow.common.exception;
 import com.trackflow.common.model.R;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,6 +18,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -159,6 +161,48 @@ public class GlobalExceptionHandler {
         log.warn("File upload size exceeded on {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(R.fail(ErrorCode.BAD_REQUEST, "文件大小超出服务器限制（最大 50MB）"));
+    }
+
+    /**
+     * 数据库唯一约束违规（并发竞态导致的重复插入）
+     * <p>
+     * 按约束名映射为对应的业务错误码，返回 409 Conflict 而非 500。
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<R<Void>> handleDuplicateKeyException(DuplicateKeyException ex, HttpServletRequest request) {
+        String message = ex.getMessage();
+        log.warn("Duplicate key violation on {} {}: {}", request.getMethod(), request.getRequestURI(), message);
+
+        ErrorCode errorCode = resolveErrorCodeFromConstraint(message);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(R.fail(errorCode));
+    }
+
+    /**
+     * 约束名 → ErrorCode 映射表
+     */
+    private static final Map<String, ErrorCode> CONSTRAINT_ERROR_MAP = Map.of(
+            "project_key_key", ErrorCode.PROJECT_KEY_DUPLICATE,
+            "organization_code_key", ErrorCode.ORG_CODE_DUPLICATE,
+            "sys_role_code_key", ErrorCode.ROLE_CODE_DUPLICATE,
+            "issue_tag_project_id_name_key", ErrorCode.DUPLICATE_RESOURCE,
+            "issue_link_source_issue_id_target_issue_id_link_type_key", ErrorCode.DUPLICATE_RESOURCE,
+            "issue_tag_relation_issue_id_tag_id_key", ErrorCode.DUPLICATE_RESOURCE,
+            "project_member_project_user_role_key", ErrorCode.DUPLICATE_RESOURCE,
+            "sys_user_username_key", ErrorCode.DUPLICATE_RESOURCE,
+            "issue_status_code_key", ErrorCode.DUPLICATE_RESOURCE
+    );
+
+    private ErrorCode resolveErrorCodeFromConstraint(String exceptionMessage) {
+        if (exceptionMessage != null) {
+            for (Map.Entry<String, ErrorCode> entry : CONSTRAINT_ERROR_MAP.entrySet()) {
+                if (exceptionMessage.contains(entry.getKey())) {
+                    return entry.getValue();
+                }
+            }
+        }
+        // 未知约束名 → 使用通用重复资源错误码
+        return ErrorCode.DUPLICATE_RESOURCE;
     }
 
     /**
