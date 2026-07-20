@@ -150,6 +150,7 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
+          <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button v-if="canEditSprint" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
         </div>
@@ -230,6 +231,7 @@
         <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip v-if="canEditSprint" :content="getActivateTooltip(sprint)">
             <a-button type="primary" size="mini" :disabled="hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
@@ -297,6 +299,7 @@
 
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button
             size="mini"
@@ -864,6 +867,16 @@ function viewSprintIssues(sprint: SprintVO) {
     query.project = currentProject.key
   }
   router.push({ path: '/issues', query })
+}
+
+function viewSprintOnBoard(sprint: SprintVO) {
+  // 跳转到看板，自动选中该 Sprint 和当前项目
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const query: Record<string, string> = { sprint: sprint.id }
+  if (currentProject) {
+    query.project = currentProject.key
+  }
+  router.push({ path: '/boards', query })
 }
 
 function viewUnassignedIssues(sprint: SprintVO) {

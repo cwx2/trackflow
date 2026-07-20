@@ -41,11 +41,15 @@
             </span>
           </a-option>
         </a-select>
-        <!-- Sprint 剩余天数倒计时 -->
-        <span v-if="sprintRemainingDays !== null" class="sprint-countdown" :class="{ 'sprint-countdown--urgent': sprintRemainingDays <= 3, 'sprint-countdown--overdue': sprintRemainingDays < 0 }">
-          <template v-if="sprintRemainingDays > 0">剩余 {{ sprintRemainingDays }} 天</template>
-          <template v-else-if="sprintRemainingDays === 0">今天结束</template>
-          <template v-else>已超期 {{ Math.abs(sprintRemainingDays) }} 天</template>
+        <!-- Sprint 日期范围 + 剩余天数 -->
+        <span v-if="currentSelectedSprint && currentSelectedSprint.startDate" class="sprint-date-info">
+          <span class="sprint-date-range">{{ formatSprintDateRange(currentSelectedSprint.startDate, currentSelectedSprint.endDate) }}</span>
+          <span v-if="sprintRemainingDays !== null" class="sprint-countdown" :class="{ 'sprint-countdown--urgent': sprintRemainingDays <= 3, 'sprint-countdown--overdue': sprintRemainingDays < 0 }">
+            <template v-if="sprintRemainingDays > 0">· 剩余 {{ sprintRemainingDays }} 天</template>
+            <template v-else-if="sprintRemainingDays === 0">· 今天结束</template>
+            <template v-else>· 已超期 {{ Math.abs(sprintRemainingDays) }} 天</template>
+          </span>
+          <a class="sprint-detail-link" @click="goToSprintDetail" title="查看迭代详情">📊</a>
         </span>
         <!-- No active sprint hint with next sprint info -->
         <span v-else-if="selectedProject && sprints.length > 0 && !activeSprint && !selectedSprint" class="sprint-no-active-hint">
@@ -1368,12 +1372,17 @@ const activeSprint = computed(() => {
   )
 })
 
-/** Sprint 剩余天数（选中的 Sprint 有 endDate 且是"当前"Sprint 时显示） */
+/** Sprint 剩余天数（选中的 Sprint 有 endDate 时显示——active 或已开始的 planned） */
 const sprintRemainingDays = computed(() => {
   const sprint = currentSelectedSprint.value
   if (!sprint || !sprint.endDate) return null
-  // Only show countdown for the "current" sprint (active or date-range planned)
-  if (sprint.id !== activeSprint.value?.id) return null
+  // Show countdown for active sprint or planned sprint that has started (date-range)
+  if (sprint.status !== 'active' && sprint.status !== 'planned') return null
+  // For planned sprints, only show if start date has passed or is today
+  if (sprint.status === 'planned' && sprint.startDate) {
+    const today = new Date().toISOString().split('T')[0]
+    if (sprint.startDate > today) return null
+  }
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const endDate = new Date(sprint.endDate + 'T00:00:00')
@@ -1478,6 +1487,26 @@ const showSprintModeNoActiveState = computed(() =>
 /** 跳转到迭代管理页面 */
 function goToSprints() {
   router.push({ name: 'Sprints' })
+}
+
+/** 跳转到迭代详情页（保持项目上下文） */
+function goToSprintDetail() {
+  const query: Record<string, string> = {}
+  if (currentProjectKey.value) {
+    query.project = currentProjectKey.value
+  }
+  router.push({ name: 'Sprints', query })
+}
+
+/** 格式化 Sprint 日期范围（如 "7/29 - 8/11"） */
+function formatSprintDateRange(startDate?: string, endDate?: string): string {
+  if (!startDate) return ''
+  const formatShort = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00')
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  }
+  if (!endDate) return formatShort(startDate) + ' 开始'
+  return `${formatShort(startDate)} - ${formatShort(endDate)}`
 }
 
 /** 打开看板设置到基本设置标签页 */
@@ -3125,6 +3154,31 @@ onUnmounted(() => {
 .sprint-countdown--overdue {
   color: rgb(var(--danger-6));
   background: rgba(var(--danger-6), 0.1);
+}
+
+.sprint-date-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.sprint-date-range {
+  font-size: 11px;
+  color: var(--color-text-3);
+}
+
+.sprint-detail-link {
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 150ms;
+  text-decoration: none;
+  margin-left: 2px;
+}
+
+.sprint-detail-link:hover {
+  opacity: 1;
 }
 
 .sprint-no-active-hint {
