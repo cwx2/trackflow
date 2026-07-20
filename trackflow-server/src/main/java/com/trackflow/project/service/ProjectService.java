@@ -88,6 +88,7 @@ public class ProjectService {
     private final ApplicationEventPublisher eventPublisher;
     private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
     private final com.trackflow.system.service.GlobalMemberService globalMemberService;
+    private final com.trackflow.project.service.ProjectModuleService projectModuleService;
 
     /**
      * 创建项目
@@ -147,6 +148,9 @@ public class ProjectService {
 
         // 根据模板类型初始化项目（工作流、看板列配置等）
         projectInitializationService.initialize(project.getId(), dto.getTemplate());
+
+        // 初始化项目默认启用模块（全部启用）
+        projectModuleService.initializeDefaultModules(project.getId());
 
         // 同步全局分配的成员到新项目
         globalMemberService.syncGlobalMembersToProject(project.getId());

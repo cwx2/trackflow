@@ -12,17 +12,20 @@ import com.trackflow.issue.entity.IssueTag;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.vo.IssueTagVO;
 import com.trackflow.auth.security.TrackFlowPermissionEvaluator;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.*;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectActivity;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectCopyService;
+import com.trackflow.project.service.ProjectModuleService;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.project.vo.ProjectActivityVO;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
+import com.trackflow.project.vo.ProjectModulesVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
 import com.trackflow.project.vo.ProjectVO;
 import jakarta.validation.Valid;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/projects")
@@ -46,6 +50,8 @@ public class ProjectController {
     private final IssueConverter issueConverter;
     private final ProjectActivityService projectActivityService;
     private final TrackFlowPermissionEvaluator permissionEvaluator;
+    private final ProjectModuleService projectModuleService;
+    private final PermissionService permissionService;
 
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('project:create')")
@@ -281,6 +287,44 @@ public class ProjectController {
             @PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         return R.ok(projectService.getTimeTrackingDisableImpact(projectId));
+    }
+
+    // ========== 项目模块管理 ==========
+
+    /**
+     * 获取项目启用的模块列表
+     */
+    @GetMapping("/{id}/modules")
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<ProjectModulesVO> getEnabledModules(@PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
+        Set<String> enabledModules = projectModuleService.getEnabledModules(projectId);
+        ProjectModulesVO vo = new ProjectModulesVO();
+        vo.setEnabledModules(new java.util.ArrayList<>(enabledModules));
+        vo.setAllModules(ProjectModuleService.ALL_MODULES);
+        vo.setCoreModules(new java.util.ArrayList<>(ProjectModuleService.CORE_MODULES));
+        return R.ok(vo);
+    }
+
+    /**
+     * 更新项目启用的模块列表
+     */
+    @PutMapping("/{id}/modules")
+    @PreAuthorize("@perm.checkProject(#id, 'project:edit')")
+    public R<ProjectModulesVO> updateEnabledModules(
+            @PathVariable("id") String id,
+            @Valid @RequestBody UpdateProjectModulesDTO dto) {
+        Long projectId = projectService.resolveProjectId(id);
+        projectModuleService.updateEnabledModules(projectId, dto.getEnabledModules());
+        // 更新后清除该项目所有用户的权限缓存
+        permissionService.invalidateCacheForProject(projectId);
+        // 返回最新状态
+        Set<String> enabledModules = projectModuleService.getEnabledModules(projectId);
+        ProjectModulesVO vo = new ProjectModulesVO();
+        vo.setEnabledModules(new java.util.ArrayList<>(enabledModules));
+        vo.setAllModules(ProjectModuleService.ALL_MODULES);
+        vo.setCoreModules(new java.util.ArrayList<>(ProjectModuleService.CORE_MODULES));
+        return R.ok(vo);
     }
 
     // ========== 项目收藏 ==========

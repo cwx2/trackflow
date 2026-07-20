@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO, ProjectStatisticsVO } from './types'
+import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO, ProjectStatisticsVO, ProjectModulesVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -142,5 +142,15 @@ export const projectApi = {
   /** 切换项目收藏状态 */
   toggleFavorite(projectId: string) {
     return request.post<any, R<{ favorited: boolean }>>(`/projects/${projectId}/favorite`)
+  },
+
+  /** 获取项目启用模块列表 */
+  getEnabledModules(projectId: string) {
+    return request.get<any, R<ProjectModulesVO>>(`/projects/${projectId}/modules`)
+  },
+
+  /** 更新项目启用模块 */
+  updateEnabledModules(projectId: string, data: { enabledModules: string[] }) {
+    return request.put<any, R<ProjectModulesVO>>(`/projects/${projectId}/modules`, data)
   }
 }

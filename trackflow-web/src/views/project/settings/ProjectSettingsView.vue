@@ -61,6 +61,13 @@
             :is-archived="isArchived"
           />
         </a-tab-pane>
+        <a-tab-pane key="modules" title="功能模块">
+          <ProjectSettingsModules
+            :project="project"
+            :can-manage="canEditProject"
+            :is-archived="isArchived"
+          />
+        </a-tab-pane>
       </a-tabs>
     </template>
 
@@ -87,6 +94,7 @@ import ProjectSettingsMembers from './ProjectSettingsMembers.vue'
 import ProjectSettingsCustomFields from './ProjectSettingsCustomFields.vue'
 import ProjectSettingsTimeTracking from './ProjectSettingsTimeTracking.vue'
 import ProjectSettingsWorkflow from './ProjectSettingsWorkflow.vue'
+import ProjectSettingsModules from './ProjectSettingsModules.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -100,7 +108,7 @@ const projectPerms = ref<Set<string>>(new Set())
 // Active tab from route query or default
 const activeTab = computed(() => {
   const tab = route.query.tab as string
-  return ['general', 'members', 'custom-fields', 'workflow', 'time-tracking'].includes(tab) ? tab : 'general'
+  return ['general', 'members', 'custom-fields', 'workflow', 'time-tracking', 'modules'].includes(tab) ? tab : 'general'
 })
 
 // Permissions

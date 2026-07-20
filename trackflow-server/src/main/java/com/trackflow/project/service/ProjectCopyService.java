@@ -56,6 +56,7 @@ public class ProjectCopyService {
     private final CustomFieldProjectMapper customFieldProjectMapper;
     private final TransitionActionMapper transitionActionMapper;
     private final SavedQueryMapper savedQueryMapper;
+    private final ProjectModuleService projectModuleService;
 
     /** 有效的复制选项 */
     private static final Set<String> VALID_OPTIONS = Set.of(
@@ -114,7 +115,10 @@ public class ProjectCopyService {
         // 4. 添加当前用户为项目管理员
         addCreatorAsAdmin(newProjectId, currentUserId, now);
 
-        // 5. 根据 copyOptions 选择性复制
+        // 5. 复制源项目的启用模块配置
+        copyEnabledModules(source.getId(), newProjectId);
+
+        // 6. 根据 copyOptions 选择性复制
         Set<String> options = normalizeCopyOptions(dto.getCopyOptions());
 
         if (options.contains("workflow")) {
@@ -191,6 +195,15 @@ public class ProjectCopyService {
         admin.setRoleId(PROJECT_ADMIN_ROLE_ID);
         admin.setJoinedAt(now);
         projectMemberMapper.insert(admin);
+    }
+
+    /**
+     * 复制源项目的启用模块配置到新项目
+     */
+    private void copyEnabledModules(Long sourceId, Long targetId) {
+        Set<String> sourceModules = projectModuleService.getEnabledModules(sourceId);
+        projectModuleService.updateEnabledModules(targetId, new java.util.ArrayList<>(sourceModules));
+        log.debug("Copied {} enabled modules from project {} to {}", sourceModules.size(), sourceId, targetId);
     }
 
     private void copyWorkflowTransitions(Long sourceId, Long targetId) {

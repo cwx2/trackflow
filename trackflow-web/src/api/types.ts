@@ -130,6 +130,13 @@ export interface ProjectActivityVO {
   targetUserName?: string
 }
 
+// ========== 项目模块 ==========
+export interface ProjectModulesVO {
+  enabledModules: string[]
+  allModules: string[]
+  coreModules: string[]
+}
+
 // ========== 项目统计 ==========
 export interface ProjectStatisticsVO {
   totalIssues: number

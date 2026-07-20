@@ -4,10 +4,13 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectVisibility;
+import com.trackflow.project.service.ProjectModuleService;
 import com.trackflow.system.mapper.GlobalMemberMapper;
 import com.trackflow.system.mapper.RolePermissionMapper;
+import com.trackflow.system.mapper.SysPermissionMapper;
 import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.Cursor;
@@ -16,13 +19,16 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 权限服务：Redis 缓存 + 数据库查询
+ * 权限服务：Redis 缓存 + 数据库查询 + 模块过滤
+ * <p>
+ * 支持三层权限检查：
+ * 1. 角色 → 权限（role_permission 表）
+ * 2. 项目启用模块 → 权限过滤（project_enabled_module + sys_permission.category）
+ * 3. 资源级规则（reporter/assignee 特殊权限）
  * <p>
  * 支持 NonMember / Anonymous 访问控制：
  * - 如果用户不是项目成员，检查项目 visibility
@@ -51,6 +57,39 @@ public class PermissionService {
     private final UserGroupRoleMapper userGroupRoleMapper;
     private final ProjectMapper projectMapper;
     private final GlobalMemberMapper globalMemberMapper;
+    private final ProjectModuleService projectModuleService;
+    private final SysPermissionMapper sysPermissionMapper;
+
+    /**
+     * 权限码 → 所属模块（category）映射。
+     * 启动时从 sys_permission 表加载，内存常驻（权限定义极少变化）。
+     * Key: permission code (e.g. "time:log"), Value: category (e.g. "time_tracking")
+     */
+    private final Map<String, String> permissionCategoryMap = new ConcurrentHashMap<>();
+
+    @PostConstruct
+    public void init() {
+        loadPermissionCategoryMap();
+    }
+
+    /**
+     * 加载权限码→模块映射（从 sys_permission 表）
+     */
+    private void loadPermissionCategoryMap() {
+        List<Map<String, String>> rows = sysPermissionMapper.selectProjectPermissionCategories();
+        permissionCategoryMap.clear();
+        for (Map<String, String> row : rows) {
+            permissionCategoryMap.put(row.get("code"), row.get("category"));
+        }
+        log.info("Loaded {} permission→category mappings for module filtering", permissionCategoryMap.size());
+    }
+
+    /**
+     * 刷新权限→模块映射缓存（当 sys_permission 表变化时调用）
+     */
+    public void refreshPermissionCategoryMap() {
+        loadPermissionCategoryMap();
+    }
 
     /**
      * 检查用户是否拥有指定权限（全局 + 项目级）
@@ -211,6 +250,7 @@ public class PermissionService {
      * 2. 无成员关系时，查项目 visibility
      * 3. visibility = internal/public 且用户已登录 → 返回 NonMember 角色权限
      * 4. visibility = public 且未登录 → 返回 Anonymous 角色权限
+     * 5. 对结果按项目启用模块过滤（只保留启用模块下的权限）
      */
     public Set<String> getProjectPermissions(Long userId, Long projectId) {
         String cacheKey = PROJECT_CACHE_KEY_PREFIX + userId + ":" + projectId;
@@ -226,6 +266,12 @@ public class PermissionService {
         // 如果用户不是成员，尝试 NonMember fallback
         if (permissions.isEmpty() && userId != null) {
             permissions = loadNonMemberPermissions(projectId);
+        }
+
+        // ★ 模块过滤：只保留项目已启用模块下的权限
+        if (!permissions.isEmpty()) {
+            permissions = projectModuleService.filterByEnabledModules(
+                    projectId, permissions, permissionCategoryMap);
         }
 
         if (!permissions.isEmpty()) {
