@@ -333,6 +333,11 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldOption>()
                         .eq(CustomFieldOption::getCustomFieldId, id)));
 
+        // 条件引用数：有多少其他字段-项目配置以此字段为条件源
+        usage.setConditionRefCount(projectMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getConditionFieldId, id)));
+
         return usage;
     }
 
@@ -389,14 +394,41 @@ public class CustomFieldService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
 
+        // 检查是否被其他字段作为条件源引用
+        long conditionRefCount = projectMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getConditionFieldId, id));
+
         if (!confirm) {
             long valueCount = valueMapper.selectCount(
                     new LambdaQueryWrapper<CustomFieldValue>()
                             .eq(CustomFieldValue::getCustomFieldId, id));
-            if (valueCount > 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST,
-                        "此字段被工单引用，请使用 confirm=true 确认删除");
+            if (valueCount > 0 || conditionRefCount > 0) {
+                StringBuilder message = new StringBuilder();
+                if (valueCount > 0) {
+                    message.append("此字段被 ").append(valueCount).append(" 条工单值记录引用");
+                }
+                if (conditionRefCount > 0) {
+                    if (!message.isEmpty()) message.append("，");
+                    message.append("且被 ").append(conditionRefCount)
+                           .append(" 条字段配置作为条件源引用（删除后相关条件规则将失效，被隐藏的字段将变为始终显示）");
+                }
+                message.append("，请使用 confirm=true 确认删除");
+                throw new BusinessException(ErrorCode.BAD_REQUEST, message.toString());
             }
+        }
+
+        // 主动清除引用此字段的条件配置（防止 conditionValues 残留无效数据）
+        if (conditionRefCount > 0) {
+            List<CustomFieldProject> refs = projectMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getConditionFieldId, id));
+            for (CustomFieldProject ref : refs) {
+                ref.setConditionFieldId(null);
+                ref.setConditionValues(null);
+                projectMapper.updateById(ref);
+            }
+            log.info("Cleared condition references for deleted field {}: {} mappings affected", id, refs.size());
         }
 
         definitionMapper.deleteById(id);
@@ -2313,10 +2345,10 @@ public class CustomFieldService {
         // 删除关联
         projectMapper.deleteById(mapping.getId());
 
-        // 清除该项目所有工单中该字段的值（参数化子查询，避免 SQL 拼接）
+        // 清除该项目所有活跃工单中该字段的值（排除软删除工单，保留其字段值以备恢复）
         valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
                 .eq(CustomFieldValue::getCustomFieldId, customFieldId)
-                .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0})", projectId));
+                .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0} AND deleted_at IS NULL)", projectId));
     }
 
     /**
@@ -2508,7 +2540,7 @@ public class CustomFieldService {
         List<CustomFieldValue> targetValues = valueMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldValue>()
                         .eq(CustomFieldValue::getCustomFieldId, fieldId)
-                        .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0})", projectId));
+                        .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0} AND deleted_at IS NULL)", projectId));
 
         if (targetValues.isEmpty()) return 0;
 
