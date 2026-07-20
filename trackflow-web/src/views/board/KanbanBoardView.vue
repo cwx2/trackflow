@@ -223,7 +223,7 @@
         />
       <!-- ===== 无分组模式（原始平面看板） ===== -->
       <div
-        v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && swimlaneGroupBy === 'none'"
+        v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && !showSprintModeNoActiveState && swimlaneGroupBy === 'none'"
         class="board-container"
       >
         <template v-for="status in visibleStatuses" :key="status.id">
@@ -427,7 +427,7 @@
 
       <!-- ===== Swimlane 分组模式 ===== -->
       <div
-        v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && swimlaneGroupBy !== 'none'"
+        v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && !showSprintModeNoActiveState && swimlaneGroupBy !== 'none'"
         class="swimlane-container"
       >
         <!-- Swimlane 表头（状态列标题） -->
@@ -633,8 +633,19 @@
         </div>
       </div>
 
+      <!-- 空状态：Sprint 模式无活跃迭代 -->
+      <div v-if="showSprintModeNoActiveState" class="empty-state empty-state--sprint">
+        <div class="empty-icon">🏃</div>
+        <h3 class="empty-title">看板已配置为仅显示当前 Sprint 工单</h3>
+        <p class="empty-desc">当前项目暂无活跃迭代。请前往「迭代」页面激活一个 Sprint，或修改看板设置为「显示所有工单」。</p>
+        <div class="empty-actions">
+          <a-button type="primary" size="small" @click="goToSprints">前往迭代页面</a-button>
+          <a-button size="small" @click="openSettingsToGeneral">修改看板设置</a-button>
+        </div>
+      </div>
+
       <!-- 空状态：搜索无结果 -->
-      <div v-if="showNoSearchResults" class="empty-state">
+      <div v-else-if="showNoSearchResults" class="empty-state">
         <div class="empty-icon">🔍</div>
         <h3 class="empty-title">未找到匹配的工单</h3>
         <p class="empty-desc">没有工单匹配关键词「{{ keyword }}」</p>
@@ -667,6 +678,7 @@
       :project-id="selectedProject || ''"
       :project-name="currentProjectName"
       :columns="allColumnConfigs"
+      :has-active-sprint="!!activeSprint"
       @saved="onSettingsSaved"
     />
 
@@ -1280,6 +1292,26 @@ const isSearchActive = computed(() => keyword.value.trim().length > 0)
 const showNoSearchResults = computed(() =>
   isSearchActive.value && selectedProject.value && issues.value.length === 0 && !loading.value
 )
+
+/** 是否显示 Sprint 模式无活跃迭代的空状态 */
+const showSprintModeNoActiveState = computed(() =>
+  selectedProject.value &&
+  !loading.value &&
+  boardFilterMode.value === 'active_sprint' &&
+  !activeSprint.value &&
+  issues.value.length === 0 &&
+  !isSearchActive.value
+)
+
+/** 跳转到迭代管理页面 */
+function goToSprints() {
+  router.push({ name: 'Sprints' })
+}
+
+/** 打开看板设置到基本设置标签页 */
+function openSettingsToGeneral() {
+  showSettings.value = true
+}
 
 function onSearchInput() {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
@@ -3455,6 +3487,18 @@ onUnmounted(() => {
 .empty-desc {
   font-size: 13px;
   color: var(--color-text-3);
+}
+
+.empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.empty-state--sprint .empty-desc {
+  max-width: 420px;
+  line-height: 1.6;
 }
 
 /* ===== Swimlane 分组视图 ===== */

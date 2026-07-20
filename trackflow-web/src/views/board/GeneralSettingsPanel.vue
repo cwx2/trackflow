@@ -58,6 +58,15 @@
         </label>
       </div>
 
+      <!-- Sprint 模式无活跃迭代警告 -->
+      <div v-if="editableFilterMode === 'active_sprint' && !props.hasActiveSprint" class="sprint-warning">
+        <span class="sprint-warning-icon">⚠️</span>
+        <div class="sprint-warning-content">
+          <span class="sprint-warning-title">当前项目无活跃迭代</span>
+          <span class="sprint-warning-desc">选择此模式后看板将为空。请先在「迭代」页面激活一个 Sprint。</span>
+        </div>
+      </div>
+
       <!-- 查询过滤条件构建器 -->
       <div v-if="editableFilterMode === 'query'" class="query-filter-builder">
         <div class="query-builder-header">
@@ -210,6 +219,7 @@ const props = defineProps<{
   filterMode: string
   filterQuery: string | null
   doneRetentionDays: number | null
+  hasActiveSprint: boolean
 }>()
 
 const emit = defineEmits<{
@@ -512,6 +522,42 @@ function toggleEditRole(code: string, checked: boolean) {
 .behavior-option-desc {
   font-size: 12px;
   color: var(--color-text-3);
+  line-height: 1.4;
+}
+
+/* ===== Sprint 模式无活跃迭代警告 ===== */
+.sprint-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(var(--warning-6), 0.08);
+  border: 1px solid rgba(var(--warning-6), 0.3);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.sprint-warning-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.sprint-warning-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sprint-warning-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(var(--warning-6));
+}
+
+.sprint-warning-desc {
+  font-size: 12px;
+  color: var(--color-text-2);
   line-height: 1.4;
 }
 

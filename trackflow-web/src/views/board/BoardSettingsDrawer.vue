@@ -25,6 +25,7 @@
           :filter-mode="editableFilterMode"
           :filter-query="editableFilterQuery"
           :done-retention-days="editableDoneRetentionDays"
+          :has-active-sprint="hasActiveSprint"
           @update:name="editableBoardName = $event"
           @update:can-view-roles="editableCanViewRoles = $event"
           @update:can-edit-roles="editableCanEditRoles = $event"
@@ -208,6 +209,7 @@ const props = defineProps<{
   projectId: string
   projectName: string
   columns: BoardColumnVO[]
+  hasActiveSprint: boolean
 }>()
 
 const emit = defineEmits<{
