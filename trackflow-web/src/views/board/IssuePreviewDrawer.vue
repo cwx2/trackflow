@@ -37,23 +37,118 @@
       <!-- 标题 -->
       <h2 class="preview-issue-title">{{ detail.title }}</h2>
 
-      <!-- 状态与优先级 -->
+      <!-- 状态与优先级（可编辑） -->
       <div class="preview-meta-row">
-        <span
-          class="preview-status-badge"
-          :style="{ backgroundColor: statusColor, color: '#fff' }"
-        >{{ localizeStatusName(detail.status?.name) }}</span>
-        <span class="preview-priority">
-          {{ priorityIcon(detail.priority) }} {{ localizePriority(detail.priority) }}
-        </span>
+        <a-trigger
+          trigger="click"
+          position="bl"
+          :popup-visible="editingStatus"
+          @update:popup-visible="v => v ? openStatusEdit() : closeStatusEdit()"
+        >
+          <span
+            class="preview-status-badge preview-status-badge--editable"
+            :style="{ backgroundColor: statusColor, color: '#fff' }"
+            title="点击切换状态"
+          >{{ localizeStatusName(detail.status?.name) }} <span class="edit-chevron">▾</span></span>
+          <template #content>
+            <div class="inline-edit-panel">
+              <div class="inline-edit-title">变更状态</div>
+              <div v-if="loadingTransitions" class="inline-edit-loading"><a-spin :size="16" /></div>
+              <div v-else-if="availableTransitions.length === 0" class="inline-edit-empty">无可用状态转换</div>
+              <div v-else class="inline-edit-list">
+                <div
+                  v-for="t in availableTransitions"
+                  :key="t.id"
+                  class="inline-edit-item"
+                  @click="selectStatus(t)"
+                >
+                  <span class="status-dot" :style="{ background: t.color || 'var(--color-fill-4)' }"></span>
+                  <span class="item-label">{{ localizeStatusName(t.name) }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </a-trigger>
+
+        <a-trigger
+          trigger="click"
+          position="bl"
+          :popup-visible="editingPriority"
+          @update:popup-visible="v => v ? editingPriority = true : editingPriority = false"
+        >
+          <span class="preview-priority preview-priority--editable" title="点击修改优先级">
+            {{ priorityIcon(detail.priority) }} {{ localizePriority(detail.priority) }} <span class="edit-chevron">▾</span>
+          </span>
+          <template #content>
+            <div class="inline-edit-panel">
+              <div class="inline-edit-title">修改优先级</div>
+              <div class="inline-edit-list">
+                <div
+                  v-for="p in priorityOptions"
+                  :key="p.value"
+                  class="inline-edit-item"
+                  :class="{ 'inline-edit-item--selected': detail.priority === p.value }"
+                  @click="selectPriority(p.value)"
+                >
+                  <span class="item-icon">{{ p.icon }}</span>
+                  <span class="item-label">{{ p.label }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </a-trigger>
+
         <span class="preview-type">{{ typeLabel(detail.issueType) }}</span>
       </div>
 
       <!-- 关键字段 -->
       <div class="preview-fields">
-        <div class="preview-field" v-if="detail.assigneeName">
+        <div class="preview-field">
           <span class="field-label">负责人</span>
-          <span class="field-value">{{ detail.assigneeName }}</span>
+          <a-trigger
+            trigger="click"
+            position="bl"
+            :popup-visible="editingAssignee"
+            @update:popup-visible="v => v ? openAssigneeEdit() : closeAssigneeEdit()"
+          >
+            <span class="field-value field-value--editable" title="点击修改负责人">
+              {{ detail.assigneeName || '未分配' }}
+              <span class="edit-chevron">▾</span>
+            </span>
+            <template #content>
+              <div class="inline-edit-panel inline-edit-panel--wide">
+                <div class="inline-edit-title">分配负责人</div>
+                <div class="inline-edit-search">
+                  <input
+                    v-model="assigneeSearch"
+                    class="inline-search-input"
+                    placeholder="搜索成员..."
+                    @keyup.escape="closeAssigneeEdit"
+                  />
+                </div>
+                <div v-if="loadingMembers" class="inline-edit-loading"><a-spin :size="16" /></div>
+                <div v-else class="inline-edit-list">
+                  <div
+                    class="inline-edit-item"
+                    :class="{ 'inline-edit-item--selected': !detail.assigneeId }"
+                    @click="selectAssignee(null, null)"
+                  >
+                    <span class="item-label">未分配</span>
+                  </div>
+                  <div
+                    v-for="m in filteredMembers"
+                    :key="m.userId"
+                    class="inline-edit-item"
+                    :class="{ 'inline-edit-item--selected': detail.assigneeId === m.userId }"
+                    @click="selectAssignee(m.userId, m.displayName)"
+                  >
+                    <span class="item-label">{{ m.displayName }}</span>
+                  </div>
+                  <div v-if="filteredMembers.length === 0 && assigneeSearch" class="inline-edit-empty">无匹配成员</div>
+                </div>
+              </div>
+            </template>
+          </a-trigger>
         </div>
         <div class="preview-field" v-if="detail.reporterName">
           <span class="field-label">报告者</span>
@@ -163,7 +258,8 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { issueApi, projectApi } from '@/api'
-import type { IssueDetailVO, IssueCommentVO } from '@/api/types'
+import type { IssueDetailVO, IssueCommentVO, IssueStatusVO } from '@/api/types'
+import { Message } from '@arco-design/web-vue'
 import TimeProgressIndicator from '@/views/issue/components/TimeProgressIndicator.vue'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
@@ -179,6 +275,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:visible': [val: boolean]
   'go-detail': [issueId: string]
+  'issue-updated': [issueId: string, changes: Record<string, any>]
 }>()
 
 const router = useRouter()
@@ -188,6 +285,144 @@ const loadError = ref<string | null>(null)
 const detail = ref<IssueDetailVO | null>(null)
 const comments = ref<IssueCommentVO[]>([])
 const timeTrackingEnabled = ref(true)
+
+// ===== Inline Edit State =====
+const editingStatus = ref(false)
+const loadingTransitions = ref(false)
+const availableTransitions = ref<IssueStatusVO[]>([])
+
+const editingPriority = ref(false)
+const priorityOptions = [
+  { value: 'Critical', label: '紧急', icon: '🔴' },
+  { value: 'High', label: '高', icon: '🟠' },
+  { value: 'Normal', label: '普通', icon: '🔵' },
+  { value: 'Low', label: '低', icon: '⚪' }
+]
+
+const editingAssignee = ref(false)
+const loadingMembers = ref(false)
+const projectMembers = ref<Array<{ userId: string; displayName: string }>>([])
+const assigneeSearch = ref('')
+
+const filteredMembers = computed(() => {
+  if (!assigneeSearch.value) return projectMembers.value
+  const q = assigneeSearch.value.toLowerCase()
+  return projectMembers.value.filter(m => m.displayName.toLowerCase().includes(q))
+})
+
+// ===== Status Edit =====
+async function openStatusEdit() {
+  if (!props.issueId) return
+  editingStatus.value = true
+  loadingTransitions.value = true
+  try {
+    const res = await issueApi.getAvailableTransitions(props.issueId)
+    availableTransitions.value = res.data || []
+  } catch {
+    availableTransitions.value = []
+  } finally {
+    loadingTransitions.value = false
+  }
+}
+
+function closeStatusEdit() {
+  editingStatus.value = false
+  availableTransitions.value = []
+}
+
+async function selectStatus(target: IssueStatusVO) {
+  if (!props.issueId || !detail.value) return
+  editingStatus.value = false
+
+  const oldStatusId = detail.value.statusId
+  // Optimistic update
+  detail.value.status = { ...detail.value.status!, id: target.id, name: target.name, color: target.color }
+  detail.value.statusId = target.id
+
+  try {
+    await issueApi.transitStatus(props.issueId, target.id, undefined, detail.value.version)
+    // Bump local version
+    detail.value.version = (detail.value.version || 0) + 1
+    Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)
+    emit('issue-updated', props.issueId, { statusId: target.id })
+  } catch (e: any) {
+    // Rollback
+    if (detail.value.status) {
+      detail.value.statusId = oldStatusId
+    }
+    // Reload to get correct state
+    loadDetail()
+    Message.error(e.response?.data?.message || '状态变更失败')
+  }
+}
+
+// ===== Priority Edit =====
+async function selectPriority(priority: string) {
+  if (!props.issueId || !detail.value) return
+  editingPriority.value = false
+
+  if (detail.value.priority === priority) return
+
+  const oldPriority = detail.value.priority
+  detail.value.priority = priority
+
+  try {
+    await issueApi.update(props.issueId, { priority })
+    Message.success(`优先级已变更为「${localizePriority(priority)}」`)
+    emit('issue-updated', props.issueId, { priority })
+  } catch (e: any) {
+    detail.value.priority = oldPriority
+    Message.error(e.response?.data?.message || '优先级变更失败')
+  }
+}
+
+// ===== Assignee Edit =====
+async function openAssigneeEdit() {
+  if (!detail.value?.projectId) return
+  editingAssignee.value = true
+  assigneeSearch.value = ''
+
+  if (projectMembers.value.length === 0) {
+    loadingMembers.value = true
+    try {
+      const res = await projectApi.listAssignableMembers(detail.value.projectId)
+      projectMembers.value = (res.data || []).map(m => ({
+        userId: m.userId,
+        displayName: m.displayName
+      }))
+    } catch {
+      projectMembers.value = []
+    } finally {
+      loadingMembers.value = false
+    }
+  }
+}
+
+function closeAssigneeEdit() {
+  editingAssignee.value = false
+  assigneeSearch.value = ''
+}
+
+async function selectAssignee(userId: string | null, displayName: string | null) {
+  if (!props.issueId || !detail.value) return
+  editingAssignee.value = false
+
+  const oldAssigneeId = detail.value.assigneeId
+  const oldAssigneeName = detail.value.assigneeName
+  detail.value.assigneeId = userId || undefined
+  detail.value.assigneeName = displayName || undefined
+
+  try {
+    // Backend expects 0 for unassign (normalizeAssigneeId converts 0 → null)
+    await issueApi.assign(props.issueId, userId || '0')
+    Message.success(userId ? `已分配给「${displayName}」` : '已取消分配')
+    emit('issue-updated', props.issueId, { assigneeId: userId, assigneeName: displayName })
+  } catch (e: any) {
+    detail.value.assigneeId = oldAssigneeId
+    detail.value.assigneeName = oldAssigneeName
+    Message.error(e.response?.data?.message || '分配失败')
+  }
+}
 
 const statusColor = computed(() => detail.value?.status?.color || 'var(--color-fill-4)')
 
@@ -231,6 +466,11 @@ watch(() => props.visible, (v) => {
     detail.value = null
     comments.value = []
     loadError.value = null
+    // Reset edit state
+    editingStatus.value = false
+    editingPriority.value = false
+    editingAssignee.value = false
+    projectMembers.value = []
   }
 })
 
@@ -385,9 +625,34 @@ function renderCommentContent(content: string): string {
   line-height: 1.4;
 }
 
+.preview-status-badge--editable {
+  cursor: pointer;
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+.preview-status-badge--editable:hover {
+  opacity: 0.85;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
 .preview-priority {
   font-size: 12px;
   color: var(--color-text-2);
+}
+
+.preview-priority--editable {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.preview-priority--editable:hover {
+  background: var(--color-fill-2);
+}
+
+.edit-chevron {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 2px;
 }
 
 .preview-type {
@@ -427,6 +692,17 @@ function renderCommentContent(content: string): string {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.field-value--editable {
+  cursor: pointer;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.field-value--editable:hover {
+  background: var(--color-fill-2);
 }
 
 .field-value--overdue {
@@ -599,5 +875,115 @@ function renderCommentContent(content: string): string {
   align-self: flex-start;
   font-size: 12px;
   color: rgb(var(--primary-6));
+}
+
+/* ===== Inline Edit Panel ===== */
+.inline-edit-panel {
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  max-width: 240px;
+  overflow: hidden;
+}
+
+.inline-edit-panel--wide {
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.inline-edit-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-3);
+  padding: 8px 12px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.inline-edit-search {
+  padding: 4px 8px;
+}
+
+.inline-search-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-fill-1);
+  color: var(--color-text-1);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.inline-search-input:focus {
+  border-color: rgb(var(--primary-6));
+}
+.inline-search-input::placeholder {
+  color: var(--color-text-4);
+}
+
+.inline-edit-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.inline-edit-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 13px;
+  color: var(--color-text-1);
+}
+.inline-edit-item:hover {
+  background: var(--color-fill-2);
+}
+.inline-edit-item--selected {
+  background: rgba(var(--primary-6), 0.08);
+  font-weight: 500;
+}
+.inline-edit-item--selected::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 12px;
+  color: rgb(var(--primary-6));
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.item-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-edit-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.inline-edit-empty {
+  font-size: 12px;
+  color: var(--color-text-4);
+  text-align: center;
+  padding: 12px;
 }
 </style>

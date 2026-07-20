@@ -728,6 +728,7 @@
       :issue-id="previewIssueId"
       @update:visible="previewVisible = $event"
       @go-detail="onPreviewGoDetail"
+      @issue-updated="onPreviewIssueUpdated"
     />
 
     <!-- 批量操作栏（底部固定） -->
@@ -1072,6 +1073,25 @@ function closePreview() {
 
 function onPreviewGoDetail(issueId: string) {
   router.push({ name: 'IssueDetail', params: { id: issueId } })
+}
+
+/** Handle issue updates from preview panel (inline editing) */
+function onPreviewIssueUpdated(issueId: string, changes: Record<string, any>) {
+  const issue = issues.value.find(i => i.id === issueId)
+  if (!issue) return
+
+  // Apply changes to the local issue object
+  if (changes.statusId) {
+    issue.statusId = changes.statusId
+    issue.version = (issue.version || 0) + 1
+  }
+  if (changes.priority) {
+    issue.priority = changes.priority
+  }
+  if ('assigneeId' in changes) {
+    issue.assigneeId = changes.assigneeId || undefined
+    issue.assigneeName = changes.assigneeName || undefined
+  }
 }
 
 function toggleBacklog() {
