@@ -19,6 +19,10 @@ public class DashboardListVO {
     private Integer widgetCount;
     /** 精细化共享对象数量（用户+组的总数） */
     private Integer shareCount;
+    /** 当前用户是否收藏了该仪表盘 */
+    private Boolean favorited;
+    /** 是否为当前用户的默认仪表盘 */
+    private Boolean isDefault;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

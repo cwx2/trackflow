@@ -41,6 +41,8 @@ export interface DashboardListVO {
   shared: boolean
   widgetCount: number
   shareCount: number
+  favorited: boolean
+  isDefault: boolean
   createdAt: string
   updatedAt: string
 }
@@ -138,6 +140,30 @@ export const customDashboardApi = {
   delete(id: string) {
     return request.delete<any, R<void>>(`/dashboards/${id}`)
   },
+
+  // ─── 收藏 & 默认 ──────────────────────────────────────
+
+  /** 切换收藏状态，返回 true=已收藏，false=已取消 */
+  toggleFavorite(dashboardId: string) {
+    return request.post<any, R<boolean>>(`/dashboards/${dashboardId}/favorite`)
+  },
+
+  /** 设为默认仪表盘 */
+  setDefault(dashboardId: string) {
+    return request.put<any, R<void>>(`/dashboards/${dashboardId}/default`)
+  },
+
+  /** 取消默认仪表盘 */
+  unsetDefault() {
+    return request.delete<any, R<void>>('/dashboards/default')
+  },
+
+  /** 获取当前用户的默认仪表盘 ID */
+  getDefault() {
+    return request.get<any, R<string | null>>('/dashboards/default')
+  },
+
+  // ─── Widget ────────────────────────────────────────────
 
   /** 添加 Widget */
   addWidget(dashboardId: string, data: CreateWidgetParams) {

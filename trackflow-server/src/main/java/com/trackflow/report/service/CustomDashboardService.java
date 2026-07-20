@@ -14,10 +14,12 @@ import com.trackflow.report.dto.UpdateDashboardDTO;
 import com.trackflow.report.dto.UpdateLayoutDTO;
 import com.trackflow.report.dto.UpdateWidgetDTO;
 import com.trackflow.report.entity.Dashboard;
+import com.trackflow.report.entity.DashboardFavorite;
 import com.trackflow.report.entity.DashboardShare;
 import com.trackflow.report.entity.DashboardWidget;
 import com.trackflow.report.entity.WidgetType;
 import com.trackflow.report.mapper.DashboardMapper;
+import com.trackflow.report.mapper.DashboardFavoriteMapper;
 import com.trackflow.report.mapper.DashboardShareMapper;
 import com.trackflow.report.mapper.DashboardWidgetMapper;
 import com.trackflow.report.vo.DashboardDetailVO;
@@ -47,12 +49,14 @@ public class CustomDashboardService {
     private final DashboardMapper dashboardMapper;
     private final DashboardWidgetMapper widgetMapper;
     private final DashboardShareMapper shareMapper;
+    private final DashboardFavoriteMapper favoriteMapper;
     private final DashboardConverter dashboardConverter;
     private final SysUserMapper sysUserMapper;
     private final UserGroupMapper userGroupMapper;
 
     /**
      * 获取仪表盘列表（当前用户拥有的 + 全局共享的 + 精确共享给我的）
+     * 返回按收藏优先、字母排序的列表，含收藏/默认状态
      */
     public List<DashboardListVO> list(Long userId) {
         // 查询精确共享给当前用户的仪表盘 ID
@@ -89,13 +93,32 @@ public class CustomDashboardService {
             Map<Long, Long> widgetCounts = getWidgetCountMap(dashboardIds);
             Map<Long, Long> shareCounts = getShareCountMap(dashboardIds);
 
+            // 查询当前用户的收藏记录
+            List<DashboardFavorite> favorites = favoriteMapper.selectList(
+                    new LambdaQueryWrapper<DashboardFavorite>()
+                            .eq(DashboardFavorite::getUserId, userId));
+            Map<Long, DashboardFavorite> favoriteMap = favorites.stream()
+                    .collect(Collectors.toMap(DashboardFavorite::getDashboardId, f -> f, (a, b) -> a));
+
             for (int i = 0; i < voList.size(); i++) {
                 Dashboard entity = dashboards.get(i);
                 DashboardListVO vo = voList.get(i);
                 vo.setOwnerName(ownerNames.getOrDefault(entity.getOwnerId(), ""));
                 vo.setWidgetCount(widgetCounts.getOrDefault(entity.getId(), 0L).intValue());
                 vo.setShareCount(shareCounts.getOrDefault(entity.getId(), 0L).intValue());
+
+                DashboardFavorite fav = favoriteMap.get(entity.getId());
+                vo.setFavorited(fav != null);
+                vo.setIsDefault(fav != null && Boolean.TRUE.equals(fav.getIsDefault()));
             }
+
+            // 排序：收藏在前 → 各组内按名称字母排序
+            voList.sort((a, b) -> {
+                boolean aFav = Boolean.TRUE.equals(a.getFavorited());
+                boolean bFav = Boolean.TRUE.equals(b.getFavorited());
+                if (aFav != bFav) return aFav ? -1 : 1;
+                return a.getName().compareToIgnoreCase(b.getName());
+            });
         }
 
         return voList;
@@ -335,6 +358,98 @@ public class CustomDashboardService {
         log.info("Dashboard share removed: dashboardId={}, shareId={}", dashboardId, shareId);
     }
 
+    // ─── 收藏与默认仪表盘 ────────────────────────────────────
+
+    /**
+     * 切换收藏状态
+     * @return true=已收藏, false=已取消收藏
+     */
+    @Transactional
+    public boolean toggleFavorite(Long dashboardId, Long userId) {
+        // 确认仪表盘存在且用户有权访问
+        assertCanView(dashboardId, userId);
+
+        DashboardFavorite existing = favoriteMapper.selectOne(
+                new LambdaQueryWrapper<DashboardFavorite>()
+                        .eq(DashboardFavorite::getUserId, userId)
+                        .eq(DashboardFavorite::getDashboardId, dashboardId));
+
+        if (existing != null) {
+            // 取消收藏（如果是默认仪表盘也一并清除）
+            favoriteMapper.deleteById(existing.getId());
+            log.info("Dashboard unfavorited: dashboardId={}, userId={}", dashboardId, userId);
+            return false;
+        } else {
+            // 添加收藏
+            DashboardFavorite fav = new DashboardFavorite();
+            fav.setUserId(userId);
+            fav.setDashboardId(dashboardId);
+            fav.setIsDefault(false);
+            favoriteMapper.insert(fav);
+            log.info("Dashboard favorited: dashboardId={}, userId={}", dashboardId, userId);
+            return true;
+        }
+    }
+
+    /**
+     * 设为默认仪表盘（自动收藏）
+     */
+    @Transactional
+    public void setDefault(Long dashboardId, Long userId) {
+        // 确认仪表盘存在且用户有权访问
+        assertCanView(dashboardId, userId);
+
+        // 清除当前用户的旧默认
+        LambdaUpdateWrapper<DashboardFavorite> clearDefault = new LambdaUpdateWrapper<DashboardFavorite>()
+                .eq(DashboardFavorite::getUserId, userId)
+                .eq(DashboardFavorite::getIsDefault, true)
+                .set(DashboardFavorite::getIsDefault, false);
+        favoriteMapper.update(null, clearDefault);
+
+        // 查找或创建收藏记录
+        DashboardFavorite existing = favoriteMapper.selectOne(
+                new LambdaQueryWrapper<DashboardFavorite>()
+                        .eq(DashboardFavorite::getUserId, userId)
+                        .eq(DashboardFavorite::getDashboardId, dashboardId));
+
+        if (existing != null) {
+            existing.setIsDefault(true);
+            favoriteMapper.updateById(existing);
+        } else {
+            DashboardFavorite fav = new DashboardFavorite();
+            fav.setUserId(userId);
+            fav.setDashboardId(dashboardId);
+            fav.setIsDefault(true);
+            favoriteMapper.insert(fav);
+        }
+
+        log.info("Dashboard set as default: dashboardId={}, userId={}", dashboardId, userId);
+    }
+
+    /**
+     * 取消默认仪表盘
+     */
+    @Transactional
+    public void unsetDefault(Long userId) {
+        LambdaUpdateWrapper<DashboardFavorite> clearDefault = new LambdaUpdateWrapper<DashboardFavorite>()
+                .eq(DashboardFavorite::getUserId, userId)
+                .eq(DashboardFavorite::getIsDefault, true)
+                .set(DashboardFavorite::getIsDefault, false);
+        favoriteMapper.update(null, clearDefault);
+        log.info("Dashboard default cleared for userId={}", userId);
+    }
+
+    /**
+     * 获取用户的默认仪表盘 ID（如果有）
+     */
+    public Long getUserDefaultDashboardId(Long userId) {
+        DashboardFavorite defaultFav = favoriteMapper.selectOne(
+                new LambdaQueryWrapper<DashboardFavorite>()
+                        .eq(DashboardFavorite::getUserId, userId)
+                        .eq(DashboardFavorite::getIsDefault, true));
+        return defaultFav != null ? defaultFav.getDashboardId() : null;
+    }
+
     // ─── Widget 操作 ────────────────────────────────────────
 
     /**
@@ -481,6 +596,26 @@ public class CustomDashboardService {
             return;
         }
         throw new BusinessException(ErrorCode.ACCESS_DENIED, "无编辑权限");
+    }
+
+    /**
+     * 校验用户是否有查看权限（owner 或全局共享 或精确共享）
+     */
+    private void assertCanView(Long dashboardId, Long userId) {
+        Dashboard dashboard = dashboardMapper.selectById(dashboardId);
+        if (dashboard == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (dashboard.getOwnerId().equals(userId)) {
+            return;
+        }
+        if (Boolean.TRUE.equals(dashboard.getShared())) {
+            return;
+        }
+        if (shareMapper.countAccessByUser(dashboardId, userId) > 0) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问该仪表盘");
     }
 
     private Map<Long, String> getOwnerNameMap(Set<Long> userIds) {

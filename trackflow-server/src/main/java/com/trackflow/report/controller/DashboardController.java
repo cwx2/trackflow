@@ -84,6 +84,52 @@ public class DashboardController {
     // ─── 共享管理 ────────────────────────────────────────
 
     /**
+     * 切换仪表盘收藏状态
+     */
+    @PostMapping("/{id}/favorite")
+    @PreAuthorize("isAuthenticated()")
+    public R<Boolean> toggleFavorite(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        boolean favorited = dashboardService.toggleFavorite(id, userId);
+        return R.ok(favorited);
+    }
+
+    /**
+     * 设为默认仪表盘
+     */
+    @PutMapping("/{id}/default")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> setDefault(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        dashboardService.setDefault(id, userId);
+        return R.ok();
+    }
+
+    /**
+     * 取消默认仪表盘
+     */
+    @DeleteMapping("/default")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> unsetDefault() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        dashboardService.unsetDefault(userId);
+        return R.ok();
+    }
+
+    /**
+     * 获取当前用户的默认仪表盘 ID
+     */
+    @GetMapping("/default")
+    @PreAuthorize("isAuthenticated()")
+    public R<String> getDefault() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Long defaultId = dashboardService.getUserDefaultDashboardId(userId);
+        return R.ok(defaultId != null ? String.valueOf(defaultId) : null);
+    }
+
+    // ─── 共享管理（精细化） ────────────────────────────────
+
+    /**
      * 获取仪表盘的共享列表
      */
     @GetMapping("/{id}/shares")

@@ -12,19 +12,53 @@
 
     <!-- 仪表盘切换器 -->
     <div class="dashboard-switcher" v-if="dashboards.length > 0">
-      <div
-        v-for="d in dashboards"
-        :key="d.id"
-        class="dashboard-tab"
-        :class="{ active: activeDashboardId === d.id }"
-        @click="selectDashboard(d.id)"
-      >
-        <span class="tab-name">{{ d.name }}</span>
-        <span v-if="d.shared" class="tab-shared" title="已共享">
-          <icon-share-alt :size="12" />
-        </span>
-        <span class="tab-count">{{ d.widgetCount }}</span>
-      </div>
+      <!-- 收藏分组 -->
+      <template v-if="favoriteDashboards.length > 0">
+        <div class="switcher-group-label">收藏</div>
+        <div
+          v-for="d in favoriteDashboards"
+          :key="d.id"
+          class="dashboard-tab"
+          :class="{ active: activeDashboardId === d.id }"
+          @click="selectDashboard(d.id)"
+        >
+          <span
+            class="tab-star tab-star-active"
+            title="取消收藏"
+            @click.stop="handleToggleFavorite(d)"
+          >★</span>
+          <span class="tab-name">{{ d.name }}</span>
+          <span v-if="d.isDefault" class="tab-default-badge" title="默认仪表盘">默认</span>
+          <span v-if="d.shared" class="tab-shared" title="已共享">
+            <icon-share-alt :size="12" />
+          </span>
+          <span class="tab-count">{{ d.widgetCount }}</span>
+        </div>
+      </template>
+      <!-- 分隔（仅当两组都有内容） -->
+      <div v-if="favoriteDashboards.length > 0 && otherDashboards.length > 0" class="switcher-divider"></div>
+      <!-- 其他仪表盘 -->
+      <template v-if="otherDashboards.length > 0">
+        <div v-if="favoriteDashboards.length > 0" class="switcher-group-label">其他</div>
+        <div
+          v-for="d in otherDashboards"
+          :key="d.id"
+          class="dashboard-tab"
+          :class="{ active: activeDashboardId === d.id }"
+          @click="selectDashboard(d.id)"
+        >
+          <span
+            class="tab-star"
+            title="收藏"
+            @click.stop="handleToggleFavorite(d)"
+          >☆</span>
+          <span class="tab-name">{{ d.name }}</span>
+          <span v-if="d.shared" class="tab-shared" title="已共享">
+            <icon-share-alt :size="12" />
+          </span>
+          <span class="tab-count">{{ d.widgetCount }}</span>
+        </div>
+      </template>
     </div>
 
     <!-- 主体内容 -->
@@ -60,7 +94,19 @@
               已共享给 {{ currentDashboard.shareCount }} 个对象
             </span>
           </div>
-          <div class="toolbar-right" v-if="isOwner">
+          <div class="toolbar-right">
+            <!-- 任何用户都可以设为自己的默认 -->
+            <a-tooltip :content="isCurrentDefault ? '取消默认' : '设为默认仪表盘'">
+              <a-button
+                size="small"
+                type="text"
+                :class="{ 'default-btn-active': isCurrentDefault }"
+                @click="handleSetDefault"
+              >
+                <template #icon><icon-star /></template>
+              </a-button>
+            </a-tooltip>
+            <template v-if="isOwner">
             <a-button size="small" @click="showAddWidgetModal = true">
               <template #icon><icon-plus /></template>
               添加微件
@@ -88,6 +134,7 @@
                 </a-doption>
               </template>
             </a-dropdown>
+            </template>
           </div>
         </div>
 
@@ -282,7 +329,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import {
-  IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt
+  IconPlus, IconMore, IconEdit, IconDelete, IconShareAlt, IconStar
 } from '@arco-design/web-vue/es/icon'
 import { customDashboardApi } from '@/api'
 import { reportApi } from '@/api/report'
@@ -362,6 +409,19 @@ const isOwner = computed(() => {
   return currentDashboard.value.ownerId === currentUserId.value
 })
 
+/** 收藏的仪表盘（后端已排序，收藏在前 + 字母序） */
+const favoriteDashboards = computed(() => dashboards.value.filter(d => d.favorited))
+
+/** 未收藏的仪表盘 */
+const otherDashboards = computed(() => dashboards.value.filter(d => !d.favorited))
+
+/** 当前仪表盘是否为默认 */
+const isCurrentDefault = computed(() => {
+  if (!activeDashboardId.value) return false
+  const d = dashboards.value.find(d => d.id === activeDashboardId.value)
+  return d?.isDefault === true
+})
+
 // ─── Grid Layout ─────────────────────────────────────────
 // NOTE: Variable named "widgetLayout" (not "gridLayout") to avoid name collision
 // with the <grid-layout> component tag. Vue SFC compiler resolves <grid-layout>
@@ -428,11 +488,14 @@ async function loadDashboards() {
   try {
     const res = await customDashboardApi.list()
     dashboards.value = res.data || []
-    // 自动选中第一个（或上次选中的）
+    // 自动选中：优先默认仪表盘 > 上次选中 > 第一个
     if (dashboards.value.length > 0) {
+      const defaultDashboard = dashboards.value.find(d => d.isDefault)
       const targetId = activeDashboardId.value && dashboards.value.find(d => d.id === activeDashboardId.value)
         ? activeDashboardId.value
-        : dashboards.value[0].id
+        : defaultDashboard
+          ? defaultDashboard.id
+          : dashboards.value[0].id
       await selectDashboard(targetId)
     }
   } catch (e: any) {
@@ -529,6 +592,43 @@ async function onShareSaved() {
   if (currentDashboard.value) {
     await selectDashboard(currentDashboard.value.id)
     await loadDashboards()
+  }
+}
+
+// ─── 收藏 & 默认 ─────────────────────────────────────────
+
+async function handleToggleFavorite(d: DashboardListVO) {
+  try {
+    const res = await customDashboardApi.toggleFavorite(d.id)
+    const nowFavorited = res.data
+    // 乐观更新本地状态
+    d.favorited = nowFavorited
+    if (!nowFavorited) {
+      d.isDefault = false
+    }
+    Message.success(nowFavorited ? '已收藏' : '已取消收藏')
+    // 刷新列表以获取正确排序
+    await loadDashboards()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
+async function handleSetDefault() {
+  if (!currentDashboard.value || !activeDashboardId.value) return
+  try {
+    if (isCurrentDefault.value) {
+      // 取消默认
+      await customDashboardApi.unsetDefault()
+      Message.success('已取消默认仪表盘')
+    } else {
+      // 设为默认
+      await customDashboardApi.setDefault(activeDashboardId.value)
+      Message.success('已设为默认仪表盘')
+    }
+    await loadDashboards()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
   }
 }
 
@@ -725,11 +825,30 @@ watch(showEditModal, (val) => {
   overflow-x: auto;
 }
 
+.switcher-group-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 8px 8px 4px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.switcher-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--tf-border-light);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
 .dashboard-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 8px 10px;
   font-size: 13px;
   font-weight: 500;
   color: var(--tf-text-secondary);
@@ -747,6 +866,37 @@ watch(showEditModal, (val) => {
 .dashboard-tab.active {
   color: var(--tf-accent);
   border-bottom-color: var(--tf-accent);
+}
+
+.tab-star {
+  font-size: 14px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  cursor: pointer;
+  transition: color 0.15s, transform 0.15s;
+  line-height: 1;
+}
+
+.tab-star:hover {
+  color: var(--tf-warning, #d29922);
+  transform: scale(1.2);
+}
+
+.tab-star-active {
+  color: var(--tf-warning, #d29922);
+}
+
+.tab-star-active:hover {
+  color: var(--tf-text-tertiary);
+}
+
+.tab-default-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tf-accent);
+  background: color-mix(in srgb, var(--tf-accent) 12%, transparent);
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.4;
 }
 
 .tab-shared {
@@ -815,6 +965,10 @@ watch(showEditModal, (val) => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.default-btn-active {
+  color: var(--tf-warning, #d29922) !important;
 }
 
 /* Grid 容器 */
