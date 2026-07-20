@@ -53,6 +53,29 @@ function isTokenExpiringSoon(token: string, bufferSeconds = 30): boolean {
   }
 }
 
+/**
+ * 会话过期处理（去重 + 延迟跳转）
+ * 解决：多个并发请求同时发现 token 过期时，只触发一次登出通知 + 跳转。
+ * 给用户 2 秒的视觉反馈时间（显示"会话已过期"提示），而非突然跳转。
+ */
+let sessionExpiredHandled = false
+
+function handleSessionExpired() {
+  if (sessionExpiredHandled) return
+  sessionExpiredHandled = true
+
+  // 动态导入避免循环依赖
+  import('@arco-design/web-vue').then(({ Message }) => {
+    Message.error({ content: '会话已过期，正在跳转到登录页...', id: 'session-expired', duration: 3000 })
+  })
+
+  // 延迟 1.5 秒后执行 logout 跳转，给用户视觉反馈
+  setTimeout(() => {
+    const authStore = useAuthStore()
+    authStore.logout('会话已过期，请重新登录')
+  }, 1500)
+}
+
 // 请求拦截器：附加 Token + 主动刷新即将过期的 Token
 request.interceptors.request.use(
   async (config) => {
@@ -88,17 +111,17 @@ request.interceptors.request.use(
           onTokenRefreshed(authStore.accessToken!)
           config.headers.Authorization = `Bearer ${authStore.accessToken}`
         } else {
-          // refresh_token 也过期了，跳转登录
+          // refresh_token 也过期了 — 不立即 logout，而是优雅处理
           isRefreshing = false
           onRefreshFailed()
-          authStore.logout('会话已过期，请重新登录')
-          return Promise.reject(new axios.Cancel('Token refresh failed'))
+          handleSessionExpired()
+          return Promise.reject(new axios.Cancel('会话已过期'))
         }
       } catch {
         isRefreshing = false
         onRefreshFailed()
-        authStore.logout('会话已过期，请重新登录')
-        return Promise.reject(new axios.Cancel('Token refresh failed'))
+        handleSessionExpired()
+        return Promise.reject(new axios.Cancel('会话已过期'))
       }
     } else {
       config.headers.Authorization = `Bearer ${authStore.accessToken}`
@@ -175,13 +198,13 @@ request.interceptors.response.use(
         } else {
           isRefreshing = false
           onRefreshFailed()
-          authStore.logout('会话已过期，请重新登录')
+          handleSessionExpired()
           return Promise.reject(error)
         }
       } catch {
         isRefreshing = false
         onRefreshFailed()
-        authStore.logout('会话已过期，请重新登录')
+        handleSessionExpired()
         return Promise.reject(error)
       }
     }

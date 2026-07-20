@@ -171,7 +171,7 @@ export const useAuthStore = defineStore('auth', () => {
       } else {
         // 所有重试都失败了 — refresh_token 大概率也已过期
         console.error('[auth] Token refresh failed after all retries')
-        logout('会话已过期，请重新登录')
+        showSessionExpiredNotification()
       }
     } catch {
       isProactiveRefreshing = false
@@ -180,9 +180,32 @@ export const useAuthStore = defineStore('auth', () => {
           performProactiveRefresh(retries + 1)
         }, TOKEN_REFRESH_RETRY_DELAY)
       } else {
-        logout('会话已过期，请重新登录')
+        showSessionExpiredNotification()
       }
     }
+  }
+
+  /**
+   * 显示会话过期通知，延迟后跳转登录页。
+   * 避免突然的无提示跳转让用户以为系统崩溃。
+   */
+  let sessionExpiredNotified = false
+  function showSessionExpiredNotification() {
+    if (sessionExpiredNotified) return
+    sessionExpiredNotified = true
+    import('@arco-design/web-vue').then(({ Notification: ArcoNotification }) => {
+      ArcoNotification.error({
+        id: 'session-expired-global',
+        title: '会话已过期',
+        content: '您的登录状态已失效，即将跳转到登录页面...',
+        duration: 3000,
+        closable: false
+      })
+    }).catch(() => { /* ignore */ })
+    // 延迟 2 秒后跳转，给用户视觉准备时间
+    setTimeout(() => {
+      logout('会话已过期，请重新登录')
+    }, 2000)
   }
 
   /**

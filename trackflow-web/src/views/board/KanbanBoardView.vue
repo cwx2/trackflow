@@ -1457,7 +1457,10 @@ async function loadIssuesWithLoading() {
   loading.value = true
   try {
     await loadIssues()
-  } catch {
+  } catch (e: any) {
+    // 会话过期（axios.Cancel from request.ts）时不显示"搜索失败"——已有过期提示和跳转
+    const isSessionExpired = e?.message === '会话已过期' || e?.code === 'ERR_CANCELED'
+    if (isSessionExpired) return
     issues.value = []
     Message.error('搜索失败')
   } finally {
@@ -2510,7 +2513,10 @@ async function loadBoard() {
   try {
     await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers()])
     await loadIssues()
-  } catch {
+  } catch (e: any) {
+    // 会话过期时不显示"加载失败"——已有过期提示和跳转
+    const isSessionExpired = e?.message === '会话已过期' || e?.code === 'ERR_CANCELED'
+    if (isSessionExpired) return
     issues.value = []
     Message.error('加载看板数据失败')
   } finally {
