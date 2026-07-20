@@ -70,16 +70,24 @@
         </a-select>
       </div>
       <div class="toolbar-right">
-        <!-- Progress Indicator (各列卡片数 mini bar chart) -->
-        <div v-if="selectedProject && visibleStatuses.length > 0" class="progress-indicator" role="img" aria-label="各列工单分布">
+        <!-- Progress Indicator (各列卡片数 mini bar chart) — 仅活跃状态 -->
+        <div v-if="selectedProject && visibleStatuses.length > 0" class="progress-indicator" role="img" :aria-label="progressIndicatorAriaLabel">
+          <!-- 活跃状态柱形 -->
           <div
-            v-for="status in visibleStatuses"
+            v-for="status in activeStatuses"
             :key="status.id"
             class="progress-bar"
             :class="{ 'progress-bar--collapsed': collapsedColumns.has(status.id) }"
             :style="{ height: getProgressBarHeight(status.id), backgroundColor: status.color || 'var(--color-fill-4)' }"
             :title="`${localizeStatusName(status.name)}：${getColumnIssues(status.id).length} 个工单`"
             @click="scrollToColumn(status.id)"
+          ></div>
+          <!-- 终态汇总柱形（灰色弱化） -->
+          <div
+            v-if="closedIssueCount > 0"
+            class="progress-bar progress-bar--closed"
+            :style="{ height: getClosedProgressBarHeight() }"
+            :title="`已完成/已取消：${closedIssueCount} 个工单（${closedIssueDetail}）`"
           ></div>
         </div>
         <a-divider v-if="selectedProject && visibleStatuses.length > 0" direction="vertical" style="margin: 0 4px" />
@@ -1413,6 +1421,37 @@ const visibleStatuses = computed(() => {
     } as IssueStatusVO))
 })
 
+// ===== 进度指示器：活跃状态 vs 终态 =====
+
+/** 活跃状态列（排除已完成/已取消） — 用于进度指示器主体 */
+const activeStatuses = computed(() => {
+  return visibleStatuses.value.filter(s => !isClosedStatus(s))
+})
+
+/** 终态列（已完成/已取消） — 用于进度指示器弱化汇总 */
+const closedStatuses = computed(() => {
+  return visibleStatuses.value.filter(s => isClosedStatus(s))
+})
+
+/** 终态工单总数 */
+const closedIssueCount = computed(() => {
+  return closedStatuses.value.reduce((sum, s) => sum + getColumnIssues(s.id).length, 0)
+})
+
+/** 终态工单明细（用于 tooltip） */
+const closedIssueDetail = computed(() => {
+  return closedStatuses.value
+    .filter(s => getColumnIssues(s.id).length > 0)
+    .map(s => `${localizeStatusName(s.name)} ${getColumnIssues(s.id).length}`)
+    .join('、')
+})
+
+/** 进度指示器 aria-label */
+const progressIndicatorAriaLabel = computed(() => {
+  const activeCount = activeStatuses.value.reduce((sum, s) => sum + getColumnIssues(s.id).length, 0)
+  return `活跃工单分布：${activeCount} 个活跃工单` + (closedIssueCount.value > 0 ? `，${closedIssueCount.value} 个已完成` : '')
+})
+
 /**
  * 有效的看板列（考虑列合并）。
  * 合并后的列：id 取 merge_group_id，name 取 merge_title，包含多个 statusIds。
@@ -1588,12 +1627,22 @@ function toggleColumnCollapse(statusId: string) {
 
 // ===== Progress Indicator（各列卡片数 mini bar chart） =====
 
-/** 计算进度条高度（相对最大列的比例） */
+/** 计算进度条高度（相对活跃状态中最大列的比例） */
 function getProgressBarHeight(statusId: string): string {
   const count = getColumnIssues(statusId).length
   if (count === 0) return '2px'
-  const maxCount = Math.max(...visibleStatuses.value.map(s => getColumnIssues(s.id).length), 1)
+  const maxCount = Math.max(...activeStatuses.value.map(s => getColumnIssues(s.id).length), 1)
   const height = Math.max(4, Math.round((count / maxCount) * 24))
+  return `${height}px`
+}
+
+/** 计算终态汇总柱高度（相对活跃状态按比例缩放，但上限为 16px 以弱化视觉） */
+function getClosedProgressBarHeight(): string {
+  if (closedIssueCount.value === 0) return '2px'
+  const maxActiveCount = Math.max(...activeStatuses.value.map(s => getColumnIssues(s.id).length), 1)
+  // 使用对数缩放 — 终态工单再多也不会压过活跃柱形
+  const ratio = Math.min(closedIssueCount.value / maxActiveCount, 3)
+  const height = Math.max(4, Math.min(16, Math.round(ratio * 8)))
   return `${height}px`
 }
 
@@ -2928,6 +2977,21 @@ onUnmounted(() => {
 
 .progress-bar--collapsed {
   opacity: 0.35;
+}
+
+.progress-bar--closed {
+  background: var(--color-fill-4) !important;
+  opacity: 0.45;
+  border-left: 1px solid var(--color-border);
+  margin-left: 2px;
+  cursor: default;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.08) 2px,
+    rgba(255, 255, 255, 0.08) 4px
+  ) !important;
 }
 
 .board-spin {
