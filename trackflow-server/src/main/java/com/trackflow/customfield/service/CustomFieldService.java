@@ -13,10 +13,14 @@ import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.customfield.vo.ProjectFieldsVO;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.entity.ProjectStatus;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +49,7 @@ public class CustomFieldService {
     private final IssueActivityMapper activityMapper;
     private final IssueMapper issueMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final ProjectMapper projectEntityMapper;
     private final PermissionService permissionService;
 
     @Transactional
@@ -272,6 +277,17 @@ public class CustomFieldService {
 
         log.info("Custom field {} scope reduced (isForAll: true→false): removed {} orphan values from {} issues in non-retained projects",
                 customFieldId, orphanValueIds.size(), orphanValueIds.size());
+    }
+
+    /**
+     * 获取单个自定义字段详情。
+     */
+    public CustomFieldDefinition getById(Long id) {
+        CustomFieldDefinition entity = definitionMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+        return entity;
     }
 
     /**
@@ -1882,6 +1898,84 @@ public class CustomFieldService {
         return allNonGlobal.stream()
                 .filter(f -> !attachedIds.contains(f.getId()))
                 .toList();
+    }
+
+    /**
+     * 获取"Fields in Projects"矩阵数据。
+     * 返回每个项目及其关联的自定义字段列表（含全局字段）。
+     */
+    public List<ProjectFieldsVO> getFieldsInProjects() {
+        // 1. 获取所有活跃项目
+        List<Project> projects = projectEntityMapper.selectList(
+                new LambdaQueryWrapper<Project>()
+                        .eq(Project::getStatus, ProjectStatus.ACTIVE)
+                        .orderByAsc(Project::getName));
+
+        // 2. 获取所有全局字段
+        List<CustomFieldDefinition> globalFields = definitionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getIsForAll, true)
+                        .orderByAsc(CustomFieldDefinition::getPosition));
+
+        // 3. 获取所有项目-字段关联
+        List<CustomFieldProject> allMappings = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .orderByAsc(CustomFieldProject::getPosition));
+        Map<Long, List<Long>> projectFieldIdsMap = allMappings.stream()
+                .collect(Collectors.groupingBy(
+                        CustomFieldProject::getProjectId,
+                        Collectors.mapping(CustomFieldProject::getCustomFieldId, Collectors.toList())));
+
+        // 4. 收集所有需要加载的非全局字段 ID
+        Set<Long> allProjectFieldIds = allMappings.stream()
+                .map(CustomFieldProject::getCustomFieldId)
+                .collect(Collectors.toSet());
+        Map<Long, CustomFieldDefinition> fieldMap = new HashMap<>();
+        globalFields.forEach(f -> fieldMap.put(f.getId(), f));
+        if (!allProjectFieldIds.isEmpty()) {
+            definitionMapper.selectBatchIds(allProjectFieldIds)
+                    .forEach(f -> fieldMap.put(f.getId(), f));
+        }
+
+        // 5. 组装结果
+        List<ProjectFieldsVO> result = new ArrayList<>();
+        for (Project project : projects) {
+            ProjectFieldsVO pvo = new ProjectFieldsVO();
+            pvo.setProjectId(String.valueOf(project.getId()));
+            pvo.setProjectName(project.getName());
+            pvo.setProjectKey(project.getKey());
+
+            List<ProjectFieldsVO.FieldSummaryVO> fields = new ArrayList<>();
+
+            // 全局字段
+            for (CustomFieldDefinition gf : globalFields) {
+                fields.add(toFieldSummary(gf));
+            }
+
+            // 项目专属字段
+            List<Long> projectFieldIds = projectFieldIdsMap.getOrDefault(project.getId(), List.of());
+            for (Long fieldId : projectFieldIds) {
+                CustomFieldDefinition fd = fieldMap.get(fieldId);
+                if (fd != null && !Boolean.TRUE.equals(fd.getIsForAll())) {
+                    fields.add(toFieldSummary(fd));
+                }
+            }
+
+            pvo.setFields(fields);
+            result.add(pvo);
+        }
+        return result;
+    }
+
+    private ProjectFieldsVO.FieldSummaryVO toFieldSummary(CustomFieldDefinition field) {
+        ProjectFieldsVO.FieldSummaryVO vo = new ProjectFieldsVO.FieldSummaryVO();
+        vo.setId(String.valueOf(field.getId()));
+        vo.setName(field.getName());
+        vo.setFieldFormat(field.getFieldFormat());
+        vo.setIsForAll(field.getIsForAll());
+        vo.setIsRequired(field.getIsRequired());
+        vo.setIsMulti(field.getIsMulti());
+        return vo;
     }
 
     /**

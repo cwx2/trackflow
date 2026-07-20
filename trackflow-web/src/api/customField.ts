@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO } from './types'
+import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO } from './types'
 
 /**
  * 自定义字段模块 API
@@ -58,6 +58,16 @@ export const customFieldApi = {
   /** 获取字段使用情况（删除前影响分析） */
   getUsage(id: string) {
     return request.get<any, R<CustomFieldUsageVO>>(`/admin/custom-fields/${id}/usage`)
+  },
+
+  /** 获取单个字段详情 */
+  getDetail(id: string) {
+    return request.get<any, R<CustomFieldDefinitionVO>>(`/admin/custom-fields/${id}`)
+  },
+
+  /** 获取 Fields in Projects 矩阵数据 */
+  fieldsInProjects() {
+    return request.get<any, R<ProjectFieldsVO[]>>('/admin/custom-fields/fields-in-projects')
   },
 
   /** 获取所有枚举类型字段列表（用于"从已有字段复制选项"下拉） */

@@ -500,6 +500,23 @@ export interface CustomFieldUsageVO {
   optionCount: number
 }
 
+/** "Fields in Projects" 矩阵视图——按项目分组展示关联的自定义字段 */
+export interface ProjectFieldsVO {
+  projectId: string
+  projectName: string
+  projectKey: string
+  fields: FieldSummaryVO[]
+}
+
+export interface FieldSummaryVO {
+  id: string
+  name: string
+  fieldFormat: string
+  isForAll: boolean
+  isRequired: boolean
+  isMulti: boolean
+}
+
 export interface CustomFieldValueVO {
   customFieldId: string
   fieldName: string

@@ -2,66 +2,142 @@
   <div class="cf-manage">
     <div class="cf-header">
       <h2 class="page-title">自定义字段管理</h2>
-      <a-button type="primary" size="small" @click="openCreate">
+      <a-button v-if="activeTab === 'list'" type="primary" size="small" @click="openCreate">
         <template #icon><icon-plus /></template>
         创建自定义字段
       </a-button>
     </div>
 
-    <!-- 字段列表 -->
-    <div class="cf-table">
-      <a-table
-        :data="fieldList"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        size="small"
-        @page-change="onPageChange"
-      >
-        <template #columns>
-          <a-table-column title="字段名称" data-index="name" />
-          <a-table-column title="类型" data-index="fieldFormat" :width="100">
-            <template #cell="{ record }">
-              <a-tag size="small">{{ formatTypeLabel(record.fieldFormat) }}</a-tag>
-            </template>
-          </a-table-column>
-          <a-table-column title="必填" data-index="isRequired" :width="60" align="center">
-            <template #cell="{ record }">
-              <icon-check v-if="record.isRequired" style="color: var(--tf-success)" />
-            </template>
-          </a-table-column>
-          <a-table-column title="全局" data-index="isForAll" :width="60" align="center">
-            <template #cell="{ record }">
-              <icon-check v-if="record.isForAll" style="color: var(--tf-accent)" />
-            </template>
-          </a-table-column>
-          <a-table-column title="适用项目" :width="120">
-            <template #cell="{ record }">
-              <span v-if="record.isForAll" class="text-muted">所有项目</span>
-              <span v-else class="text-muted">{{ (record.projectIds || []).length }} 个项目</span>
-            </template>
-          </a-table-column>
-          <a-table-column title="适用类型" :width="140">
-            <template #cell="{ record }">
-              <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
-              <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
-            </template>
-          </a-table-column>
-          <a-table-column title="列表可见" :width="80" align="center">
-            <template #cell="{ record }">
-              <icon-eye v-if="!record.isHiddenInList" style="color: var(--tf-success)" />
-              <icon-eye-invisible v-else style="color: var(--tf-text-quaternary)" />
-            </template>
-          </a-table-column>
-          <a-table-column title="操作" :width="120" align="center">
-            <template #cell="{ record }">
-              <a-button type="text" size="mini" @click="openEdit(record)">编辑</a-button>
-              <a-button type="text" size="mini" status="danger" @click="confirmDelete(record)">删除</a-button>
-            </template>
-          </a-table-column>
-        </template>
-      </a-table>
-    </div>
+    <!-- 双标签页 -->
+    <a-tabs v-model:active-key="activeTab" size="small" class="cf-tabs">
+      <a-tab-pane key="list" title="Fields List">
+        <!-- 字段列表 + 详情侧边栏 -->
+        <div class="cf-body">
+          <div class="cf-table" :class="{ 'has-detail': !!selectedField }">
+            <a-table
+              :data="fieldList"
+              :loading="loading"
+              :pagination="pagination"
+              row-key="id"
+              size="small"
+              @page-change="onPageChange"
+              @row-click="onRowClick"
+            >
+              <template #columns>
+                <a-table-column title="字段名称" data-index="name">
+                  <template #cell="{ record }">
+                    <span class="clickable-name">{{ record.name }}</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="类型" data-index="fieldFormat" :width="100">
+                  <template #cell="{ record }">
+                    <a-tag size="small">{{ formatTypeLabel(record.fieldFormat) }}</a-tag>
+                  </template>
+                </a-table-column>
+                <a-table-column title="必填" data-index="isRequired" :width="60" align="center">
+                  <template #cell="{ record }">
+                    <icon-check v-if="record.isRequired" style="color: var(--tf-success)" />
+                  </template>
+                </a-table-column>
+                <a-table-column title="全局" data-index="isForAll" :width="60" align="center">
+                  <template #cell="{ record }">
+                    <icon-check v-if="record.isForAll" style="color: var(--tf-accent)" />
+                  </template>
+                </a-table-column>
+                <a-table-column title="适用项目" :width="120">
+                  <template #cell="{ record }">
+                    <span v-if="record.isForAll" class="text-muted">所有项目</span>
+                    <span v-else class="text-muted">{{ (record.projectIds || []).length }} 个项目</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="适用类型" :width="140">
+                  <template #cell="{ record }">
+                    <span v-if="!record.issueTypes || record.issueTypes.length === 0" class="text-muted">所有类型</span>
+                    <span v-else>{{ record.issueTypes.map(t => localizeIssueType(t)).join(', ') }}</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="列表可见" :width="80" align="center">
+                  <template #cell="{ record }">
+                    <icon-eye v-if="!record.isHiddenInList" style="color: var(--tf-success)" />
+                    <icon-eye-invisible v-else style="color: var(--tf-text-quaternary)" />
+                  </template>
+                </a-table-column>
+                <a-table-column title="操作" :width="120" align="center">
+                  <template #cell="{ record }">
+                    <a-button type="text" size="mini" @click.stop="openEdit(record)">编辑</a-button>
+                    <a-button type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
+                  </template>
+                </a-table-column>
+              </template>
+            </a-table>
+          </div>
+
+          <!-- 字段详情侧边栏 -->
+          <div v-if="selectedField" class="cf-detail-sidebar">
+            <div class="detail-header">
+              <h3 class="detail-title">{{ selectedField.name }}</h3>
+              <a-button type="text" size="mini" @click="selectedField = null">
+                <icon-close />
+              </a-button>
+            </div>
+            <div class="detail-body">
+              <div class="detail-row">
+                <span class="detail-label">类型</span>
+                <span class="detail-value">{{ formatTypeLabel(selectedField.fieldFormat) }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">必填</span>
+                <span class="detail-value">{{ selectedField.isRequired ? '是' : '否' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">全局可用</span>
+                <span class="detail-value">{{ selectedField.isForAll ? '是' : '否' }}</span>
+              </div>
+              <div v-if="selectedField.isMulti" class="detail-row">
+                <span class="detail-label">多值</span>
+                <span class="detail-value">是</span>
+              </div>
+              <div v-if="selectedField.defaultValue" class="detail-row">
+                <span class="detail-label">默认值</span>
+                <span class="detail-value">{{ selectedField.defaultValue }}</span>
+              </div>
+              <div v-if="!selectedField.isForAll" class="detail-row">
+                <span class="detail-label">适用项目</span>
+                <span class="detail-value">{{ (selectedField.projectIds || []).length }} 个</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">适用类型</span>
+                <span class="detail-value">
+                  {{ (!selectedField.issueTypes || selectedField.issueTypes.length === 0) ? '所有' : selectedField.issueTypes.map(t => localizeIssueType(t)).join(', ') }}
+                </span>
+              </div>
+              <div v-if="selectedField.options && selectedField.options.length > 0" class="detail-section">
+                <span class="detail-label">选项列表</span>
+                <div class="detail-options">
+                  <a-tag
+                    v-for="opt in selectedField.options.filter(o => !o.isArchived)"
+                    :key="opt.id"
+                    size="small"
+                    :color="opt.color || undefined"
+                  >{{ opt.value }}</a-tag>
+                </div>
+              </div>
+              <div v-if="detailUsage" class="detail-section">
+                <span class="detail-label">使用统计</span>
+                <div class="detail-stats">
+                  <span>{{ detailUsage.issueCount }} 个工单</span>
+                  <span>{{ detailUsage.valueCount }} 条值</span>
+                  <span>{{ detailUsage.projectCount }} 个项目</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+      <a-tab-pane key="projects" title="Fields in Projects">
+        <FieldsInProjects ref="fieldsInProjectsRef" />
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- 创建/编辑抽屉 -->
     <a-drawer
@@ -252,17 +328,24 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
-import type { CustomFieldDefinitionVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, CustomFieldUsageVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
+import FieldsInProjects from './FieldsInProjects.vue'
 
+const activeTab = ref('list')
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
 const loading = ref(false)
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
 const projectList = ref<any[]>([])
 const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
+
+// Detail sidebar state
+const selectedField = ref<CustomFieldDefinitionVO | null>(null)
+const detailUsage = ref<CustomFieldUsageVO | null>(null)
+const fieldsInProjectsRef = ref<InstanceType<typeof FieldsInProjects> | null>(null)
 
 // Drawer state
 const drawerVisible = ref(false)
@@ -359,6 +442,17 @@ async function loadIssueTypes() {
 function onPageChange(page: number) {
   pagination.current = page
   loadList()
+}
+
+async function onRowClick(record: CustomFieldDefinitionVO) {
+  selectedField.value = record
+  detailUsage.value = null
+  try {
+    const res = await customFieldApi.getUsage(record.id)
+    detailUsage.value = res.data || null
+  } catch {
+    // silently ignore
+  }
 }
 
 function resetForm() {
@@ -606,10 +700,107 @@ onMounted(() => {
   margin: 0;
 }
 
+.cf-tabs {
+  flex: 1;
+}
+
+.cf-body {
+  display: flex;
+  gap: 16px;
+}
+
 .cf-table {
   background: var(--tf-bg-surface);
   border-radius: 6px;
   border: 1px solid var(--tf-border);
+  flex: 1;
+  min-width: 0;
+}
+.cf-table.has-detail {
+  flex: 1;
+}
+
+.clickable-name {
+  cursor: pointer;
+  color: var(--tf-accent);
+}
+.clickable-name:hover {
+  text-decoration: underline;
+}
+
+/* Detail sidebar */
+.cf-detail-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--tf-border);
+}
+
+.detail-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0;
+}
+
+.detail-body {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  flex-shrink: 0;
+}
+
+.detail-value {
+  font-size: 12px;
+  color: var(--tf-text-primary);
+  text-align: right;
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--tf-border);
+}
+
+.detail-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.detail-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--tf-text-secondary);
 }
 
 .text-muted {

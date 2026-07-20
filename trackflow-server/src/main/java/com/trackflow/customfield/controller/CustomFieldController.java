@@ -20,6 +20,7 @@ import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
 import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
+import com.trackflow.customfield.vo.ProjectFieldsVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -90,6 +91,18 @@ public class CustomFieldController {
         return R.ok(vo);
     }
 
+    @GetMapping("/admin/custom-fields/{id}")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<CustomFieldDefinitionVO> getDetail(@PathVariable("id") Long id) {
+        CustomFieldDefinition entity = customFieldService.getById(id);
+        CustomFieldDefinitionVO vo = converter.toVO(entity);
+        vo.setOptions(converter.toOptionVOList(customFieldService.getOptions(entity.getId())));
+        vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
+                .map(String::valueOf).toList());
+        vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
+        return R.ok(vo);
+    }
+
     @DeleteMapping("/admin/custom-fields/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<Void> delete(@PathVariable("id") Long id,
@@ -102,6 +115,16 @@ public class CustomFieldController {
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<CustomFieldUsageVO> getUsage(@PathVariable("id") Long id) {
         return R.ok(customFieldService.getUsage(id));
+    }
+
+    /**
+     * 获取"Fields in Projects"矩阵数据：按项目分组展示每个项目关联的自定义字段。
+     * 包含全局字段和项目专属字段。
+     */
+    @GetMapping("/admin/custom-fields/fields-in-projects")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<List<ProjectFieldsVO>> fieldsInProjects() {
+        return R.ok(customFieldService.getFieldsInProjects());
     }
 
     /**
