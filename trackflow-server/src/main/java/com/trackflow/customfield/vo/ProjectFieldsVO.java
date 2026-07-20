@@ -28,9 +28,20 @@ public class ProjectFieldsVO {
         private String fieldFormat;
         /** 是否全局字段 */
         private Boolean isForAll;
-        /** 是否必填 */
+        /** 是否必填（全局级别） */
         private Boolean isRequired;
         /** 是否多值 */
         private Boolean isMulti;
+
+        // === 项目级覆盖属性 ===
+
+        /** 项目级必填性覆盖（null=继承全局，true/false=覆盖） */
+        private Boolean projectIsRequired;
+        /** 项目级默认值覆盖（null=继承全局） */
+        private String projectDefaultValue;
+        /** 字段在项目中的排序位置 */
+        private Integer position;
+        /** 是否存在项目级覆盖（便于前端快速判断） */
+        private Boolean hasOverride;
     }
 }

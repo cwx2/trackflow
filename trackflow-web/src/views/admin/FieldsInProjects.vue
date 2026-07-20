@@ -1,20 +1,30 @@
 <template>
   <div class="fields-in-projects">
-    <!-- 筛选 -->
+    <!-- 顶部汇总 + 筛选 -->
     <div class="fip-toolbar">
-      <a-input
-        v-model="keyword"
-        placeholder="按项目名称筛选..."
-        size="small"
-        allow-clear
-        style="width: 240px"
-      >
-        <template #prefix><icon-search /></template>
-      </a-input>
-      <a-radio-group v-model="groupBy" type="button" size="small">
-        <a-radio value="project">按项目分组</a-radio>
-        <a-radio value="field">按字段分组</a-radio>
-      </a-radio-group>
+      <div class="fip-summary" v-if="!loading">
+        <span class="summary-text">
+          {{ projectFieldsData.length }} 个项目 · {{ totalFieldCount }} 个字段配置
+        </span>
+        <span v-if="overrideCount > 0" class="summary-override">
+          {{ overrideCount }} 个项目级覆盖
+        </span>
+      </div>
+      <div class="fip-actions">
+        <a-input
+          v-model="keyword"
+          placeholder="按项目名称筛选..."
+          size="small"
+          allow-clear
+          style="width: 200px"
+        >
+          <template #prefix><icon-search /></template>
+        </a-input>
+        <a-radio-group v-model="groupBy" type="button" size="small">
+          <a-radio value="project">按项目分组</a-radio>
+          <a-radio value="field">按字段分组</a-radio>
+        </a-radio-group>
+      </div>
     </div>
 
     <!-- 加载状态 -->
@@ -38,26 +48,107 @@
             <icon-right :class="{ 'expanded': expandedGroups.has(project.projectId) }" class="expand-icon" />
             <span class="project-name">{{ project.projectName }}</span>
             <span class="project-key">{{ project.projectKey }}</span>
+            <span v-if="getProjectOverrideCount(project) > 0" class="override-badge">
+              {{ getProjectOverrideCount(project) }} 覆盖
+            </span>
             <span class="field-count">{{ project.fields.length }} 个字段</span>
           </div>
           <div v-if="expandedGroups.has(project.projectId)" class="group-fields">
-            <div v-for="field in project.fields" :key="field.id" class="field-row">
-              <span class="field-name">{{ field.name }}</span>
-              <a-tag size="small" class="field-type-tag">{{ formatType(field.fieldFormat) }}</a-tag>
-              <span v-if="field.isForAll" class="badge badge-global">全局</span>
-              <span v-else class="badge badge-project">项目级</span>
-              <span v-if="field.isRequired" class="badge badge-required">必填</span>
-              <span v-if="field.isMulti" class="badge badge-multi">多值</span>
-              <div class="field-actions">
-                <a-button
-                  v-if="!field.isForAll"
-                  type="text"
-                  size="mini"
-                  status="danger"
-                  @click.stop="handleDetach(project.projectId, field.id, field.name, project.projectName)"
-                >
-                  移除
-                </a-button>
+            <div
+              v-for="field in project.fields"
+              :key="field.id"
+              class="field-row"
+              :class="{ 'field-row--editing': isEditingField(project.projectId, field.id) }"
+              @click="openFieldEditor(project.projectId, field)"
+            >
+              <div class="field-row-main">
+                <span class="field-name">{{ field.name }}</span>
+                <a-tag size="small" class="field-type-tag">{{ formatType(field.fieldFormat) }}</a-tag>
+                <span v-if="field.isForAll" class="badge badge-global">全局</span>
+                <span v-else class="badge badge-project">项目级</span>
+                <!-- 必填状态：显示有效值+覆盖指示 -->
+                <template v-if="getEffectiveRequired(field)">
+                  <span
+                    class="badge badge-required"
+                    :class="{ 'badge-overridden': field.projectIsRequired !== null }"
+                  >
+                    必填<template v-if="field.projectIsRequired !== null">(项目级)</template>
+                  </span>
+                </template>
+                <template v-else-if="field.projectIsRequired === false">
+                  <span class="badge badge-not-required badge-overridden">
+                    非必填(项目级)
+                  </span>
+                </template>
+                <!-- 默认值覆盖指示 -->
+                <span v-if="field.projectDefaultValue" class="badge badge-default-override">
+                  默认:{{ truncateValue(field.projectDefaultValue) }}
+                </span>
+                <span v-if="field.isMulti" class="badge badge-multi">多值</span>
+                <div class="field-actions" @click.stop>
+                  <a-button
+                    v-if="!field.isForAll"
+                    type="text"
+                    size="mini"
+                    status="danger"
+                    @click="handleDetach(project.projectId, field.id, field.name, project.projectName)"
+                  >
+                    移除
+                  </a-button>
+                </div>
+              </div>
+              <!-- 内联编辑面板 -->
+              <div
+                v-if="isEditingField(project.projectId, field.id)"
+                class="field-override-editor"
+                @click.stop
+              >
+                <div class="editor-title">项目级属性覆盖</div>
+                <div class="editor-row">
+                  <span class="editor-label">必填性</span>
+                  <a-select
+                    v-model="editForm.isRequired"
+                    size="small"
+                    style="width: 160px"
+                    placeholder="继承全局设置"
+                    allow-clear
+                  >
+                    <a-option :value="true">必填</a-option>
+                    <a-option :value="false">非必填</a-option>
+                  </a-select>
+                  <span class="editor-hint">
+                    全局: {{ field.isRequired ? '必填' : '非必填' }}
+                  </span>
+                </div>
+                <div class="editor-row">
+                  <span class="editor-label">默认值</span>
+                  <a-input
+                    v-model="editForm.defaultValue"
+                    size="small"
+                    style="width: 160px"
+                    placeholder="继承全局设置"
+                    allow-clear
+                  />
+                </div>
+                <div class="editor-actions">
+                  <a-button size="mini" @click.stop="closeFieldEditor">取消</a-button>
+                  <a-button
+                    size="mini"
+                    type="primary"
+                    :loading="saving"
+                    @click.stop="saveOverride(project.projectId, field.id)"
+                  >
+                    保存覆盖
+                  </a-button>
+                  <a-button
+                    v-if="field.hasOverride"
+                    size="mini"
+                    status="warning"
+                    @click.stop="clearOverride(project.projectId, field.id)"
+                  >
+                    清除覆盖
+                  </a-button>
+                </div>
               </div>
             </div>
             <!-- 附加字段操作 -->
@@ -90,24 +181,169 @@
             <a-tag size="small">{{ formatType(item.fieldFormat) }}</a-tag>
             <span v-if="item.isForAll" class="badge badge-global">全局（所有项目）</span>
             <span v-else class="field-count">{{ item.projects.length }} 个项目</span>
+            <span v-if="item.overrideCount > 0" class="override-badge">
+              {{ item.overrideCount }} 覆盖
+            </span>
           </div>
           <div v-if="expandedGroups.has(item.fieldId)" class="group-fields">
             <template v-if="item.isForAll">
               <div class="info-note">此字段为全局字段，自动对所有项目可用。</div>
+              <div
+                v-for="proj in item.projects"
+                :key="proj.projectId"
+                class="field-row"
+                :class="{ 'field-row--editing': isEditingField(proj.projectId, item.fieldId) }"
+                @click="openFieldEditorByField(proj, item)"
+              >
+                <div class="field-row-main">
+                  <span class="project-name">{{ proj.projectName }}</span>
+                  <span class="project-key">{{ proj.projectKey }}</span>
+                  <template v-if="proj.hasOverride">
+                    <span v-if="proj.projectIsRequired !== null" class="badge badge-required badge-overridden">
+                      {{ proj.projectIsRequired ? '必填' : '非必填' }}(项目级)
+                    </span>
+                    <span v-if="proj.projectDefaultValue" class="badge badge-default-override">
+                      默认:{{ truncateValue(proj.projectDefaultValue) }}
+                    </span>
+                  </template>
+                </div>
+                <!-- 内联编辑面板 -->
+                <div
+                  v-if="isEditingField(proj.projectId, item.fieldId)"
+                  class="field-override-editor"
+                  @click.stop
+                >
+                  <div class="editor-title">项目级属性覆盖</div>
+                  <div class="editor-row">
+                    <span class="editor-label">必填性</span>
+                    <a-select
+                      v-model="editForm.isRequired"
+                      size="small"
+                      style="width: 160px"
+                      placeholder="继承全局设置"
+                      allow-clear
+                    >
+                      <a-option :value="true">必填</a-option>
+                      <a-option :value="false">非必填</a-option>
+                    </a-select>
+                    <span class="editor-hint">
+                      全局: {{ item.globalIsRequired ? '必填' : '非必填' }}
+                    </span>
+                  </div>
+                  <div class="editor-row">
+                    <span class="editor-label">默认值</span>
+                    <a-input
+                      v-model="editForm.defaultValue"
+                      size="small"
+                      style="width: 160px"
+                      placeholder="继承全局设置"
+                      allow-clear
+                    />
+                  </div>
+                  <div class="editor-actions">
+                    <a-button size="mini" @click.stop="closeFieldEditor">取消</a-button>
+                    <a-button
+                      size="mini"
+                      type="primary"
+                      :loading="saving"
+                      @click.stop="saveOverride(proj.projectId, item.fieldId)"
+                    >
+                      保存覆盖
+                    </a-button>
+                    <a-button
+                      v-if="proj.hasOverride"
+                      size="mini"
+                      status="warning"
+                      @click.stop="clearOverride(proj.projectId, item.fieldId)"
+                    >
+                      清除覆盖
+                    </a-button>
+                  </div>
+                </div>
+              </div>
             </template>
             <template v-else>
-              <div v-for="proj in item.projects" :key="proj.projectId" class="field-row">
-                <span class="project-name">{{ proj.projectName }}</span>
-                <span class="project-key">{{ proj.projectKey }}</span>
-                <div class="field-actions">
-                  <a-button
-                    type="text"
-                    size="mini"
-                    status="danger"
-                    @click.stop="handleDetach(proj.projectId, item.fieldId, item.fieldName, proj.projectName)"
-                  >
-                    移除
-                  </a-button>
+              <div
+                v-for="proj in item.projects"
+                :key="proj.projectId"
+                class="field-row"
+                :class="{ 'field-row--editing': isEditingField(proj.projectId, item.fieldId) }"
+                @click="openFieldEditorByField(proj, item)"
+              >
+                <div class="field-row-main">
+                  <span class="project-name">{{ proj.projectName }}</span>
+                  <span class="project-key">{{ proj.projectKey }}</span>
+                  <template v-if="proj.hasOverride">
+                    <span v-if="proj.projectIsRequired !== null" class="badge badge-required badge-overridden">
+                      {{ proj.projectIsRequired ? '必填' : '非必填' }}(项目级)
+                    </span>
+                    <span v-if="proj.projectDefaultValue" class="badge badge-default-override">
+                      默认:{{ truncateValue(proj.projectDefaultValue) }}
+                    </span>
+                  </template>
+                  <div class="field-actions" @click.stop>
+                    <a-button
+                      type="text"
+                      size="mini"
+                      status="danger"
+                      @click="handleDetach(proj.projectId, item.fieldId, item.fieldName, proj.projectName)"
+                    >
+                      移除
+                    </a-button>
+                  </div>
+                </div>
+                <!-- 内联编辑面板 -->
+                <div
+                  v-if="isEditingField(proj.projectId, item.fieldId)"
+                  class="field-override-editor"
+                  @click.stop
+                >
+                  <div class="editor-title">项目级属性覆盖</div>
+                  <div class="editor-row">
+                    <span class="editor-label">必填性</span>
+                    <a-select
+                      v-model="editForm.isRequired"
+                      size="small"
+                      style="width: 160px"
+                      placeholder="继承全局设置"
+                      allow-clear
+                    >
+                      <a-option :value="true">必填</a-option>
+                      <a-option :value="false">非必填</a-option>
+                    </a-select>
+                    <span class="editor-hint">
+                      全局: {{ item.globalIsRequired ? '必填' : '非必填' }}
+                    </span>
+                  </div>
+                  <div class="editor-row">
+                    <span class="editor-label">默认值</span>
+                    <a-input
+                      v-model="editForm.defaultValue"
+                      size="small"
+                      style="width: 160px"
+                      placeholder="继承全局设置"
+                      allow-clear
+                    />
+                  </div>
+                  <div class="editor-actions">
+                    <a-button size="mini" @click.stop="closeFieldEditor">取消</a-button>
+                    <a-button
+                      size="mini"
+                      type="primary"
+                      :loading="saving"
+                      @click.stop="saveOverride(proj.projectId, item.fieldId)"
+                    >
+                      保存覆盖
+                    </a-button>
+                    <a-button
+                      v-if="proj.hasOverride"
+                      size="mini"
+                      status="warning"
+                      @click.stop="clearOverride(proj.projectId, item.fieldId)"
+                    >
+                      清除覆盖
+                    </a-button>
+                  </div>
                 </div>
               </div>
             </template>
@@ -148,13 +384,21 @@ import { ref, computed, onMounted } from 'vue'
 import { IconSearch, IconRight, IconPlus, IconFolder, IconFile } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
-import type { ProjectFieldsVO, CustomFieldDefinitionVO } from '@/api/types'
+import type { ProjectFieldsVO, FieldSummaryVO, CustomFieldDefinitionVO } from '@/api/types'
 
 const loading = ref(false)
 const keyword = ref('')
 const groupBy = ref<'project' | 'field'>('project')
 const expandedGroups = ref(new Set<string>())
 const projectFieldsData = ref<ProjectFieldsVO[]>([])
+
+// Inline editor state
+const editingKey = ref<string | null>(null) // "projectId:fieldId"
+const editForm = ref<{ isRequired: boolean | null; defaultValue: string | null }>({
+  isRequired: null,
+  defaultValue: null
+})
+const saving = ref(false)
 
 // Attach dialog state
 const attachDialogVisible = ref(false)
@@ -176,6 +420,34 @@ const fieldTypeLabels: Record<string, string> = {
   user: '用户'
 }
 
+// === 汇总统计 ===
+const totalFieldCount = computed(() => {
+  return projectFieldsData.value.reduce((sum, p) => sum + p.fields.length, 0)
+})
+
+const overrideCount = computed(() => {
+  let count = 0
+  for (const p of projectFieldsData.value) {
+    for (const f of p.fields) {
+      if (f.hasOverride) count++
+    }
+  }
+  return count
+})
+
+function getProjectOverrideCount(project: ProjectFieldsVO): number {
+  return project.fields.filter(f => f.hasOverride).length
+}
+
+function getEffectiveRequired(field: FieldSummaryVO): boolean {
+  if (field.projectIsRequired !== null) return field.projectIsRequired
+  return field.isRequired
+}
+
+function truncateValue(value: string): string {
+  return value.length > 10 ? value.substring(0, 10) + '...' : value
+}
+
 function formatType(format: string) {
   return fieldTypeLabels[format] || format
 }
@@ -188,7 +460,80 @@ function toggleGroup(id: string) {
   }
 }
 
-// 按项目分组视图（过滤）
+// === Inline editor ===
+function isEditingField(projectId: string, fieldId: string): boolean {
+  return editingKey.value === `${projectId}:${fieldId}`
+}
+
+function openFieldEditor(projectId: string, field: FieldSummaryVO) {
+  const key = `${projectId}:${field.id}`
+  if (editingKey.value === key) {
+    closeFieldEditor()
+    return
+  }
+  editingKey.value = key
+  editForm.value = {
+    isRequired: field.projectIsRequired ?? null,
+    defaultValue: field.projectDefaultValue ?? null
+  }
+}
+
+function openFieldEditorByField(
+  proj: { projectId: string; projectName: string; projectKey: string; hasOverride: boolean; projectIsRequired: boolean | null; projectDefaultValue: string | null },
+  item: { fieldId: string; globalIsRequired: boolean }
+) {
+  const key = `${proj.projectId}:${item.fieldId}`
+  if (editingKey.value === key) {
+    closeFieldEditor()
+    return
+  }
+  editingKey.value = key
+  editForm.value = {
+    isRequired: proj.projectIsRequired ?? null,
+    defaultValue: proj.projectDefaultValue ?? null
+  }
+}
+
+function closeFieldEditor() {
+  editingKey.value = null
+  editForm.value = { isRequired: null, defaultValue: null }
+}
+
+async function saveOverride(projectId: string, fieldId: string) {
+  saving.value = true
+  try {
+    await customFieldApi.setFieldProjectOverride(projectId, fieldId, {
+      isRequired: editForm.value.isRequired,
+      defaultValue: editForm.value.defaultValue || null
+    })
+    Message.success('项目级覆盖已保存')
+    closeFieldEditor()
+    loadData()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function clearOverride(projectId: string, fieldId: string) {
+  saving.value = true
+  try {
+    await customFieldApi.setFieldProjectOverride(projectId, fieldId, {
+      isRequired: null,
+      defaultValue: null
+    })
+    Message.success('已清除项目级覆盖，恢复全局设置')
+    closeFieldEditor()
+    loadData()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '清除失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+// === 按项目分组视图（过滤） ===
 const filteredByProject = computed(() => {
   if (!keyword.value.trim()) return projectFieldsData.value
   const kw = keyword.value.trim().toLowerCase()
@@ -197,13 +542,24 @@ const filteredByProject = computed(() => {
   )
 })
 
-// 按字段分组视图
+// === 按字段分组视图 ===
+interface FieldGroupProjectItem {
+  projectId: string
+  projectName: string
+  projectKey: string
+  hasOverride: boolean
+  projectIsRequired: boolean | null
+  projectDefaultValue: string | null
+}
+
 interface FieldGroupItem {
   fieldId: string
   fieldName: string
   fieldFormat: string
   isForAll: boolean
-  projects: Array<{ projectId: string; projectName: string; projectKey: string }>
+  globalIsRequired: boolean
+  projects: FieldGroupProjectItem[]
+  overrideCount: number
 }
 
 const filteredByField = computed<FieldGroupItem[]>(() => {
@@ -217,17 +573,21 @@ const filteredByField = computed<FieldGroupItem[]>(() => {
           fieldName: field.name,
           fieldFormat: field.fieldFormat,
           isForAll: field.isForAll,
-          projects: []
+          globalIsRequired: field.isRequired,
+          projects: [],
+          overrideCount: 0
         })
       }
       const item = fieldMap.get(field.id)!
-      if (!field.isForAll) {
-        item.projects.push({
-          projectId: project.projectId,
-          projectName: project.projectName,
-          projectKey: project.projectKey
-        })
-      }
+      item.projects.push({
+        projectId: project.projectId,
+        projectName: project.projectName,
+        projectKey: project.projectKey,
+        hasOverride: field.hasOverride,
+        projectIsRequired: field.projectIsRequired,
+        projectDefaultValue: field.projectDefaultValue
+      })
+      if (field.hasOverride) item.overrideCount++
     }
   }
 
@@ -239,13 +599,14 @@ const filteredByField = computed<FieldGroupItem[]>(() => {
   return items.sort((a, b) => a.fieldName.localeCompare(b.fieldName))
 })
 
+// === Data loading ===
 async function loadData() {
   loading.value = true
   try {
     const res = await customFieldApi.fieldsInProjects()
     projectFieldsData.value = res.data || []
     // 默认展开第一个项目
-    if (projectFieldsData.value.length > 0) {
+    if (projectFieldsData.value.length > 0 && expandedGroups.value.size === 0) {
       expandedGroups.value.add(projectFieldsData.value[0].projectId)
     }
   } catch {
@@ -255,6 +616,7 @@ async function loadData() {
   }
 }
 
+// === Attach/Detach ===
 async function openAttachDialog(project: ProjectFieldsVO) {
   attachTarget.value = project
   selectedFieldToAttach.value = null
@@ -320,6 +682,33 @@ defineExpose({ refresh: loadData })
 }
 
 .fip-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fip-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-text {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+}
+
+.summary-override {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--color-warning-light-1, rgba(210, 153, 34, 0.15));
+  color: var(--tf-warning);
+  font-weight: 500;
+}
+
+.fip-actions {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -406,6 +795,15 @@ defineExpose({ refresh: loadData })
   margin-left: auto;
 }
 
+.override-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--color-warning-light-1, rgba(210, 153, 34, 0.15));
+  color: var(--tf-warning);
+  font-weight: 500;
+}
+
 .group-fields {
   padding: 4px 12px 8px 32px;
   display: flex;
@@ -415,14 +813,24 @@ defineExpose({ refresh: loadData })
 
 .field-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
   padding: 6px 8px;
   border-radius: 4px;
+  cursor: pointer;
   transition: background 100ms;
 }
 .field-row:hover {
   background: var(--tf-bg-hover);
+}
+.field-row--editing {
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+}
+
+.field-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .field-type-tag {
@@ -447,6 +855,18 @@ defineExpose({ refresh: loadData })
   background: var(--color-warning-light-1, rgba(210, 153, 34, 0.15));
   color: var(--tf-warning);
 }
+.badge-not-required {
+  background: var(--color-fill-2, rgba(128, 128, 128, 0.1));
+  color: var(--tf-text-secondary);
+}
+.badge-overridden {
+  border: 1px dashed var(--tf-warning);
+}
+.badge-default-override {
+  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.1));
+  color: var(--tf-accent);
+  border: 1px dashed var(--tf-accent);
+}
 .badge-multi {
   background: var(--color-purple-light-1, rgba(156, 39, 176, 0.15));
   color: #b388ff;
@@ -454,6 +874,48 @@ defineExpose({ refresh: loadData })
 
 .field-actions {
   margin-left: auto;
+}
+
+/* Inline override editor */
+.field-override-editor {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--tf-bg-elevated, var(--tf-bg-surface));
+  border-radius: 4px;
+  border: 1px solid var(--tf-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+}
+
+.editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-label {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  width: 56px;
+  flex-shrink: 0;
+}
+
+.editor-hint {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .attach-row {

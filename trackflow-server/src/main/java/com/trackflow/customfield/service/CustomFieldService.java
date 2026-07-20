@@ -1960,14 +1960,17 @@ public class CustomFieldService {
                         .eq(CustomFieldDefinition::getIsForAll, true)
                         .orderByAsc(CustomFieldDefinition::getPosition));
 
-        // 3. 获取所有项目-字段关联
+        // 3. 获取所有项目-字段关联（含覆盖属性）
         List<CustomFieldProject> allMappings = projectMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldProject>()
                         .orderByAsc(CustomFieldProject::getPosition));
-        Map<Long, List<Long>> projectFieldIdsMap = allMappings.stream()
-                .collect(Collectors.groupingBy(
-                        CustomFieldProject::getProjectId,
-                        Collectors.mapping(CustomFieldProject::getCustomFieldId, Collectors.toList())));
+        // 按 projectId+fieldId 双键索引，用于快速查找覆盖数据
+        Map<String, CustomFieldProject> mappingIndex = new HashMap<>();
+        Map<Long, List<Long>> projectFieldIdsMap = new HashMap<>();
+        for (CustomFieldProject m : allMappings) {
+            mappingIndex.put(m.getProjectId() + ":" + m.getCustomFieldId(), m);
+            projectFieldIdsMap.computeIfAbsent(m.getProjectId(), k -> new ArrayList<>()).add(m.getCustomFieldId());
+        }
 
         // 4. 收集所有需要加载的非全局字段 ID
         Set<Long> allProjectFieldIds = allMappings.stream()
@@ -1980,7 +1983,7 @@ public class CustomFieldService {
                     .forEach(f -> fieldMap.put(f.getId(), f));
         }
 
-        // 5. 组装结果
+        // 5. 组装结果（含项目级覆盖数据）
         List<ProjectFieldsVO> result = new ArrayList<>();
         for (Project project : projects) {
             ProjectFieldsVO pvo = new ProjectFieldsVO();
@@ -1990,9 +1993,10 @@ public class CustomFieldService {
 
             List<ProjectFieldsVO.FieldSummaryVO> fields = new ArrayList<>();
 
-            // 全局字段
+            // 全局字段（可能有项目级覆盖）
             for (CustomFieldDefinition gf : globalFields) {
-                fields.add(toFieldSummary(gf));
+                CustomFieldProject mapping = mappingIndex.get(project.getId() + ":" + gf.getId());
+                fields.add(toFieldSummary(gf, mapping));
             }
 
             // 项目专属字段
@@ -2000,7 +2004,8 @@ public class CustomFieldService {
             for (Long fieldId : projectFieldIds) {
                 CustomFieldDefinition fd = fieldMap.get(fieldId);
                 if (fd != null && !Boolean.TRUE.equals(fd.getIsForAll())) {
-                    fields.add(toFieldSummary(fd));
+                    CustomFieldProject mapping = mappingIndex.get(project.getId() + ":" + fieldId);
+                    fields.add(toFieldSummary(fd, mapping));
                 }
             }
 
@@ -2010,7 +2015,7 @@ public class CustomFieldService {
         return result;
     }
 
-    private ProjectFieldsVO.FieldSummaryVO toFieldSummary(CustomFieldDefinition field) {
+    private ProjectFieldsVO.FieldSummaryVO toFieldSummary(CustomFieldDefinition field, CustomFieldProject mapping) {
         ProjectFieldsVO.FieldSummaryVO vo = new ProjectFieldsVO.FieldSummaryVO();
         vo.setId(String.valueOf(field.getId()));
         vo.setName(field.getName());
@@ -2018,6 +2023,17 @@ public class CustomFieldService {
         vo.setIsForAll(field.getIsForAll());
         vo.setIsRequired(field.getIsRequired());
         vo.setIsMulti(field.getIsMulti());
+
+        // 项目级覆盖属性
+        if (mapping != null) {
+            vo.setProjectIsRequired(mapping.getIsRequired());
+            vo.setProjectDefaultValue(mapping.getDefaultValue());
+            vo.setPosition(mapping.getPosition());
+            vo.setHasOverride(mapping.getIsRequired() != null || mapping.getDefaultValue() != null);
+        } else {
+            vo.setHasOverride(false);
+        }
+
         return vo;
     }
 

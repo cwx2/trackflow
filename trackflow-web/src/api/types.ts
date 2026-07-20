@@ -523,6 +523,14 @@ export interface FieldSummaryVO {
   isForAll: boolean
   isRequired: boolean
   isMulti: boolean
+  /** 项目级必填性覆盖（null=继承全局） */
+  projectIsRequired: boolean | null
+  /** 项目级默认值覆盖（null=继承全局） */
+  projectDefaultValue: string | null
+  /** 字段在项目中的排序位置 */
+  position: number | null
+  /** 是否存在项目级覆盖 */
+  hasOverride: boolean
 }
 
 export interface CustomFieldValueVO {
