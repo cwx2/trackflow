@@ -38,6 +38,16 @@ public class ReportConfig {
         private List<String> assignees;
         private List<String> issueTypes;
         private String sprintId;
+
+        // ── 语义快捷筛选（兼容系统预置报表旧格式） ──
+        /** true=仅已关闭, false=排除已关闭 */
+        private Boolean statusClosed;
+        /** true=仅未分配（assignee_id IS NULL） */
+        private Boolean unassigned;
+        /** true=仅逾期（due_date < today 且未关闭） */
+        private Boolean overdue;
+        /** true=仅当前活跃 Sprint 的工单 */
+        private Boolean activeSprint;
     }
 
     @Data
@@ -78,7 +88,42 @@ public class ReportConfig {
             if (sprintId != null) {
                 filters.setSprintId(String.valueOf(sprintId));
             }
+            // 语义快捷筛选字段（兼容旧版系统预置报表 config）
+            Object statusClosed = filtersMap.get("statusClosed");
+            if (statusClosed instanceof Boolean b) {
+                filters.setStatusClosed(b);
+            }
+            Object unassigned = filtersMap.get("unassigned");
+            if (unassigned instanceof Boolean b) {
+                filters.setUnassigned(b);
+            }
+            Object overdue = filtersMap.get("overdue");
+            if (overdue instanceof Boolean b) {
+                filters.setOverdue(b);
+            }
+            Object activeSprint = filtersMap.get("activeSprint");
+            if (activeSprint instanceof Boolean b) {
+                filters.setActiveSprint(b);
+            }
             config.setFilters(filters);
+        }
+
+        // 兼容旧版 periodType → 转换为标准 timeRange
+        if (config.getTimeRange() == null && config.getFilters() != null) {
+            Object filtersForPeriod = map.get("filters");
+            if (filtersForPeriod instanceof Map<?, ?> fm) {
+                Object periodType = fm.get("periodType");
+                if (periodType instanceof String pt && !pt.isBlank()) {
+                    String preset = convertPeriodTypeToPreset(pt);
+                    if (preset != null) {
+                        ReportTimeRange timeRange = new ReportTimeRange();
+                        timeRange.setType("dynamic");
+                        timeRange.setPreset(preset);
+                        timeRange.setField("createdAt");
+                        config.setTimeRange(timeRange);
+                    }
+                }
+            }
         }
 
         // 解析 timeRange
@@ -179,6 +224,21 @@ public class ReportConfig {
         };
     }
 
+    /**
+     * 将旧版 periodType 转换为新版 timeRange preset
+     */
+    private static String convertPeriodTypeToPreset(String periodType) {
+        return switch (periodType) {
+            case "current_month" -> "this_month";
+            case "current_week" -> "last_7_days";
+            case "last_month" -> "last_month";
+            case "last_week" -> "last_7_days";
+            case "current_quarter" -> "this_quarter";
+            case "current_year" -> "this_year";
+            default -> null;
+        };
+    }
+
     @SuppressWarnings("unchecked")
     private static List<String> toStringList(Object obj) {
         if (obj instanceof List<?> list) {
@@ -200,7 +260,11 @@ public class ReportConfig {
                 || hasContent(filters.getPriorities())
                 || hasContent(filters.getAssignees())
                 || hasContent(filters.getIssueTypes())
-                || filters.getSprintId() != null;
+                || filters.getSprintId() != null
+                || filters.getStatusClosed() != null
+                || Boolean.TRUE.equals(filters.getUnassigned())
+                || Boolean.TRUE.equals(filters.getOverdue())
+                || Boolean.TRUE.equals(filters.getActiveSprint());
     }
 
     private boolean hasContent(List<String> list) {
