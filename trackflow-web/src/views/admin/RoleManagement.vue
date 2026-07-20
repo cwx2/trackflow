@@ -249,6 +249,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   query: '查询权限',
   report: '报表权限',
   integration: '集成权限',
+  time_tracking: '时间追踪权限',
+  rule: '规则权限',
 }
 
 const roles = ref<any[]>([])
