@@ -24,6 +24,7 @@ public class SystemSettingController {
      * 获取时间追踪设置（所有认证用户可读取，前端需要用于工时换算）
      */
     @GetMapping("/time-tracking")
+    @PreAuthorize("isAuthenticated()")
     public R<TimeTrackingSettingsVO> getTimeTrackingSettings() {
         return R.ok(settingService.getTimeTrackingSettings());
     }

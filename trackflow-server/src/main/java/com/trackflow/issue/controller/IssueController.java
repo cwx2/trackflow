@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/issues")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class IssueController {
 
     private final IssueService issueService;

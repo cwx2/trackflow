@@ -36,6 +36,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class CustomFieldController {
 
     private final CustomFieldService customFieldService;

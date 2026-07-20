@@ -45,3 +45,10 @@ logging:
   level:
     com.trackflow: DEBUG
     org.springframework.security: DEBUG
+
+# TrackFlow custom settings
+trackflow:
+  security:
+    # 启动时检查所有 Controller 端点是否有授权注解
+    # false = 仅打印 WARN 日志；true = 缺失注解时阻断启动（生产环境建议 true）
+    enforce-authorization-check: false

@@ -21,6 +21,7 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/queries")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class SavedQueryController {
 
     private final SavedQueryService savedQueryService;

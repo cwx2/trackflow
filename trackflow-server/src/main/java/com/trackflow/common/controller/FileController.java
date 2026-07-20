@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.InputStream;
@@ -17,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 @RestController
 @RequestMapping("/api/v1/files")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class FileController {
 
     private final MinioService minioService;

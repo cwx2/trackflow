@@ -36,6 +36,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/projects")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class ProjectController {
 
     private final ProjectService projectService;
