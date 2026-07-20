@@ -1060,13 +1060,30 @@ public class CustomFieldService {
 
         List<CustomFieldValidationEngine.FieldValidationError> allErrors = new ArrayList<>();
 
+        // 构建条件评估的上下文值：PARTIAL 模式需合并数据库已有值
+        // 确保条件源字段即使不在本次请求中，也能基于已有值正确评估
+        Map<Long, String> conditionContext;
+        if (mode == CustomFieldValidateMode.PARTIAL) {
+            Map<Long, String> existingValues = getValues(issueId);
+            conditionContext = new HashMap<>(existingValues);
+            conditionContext.putAll(fieldValues); // 请求值覆盖已有值
+        } else {
+            conditionContext = fieldValues;
+        }
+
         for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
             CustomFieldDefinition field = fieldMap.get(entry.getKey());
             if (field == null) continue;
             // Pass project-level required override to validation engine
             CustomFieldProject override = projectOverrides.get(entry.getKey());
+
+            // 如果字段有条件显示规则且条件不满足，跳过必填性验证（允许清空）
             Boolean effectiveRequired = (override != null && override.getIsRequired() != null)
                     ? override.getIsRequired() : null;
+            if (!isFieldConditionMet(override, conditionContext)) {
+                // 条件不满足时字段应隐藏，跳过必填检查但仍做格式校验
+                effectiveRequired = false;
+            }
             allErrors.addAll(validationEngine.validate(field, entry.getValue(), projectId, effectiveRequired));
         }
 
@@ -1074,7 +1091,7 @@ public class CustomFieldService {
         for (CustomFieldDefinition field : applicableFields) {
             // 条件显示评估：如果字段有条件且条件不满足，跳过必填校验
             CustomFieldProject mapping = projectOverrides.get(field.getId());
-            if (!isFieldConditionMet(mapping, fieldValues)) {
+            if (!isFieldConditionMet(mapping, conditionContext)) {
                 continue;
             }
             if (isFieldRequired(field, mapping) && !fieldValues.containsKey(field.getId())) {
