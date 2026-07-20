@@ -628,7 +628,8 @@ public class IssueService {
                 newSprintName = newSprint != null ? newSprint.getName() : null;
             }
             recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
-            issue.setSprintId(dto.getSprintId());
+            // 0 means "clear sprint" → set to null (DB convention: sprint_id IS NULL for Backlog)
+            issue.setSprintId(dto.getSprintId() == 0 ? null : dto.getSprintId());
             // 收集迭代变更
             fieldChanges.put("sprint", new String[]{oldSprintName, newSprintName});
         }

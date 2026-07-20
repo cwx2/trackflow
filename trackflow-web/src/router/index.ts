@@ -80,6 +80,11 @@ const routes = [
         component: () => import('@/views/sprint/SprintView.vue')
       },
       {
+        path: 'sprint-planning',
+        name: 'SprintPlanning',
+        component: () => import('@/views/sprint/SprintPlanningView.vue')
+      },
+      {
         path: 'workflow',
         name: 'Workflow',
         component: () => import('@/views/admin/WorkflowEditor.vue'),

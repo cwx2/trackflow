@@ -32,6 +32,10 @@
           <span class="nav-label">迭代</span>
           <span v-if="!canManageSprint && navBadgeLoaded" class="nav-readonly-tag" title="您当前无迭代管理权限">只读</span>
         </router-link>
+        <router-link to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">规划</span>
+        </router-link>
         <router-link to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
           <span class="nav-icon">⏱</span>
           <span class="nav-label">时间表</span>
