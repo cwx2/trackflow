@@ -14,6 +14,7 @@ import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
 import com.trackflow.customfield.service.CustomFieldService;
+import com.trackflow.customfield.service.CustomFieldValidateMode;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
 import com.trackflow.issue.dto.MoveIssueDTO;
@@ -150,7 +151,7 @@ public class IssueService {
             for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
                 try {
                     userFieldValues.put(Long.parseLong(entry.getKey()),
-                            entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                            entry.getValue() != null ? String.valueOf(entry.getValue()) : null);
                 } catch (NumberFormatException ignored) {}
             }
         }
@@ -684,11 +685,12 @@ public class IssueService {
             for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
                 try {
                     fieldValues.put(Long.parseLong(entry.getKey()),
-                            entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                            entry.getValue() != null ? String.valueOf(entry.getValue()) : null);
                 } catch (NumberFormatException ignored) {}
             }
             customFieldService.saveValues(issue.getId(), fieldValues,
-                    issue.getIssueType(), issue.getProjectId());
+                    issue.getIssueType(), issue.getProjectId(),
+                    CustomFieldValidateMode.PARTIAL);
         }
 
         issueMapper.updateById(issue);

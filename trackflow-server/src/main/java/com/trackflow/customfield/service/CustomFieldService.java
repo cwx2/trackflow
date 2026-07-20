@@ -1010,8 +1010,29 @@ public class CustomFieldService {
         return conditionValues.contains(conditionFieldValue);
     }
 
+    /**
+     * 保存自定义字段值（默认 FULL 模式，向后兼容）。
+     */
     @Transactional
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
+        saveValues(issueId, fieldValues, issueType, projectId, CustomFieldValidateMode.FULL);
+    }
+
+    /**
+     * 保存自定义字段值（指定验证模式）。
+     *
+     * <p>FULL 模式：所有适用的必填字段都必须有值（创建场景）。
+     * <p>PARTIAL 模式：仅验证本次传入的字段，未传入的必填字段跳过（更新场景）。
+     *
+     * @param issueId     工单 ID
+     * @param fieldValues 本次传入的字段值 map（fieldId → value）
+     * @param issueType   工单类型
+     * @param projectId   项目 ID
+     * @param mode        验证模式
+     */
+    @Transactional
+    public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
+                           CustomFieldValidateMode mode) {
         if (fieldValues == null || fieldValues.isEmpty()) return;
 
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
@@ -1049,6 +1070,7 @@ public class CustomFieldService {
             allErrors.addAll(validationEngine.validate(field, entry.getValue(), projectId, effectiveRequired));
         }
 
+        // 必填字段检查：PARTIAL 模式下仅检查传入的字段，跳过未传入的
         for (CustomFieldDefinition field : applicableFields) {
             // 条件显示评估：如果字段有条件且条件不满足，跳过必填校验
             CustomFieldProject mapping = projectOverrides.get(field.getId());
@@ -1056,6 +1078,11 @@ public class CustomFieldService {
                 continue;
             }
             if (isFieldRequired(field, mapping) && !fieldValues.containsKey(field.getId())) {
+                if (mode == CustomFieldValidateMode.PARTIAL) {
+                    // PARTIAL 模式：未传入的必填字段跳过（保持已有值不变）
+                    continue;
+                }
+                // FULL 模式：未传入的必填字段报错
                 allErrors.add(new CustomFieldValidationEngine.FieldValidationError(
                         field.getName(), "此字段为必填项"));
             }
@@ -1116,7 +1143,12 @@ public class CustomFieldService {
                 String oldValue = existing != null ? existing.getValue() : null;
                 String newValue = rawInput;
 
-                if (existing != null) {
+                if (newValue == null || newValue.isBlank()) {
+                    // 空值 → 删除已有记录（与 saveSingleValue 行为一致）
+                    if (existing != null) {
+                        valueMapper.deleteById(existing.getId());
+                    }
+                } else if (existing != null) {
                     existing.setValue(newValue);
                     existing.setUpdatedAt(LocalDateTime.now());
                     valueMapper.updateById(existing);
