@@ -175,8 +175,25 @@ public class UserService {
      * 分页查询用户列表
      */
     public Page<SysUser> list(Page<SysUser> page, String keyword, String username, String displayName,
-                              String email, Long orgId, String status, String banStatus) {
+                              String email, Long orgId, String status, String banStatus, Long roleId) {
+        // 如果指定了角色筛选，先查出该角色对应的用户 ID 列表
+        List<Long> roleUserIds = null;
+        if (roleId != null) {
+            roleUserIds = userRoleMapper.selectList(
+                    new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, roleId)
+            ).stream().map(UserRole::getUserId).toList();
+            if (roleUserIds.isEmpty()) {
+                // 该角色无用户，直接返回空结果
+                return page;
+            }
+        }
+
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
+
+        // roleId 筛选
+        if (roleUserIds != null) {
+            wrapper.in(SysUser::getId, roleUserIds);
+        }
 
         // keyword: unified search across username, displayName, email (OR condition)
         if (keyword != null && !keyword.isBlank()) {

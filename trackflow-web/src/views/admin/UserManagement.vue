@@ -5,6 +5,10 @@
       <div class="header-actions">
         <div class="header-filters">
           <input v-model="filters.keyword" class="filter-input" placeholder="搜索用户名/姓名/邮箱..." @input="debounceLoad" />
+          <select v-model="filters.roleId" class="filter-select" @change="loadUsers">
+            <option value="">全部角色</option>
+            <option v-for="role in globalRoles" :key="role.id" :value="role.id">{{ role.name }}</option>
+          </select>
           <select v-model="filters.status" class="filter-select" @change="loadUsers">
             <option value="">全部状态</option>
             <option value="active">启用</option>
@@ -328,7 +332,7 @@ const pageSize = 20
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 const loading = ref(false)
 
-const filters = reactive({ keyword: '', status: '', banStatus: '' })
+const filters = reactive({ keyword: '', roleId: '', status: '', banStatus: '' })
 
 // 排序状态
 const sortField = ref('createdAt')
@@ -398,7 +402,8 @@ async function loadUsers() {
   loading.value = true
   try {
     const params: any = { page: page.value, pageSize }
-    if (filters.keyword) params.username = filters.keyword
+    if (filters.keyword) params.keyword = filters.keyword
+    if (filters.roleId) params.roleId = filters.roleId
     if (filters.status) params.status = filters.status
     if (filters.banStatus) params.banStatus = filters.banStatus
     // 排序参数：-fieldName 降序，fieldName 升序

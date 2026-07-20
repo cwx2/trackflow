@@ -55,6 +55,7 @@ public class UserController {
             @RequestParam(value = "orgId", required = false) Long orgId,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "banStatus", required = false) String banStatus,
+            @RequestParam(value = "roleId", required = false) Long roleId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             @RequestParam(value = "sort", required = false) String sort) {
@@ -62,7 +63,7 @@ public class UserController {
         Page<SysUser> pageObj = PageHelper.buildPage(page, pageSize, sort,
                 Set.of("id", "username", "display_name", "email", "status",
                         "org_id", "created_at", "updated_at", "last_login_at"));
-        Page<SysUser> result = userService.list(pageObj, keyword, username, displayName, email, orgId, status, banStatus);
+        Page<SysUser> result = userService.list(pageObj, keyword, username, displayName, email, orgId, status, banStatus, roleId);
 
         List<UserVO> voList = userConverter.toVOList(result.getRecords());
 
