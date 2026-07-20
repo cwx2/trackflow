@@ -237,7 +237,7 @@ const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canCommen
   { isProjectArchived: () => isProjectArchived.value }
 )
 
-// 资源级权限覆盖：Issue 的 reporter/assignee 即使项目角色无 issue:edit 也可编辑
+// 资源级权限覆盖：reporter 需 issue:edit_own，assignee 需 issue:edit_assigned
 import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 
@@ -250,23 +250,38 @@ const canManageComments = computed(() => hasProjectPermission('issue:manage_comm
 /** 是否可以管理自定义字段（用于内联添加选项） */
 const canManageCustomFieldsComputed = computed(() => hasProjectPermission('project:manage_custom_fields'))
 
-/** 是否为 Issue 的创建者或负责人 */
-const isIssueOwner = computed(() => {
+/** 是否为 Issue 的创建者 */
+const isReporter = computed(() => {
   const dbUserId = authStore.user?.userId
   if (!dbUserId || !issue.value) return false
-  return dbUserId === issue.value.reporterId || dbUserId === issue.value.assigneeId
+  return dbUserId === issue.value.reporterId
 })
 
-/** 综合权限：项目级权限 OR 资源级权限（reporter/assignee 可编辑） */
+/** 是否为 Issue 的负责人 */
+const isAssignee = computed(() => {
+  const dbUserId = authStore.user?.userId
+  if (!dbUserId || !issue.value) return false
+  return dbUserId === issue.value.assigneeId
+})
+
+/** 综合权限：项目级 issue:edit OR 资源级（reporter + edit_own / assignee + edit_assigned） */
 const canEditIssueEffective = computed(() => {
   if (isProjectArchived.value) return false
-  return canEditIssue.value || isIssueOwner.value
+  if (canEditIssue.value) return true
+  // 资源级：reporter 需要 issue:edit_own 权限
+  if (isReporter.value && hasProjectPermission('issue:edit_own')) return true
+  // 资源级：assignee 需要 issue:edit_assigned 权限
+  if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
+  return false
 })
 
-/** 综合状态变更权限：项目级权限即可（不再要求 assignee） */
+/** 综合状态变更权限：项目级 issue:change_status OR assignee + edit_assigned */
 const canChangeStatusEffective = computed(() => {
   if (isProjectArchived.value) return false
-  return canChangeStatus.value
+  if (canChangeStatus.value) return true
+  // 资源级：assignee 需要 issue:edit_assigned 权限
+  if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
+  return false
 })
 
 /** 是否可以移动工单到其他项目 */

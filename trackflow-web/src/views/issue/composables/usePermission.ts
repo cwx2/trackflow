@@ -46,12 +46,24 @@ export function usePermission(issues: Ref<IssueVO[]>) {
    * 判断当前用户是否可以编辑指定 Issue
    * system:admin 直接返回 true
    * 未加载权限时返回 true（乐观策略，后端兜底）
+   * 
+   * 检查逻辑（与后端 PermissionService.hasIssuePermission 一致）：
+   * 1. 项目级 issue:edit 权限 → 允许
+   * 2. 是 reporter 且有 issue:edit_own → 允许
+   * 3. 是 assignee 且有 issue:edit_assigned → 允许
    */
   function canEditIssue(issue: IssueVO): boolean {
     if (authStore.hasGlobalPermission('system:admin')) return true
     const perms = permissionCache.value[issue.projectId]
     if (!perms) return true // 未加载时默认允许，后端兜底
-    return perms.has('issue:edit')
+    // 1. 项目级 issue:edit
+    if (perms.has('issue:edit')) return true
+    // 2. 资源级：reporter + issue:edit_own
+    const userId = authStore.user?.userId
+    if (userId && userId === issue.reporterId && perms.has('issue:edit_own')) return true
+    // 3. 资源级：assignee + issue:edit_assigned
+    if (userId && userId === issue.assigneeId && perms.has('issue:edit_assigned')) return true
+    return false
   }
 
   /**

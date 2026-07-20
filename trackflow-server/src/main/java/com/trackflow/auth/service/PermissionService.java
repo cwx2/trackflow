@@ -399,9 +399,14 @@ public class PermissionService {
     /**
      * 检查用户对特定 Issue 的权限（含资源级规则）。
      *
-     * 资源级规则：
-     * - Issue 的 reporter（创建者）自动获得 issue:edit 权限
-     * - Issue 的 assignee（负责人）自动获得 issue:edit 和 issue:change_status 权限
+     * <p>资源级规则（可通过角色配置开启/关闭）：
+     * <ul>
+     *   <li>reporter 需要 issue:edit_own 权限才能编辑自己创建的工单</li>
+     *   <li>assignee 需要 issue:edit_assigned 权限才能编辑/变更分配给自己的工单</li>
+     * </ul>
+     *
+     * <p>这些权限由管理员在角色配置中控制，不再硬编码授予。
+     * 参考 OpenProject 的 edit_own_work_packages 模式。
      *
      * @param userId     当前操作用户
      * @param issue      目标 Issue 对象
@@ -416,19 +421,19 @@ public class PermissionService {
             return true;
         }
 
-        // 2. 资源级规则：创建者（reporter）可编辑
+        // 2. 资源级规则：创建者（reporter）需要 issue:edit_own 权限
         if ("issue:edit".equals(permission) && Objects.equals(userId, issue.getReporterId())) {
-            return true;
+            return hasPermission(userId, issue.getProjectId(), "issue:edit_own");
         }
 
-        // 3. 资源级规则：负责人（assignee）可编辑
+        // 3. 资源级规则：负责人（assignee）需要 issue:edit_assigned 权限
         if ("issue:edit".equals(permission) && Objects.equals(userId, issue.getAssigneeId())) {
-            return true;
+            return hasPermission(userId, issue.getProjectId(), "issue:edit_assigned");
         }
 
-        // 4. 资源级规则：负责人可变更状态
+        // 4. 资源级规则：负责人变更状态——也需要 issue:edit_assigned 权限
         if ("issue:change_status".equals(permission) && Objects.equals(userId, issue.getAssigneeId())) {
-            return true;
+            return hasPermission(userId, issue.getProjectId(), "issue:edit_assigned");
         }
 
         return false;
