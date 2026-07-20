@@ -774,15 +774,21 @@ public class CustomFieldService {
         projectFields.forEach(f -> merged.put(f.getId(), f));
 
         if (issueType != null && !issueType.isBlank()) {
-            Set<Long> typeRestricted = issueTypeMapper.selectList(null).stream()
-                    .collect(Collectors.groupingBy(CustomFieldIssueType::getCustomFieldId,
-                            Collectors.mapping(CustomFieldIssueType::getIssueType, Collectors.toSet())))
-                    .entrySet().stream()
-                    .filter(e -> !e.getValue().contains(issueType))
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.toSet());
+            Set<Long> mergedFieldIds = merged.keySet();
+            if (!mergedFieldIds.isEmpty()) {
+                Set<Long> typeRestricted = issueTypeMapper.selectList(
+                        new LambdaQueryWrapper<CustomFieldIssueType>()
+                                .in(CustomFieldIssueType::getCustomFieldId, mergedFieldIds))
+                        .stream()
+                        .collect(Collectors.groupingBy(CustomFieldIssueType::getCustomFieldId,
+                                Collectors.mapping(CustomFieldIssueType::getIssueType, Collectors.toSet())))
+                        .entrySet().stream()
+                        .filter(e -> !e.getValue().contains(issueType))
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toSet());
 
-            merged.entrySet().removeIf(e -> typeRestricted.contains(e.getKey()));
+                merged.entrySet().removeIf(e -> typeRestricted.contains(e.getKey()));
+            }
         }
 
         return new ArrayList<>(merged.values());
