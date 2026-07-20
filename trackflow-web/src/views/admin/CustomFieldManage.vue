@@ -326,16 +326,22 @@
 
         <!-- 项目关联（非全局时） -->
         <a-form-item v-if="!form.isForAll" label="关联项目">
-          <a-checkbox-group v-model="form.projectIds">
-            <a-checkbox v-for="p in projectList" :key="p.id" :value="p.id">{{ p.name }}</a-checkbox>
-          </a-checkbox-group>
+          <CheckboxGroupEnhanced
+            v-model="form.projectIds"
+            :options="projectCheckboxOptions"
+            :search-threshold="8"
+            :scroll-threshold="10"
+          />
         </a-form-item>
 
         <!-- Issue 类型关联 -->
         <a-form-item label="适用 Issue 类型">
-          <a-checkbox-group v-model="form.issueTypes">
-            <a-checkbox v-for="t in issueTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-checkbox>
-          </a-checkbox-group>
+          <CheckboxGroupEnhanced
+            v-model="form.issueTypes"
+            :options="issueTypeCheckboxOptions"
+            :search-threshold="8"
+            :scroll-threshold="10"
+          />
           <div class="form-help">不选则适用所有类型</div>
         </a-form-item>
       </a-form>
@@ -344,7 +350,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
@@ -352,6 +358,8 @@ import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } f
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
+import CheckboxGroupEnhanced from './components/CheckboxGroupEnhanced.vue'
+import type { CheckboxOption } from './components/CheckboxGroupEnhanced.vue'
 
 const activeTab = ref('list')
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
@@ -359,6 +367,24 @@ const loading = ref(false)
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
 const projectList = ref<any[]>([])
 const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
+
+/** 项目列表转换为 CheckboxGroupEnhanced 的选项格式 */
+const projectCheckboxOptions = computed<CheckboxOption[]>(() =>
+  projectList.value.map(p => ({
+    value: p.id as string,
+    label: p.name as string,
+    extra: p.key as string,
+    searchKeywords: [p.key as string]
+  }))
+)
+
+/** Issue 类型列表转换为 CheckboxGroupEnhanced 的选项格式 */
+const issueTypeCheckboxOptions = computed<CheckboxOption[]>(() =>
+  issueTypeOptions.value.map(t => ({
+    value: t.value,
+    label: t.label
+  }))
+)
 
 // Detail sidebar state
 const selectedField = ref<CustomFieldDefinitionVO | null>(null)
