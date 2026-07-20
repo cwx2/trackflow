@@ -151,11 +151,11 @@
       </div>
 
       <!-- Planned Sprints -->
-      <div v-for="sprint in plannedSprints" :key="sprint.id" class="sprint-card planned" :class="{ 'sprint-current': !hasActiveSprint && sprint.id === currentSprintId }">
+      <div v-for="sprint in plannedSprints" :key="sprint.id" class="sprint-card planned" :class="{ 'sprint-next': !hasActiveSprint && sprint.id === nextPlannedSprintId }">
         <div class="sprint-header">
           <div class="sprint-info">
-            <span class="sprint-status-badge planned" v-if="hasActiveSprint || sprint.id !== currentSprintId">计划中</span>
-            <span class="sprint-status-badge current" v-else>当前</span>
+            <span class="sprint-status-badge next" v-if="!hasActiveSprint && sprint.id === nextPlannedSprintId">下一个</span>
+            <span class="sprint-status-badge planned" v-else>计划中</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
           </div>
           <div class="sprint-dates" v-if="sprint.startDate">
@@ -738,16 +738,13 @@ const selectedProjectKey = computed(() => {
 })
 
 /**
- * "当前 Sprint" 检测逻辑（参照 YouTrack）：
- * - 如果有 active Sprint，它就是当前 Sprint
- * - 如果没有 active，从 planned 中找"最早开始日期的未完成 Sprint"
- * - 相同开始日期时，选结束日期最晚的
+ * "下一个 Sprint" — 没有 active 时，从 planned 中找最近的那个。
+ * 仅用于 UI badge 显示"下一个"标签，不代表它是"当前"。
  */
-const currentSprintId = computed<string | null>(() => {
-  if (activeSprints.value.length > 0) {
-    return activeSprints.value[0].id
-  }
-  // From planned sprints (already sorted by start_date ASC from backend)
+const nextPlannedSprintId = computed<string | null>(() => {
+  // 有 active 时不需要标记任何 planned 为"下一个"
+  if (activeSprints.value.length > 0) return null
+  // planned 列表已按 start_date ASC 排序（后端保证）
   if (plannedSprints.value.length > 0) {
     return plannedSprints.value[0].id
   }
@@ -1216,8 +1213,8 @@ function syncUrlProjectParam() {
 .sprint-card.active {
   border-left: 3px solid rgb(var(--primary-6));
 }
-.sprint-card.sprint-current {
-  border-left: 3px solid rgb(var(--success-6));
+.sprint-card.sprint-next {
+  border-left: 3px solid rgb(var(--primary-6));
 }
 .sprint-card.completed {
   opacity: 0.7;
@@ -1244,8 +1241,8 @@ function syncUrlProjectParam() {
   flex-shrink: 0;
 }
 .sprint-status-badge.active { background: rgba(var(--primary-6), 0.1); color: rgb(var(--primary-6)); }
-.sprint-status-badge.planned { background: rgba(var(--warning-6), 0.1); color: rgb(var(--warning-6)); }
-.sprint-status-badge.current { background: rgba(var(--success-6), 0.1); color: rgb(var(--success-6)); font-weight: 600; }
+.sprint-status-badge.planned { background: var(--color-fill-2); color: var(--color-text-3); }
+.sprint-status-badge.next { background: rgba(var(--primary-6), 0.1); color: rgb(var(--primary-6)); font-weight: 600; }
 .sprint-status-badge.completed { background: var(--color-fill-2); color: var(--color-text-3); }
 
 .sprint-name {
