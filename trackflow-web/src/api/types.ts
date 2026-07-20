@@ -829,3 +829,17 @@ export interface SprintOverlapWarning {
     status: string
   }>
 }
+
+// ========== 工单模板 ==========
+export interface IssueTemplateVO {
+  id: string
+  projectId: string
+  name: string
+  description?: string
+  issueType?: string
+  priority?: string
+  defaultTags?: string
+  isSystem: boolean
+  sortOrder: number
+  createdBy?: string
+}

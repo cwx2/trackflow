@@ -25,6 +25,29 @@
         />
       </div>
 
+      <!-- 模板选择器 -->
+      <div v-if="templates.length > 0 && !cloneData" class="template-bar">
+        <span class="template-label">模板</span>
+        <div class="template-chips">
+          <div
+            v-for="t in templates"
+            :key="t.id"
+            class="template-chip"
+            :class="{ active: selectedTemplateId === t.id }"
+            @click="applyTemplate(t)"
+          >
+            {{ t.name }}
+          </div>
+          <div
+            v-if="selectedTemplateId"
+            class="template-chip template-chip-clear"
+            @click="clearTemplate"
+          >
+            ✕ 清除模板
+          </div>
+        </div>
+      </div>
+
       <div class="create-body">
         <!-- 左侧：编辑区 -->
         <div class="editor-area">
@@ -271,13 +294,13 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconDown, IconAttachment } from '@arco-design/web-vue/es/icon'
-import { projectApi, issueApi, sprintApi, customFieldApi } from '@/api'
+import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
-import type { CustomFieldDefinitionVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, IssueTemplateVO } from '@/api/types'
 
 const props = defineProps<{
   visible: boolean
@@ -297,6 +320,9 @@ const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
 const sprints = ref<any[]>([])
 
+// 工单模板
+const templates = ref<IssueTemplateVO[]>([])
+const selectedTemplateId = ref<string | null>(null)
 const form = reactive({
   projectId: undefined as string | undefined,
   title: '',
@@ -425,9 +451,39 @@ watch(() => props.visible, (val) => {
 
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
-  if (!pid) { members.value = []; sprints.value = []; return }
+  if (!pid) { members.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; return }
   try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
   try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed') } catch { sprints.value = [] }
+  // 加载项目模板
+  try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
+  selectedTemplateId.value = null
+}
+
+/**
+ * 应用模板到表单
+ */
+function applyTemplate(template: IssueTemplateVO) {
+  if (selectedTemplateId.value === template.id) {
+    // 取消选择
+    clearTemplate()
+    return
+  }
+  selectedTemplateId.value = template.id
+  // 填充描述（仅当描述为空或仍是上一个模板内容时）
+  form.description = template.description || ''
+  // 填充类型和优先级
+  if (template.issueType) form.issueType = template.issueType
+  if (template.priority) form.priority = template.priority
+}
+
+/**
+ * 清除模板选择，重置表单内容
+ */
+function clearTemplate() {
+  selectedTemplateId.value = null
+  form.description = ''
+  form.issueType = 'Task'
+  form.priority = 'Normal'
 }
 
 function close() {
@@ -457,6 +513,7 @@ async function submitAndNew() {
     form.assigneeId = undefined
     form.dueDate = ''
     form.estimatedHours = undefined
+    selectedTemplateId.value = null
     // 重置自定义字段值到默认值
     resetCustomFields()
   }
@@ -517,6 +574,57 @@ onMounted(() => {
 .title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
 .title-input { font-size: 18px; font-weight: 500; }
 .title-input :deep(.arco-input) { font-size: 18px; font-weight: 500; }
+
+.template-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.template-label {
+  font-size: 12px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
+}
+.template-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.template-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+  color: var(--color-text-2);
+  background: var(--color-fill-1, var(--tf-bg-surface));
+  transition: all 150ms;
+  user-select: none;
+}
+.template-chip:hover {
+  border-color: var(--tf-accent, rgb(var(--primary-6)));
+  color: var(--tf-accent, rgb(var(--primary-6)));
+  background: var(--color-primary-light-1, rgba(var(--primary-6), 0.06));
+}
+.template-chip.active {
+  border-color: var(--tf-accent, rgb(var(--primary-6)));
+  background: var(--tf-accent, rgb(var(--primary-6)));
+  color: #fff;
+}
+.template-chip-clear {
+  border-style: dashed;
+  color: var(--color-text-3);
+}
+.template-chip-clear:hover {
+  border-color: var(--color-text-3);
+  color: var(--color-text-2);
+  background: var(--color-fill-2, var(--tf-bg-hover));
+}
 
 .create-body { flex: 1; display: flex; overflow: hidden; }
 

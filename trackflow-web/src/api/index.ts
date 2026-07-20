@@ -34,6 +34,7 @@ export { webhookApi } from './webhook'
 export { integrationAdminApi } from './integrationAdmin'
 export { workflowRuleApi } from './workflowRule'
 export { workflowDefinitionApi } from './workflowDefinition'
+export { issueTemplateApi } from './issueTemplate'
 
 // 类型导出
 export type * from './types'
