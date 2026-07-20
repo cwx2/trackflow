@@ -3,7 +3,7 @@
     <!-- 顶部工具栏 -->
     <div class="board-toolbar">
       <div class="toolbar-left">
-        <h2 class="page-title">看板</h2>
+        <h2 class="page-title">{{ displayBoardName }}</h2>
         <a-select
           v-model="selectedProject"
           placeholder="选择项目"
@@ -970,9 +970,17 @@ function restoreFromUrl(): boolean {
 const boardFilterMode = ref<'all' | 'active_sprint' | 'query'>('all')
 const boardFilterQuery = ref<string | null>(null)
 const boardDoneRetentionDays = ref<number | null>(null)
+const boardName = ref('')
 
 /** 当前用户是否有看板编辑权限（来自 board_general_config 动态计算） */
 const canEditBoard = ref(false)
+
+/** 看板页面标题：优先使用管理员设置的名称，fallback 到"项目名 看板"或"看板" */
+const displayBoardName = computed(() => {
+  if (boardName.value) return boardName.value
+  if (currentProjectName.value) return `${currentProjectName.value} 看板`
+  return '看板'
+})
 
 /** 当前是否有 Board Behavior 过滤生效 */
 const isBehaviorFilterActive = computed(() => {
@@ -2367,7 +2375,7 @@ async function loadSprints() {
   }
 }
 
-/** 加载 Board Behavior 配置（过滤模式 + 完成工单保留天数） */
+/** 加载 Board Behavior 配置（过滤模式 + 完成工单保留天数 + 看板名称） */
 async function loadBoardBehavior() {
   if (!selectedProject.value) return
   try {
@@ -2377,12 +2385,14 @@ async function loadBoardBehavior() {
       boardFilterQuery.value = res.data.filterQuery ?? null
       boardDoneRetentionDays.value = res.data.doneRetentionDays ?? null
       canEditBoard.value = res.data.currentUserCanEdit ?? false
+      boardName.value = res.data.name || ''
     }
   } catch {
     boardFilterMode.value = 'all'
     boardFilterQuery.value = null
     boardDoneRetentionDays.value = null
     canEditBoard.value = false
+    boardName.value = ''
   }
 }
 
