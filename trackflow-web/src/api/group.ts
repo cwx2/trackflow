@@ -37,10 +37,13 @@ export interface GroupRoleAssignment {
   roleId: string
   roleName: string
   roleCode: string
+  roleType: string
   /** null 表示全局角色 */
   projectId?: string
   projectName?: string
   projectKey?: string
+  /** 作用域：global / all_projects / project */
+  scope: string
   createdAt: string
 }
 
@@ -85,10 +88,12 @@ export const groupApi = {
   },
 
   /** 为组分配角色 */
-  assignRole(groupId: string, data: { roleId: string; projectId?: string }) {
+  assignRole(groupId: string, data: { roleId: string; projectIds?: string[]; globalScope?: boolean; projectId?: string }) {
     return request.post<any, R<void>>(`/groups/${groupId}/roles`, {
       roleId: data.roleId,
-      projectId: data.projectId || null
+      projectIds: data.projectIds?.length ? data.projectIds : undefined,
+      globalScope: data.globalScope || undefined,
+      projectId: data.projectId || undefined
     })
   },
 

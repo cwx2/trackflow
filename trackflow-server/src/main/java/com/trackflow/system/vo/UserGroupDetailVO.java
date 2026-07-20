@@ -39,10 +39,18 @@ public class UserGroupDetailVO {
         private String roleId;
         private String roleName;
         private String roleCode;
-        /** null 表示全局角色 */
+        private String roleType;
+        /** null 表示全局作用域 */
         private String projectId;
         private String projectName;
         private String projectKey;
+        /**
+         * 作用域描述：
+         * - "global" = 全局角色
+         * - "all_projects" = 项目角色，全局作用域（对所有项目生效）
+         * - "project" = 项目角色，指定项目
+         */
+        private String scope;
         private LocalDateTime createdAt;
     }
 }

@@ -13,43 +13,52 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
 
     /**
      * 查询用户通过组继承的全局权限
-     * 路径: user_group_member → user_group_role (project_id IS NULL) → role_permission
+     * 路径: user_group_member → user_group_role (project_id IS NULL + role.role_type='global') → role_permission
      */
     @Select("""
             SELECT DISTINCT rp.permission
             FROM role_permission rp
             INNER JOIN user_group_role ugr ON ugr.role_id = rp.role_id
             INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+            INNER JOIN sys_role sr ON sr.id = ugr.role_id
             WHERE ugm.user_id = #{userId}
               AND ugr.project_id IS NULL
+              AND sr.role_type = 'global'
             """)
     List<String> selectGlobalPermissionsByUserId(@Param("userId") Long userId);
 
     /**
-     * 查询用户通过组继承的项目级权限
-     * 路径: user_group_member → user_group_role (project_id = ?) → role_permission
+     * 查询用户通过组继承的项目级权限（含"全局作用域"的项目角色）
+     * 匹配两种情况：
+     * 1. ugr.project_id = 指定项目 ID（精确绑定）
+     * 2. ugr.project_id IS NULL 且 role_type = 'project'（全局作用域，对所有项目生效）
      */
     @Select("""
             SELECT DISTINCT rp.permission
             FROM role_permission rp
             INNER JOIN user_group_role ugr ON ugr.role_id = rp.role_id
             INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+            INNER JOIN sys_role sr ON sr.id = ugr.role_id
             WHERE ugm.user_id = #{userId}
-              AND ugr.project_id = #{projectId}
+              AND (
+                ugr.project_id = #{projectId}
+                OR (ugr.project_id IS NULL AND sr.role_type = 'project')
+              )
             """)
     List<String> selectProjectPermissionsByUserAndProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
 
     /**
      * 查询用户通过组继承的所有项目级权限（不限项目）
-     * 用于 hasPermissionInAnyProject 检查
+     * 包含精确绑定项目的角色 + 全局作用域的项目角色
      */
     @Select("""
             SELECT DISTINCT rp.permission
             FROM role_permission rp
             INNER JOIN user_group_role ugr ON ugr.role_id = rp.role_id
             INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+            INNER JOIN sys_role sr ON sr.id = ugr.role_id
             WHERE ugm.user_id = #{userId}
-              AND ugr.project_id IS NOT NULL
+              AND sr.role_type = 'project'
             """)
     List<String> selectAllProjectPermissionsByUserId(@Param("userId") Long userId);
 

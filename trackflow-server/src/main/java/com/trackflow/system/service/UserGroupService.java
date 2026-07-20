@@ -234,7 +234,7 @@ public class UserGroupService {
     }
 
     /**
-     * 为组分配角色
+     * 为组分配角色（支持全局作用域、多项目批量分配）
      */
     @Transactional
     public void assignRole(Long groupId, GroupRoleDTO dto) {
@@ -249,30 +249,71 @@ public class UserGroupService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在");
         }
 
-        // 角色类型校验
-        if (dto.getProjectId() == null) {
-            // 全局角色分配：角色必须是 global 类型
-            if (!"global".equals(role.getRoleType())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "只能为组分配全局角色到全局范围。项目角色请指定项目。");
+        // 规范化参数：兼容旧接口的 projectId 字段
+        List<Long> projectIds = resolveProjectIds(dto);
+        boolean isGlobalScope = Boolean.TRUE.equals(dto.getGlobalScope());
+
+        if ("global".equals(role.getRoleType())) {
+            // 全局角色类型：只能以全局方式分配（projectId=null）
+            if (!projectIds.isEmpty() || isGlobalScope) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "全局角色不需要指定项目，直接分配即可");
+            }
+            insertGroupRoleIfNotExists(groupId, dto.getRoleId(), null);
+        } else if ("project".equals(role.getRoleType())) {
+            if (isGlobalScope) {
+                // 项目角色 + 全局作用域：project_id=null 表示对所有项目生效
+                insertGroupRoleIfNotExists(groupId, dto.getRoleId(), null);
+            } else if (!projectIds.isEmpty()) {
+                // 项目角色 + 指定项目列表：逐个校验并插入
+                for (Long projectId : projectIds) {
+                    Project project = projectMapper.selectById(projectId);
+                    if (project == null) {
+                        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: ID=" + projectId);
+                    }
+                    insertGroupRoleIfNotExists(groupId, dto.getRoleId(), projectId);
+                }
+            } else {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "项目角色必须指定项目或选择全局作用域");
             }
         } else {
-            // 项目级角色分配：角色必须是 project 类型
-            if (!"project".equals(role.getRoleType())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "只能为组分配项目角色到指定项目。全局角色请不指定项目。");
-            }
-            // 校验项目存在
-            Project project = projectMapper.selectById(dto.getProjectId());
-            if (project == null) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
-            }
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "未知的角色类型: " + role.getRoleType());
         }
 
-        // 幂等性检查
+        // 失效所有组成员的权限缓存
+        List<Long> memberUserIds = memberMapper.selectUserIdsByGroupId(groupId);
+        memberUserIds.forEach(permissionService::invalidateCache);
+
+        String scopeDesc = isGlobalScope ? "全局(所有项目)" :
+                projectIds.isEmpty() ? "全局" : "项目:" + projectIds;
+        systemAuditService.log("assign_group_role", "user_group", groupId,
+                Map.of("groupName", group.getName(), "roleName", role.getName(), "scope", scopeDesc));
+
+        log.info("为用户组 {}({}) 分配角色 {}({}), scope={}",
+                group.getName(), groupId, role.getName(), dto.getRoleId(), scopeDesc);
+    }
+
+    /**
+     * 解析项目 ID 列表（兼容 projectId 和 projectIds 两种传参方式）
+     */
+    private List<Long> resolveProjectIds(GroupRoleDTO dto) {
+        if (dto.getProjectIds() != null && !dto.getProjectIds().isEmpty()) {
+            return dto.getProjectIds();
+        }
+        if (dto.getProjectId() != null) {
+            return List.of(dto.getProjectId());
+        }
+        return List.of();
+    }
+
+    /**
+     * 插入组角色分配记录（幂等：已存在则跳过）
+     */
+    private void insertGroupRoleIfNotExists(Long groupId, Long roleId, Long projectId) {
         LambdaQueryWrapper<UserGroupRole> checkWrapper = new LambdaQueryWrapper<UserGroupRole>()
                 .eq(UserGroupRole::getGroupId, groupId)
-                .eq(UserGroupRole::getRoleId, dto.getRoleId());
-        if (dto.getProjectId() != null) {
-            checkWrapper.eq(UserGroupRole::getProjectId, dto.getProjectId());
+                .eq(UserGroupRole::getRoleId, roleId);
+        if (projectId != null) {
+            checkWrapper.eq(UserGroupRole::getProjectId, projectId);
         } else {
             checkWrapper.isNull(UserGroupRole::getProjectId);
         }
@@ -283,21 +324,10 @@ public class UserGroupService {
 
         UserGroupRole groupRole = new UserGroupRole();
         groupRole.setGroupId(groupId);
-        groupRole.setRoleId(dto.getRoleId());
-        groupRole.setProjectId(dto.getProjectId());
+        groupRole.setRoleId(roleId);
+        groupRole.setProjectId(projectId);
         groupRole.setCreatedAt(LocalDateTime.now());
         groupRoleMapper.insert(groupRole);
-
-        // 失效所有组成员的权限缓存
-        List<Long> memberUserIds = memberMapper.selectUserIdsByGroupId(groupId);
-        memberUserIds.forEach(permissionService::invalidateCache);
-
-        systemAuditService.log("assign_group_role", "user_group", groupId,
-                Map.of("groupName", group.getName(), "roleName", role.getName(),
-                        "projectId", dto.getProjectId() != null ? dto.getProjectId() : "global"));
-
-        log.info("为用户组 {}({}) 分配角色 {}({}), projectId={}",
-                group.getName(), groupId, role.getName(), dto.getRoleId(), dto.getProjectId());
     }
 
     /**
@@ -415,15 +445,24 @@ public class UserGroupService {
             if (role != null) {
                 assignment.setRoleName(role.getName());
                 assignment.setRoleCode(role.getCode());
+                assignment.setRoleType(role.getRoleType());
             }
 
+            // 确定作用域
             if (gr.getProjectId() != null) {
                 assignment.setProjectId(String.valueOf(gr.getProjectId()));
+                assignment.setScope("project");
                 Project project = projectMap.get(gr.getProjectId());
                 if (project != null) {
                     assignment.setProjectName(project.getName());
                     assignment.setProjectKey(project.getKey());
                 }
+            } else if (role != null && "project".equals(role.getRoleType())) {
+                // 项目角色但 project_id=null → 全局作用域（所有项目）
+                assignment.setScope("all_projects");
+            } else {
+                // 全局角色类型
+                assignment.setScope("global");
             }
 
             return assignment;
