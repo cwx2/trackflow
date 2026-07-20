@@ -1,7 +1,9 @@
 package com.trackflow.auth.config;
 
 import com.trackflow.auth.filter.ApiKeyAuthFilter;
+import com.trackflow.auth.filter.RateLimitFilter;
 import com.trackflow.auth.filter.UserSyncFilter;
+import com.trackflow.auth.service.RateLimitService;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.WebUtils;
 import com.trackflow.system.service.SystemAuditService;
@@ -39,15 +41,21 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final ApiKeyAuthFilter apiKeyAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final UserSyncFilter userSyncFilter;
     private final SystemAuditService systemAuditService;
+    private final RateLimitService rateLimitService;
 
     public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter,
+                          RateLimitFilter rateLimitFilter,
                           UserSyncFilter userSyncFilter,
-                          SystemAuditService systemAuditService) {
+                          SystemAuditService systemAuditService,
+                          RateLimitService rateLimitService) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
+        this.rateLimitFilter = rateLimitFilter;
         this.userSyncFilter = userSyncFilter;
         this.systemAuditService = systemAuditService;
+        this.rateLimitService = rateLimitService;
     }
 
     @Bean
@@ -69,6 +77,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().denyAll()
             )
+            // Rate limit 过滤器：在所有认证之前检查 IP 封禁和全局频率限制
+            .addFilterBefore(rateLimitFilter, BearerTokenAuthenticationFilter.class)
             // API Key 过滤器：在 JWT 认证之前处理 tf_ 前缀的 token
             .addFilterBefore(apiKeyAuthFilter, BearerTokenAuthenticationFilter.class)
             // 用户同步过滤器：在 JWT 认证之后同步用户信息到本地数据库
@@ -112,7 +122,7 @@ public class SecurityConfig {
     }
 
     /**
-     * 记录 JWT 认证失败事件到审计日志。
+     * 记录 JWT 认证失败事件到审计日志，并触发限流计数。
      * 仅记录带有 Authorization header 的 /api/v1/ 请求（排除无 token 的未认证请求和 API Key 路径）。
      */
     private void logAuthFailure(HttpServletRequest request, Exception authException) {
@@ -133,11 +143,15 @@ public class SecurityConfig {
                 return;
             }
 
+            // 记录认证失败到限流服务
+            String clientIp = WebUtils.getClientIp(request);
+            rateLimitService.recordAuthFailure(clientIp);
+
             String reason = authException != null ? authException.getClass().getSimpleName() : "unknown";
             systemAuditService.logAuthEvent(
                     "login_failed",
                     null,
-                    WebUtils.getClientIp(request),
+                    clientIp,
                     request.getHeader("User-Agent"),
                     Map.of("method", "jwt", "reason", reason, "path", path)
             );
@@ -189,6 +203,17 @@ public class SecurityConfig {
             }
             return null;
         };
+    }
+
+    /**
+     * 禁止 RateLimitFilter 被 Spring Boot 自动注册为 Servlet Filter。
+     * 只通过 Security Filter Chain (addFilterBefore) 调用，避免双重执行。
+     */
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> disableRateLimitFilterAutoRegistration() {
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(rateLimitFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     /**

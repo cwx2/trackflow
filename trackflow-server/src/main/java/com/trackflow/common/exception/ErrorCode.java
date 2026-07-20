@@ -25,6 +25,10 @@ public enum ErrorCode {
     TOKEN_EXPIRED(40101, 401, "登录已过期，请重新登录"),
     TOKEN_INVALID_ISSUER(40102, 401, "Token 签发者无效"),
 
+    // Rate Limiting (429xx)
+    RATE_LIMITED(42900, 429, "请求过于频繁，请稍后重试"),
+    AUTH_RATE_LIMITED(42901, 429, "认证失败次数过多，您的 IP 已被临时封禁"),
+
     // Authorization (403xx)
     ACCESS_DENIED(40300, 403, "权限不足"),
     PROJECT_ACCESS_DENIED(40300, 403, "无权访问该项目"), // 与 ACCESS_DENIED 共用 code，前端无需区分

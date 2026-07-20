@@ -44,6 +44,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final SysUserMapper sysUserMapper;
     private final ObjectMapper objectMapper;
     private final SystemAuditService systemAuditService;
+    private final com.trackflow.auth.service.RateLimitService rateLimitService;
 
     /**
      * API Key 认证失败的原因枚举（内部使用，用于区分审计事件类型）
@@ -78,6 +79,10 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                     // 根据失败原因记录不同的审计事件
                     ApiKeyFailureReason reason = failureReason.get();
                     failureReason.remove();
+
+                    // 记录认证失败到限流服务
+                    String clientIp = WebUtils.getClientIp(request);
+                    rateLimitService.recordAuthFailure(clientIp);
 
                     if (reason == ApiKeyFailureReason.EXPIRED) {
                         logApiKeyExpired(request, token);
@@ -143,6 +148,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 Collections.singletonList(new SimpleGrantedAuthority("ROLE_API_KEY"))
         );
         SecurityContextHolder.getContext().setAuthentication(authToken);
+
+        // 认证成功，清除该 IP 的失败计数
+        rateLimitService.clearAuthFailures(WebUtils.getClientIp(request));
 
         // 更新 last_used_at
         apiKey.setLastUsedAt(LocalDateTime.now());

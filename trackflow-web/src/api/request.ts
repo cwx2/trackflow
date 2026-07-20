@@ -144,6 +144,17 @@ request.interceptors.response.use(
     const authStore = useAuthStore()
     const originalRequest = error.config
 
+    // 429 请求频率限制：显示友好提示，不触发重试
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers?.['retry-after']
+      const seconds = retryAfter ? parseInt(retryAfter, 10) : 60
+      const message = error.response.data?.message || `请求过于频繁，请 ${seconds} 秒后重试`
+      import('@arco-design/web-vue').then(({ Message }) => {
+        Message.warning({ content: message, id: 'rate-limited', duration: 5000 })
+      })
+      return Promise.reject(error)
+    }
+
     // 403 权限不足：刷新本地权限缓存并提示
     if (error.response?.status === 403) {
       if (!originalRequest._silent403) {
