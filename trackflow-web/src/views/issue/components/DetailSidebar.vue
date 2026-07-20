@@ -82,7 +82,7 @@
                   :key="opt.value"
                   class="dropdown-item multi-item"
                   :class="{ selected: multiSelectedValues.includes(opt.value) }"
-                  @click="toggleMultiOption(opt.value)"
+                  @click="toggleMultiOption(field, opt.value)"
                 >
                   <span class="item-check">{{ multiSelectedValues.includes(opt.value) ? '✓' : '' }}</span>
                   <span class="item-text">{{ opt.label }}</span>
@@ -106,9 +106,6 @@
                     <button class="input-btn add-option-btn" :disabled="!newOptionValue.trim()" @click="confirmAddOption(field)">添加</button>
                   </div>
                 </template>
-                <div class="dropdown-actions">
-                  <button class="input-btn multi-confirm" @click="commitMultiSelect(field)">确定</button>
-                </div>
               </div>
               <!-- 日期输入 -->
               <div class="dropdown-input" v-if="field.editType === 'date'">
@@ -219,6 +216,8 @@ const inputValue = ref('')
 const searchInputRef = ref<HTMLInputElement[]>()
 /** 多值字段编辑状态：当前选中的值列表 */
 const multiSelectedValues = ref<string[]>([])
+/** 多值字段去抖保存定时器 */
+let multiSaveTimer: ReturnType<typeof setTimeout> | null = null
 /** 内联添加选项模式 */
 const addingOption = ref(false)
 const newOptionValue = ref('')
@@ -267,18 +266,19 @@ function commitInput(field: SidebarField) {
   editingKey.value = null
 }
 
-function toggleMultiOption(value: string) {
+function toggleMultiOption(field: SidebarField, value: string) {
   const idx = multiSelectedValues.value.indexOf(value)
   if (idx >= 0) {
     multiSelectedValues.value.splice(idx, 1)
   } else {
     multiSelectedValues.value.push(value)
   }
-}
-
-function commitMultiSelect(field: SidebarField) {
-  emit('edit-field', field.key, [...multiSelectedValues.value])
-  editingKey.value = null
+  // 去抖保存：快速连续勾选时，300ms 内只发一次请求（取最终状态）
+  if (multiSaveTimer) clearTimeout(multiSaveTimer)
+  multiSaveTimer = setTimeout(() => {
+    emit('edit-field', field.key, [...multiSelectedValues.value])
+    multiSaveTimer = null
+  }, 300)
 }
 
 function startAddOption() {
@@ -542,16 +542,6 @@ function confirmAddOption(field: SidebarField) {
   background: var(--tf-accent);
   border-color: var(--tf-accent);
   color: #fff;
-}
-.dropdown-actions {
-  padding: 6px 8px;
-  border-top: 1px solid var(--tf-border);
-  display: flex;
-  justify-content: flex-end;
-}
-.multi-confirm {
-  padding: 4px 10px;
-  font-size: 11px;
 }
 
 /* ===== Inline Add Option ===== */
