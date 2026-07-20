@@ -420,15 +420,12 @@ public class CustomFieldService {
 
         // 主动清除引用此字段的条件配置（防止 conditionValues 残留无效数据）
         if (conditionRefCount > 0) {
-            List<CustomFieldProject> refs = projectMapper.selectList(
-                    new LambdaQueryWrapper<CustomFieldProject>()
-                            .eq(CustomFieldProject::getConditionFieldId, id));
-            for (CustomFieldProject ref : refs) {
-                ref.setConditionFieldId(null);
-                ref.setConditionValues(null);
-                projectMapper.updateById(ref);
-            }
-            log.info("Cleared condition references for deleted field {}: {} mappings affected", id, refs.size());
+            projectMapper.update(null,
+                    new LambdaUpdateWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getConditionFieldId, id)
+                            .set(CustomFieldProject::getConditionFieldId, null)
+                            .set(CustomFieldProject::getConditionValues, null));
+            log.info("Cleared condition references for deleted field {}: {} mappings affected", id, conditionRefCount);
         }
 
         definitionMapper.deleteById(id);

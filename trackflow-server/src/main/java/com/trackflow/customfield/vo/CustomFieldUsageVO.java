@@ -19,4 +19,6 @@ public class CustomFieldUsageVO {
     private long issueTypeCount;
     /** 选项数量（仅 list 类型） */
     private long optionCount;
+    /** 被其他字段作为条件源引用的数量 */
+    private long conditionRefCount;
 }

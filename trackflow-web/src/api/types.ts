@@ -527,6 +527,7 @@ export interface CustomFieldUsageVO {
   isForAll: boolean
   issueTypeCount: number
   optionCount: number
+  conditionRefCount: number
 }
 
 /** 单个选项的使用统计 */

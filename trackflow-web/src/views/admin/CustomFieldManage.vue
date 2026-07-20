@@ -916,7 +916,10 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
     const usage = res.data
     if (!usage) return
 
-    if (usage.issueCount === 0) {
+    const hasValues = usage.issueCount > 0
+    const hasConditionRefs = usage.conditionRefCount > 0
+
+    if (!hasValues && !hasConditionRefs) {
       // 无引用——简单确认
       const projectInfo = usage.isForAll
         ? `该字段为全局字段，当前适用于所有 ${usage.projectCount} 个项目。`
@@ -930,14 +933,21 @@ async function confirmDelete(record: CustomFieldDefinitionVO) {
         onOk: () => handleDelete(record.id)
       })
     } else {
-      // 有工单引用——危险确认
+      // 有工单引用或条件依赖——危险确认
       const projectInfo = usage.isForAll
         ? `（全局字段，覆盖所有 ${usage.projectCount} 个项目）`
         : ''
+      const parts: string[] = []
+      if (hasValues) {
+        parts.push(`被 ${usage.issueCount} 个工单使用（共 ${usage.valueCount} 条值记录），删除后这些数据将永久丢失`)
+      }
+      if (hasConditionRefs) {
+        parts.push(`被 ${usage.conditionRefCount} 条字段配置作为条件源引用，删除后相关条件规则将失效，被隐藏的字段将变为始终显示`)
+      }
       Modal.error({
         title: '⚠️ 删除将导致数据丢失',
-        content: `字段「${record.name}」${projectInfo}当前被 ${usage.issueCount} 个工单使用（共 ${usage.valueCount} 条值记录）。删除后这些数据将永久丢失且不可恢复。`,
-        okText: `确认删除（影响 ${usage.issueCount} 个工单）`,
+        content: `字段「${record.name}」${projectInfo}当前${parts.join('；')}。此操作不可撤销。`,
+        okText: hasValues ? `确认删除（影响 ${usage.issueCount} 个工单）` : '确认删除',
         cancelText: '取消',
         hideCancel: false,
         onOk: () => handleDelete(record.id)
