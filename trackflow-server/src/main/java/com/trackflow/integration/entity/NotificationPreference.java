@@ -50,6 +50,20 @@ public class NotificationPreference implements Serializable {
     private String quietHoursStart;
     private String quietHoursEnd;
 
+    // 关注（Watched）通知开关
+    /** 我关注的工单有更新时通知我 */
+    private Boolean onWatchedUpdated;
+
+    // 自动关注行为配置
+    /** 创建工单时自动关注 */
+    private Boolean autoWatchOnCreate;
+    /** 评论工单时自动关注 */
+    private Boolean autoWatchOnComment;
+    /** 修改工单时自动关注 */
+    private Boolean autoWatchOnUpdate;
+    /** 被分配为负责人时自动关注 */
+    private Boolean autoWatchOnAssign;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

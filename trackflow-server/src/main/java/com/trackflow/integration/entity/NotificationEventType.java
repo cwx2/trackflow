@@ -34,7 +34,11 @@ public enum NotificationEventType {
 
     // ===== Date Alert 相关 =====
     DUE_DATE_APPROACHING(NotificationPreference::getOnDueDate),
-    OVERDUE(NotificationPreference::getOnOverdue);
+    OVERDUE(NotificationPreference::getOnOverdue),
+
+    // ===== Watcher 相关 =====
+    /** 用户关注的工单有更新 */
+    WATCHED(NotificationPreference::getOnWatchedUpdated);
 
     private final Function<NotificationPreference, Boolean> extractor;
 

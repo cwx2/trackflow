@@ -22,6 +22,13 @@ export interface NotificationPreferenceVO {
   emailEnabled: boolean
   quietHoursStart: string | null
   quietHoursEnd: string | null
+  // Watched 通知开关
+  onWatchedUpdated: boolean
+  // 自动关注行为配置
+  autoWatchOnCreate: boolean
+  autoWatchOnComment: boolean
+  autoWatchOnUpdate: boolean
+  autoWatchOnAssign: boolean
 }
 
 export interface UpdateNotificationPreferenceDTO {
@@ -42,6 +49,13 @@ export interface UpdateNotificationPreferenceDTO {
   emailEnabled?: boolean
   quietHoursStart?: string | null
   quietHoursEnd?: string | null
+  // Watched 通知开关
+  onWatchedUpdated?: boolean
+  // 自动关注行为配置
+  autoWatchOnCreate?: boolean
+  autoWatchOnComment?: boolean
+  autoWatchOnUpdate?: boolean
+  autoWatchOnAssign?: boolean
 }
 
 export interface EmailAvailabilityVO {

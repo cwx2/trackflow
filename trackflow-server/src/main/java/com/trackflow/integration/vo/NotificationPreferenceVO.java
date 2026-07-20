@@ -39,4 +39,13 @@ public class NotificationPreferenceVO {
     // 静音时段
     private String quietHoursStart;
     private String quietHoursEnd;
+
+    // 关注（Watched）通知开关
+    private Boolean onWatchedUpdated;
+
+    // 自动关注行为配置
+    private Boolean autoWatchOnCreate;
+    private Boolean autoWatchOnComment;
+    private Boolean autoWatchOnUpdate;
+    private Boolean autoWatchOnAssign;
 }

@@ -39,7 +39,9 @@ export type NotificationReason =
   | 'mentioned'
   | 'member'
   | 'watched'
+  | 'subscription'
   | 'auto_assigned'
+  | 'rule_triggered'
 
 export interface NotificationVO {
   id: string

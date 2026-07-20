@@ -44,4 +44,13 @@ public class UpdateNotificationPreferenceDTO {
     @Size(max = 5)
     @Pattern(regexp = "^\\d{2}:\\d{2}$", message = "时间格式必须为HH:mm")
     private String quietHoursEnd;
+
+    // 关注（Watched）通知开关
+    private Boolean onWatchedUpdated;
+
+    // 自动关注行为配置
+    private Boolean autoWatchOnCreate;
+    private Boolean autoWatchOnComment;
+    private Boolean autoWatchOnUpdate;
+    private Boolean autoWatchOnAssign;
 }

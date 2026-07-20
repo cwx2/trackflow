@@ -31,6 +31,10 @@ public enum NotificationReason {
     /** 关注了此工单（预留） */
     watched("你关注了此工单"),
 
+    /** 通过订阅规则匹配（基于标签或保存搜索） */
+    subscription("你的订阅规则匹配"),
+
+
     /** 工作流自动分配 */
     auto_assigned("工作流自动分配给你"),
 

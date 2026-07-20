@@ -61,6 +61,15 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
         vo.setQuietHoursStart(entity.getQuietHoursStart());
         vo.setQuietHoursEnd(entity.getQuietHoursEnd());
 
+        // Watched 通知开关
+        vo.setOnWatchedUpdated(entity.getOnWatchedUpdated());
+
+        // 自动关注行为配置
+        vo.setAutoWatchOnCreate(entity.getAutoWatchOnCreate());
+        vo.setAutoWatchOnComment(entity.getAutoWatchOnComment());
+        vo.setAutoWatchOnUpdate(entity.getAutoWatchOnUpdate());
+        vo.setAutoWatchOnAssign(entity.getAutoWatchOnAssign());
+
         return vo;
     }
 

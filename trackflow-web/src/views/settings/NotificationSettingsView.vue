@@ -6,6 +6,9 @@
     </div>
 
     <a-spin :loading="loading" class="settings-content">
+      <!-- 订阅规则管理 -->
+      <NotificationSubscriptions />
+
       <!-- 事件订阅 -->
       <div class="settings-section">
         <h3 class="section-title">事件订阅</h3>
@@ -65,6 +68,13 @@
               </div>
               <a-switch v-model="form.onIssueUpdated" size="small" @change="handleSave" />
             </div>
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">我关注的工单有更新</span>
+                <span class="event-desc">你主动关注或自动关注的工单有任何变更时通知</span>
+              </div>
+              <a-switch v-model="form.onWatchedUpdated" size="small" @change="handleSave" />
+            </div>
           </div>
         </div>
 
@@ -112,6 +122,43 @@
               </div>
               <a-switch :model-value="true" size="small" disabled />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 自动关注 -->
+      <div class="settings-section">
+        <h3 class="section-title">自动关注</h3>
+        <p class="section-desc">配置哪些操作自动将你加入工单的关注列表。关注后，该工单的后续更新会通知你。</p>
+
+        <div class="event-items auto-watch-items">
+          <div class="event-item">
+            <div class="event-info">
+              <span class="event-label">我创建工单时</span>
+              <span class="event-desc">创建工单后自动关注该工单</span>
+            </div>
+            <a-switch v-model="form.autoWatchOnCreate" size="small" @change="handleSave" />
+          </div>
+          <div class="event-item">
+            <div class="event-info">
+              <span class="event-label">我发表评论时</span>
+              <span class="event-desc">在工单中发表评论后自动关注该工单</span>
+            </div>
+            <a-switch v-model="form.autoWatchOnComment" size="small" @change="handleSave" />
+          </div>
+          <div class="event-item">
+            <div class="event-info">
+              <span class="event-label">我修改工单时</span>
+              <span class="event-desc">更新工单字段后自动关注该工单</span>
+            </div>
+            <a-switch v-model="form.autoWatchOnUpdate" size="small" @change="handleSave" />
+          </div>
+          <div class="event-item">
+            <div class="event-info">
+              <span class="event-label">我被设为负责人时</span>
+              <span class="event-desc">被分配为工单负责人后自动关注该工单</span>
+            </div>
+            <a-switch v-model="form.autoWatchOnAssign" size="small" @change="handleSave" />
           </div>
         </div>
       </div>
@@ -231,6 +278,7 @@ import { notificationPreferenceApi, notificationApi } from '@/api'
 import type { NotificationPreferenceVO, EmailAvailabilityVO } from '@/api/notificationPreference'
 import type { MutedThreadVO } from '@/api/notification'
 import ProjectNotificationPreferences from './ProjectNotificationPreferences.vue'
+import NotificationSubscriptions from './NotificationSubscriptions.vue'
 
 const loading = ref(true)
 const quietHoursEnabled = ref(false)
@@ -263,7 +311,12 @@ const form = reactive({
   notifyOwnChanges: false,
   emailEnabled: false,
   quietHoursStart: null as string | null,
-  quietHoursEnd: null as string | null
+  quietHoursEnd: null as string | null,
+  onWatchedUpdated: true,
+  autoWatchOnCreate: true,
+  autoWatchOnComment: true,
+  autoWatchOnUpdate: false,
+  autoWatchOnAssign: true
 })
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
@@ -317,6 +370,11 @@ function applyData(data: NotificationPreferenceVO) {
   form.emailEnabled = data.emailEnabled
   form.quietHoursStart = data.quietHoursStart
   form.quietHoursEnd = data.quietHoursEnd
+  form.onWatchedUpdated = data.onWatchedUpdated ?? true
+  form.autoWatchOnCreate = data.autoWatchOnCreate ?? true
+  form.autoWatchOnComment = data.autoWatchOnComment ?? true
+  form.autoWatchOnUpdate = data.autoWatchOnUpdate ?? false
+  form.autoWatchOnAssign = data.autoWatchOnAssign ?? true
   quietHoursEnabled.value = !!(data.quietHoursStart && data.quietHoursEnd)
 }
 
@@ -347,7 +405,12 @@ function handleSave() {
         notifyOwnChanges: form.notifyOwnChanges,
         emailEnabled: form.emailEnabled,
         quietHoursStart: form.quietHoursStart,
-        quietHoursEnd: form.quietHoursEnd
+        quietHoursEnd: form.quietHoursEnd,
+        onWatchedUpdated: form.onWatchedUpdated,
+        autoWatchOnCreate: form.autoWatchOnCreate,
+        autoWatchOnComment: form.autoWatchOnComment,
+        autoWatchOnUpdate: form.autoWatchOnUpdate,
+        autoWatchOnAssign: form.autoWatchOnAssign
       })
       if (res.code === 0) {
         Message.success('通知偏好已保存')

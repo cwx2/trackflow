@@ -8,10 +8,14 @@ import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationOutboxWriter;
 import com.trackflow.integration.service.NotificationPreferenceService;
 import com.trackflow.integration.service.NotificationService;
+import com.trackflow.integration.service.NotificationSubscriptionService;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.IssueTagRelationMapper;
+import com.trackflow.issue.mapper.IssueWatcherMapper;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -42,24 +46,33 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private final NotificationService notificationService;
     private final NotificationPreferenceService preferenceService;
     private final NotificationOutboxWriter outboxWriter;
+    private final NotificationSubscriptionService subscriptionService;
     private final IssueCommentMapper commentMapper;
     private final IssueStatusMapper statusMapper;
     private final ProjectMapper projectMapper;
+    private final IssueWatcherMapper watcherMapper;
+    private final IssueTagRelationMapper tagRelationMapper;
 
     public IssueNotificationHelper(NotificationService notificationService,
                                    NotificationPreferenceService preferenceService,
                                    NotificationOutboxWriter outboxWriter,
+                                   NotificationSubscriptionService subscriptionService,
                                    IssueCommentMapper commentMapper,
                                    IssueStatusMapper statusMapper,
                                    ProjectMapper projectMapper,
+                                   IssueWatcherMapper watcherMapper,
+                                   IssueTagRelationMapper tagRelationMapper,
                                    SysUserMapper sysUserMapper) {
         super(sysUserMapper, null); // IssueNotificationHelper 不需要 ProjectMemberMapper
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
         this.outboxWriter = outboxWriter;
+        this.subscriptionService = subscriptionService;
         this.commentMapper = commentMapper;
         this.statusMapper = statusMapper;
         this.projectMapper = projectMapper;
+        this.watcherMapper = watcherMapper;
+        this.tagRelationMapper = tagRelationMapper;
     }
 
     // ==================== 公共通知方法 ====================
@@ -104,11 +117,11 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     }
 
     /**
-     * 新评论通知：通知报告人 + 负责人 + 之前评论者（去重，排除当前用户）。
+     * 新评论通知：通知报告人 + 负责人 + 之前评论者 + 关注者（去重，排除当前用户）。
      * 每个接收者根据其角色获得对应的 reason。
      * <p>
      * 性能优化：使用批量偏好查询 + 按 reason 分组批量通知，
-     * 将 DB 操作从 N×3 次降至常数级（最多 3 组 × 2-3 次）。
+     * 将 DB 操作从 N×3 次降至常数级（最多 4 组 × 2-3 次）。
      */
     @Async("notificationExecutor")
     public void notifyCommented(Issue issue, Long commenterId) {
@@ -121,9 +134,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
-            // 批量偏好过滤（1 次 SELECT 替代 N 次 isEnabled 调用）
-            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
-                    recipientReasons.keySet(), NotificationEventType.ISSUE_COMMENTED, issue.getProjectId());
+            // 分离 watcher 和非 watcher 接收者，分别用不同事件类型过滤偏好
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_COMMENTED, issue.getProjectId());
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -191,9 +204,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                     ? NotificationEventType.ISSUE_RESOLVED
                     : NotificationEventType.ISSUE_STATUS_CHANGED;
 
-            // 批量偏好过滤（1 次 SELECT 替代 N 次 isEnabled 调用）
-            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
-                    recipientReasons.keySet(), eventType, issue.getProjectId());
+            // 分离 watcher 和非 watcher 接收者，分别用不同事件类型过滤偏好
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, eventType, issue.getProjectId());
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -354,8 +367,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             }
 
             // 批量偏好过滤（使用 ISSUE_STATUS_CHANGED 偏好，移动属于重大变更类通知）
-            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
-                    recipientReasons.keySet(), NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId());
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId());
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -401,8 +414,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
-            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
-                    recipientReasons.keySet(), NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId());
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_STATUS_CHANGED, issue.getProjectId());
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -445,8 +458,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
-            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
-                    recipientReasons.keySet(), NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -521,8 +534,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                 return;
             }
 
-            Set<Long> enabledUserIds = preferenceService.getEnabledUserIds(
-                    recipientReasons.keySet(), NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
             if (enabledUserIds.isEmpty()) {
                 return;
             }
@@ -649,16 +662,74 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     }
 
     /**
+     * 分离 watcher 和非 watcher 接收者，分别使用不同事件类型检查偏好。
+     * <p>
+     * watcher 用户：检查 WATCHED 偏好
+     * 非 watcher 用户：检查传入的 eventType 偏好
+     * 合并两组结果返回。
+     */
+    private Set<Long> filterRecipientsWithWatcherSupport(
+            Map<Long, NotificationReason> recipientReasons,
+            NotificationEventType standardEventType,
+            Long projectId) {
+
+        // 分离 watcher 和非 watcher
+        Set<Long> watcherUserIds = new HashSet<>();
+        Set<Long> otherUserIds = new HashSet<>();
+        for (Map.Entry<Long, NotificationReason> entry : recipientReasons.entrySet()) {
+            if (entry.getValue() == NotificationReason.watched) {
+                watcherUserIds.add(entry.getKey());
+            } else {
+                otherUserIds.add(entry.getKey());
+            }
+        }
+
+        Set<Long> enabledUserIds = new HashSet<>();
+
+        // 非 watcher 用标准事件类型过滤
+        if (!otherUserIds.isEmpty()) {
+            enabledUserIds.addAll(preferenceService.getEnabledUserIds(otherUserIds, standardEventType, projectId));
+        }
+
+        // watcher 用 WATCHED 事件类型过滤
+        if (!watcherUserIds.isEmpty()) {
+            enabledUserIds.addAll(preferenceService.getEnabledUserIds(watcherUserIds, NotificationEventType.WATCHED, projectId));
+        }
+
+        return enabledUserIds;
+    }
+
+    /**
      * 收集评论通知接收人及其 reason：
+     * - watcher → watched（最低优先级）
+     * - 之前评论者 → commenter
      * - 报告人 → reporter
      * - 负责人 → assigned
-     * - 之前评论者 → commenter
-     * 去重，排除评论者自己。若一人有多个角色，优先级：assigned > reporter > commenter。
+     * 去重，排除评论者自己。若一人有多个角色，优先级：assigned > reporter > commenter > watched。
      */
     private Map<Long, NotificationReason> collectCommentRecipientsWithReason(Issue issue, Long excludeUserId) {
         Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
 
-        // 之前的评论者优先级最低，先加入（后续会被更高优先级覆盖）
+        // Watcher 优先级最低，先加入（后续会被更高优先级覆盖）
+        List<Long> watcherIds = watcherMapper.selectWatcherUserIds(issue.getId());
+        if (watcherIds != null) {
+            for (Long id : watcherIds) {
+                recipients.put(id, NotificationReason.watched);
+            }
+        }
+
+        // 标签订阅者（优先级高于 watcher，低于 commenter）
+        try {
+            List<Long> tagIds = getIssueTagIds(issue.getId());
+            Set<Long> tagSubscribers = subscriptionService.findSubscribersByTags(tagIds, "onCommented");
+            for (Long id : tagSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] 订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // 之前的评论者优先级较低
         List<Long> commenterIds = commentMapper.selectDistinctCommenterIds(issue.getId());
         if (commenterIds != null) {
             for (Long id : commenterIds) {
@@ -683,12 +754,32 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
 
     /**
      * 收集状态变更通知接收人及其 reason：
+     * - watcher → watched（最低优先级）
      * - 报告人 → reporter
      * - 负责人 → assigned
      * 去重，排除操作者自己。
      */
     private Map<Long, NotificationReason> collectStatusChangeRecipientsWithReason(Issue issue, Long excludeUserId) {
         Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
+
+        // Watcher 优先级最低
+        List<Long> watcherIds = watcherMapper.selectWatcherUserIds(issue.getId());
+        if (watcherIds != null) {
+            for (Long id : watcherIds) {
+                recipients.put(id, NotificationReason.watched);
+            }
+        }
+
+        // 标签订阅者
+        try {
+            List<Long> tagIds = getIssueTagIds(issue.getId());
+            Set<Long> tagSubscribers = subscriptionService.findSubscribersByTags(tagIds, "onUpdated");
+            for (Long id : tagSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] 订阅匹配跳过: {}", e.getMessage());
+        }
 
         if (issue.getReporterId() != null) {
             recipients.put(issue.getReporterId(), NotificationReason.reporter);
@@ -714,5 +805,16 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             return String.valueOf(statusId);
         }
+    }
+
+    /**
+     * 获取工单当前关联的标签ID列表
+     */
+    private List<Long> getIssueTagIds(Long issueId) {
+        var relations = tagRelationMapper.selectList(
+                new LambdaQueryWrapper<IssueTagRelation>()
+                        .eq(IssueTagRelation::getIssueId, issueId)
+                        .select(IssueTagRelation::getTagId));
+        return relations.stream().map(IssueTagRelation::getTagId).toList();
     }
 }

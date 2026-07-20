@@ -318,6 +318,25 @@ public class NotificationPreferenceService {
         // 静音时段允许设置为 null（清除）
         pref.setQuietHoursStart(dto.getQuietHoursStart());
         pref.setQuietHoursEnd(dto.getQuietHoursEnd());
+
+        // Watched 通知开关
+        if (dto.getOnWatchedUpdated() != null) {
+            pref.setOnWatchedUpdated(dto.getOnWatchedUpdated());
+        }
+
+        // 自动关注行为配置
+        if (dto.getAutoWatchOnCreate() != null) {
+            pref.setAutoWatchOnCreate(dto.getAutoWatchOnCreate());
+        }
+        if (dto.getAutoWatchOnComment() != null) {
+            pref.setAutoWatchOnComment(dto.getAutoWatchOnComment());
+        }
+        if (dto.getAutoWatchOnUpdate() != null) {
+            pref.setAutoWatchOnUpdate(dto.getAutoWatchOnUpdate());
+        }
+        if (dto.getAutoWatchOnAssign() != null) {
+            pref.setAutoWatchOnAssign(dto.getAutoWatchOnAssign());
+        }
     }
 
     /**
@@ -342,6 +361,13 @@ public class NotificationPreferenceService {
         pref.setDueDateAdvanceDays(getDefaultInt("notification.default_due_date_advance_days", 1));
         pref.setNotifyOwnChanges(getDefaultBool("notification.default_notify_own_changes", false));
         pref.setEmailEnabled(getDefaultBool("notification.default_email_enabled", false));
+        // Watched 通知开关默认开启
+        pref.setOnWatchedUpdated(true);
+        // 自动关注行为默认值
+        pref.setAutoWatchOnCreate(true);
+        pref.setAutoWatchOnComment(true);
+        pref.setAutoWatchOnUpdate(false);
+        pref.setAutoWatchOnAssign(true);
         pref.setCreatedAt(LocalDateTime.now());
         pref.setUpdatedAt(LocalDateTime.now());
         preferenceMapper.insert(pref);
