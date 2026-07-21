@@ -6,6 +6,11 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.workflow.WorkflowScope;
+import com.trackflow.workflow.entity.TransitionAction;
+import com.trackflow.workflow.mapper.TransitionActionMapper;
+import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.mapper.SprintMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.PermissionEvaluator;
@@ -34,6 +39,8 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
     private final PermissionService permissionService;
     private final IssueMapper issueMapper;
     private final com.trackflow.project.mapper.ProjectMapper projectMapper;
+    private final TransitionActionMapper transitionActionMapper;
+    private final SprintMapper sprintMapper;
 
     /**
      * 检查项目级权限（通过项目标识符：Key 或 ID）
@@ -107,6 +114,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
      * @param issueId    Issue 的数据库 ID
      * @param permission 要检查的权限码
      * @return true 如果用户有权限（项目级或资源级）
+     * @throws BusinessException RESOURCE_NOT_FOUND 当 Issue 不存在时（返回 404）
      */
     public boolean checkIssue(Long issueId, String permission) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -123,10 +131,89 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
                         .isNull(Issue::getDeletedAt)
         );
         if (issue == null) {
-            return false;
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
 
         return permissionService.hasIssuePermission(userId, issue, permission);
+    }
+
+    /**
+     * 检查转换动作的工作流管理权限。
+     * <p>
+     * 全局动作 → 要求 system:admin；项目级动作 → 要求 project:manage_workflow。
+     * 用于 @PreAuthorize("@perm.checkWorkflowAction(#id)")
+     *
+     * @param actionId 转换动作 ID
+     * @return true 如果用户有权限管理此转换动作
+     * @throws BusinessException RESOURCE_NOT_FOUND 当动作不存在时
+     */
+    public boolean checkWorkflowAction(Long actionId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        TransitionAction action = transitionActionMapper.selectById(actionId);
+        if (action == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
+        }
+
+        Long projectId = WorkflowScope.toApi(action.getProjectId());
+        if (WorkflowScope.isGlobal(projectId)) {
+            String permission = "system:admin";
+            if (!isPermissionInScope(permission)) return false;
+            return permissionService.hasGlobalPermission(userId, permission);
+        } else {
+            String permission = "project:manage_workflow";
+            if (!isPermissionInScope(permission)) return false;
+            return permissionService.hasPermission(userId, projectId, permission);
+        }
+    }
+
+    /**
+     * 检查已删除 Issue 的项目级权限（用于恢复/永久删除操作）。
+     * <p>
+     * 与 checkIssue 不同，此方法查询含 soft-delete 标记的 Issue。
+     * 用于 @PreAuthorize("@perm.checkDeletedIssue(#id, 'issue:delete')")
+     *
+     * @param issueId    Issue ID
+     * @param permission 要检查的权限码
+     * @return true 如果用户有权限
+     * @throws BusinessException RESOURCE_NOT_FOUND 当 Issue 不存在时
+     */
+    public boolean checkDeletedIssue(Long issueId, String permission) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        if (!isPermissionInScope(permission)) return false;
+
+        java.util.Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(issueId);
+        if (row == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+        }
+        Long projectId = ((Number) row.get("project_id")).longValue();
+        return permissionService.hasPermission(userId, projectId, permission);
+    }
+
+    /**
+     * 检查 Sprint 资源的项目级权限。
+     * <p>
+     * 用于 @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
+     *
+     * @param sprintId   Sprint ID
+     * @param permission 要检查的权限码
+     * @return true 如果用户有权限
+     * @throws BusinessException RESOURCE_NOT_FOUND 当 Sprint 不存在时
+     */
+    public boolean checkSprint(Long sprintId, String permission) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        if (!isPermissionInScope(permission)) return false;
+
+        Sprint sprint = sprintMapper.selectById(sprintId);
+        if (sprint == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
+        }
+        return permissionService.hasPermission(userId, sprint.getProjectId(), permission);
     }
 
     /**

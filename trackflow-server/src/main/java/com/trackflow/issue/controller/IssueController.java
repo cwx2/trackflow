@@ -217,7 +217,7 @@ public class IssueController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:delete')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:delete')")
     public R<Void> delete(@PathVariable("id") Long id) {
         issueService.delete(id);
         return R.ok();
@@ -235,14 +235,14 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/restore")
-    @PreAuthorize("@perm.check(@issueService.getDeletedIssueProjectId(#id), 'issue:delete')")
+    @PreAuthorize("@perm.checkDeletedIssue(#id, 'issue:delete')")
     public R<Void> restore(@PathVariable("id") Long id) {
         issueService.restore(id);
         return R.ok();
     }
 
     @DeleteMapping("/{id}/permanent")
-    @PreAuthorize("@perm.check(@issueService.getDeletedIssueProjectId(#id), 'project:admin')")
+    @PreAuthorize("@perm.checkDeletedIssue(#id, 'project:admin')")
     public R<Void> permanentDelete(@PathVariable("id") Long id) {
         issueService.permanentDelete(id);
         return R.ok();
@@ -463,7 +463,7 @@ public class IssueController {
     }
 
     @PutMapping("/{id}/assign")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:assign')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:assign')")
     public R<Void> assign(@PathVariable("id") Long id, @Valid @RequestBody AssignIssueDTO dto) {
         issueService.assign(id, dto.getAssigneeId());
         return R.ok();
@@ -478,20 +478,20 @@ public class IssueController {
     }
 
     @PostMapping("/{id}/comments")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<IssueCommentVO> addComment(@PathVariable("id") Long id, @Valid @RequestBody AddCommentDTO dto) {
         return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
     }
 
     @PutMapping("/{id}/comments/{commentId}")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<IssueCommentVO> updateComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId,
                                             @Valid @RequestBody UpdateCommentDTO dto) {
         return R.ok(issueConverter.toCommentVO(issueService.updateComment(id, commentId, dto.getContent())));
     }
 
     @DeleteMapping("/{id}/comments/{commentId}")
-    @PreAuthorize("@perm.check(@issueService.getProjectId(#id), 'issue:comment')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<Void> deleteComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
         issueService.deleteComment(id, commentId);
         return R.ok();

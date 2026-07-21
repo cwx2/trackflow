@@ -74,7 +74,7 @@ public class TransitionActionController {
      * 更新转换动作
      */
     @PutMapping("/{id}")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(@transitionActionService.getProjectId(#id)) ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
+    @PreAuthorize("@perm.checkWorkflowAction(#id)")
     public R<TransitionActionVO> update(@PathVariable("id") Long id,
                                         @RequestBody @Valid UpdateTransitionActionDTO dto) {
         TransitionAction action = transitionActionService.update(id, dto);
@@ -85,7 +85,7 @@ public class TransitionActionController {
      * 删除转换动作
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(@transitionActionService.getProjectId(#id)) ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
+    @PreAuthorize("@perm.checkWorkflowAction(#id)")
     public R<Void> delete(@PathVariable("id") Long id) {
         transitionActionService.delete(id);
         return R.ok();
@@ -95,7 +95,7 @@ public class TransitionActionController {
      * 切换启用状态
      */
     @PatchMapping("/{id}/toggle")
-    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(@transitionActionService.getProjectId(#id)) ? @perm.checkGlobal('system:admin') : @perm.check(@transitionActionService.getProjectId(#id), 'project:manage_workflow')")
+    @PreAuthorize("@perm.checkWorkflowAction(#id)")
     public R<Void> toggleEnabled(@PathVariable("id") Long id) {
         transitionActionService.toggleEnabled(id);
         return R.ok();

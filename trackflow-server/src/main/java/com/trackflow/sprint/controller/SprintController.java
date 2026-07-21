@@ -46,56 +46,56 @@ public class SprintController {
     }
 
     @GetMapping("/api/v1/sprints/{id}")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintVO> getById(@PathVariable("id") Long id) {
         return R.ok(sprintService.getByIdWithStats(id));
     }
 
     @PutMapping("/api/v1/sprints/{id}")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
     public R<SprintVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateSprintDTO dto) {
         return R.ok(sprintConverter.toVO(sprintService.update(id, dto)));
     }
 
     @PutMapping("/api/v1/sprints/{id}/activate")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
     public R<SprintVO> activate(@PathVariable("id") Long id) {
         return R.ok(sprintConverter.toVO(sprintService.activate(id)));
     }
 
     @GetMapping("/api/v1/sprints/{id}/completion-preview")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
     public R<CompletionPreviewVO> completionPreview(@PathVariable("id") Long id) {
         return R.ok(sprintService.getCompletionPreview(id));
     }
 
     @PutMapping("/api/v1/sprints/{id}/complete")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:edit')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
     public R<SprintVO> complete(@PathVariable("id") Long id, @RequestBody(required = false) @Valid CompleteSprintDTO dto) {
         return R.ok(sprintConverter.toVO(sprintService.complete(id, dto)));
     }
 
     @GetMapping("/api/v1/sprints/{id}/deletion-preview")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:delete')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:delete')")
     public R<DeletionPreviewVO> deletionPreview(@PathVariable("id") Long id) {
         return R.ok(sprintService.getDeletionPreview(id));
     }
 
     @DeleteMapping("/api/v1/sprints/{id}")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:delete')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:delete')")
     public R<Void> delete(@PathVariable("id") Long id, @RequestBody(required = false) @Valid DeleteSprintDTO dto) {
         sprintService.delete(id, dto);
         return R.ok();
     }
 
     @GetMapping("/api/v1/sprints/{id}/burndown")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<BurndownVO> burndown(@PathVariable("id") Long id) {
         return R.ok(sprintService.getBurndownData(id));
     }
 
     @GetMapping("/api/v1/sprints/{id}/assignee-distribution")
-    @PreAuthorize("@perm.check(@sprintService.getById(#id).projectId, 'sprint:view')")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintAssigneeDistributionVO> assigneeDistribution(@PathVariable("id") Long id) {
         return R.ok(sprintService.getAssigneeDistribution(id));
     }
