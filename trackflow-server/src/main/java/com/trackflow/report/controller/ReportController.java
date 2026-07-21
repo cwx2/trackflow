@@ -10,6 +10,7 @@ import com.trackflow.report.dto.UpdateReportDTO;
 import com.trackflow.report.service.ReportService;
 import com.trackflow.report.vo.ReportDefinitionVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
+import com.trackflow.report.vo.ReportGroupByOptionVO;
 import com.trackflow.report.vo.ReportShareVO;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -39,11 +41,35 @@ public class ReportController {
             projectService.assertProjectAccessible(userId, projectId);
         }
         List<ReportDefinitionVO> voList = reportConverter.toVOList(reportService.list(projectId, userId));
-        // 填充共享数量
+        // 填充共享数量和收藏状态
+        Set<Long> favoriteIds = reportService.getUserFavoriteReportIds(userId);
         for (ReportDefinitionVO vo : voList) {
             vo.setShareCount(reportService.getShareCount(Long.parseLong(vo.getId())));
+            vo.setFavorited(favoriteIds.contains(Long.parseLong(vo.getId())));
         }
+        // 排序：收藏的在前，然后按名称
+        voList.sort((a, b) -> {
+            boolean aFav = Boolean.TRUE.equals(a.getFavorited());
+            boolean bFav = Boolean.TRUE.equals(b.getFavorited());
+            if (aFav != bFav) return aFav ? -1 : 1;
+            return (a.getName() != null ? a.getName() : "").compareTo(b.getName() != null ? b.getName() : "");
+        });
         return R.ok(voList);
+    }
+
+    /**
+     * 获取可用的分组维度列表（内置 + 自定义字段）
+     * GET /api/v1/reports/group-by-options?projectId=xxx
+     */
+    @GetMapping("/group-by-options")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<ReportGroupByOptionVO>> getGroupByOptions(
+            @RequestParam(value = "projectId", required = false) Long projectId) {
+        if (projectId != null) {
+            Long userId = SecurityUtils.getCurrentUserId();
+            projectService.assertProjectAccessible(userId, projectId);
+        }
+        return R.ok(reportService.getAvailableGroupByDimensions(projectId));
     }
 
     @PostMapping
@@ -84,6 +110,20 @@ public class ReportController {
     public R<ReportDefinitionVO> clone(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportConverter.toVO(reportService.clone(id, userId)));
+    }
+
+    /**
+     * 切换报表收藏状态
+     * POST /api/v1/reports/{id}/favorite
+     *
+     * @return true=已收藏, false=已取消收藏
+     */
+    @PostMapping("/{id}/favorite")
+    @PreAuthorize("isAuthenticated()")
+    public R<Boolean> toggleFavorite(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        boolean favorited = reportService.toggleFavorite(id, userId);
+        return R.ok(favorited);
     }
 
     /**

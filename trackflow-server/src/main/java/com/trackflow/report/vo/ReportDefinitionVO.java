@@ -14,6 +14,8 @@ public class ReportDefinitionVO {
     private String createdBy;
     /** 精细化共享对象数量 */
     private Integer shareCount;
+    /** 当前用户是否收藏了该报表 */
+    private Boolean favorited;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -17,7 +17,7 @@
         allow-clear
         size="small"
         style="width: 200px"
-        @change="loadReports"
+        @change="onProjectChange"
       >
         <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
       </a-select>
@@ -54,6 +54,14 @@
         <div class="card-header">
           <span class="card-type-badge" :class="'type-' + report.type">{{ reportTypeLabel(report.type) }}</span>
           <div class="card-header-right">
+            <button
+              class="favorite-btn"
+              :class="{ 'is-favorited': report.favorited }"
+              :title="report.favorited ? '取消收藏' : '收藏'"
+              @click.stop="toggleFavorite(report)"
+            >
+              {{ report.favorited ? '★' : '☆' }}
+            </button>
             <span v-if="report.isSystem" class="system-badge">系统</span>
             <a-dropdown v-if="canShowMenu(report)" trigger="click" @click.stop>
               <span class="card-menu-btn" @click.stop>⋯</span>
@@ -199,11 +207,20 @@
         </a-form-item>
         <a-form-item label="分组依据">
           <a-select v-model="form.groupBy" placeholder="选择分组" :disabled="isGroupByLocked">
-            <a-option value="status">状态</a-option>
-            <a-option value="assignee">负责人</a-option>
-            <a-option value="priority">优先级</a-option>
-            <a-option value="type">工单类型</a-option>
-            <a-option value="project">项目</a-option>
+            <a-option-group v-if="builtinDimensions.length > 0" label="内置维度">
+              <a-option
+                v-for="dim in builtinDimensions"
+                :key="dim.value"
+                :value="dim.value"
+              >{{ dim.label }}</a-option>
+            </a-option-group>
+            <a-option-group v-if="customFieldDimensions.length > 0" label="自定义字段">
+              <a-option
+                v-for="dim in customFieldDimensions"
+                :key="dim.value"
+                :value="dim.value"
+              >{{ dim.label }}</a-option>
+            </a-option-group>
           </a-select>
           <span v-if="isGroupByLocked" class="form-hint">已根据报表类型自动设置</span>
         </a-form-item>
@@ -353,16 +370,22 @@ const typeToGroupByMap: Record<string, string> = {
 /** 当 type 有固定的 groupBy 映射时，禁用 groupBy 选择 */
 const isGroupByLocked = computed(() => form.type in typeToGroupByMap)
 
-/** 可选的第二维度列表（排除已选的主维度） */
-const allDimensions = [
-  { value: 'status', label: '状态' },
-  { value: 'assignee', label: '负责人' },
-  { value: 'priority', label: '优先级' },
-  { value: 'type', label: '工单类型' },
-  { value: 'project', label: '项目' }
-]
+/** 可选的分组维度列表（从 API 动态加载） */
+const allDimensions = ref<{ value: string; label: string; category?: string }[]>([
+  { value: 'status', label: '状态', category: 'builtin' },
+  { value: 'assignee', label: '负责人', category: 'builtin' },
+  { value: 'priority', label: '优先级', category: 'builtin' },
+  { value: 'type', label: '工单类型', category: 'builtin' },
+  { value: 'project', label: '项目', category: 'builtin' }
+])
+const builtinDimensions = computed(() => {
+  return allDimensions.value.filter(d => d.category === 'builtin' || !d.category)
+})
+const customFieldDimensions = computed(() => {
+  return allDimensions.value.filter(d => d.category === 'custom_field')
+})
 const availableSecondDimensions = computed(() => {
-  return allDimensions.filter(d => d.value !== form.groupBy)
+  return allDimensions.value.filter(d => d.value !== form.groupBy)
 })
 
 // type 变化时自动锁定 groupBy
@@ -398,6 +421,25 @@ async function loadProjects() {
   } catch {
     // non-critical
   }
+}
+
+async function loadGroupByOptions() {
+  try {
+    const res = await reportApi.getGroupByOptions(selectedProjectId.value || undefined)
+    if (res.data && res.data.length > 0) {
+      allDimensions.value = res.data.map(opt => ({
+        value: opt.value,
+        label: opt.label,
+        category: opt.category
+      }))
+    }
+  } catch {
+    // non-critical, fallback to initial built-in dimensions
+  }
+}
+
+async function onProjectChange() {
+  await Promise.all([loadReports(), loadGroupByOptions()])
 }
 
 async function executeReport(report: ReportDefinitionVO) {
@@ -577,6 +619,23 @@ async function cloneReport(report: ReportDefinitionVO) {
   }
 }
 
+async function toggleFavorite(report: ReportDefinitionVO) {
+  try {
+    const res = await reportApi.toggleFavorite(report.id)
+    report.favorited = res.data
+    // 重新排序列表：收藏的在前
+    reports.value.sort((a, b) => {
+      const aFav = a.favorited ? 1 : 0
+      const bFav = b.favorited ? 1 : 0
+      if (aFav !== bFav) return bFav - aFav
+      return (a.name || '').localeCompare(b.name || '')
+    })
+    Message.success(res.data ? '已收藏' : '已取消收藏')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
 async function exportReport(report: ReportDefinitionVO) {
   try {
     const blob = await reportApi.exportCsv(report.id)
@@ -622,6 +681,10 @@ function reportTypeLabel(type: string) {
 }
 
 function groupByLabel(groupBy: string) {
+  // First check dynamic dimensions from API
+  const dim = allDimensions.value.find(d => d.value === groupBy)
+  if (dim) return dim.label
+  // Fallback for built-in
   const map: Record<string, string> = {
     status: '状态',
     assignee: '负责人',
@@ -684,7 +747,7 @@ onMounted(async () => {
   readThemeColors()
   themeObserver = new MutationObserver(() => readThemeColors())
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
-  await Promise.all([loadReports(), loadProjects()])
+  await Promise.all([loadReports(), loadProjects(), loadGroupByOptions()])
 })
 
 onBeforeUnmount(() => {
@@ -1027,6 +1090,30 @@ function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.favorite-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--tf-text-tertiary);
+  transition: color 0.15s, transform 0.15s;
+}
+
+.favorite-btn:hover {
+  color: var(--tf-warning, #d29922);
+  transform: scale(1.15);
+}
+
+.favorite-btn.is-favorited {
+  color: var(--tf-warning, #d29922);
 }
 
 .system-badge {

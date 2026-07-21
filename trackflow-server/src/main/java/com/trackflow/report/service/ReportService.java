@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
@@ -19,10 +21,13 @@ import com.trackflow.report.entity.ReportGroupBy;
 import com.trackflow.report.entity.ReportShare;
 import com.trackflow.report.entity.ReportType;
 import com.trackflow.report.mapper.ReportDefinitionMapper;
+import com.trackflow.report.mapper.ReportFavoriteMapper;
 import com.trackflow.report.mapper.ReportShareMapper;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
+import com.trackflow.report.entity.ReportFavorite;
 import com.trackflow.report.mapper.result.*;
 import com.trackflow.report.vo.ReportExecuteResultVO;
+import com.trackflow.report.vo.ReportGroupByOptionVO;
 import com.trackflow.report.vo.ReportShareVO;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
@@ -48,6 +53,7 @@ public class ReportService {
     private final ReportDefinitionMapper reportMapper;
     private final ReportStatisticsMapper reportStatisticsMapper;
     private final ReportShareMapper reportShareMapper;
+    private final ReportFavoriteMapper reportFavoriteMapper;
     private final ObjectMapper objectMapper;
     private final ProjectService projectService;
     private final PermissionService permissionService;
@@ -55,6 +61,7 @@ public class ReportService {
     private final SprintMapper sprintMapper;
     private final SysUserMapper sysUserMapper;
     private final UserGroupMapper userGroupMapper;
+    private final CustomFieldService customFieldService;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
@@ -100,6 +107,7 @@ public class ReportService {
      * 创建报表（带权限校验）
      * - projectId 非空：需要 project:edit 权限
      * - projectId 为空（全局报表）：需要系统管理员权限
+     * 创建后自动添加到创建者的收藏列表（参照 YouTrack 行为）
      */
     @Transactional
     public ReportDefinition createWithAccessCheck(CreateReportDTO dto, Long userId) {
@@ -114,7 +122,10 @@ public class ReportService {
                 throw new BusinessException(ErrorCode.ACCESS_DENIED, "全局报表仅系统管理员可创建");
             }
         }
-        return create(dto);
+        ReportDefinition report = create(dto);
+        // 新创建的报表自动添加到创建者收藏
+        addFavorite(report.getId(), userId);
+        return report;
     }
 
     @Transactional
@@ -136,6 +147,71 @@ public class ReportService {
         report.setShared(dto.getShared() != null ? dto.getShared() : false);
         reportMapper.insert(report);
         return report;
+    }
+
+    // ─── 收藏管理 ────────────────────────────────────────
+
+    /**
+     * 切换报表收藏状态（收藏/取消收藏）
+     *
+     * @param reportId 报表ID
+     * @param userId   当前用户ID
+     * @return true=已收藏, false=已取消收藏
+     */
+    @Transactional
+    public boolean toggleFavorite(Long reportId, Long userId) {
+        // 确认报表存在
+        ReportDefinition report = reportMapper.selectById(reportId);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+
+        ReportFavorite existing = reportFavoriteMapper.selectOne(
+                new LambdaQueryWrapper<ReportFavorite>()
+                        .eq(ReportFavorite::getUserId, userId)
+                        .eq(ReportFavorite::getReportId, reportId));
+
+        if (existing != null) {
+            reportFavoriteMapper.deleteById(existing.getId());
+            log.info("Report unfavorited: reportId={}, userId={}", reportId, userId);
+            return false;
+        } else {
+            ReportFavorite fav = new ReportFavorite();
+            fav.setUserId(userId);
+            fav.setReportId(reportId);
+            reportFavoriteMapper.insert(fav);
+            log.info("Report favorited: reportId={}, userId={}", reportId, userId);
+            return true;
+        }
+    }
+
+    /**
+     * 添加报表到用户收藏（内部使用，如创建报表时自动收藏）
+     */
+    public void addFavorite(Long reportId, Long userId) {
+        ReportFavorite existing = reportFavoriteMapper.selectOne(
+                new LambdaQueryWrapper<ReportFavorite>()
+                        .eq(ReportFavorite::getUserId, userId)
+                        .eq(ReportFavorite::getReportId, reportId));
+        if (existing == null) {
+            ReportFavorite fav = new ReportFavorite();
+            fav.setUserId(userId);
+            fav.setReportId(reportId);
+            reportFavoriteMapper.insert(fav);
+        }
+    }
+
+    /**
+     * 获取用户收藏的报表ID集合
+     */
+    public Set<Long> getUserFavoriteReportIds(Long userId) {
+        List<ReportFavorite> favorites = reportFavoriteMapper.selectList(
+                new LambdaQueryWrapper<ReportFavorite>()
+                        .eq(ReportFavorite::getUserId, userId)
+                        .select(ReportFavorite::getReportId));
+        return favorites.stream()
+                .map(ReportFavorite::getReportId)
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -268,10 +344,15 @@ public class ReportService {
         Map<String, Object> configMap = parseConfig(config);
         String groupBy = (String) configMap.get("groupBy");
 
-        // 如果指定了 groupBy，必须合法
+        // 如果指定了 groupBy，必须合法（内置维度或 cf_{fieldId} 格式）
         if (groupBy != null && !groupBy.isBlank() && !ReportGroupBy.isValid(groupBy)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的分组维度: " + groupBy + "，允许值: " + ReportGroupBy.allowedValues());
+        }
+
+        // 自定义字段存在性校验
+        if (groupBy != null && ReportGroupBy.isCustomFieldFormat(groupBy)) {
+            validateCustomFieldExists(groupBy);
         }
 
         // secondGroupBy 校验
@@ -279,6 +360,9 @@ public class ReportService {
         if (secondGroupBy != null && !secondGroupBy.isBlank() && !ReportGroupBy.isValid(secondGroupBy)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的第二分组维度: " + secondGroupBy + "，允许值: " + ReportGroupBy.allowedValues());
+        }
+        if (secondGroupBy != null && ReportGroupBy.isCustomFieldFormat(secondGroupBy)) {
+            validateCustomFieldExists(secondGroupBy);
         }
 
         // 类型与 groupBy 的一致性校验
@@ -298,10 +382,29 @@ public class ReportService {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的分组维度: " + groupBy + "，允许值: " + ReportGroupBy.allowedValues());
         }
+        if (groupBy != null && ReportGroupBy.isCustomFieldFormat(groupBy)) {
+            validateCustomFieldExists(groupBy);
+        }
         String secondGroupBy = (String) configMap.get("secondGroupBy");
         if (secondGroupBy != null && !secondGroupBy.isBlank() && !ReportGroupBy.isValid(secondGroupBy)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的第二分组维度: " + secondGroupBy + "，允许值: " + ReportGroupBy.allowedValues());
+        }
+        if (secondGroupBy != null && ReportGroupBy.isCustomFieldFormat(secondGroupBy)) {
+            validateCustomFieldExists(secondGroupBy);
+        }
+    }
+
+    /**
+     * 校验自定义字段是否存在
+     */
+    private void validateCustomFieldExists(String groupByValue) {
+        Long fieldId = ReportGroupBy.extractCustomFieldId(groupByValue);
+        if (fieldId == null) return;
+        CustomFieldDefinition field = customFieldService.getDefinitionById(fieldId);
+        if (field == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "自定义字段不存在: " + groupByValue);
         }
     }
 
@@ -546,7 +649,7 @@ public class ReportService {
 
     /**
      * 增强版执行引擎
-     * 支持：timeRange筛选 + filters组合筛选 + 双维度交叉 + 按项目分组 + chartType
+     * 支持：timeRange筛选 + filters组合筛选 + 双维度交叉 + 按项目分组 + chartType + 自定义字段分组
      *
      * @param report     报表定义
      * @param projectIds 项目范围限制（null 表示不限制——仅内部调用允许）
@@ -564,6 +667,21 @@ public class ReportService {
         // 构建查询参数 Map（使用传入的 projectIds 限制范围）
         Map<String, Object> params = buildQueryParams(config, groupBy, projectIds);
 
+        // 如果是自定义字段分组，解析 fieldId 并添加到 params
+        if (ReportGroupBy.isCustomFieldFormat(groupBy)) {
+            Long cfId = ReportGroupBy.extractCustomFieldId(groupBy);
+            params.put("customFieldId", cfId);
+            params.put("isCustomFieldGroupBy", true);
+            // 获取字段定义，判断是否为 list 类型（需要 JOIN option 表获取显示值）
+            CustomFieldDefinition cfDef = customFieldService.getDefinitionById(cfId);
+            if (cfDef != null && "list".equals(cfDef.getFieldFormat())) {
+                params.put("customFieldIsListType", true);
+            }
+            if (cfDef != null && "user".equals(cfDef.getFieldFormat())) {
+                params.put("customFieldIsUserType", true);
+            }
+        }
+
         ReportExecuteResultVO result = new ReportExecuteResultVO();
         result.setTitle(report.getName());
         result.setType(report.getType());
@@ -578,6 +696,19 @@ public class ReportService {
         if (isCrossMode) {
             result.setSecondGroupBy(secondGroupBy);
             params.put("secondGroupBy", secondGroupBy);
+            // 如果第二维度也是自定义字段
+            if (ReportGroupBy.isCustomFieldFormat(secondGroupBy)) {
+                Long cfId2 = ReportGroupBy.extractCustomFieldId(secondGroupBy);
+                params.put("secondCustomFieldId", cfId2);
+                params.put("isSecondCustomFieldGroupBy", true);
+                CustomFieldDefinition cfDef2 = customFieldService.getDefinitionById(cfId2);
+                if (cfDef2 != null && "list".equals(cfDef2.getFieldFormat())) {
+                    params.put("secondCustomFieldIsListType", true);
+                }
+                if (cfDef2 != null && "user".equals(cfDef2.getFieldFormat())) {
+                    params.put("secondCustomFieldIsUserType", true);
+                }
+            }
             executeCrossMode(params, result);
         } else {
             executeSingleMode(params, result);
@@ -852,5 +983,45 @@ public class ReportService {
         } catch (JsonProcessingException e) {
             return Map.of();
         }
+    }
+
+    /**
+     * 获取可用的分组维度列表（内置 + 项目的自定义字段）
+     *
+     * @param projectId 项目 ID（可选），传入时额外返回该项目可用的自定义字段维度
+     * @return 可用维度列表
+     */
+    public List<ReportGroupByOptionVO> getAvailableGroupByDimensions(Long projectId) {
+        List<ReportGroupByOptionVO> dimensions = new ArrayList<>();
+
+        // 内置维度
+        for (ReportGroupBy builtin : ReportGroupBy.values()) {
+            dimensions.add(new ReportGroupByOptionVO(
+                    builtin.getValue(), builtin.getLabel(), "builtin", null));
+        }
+
+        // 自定义字段维度
+        List<CustomFieldDefinition> fields;
+        if (projectId != null) {
+            fields = customFieldService.listByProject(projectId, null);
+        } else {
+            // 全局报表：只返回 is_for_all=true 的全局字段
+            fields = customFieldService.listGlobalFields();
+        }
+
+        // 可分组的字段类型：list, string, user, int（排除 text, datetime, bool 等不适合分组的类型）
+        Set<String> groupableFormats = Set.of("list", "string", "user", "int");
+
+        for (CustomFieldDefinition field : fields) {
+            if (groupableFormats.contains(field.getFieldFormat())) {
+                dimensions.add(new ReportGroupByOptionVO(
+                        ReportGroupBy.CUSTOM_FIELD_PREFIX + field.getId(),
+                        field.getName(),
+                        "custom_field",
+                        field.getFieldFormat()));
+            }
+        }
+
+        return dimensions;
     }
 }

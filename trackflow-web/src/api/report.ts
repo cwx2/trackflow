@@ -11,6 +11,8 @@ export interface ReportDefinitionVO {
   isSystem: boolean
   createdBy: string
   shareCount: number
+  /** 当前用户是否收藏了该报表 */
+  favorited: boolean
   createdAt: string
   updatedAt: string
 }
@@ -74,6 +76,18 @@ export interface ReportDataVO {
   refreshInterval?: number | null
 }
 
+/** 报表可用分组维度选项 */
+export interface ReportGroupByOptionVO {
+  /** 维度值（如 "status", "cf_2077320550062825474"） */
+  value: string
+  /** 显示标签（如 "按状态", "平台"） */
+  label: string
+  /** 维度类别: "builtin" 或 "custom_field" */
+  category: 'builtin' | 'custom_field'
+  /** 自定义字段格式（仅 category=custom_field 时有值） */
+  fieldFormat?: string
+}
+
 /**
  * 报表模块 API
  */
@@ -82,6 +96,12 @@ export const reportApi = {
   list(projectId?: string) {
     const params = projectId ? { projectId } : {}
     return request.get<any, R<ReportDefinitionVO[]>>('/reports', { params })
+  },
+
+  /** 获取可用的分组维度列表（内置 + 自定义字段） */
+  getGroupByOptions(projectId?: string) {
+    const params = projectId ? { projectId } : {}
+    return request.get<any, R<ReportGroupByOptionVO[]>>('/reports/group-by-options', { params })
   },
 
   /** 创建报表 */
@@ -107,6 +127,11 @@ export const reportApi = {
   /** 克隆报表 */
   clone(id: string) {
     return request.post<any, R<ReportDefinitionVO>>(`/reports/${id}/clone`)
+  },
+
+  /** 切换报表收藏状态 */
+  toggleFavorite(id: string) {
+    return request.post<any, R<boolean>>(`/reports/${id}/favorite`)
   },
 
   /** 导出报表为 CSV（返回 Blob） */
