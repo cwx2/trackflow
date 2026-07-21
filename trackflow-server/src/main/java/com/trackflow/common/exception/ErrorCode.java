@@ -19,6 +19,8 @@ public enum ErrorCode {
     INVALID_BATCH_OPERATION(40002, 400, "无效的批量操作类型或缺少必填参数"),
     PROJECT_ARCHIVED(40003, 400, "归档项目不允许此操作"),
     QUIET_HOURS_INCOMPLETE(40004, 400, "静音时段的开始和结束时间必须同时设置或同时清除"),
+    INVALID_PARAMETER(40005, 400, "无效的请求参数"),
+    INVALID_STATE(40006, 400, "当前状态不允许此操作"),
 
     // Authentication (401xx)
     AUTH_MISSING(40100, 401, "未认证，请先登录"),
