@@ -30,7 +30,7 @@ public class ReportStatisticsController {
      * filter 可选：JSON 数组格式的 Issue 筛选条件（与工单列表的筛选语法相同）
      */
     @GetMapping("/dashboard")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<DashboardVO> dashboard(
             @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId,
@@ -53,7 +53,7 @@ public class ReportStatisticsController {
      * 获取工单状态分布
      */
     @GetMapping("/status-distribution")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<StatusDistributionVO> statusDistribution(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
@@ -66,7 +66,7 @@ public class ReportStatisticsController {
      * 获取优先级分布
      */
     @GetMapping("/priority-distribution")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<PriorityDistributionVO> priorityDistribution(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
@@ -79,7 +79,7 @@ public class ReportStatisticsController {
      * 获取工单趋势（每日新建/关闭）
      */
     @GetMapping("/trend")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<TrendVO> trend(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -93,7 +93,7 @@ public class ReportStatisticsController {
      * 获取团队工作负载（按负责人统计）
      */
     @GetMapping("/workload")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<WorkloadVO> workload(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
@@ -106,7 +106,7 @@ public class ReportStatisticsController {
      * 获取工单类型分布
      */
     @GetMapping("/type-distribution")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<TypeDistributionVO> typeDistribution(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "sprintId", required = false) Long sprintId) {
@@ -119,7 +119,7 @@ public class ReportStatisticsController {
      * 获取 Sprint 燃尽图数据
      */
     @GetMapping("/burndown")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<BurndownVO> burndown(
             @RequestParam("projectId") Long projectId,
             @RequestParam("sprintId") Long sprintId) {
@@ -132,7 +132,7 @@ public class ReportStatisticsController {
      * 获取累积流图数据（Cumulative Flow Diagram）
      */
     @GetMapping("/cumulative-flow")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<CumulativeFlowVO> cumulativeFlow(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -146,7 +146,7 @@ public class ReportStatisticsController {
      * 获取解决时间分析数据（Resolution Time）
      */
     @GetMapping("/resolution-time")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<ResolutionTimeVO> resolutionTime(
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -163,7 +163,7 @@ public class ReportStatisticsController {
      * projectId 可选：不传时返回用户有权限的全部项目聚合数据
      */
     @GetMapping("/time-report")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<TimeReportVO> timeReport(
             @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -182,7 +182,7 @@ public class ReportStatisticsController {
      * 支持分页：page（默认1）, pageSize（默认50，最大200）
      */
     @GetMapping("/estimation-report")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<EstimationReportVO> estimationReport(
             @RequestParam(value = "projectId", required = false) Long projectId,
             @RequestParam(value = "page", defaultValue = "1") Integer page,

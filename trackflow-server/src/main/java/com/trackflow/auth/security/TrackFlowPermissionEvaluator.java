@@ -265,6 +265,61 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
     }
 
     /**
+     * 检查用户是否有报表查看权限（用于报表列表/执行/克隆/收藏等读操作）。
+     * <p>
+     * 规则：系统管理员 或 在任意项目中拥有 report:view 权限
+     * 用于 @PreAuthorize("@perm.canViewReports()")
+     */
+    public boolean canViewReports() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        String permission = "report:view";
+        if (!isPermissionInScope(permission)) return false;
+
+        return permissionService.isSystemAdmin(userId)
+                || permissionService.hasPermissionInAnyProject(userId, permission);
+    }
+
+    /**
+     * 检查用户是否有报表创建权限。
+     * <p>
+     * 规则：系统管理员 或 在任意项目中拥有 report:create 权限
+     * 用于 @PreAuthorize("@perm.canCreateReports()")
+     */
+    public boolean canCreateReports() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        String permission = "report:create";
+        if (!isPermissionInScope(permission)) return false;
+
+        return permissionService.isSystemAdmin(userId)
+                || permissionService.hasPermissionInAnyProject(userId, permission);
+    }
+
+    /**
+     * 检查用户对指定项目是否有报表查看权限。
+     * <p>
+     * 用于 @PreAuthorize("@perm.check(#projectId, 'report:view')")
+     * 当 projectId 为 null 时回退到 canViewReports() 逻辑。
+     */
+    public boolean checkReportView(Long projectId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        String permission = "report:view";
+        if (!isPermissionInScope(permission)) return false;
+
+        if (permissionService.isSystemAdmin(userId)) return true;
+
+        if (projectId != null) {
+            return permissionService.hasPermission(userId, projectId, permission);
+        }
+        return permissionService.hasPermissionInAnyProject(userId, permission);
+    }
+
+    /**
      * 判断请求的权限是否在当前 API Key 的 scope 范围内。
      * <p>
      * 规则：

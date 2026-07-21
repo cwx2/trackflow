@@ -34,7 +34,7 @@ public class DashboardController {
      * 获取仪表盘列表（当前用户拥有的 + 共享的）
      */
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<DashboardListVO>> list() {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.list(userId));
@@ -44,7 +44,7 @@ public class DashboardController {
      * 获取仪表盘详情（含所有 Widget）
      */
     @GetMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<DashboardDetailVO> getDetail(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getDetail(id, userId));
@@ -54,7 +54,7 @@ public class DashboardController {
      * 创建仪表盘
      */
     @PostMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canCreateReports()")
     public R<DashboardDetailVO> create(@Valid @RequestBody CreateDashboardDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.create(dto, userId));
@@ -64,7 +64,7 @@ public class DashboardController {
      * 更新仪表盘（名称/描述/共享）
      */
     @PutMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<DashboardDetailVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateDashboardDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.update(id, dto, userId));
@@ -74,7 +74,7 @@ public class DashboardController {
      * 删除仪表盘
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.delete(id, userId);
@@ -87,7 +87,7 @@ public class DashboardController {
      * 切换仪表盘收藏状态
      */
     @PostMapping("/{id}/favorite")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Boolean> toggleFavorite(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         boolean favorited = dashboardService.toggleFavorite(id, userId);
@@ -98,7 +98,7 @@ public class DashboardController {
      * 设为默认仪表盘
      */
     @PutMapping("/{id}/default")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> setDefault(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.setDefault(id, userId);
@@ -109,7 +109,7 @@ public class DashboardController {
      * 取消默认仪表盘
      */
     @DeleteMapping("/default")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> unsetDefault() {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.unsetDefault(userId);
@@ -120,7 +120,7 @@ public class DashboardController {
      * 获取当前用户的默认仪表盘 ID
      */
     @GetMapping("/default")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<String> getDefault() {
         Long userId = SecurityUtils.getCurrentUserId();
         Long defaultId = dashboardService.getUserDefaultDashboardId(userId);
@@ -133,7 +133,7 @@ public class DashboardController {
      * 获取仪表盘的共享列表
      */
     @GetMapping("/{id}/shares")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<DashboardShareVO>> getShares(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getShares(id, userId));
@@ -143,7 +143,7 @@ public class DashboardController {
      * 设置仪表盘共享（覆盖模式）
      */
     @PutMapping("/{id}/shares")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<DashboardShareVO>> setShares(@PathVariable("id") Long id,
                                                 @Valid @RequestBody ShareDashboardDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -154,7 +154,7 @@ public class DashboardController {
      * 移除单条共享
      */
     @DeleteMapping("/{id}/shares/{shareId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> removeShare(@PathVariable("id") Long id, @PathVariable("shareId") Long shareId) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.removeShare(id, shareId, userId);
@@ -167,7 +167,7 @@ public class DashboardController {
      * 添加 Widget 到仪表盘
      */
     @PostMapping("/{id}/widgets")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<DashboardWidgetVO> addWidget(@PathVariable("id") Long id, @Valid @RequestBody CreateWidgetDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.addWidget(id, dto, userId));
@@ -177,7 +177,7 @@ public class DashboardController {
      * 更新 Widget（配置/位置/大小）
      */
     @PutMapping("/{id}/widgets/{widgetId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<DashboardWidgetVO> updateWidget(
             @PathVariable("id") Long id,
             @PathVariable("widgetId") Long widgetId,
@@ -190,7 +190,7 @@ public class DashboardController {
      * 删除 Widget
      */
     @DeleteMapping("/{id}/widgets/{widgetId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> deleteWidget(@PathVariable("id") Long id, @PathVariable("widgetId") Long widgetId) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.deleteWidget(id, widgetId, userId);
@@ -201,7 +201,7 @@ public class DashboardController {
      * 批量更新 Widget 位置（拖拽后保存布局）
      */
     @PutMapping("/{id}/layout")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> updateLayout(@PathVariable("id") Long id, @Valid @RequestBody UpdateLayoutDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.updateLayout(id, dto, userId);

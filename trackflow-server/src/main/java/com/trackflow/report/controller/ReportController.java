@@ -34,7 +34,7 @@ public class ReportController {
     private final ProjectService projectService;
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<ReportDefinitionVO>> list(@RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
@@ -68,7 +68,7 @@ public class ReportController {
      * GET /api/v1/reports/group-by-options?projectId=xxx
      */
     @GetMapping("/group-by-options")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<ReportGroupByOptionVO>> getGroupByOptions(
             @RequestParam(value = "projectId", required = false) Long projectId) {
         if (projectId != null) {
@@ -79,21 +79,21 @@ public class ReportController {
     }
 
     @PostMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canCreateReports()")
     public R<ReportDefinitionVO> create(@Valid @RequestBody CreateReportDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportConverter.toVO(reportService.createWithAccessCheck(dto, userId)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<ReportDefinitionVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateReportDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportConverter.toVO(reportService.updateWithAccessCheck(id, dto, userId)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.deleteWithAccessCheck(id, userId);
@@ -101,7 +101,7 @@ public class ReportController {
     }
 
     @GetMapping("/{id}/data")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<ReportExecuteResultVO> execute(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportService.executeWithAccessCheck(id, userId));
@@ -112,7 +112,7 @@ public class ReportController {
      * POST /api/v1/reports/{id}/clone
      */
     @PostMapping("/{id}/clone")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canCreateReports()")
     public R<ReportDefinitionVO> clone(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportConverter.toVO(reportService.clone(id, userId)));
@@ -125,7 +125,7 @@ public class ReportController {
      * @return true=已收藏, false=已取消收藏
      */
     @PostMapping("/{id}/favorite")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Boolean> toggleFavorite(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         boolean favorited = reportService.toggleFavorite(id, userId);
@@ -137,7 +137,7 @@ public class ReportController {
      * GET /api/v1/reports/{id}/export?format=csv|xlsx
      */
     @GetMapping("/{id}/export")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public void export(@PathVariable("id") Long id,
                        @RequestParam(value = "format", defaultValue = "csv") String format,
                        HttpServletResponse response) throws IOException {
@@ -184,7 +184,7 @@ public class ReportController {
      * 获取报表的共享列表
      */
     @GetMapping("/{id}/shares")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<ReportShareVO>> getShares(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportService.getShares(id, userId));
@@ -194,7 +194,7 @@ public class ReportController {
      * 设置报表共享（覆盖模式）
      */
     @PutMapping("/{id}/shares")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<List<ReportShareVO>> setShares(@PathVariable("id") Long id,
                                             @Valid @RequestBody ShareReportDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -205,7 +205,7 @@ public class ReportController {
      * 移除单条共享
      */
     @DeleteMapping("/{id}/shares/{shareId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("@perm.canViewReports()")
     public R<Void> removeShare(@PathVariable("id") Long id, @PathVariable("shareId") Long shareId) {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.removeShare(id, shareId, userId);

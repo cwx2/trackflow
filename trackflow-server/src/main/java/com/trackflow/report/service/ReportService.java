@@ -177,6 +177,7 @@ public class ReportService {
 
     /**
      * 切换报表收藏状态（收藏/取消收藏）
+     * 需要对报表有查看权限才能收藏
      *
      * @param reportId 报表ID
      * @param userId   当前用户ID
@@ -188,6 +189,14 @@ public class ReportService {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+
+        // 权限校验：需要对报表有查看权限
+        if (!Boolean.TRUE.equals(report.getShared())
+                && !userId.equals(report.getCreatedBy())
+                && reportShareMapper.countAccessByUser(reportId, userId) == 0
+                && !permissionService.isSystemAdmin(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
         ReportFavorite existing = reportFavoriteMapper.selectOne(
@@ -239,8 +248,9 @@ public class ReportService {
     }
 
     /**
-     * 克隆报表
+     * 克隆报表（带权限校验）
      * 创建一份指定报表的副本，名称加"(副本)"后缀
+     * 需要：用户对源报表有查看权限 + report:create 权限
      */
     @Transactional
     public ReportDefinition clone(Long id, Long userId) {
@@ -249,9 +259,17 @@ public class ReportService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
 
-        // 项目可访问性检查（读操作）
+        // 项目可访问性检查
         if (source.getProjectId() != null) {
             projectService.assertProjectAccessible(userId, source.getProjectId());
+        }
+
+        // 私有报表隔离检查（owner / shared=true / report_share 中有权限 / 系统管理员）
+        if (!Boolean.TRUE.equals(source.getShared())
+                && !userId.equals(source.getCreatedBy())
+                && reportShareMapper.countAccessByUser(id, userId) == 0
+                && !permissionService.isSystemAdmin(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
         ReportDefinition cloned = new ReportDefinition();
@@ -312,7 +330,7 @@ public class ReportService {
     }
 
     /**
-     * 导出权限校验（项目可访问 + 私有报表隔离）
+     * 导出权限校验（项目可访问 + 私有报表隔离 + 系统管理员覆盖）
      */
     private void assertExportAccess(ReportDefinition report, Long id, Long userId) {
         if (report.getProjectId() != null) {
@@ -320,7 +338,8 @@ public class ReportService {
         }
         if (!Boolean.TRUE.equals(report.getShared())
                 && !userId.equals(report.getCreatedBy())
-                && reportShareMapper.countAccessByUser(id, userId) == 0) {
+                && reportShareMapper.countAccessByUser(id, userId) == 0
+                && !permissionService.isSystemAdmin(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
     }
@@ -579,6 +598,7 @@ public class ReportService {
 
     /**
      * 设置报表共享（覆盖模式：传入全量共享列表）
+     * 只有报表创建者或系统管理员可以管理共享
      */
     @Transactional
     public List<ReportShareVO> setShares(Long reportId, ShareReportDTO dto, Long userId) {
@@ -586,8 +606,8 @@ public class ReportService {
         if (report == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
-        // 只有报表创建者可以管理共享
-        if (!report.getCreatedBy().equals(userId)) {
+        // 只有报表创建者或系统管理员可以管理共享
+        if (!report.getCreatedBy().equals(userId) && !permissionService.isSystemAdmin(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以管理共享");
         }
 
@@ -616,14 +636,15 @@ public class ReportService {
 
     /**
      * 获取报表的共享列表
+     * 创建者或系统管理员可以查看完整共享列表
      */
     public List<ReportShareVO> getShares(Long reportId, Long userId) {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
-        // 只有创建者可以查看完整共享列表
-        if (!report.getCreatedBy().equals(userId)) {
+        // 只有创建者或系统管理员可以查看完整共享列表
+        if (!report.getCreatedBy().equals(userId) && !permissionService.isSystemAdmin(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以查看共享设置");
         }
 
@@ -676,6 +697,7 @@ public class ReportService {
 
     /**
      * 移除单条共享
+     * 只有报表创建者或系统管理员可以管理共享
      */
     @Transactional
     public void removeShare(Long reportId, Long shareId, Long userId) {
@@ -683,7 +705,7 @@ public class ReportService {
         if (report == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
-        if (!report.getCreatedBy().equals(userId)) {
+        if (!report.getCreatedBy().equals(userId) && !permissionService.isSystemAdmin(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有报表创建者可以管理共享");
         }
 
@@ -743,6 +765,7 @@ public class ReportService {
     /**
      * 执行报表（带权限校验）
      * 对全局报表（projectId=null），按当前用户可访问的项目范围限制数据。
+     * 系统管理员可查看任何报表。
      */
     public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
@@ -752,9 +775,11 @@ public class ReportService {
             projectService.assertProjectAccessible(userId, report.getProjectId());
         }
 
+        // 私有报表隔离：owner / shared / report_share / 系统管理员
         if (!Boolean.TRUE.equals(report.getShared())
                 && !userId.equals(report.getCreatedBy())
-                && reportShareMapper.countAccessByUser(id, userId) == 0) {
+                && reportShareMapper.countAccessByUser(id, userId) == 0
+                && !permissionService.isSystemAdmin(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
