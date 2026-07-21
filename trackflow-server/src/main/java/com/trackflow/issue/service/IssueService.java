@@ -1046,6 +1046,24 @@ public class IssueService {
         keyHistory.setChangedBy(currentUserId);
         issueKeyHistoryMapper.insert(keyHistory);
 
+        // 状态兼容性检查：当前 statusId 在目标项目工作流中是否可达
+        boolean statusValid = workflowService.isStatusInWorkflow(
+                targetProjectId, issue.getIssueType(), issue.getStatusId());
+        if (!statusValid) {
+            // 自动回退到系统默认状态（对标 YouTrack：移动后状态不兼容时重置为默认值）
+            var defaultStatus = workflowService.getDefaultStatus();
+            if (defaultStatus != null) {
+                Long oldStatusId = issue.getStatusId();
+                issue.setStatusId(defaultStatus.getId());
+                String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
+                String newStatusName = defaultStatus.getLocalizedName();
+                recordActivity(issueId, currentUserId, "status_reset", "status",
+                        oldStatusName, newStatusName);
+                log.info("Issue {} moved to project {}: status auto-reset from {} to default ({})",
+                        issueId, targetProjectId, oldStatusName, newStatusName);
+            }
+        }
+
         issueMapper.updateById(issue);
 
         // 自定义字段清理：移除不适用于目标项目的字段值
