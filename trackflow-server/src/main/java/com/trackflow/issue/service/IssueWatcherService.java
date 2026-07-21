@@ -9,8 +9,8 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueWatcher;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueWatcherMapper;
+import com.trackflow.issue.vo.IssueWatcherVO;
 import com.trackflow.project.service.ProjectService;
-import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -39,7 +39,6 @@ public class IssueWatcherService {
     private final IssueMapper issueMapper;
     private final ProjectService projectService;
     private final NotificationPreferenceService preferenceService;
-    private final SysUserMapper sysUserMapper;
 
     /**
      * 手动关注工单。
@@ -86,6 +85,13 @@ public class IssueWatcherService {
      */
     public List<Long> getWatcherUserIds(Long issueId) {
         return watcherMapper.selectWatcherUserIds(issueId);
+    }
+
+    /**
+     * 查询工单的关注者列表（含用户信息），单次 JOIN 查询避免 N+1
+     */
+    public List<IssueWatcherVO> listWatchersWithUser(Long issueId) {
+        return watcherMapper.selectWatchersWithUser(issueId);
     }
 
     /**
