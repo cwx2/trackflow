@@ -67,6 +67,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'submit'): void
 }>()
 
 // ==================== State ====================
@@ -196,6 +197,7 @@ function onBlur() {
 function onKeydown(e: KeyboardEvent) {
   if (!showDropdown.value || suggestions.value.length === 0) {
     if (e.key === 'Escape') showDropdown.value = false
+    if (e.key === 'Enter') emit('submit')
     return
   }
 

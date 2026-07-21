@@ -35,15 +35,14 @@
         <span class="sq-chip-name" @click="handleChipClick" title="点击编辑查询">{{ activeQueryName }}</span>
         <span class="sq-chip-close" @click.stop="handleClearQuery" title="清除查询">✕</span>
       </div>
-      <input
-        ref="searchInputRef"
+      <QueryInput
         v-model="searchKeyword"
-        class="search-input"
-        :placeholder="activeQueryName ? '追加筛选关键词...' : '输入搜索请求'"
-        @keyup.enter="emitSearch"
-        @input="onSearchInput"
+        :placeholder="activeQueryName ? '追加筛选关键词...' : '输入搜索请求 (如 状态: 未关闭  负责人: 我)'"
+        :status-list="statusList"
+        :project-list="projectList"
+        :project-id="projectId"
+        @submit="emitSearch"
       />
-      <span v-if="searchKeyword" class="clear-btn" @click="clearSearch">✕</span>
     </div>
 
     <!-- Filter mode -->
@@ -181,6 +180,7 @@ import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
+import QueryInput from './QueryInput.vue'
 
 // ==================== Types ====================
 
@@ -269,7 +269,6 @@ const FILTER_FIELDS: FilterField[] = [
 
 const mode = ref<'search' | 'filter'>('search')
 const searchKeyword = ref('')
-const searchInputRef = ref<HTMLInputElement | null>(null)
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 // Filter chips
@@ -348,12 +347,13 @@ watch(mode, (newMode) => {
 
 // ==================== Search Mode ====================
 
-function onSearchInput() {
+watch(searchKeyword, () => {
+  if (mode.value !== 'search') return
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchDebounceTimer = setTimeout(() => {
     emitSearch()
   }, 300)
-}
+})
 
 function emitSearch() {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
