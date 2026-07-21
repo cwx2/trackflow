@@ -96,6 +96,12 @@
           ></div>
         </div>
         <a-divider v-if="selectedProject && visibleStatuses.length > 0" direction="vertical" style="margin: 0 4px" />
+        <!-- Estimation 指示器 -->
+        <div v-if="selectedProject && boardTotalEstimation > 0" class="estimation-indicator" :title="'看板总预估工时: ' + boardTotalEstimation + 'h'">
+          <span class="estimation-icon">⏱</span>
+          <span class="estimation-value">{{ boardTotalEstimation % 1 === 0 ? boardTotalEstimation : boardTotalEstimation.toFixed(1) }}h</span>
+        </div>
+        <a-divider v-if="selectedProject && boardTotalEstimation > 0" direction="vertical" style="margin: 0 4px" />
         <!-- Card Size 选择器 -->
         <div class="card-size-group" role="group" aria-label="卡片尺寸">
           <button
@@ -316,6 +322,7 @@
                 :class="getWipClass(status.id)"
                 :title="getWipTooltip(status.id)"
               >{{ getColumnIssues(status.id).length }}<template v-if="getWipMax(status.id) !== null">/{{ getWipMax(status.id) }}</template></span>
+              <span v-if="getColumnEstimation(status.id)" class="column-estimation" :title="'预估工时总计: ' + getColumnEstimation(status.id) + 'h'">⏱ {{ getColumnEstimation(status.id) }}h</span>
               <span v-if="getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
                 {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
               </span>
@@ -371,7 +378,7 @@
                   </a-tooltip>
                   <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
                   <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
-                  <span v-if="isCardFieldVisible('estimatedHours')" class="card-meta-tag"><!-- placeholder for future --></span>
+                  <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
                 </div>
                 <div class="card-footer">
                   <span v-if="isCardFieldVisible('type')" class="card-type">{{ typeLabel(issue.issueType) }}</span>
@@ -617,6 +624,7 @@
                         </a-tooltip>
                         <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
                         <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
+                        <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
                       </div>
                       <div class="card-footer">
                         <span v-if="isCardFieldVisible('type')" class="card-type">{{ typeLabel(issue.issueType) }}</span>
@@ -792,6 +800,7 @@ import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
+import { useManualOrder } from '@/views/issue/composables/useManualOrder'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
@@ -1057,6 +1066,8 @@ const boardFilterMode = ref<'all' | 'active_sprint' | 'query'>('all')
 const boardFilterQuery = ref<string | null>(null)
 const boardDoneRetentionDays = ref<number | null>(null)
 const boardName = ref('')
+/** 看板列标识字段：status=按状态分列, priority=按优先级分列 */
+const boardColumnField = ref<'status' | 'priority'>('status')
 
 /** 当前用户是否有看板编辑权限（来自 board_general_config 动态计算） */
 const canEditBoard = ref(false)
@@ -1149,17 +1160,30 @@ const collapsedSwimlanes = ref<Set<string>>(
   new Set(JSON.parse(localStorage.getItem(COLLAPSED_SWIMLANES_KEY) || '[]'))
 )
 
+/** 泳道选中的值列表（null = 全选，向后兼容） */
+const swimlaneSelectedValues = ref<string[] | null>(null)
+/** 是否显示"未分类"泳道 */
+const swimlaneShowUncategorized = ref<boolean>(true)
+/** 未分类泳道位置 */
+const swimlaneUncategorizedPosition = ref<'top' | 'bottom'>('bottom')
+
 function onSwimlaneChange() {
   localStorage.setItem(SWIMLANE_STORAGE_KEY, swimlaneGroupBy.value)
-  // 切换分组维度时清除折叠状态
+  // 切换分组维度时清除折叠状态和已选值
   collapsedSwimlanes.value.clear()
   localStorage.removeItem(COLLAPSED_SWIMLANES_KEY)
+  swimlaneSelectedValues.value = null
+  swimlaneShowUncategorized.value = true
+  swimlaneUncategorizedPosition.value = 'bottom'
   // 同步到 URL
   syncUrlState()
   // 持久化到服务端（静默保存，不阻塞 UI）
   if (selectedProject.value) {
     boardApi.saveSwimlaneConfig(selectedProject.value, {
-      groupByField: swimlaneGroupBy.value
+      groupByField: swimlaneGroupBy.value,
+      selectedValues: null,
+      showUncategorized: true,
+      uncategorizedPosition: 'bottom'
     }).catch(() => { /* 静默失败 */ })
   }
 }
@@ -1188,20 +1212,64 @@ const swimlanes = computed<SwimlaneRow[]>(() => {
 
   const allIssues = issues.value
 
+  let rows: SwimlaneRow[]
   switch (swimlaneGroupBy.value) {
     case 'assignee':
-      return groupByAssignee(allIssues)
+      rows = groupByAssignee(allIssues)
+      break
     case 'priority':
-      return groupByPriority(allIssues)
+      rows = groupByPriority(allIssues)
+      break
     case 'type':
-      return groupByType(allIssues)
+      rows = groupByType(allIssues)
+      break
     case 'sprint':
-      return groupBySprint(allIssues)
+      rows = groupBySprint(allIssues)
+      break
     case 'tag':
-      return groupByTag(allIssues)
+      rows = groupByTag(allIssues)
+      break
     default:
       return []
   }
+
+  // 如果有 selectedValues 配置，过滤泳道并生成"未分类"泳道
+  const selected = swimlaneSelectedValues.value
+  if (selected && selected.length > 0) {
+    const selectedSet = new Set(selected)
+    const filteredRows: SwimlaneRow[] = []
+    const uncategorizedIssues: IssueVO[] = []
+
+    for (const row of rows) {
+      if (selectedSet.has(row.key)) {
+        filteredRows.push(row)
+      } else {
+        // 不在选中列表中的泳道，工单归入"未分类"
+        uncategorizedIssues.push(...row.issues)
+      }
+    }
+
+    // 按选中值顺序排列
+    filteredRows.sort((a, b) => selected.indexOf(a.key) - selected.indexOf(b.key))
+
+    // 添加"未分类"泳道
+    if (swimlaneShowUncategorized.value && uncategorizedIssues.length > 0) {
+      const uncategorizedRow: SwimlaneRow = {
+        key: '__uncategorized__',
+        label: '未分类',
+        issues: uncategorizedIssues
+      }
+      if (swimlaneUncategorizedPosition.value === 'top') {
+        filteredRows.unshift(uncategorizedRow)
+      } else {
+        filteredRows.push(uncategorizedRow)
+      }
+    }
+
+    return filteredRows
+  }
+
+  return rows
 })
 
 function groupByAssignee(allIssues: IssueVO[]): SwimlaneRow[] {
@@ -1578,6 +1646,7 @@ function onProjectChange() {
   showAllColumns.value = false  // 切换项目时重置临时显示
   userExplicitlySelectedAll = false  // Reset: allow auto-select for new project
   guidanceDismissed.value = false  // Reset guidance for new project
+  resetBoardManualOrder()  // Reset manual order when switching projects
   // 切换项目时：保留 'me' 筛选，但清除指定用户 ID（因为不同项目的成员不同）
   if (assigneeFilter.value && assigneeFilter.value !== 'me') {
     assigneeFilter.value = undefined
@@ -1608,6 +1677,28 @@ const {
 
 const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority, batchTagAdd, batchTagRemove, batchAddLink, batchDelete } = useBatchOps()
 
+// ===== 手动排序（列内拖拽） =====
+const {
+  isManualSorted: boardManualSorted,
+  loadManualOrder: loadBoardManualOrder,
+  applyManualOrder: applyBoardManualOrder,
+  saveOrder: saveBoardManualOrder,
+  reset: resetBoardManualOrder
+} = useManualOrder()
+
+/** 判断手动排序是否被禁用（Board Settings 的 filterQuery 包含 sort by 等排序指令） */
+const isManualSortDisabled = computed(() => {
+  if (!boardFilterQuery.value) return false
+  // Check if filterQuery contains sort-related fields (simplified check)
+  try {
+    const filters = JSON.parse(boardFilterQuery.value)
+    return Array.isArray(filters) && filters.some((f: any) => f.field === 'sort' || f.field === 'orderBy')
+  } catch {
+    // string-based query: check for 'sort by' keyword
+    return boardFilterQuery.value.toLowerCase().includes('sort by')
+  }
+})
+
 // 看板列配置
 const allColumnConfigs = ref<BoardColumnVO[]>([])
 const showSettings = ref(false)
@@ -1629,12 +1720,16 @@ const columnMerges = ref<BoardColumnMergeGroupVO[]>([])
 // 根据列配置过滤出可见的状态
 const visibleStatuses = computed(() => {
   if (allColumnConfigs.value.length === 0) {
-    return statuses.value
+    if (boardColumnField.value === 'status') {
+      return statuses.value
+    }
+    // For non-status modes with no config, return empty (will be populated by loadBoardColumns)
+    return []
   }
   return allColumnConfigs.value
     .filter(c => c.visible || showAllColumns.value)
     .map(c => ({
-      id: c.statusId,
+      id: c.fieldValue || c.statusId,
       name: c.statusName,
       code: c.statusCode,
       color: c.statusColor,
@@ -1913,7 +2008,22 @@ const undoStack = ref<UndoEntry[]>([])
 const UNDO_TIMEOUT = 10000
 
 function getColumnIssues(statusId: string): IssueVO[] {
-  return issues.value.filter(i => i.statusId === statusId)
+  let columnIssues: IssueVO[]
+  if (boardColumnField.value === 'priority') {
+    // Priority mode: statusId parameter is actually the priority value (Critical/High/Normal/Low)
+    columnIssues = issues.value.filter(i => (i.priority || 'Normal') === statusId)
+  } else {
+    // Default: status mode
+    columnIssues = issues.value.filter(i => i.statusId === statusId)
+  }
+
+  // Apply manual order if available and not disabled
+  if (boardManualSorted.value && !isManualSortDisabled.value) {
+    const { sorted, rest } = applyBoardManualOrder(columnIssues)
+    return [...sorted, ...rest]
+  }
+
+  return columnIssues
 }
 
 // ===== WIP 限制辅助函数 =====
@@ -1969,6 +2079,32 @@ function getWipTooltip(statusId: string): string {
   if (warning === 'wip-under') suffix = ' ⚠️ 低于最小值'
   return `${count} 个工单 (${parts.join(', ')})${suffix}`
 }
+
+/**
+ * 获取列的预估工时总和（从列配置数据中读取）
+ */
+function getColumnEstimation(statusId: string): string {
+  const config = getColumnConfig(statusId)
+  if (!config || !config.totalEstimation) return ''
+  // 格式化：去除尾部多余的零
+  const val = Number(config.totalEstimation)
+  if (val <= 0) return ''
+  return val % 1 === 0 ? String(val) : val.toFixed(1)
+}
+
+/**
+ * 获取看板总预估工时（所有可见列的 totalEstimation 总和）
+ */
+const boardTotalEstimation = computed(() => {
+  if (!allColumnConfigs.value || allColumnConfigs.value.length === 0) return 0
+  let total = 0
+  for (const col of allColumnConfigs.value) {
+    if (col.visible && col.totalEstimation) {
+      total += Number(col.totalEstimation)
+    }
+  }
+  return total
+})
 
 function expandColumn(statusId: string) {
   collapsedColumns.value.delete(statusId)
@@ -2066,6 +2202,8 @@ function onCardKeydown(event: KeyboardEvent, issue: IssueVO) {
 // ===== 拖拽逻辑 =====
 
 function isCardDraggable(issue: IssueVO): boolean {
+  // Priority mode: always draggable (no workflow constraint, just needs edit permission)
+  if (boardColumnField.value === 'priority') return true
   if (!canChangeStatus.value) return false
   if (transitionableSourceStatuses.value.size === 0) return true
   return transitionableSourceStatuses.value.has(issue.statusId)
@@ -2083,6 +2221,12 @@ async function onDragStart(event: DragEvent, issue: IssueVO) {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', issue.id)
+  }
+
+  // Priority mode: all columns are valid targets (no workflow constraint)
+  if (boardColumnField.value === 'priority') {
+    allowedTargetStatuses.value = new Set(visibleStatuses.value.map(s => s.id))
+    return
   }
 
   try {
@@ -2120,12 +2264,24 @@ function onDragLeave(event: DragEvent) {
 }
 
 function isDropAllowed(targetStatusId: string): boolean {
+  // Priority mode: always allow (no workflow restriction, just check not same column)
+  if (boardColumnField.value === 'priority') {
+    if (!draggingIssue.value) return false
+    // Allow within-column drop for reordering (when manual sort enabled)
+    if ((draggingIssue.value.priority || 'Normal') === targetStatusId) {
+      return !isManualSortDisabled.value
+    }
+    return true
+  }
   // Allow drop from backlog panel
   if (backlogDraggingIssue.value) {
     return allowedTargetStatuses.value.has(targetStatusId)
   }
   if (!draggingIssue.value) return false
-  if (draggingIssue.value.statusId === targetStatusId) return false
+  // Allow within-column drop for reordering (when manual sort is not disabled)
+  if (draggingIssue.value.statusId === targetStatusId) {
+    return !isManualSortDisabled.value
+  }
   return allowedTargetStatuses.value.has(targetStatusId)
 }
 
@@ -2144,6 +2300,39 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
   const issue = draggingIssue.value
   if (!issue || !isDropAllowed(targetStatusId)) {
     onDragEnd()
+    return
+  }
+
+  // Within-column drop: reorder card (manual sorting)
+  const isWithinColumnDrop = (boardColumnField.value === 'priority')
+    ? (issue.priority || 'Normal') === targetStatusId
+    : issue.statusId === targetStatusId
+
+  if (isWithinColumnDrop && !isManualSortDisabled.value) {
+    await handleWithinColumnReorder(issue, targetStatusId, event)
+    return
+  }
+
+  // Priority mode: update priority field instead of status transition
+  if (boardColumnField.value === 'priority') {
+    const oldPriority = issue.priority || 'Normal'
+    const targetPriority = targetStatusId // In priority mode, targetStatusId is the priority value
+    if (oldPriority === targetPriority) {
+      onDragEnd()
+      return
+    }
+    // Optimistic update
+    issue.priority = targetPriority
+    draggingIssue.value = null
+    allowedTargetStatuses.value.clear()
+    try {
+      await issueApi.update(issue.id, { priority: targetPriority })
+      issue.version = (issue.version || 0) + 1
+      Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+    } catch (e: any) {
+      issue.priority = oldPriority
+      Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
+    }
     return
   }
 
@@ -2224,6 +2413,85 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     Message.error(`${issue.issueKey} 移动失败：${errMsg}`)
   } finally {
     transitioningIssueIds.value.delete(issue.id)
+  }
+}
+
+/** Handle within-column drop: reorder card using manual order API */
+async function handleWithinColumnReorder(issue: IssueVO, columnId: string, event: DragEvent) {
+  // Determine the drop target position within the column
+  const columnIssues = getColumnIssues(columnId)
+  const draggedIndex = columnIssues.findIndex(i => i.id === issue.id)
+
+  // Get the drop target element to determine position
+  const dropTarget = event.target as HTMLElement | null
+  let targetIndex = columnIssues.length - 1 // default: drop at end
+
+  if (dropTarget) {
+    // Find the closest card element to determine insertion point
+    const cardEl = dropTarget.closest('.kanban-card') as HTMLElement | null
+    if (cardEl) {
+      // Find which issue this card belongs to
+      const cardIndex = columnIssues.findIndex(i => {
+        // Use issue key to match (card-key contains it)
+        const keyEl = cardEl.querySelector('.card-key')
+        return keyEl && keyEl.textContent === i.issueKey
+      })
+      if (cardIndex >= 0 && cardIndex !== draggedIndex) {
+        // Determine if dropped above or below the target card
+        const rect = cardEl.getBoundingClientRect()
+        const dropY = event.clientY
+        const midY = rect.top + rect.height / 2
+        targetIndex = dropY < midY ? cardIndex : cardIndex + 1
+        if (targetIndex > draggedIndex) targetIndex-- // Adjust for removal
+      }
+    }
+  }
+
+  // Only reorder if position actually changed
+  if (draggedIndex === targetIndex) {
+    onDragEnd()
+    return
+  }
+
+  // Build new order for all issues (not just this column)
+  const allIssueIds = issues.value.map(i => i.id)
+
+  // Reorder within the column: remove from old position, insert at new position
+  const reorderedColumn = [...columnIssues]
+  const [moved] = reorderedColumn.splice(draggedIndex, 1)
+  reorderedColumn.splice(targetIndex, 0, moved)
+
+  // Build the full issue order list (preserving order of other columns, updating this column)
+  const columnIssueSet = new Set(columnIssues.map(i => i.id))
+  const fullOrder: string[] = []
+  let columnInserted = false
+
+  for (const id of allIssueIds) {
+    if (columnIssueSet.has(id)) {
+      if (!columnInserted) {
+        // Insert all reordered column issues at the position of the first column issue
+        fullOrder.push(...reorderedColumn.map(i => i.id))
+        columnInserted = true
+      }
+      // Skip individual column issues (they're already added in order)
+    } else {
+      fullOrder.push(id)
+    }
+  }
+
+  // End drag state
+  draggingIssue.value = null
+  allowedTargetStatuses.value.clear()
+
+  // Save the new order via API
+  try {
+    await saveBoardManualOrder(fullOrder)
+    // Force re-render by updating the issues array order
+    const orderMap = new Map<string, number>()
+    fullOrder.forEach((id, idx) => orderMap.set(id, idx))
+    issues.value.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0))
+  } catch {
+    // Order save failed - the composable already shows an error message
   }
 }
 
@@ -2496,6 +2764,9 @@ async function loadCardConfig() {
 async function loadSwimlaneConfig() {
   if (!selectedProject.value) {
     swimlaneGroupBy.value = 'none'
+    swimlaneSelectedValues.value = null
+    swimlaneShowUncategorized.value = true
+    swimlaneUncategorizedPosition.value = 'bottom'
     return
   }
   try {
@@ -2504,6 +2775,10 @@ async function loadSwimlaneConfig() {
       swimlaneGroupBy.value = res.data.groupByField as SwimlaneGroupBy
       // 同步到 localStorage（兼容本地快速切换）
       localStorage.setItem(SWIMLANE_STORAGE_KEY, res.data.groupByField)
+      // 加载值选择配置
+      swimlaneSelectedValues.value = res.data.selectedValues || null
+      swimlaneShowUncategorized.value = res.data.showUncategorized !== false
+      swimlaneUncategorizedPosition.value = res.data.uncategorizedPosition || 'bottom'
     }
   } catch {
     // 保持当前 localStorage 中的值
@@ -2602,6 +2877,7 @@ async function loadBoardBehavior() {
       boardDoneRetentionDays.value = res.data.doneRetentionDays ?? null
       canEditBoard.value = res.data.currentUserCanEdit ?? false
       boardName.value = res.data.name || ''
+      boardColumnField.value = (res.data.columnField as 'status' | 'priority') || 'status'
     }
   } catch {
     boardFilterMode.value = 'all'
@@ -2638,6 +2914,10 @@ async function loadBoard() {
   try {
     await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers(), loadChartConfig()])
     await loadIssues()
+    // Load manual order for board card sorting
+    if (selectedProject.value) {
+      await loadBoardManualOrder({ type: 'project', id: selectedProject.value })
+    }
   } catch (e: any) {
     // 会话过期时不显示"加载失败"——已有过期提示和跳转
     const isSessionExpired = e?.message === '会话已过期' || e?.code === 'ERR_CANCELED'
@@ -3376,6 +3656,32 @@ onUnmounted(() => {
   background: var(--color-fill-3);
   padding: 2px 6px;
   border-radius: 3px;
+}
+
+.column-estimation {
+  font-size: 11px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.estimation-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--tf-text-secondary, var(--color-text-2));
+  cursor: default;
+  white-space: nowrap;
+}
+
+.estimation-icon {
+  font-size: 12px;
+}
+
+.estimation-value {
+  font-weight: 500;
 }
 
 .column-collapse-btn {
