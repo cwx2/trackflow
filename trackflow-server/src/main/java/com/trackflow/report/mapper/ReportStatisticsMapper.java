@@ -1,12 +1,12 @@
 package com.trackflow.report.mapper;
 
+import com.trackflow.report.dto.ReportQueryParams;
 import com.trackflow.report.mapper.result.*;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 报表统计专用 Mapper — 所有聚合在 SQL 层完成，不加载原始记录到内存
@@ -189,11 +189,21 @@ public interface ReportStatisticsMapper {
      * 通用单维度分组查询（带筛选 + 时间范围）
      * groupBy 维度在 SQL 中动态选择
      */
-    List<ReportGroupRow> selectReportGrouped(@Param("params") Map<String, Object> params);
+    List<ReportGroupRow> selectReportGrouped(@Param("params") ReportQueryParams params);
 
     /**
      * 双维度交叉分组查询
      * 返回行：(primary_label, secondary_label, cnt)
      */
-    List<ReportCrossRow> selectReportCross(@Param("params") Map<String, Object> params);
+    List<ReportCrossRow> selectReportCross(@Param("params") ReportQueryParams params);
+
+    /**
+     * 状态转换统计查询
+     * 基于 issue_activity 表的 action='change_status' 事件聚合
+     * 返回行：(from_status, to_status, transition_count, avg_duration_hours)
+     */
+    List<StateTransitionRow> selectStateTransitions(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }

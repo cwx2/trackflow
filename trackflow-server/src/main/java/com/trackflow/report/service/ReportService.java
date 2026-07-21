@@ -13,6 +13,7 @@ import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.report.dto.CreateReportDTO;
+import com.trackflow.report.dto.ReportQueryParams;
 import com.trackflow.report.dto.ShareReportDTO;
 import com.trackflow.report.dto.UpdateReportDTO;
 import com.trackflow.report.entity.ReportConfig;
@@ -26,9 +27,12 @@ import com.trackflow.report.mapper.ReportShareMapper;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.entity.ReportFavorite;
 import com.trackflow.report.mapper.result.*;
+import com.trackflow.report.vo.BurndownVO;
+import com.trackflow.report.vo.CumulativeFlowVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
 import com.trackflow.report.vo.ReportGroupByOptionVO;
 import com.trackflow.report.vo.ReportShareVO;
+import com.trackflow.report.vo.ResolutionTimeVO;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
@@ -62,6 +66,7 @@ public class ReportService {
     private final SysUserMapper sysUserMapper;
     private final UserGroupMapper userGroupMapper;
     private final CustomFieldService customFieldService;
+    private final ReportStatisticsService reportStatisticsService;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
@@ -844,11 +849,30 @@ public class ReportService {
     /**
      * 增强版执行引擎
      * 支持：timeRange筛选 + filters组合筛选 + 双维度交叉 + 按项目分组 + chartType + 自定义字段分组
+     * 以及 Timeline 类报表（燃尽图、累积流图、解决时间）和 State Transition 类报表
      *
      * @param report     报表定义
      * @param projectIds 项目范围限制（null 表示不限制——仅内部调用允许）
      */
     private ReportExecuteResultVO executeInternal(ReportDefinition report, List<Long> projectIds) {
+        ReportType reportType = ReportType.fromValue(report.getType());
+
+        // 类型路由：时间线类和状态转换类报表委托给专门的执行方法
+        if (reportType != null && reportType.isTimeline()) {
+            return executeTimelineReport(report, reportType, projectIds);
+        }
+        if (reportType != null && reportType.isStateTransition()) {
+            return executeStateTransitionReport(report, projectIds);
+        }
+
+        // 分布类报表：原有逻辑
+        return executeDistributionReport(report, projectIds);
+    }
+
+    /**
+     * 执行分布类报表（Issue Distribution 类）
+     */
+    private ReportExecuteResultVO executeDistributionReport(ReportDefinition report, List<Long> projectIds) {
         Map<String, Object> rawConfig = parseConfig(report.getConfig());
         ReportConfig config = ReportConfig.fromMap(rawConfig);
 
@@ -858,27 +882,28 @@ public class ReportService {
             groupBy = "status";
         }
 
-        // 构建查询参数 Map（使用传入的 projectIds 限制范围）
-        Map<String, Object> params = buildQueryParams(config, groupBy, projectIds);
+        // 构建查询参数（使用传入的 projectIds 限制范围）
+        ReportQueryParams params = buildQueryParams(config, groupBy, projectIds);
 
         // 如果是自定义字段分组，解析 fieldId 并添加到 params
         if (ReportGroupBy.isCustomFieldFormat(groupBy)) {
             Long cfId = ReportGroupBy.extractCustomFieldId(groupBy);
-            params.put("customFieldId", cfId);
-            params.put("isCustomFieldGroupBy", true);
+            params.setCustomFieldId(cfId);
+            params.setIsCustomFieldGroupBy(true);
             // 获取字段定义，判断是否为 list 类型（需要 JOIN option 表获取显示值）
             CustomFieldDefinition cfDef = customFieldService.getDefinitionById(cfId);
             if (cfDef != null && "list".equals(cfDef.getFieldFormat())) {
-                params.put("customFieldIsListType", true);
+                params.setCustomFieldIsListType(true);
             }
             if (cfDef != null && "user".equals(cfDef.getFieldFormat())) {
-                params.put("customFieldIsUserType", true);
+                params.setCustomFieldIsUserType(true);
             }
         }
 
         ReportExecuteResultVO result = new ReportExecuteResultVO();
         result.setTitle(report.getName());
         result.setType(report.getType());
+        result.setCategory("distribution");
         result.setGroupBy(groupBy);
         result.setChartType(config.getChartType());
 
@@ -889,18 +914,18 @@ public class ReportService {
 
         if (isCrossMode) {
             result.setSecondGroupBy(secondGroupBy);
-            params.put("secondGroupBy", secondGroupBy);
+            params.setSecondGroupBy(secondGroupBy);
             // 如果第二维度也是自定义字段
             if (ReportGroupBy.isCustomFieldFormat(secondGroupBy)) {
                 Long cfId2 = ReportGroupBy.extractCustomFieldId(secondGroupBy);
-                params.put("secondCustomFieldId", cfId2);
-                params.put("isSecondCustomFieldGroupBy", true);
+                params.setSecondCustomFieldId(cfId2);
+                params.setIsSecondCustomFieldGroupBy(true);
                 CustomFieldDefinition cfDef2 = customFieldService.getDefinitionById(cfId2);
                 if (cfDef2 != null && "list".equals(cfDef2.getFieldFormat())) {
-                    params.put("secondCustomFieldIsListType", true);
+                    params.setSecondCustomFieldIsListType(true);
                 }
                 if (cfDef2 != null && "user".equals(cfDef2.getFieldFormat())) {
-                    params.put("secondCustomFieldIsUserType", true);
+                    params.setSecondCustomFieldIsUserType(true);
                 }
             }
             executeCrossMode(params, result);
@@ -921,9 +946,260 @@ public class ReportService {
     }
 
     /**
+     * 执行时间线类报表（燃尽图、累积流图、解决时间分析）
+     */
+    private ReportExecuteResultVO executeTimelineReport(ReportDefinition report, ReportType reportType, List<Long> projectIds) {
+        Map<String, Object> rawConfig = parseConfig(report.getConfig());
+        ReportConfig config = ReportConfig.fromMap(rawConfig);
+
+        ReportExecuteResultVO result = new ReportExecuteResultVO();
+        result.setTitle(report.getName());
+        result.setType(report.getType());
+        result.setCategory("timeline");
+        result.setCalculatedAt(LocalDateTime.now());
+        result.setRefreshInterval(config.getRefreshInterval());
+
+        // 解析时间范围（时间线类报表的核心参数）
+        LocalDateTime[] timeRange = config.resolveTimeRange();
+        java.time.LocalDate startDate = timeRange != null ? timeRange[0].toLocalDate() : java.time.LocalDate.now().minusDays(29);
+        java.time.LocalDate endDate = timeRange != null ? timeRange[1].toLocalDate() : java.time.LocalDate.now();
+
+        // 解析 Sprint ID（燃尽图需要）
+        Long sprintId = null;
+        if (config.getFilters() != null && config.getFilters().getSprintId() != null) {
+            try {
+                sprintId = Long.parseLong(config.getFilters().getSprintId());
+            } catch (NumberFormatException ignore) {}
+        }
+
+        switch (reportType) {
+            case BURNDOWN, BURNDOWN_CHART -> {
+                if (sprintId == null) {
+                    // 燃尽图必须指定 Sprint，尝试查找活跃 Sprint
+                    sprintId = findActiveSprintId(projectIds);
+                }
+                if (sprintId == null) {
+                    // 无可用 Sprint，返回空数据
+                    result.setChartType("line");
+                    result.setDates(List.of());
+                    result.setSeries(List.of());
+                    Map<String, Object> summary = new LinkedHashMap<>();
+                    summary.put("message", "没有找到可用的 Sprint");
+                    result.setSummary(summary);
+                    return result;
+                }
+                executeBurndownReport(result, report.getProjectId(), sprintId);
+            }
+            case CUMULATIVE_FLOW -> executeCumulativeFlowReport(result, projectIds, startDate, endDate);
+            case RESOLUTION_TIME -> executeResolutionTimeReport(result, projectIds, startDate, endDate, config);
+            default -> {
+                // Fallback to distribution for unknown timeline types
+                return executeDistributionReport(report, projectIds);
+            }
+        }
+
+        // 设置应用的筛选摘要
+        if (config.hasFilters() || config.getTimeRange() != null) {
+            result.setAppliedFilters(buildFilterSummary(config));
+        }
+
+        return result;
+    }
+
+    /**
+     * 执行燃尽图报表
+     */
+    private void executeBurndownReport(ReportExecuteResultVO result, Long projectId, Long sprintId) {
+        result.setChartType("line");
+
+        BurndownVO burndown = reportStatisticsService.getBurndownData(projectId, sprintId);
+
+        result.setDates(burndown.getDates());
+        result.setIdealLine(burndown.getIdeal());
+
+        // 构建 series
+        List<ReportExecuteResultVO.TimeSeriesData> series = new ArrayList<>();
+
+        ReportExecuteResultVO.TimeSeriesData actualSeries = new ReportExecuteResultVO.TimeSeriesData();
+        actualSeries.setName("剩余工单");
+        actualSeries.setColor("#58a6ff");
+        actualSeries.setData(burndown.getActual() != null
+                ? burndown.getActual().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        actualSeries.setSeriesType("line");
+        series.add(actualSeries);
+
+        ReportExecuteResultVO.TimeSeriesData idealSeries = new ReportExecuteResultVO.TimeSeriesData();
+        idealSeries.setName("理想线");
+        idealSeries.setColor("#6b7280");
+        idealSeries.setData(burndown.getIdeal() != null
+                ? burndown.getIdeal().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        idealSeries.setSeriesType("line");
+        series.add(idealSeries);
+
+        result.setSeries(series);
+        result.setTotal(burndown.getTotalIssues());
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("sprintName", burndown.getSprintName());
+        summary.put("totalIssues", burndown.getTotalIssues());
+        result.setSummary(summary);
+    }
+
+    /**
+     * 执行累积流图报表
+     */
+    private void executeCumulativeFlowReport(ReportExecuteResultVO result, List<Long> projectIds,
+                                              java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        result.setChartType("stacked_area");
+
+        CumulativeFlowVO cfd = reportStatisticsService.getCumulativeFlowData(projectIds, startDate, endDate);
+
+        result.setDates(cfd.getDates());
+
+        List<ReportExecuteResultVO.TimeSeriesData> series = new ArrayList<>();
+        if (cfd.getSeries() != null) {
+            for (CumulativeFlowVO.StatusSeries statusSeries : cfd.getSeries()) {
+                ReportExecuteResultVO.TimeSeriesData ts = new ReportExecuteResultVO.TimeSeriesData();
+                ts.setName(statusSeries.getName());
+                ts.setColor(statusSeries.getColor());
+                ts.setData(statusSeries.getData() != null
+                        ? statusSeries.getData().stream().map(v -> (Number) v).collect(Collectors.toList())
+                        : List.of());
+                ts.setSeriesType("area");
+                series.add(ts);
+            }
+        }
+        result.setSeries(series);
+    }
+
+    /**
+     * 执行解决时间分析报表
+     */
+    private void executeResolutionTimeReport(ReportExecuteResultVO result, List<Long> projectIds,
+                                              java.time.LocalDate startDate, java.time.LocalDate endDate,
+                                              ReportConfig config) {
+        result.setChartType("line");
+
+        // 从 config 的 groupBy 中获取解决时间的分组（可选）
+        String groupBy = config.getGroupBy();
+        ResolutionTimeVO rt = reportStatisticsService.getResolutionTimeData(projectIds, startDate, endDate, groupBy);
+
+        result.setDates(rt.getDates());
+
+        List<ReportExecuteResultVO.TimeSeriesData> series = new ArrayList<>();
+
+        // 平均解决时间
+        ReportExecuteResultVO.TimeSeriesData avgSeries = new ReportExecuteResultVO.TimeSeriesData();
+        avgSeries.setName("平均解决时间(h)");
+        avgSeries.setColor("#58a6ff");
+        avgSeries.setData(rt.getAvgHours() != null
+                ? rt.getAvgHours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        avgSeries.setSeriesType("line");
+        series.add(avgSeries);
+
+        // 中位解决时间
+        ReportExecuteResultVO.TimeSeriesData medianSeries = new ReportExecuteResultVO.TimeSeriesData();
+        medianSeries.setName("中位解决时间(h)");
+        medianSeries.setColor("#3fb950");
+        medianSeries.setData(rt.getMedianHours() != null
+                ? rt.getMedianHours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        medianSeries.setSeriesType("line");
+        series.add(medianSeries);
+
+        // P90 解决时间
+        ReportExecuteResultVO.TimeSeriesData p90Series = new ReportExecuteResultVO.TimeSeriesData();
+        p90Series.setName("P90 解决时间(h)");
+        p90Series.setColor("#d29922");
+        p90Series.setData(rt.getP90Hours() != null
+                ? rt.getP90Hours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        p90Series.setSeriesType("line");
+        series.add(p90Series);
+
+        result.setSeries(series);
+
+        // 概览信息
+        Map<String, Object> summary = new LinkedHashMap<>();
+        long totalResolved = rt.getResolvedCount() != null
+                ? rt.getResolvedCount().stream().mapToLong(Long::longValue).sum()
+                : 0L;
+        summary.put("totalResolved", totalResolved);
+        if (rt.getGroupDetails() != null && !rt.getGroupDetails().isEmpty()) {
+            summary.put("groupDetails", rt.getGroupDetails());
+        }
+        result.setSummary(summary);
+        result.setTotal(totalResolved);
+    }
+
+    /**
+     * 执行状态转换统计报表
+     */
+    private ReportExecuteResultVO executeStateTransitionReport(ReportDefinition report, List<Long> projectIds) {
+        Map<String, Object> rawConfig = parseConfig(report.getConfig());
+        ReportConfig config = ReportConfig.fromMap(rawConfig);
+
+        ReportExecuteResultVO result = new ReportExecuteResultVO();
+        result.setTitle(report.getName());
+        result.setType(report.getType());
+        result.setCategory("state_transition");
+        result.setChartType("bar_horizontal");
+        result.setCalculatedAt(LocalDateTime.now());
+        result.setRefreshInterval(config.getRefreshInterval());
+
+        // 解析时间范围
+        LocalDateTime[] timeRange = config.resolveTimeRange();
+        LocalDateTime start = timeRange != null ? timeRange[0] : LocalDateTime.now().minusDays(30);
+        LocalDateTime end = timeRange != null ? timeRange[1] : LocalDateTime.now();
+
+        // 查询状态转换数据（基于 issue_activity 表）
+        List<ReportExecuteResultVO.StateTransitionItem> transitions =
+                reportStatisticsService.getStateTransitionData(projectIds, start, end);
+
+        result.setTransitions(transitions);
+
+        // 同时提供 labels + data 给前端用于条形图渲染
+        List<String> labels = new ArrayList<>();
+        List<Long> data = new ArrayList<>();
+        long total = 0;
+        for (ReportExecuteResultVO.StateTransitionItem item : transitions) {
+            labels.add(item.getFromStatus() + " → " + item.getToStatus());
+            data.add(item.getCount());
+            total += item.getCount();
+        }
+        result.setLabels(labels);
+        result.setData(data);
+        result.setTotal(total);
+
+        // 设置筛选摘要
+        if (config.hasFilters() || config.getTimeRange() != null) {
+            result.setAppliedFilters(buildFilterSummary(config));
+        }
+
+        return result;
+    }
+
+    /**
+     * 查找给定项目范围内的活跃 Sprint ID
+     */
+    private Long findActiveSprintId(List<Long> projectIds) {
+        LambdaQueryWrapper<Sprint> query = new LambdaQueryWrapper<>();
+        query.eq(Sprint::getStatus, SprintStatus.ACTIVE);
+        if (projectIds != null && !projectIds.isEmpty()) {
+            query.in(Sprint::getProjectId, projectIds);
+        }
+        query.last("LIMIT 1");
+        Sprint sprint = sprintMapper.selectOne(query);
+        return sprint != null ? sprint.getId() : null;
+    }
+
+    /**
      * 单维度执行
      */
-    private void executeSingleMode(Map<String, Object> params, ReportExecuteResultVO result) {
+    private void executeSingleMode(ReportQueryParams params, ReportExecuteResultVO result) {
         List<ReportGroupRow> rows = reportStatisticsMapper.selectReportGrouped(params);
 
         List<String> labels = new ArrayList<>();
@@ -946,7 +1222,7 @@ public class ReportService {
      * 双维度交叉执行
      * 将 (primaryLabel, secondaryLabel, cnt) 行数据转为矩阵
      */
-    private void executeCrossMode(Map<String, Object> params, ReportExecuteResultVO result) {
+    private void executeCrossMode(ReportQueryParams params, ReportExecuteResultVO result) {
         List<ReportCrossRow> rows = reportStatisticsMapper.selectReportCross(params);
 
         // 收集所有唯一的 primary 和 secondary labels（保持出现顺序）
@@ -988,43 +1264,43 @@ public class ReportService {
     }
 
     /**
-     * 构建传给 Mapper 的查询参数 Map
+     * 构建传给 Mapper 的报表查询参数
      */
-    private Map<String, Object> buildQueryParams(ReportConfig config, String groupBy, List<Long> projectIds) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("groupBy", groupBy);
-        params.put("sortBy", config.getSortBy());
+    private ReportQueryParams buildQueryParams(ReportConfig config, String groupBy, List<Long> projectIds) {
+        ReportQueryParams params = new ReportQueryParams();
+        params.setGroupBy(groupBy);
+        params.setSortBy(config.getSortBy());
 
         if (projectIds != null) {
-            params.put("projectIds", projectIds);
+            params.setProjectIds(projectIds);
         }
 
         // 时间范围
         LocalDateTime[] timeRange = config.resolveTimeRange();
         if (timeRange != null) {
-            params.put("timeStart", timeRange[0]);
-            params.put("timeEnd", timeRange[1]);
-            params.put("timeField", config.getTimeField());
+            params.setTimeStart(timeRange[0]);
+            params.setTimeEnd(timeRange[1]);
+            params.setTimeField(config.getTimeField());
         }
 
         // 筛选条件
         ReportConfig.ReportFilters filters = config.getFilters();
         if (filters != null) {
             if (filters.getStatuses() != null && !filters.getStatuses().isEmpty()) {
-                params.put("statuses", filters.getStatuses());
+                params.setStatuses(filters.getStatuses());
             }
             if (filters.getStatusesExclude() != null && !filters.getStatusesExclude().isEmpty()) {
-                params.put("statusesExclude", filters.getStatusesExclude());
+                params.setStatusesExclude(filters.getStatusesExclude());
             }
             if (filters.getPriorities() != null && !filters.getPriorities().isEmpty()) {
-                params.put("priorities", filters.getPriorities());
+                params.setPriorities(filters.getPriorities());
             }
             if (filters.getIssueTypes() != null && !filters.getIssueTypes().isEmpty()) {
-                params.put("issueTypes", filters.getIssueTypes());
+                params.setIssueTypes(filters.getIssueTypes());
             }
             if (filters.getSprintId() != null) {
                 try {
-                    params.put("sprintId", Long.parseLong(filters.getSprintId()));
+                    params.setSprintId(Long.parseLong(filters.getSprintId()));
                 } catch (NumberFormatException e) {
                     log.warn("Invalid sprintId in report config: {}", filters.getSprintId());
                 }
@@ -1039,7 +1315,7 @@ public class ReportService {
                         .filter(Objects::nonNull)
                         .toList();
                 if (!assigneeIds.isEmpty()) {
-                    params.put("assigneeIds", assigneeIds);
+                    params.setAssigneeIds(assigneeIds);
                 }
             }
 
@@ -1049,28 +1325,27 @@ public class ReportService {
             if (filters.getStatusClosed() != null) {
                 Set<Long> closedIds = statusCacheHelper.getClosedStatusIds();
                 if (!closedIds.isEmpty()) {
+                    params.setClosedStatusIds(closedIds);
                     if (Boolean.TRUE.equals(filters.getStatusClosed())) {
-                        params.put("closedStatusIds", closedIds);
-                        params.put("onlyClosedStatus", true);
+                        params.setOnlyClosedStatus(true);
                     } else {
-                        params.put("closedStatusIds", closedIds);
-                        params.put("excludeClosedStatus", true);
+                        params.setExcludeClosedStatus(true);
                     }
                 }
             }
 
             // unassigned: true=仅未分配
             if (Boolean.TRUE.equals(filters.getUnassigned())) {
-                params.put("unassigned", true);
+                params.setUnassigned(true);
             }
 
             // overdue: true=仅逾期（due_date < today 且未关闭）
             if (Boolean.TRUE.equals(filters.getOverdue())) {
-                params.put("overdue", true);
+                params.setOverdue(true);
                 // 需要排除已关闭的工单
                 Set<Long> closedIds = statusCacheHelper.getClosedStatusIds();
                 if (!closedIds.isEmpty()) {
-                    params.put("closedStatusIds", closedIds);
+                    params.setClosedStatusIds(closedIds);
                 }
             }
 
@@ -1086,10 +1361,10 @@ public class ReportService {
                 if (!activeSprints.isEmpty()) {
                     List<Long> activeSprintIds = activeSprints.stream()
                             .map(Sprint::getId).toList();
-                    params.put("activeSprintIds", activeSprintIds);
+                    params.setActiveSprintIds(activeSprintIds);
                 } else {
                     // 没有活跃 Sprint，返回空结果（sprintId 设为不存在的值）
-                    params.put("sprintId", -1L);
+                    params.setSprintId(-1L);
                 }
             }
         }
