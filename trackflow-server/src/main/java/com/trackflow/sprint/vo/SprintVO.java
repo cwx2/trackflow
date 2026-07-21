@@ -42,4 +42,10 @@ public class SprintVO {
     private int overdueIssues;
     /** 未分配负责人的工单数（assignee_id IS NULL） */
     private int unassignedIssues;
+
+    // ===== 工时统计 =====
+    /** 该 Sprint 所有工单的预估总工时（estimated_hours 之和） */
+    private double totalEstimatedHours;
+    /** 该 Sprint 已完成工单的预估工时总和 */
+    private double completedEstimatedHours;
 }

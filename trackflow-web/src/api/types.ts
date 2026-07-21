@@ -228,6 +228,8 @@ export interface IssueVO {
   childCount?: number
   /** 已关闭的直接子工单数 */
   childClosedCount?: number
+  /** 预估工时 */
+  estimatedHours?: number
   /** 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本 */
   customFieldValues?: Record<string, string>
   /** 自定义字段颜色值，key 格式 "cf_{fieldId}"，value 为 HEX 颜色（仅有颜色的 list 类型字段） */
@@ -400,6 +402,10 @@ export interface SprintVO {
   overdueIssues: number
   /** 未分配负责人的工单数 */
   unassignedIssues: number
+  /** 该 Sprint 所有工单的预估总工时 */
+  totalEstimatedHours: number
+  /** 该 Sprint 已完成工单的预估工时总和 */
+  completedEstimatedHours: number
 }
 
 /** Sprint 燃尽图数据 */
@@ -432,6 +438,10 @@ export interface SprintAssigneeDistributionVO {
   sprintName: string
   totalIssues: number
   unassignedCount: number
+  /** 所有工单预估工时总和 */
+  totalEstimatedHours: number
+  /** 未分配工单的预估工时总和 */
+  unassignedEstimatedHours: number
   assignees: SprintAssigneeItem[]
 }
 
@@ -443,6 +453,8 @@ export interface SprintAssigneeItem {
   doneCount: number
   inProgressCount: number
   todoCount: number
+  /** 该负责人承担的预估工时总和 */
+  estimatedHoursTotal: number
 }
 
 // ========== 用户/角色/组织 ==========
@@ -718,6 +730,8 @@ export interface TransitStatusResultVO {
 // ========== 看板 ==========
 export interface BoardColumnVO {
   statusId: string
+  /** 通用列标识值（status模式=statusId, priority模式=Critical/High/Normal/Low） */
+  fieldValue: string
   statusName: string
   statusCode: string
   statusColor: string
@@ -731,6 +745,8 @@ export interface BoardColumnVO {
   hasHiddenIssues: boolean | null
   /** 该项目中处于此状态的工单数量 */
   issueCount: number | null
+  /** 该列所有工单的预估工时总和 */
+  totalEstimation: number | null
   /** 该状态是否出现在项目的工作流转换路径中 */
   inWorkflow: boolean | null
 }
@@ -758,6 +774,12 @@ export interface BoardCardConfigVO {
 export interface BoardSwimlaneConfigVO {
   /** 泳道分组字段：none / assignee / priority / type / sprint / tag */
   groupByField: string
+  /** 选中的泳道值列表，null 或空表示全选（向后兼容） */
+  selectedValues?: string[] | null
+  /** 是否显示"未分类"泳道（默认 true） */
+  showUncategorized?: boolean
+  /** 未分类泳道位置：top / bottom（默认 bottom） */
+  uncategorizedPosition?: 'top' | 'bottom'
 }
 
 // ========== 看板图表配置 ==========
@@ -805,6 +827,8 @@ export interface BoardGeneralConfigVO {
   filterQuery: string | null
   /** 已完成工单保留天数（null 表示不限制） */
   doneRetentionDays: number | null
+  /** 看板列标识字段：status | priority */
+  columnField: 'status' | 'priority'
   /** 当前用户是否有看板查看权限 */
   currentUserCanView: boolean
   /** 当前用户是否有看板编辑权限 */

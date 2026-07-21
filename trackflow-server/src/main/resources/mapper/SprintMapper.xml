@@ -18,6 +18,8 @@
         <result property="todoIssues" column="todo_issues"/>
         <result property="overdueIssues" column="overdue_issues"/>
         <result property="unassignedIssues" column="unassigned_issues"/>
+        <result property="totalEstimatedHours" column="total_estimated_hours"/>
+        <result property="completedEstimatedHours" column="completed_estimated_hours"/>
     </resultMap>
 
     <!-- 带工单统计的 Sprint 列表查询 -->
@@ -36,7 +38,9 @@
             COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
             COALESCE(stats.todo_issues, 0) AS todo_issues,
             COALESCE(stats.overdue_issues, 0) AS overdue_issues,
-            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues
+            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues,
+            COALESCE(stats.total_estimated_hours, 0) AS total_estimated_hours,
+            COALESCE(stats.completed_estimated_hours, 0) AS completed_estimated_hours
         FROM sprint s
         LEFT JOIN (
             SELECT
@@ -46,7 +50,9 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
-                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues
+                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
+                COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
+                COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
             FROM issue i
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
@@ -59,6 +65,7 @@
                 WHEN 'active' THEN 1
                 WHEN 'planned' THEN 2
                 WHEN 'completed' THEN 3
+                WHEN 'archived' THEN 4
             END,
             CASE
                 WHEN s.status = 'planned' THEN s.start_date
@@ -87,7 +94,9 @@
             COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
             COALESCE(stats.todo_issues, 0) AS todo_issues,
             COALESCE(stats.overdue_issues, 0) AS overdue_issues,
-            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues
+            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues,
+            COALESCE(stats.total_estimated_hours, 0) AS total_estimated_hours,
+            COALESCE(stats.completed_estimated_hours, 0) AS completed_estimated_hours
         FROM sprint s
         LEFT JOIN (
             SELECT
@@ -97,7 +106,9 @@
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
-                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues
+                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
+                COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
+                COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
             FROM issue i
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
@@ -154,7 +165,8 @@
             COUNT(*) AS issue_count,
             COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_count,
             COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_count,
-            COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_count
+            COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_count,
+            COALESCE(SUM(i.estimated_hours), 0) AS estimated_hours_total
         FROM issue i
         LEFT JOIN issue_status ist ON ist.id = i.status_id
         LEFT JOIN sys_user u ON u.id = i.assignee_id

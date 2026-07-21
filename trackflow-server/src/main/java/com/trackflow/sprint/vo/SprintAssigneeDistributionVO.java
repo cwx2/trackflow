@@ -17,6 +17,10 @@ public class SprintAssigneeDistributionVO {
     private int totalIssues;
     /** 未分配负责人的工单数 */
     private int unassignedCount;
+    /** 所有工单预估工时总和 */
+    private double totalEstimatedHours;
+    /** 未分配工单的预估工时总和 */
+    private double unassignedEstimatedHours;
     /** 按负责人分组的工单统计列表（按数量降序） */
     private List<AssigneeItem> assignees;
 
@@ -34,5 +38,7 @@ public class SprintAssigneeDistributionVO {
         private int inProgressCount;
         /** 待办工单数 */
         private int todoCount;
+        /** 该负责人承担的预估工时总和 */
+        private double estimatedHoursTotal;
     }
 }

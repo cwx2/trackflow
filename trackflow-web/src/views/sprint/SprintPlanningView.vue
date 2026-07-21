@@ -127,6 +127,7 @@
                 <div class="card-title">{{ issue.title }}</div>
                 <div class="card-meta">
                   <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
+                  <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
                   <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                 </div>
               </div>
@@ -158,6 +159,7 @@
               <span class="panel-count">{{ getSprintIssues(sprint.id).length }}</span>
             </div>
             <div class="panel-header-right" v-if="sprint.startDate">
+              <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0">⏱ {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
               <span class="sprint-dates">{{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}</span>
             </div>
           </div>
@@ -194,6 +196,7 @@
                 <div class="card-title">{{ issue.title }}</div>
                 <div class="card-meta">
                   <span class="card-type">{{ localizeIssueType(issue.issueType) }}</span>
+                  <span v-if="issue.estimatedHours" class="card-estimation">⏱ {{ issue.estimatedHours }}h</span>
                   <span v-if="issue.assigneeName" class="card-assignee">{{ issue.assigneeName }}</span>
                 </div>
               </div>
@@ -318,6 +321,17 @@ const selectedCount = computed(() => selectedIds.value.size)
 
 function getSprintIssues(sprintId: string): IssueVO[] {
   return sprintIssuesMap.value.get(sprintId) || []
+}
+
+function getSprintTotalHours(sprintId: string): number {
+  const issues = getSprintIssues(sprintId)
+  return issues.reduce((sum, issue) => sum + (issue.estimatedHours || 0), 0)
+}
+
+function formatHours(hours: number): string {
+  if (hours === 0) return '0h'
+  if (hours >= 1) return `${Math.round(hours * 10) / 10}h`
+  return `${Math.round(hours * 60)}m`
 }
 
 function formatDate(dateStr?: string): string {
@@ -947,6 +961,22 @@ onMounted(async () => {
 .card-assignee {
   font-size: 10px;
   color: var(--color-text-2);
+}
+.card-estimation {
+  font-size: 10px;
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.sprint-total-hours {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-2);
+  background: var(--color-fill-2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-right: 8px;
 }
 
 /* ===== Empty States ===== */

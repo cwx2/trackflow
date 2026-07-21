@@ -131,6 +131,10 @@
               <span class="stat-dot"></span>
               未分配 {{ sprint.unassignedIssues }}
             </span>
+            <span class="stat-item estimation" v-if="sprint.totalEstimatedHours > 0">
+              <span class="stat-icon">⏱</span>
+              已完成 {{ formatHours(sprint.completedEstimatedHours) }} / 共 {{ formatHours(sprint.totalEstimatedHours) }}
+            </span>
           </div>
         </div>
 
@@ -216,6 +220,10 @@
             <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
               <span class="stat-dot"></span>
               未分配 {{ sprint.unassignedIssues }}
+            </span>
+            <span class="stat-item estimation" v-if="sprint.totalEstimatedHours > 0">
+              <span class="stat-icon">⏱</span>
+              共 {{ formatHours(sprint.totalEstimatedHours) }}
             </span>
           </div>
         </div>
@@ -312,6 +320,7 @@
           >
             {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
           </a-button>
+          <a-button v-if="canEditSprint" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
         </div>
 
         <!-- 已完成 Sprint 的燃尽图（展开时显示） -->
@@ -324,9 +333,64 @@
       </div>
         </template>
       </div>
-    </div>
 
-    <!-- 加载状态 -->
+      <!-- Archived Sprints Section (collapsible) -->
+      <div v-if="archivedSprints.length > 0" class="completed-section archived-section">
+        <div class="completed-section-header" @click="showArchivedSprints = !showArchivedSprints">
+          <span class="completed-toggle-icon">{{ showArchivedSprints ? '▾' : '▸' }}</span>
+          <span class="completed-section-title">已归档</span>
+          <span class="completed-section-count">{{ archivedSprints.length }}</span>
+        </div>
+        <template v-if="showArchivedSprints">
+          <div v-for="sprint in archivedSprints" :key="sprint.id" class="sprint-card archived">
+            <div class="sprint-header">
+              <div class="sprint-info">
+                <span class="sprint-status-badge archived">已归档</span>
+                <h3 class="sprint-name">{{ sprint.name }}</h3>
+              </div>
+              <div class="sprint-dates">
+                {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
+              </div>
+            </div>
+
+            <!-- 统计 -->
+            <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
+              <div class="progress-bar-container">
+                <div class="progress-bar">
+                  <div
+                    class="progress-segment done"
+                    :style="{ width: getProgressPercent(sprint, 'done') + '%' }"
+                  ></div>
+                  <div
+                    class="progress-segment in-progress"
+                    :style="{ width: getProgressPercent(sprint, 'inProgress') + '%' }"
+                  ></div>
+                  <div
+                    class="progress-segment todo"
+                    :style="{ width: getProgressPercent(sprint, 'todo') + '%' }"
+                  ></div>
+                </div>
+                <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
+              </div>
+              <div class="progress-stats">
+                <span class="stat-item done">
+                  <span class="stat-dot"></span>
+                  完成 {{ sprint.doneIssues }}
+                </span>
+                <span class="stat-item total">
+                  共 {{ sprint.totalIssues }} 个工单
+                </span>
+              </div>
+            </div>
+
+            <div class="sprint-actions">
+              <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+              <a-button v-if="canEditSprint" size="mini" type="text" @click="restoreSprint(sprint)">恢复</a-button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
     <div v-else-if="loadingState === 'loading'" class="empty-state">
       <a-spin :size="32" />
       <p class="empty-desc" style="margin-top: 16px;">正在加载迭代列表…</p>
@@ -680,6 +744,7 @@ const creating = ref(false)
 const creationPreview = ref<CreationPreviewVO | null>(null)
 const expandedCompletedSprints = ref<Set<string>>(new Set())
 const showCompletedSprints = ref(false)
+const showArchivedSprints = ref(false)
 
 // ===== 编辑迭代相关 =====
 const showEdit = ref(false)
@@ -739,6 +804,7 @@ const overlapContext = ref<'create' | 'edit'>('create')
 const activeSprints = computed(() => sprints.value.filter(s => s.status === 'active' || s.status === 'Active'))
 const plannedSprints = computed(() => sprints.value.filter(s => s.status === 'planned' || s.status === 'Planned'))
 const completedSprints = computed(() => sprints.value.filter(s => s.status === 'completed' || s.status === 'Completed'))
+const archivedSprints = computed(() => sprints.value.filter(s => s.status === 'archived' || s.status === 'Archived'))
 const hasActiveSprint = computed(() => activeSprints.value.length > 0)
 const nextStartableSprint = computed(() => {
   return plannedSprints.value.find(s => !isSprintNotStartable(s)) || null
@@ -805,6 +871,12 @@ function formatDate(dateStr?: string): string {
   if (!dateStr) return ''
   const d = new Date(dateStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatHours(hours: number): string {
+  if (hours === 0) return '0h'
+  if (hours >= 1) return `${Math.round(hours * 10) / 10}h`
+  return `${Math.round(hours * 60)}m`
 }
 
 function getRemainingDays(sprint: SprintVO): number | null {
@@ -1070,6 +1142,26 @@ async function confirmDeleteSprint() {
   }
 }
 
+async function archiveSprint(sprint: SprintVO) {
+  try {
+    await sprintApi.archive(sprint.id)
+    Message.success('迭代已归档')
+    loadSprints()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '归档失败')
+  }
+}
+
+async function restoreSprint(sprint: SprintVO) {
+  try {
+    await sprintApi.restore(sprint.id)
+    Message.success('迭代已恢复')
+    loadSprints()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '恢复失败')
+  }
+}
+
 async function openCreateModal() {
   // 重置表单
   createForm.name = ''
@@ -1153,7 +1245,7 @@ function confirmOverlapAndProceed() {
 
 function openEditModal(sprint: SprintVO) {
   editingSprintId.value = sprint.id
-  editingCompleted.value = (sprint.status === 'completed' || sprint.status === 'Completed')
+  editingCompleted.value = (sprint.status === 'completed' || sprint.status === 'Completed' || sprint.status === 'archived' || sprint.status === 'Archived')
   editForm.name = sprint.name
   editForm.goal = sprint.goal || ''
   editForm.startDate = sprint.startDate || ''
@@ -1308,6 +1400,9 @@ function syncUrlProjectParam() {
 .sprint-card.completed {
   opacity: 0.7;
 }
+.sprint-card.archived {
+  opacity: 0.5;
+}
 
 .sprint-header {
   display: flex;
@@ -1333,6 +1428,7 @@ function syncUrlProjectParam() {
 .sprint-status-badge.planned { background: var(--color-fill-2); color: var(--color-text-3); }
 .sprint-status-badge.next { background: rgba(var(--primary-6), 0.1); color: rgb(var(--primary-6)); font-weight: 600; }
 .sprint-status-badge.completed { background: var(--color-fill-2); color: var(--color-text-3); }
+.sprint-status-badge.archived { background: var(--color-fill-2); color: var(--color-text-4); }
 
 .sprint-name {
   font-size: 14px;
@@ -1447,6 +1543,17 @@ function syncUrlProjectParam() {
 }
 .stat-item.unassigned:hover {
   background: rgba(var(--warning-6), 0.08);
+}
+
+.stat-item.estimation {
+  color: var(--color-text-2);
+  font-weight: 500;
+  padding: 2px 6px;
+  background: var(--color-fill-1);
+  border-radius: 3px;
+}
+.stat-item.estimation .stat-icon {
+  font-size: 11px;
 }
 
 .stat-dot {

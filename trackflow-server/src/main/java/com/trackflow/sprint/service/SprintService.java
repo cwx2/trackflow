@@ -136,6 +136,8 @@ public class SprintService {
         List<SprintAssigneeDistributionVO.AssigneeItem> assignees = new ArrayList<>();
         int totalIssues = 0;
         int unassignedCount = 0;
+        double totalEstimatedHours = 0;
+        double unassignedEstimatedHours = 0;
 
         for (Map<String, Object> row : rows) {
             Object userIdObj = row.get("user_id");
@@ -144,12 +146,15 @@ public class SprintService {
             int doneCount = ((Number) row.get("done_count")).intValue();
             int inProgressCount = ((Number) row.get("in_progress_count")).intValue();
             int todoCount = ((Number) row.get("todo_count")).intValue();
+            double estimatedHoursTotal = ((Number) row.get("estimated_hours_total")).doubleValue();
 
             totalIssues += issueCount;
+            totalEstimatedHours += estimatedHoursTotal;
 
             if (userIdObj == null) {
                 // 未分配负责人的统计
                 unassignedCount = issueCount;
+                unassignedEstimatedHours = estimatedHoursTotal;
             } else {
                 SprintAssigneeDistributionVO.AssigneeItem item = new SprintAssigneeDistributionVO.AssigneeItem();
                 item.setUserId(String.valueOf(userIdObj));
@@ -158,12 +163,15 @@ public class SprintService {
                 item.setDoneCount(doneCount);
                 item.setInProgressCount(inProgressCount);
                 item.setTodoCount(todoCount);
+                item.setEstimatedHoursTotal(estimatedHoursTotal);
                 assignees.add(item);
             }
         }
 
         result.setTotalIssues(totalIssues);
         result.setUnassignedCount(unassignedCount);
+        result.setTotalEstimatedHours(totalEstimatedHours);
+        result.setUnassignedEstimatedHours(unassignedEstimatedHours);
         result.setAssignees(assignees);
         return result;
     }
@@ -638,6 +646,67 @@ public class SprintService {
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sprint.getProjectId(), "sprint_completed"));
 
+        return sprint;
+    }
+
+    /**
+     * 归档 Sprint：将已完成的 Sprint 归档，从主列表中隐藏但保留数据。
+     * 只有 completed 状态的 Sprint 才能归档。
+     *
+     * @param id Sprint ID
+     * @return 归档后的 Sprint
+     * @throws BusinessException 当 Sprint 不是 completed 状态时
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Sprint archive(Long id) {
+        Sprint sprint = getById(id);
+        projectService.assertProjectActive(sprint.getProjectId());
+
+        if (sprint.getStatus() != SprintStatus.COMPLETED) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有已完成的迭代才能归档");
+        }
+
+        sprint.setStatus(SprintStatus.ARCHIVED);
+        sprintMapper.updateById(sprint);
+
+        // 记录项目活动日志
+        Long userId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("sprint_id", sprint.getId());
+        detail.put("sprint_name", sprint.getName());
+        projectActivityService.log(sprint.getProjectId(), userId, "archive_sprint", null, detail);
+
+        log.info("Sprint 已归档: id={}, name={}, projectId={}", sprint.getId(), sprint.getName(), sprint.getProjectId());
+        return sprint;
+    }
+
+    /**
+     * 恢复 Sprint：将已归档的 Sprint 恢复为已完成状态。
+     *
+     * @param id Sprint ID
+     * @return 恢复后的 Sprint
+     * @throws BusinessException 当 Sprint 不是 archived 状态时
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Sprint restore(Long id) {
+        Sprint sprint = getById(id);
+        projectService.assertProjectActive(sprint.getProjectId());
+
+        if (sprint.getStatus() != SprintStatus.ARCHIVED) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有已归档的迭代才能恢复");
+        }
+
+        sprint.setStatus(SprintStatus.COMPLETED);
+        sprintMapper.updateById(sprint);
+
+        // 记录项目活动日志
+        Long userId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("sprint_id", sprint.getId());
+        detail.put("sprint_name", sprint.getName());
+        projectActivityService.log(sprint.getProjectId(), userId, "restore_sprint", null, detail);
+
+        log.info("Sprint 已恢复: id={}, name={}, projectId={}", sprint.getId(), sprint.getName(), sprint.getProjectId());
         return sprint;
     }
 

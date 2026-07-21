@@ -38,6 +38,7 @@
           </div>
           <div class="assignee-stats">
             <span class="issue-count">{{ distribution.unassignedCount }}</span>
+            <span class="hours-count" v-if="distribution.unassignedEstimatedHours > 0">{{ formatHours(distribution.unassignedEstimatedHours) }}</span>
             <div class="mini-bar">
               <div
                 class="mini-bar-fill unassigned-fill"
@@ -60,6 +61,7 @@
           </div>
           <div class="assignee-stats">
             <span class="issue-count">{{ assignee.issueCount }}</span>
+            <span class="hours-count" v-if="assignee.estimatedHoursTotal > 0">{{ formatHours(assignee.estimatedHoursTotal) }}</span>
             <div class="mini-bar">
               <div
                 class="mini-bar-segment done"
@@ -145,6 +147,12 @@ function getSegmentWidth(assignee: { issueCount: number; doneCount: number; inPr
 
 function getInitial(name: string): string {
   return name ? name.charAt(0) : '?'
+}
+
+function formatHours(hours: number): string {
+  if (hours === 0) return '0h'
+  if (hours >= 1) return `${Math.round(hours * 10) / 10}h`
+  return `${Math.round(hours * 60)}m`
 }
 
 function handleClickAssignee(userId: string | null) {
@@ -294,6 +302,13 @@ function handleClickAssignee(userId: string | null) {
   font-weight: 600;
   color: var(--color-text-1);
   min-width: 20px;
+  text-align: right;
+}
+
+.hours-count {
+  font-size: 11px;
+  color: var(--color-text-3);
+  min-width: 28px;
   text-align: right;
 }
 
