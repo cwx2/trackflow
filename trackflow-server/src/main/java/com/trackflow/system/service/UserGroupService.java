@@ -12,6 +12,7 @@ import com.trackflow.system.dto.GroupRoleDTO;
 import com.trackflow.system.dto.UpdateGroupDTO;
 import com.trackflow.system.entity.*;
 import com.trackflow.system.mapper.*;
+import com.trackflow.system.vo.GroupSimpleVO;
 import com.trackflow.system.vo.UserGroupDetailVO;
 import com.trackflow.system.vo.UserGroupVO;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,17 @@ public class UserGroupService {
         Page<UserGroupVO> voPage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
         voPage.setRecords(voList);
         return voPage;
+    }
+
+    /**
+     * 查询所有用户组简要信息（id + name），用于下拉选择器
+     */
+    public List<GroupSimpleVO> listSimple() {
+        List<UserGroup> groups = groupMapper.selectList(
+                new LambdaQueryWrapper<UserGroup>().orderByAsc(UserGroup::getName));
+        return groups.stream()
+                .map(g -> new GroupSimpleVO(String.valueOf(g.getId()), g.getName()))
+                .toList();
     }
 
     /**

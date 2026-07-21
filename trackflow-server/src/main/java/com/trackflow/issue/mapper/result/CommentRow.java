@@ -3,6 +3,7 @@ package com.trackflow.issue.mapper.result;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 评论 JOIN 用户查询的强类型结果行（替代 Map<String, Object>）。
@@ -19,6 +20,11 @@ public class CommentRow {
     private String source;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /**
+     * 可见性限制的组 ID 列表。NULL=全体可见。
+     */
+    private List<Long> visibleToGroupIds;
 
     // JOIN sys_user
     private String userName;

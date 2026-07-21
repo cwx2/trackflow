@@ -1,5 +1,7 @@
 package com.trackflow.common.converter;
 
+import java.util.List;
+
 /**
  * 基础类型转换接口
  * <p>
@@ -26,5 +28,18 @@ public interface BaseConverter {
      */
     default Long stringToLong(String id) {
         return id == null || id.isBlank() ? null : Long.parseLong(id);
+    }
+
+    /**
+     * List<Long> 转 List<String>（用于 VO 中 ID 列表的序列化）
+     *
+     * @param ids Long 列表
+     * @return String 列表，若输入为 null 则返回 null
+     */
+    default List<String> longListToStringList(List<Long> ids) {
+        if (ids == null) {
+            return null;
+        }
+        return ids.stream().map(String::valueOf).toList();
     }
 }

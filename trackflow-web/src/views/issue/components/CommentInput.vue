@@ -8,6 +8,33 @@
         :title="btn.title"
         @click="btn.action"
       >{{ btn.icon }}</button>
+      <div class="toolbar-spacer"></div>
+      <!-- Visible to selector -->
+      <div class="visibility-selector" v-if="groups.length > 0">
+        <button class="visibility-btn" :class="{ restricted: selectedGroupIds.length > 0 }" @click="showVisibilityDropdown = !showVisibilityDropdown" title="设置评论可见范围">
+          <span class="lock-icon">{{ selectedGroupIds.length > 0 ? '🔒' : '👁' }}</span>
+          <span class="visibility-label">{{ visibilityLabel }}</span>
+          <span class="dropdown-arrow">▾</span>
+        </button>
+        <div v-if="showVisibilityDropdown" class="visibility-dropdown" @mouseleave="showVisibilityDropdown = false">
+          <div class="dropdown-header">可见范围</div>
+          <div class="dropdown-option" :class="{ selected: selectedGroupIds.length === 0 }" @click="clearVisibility">
+            <span class="check">{{ selectedGroupIds.length === 0 ? '✓' : '' }}</span>
+            全部成员可见
+          </div>
+          <div class="dropdown-divider"></div>
+          <div
+            v-for="group in groups"
+            :key="group.id"
+            class="dropdown-option"
+            :class="{ selected: selectedGroupIds.includes(group.id) }"
+            @click="toggleGroup(group.id)"
+          >
+            <span class="check">{{ selectedGroupIds.includes(group.id) ? '✓' : '' }}</span>
+            {{ group.name }}
+          </div>
+        </div>
+      </div>
     </div>
     <div class="editor-area">
       <EditorContent :editor="editor" />
@@ -25,11 +52,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
+import { groupApi } from '@/api'
+import type { GroupSimpleVO } from '@/api/types'
 
 const props = withDefaults(defineProps<{
   showAddTime?: boolean
@@ -44,13 +73,48 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  submit: [content: string]
+  submit: [content: string, visibleToGroupIds?: string[]]
   addTime: []
   startTimer: []
   stopTimer: []
 }>()
 
 const focused = ref(false)
+const groups = ref<GroupSimpleVO[]>([])
+const selectedGroupIds = ref<string[]>([])
+const showVisibilityDropdown = ref(false)
+
+const visibilityLabel = computed(() => {
+  if (selectedGroupIds.value.length === 0) return '全部可见'
+  if (selectedGroupIds.value.length === 1) {
+    const group = groups.value.find(g => g.id === selectedGroupIds.value[0])
+    return group ? group.name : '1 个组'
+  }
+  return `${selectedGroupIds.value.length} 个组`
+})
+
+function toggleGroup(groupId: string) {
+  const index = selectedGroupIds.value.indexOf(groupId)
+  if (index >= 0) {
+    selectedGroupIds.value.splice(index, 1)
+  } else {
+    selectedGroupIds.value.push(groupId)
+  }
+}
+
+function clearVisibility() {
+  selectedGroupIds.value = []
+  showVisibilityDropdown.value = false
+}
+
+onMounted(async () => {
+  try {
+    const res = await groupApi.listSimple()
+    if (res.code === 0 && res.data) {
+      groups.value = res.data
+    }
+  } catch { /* ignore */ }
+})
 
 const editor = useEditor({
   content: '',
@@ -84,8 +148,10 @@ function insertLink() {
 function submit() {
   if (!editor.value || editor.value.isEmpty) return
   const html = editor.value.getHTML()
-  emit('submit', html)
+  const visibleTo = selectedGroupIds.value.length > 0 ? [...selectedGroupIds.value] : undefined
+  emit('submit', html, visibleTo)
   editor.value.commands.clearContent()
+  selectedGroupIds.value = []
 }
 
 onBeforeUnmount(() => { editor.value?.destroy() })
@@ -108,6 +174,7 @@ onBeforeUnmount(() => { editor.value?.destroy() })
   background: var(--tf-bg-elevated);
   border-bottom: 1px solid var(--tf-border);
 }
+.toolbar-spacer { flex: 1; }
 .tb-btn {
   font-size: 12px; padding: 4px 8px; border-radius: 3px;
   background: none; border: none; color: var(--tf-text-tertiary);
@@ -116,6 +183,48 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 }
 .tb-btn:hover { color: var(--tf-text-primary); background: var(--tf-bg-code); }
 .tb-btn.active { color: var(--tf-accent); background: var(--tf-bg-code); }
+
+/* Visibility selector */
+.visibility-selector { position: relative; }
+.visibility-btn {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 3px 8px; border-radius: 3px;
+  background: none; border: 1px solid transparent;
+  color: var(--tf-text-tertiary); cursor: pointer;
+  transition: all 150ms;
+}
+.visibility-btn:hover { color: var(--tf-text-primary); border-color: var(--tf-border); }
+.visibility-btn.restricted {
+  color: var(--tf-warning, #d29922);
+  border-color: var(--tf-warning, #d29922);
+  background: rgba(210, 153, 34, 0.08);
+}
+.lock-icon { font-size: 12px; }
+.visibility-label { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropdown-arrow { font-size: 10px; opacity: 0.6; }
+
+.visibility-dropdown {
+  position: absolute; top: 100%; right: 0; z-index: 20;
+  margin-top: 4px; min-width: 180px;
+  background: var(--tf-bg-elevated); border: 1px solid var(--tf-border);
+  border-radius: 6px; padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.dropdown-header {
+  padding: 6px 12px; font-size: 11px; font-weight: 600;
+  color: var(--tf-text-tertiary); text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.dropdown-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; font-size: 12px; cursor: pointer;
+  color: var(--tf-text-secondary);
+  transition: background 100ms;
+}
+.dropdown-option:hover { background: var(--tf-bg-hover); }
+.dropdown-option.selected { color: var(--tf-text-primary); font-weight: 500; }
+.dropdown-option .check { width: 14px; font-size: 12px; color: var(--tf-accent); }
+.dropdown-divider { height: 1px; margin: 4px 8px; background: var(--tf-border); }
 
 .editor-area {
   min-height: 80px; max-height: 200px; overflow-y: auto; padding: 12px;

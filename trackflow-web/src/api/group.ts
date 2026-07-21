@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult } from './types'
+import type { R, PageResult, GroupSimpleVO } from './types'
 
 // ========== 用户组相关类型 ==========
 
@@ -50,6 +50,11 @@ export interface GroupRoleAssignment {
 // ========== API ==========
 
 export const groupApi = {
+  /** 所有用户组简要信息（id + name），用于下拉选择器 */
+  listSimple() {
+    return request.get<any, R<GroupSimpleVO[]>>('/groups/simple')
+  },
+
   /** 用户组列表 */
   list(params?: { keyword?: string; page?: number; pageSize?: number }) {
     return request.get<any, R<PageResult<UserGroupVO>>>('/groups', { params })

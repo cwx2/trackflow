@@ -3,6 +3,7 @@ package com.trackflow.issue.vo;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class IssueCommentVO {
@@ -14,6 +15,18 @@ public class IssueCommentVO {
     private String content;
     private String source;
     private Boolean isEdited;
+
+    /**
+     * 可见性限制的组 ID 列表（String 类型防 JS 精度丢失）。
+     * null 或空表示全体可见。
+     */
+    private List<String> visibleToGroupIds;
+
+    /**
+     * 可见性限制的组名称列表（前端展示用）。
+     */
+    private List<String> visibleToGroupNames;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

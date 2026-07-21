@@ -45,6 +45,9 @@
             <strong>{{ item.user }}</strong>
             <span class="item-time">{{ item.timeAgo }}</span>
             <span v-if="item.type === 'comment' && item.isEdited" class="edited-badge">已编辑</span>
+            <span v-if="item.type === 'comment' && item.visibleToGroupNames && item.visibleToGroupNames.length > 0" class="visibility-badge" :title="'仅 ' + item.visibleToGroupNames.join(', ') + ' 可见'">
+              🔒 {{ item.visibleToGroupNames.join(', ') }}
+            </span>
             <!-- Comment actions -->
             <div v-if="item.type === 'comment' && canModifyComment(item) && hoveredId === item.id && editingCommentId !== item.commentId" class="comment-actions">
               <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
@@ -139,6 +142,7 @@ export interface ActivityItem {
   commentId?: string
   isEdited?: boolean
   rawContent?: string
+  visibleToGroupNames?: string[]
   timeAgo: string
   html?: string
   action?: string
@@ -327,6 +331,18 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
   font-size: 10px;
   color: var(--tf-text-muted);
   font-style: italic;
+}
+
+.visibility-badge {
+  font-size: 10px;
+  color: var(--tf-warning, #d29922);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(210, 153, 34, 0.1);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .comment-actions {

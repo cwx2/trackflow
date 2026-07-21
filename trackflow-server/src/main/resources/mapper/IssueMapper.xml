@@ -47,10 +47,15 @@
     </select>
 
     <!-- 评论列表：JOIN 用户表一次查出 -->
-    <select id="selectCommentsWithUser" resultType="com.trackflow.issue.mapper.result.CommentRow">
+    <resultMap id="commentRowResultMap" type="com.trackflow.issue.mapper.result.CommentRow" autoMapping="true">
+        <result column="visible_to_group_ids" property="visibleToGroupIds"
+                typeHandler="com.trackflow.common.handler.LongArrayTypeHandler"/>
+    </resultMap>
+
+    <select id="selectCommentsWithUser" resultMap="commentRowResultMap">
         SELECT
             c.id, c.issue_id, c.user_id, c.content, c.source,
-            c.created_at, c.updated_at,
+            c.created_at, c.updated_at, c.visible_to_group_ids,
             u.display_name AS user_name, u.avatar_url AS user_avatar
         FROM issue_comment c
         LEFT JOIN sys_user u ON u.id = c.user_id

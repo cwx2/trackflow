@@ -12,11 +12,13 @@ import com.trackflow.system.entity.UserGroup;
 import com.trackflow.system.service.UserGroupService;
 import com.trackflow.system.vo.UserGroupDetailVO;
 import com.trackflow.system.vo.UserGroupVO;
+import com.trackflow.system.vo.GroupSimpleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -28,6 +30,15 @@ import java.util.Set;
 public class GroupController {
 
     private final UserGroupService groupService;
+
+    /**
+     * 查询所有用户组简要信息（id + name），用于下拉选择器（如评论可见性）。
+     * 不需要管理权限，任何已认证用户都可访问。
+     */
+    @GetMapping("/simple")
+    public R<List<GroupSimpleVO>> listSimple() {
+        return R.ok(groupService.listSimple());
+    }
 
     /**
      * 分页查询用户组列表

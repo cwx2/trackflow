@@ -55,6 +55,8 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "userId", expression = "java(longToString(entity.getUserId()))")
     @Mapping(target = "userName", ignore = true)
     @Mapping(target = "userAvatar", ignore = true)
+    @Mapping(target = "visibleToGroupIds", expression = "java(longListToStringList(entity.getVisibleToGroupIds()))")
+    @Mapping(target = "visibleToGroupNames", ignore = true)
     IssueCommentVO toCommentVO(IssueComment entity);
 
     List<IssueCommentVO> toCommentVOList(List<IssueComment> entities);
