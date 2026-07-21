@@ -104,6 +104,30 @@ public class ReportService {
     }
 
     /**
+     * 获取报表列表及元数据（共享数量 + 收藏状态），避免 Controller 层 N+1 查询
+     *
+     * @param projectId 项目ID（可选）
+     * @param userId    当前用户ID
+     * @return 报表列表元数据（reports + shareCountMap + favoriteIds）
+     */
+    public ReportListMetadata listWithMetadata(Long projectId, Long userId) {
+        List<ReportDefinition> reports = list(projectId, userId);
+        List<Long> reportIds = reports.stream().map(ReportDefinition::getId).collect(Collectors.toList());
+        Map<Long, Integer> shareCountMap = getShareCountMap(reportIds);
+        Set<Long> favoriteIds = getUserFavoriteReportIds(userId);
+        return new ReportListMetadata(reports, shareCountMap, favoriteIds);
+    }
+
+    /**
+     * 报表列表查询结果元数据
+     */
+    public record ReportListMetadata(
+            List<ReportDefinition> reports,
+            Map<Long, Integer> shareCountMap,
+            Set<Long> favoriteIds
+    ) {}
+
+    /**
      * 创建报表（带权限校验）
      * - projectId 非空：需要 project:edit 权限
      * - projectId 为空（全局报表）：需要系统管理员权限
@@ -245,26 +269,131 @@ public class ReportService {
      * 导出报表为 CSV 格式
      */
     public String exportCsv(Long id, Long userId) {
+        ReportExecuteResultVO result = executeForExport(id, userId);
+        return buildCsv(result);
+    }
+
+    /**
+     * 导出报表为 Excel (XLSX) 格式，使用 Apache POI 流式写入
+     *
+     * @return 报表名称和生成的工作簿
+     */
+    public ExcelExportResult exportExcel(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
         }
+        assertExportAccess(report, id, userId);
 
-        // 项目可访问性检查（读操作）
+        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        ReportExecuteResultVO result = executeInternal(report, scopeProjectIds);
+
+        org.apache.poi.xssf.streaming.SXSSFWorkbook workbook = buildExcelWorkbook(result, report.getName());
+        return new ExcelExportResult(report.getName(), workbook);
+    }
+
+    /**
+     * Excel 导出结果封装
+     */
+    public record ExcelExportResult(String reportName, org.apache.poi.xssf.streaming.SXSSFWorkbook workbook) {}
+
+    /**
+     * 执行报表并返回结果（带权限校验），供导出使用
+     */
+    private ReportExecuteResultVO executeForExport(Long id, Long userId) {
+        ReportDefinition report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+        assertExportAccess(report, id, userId);
+
+        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        return executeInternal(report, scopeProjectIds);
+    }
+
+    /**
+     * 导出权限校验（项目可访问 + 私有报表隔离）
+     */
+    private void assertExportAccess(ReportDefinition report, Long id, Long userId) {
         if (report.getProjectId() != null) {
             projectService.assertProjectAccessible(userId, report.getProjectId());
         }
-
-        // 私有报表访问控制（含精细化共享）
         if (!Boolean.TRUE.equals(report.getShared())
                 && !userId.equals(report.getCreatedBy())
                 && reportShareMapper.countAccessByUser(id, userId) == 0) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
+    }
 
-        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
-        ReportExecuteResultVO result = executeInternal(report, scopeProjectIds);
-        return buildCsv(result);
+    /**
+     * 使用 Apache POI SXSSFWorkbook 构建 Excel 工作簿（流式写入，适合大数据量）
+     */
+    private org.apache.poi.xssf.streaming.SXSSFWorkbook buildExcelWorkbook(ReportExecuteResultVO result, String sheetName) {
+        org.apache.poi.xssf.streaming.SXSSFWorkbook workbook = new org.apache.poi.xssf.streaming.SXSSFWorkbook(100);
+        org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet(
+                sheetName != null && !sheetName.isBlank() ? sheetName.substring(0, Math.min(sheetName.length(), 31)) : "报表数据");
+
+        // 标题行样式
+        org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
+        org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerStyle.setFont(headerFont);
+
+        int rowIdx = 0;
+
+        if (result.getMatrix() != null && result.getSecondLabels() != null) {
+            // 双维度矩阵模式
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(rowIdx++);
+            headerRow.createCell(0).setCellValue("");
+            for (int j = 0; j < result.getSecondLabels().size(); j++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(j + 1);
+                cell.setCellValue(result.getSecondLabels().get(j));
+                cell.setCellStyle(headerStyle);
+            }
+            org.apache.poi.ss.usermodel.Cell totalHeader = headerRow.createCell(result.getSecondLabels().size() + 1);
+            totalHeader.setCellValue("合计");
+            totalHeader.setCellStyle(headerStyle);
+
+            for (int i = 0; i < result.getLabels().size(); i++) {
+                org.apache.poi.ss.usermodel.Row dataRow = sheet.createRow(rowIdx++);
+                org.apache.poi.ss.usermodel.Cell labelCell = dataRow.createCell(0);
+                labelCell.setCellValue(result.getLabels().get(i));
+                labelCell.setCellStyle(headerStyle);
+
+                long rowTotal = 0;
+                List<Long> matrixRow = result.getMatrix().get(i);
+                for (int j = 0; j < matrixRow.size(); j++) {
+                    long val = matrixRow.get(j);
+                    dataRow.createCell(j + 1).setCellValue(val);
+                    rowTotal += val;
+                }
+                dataRow.createCell(matrixRow.size() + 1).setCellValue(rowTotal);
+            }
+        } else {
+            // 单维度模式
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(rowIdx++);
+            org.apache.poi.ss.usermodel.Cell h1 = headerRow.createCell(0);
+            h1.setCellValue("分组");
+            h1.setCellStyle(headerStyle);
+            org.apache.poi.ss.usermodel.Cell h2 = headerRow.createCell(1);
+            h2.setCellValue("数量");
+            h2.setCellStyle(headerStyle);
+
+            for (int i = 0; i < result.getLabels().size(); i++) {
+                org.apache.poi.ss.usermodel.Row dataRow = sheet.createRow(rowIdx++);
+                dataRow.createCell(0).setCellValue(result.getLabels().get(i));
+                dataRow.createCell(1).setCellValue(result.getData().get(i));
+            }
+
+            // 合计行
+            org.apache.poi.ss.usermodel.Row totalRow = sheet.createRow(rowIdx);
+            org.apache.poi.ss.usermodel.Cell totalLabelCell = totalRow.createCell(0);
+            totalLabelCell.setCellValue("合计");
+            totalLabelCell.setCellStyle(headerStyle);
+            totalRow.createCell(1).setCellValue(result.getTotal());
+        }
+
+        return workbook;
     }
 
     /**
@@ -573,6 +702,28 @@ public class ReportService {
         Long count = reportShareMapper.selectCount(
                 new LambdaQueryWrapper<ReportShare>().eq(ReportShare::getReportId, reportId));
         return count != null ? count.intValue() : 0;
+    }
+
+    /**
+     * 批量获取多个报表的共享数量（单次 SQL，避免 N+1 查询）
+     *
+     * @param reportIds 报表 ID 列表
+     * @return reportId → shareCount 映射
+     */
+    public Map<Long, Integer> getShareCountMap(List<Long> reportIds) {
+        if (reportIds == null || reportIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Map<String, Object>> results = reportShareMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ReportShare>()
+                        .select("report_id", "COUNT(*) as cnt")
+                        .in("report_id", reportIds)
+                        .groupBy("report_id")
+        );
+        return results.stream().collect(Collectors.toMap(
+                m -> ((Number) m.get("report_id")).longValue(),
+                m -> ((Number) m.get("cnt")).intValue()
+        ));
     }
 
     /**

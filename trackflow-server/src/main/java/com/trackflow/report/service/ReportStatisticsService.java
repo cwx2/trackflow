@@ -5,6 +5,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.mapper.result.*;
 import com.trackflow.report.vo.*;
@@ -42,6 +43,7 @@ public class ReportStatisticsService {
     private final WorkItemAttributeService workItemAttributeService;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final QueryExecutor queryExecutor;
 
     private static final String CACHE_PREFIX = "report:dashboard:";
     private static final long CACHE_TTL_SECONDS = 90;
@@ -785,6 +787,36 @@ public class ReportStatisticsService {
         vo.setByProject(byProject);
 
         return vo;
+    }
+
+    // ─── Helper: 解析 Issue filter 为工单 ID 列表 ──────────────────────
+
+    /**
+     * 解析 Issue filter JSON 为匹配的工单 ID 列表
+     *
+     * @param filter               JSON 数组格式的筛选条件
+     * @param projectId            项目ID（可选）
+     * @param userId               当前用户ID
+     * @param accessibleProjectIds 用户可访问的项目ID列表（projectId 非空时为 List.of(projectId)）
+     * @return 匹配的工单ID列表，null 表示无筛选
+     */
+    @SuppressWarnings("unchecked")
+    public List<Long> resolveIssueFilter(String filter, Long projectId, Long userId, List<Long> accessibleProjectIds) {
+        if (filter == null || filter.isBlank()) {
+            return null; // null 表示无筛选
+        }
+        try {
+            List<Map<String, Object>> filters = objectMapper.readValue(filter,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            if (filters.isEmpty()) {
+                return null;
+            }
+            return queryExecutor.executeFilterToIds(filters, accessibleProjectIds);
+        } catch (Exception e) {
+            // 无法解析的 filter 忽略，不筛选
+            log.debug("Failed to parse issue filter: {}", filter, e);
+            return null;
+        }
     }
 
 }

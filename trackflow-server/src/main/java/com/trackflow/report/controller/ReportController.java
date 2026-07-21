@@ -40,21 +40,27 @@ public class ReportController {
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        List<ReportDefinitionVO> voList = reportConverter.toVOList(reportService.list(projectId, userId));
-        // 填充共享数量和收藏状态
-        Set<Long> favoriteIds = reportService.getUserFavoriteReportIds(userId);
+        ReportService.ReportListMetadata metadata = reportService.listWithMetadata(projectId, userId);
+        List<ReportDefinitionVO> voList = reportConverter.toVOList(metadata.reports());
+        enrichAndSort(voList, metadata);
+        return R.ok(voList);
+    }
+
+    /**
+     * 填充报表列表的元数据（共享数量、收藏状态）并按收藏优先+名称排序
+     */
+    private void enrichAndSort(List<ReportDefinitionVO> voList, ReportService.ReportListMetadata metadata) {
         for (ReportDefinitionVO vo : voList) {
-            vo.setShareCount(reportService.getShareCount(Long.parseLong(vo.getId())));
-            vo.setFavorited(favoriteIds.contains(Long.parseLong(vo.getId())));
+            Long reportId = Long.parseLong(vo.getId());
+            vo.setShareCount(metadata.shareCountMap().getOrDefault(reportId, 0));
+            vo.setFavorited(metadata.favoriteIds().contains(reportId));
         }
-        // 排序：收藏的在前，然后按名称
         voList.sort((a, b) -> {
             boolean aFav = Boolean.TRUE.equals(a.getFavorited());
             boolean bFav = Boolean.TRUE.equals(b.getFavorited());
             if (aFav != bFav) return aFav ? -1 : 1;
             return (a.getName() != null ? a.getName() : "").compareTo(b.getName() != null ? b.getName() : "");
         });
-        return R.ok(voList);
     }
 
     /**
@@ -127,8 +133,8 @@ public class ReportController {
     }
 
     /**
-     * 导出报表为 CSV
-     * GET /api/v1/reports/{id}/export?format=csv
+     * 导出报表为 CSV 或 Excel
+     * GET /api/v1/reports/{id}/export?format=csv|xlsx
      */
     @GetMapping("/{id}/export")
     @PreAuthorize("isAuthenticated()")
@@ -137,17 +143,33 @@ public class ReportController {
                        HttpServletResponse response) throws IOException {
         Long userId = SecurityUtils.getCurrentUserId();
 
+        if ("xlsx".equalsIgnoreCase(format)) {
+            ReportService.ExcelExportResult excelResult = reportService.exportExcel(id, userId);
+            String fileName = excelResult.reportName() + ".xlsx";
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition",
+                    "attachment; filename=\"" + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
+            try (var workbook = excelResult.workbook()) {
+                workbook.write(response.getOutputStream());
+                response.getOutputStream().flush();
+            }
+            return;
+        }
+
         if (!"csv".equalsIgnoreCase(format)) {
             response.setStatus(400);
             response.setContentType("application/json");
-            response.getWriter().write("{\"code\":40000,\"message\":\"仅支持 CSV 格式导出\"}");
+            response.getWriter().write("{\"code\":40000,\"message\":\"仅支持 csv 和 xlsx 格式导出\"}");
             return;
         }
 
         String csv = reportService.exportCsv(id, userId);
 
+        // 获取报表名称用于文件名
+        String fileName = "report-" + id + ".csv";
         response.setContentType("text/csv; charset=UTF-8");
-        response.setHeader("Content-Disposition", "attachment; filename=\"report-" + id + ".csv\"");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
         // BOM for Excel UTF-8 recognition
         response.getOutputStream().write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
         try (OutputStreamWriter writer = new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8)) {
