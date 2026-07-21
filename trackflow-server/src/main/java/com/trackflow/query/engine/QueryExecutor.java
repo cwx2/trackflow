@@ -6,6 +6,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
+import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.service.StatusCacheHelper;
@@ -18,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * 查询执行引擎：将 JSON 筛选条件动态转换为 SQL 查询
@@ -38,6 +38,7 @@ public class QueryExecutor {
 
     private final IssueMapper issueMapper;
     private final StatusCacheHelper statusCacheHelper;
+    private final CustomFieldSortHelper customFieldSortHelper;
 
     /**
      * 允许排序的字段白名单（数据库列名）
@@ -166,22 +167,42 @@ public class QueryExecutor {
     }
 
     /**
-     * 应用排序条件（白名单校验）
+     * 应用排序条件（白名单校验 + 自定义字段排序支持）
+     * <p>
+     * 内置字段通过静态白名单校验；自定义字段（cf_ 前缀）委托给 CustomFieldSortHelper 处理。
      */
     private void applySortCriteria(QueryWrapper<Issue> wrapper, List<Map<String, String>> sortCriteria) {
         if (sortCriteria != null && !sortCriteria.isEmpty()) {
+            boolean hasValidSort = false;
             for (Map<String, String> sort : sortCriteria) {
-                String field = camelToSnake(sort.get("field"));
-                if (!ALLOWED_SORT_FIELDS.contains(field)) {
-                    log.warn("非法排序字段被拦截: {}", field);
-                    continue; // 忽略非法字段，不中断查询
-                }
+                String field = sort.get("field");
+                if (field == null || field.isBlank()) continue;
+
                 String direction = sort.getOrDefault("direction", "desc");
-                if ("asc".equalsIgnoreCase(direction)) {
-                    wrapper.orderByAsc(field);
+                boolean asc = "asc".equalsIgnoreCase(direction);
+
+                // 检查是否是自定义字段排序
+                if (customFieldSortHelper.isCustomFieldSortKey(field)) {
+                    if (customFieldSortHelper.applyCustomFieldSort(wrapper, field, asc)) {
+                        hasValidSort = true;
+                    }
                 } else {
-                    wrapper.orderByDesc(field);
+                    // 内置字段排序（camelCase → snake_case 转换 + 白名单校验）
+                    String columnName = camelToSnake(field);
+                    if (!ALLOWED_SORT_FIELDS.contains(columnName)) {
+                        log.warn("非法排序字段被拦截: {}", field);
+                        continue;
+                    }
+                    if (asc) {
+                        wrapper.orderByAsc(columnName);
+                    } else {
+                        wrapper.orderByDesc(columnName);
+                    }
+                    hasValidSort = true;
                 }
+            }
+            if (!hasValidSort) {
+                wrapper.orderByDesc("updated_at");
             }
         } else {
             wrapper.orderByDesc("updated_at");

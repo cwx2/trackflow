@@ -14,6 +14,7 @@ import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
 import com.trackflow.customfield.service.CustomFieldService;
+import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.customfield.service.CustomFieldValidateMode;
 import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.IssueQuery;
@@ -73,6 +74,7 @@ public class IssueService {
     private final WorkflowService workflowService;
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldService customFieldService;
+    private final CustomFieldSortHelper customFieldSortHelper;
     private final SysUserMapper sysUserMapper;
     private final AttachmentConfig attachmentConfig;
     private final AncestorRefreshService ancestorRefreshService;
@@ -298,7 +300,31 @@ public class IssueService {
             applyKeywordFilter(wrapper, keyword);
         }
 
-        wrapper.orderByDesc("updated_at");
+        // 处理排序：自定义字段排序通过子查询实现，内置字段通过 toPage() 处理
+        String sort = query.getSort();
+        boolean hasCustomFieldSort = false;
+        if (sort != null && !sort.isBlank()) {
+            // 解析排序方向（-fieldName 降序，fieldName 升序）
+            boolean desc = sort.startsWith("-");
+            String sortField = desc ? sort.substring(1) : sort;
+            if (customFieldSortHelper.isCustomFieldSortKey(sortField)) {
+                hasCustomFieldSort = customFieldSortHelper.applyCustomFieldSort(wrapper, sortField, !desc);
+            }
+        }
+
+        // 默认排序兜底（当无有效自定义字段排序且 toPage() 也无有效排序时生效）
+        if (!hasCustomFieldSort) {
+            wrapper.orderByDesc("updated_at");
+        }
+
+        // 对于自定义字段排序，清空 sort 参数避免 toPage() 产生冲突的 ORDER BY
+        if (hasCustomFieldSort) {
+            String originalSort = query.getSort();
+            query.setSort(null);
+            Page<Issue> result = issueMapper.selectPage(query.toPage(), wrapper);
+            query.setSort(originalSort); // 恢复原值，避免影响调用方
+            return result;
+        }
         return issueMapper.selectPage(query.toPage(), wrapper);
     }
 

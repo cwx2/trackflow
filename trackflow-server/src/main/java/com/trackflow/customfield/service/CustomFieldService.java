@@ -854,7 +854,7 @@ public class CustomFieldService {
             col.setLabel(field.getName());
             col.setGroup("custom");
             col.setFieldFormat(field.getFieldFormat());
-            col.setSortable(true);
+            col.setSortable(isFieldSortable(field));
             col.setRemovable(true);
             columns.add(col);
         }
@@ -887,7 +887,7 @@ public class CustomFieldService {
             col.setLabel(field.getName());
             col.setGroup("custom");
             col.setFieldFormat(field.getFieldFormat());
-            col.setSortable(true);
+            col.setSortable(isFieldSortable(field));
             col.setRemovable(true);
             columns.add(col);
         }
@@ -2112,6 +2112,25 @@ public class CustomFieldService {
         col.setSortable(sortable);
         col.setRemovable(removable);
         return col;
+    }
+
+    /**
+     * 判断自定义字段是否支持排序。
+     * <p>
+     * 不可排序的场景：
+     * <ul>
+     *   <li>多值字段（is_multi=true）——多个值无法确定排序语义</li>
+     *   <li>text 类型——大文本排序无实际意义</li>
+     *   <li>bool 类型——仅两个值，排序价值低且 true/false 字符串排序不直观</li>
+     * </ul>
+     */
+    private boolean isFieldSortable(CustomFieldDefinition field) {
+        if (Boolean.TRUE.equals(field.getIsMulti())) {
+            return false;
+        }
+        String format = field.getFieldFormat();
+        // text 和 bool 类型不支持排序
+        return format != null && !format.equals("text") && !format.equals("bool");
     }
 
     // ========== 项目级自定义字段管理 ==========
