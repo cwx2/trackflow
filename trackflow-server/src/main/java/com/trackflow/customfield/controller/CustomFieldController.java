@@ -1,9 +1,7 @@
 package com.trackflow.customfield.controller;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
-import com.trackflow.customfield.converter.CustomFieldConverter;
 import com.trackflow.customfield.dto.CreateCustomFieldDTO;
 import com.trackflow.customfield.dto.CustomFieldQuery;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
@@ -12,9 +10,8 @@ import com.trackflow.customfield.dto.SetFieldConditionDTO;
 import com.trackflow.customfield.dto.SetFieldProjectOverrideDTO;
 import com.trackflow.customfield.dto.SetFieldVisibilityDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
-import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.entity.CustomFieldOption;
-import com.trackflow.customfield.entity.CustomFieldProject;
+import com.trackflow.customfield.converter.CustomFieldConverter;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
@@ -28,7 +25,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 自定义字段控制器
@@ -47,62 +43,26 @@ public class CustomFieldController {
     @GetMapping("/admin/custom-fields")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<PageResult<CustomFieldDefinitionVO>> list(CustomFieldQuery query) {
-        Page<CustomFieldDefinition> result = customFieldService.list(
-                query.toPage(), query.getFieldFormat(), query.getKeyword());
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(result.getRecords());
-        // 批量加载关联数据（消除 N+1 查询）
-        List<Long> fieldIds = result.getRecords().stream()
-                .map(CustomFieldDefinition::getId).toList();
-        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
-        Map<Long, List<Long>> projectIdsMap = customFieldService.getBatchProjectIds(fieldIds);
-        Map<Long, List<String>> issueTypesMap = customFieldService.getBatchIssueTypes(fieldIds);
-        for (int i = 0; i < result.getRecords().size(); i++) {
-            Long fieldId = result.getRecords().get(i).getId();
-            CustomFieldDefinitionVO vo = voList.get(i);
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
-            vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
-                    .map(String::valueOf).toList());
-            vo.setIssueTypes(issueTypesMap.getOrDefault(fieldId, List.of()));
-        }
-        return R.ok(new PageResult<>(voList, result.getTotal(),
-                (int) result.getCurrent(), (int) result.getSize()));
+        return R.ok(customFieldService.listAdminPage(query));
     }
 
     @PostMapping("/admin/custom-fields")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<CustomFieldDefinitionVO> create(@Valid @RequestBody CreateCustomFieldDTO dto) {
-        CustomFieldDefinition entity = customFieldService.create(dto);
-        CustomFieldDefinitionVO vo = converter.toVO(entity);
-        vo.setOptions(converter.toOptionVOList(customFieldService.getOptions(entity.getId())));
-        vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
-                .map(String::valueOf).toList());
-        vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
-        return R.ok(vo);
+        return R.ok(customFieldService.createAndReturnVO(dto));
     }
 
     @PutMapping("/admin/custom-fields/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<CustomFieldDefinitionVO> update(@PathVariable("id") Long id,
                                               @Valid @RequestBody UpdateCustomFieldDTO dto) {
-        CustomFieldDefinition entity = customFieldService.update(id, dto);
-        CustomFieldDefinitionVO vo = converter.toVO(entity);
-        vo.setOptions(converter.toOptionVOList(customFieldService.getOptions(entity.getId())));
-        vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
-                .map(String::valueOf).toList());
-        vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
-        return R.ok(vo);
+        return R.ok(customFieldService.updateAndReturnVO(id, dto));
     }
 
     @GetMapping("/admin/custom-fields/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<CustomFieldDefinitionVO> getDetail(@PathVariable("id") Long id) {
-        CustomFieldDefinition entity = customFieldService.getById(id);
-        CustomFieldDefinitionVO vo = converter.toVO(entity);
-        vo.setOptions(converter.toOptionVOList(customFieldService.getOptions(entity.getId())));
-        vo.setProjectIds(customFieldService.getProjectIds(entity.getId()).stream()
-                .map(String::valueOf).toList());
-        vo.setIssueTypes(customFieldService.getIssueTypes(entity.getId()));
-        return R.ok(vo);
+        return R.ok(customFieldService.getFieldDetailVO(id));
     }
 
     @DeleteMapping("/admin/custom-fields/{id}")
@@ -152,7 +112,6 @@ public class CustomFieldController {
 
     /**
      * 获取"Fields in Projects"矩阵数据：按项目分组展示每个项目关联的自定义字段。
-     * 包含全局字段和项目专属字段。
      */
     @GetMapping("/admin/custom-fields/fields-in-projects")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
@@ -166,16 +125,7 @@ public class CustomFieldController {
     @GetMapping("/admin/custom-fields/enum-fields")
     @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
     public R<List<CustomFieldDefinitionVO>> listEnumFields() {
-        List<CustomFieldDefinition> fields = customFieldService.listEnumFields();
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
-        // 批量加载选项
-        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
-        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
-        for (int i = 0; i < fields.size(); i++) {
-            Long fieldId = fields.get(i).getId();
-            voList.get(i).setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
-        }
-        return R.ok(voList);
+        return R.ok(customFieldService.listEnumFieldsVO());
     }
 
     @PutMapping("/admin/custom-fields/reorder")
@@ -185,52 +135,44 @@ public class CustomFieldController {
         return R.ok();
     }
 
+    /**
+     * 批量更新自定义字段属性（isForAll / isHiddenInList）
+     */
+    @PutMapping("/admin/custom-fields/batch-update")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<Void> batchUpdate(@Valid @RequestBody com.trackflow.customfield.dto.BatchUpdateCustomFieldDTO dto) {
+        customFieldService.batchUpdate(dto.getIds(), dto.getField(), dto.getValue());
+        return R.ok();
+    }
+
+    /**
+     * 批量删除自定义字段
+     */
+    @DeleteMapping("/admin/custom-fields/batch-delete")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<Void> batchDelete(@RequestParam("ids") List<Long> ids) {
+        customFieldService.batchDelete(ids);
+        return R.ok();
+    }
+
+    /**
+     * 启用或禁用字段的 Auto-attach 功能。
+     */
+    @PutMapping("/admin/custom-fields/{id}/auto-attach")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<Void> setAutoAttach(@PathVariable("id") Long id,
+                                  @RequestParam("enabled") boolean enabled) {
+        customFieldService.setAutoAttach(id, enabled);
+        return R.ok();
+    }
+
     // ========== 项目级读取端点 ==========
 
     @GetMapping("/projects/{projectId}/custom-fields")
     public R<List<CustomFieldDefinitionVO>> listByProject(
             @PathVariable("projectId") Long projectId,
             @RequestParam(value = "issueType", required = false) String issueType) {
-        List<CustomFieldDefinition> fields = customFieldService.listByProject(projectId, issueType);
-        Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
-
-        // Role-based visibility filtering
-        List<Long> userRoleIds = customFieldService.getCurrentUserRoleIds(projectId);
-        fields = customFieldService.filterFieldsByVisibility(fields, conditionsMap, userRoleIds);
-
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
-        // 批量加载选项数据（消除 N+1 查询）
-        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
-        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
-        for (int i = 0; i < fields.size(); i++) {
-            Long fieldId = fields.get(i).getId();
-            CustomFieldDefinitionVO vo = voList.get(i);
-            CustomFieldDefinition field = fields.get(i);
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
-            // 填充条件信息
-            CustomFieldProject mapping = conditionsMap.get(fieldId);
-            if (mapping != null && mapping.getConditionFieldId() != null) {
-                vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
-                vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
-            }
-            // 填充可编辑性标记
-            if (mapping != null) {
-                List<Long> updatableRoles = customFieldService.parseRoleIds(mapping.getUpdatableByRoles());
-                vo.setEditable(customFieldService.isUpdatableByUser(updatableRoles, userRoleIds));
-                vo.setVisibleToRoles(customFieldService.parseRoleIds(mapping.getVisibleToRoles()));
-                vo.setUpdatableByRoles(updatableRoles);
-            } else {
-                vo.setEditable(true);
-            }
-            // 计算项目级有效必填性和默认值（前端用于校验和填充）
-            vo.setEffectiveIsRequired(mapping != null && mapping.getIsRequired() != null
-                    ? mapping.getIsRequired() : field.getIsRequired());
-            String effectiveDefault = (mapping != null && mapping.getDefaultValue() != null)
-                    ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
-                    : field.getDefaultValue();
-            vo.setEffectiveDefaultValue(effectiveDefault);
-        }
-        return R.ok(voList);
+        return R.ok(customFieldService.listByProjectForUser(projectId, issueType));
     }
 
     @GetMapping("/projects/{projectId}/available-columns")
@@ -251,47 +193,7 @@ public class CustomFieldController {
     @GetMapping("/projects/{projectId}/settings/custom-fields")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
     public R<List<CustomFieldDefinitionVO>> listProjectSettingsFields(@PathVariable("projectId") Long projectId) {
-        List<CustomFieldDefinition> fields = customFieldService.listProjectFields(projectId);
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
-        Map<Long, CustomFieldProject> conditionsMap = customFieldService.getProjectFieldConditions(projectId);
-        // 批量加载关联数据（消除 N+1 查询）
-        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
-        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
-        Map<Long, List<Long>> projectIdsMap = customFieldService.getBatchProjectIds(fieldIds);
-        Map<Long, List<String>> issueTypesMap = customFieldService.getBatchIssueTypes(fieldIds);
-        for (int i = 0; i < fields.size(); i++) {
-            Long fieldId = fields.get(i).getId();
-            CustomFieldDefinitionVO vo = voList.get(i);
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
-            vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
-                    .map(String::valueOf).toList());
-            vo.setIssueTypes(issueTypesMap.getOrDefault(fieldId, List.of()));
-            // 填充条件信息
-            CustomFieldProject mapping = conditionsMap.get(fieldId);
-            if (mapping != null && mapping.getConditionFieldId() != null) {
-                vo.setConditionFieldId(String.valueOf(mapping.getConditionFieldId()));
-                vo.setConditionValues(customFieldService.parseJsonArray(mapping.getConditionValues()));
-            }
-            // 填充可见性/可编辑性配置
-            if (mapping != null) {
-                vo.setVisibleToRoles(customFieldService.parseRoleIds(mapping.getVisibleToRoles()));
-                vo.setUpdatableByRoles(customFieldService.parseRoleIds(mapping.getUpdatableByRoles()));
-            }
-            // 填充项目级覆盖（必填性 + 默认值）
-            if (mapping != null) {
-                vo.setProjectIsRequired(mapping.getIsRequired());
-                vo.setProjectDefaultValue(mapping.getDefaultValue());
-            }
-            // 计算有效值（项目覆盖 > 全局）
-            CustomFieldDefinition field = fields.get(i);
-            vo.setEffectiveIsRequired(mapping != null && mapping.getIsRequired() != null
-                    ? mapping.getIsRequired() : field.getIsRequired());
-            String effectiveDefault = (mapping != null && mapping.getDefaultValue() != null)
-                    ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
-                    : field.getDefaultValue();
-            vo.setEffectiveDefaultValue(effectiveDefault);
-        }
-        return R.ok(voList);
+        return R.ok(customFieldService.listProjectSettingsFieldsVO(projectId));
     }
 
     /**
@@ -300,16 +202,7 @@ public class CustomFieldController {
     @GetMapping("/projects/{projectId}/settings/custom-fields/available")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
     public R<List<CustomFieldDefinitionVO>> listAvailableForProject(@PathVariable("projectId") Long projectId) {
-        List<CustomFieldDefinition> fields = customFieldService.listAvailableFieldsForProject(projectId);
-        List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
-        // 批量加载选项数据（消除 N+1 查询）
-        List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
-        Map<Long, List<CustomFieldOption>> optionsMap = customFieldService.getBatchOptions(fieldIds);
-        for (int i = 0; i < fields.size(); i++) {
-            Long fieldId = fields.get(i).getId();
-            voList.get(i).setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
-        }
-        return R.ok(voList);
+        return R.ok(customFieldService.listAvailableForProjectVO(projectId));
     }
 
     /**
@@ -348,8 +241,6 @@ public class CustomFieldController {
 
     /**
      * 为枚举类型字段添加一个新选项值。
-     * 用于工单详情页/创建表单中，有权限的用户直接在下拉中添加新值。
-     * 参考 YouTrack: "Wherever you can change the value for a field, there is an option to add a new value to the set."
      */
     @PostMapping("/projects/{projectId}/custom-fields/{fieldId}/options")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
@@ -407,7 +298,6 @@ public class CustomFieldController {
 
     /**
      * 设置字段在项目中的必填性和默认值覆盖。
-     * null 值表示继承全局设置。
      */
     @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/override")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
