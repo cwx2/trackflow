@@ -62,6 +62,7 @@ public class IssueService {
     private final IssueCommentMapper commentMapper;
     private final IssueAttachmentMapper attachmentMapper;
     private final IssueActivityMapper activityMapper;
+    private final IssueKeyHistoryMapper issueKeyHistoryMapper;
     private final com.trackflow.sprint.mapper.SprintMapper sprintMapper;
     private final ProjectService projectService;
     private final MinioService minioService;
@@ -736,6 +737,17 @@ public class IssueService {
                 new LambdaQueryWrapper<Issue>().eq(Issue::getIssueKey, issueKey).isNull(Issue::getDeletedAt)
         );
         if (issue == null) {
+            // 回退查询：通过历史 Key 查找工单
+            IssueKeyHistory keyHistory = issueKeyHistoryMapper.selectOne(
+                    new LambdaQueryWrapper<IssueKeyHistory>().eq(IssueKeyHistory::getOldKey, issueKey)
+            );
+            if (keyHistory != null) {
+                issue = issueMapper.selectOne(
+                        new LambdaQueryWrapper<Issue>().eq(Issue::getId, keyHistory.getIssueId()).isNull(Issue::getDeletedAt)
+                );
+            }
+        }
+        if (issue == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
         return issue;
@@ -907,7 +919,15 @@ public class IssueService {
                 ancestorRefreshService.refreshAncestorChain(newParentId);
             }
         }
-        if (dto.getDueDate() != null) {
+        if (Boolean.TRUE.equals(dto.getClearDueDate())) {
+            // 显式清空截止日期
+            String oldDueDateStr = issue.getDueDate() != null ? issue.getDueDate().toString() : null;
+            if (oldDueDateStr != null) {
+                recordActivity(id, currentUserId, "updated", "due_date", oldDueDateStr, null);
+                fieldChanges.put("due_date", new String[]{oldDueDateStr, null});
+            }
+            issue.setDueDate(null);
+        } else if (dto.getDueDate() != null) {
             String oldDueDateStr = issue.getDueDate() != null ? issue.getDueDate().toString() : null;
             String newDueDateStr = dto.getDueDate().toString();
             recordActivity(id, currentUserId, "updated", "due_date", oldDueDateStr, newDueDateStr);
@@ -915,7 +935,19 @@ public class IssueService {
             // 收集截止日期变更
             fieldChanges.put("due_date", new String[]{oldDueDateStr, newDueDateStr});
         }
-        if (dto.getEstimatedHours() != null) {
+        if (Boolean.TRUE.equals(dto.getClearEstimatedHours())) {
+            // 显式清空预估工时
+            String oldHoursStr = issue.getEstimatedHours() != null ? issue.getEstimatedHours() + "h" : null;
+            if (oldHoursStr != null) {
+                recordActivity(id, currentUserId, "updated", "estimated_hours", oldHoursStr, null);
+                fieldChanges.put("estimated_hours", new String[]{oldHoursStr, null});
+            }
+            issue.setEstimatedHours(null);
+            // 清空预估工时：刷新祖先链的派生属性
+            if (issue.getParentId() != null && issue.getParentId() != 0) {
+                ancestorRefreshService.refreshAncestorChain(issue.getParentId());
+            }
+        } else if (dto.getEstimatedHours() != null) {
             recordActivity(id, currentUserId, "updated", "estimated_hours",
                     issue.getEstimatedHours() != null ? issue.getEstimatedHours() + "h" : null,
                     dto.getEstimatedHours() + "h");
@@ -1064,6 +1096,14 @@ public class IssueService {
                 issue.setParentId(null);
             }
         }
+
+        // 保存旧 Key 到历史表，实现 Key 重定向
+        IssueKeyHistory keyHistory = new IssueKeyHistory();
+        keyHistory.setIssueId(issueId);
+        keyHistory.setOldKey(oldIssueKey);
+        keyHistory.setNewKey(newIssueKey);
+        keyHistory.setChangedBy(currentUserId);
+        issueKeyHistoryMapper.insert(keyHistory);
 
         issueMapper.updateById(issue);
 

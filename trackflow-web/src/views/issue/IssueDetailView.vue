@@ -86,6 +86,7 @@
         :fields="sidebarFields"
         @transition="onTransition"
         @edit-field="onEditField"
+        @clear-field="onClearField"
         @add-option="onAddOption"
       />
     </div>
@@ -1107,6 +1108,25 @@ function handleUpdateError(e: any, fallbackMsg = '更新失败') {
   } else {
     Message.error(e.response?.data?.message || fallbackMsg)
   }
+}
+
+/**
+ * 清空字段处理：发送 clear 标志位给后端
+ */
+async function onClearField(key: string) {
+  if (!issue.value) return
+  const clearKeyMap: Record<string, string> = {
+    dueDate: 'clearDueDate',
+    estimatedHours: 'clearEstimatedHours',
+  }
+  const clearProp = clearKeyMap[key]
+  if (!clearProp) return
+
+  try {
+    await issueApi.update(issue.value.id, { [clearProp]: true, version: issue.value.version })
+    await loadAll()
+    Message.success('已清除')
+  } catch (e: any) { handleUpdateError(e) }
 }
 
 // ============ Utils ============

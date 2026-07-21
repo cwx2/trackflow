@@ -24,6 +24,17 @@ public class UpdateIssueDTO {
     private Map<String, Object> customFields;
 
     /**
+     * 清空截止日期标志。为 true 时将 due_date 设为 NULL，
+     * 用于解决 JSON null 无法区分"未传"和"清空"的语义歧义。
+     */
+    private Boolean clearDueDate;
+
+    /**
+     * 清空预估工时标志。为 true 时将 estimated_hours 设为 NULL。
+     */
+    private Boolean clearEstimatedHours;
+
+    /**
      * 乐观锁版本号。前端从 GET 响应中获取，PUT 时携带回来。
      * 为 null 时兼容旧客户端（跳过版本校验）。
      */

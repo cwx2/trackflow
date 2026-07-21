@@ -2,7 +2,7 @@ package com.trackflow.issue.service.precheck;
 
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.service.IssueService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -13,10 +13,13 @@ import java.util.Optional;
  * 当父工单有未关闭的子工单时，返回警告。
  */
 @Component
-@RequiredArgsConstructor
 public class ChildTaskPreCheck implements ClosePreCheck {
 
     private final IssueService issueService;
+
+    public ChildTaskPreCheck(@Lazy IssueService issueService) {
+        this.issueService = issueService;
+    }
 
     @Override
     public Optional<String> check(Issue issue) {

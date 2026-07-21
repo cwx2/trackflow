@@ -111,16 +111,19 @@
               <div class="dropdown-input" v-if="field.editType === 'date'">
                 <input v-model="inputValue" type="date" class="input-field" @keyup.enter="commitInput(field)" />
                 <button class="input-btn" @click="commitInput(field)">确定</button>
+                <button v-if="field.rawValue" class="input-btn clear-btn" @click="clearField(field)">清除</button>
               </div>
               <!-- 日期时间输入 -->
               <div class="dropdown-input" v-if="field.editType === 'datetime'">
                 <input v-model="inputValue" type="datetime-local" class="input-field" @keyup.enter="commitInput(field)" />
                 <button class="input-btn" @click="commitInput(field)">确定</button>
+                <button v-if="field.rawValue" class="input-btn clear-btn" @click="clearField(field)">清除</button>
               </div>
               <!-- 数字输入 -->
               <div class="dropdown-input" v-if="field.editType === 'number'">
                 <input v-model="inputValue" type="number" min="0" step="0.5" class="input-field" placeholder="小时数" @keyup.enter="commitInput(field)" />
                 <button class="input-btn" @click="commitInput(field)">确定</button>
+                <button v-if="field.rawValue" class="input-btn clear-btn" @click="clearField(field)">清除</button>
               </div>
               <!-- Issue 搜索 -->
               <div class="dropdown-input" v-if="field.editType === 'issue-search'">
@@ -207,6 +210,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   transition: [target: StatusInfo]
   'edit-field': [fieldKey: string, newValue: string | string[]]
+  'clear-field': [fieldKey: string]
   'add-option': [fieldId: string, value: string]
 }>()
 
@@ -263,6 +267,11 @@ function selectOption(field: SidebarField, value: string) {
 
 function commitInput(field: SidebarField) {
   emit('edit-field', field.key, inputValue.value)
+  editingKey.value = null
+}
+
+function clearField(field: SidebarField) {
+  emit('clear-field', field.key)
   editingKey.value = null
 }
 
@@ -518,6 +527,16 @@ function confirmAddOption(field: SidebarField) {
 }
 .input-btn:hover {
   background: var(--tf-accent-hover);
+}
+.clear-btn {
+  background: transparent;
+  color: var(--tf-text-tertiary);
+  border: 1px solid var(--tf-border);
+}
+.clear-btn:hover {
+  color: var(--tf-error, #f85149);
+  border-color: var(--tf-error, #f85149);
+  background: transparent;
 }
 
 /* ===== Multi-select ===== */
