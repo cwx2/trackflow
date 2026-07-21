@@ -458,14 +458,14 @@ async function loadRelatedData() {
   const needSprintOptions = isAdmin || perms.has('sprint:edit')
   const needMemberOptions = isAdmin || perms.has('issue:assign')
 
-  // 加载项目时间追踪开关
+  // 加载项目时间追踪开关（静默处理 403，观察者等低权限角色可能无权访问）
   try {
-    const ttRes = await projectApi.getTimeTrackingSettings(pid)
+    const ttRes = await projectApi.getTimeTrackingSettings(pid, { _silent403: true })
     if (ttRes.code === 0 && ttRes.data) {
       projectTimeTrackingEnabled.value = ttRes.data.enabled
     }
   } catch {
-    projectTimeTrackingEnabled.value = true // 默认启用
+    projectTimeTrackingEnabled.value = false // 403 时默认禁用（不展示无权限功能入口）
   }
 
   // 无状态变更权限时清空 transitions（确保 UI 渲染为只读）
@@ -475,12 +475,13 @@ async function loadRelatedData() {
 
   try {
     // 核心数据：始终加载（comments, activities, attachments, links, tags, custom fields）
+    // tags 使用 _silent403：观察者等低权限角色可能触发 403，不应弹出提示
     const promises: Promise<any>[] = [
       issueApi.listComments(id),
       issueApi.listActivities(id),
       issueApi.listAttachments(id),
       issueApi.listLinks(id),
-      tagApi.listProjectTags(pid),
+      tagApi.listProjectTags(pid, { _silent403: true }),
       customFieldApi.listByProject(pid, issue.value!.issueType),
     ]
     // 仅在有状态变更权限时加载可用转换（避免无权限用户触发 403）

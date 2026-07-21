@@ -18,8 +18,8 @@
         </a-input>
       </div>
 
-      <!-- Drafts section (YouTrack style) -->
-      <div v-if="hasDrafts || true" class="query-group drafts-group">
+      <!-- Drafts section (YouTrack style) — 仅对有 issue:create 权限的用户显示 -->
+      <div v-if="canCreateIssueGlobal && (hasDrafts || true)" class="query-group drafts-group">
         <div class="group-header" @click="toggleGroup('drafts')">
           <span class="group-arrow">{{ expandedGroups.has('drafts') ? '▾' : '▸' }}</span>
           <span class="group-title">草稿</span>

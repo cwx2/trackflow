@@ -32,7 +32,7 @@
           <span class="nav-label">迭代</span>
           <span v-if="!canManageSprint && navBadgeLoaded" class="nav-readonly-tag" title="您当前无迭代管理权限">只读</span>
         </router-link>
-        <router-link to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
+        <router-link v-if="canViewSprintPlanning" to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
           <span class="nav-icon">📋</span>
           <span class="nav-label">规划</span>
         </router-link>
@@ -228,6 +228,17 @@ const canViewTrash = computed(() => {
   // 后端在 my-global-permissions 中返回 nav:trash 表示用户在任意项目中有 issue:delete
   if (authStore.permissionsLoaded) {
     return authStore.hasGlobalPermission('nav:trash')
+  }
+  // 权限未加载时乐观显示
+  return true
+})
+
+const canViewSprintPlanning = computed(() => {
+  // system:admin 自动拥有所有权限
+  if (isAdmin.value) return true
+  // 后端在 my-global-permissions 中返回 nav:sprint_manage 表示用户在任意项目中有 sprint:create
+  if (authStore.permissionsLoaded) {
+    return authStore.hasGlobalPermission('nav:sprint_manage')
   }
   // 权限未加载时乐观显示
   return true

@@ -115,8 +115,8 @@ export const projectApi = {
   },
 
   /** 获取项目时间追踪设置 */
-  getTimeTrackingSettings(projectId: string) {
-    return request.get<any, R<{ enabled: boolean }>>(`/projects/${projectId}/time-tracking-settings`)
+  getTimeTrackingSettings(projectId: string, options?: RequestOptions) {
+    return request.get<any, R<{ enabled: boolean }>>(`/projects/${projectId}/time-tracking-settings`, options)
   },
 
   /** 更新项目时间追踪设置 */
