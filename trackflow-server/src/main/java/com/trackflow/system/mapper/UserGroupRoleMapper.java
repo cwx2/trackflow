@@ -71,4 +71,26 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
             WHERE ugm.group_id = #{groupId}
             """)
     List<Long> selectUserIdsByGroupId(@Param("groupId") Long groupId);
+
+    /**
+     * 查询拥有指定角色的所有组 ID（用于角色权限变更时的缓存失效）
+     */
+    @Select("""
+            SELECT DISTINCT ugr.group_id
+            FROM user_group_role ugr
+            WHERE ugr.role_id = #{roleId}
+            """)
+    List<Long> selectGroupIdsByRoleId(@Param("roleId") Long roleId);
+
+    /**
+     * 查询通过组继承指定角色的所有用户 ID（用于角色权限变更时的缓存失效）
+     * 路径: user_group_role (role_id) → user_group_member (group_id → user_id)
+     */
+    @Select("""
+            SELECT DISTINCT ugm.user_id
+            FROM user_group_member ugm
+            INNER JOIN user_group_role ugr ON ugr.group_id = ugm.group_id
+            WHERE ugr.role_id = #{roleId}
+            """)
+    List<Long> selectUserIdsByRoleIdViaGroup(@Param("roleId") Long roleId);
 }

@@ -215,14 +215,30 @@ public class PermissionService {
     }
 
     /**
-     * 失效拥有指定角色的所有用户的权限缓存
+     * 失效拥有指定角色的所有用户的权限缓存（直接分配 + 组继承）
+     * <p>
+     * 覆盖两条路径：
+     * 1. user_role → 直接拥有该角色的用户
+     * 2. user_group_role → user_group_member → 通过组继承该角色的用户
+     * <p>
+     * 合并去重后统一清除缓存，确保角色权限变更即时生效。
      */
     public void invalidateCacheForRole(Long roleId) {
-        List<Long> userIds = userRoleMapper.selectUserIdsByRoleId(roleId);
-        for (Long userId : userIds) {
+        // 路径1: 直接分配该角色的用户
+        List<Long> directUserIds = userRoleMapper.selectUserIdsByRoleId(roleId);
+
+        // 路径2: 通过用户组继承该角色的用户
+        List<Long> groupUserIds = userGroupRoleMapper.selectUserIdsByRoleIdViaGroup(roleId);
+
+        // 合并去重
+        Set<Long> allAffectedUserIds = new HashSet<>(directUserIds);
+        allAffectedUserIds.addAll(groupUserIds);
+
+        for (Long userId : allAffectedUserIds) {
             invalidateCache(userId);
         }
-        log.debug("Permission cache invalidated for {} users of role {}", userIds.size(), roleId);
+        log.debug("Permission cache invalidated for {} users of role {} (direct: {}, via groups: {})",
+                allAffectedUserIds.size(), roleId, directUserIds.size(), groupUserIds.size());
     }
 
     /**
