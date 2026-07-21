@@ -21,6 +21,28 @@
       <div class="toolbar-right">
         <span v-if="selectedCount > 0" class="selection-indicator">
           已选择 {{ selectedCount }} 个工单
+          <a-popover trigger="click" position="bottom" :content-style="{ padding: '4px 0' }" v-model:popup-visible="assignPopoverVisible">
+            <a-button size="mini" type="primary">分配负责人</a-button>
+            <template #content>
+              <div class="assignee-popover-list">
+                <div
+                  class="assignee-popover-item"
+                  @click="batchAssign(null)"
+                >
+                  <span class="assignee-popover-name">取消分配</span>
+                </div>
+                <div class="assignee-popover-divider"></div>
+                <div
+                  v-for="m in projectMembers"
+                  :key="m.userId"
+                  class="assignee-popover-item"
+                  @click="batchAssign(m.userId)"
+                >
+                  <span class="assignee-popover-name">{{ m.displayName }}</span>
+                </div>
+              </div>
+            </template>
+          </a-popover>
           <a-button size="mini" type="text" @click="clearSelection">清除</a-button>
         </span>
       </div>
@@ -94,6 +116,7 @@
                 @dragstart="onDragStart($event, issue, 'backlog')"
                 @dragend="onDragEnd"
                 @click="onCardClick($event, issue, 'backlog')"
+                @contextmenu.prevent="onCardContextMenu($event, issue, 'backlog')"
               >
                 <div class="card-top">
                   <span class="card-key">{{ issue.issueKey }}</span>
@@ -160,6 +183,7 @@
                 @dragstart="onDragStart($event, issue, sprint.id)"
                 @dragend="onDragEnd"
                 @click="onCardClick($event, issue, sprint.id)"
+                @contextmenu.prevent="onCardContextMenu($event, issue, sprint.id)"
               >
                 <div class="card-top">
                   <span class="card-key">{{ issue.issueKey }}</span>
@@ -200,6 +224,35 @@
       <h3 class="empty-title">请选择项目</h3>
       <p class="empty-desc">从上方下拉框选择一个项目开始 Sprint 规划</p>
     </div>
+
+    <!-- 右键上下文菜单 -->
+    <Teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        class="planning-context-menu"
+        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+        @click.stop
+      >
+        <div class="context-menu-item context-menu-item--submenu">
+          <span>分配负责人</span>
+          <span class="context-menu-arrow">›</span>
+          <div class="context-submenu">
+            <div class="context-menu-item" @click="contextAssign(null)">
+              取消分配
+            </div>
+            <div class="context-menu-divider"></div>
+            <div
+              v-for="m in projectMembers"
+              :key="m.userId"
+              class="context-menu-item"
+              @click="contextAssign(m.userId)"
+            >
+              {{ m.displayName }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -248,6 +301,9 @@ const draggingIds = ref<Set<string>>(new Set())
 const dragSourcePanel = ref<string | null>(null)
 const dropTargetSprintId = ref<string | null>(null)
 const backlogDropHighlight = ref(false)
+
+// ===== Assign Popover =====
+const assignPopoverVisible = ref(false)
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -536,6 +592,105 @@ async function moveIssuesToBacklog(issueIds: string[]) {
   } catch (e: any) {
     Message.error(e.response?.data?.message || '移动失败')
   }
+}
+
+// ===== Context Menu =====
+const contextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  targetIssueId: null as string | null
+})
+
+function onCardContextMenu(event: MouseEvent, issue: IssueVO, source: string) {
+  // If the right-clicked card is not already selected, select only it
+  if (!selectedIds.value.has(issue.id)) {
+    selectedIds.value = new Set([issue.id])
+    lastClickedId.value = issue.id
+    lastClickedSource.value = source
+  }
+
+  contextMenu.targetIssueId = issue.id
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.visible = true
+
+  // Close on next click anywhere
+  const closeHandler = () => {
+    contextMenu.visible = false
+    document.removeEventListener('click', closeHandler)
+    document.removeEventListener('contextmenu', closeHandler)
+  }
+  setTimeout(() => {
+    document.addEventListener('click', closeHandler)
+    document.addEventListener('contextmenu', closeHandler)
+  }, 0)
+}
+
+function contextAssign(userId: string | null) {
+  contextMenu.visible = false
+  const ids = Array.from(selectedIds.value)
+  if (ids.length === 0 && contextMenu.targetIssueId) {
+    ids.push(contextMenu.targetIssueId)
+  }
+  if (ids.length > 0) {
+    performBatchAssign(ids, userId)
+  }
+}
+
+// ===== Batch Assign =====
+
+function batchAssign(userId: string | null) {
+  assignPopoverVisible.value = false
+  const ids = Array.from(selectedIds.value)
+  if (ids.length === 0) return
+  performBatchAssign(ids, userId)
+}
+
+async function performBatchAssign(issueIds: string[], userId: string | null) {
+  try {
+    await issueApi.batch({
+      operation: 'assign',
+      issueIds,
+      assigneeId: userId || '0', // '0' means unassign
+      silent: true
+    })
+    const assigneeName = userId
+      ? projectMembers.value.find(m => m.userId === userId)?.displayName || ''
+      : ''
+    const actionText = userId ? `分配给 ${assigneeName}` : '取消分配'
+    Message.success(`已将 ${issueIds.length} 个工单${actionText}`)
+
+    // Optimistically update assignee on cards
+    updateAssigneeOnCards(issueIds, userId, assigneeName)
+    clearSelection()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '分配失败')
+  }
+}
+
+function updateAssigneeOnCards(issueIds: string[], userId: string | null, assigneeName: string) {
+  const idSet = new Set(issueIds)
+
+  // Update backlog issues
+  backlogIssues.value = backlogIssues.value.map(issue => {
+    if (idSet.has(issue.id)) {
+      return { ...issue, assigneeId: userId || undefined, assigneeName: assigneeName || undefined }
+    }
+    return issue
+  })
+
+  // Update sprint issues
+  const newMap = new Map<string, IssueVO[]>()
+  for (const [sprintId, issues] of sprintIssuesMap.value.entries()) {
+    newMap.set(sprintId, issues.map(issue => {
+      if (idSet.has(issue.id)) {
+        return { ...issue, assigneeId: userId || undefined, assigneeName: assigneeName || undefined }
+      }
+      return issue
+    }))
+  }
+  sprintIssuesMap.value = newMap
 }
 
 function goToSprintPage() {
@@ -840,5 +995,83 @@ onMounted(async () => {
   flex: 1;
   text-align: center;
   padding: 64px 24px;
+}
+
+/* ===== Assignee Popover ===== */
+.assignee-popover-list {
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 140px;
+}
+.assignee-popover-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-1);
+  transition: background 0.1s;
+  border-radius: 3px;
+}
+.assignee-popover-item:hover {
+  background: var(--color-fill-2);
+}
+.assignee-popover-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 0;
+}
+
+/* ===== Context Menu ===== */
+.planning-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--color-bg-popup, var(--color-bg-2));
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  min-width: 160px;
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-text-1);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.1s;
+}
+.context-menu-item:hover {
+  background: var(--color-fill-2);
+}
+.context-menu-item--submenu {
+  position: relative;
+}
+.context-menu-arrow {
+  font-size: 14px;
+  color: var(--color-text-3);
+}
+.context-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  background: var(--color-bg-popup, var(--color-bg-2));
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  min-width: 140px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.context-menu-item--submenu:hover > .context-submenu {
+  display: block;
+}
+.context-menu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 0;
 }
 </style>
