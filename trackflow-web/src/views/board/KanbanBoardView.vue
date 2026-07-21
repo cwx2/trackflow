@@ -183,6 +183,17 @@
             Backlog
           </a-button>
         </a-tooltip>
+        <a-tooltip :content="showChart ? '收起图表' : '展开图表'">
+          <a-button
+            size="small"
+            :type="showChart ? 'primary' : 'secondary'"
+            :disabled="!selectedProject"
+            @click="showChart = !showChart"
+          >
+            <template #icon><icon-bar-chart /></template>
+            Chart
+          </a-button>
+        </a-tooltip>
         <a-tooltip v-if="canEditBoard" content="看板列设置">
           <a-button
             size="small"
@@ -194,6 +205,16 @@
         </a-tooltip>
       </div>
     </div>
+
+    <!-- 图表面板（展开/折叠） -->
+    <BoardChartPanel
+      :visible="showChart"
+      :project-id="selectedProject || ''"
+      :sprint-id="selectedSprint"
+      :chart-type="boardChartType"
+      :burndown-calculation="boardBurndownCalculation"
+      @close="showChart = false"
+    />
 
     <!-- 加载状态 -->
     <a-spin :loading="loading" tip="加载看板数据..." class="board-spin">
@@ -776,9 +797,10 @@ import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
 import BacklogPanel from './BacklogPanel.vue'
+import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
-import { IconSettings, IconSearch, IconList } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconSearch, IconList, IconBarChart } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const route = useRoute()
@@ -1589,6 +1611,11 @@ const { batchTransitStatus, batchAssign, batchUpdateSprint, batchUpdatePriority,
 // 看板列配置
 const allColumnConfigs = ref<BoardColumnVO[]>([])
 const showSettings = ref(false)
+
+// 看板图表面板
+const showChart = ref(false)
+const boardChartType = ref<string>('burndown')
+const boardBurndownCalculation = ref<string>('issue_count')
 
 // 看板卡片配置（字段显示 + 颜色方案）
 const cardConfig = ref<BoardCardConfigVO>({
@@ -2585,6 +2612,22 @@ async function loadBoardBehavior() {
   }
 }
 
+/** 加载看板图表配置（类型 + 计算方式） */
+async function loadChartConfig() {
+  if (!selectedProject.value) return
+  try {
+    const res = await boardApi.getChartConfig(selectedProject.value)
+    if (res.data) {
+      boardChartType.value = res.data.chartType || 'burndown'
+      boardBurndownCalculation.value = res.data.burndownCalculation || 'issue_count'
+    }
+  } catch {
+    // 加载失败使用默认值
+    boardChartType.value = 'burndown'
+    boardBurndownCalculation.value = 'issue_count'
+  }
+}
+
 async function loadBoard() {
   if (!selectedProject.value) { issues.value = []; return }
   expandedEmptyColumns.value.clear()
@@ -2593,7 +2636,7 @@ async function loadBoard() {
   guidanceDismissed.value = sessionStorage.getItem(`${GUIDANCE_DISMISSED_KEY}_${selectedProject.value}`) === 'true'
   loading.value = true
   try {
-    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers()])
+    await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers(), loadChartConfig()])
     await loadIssues()
   } catch (e: any) {
     // 会话过期时不显示"加载失败"——已有过期提示和跳转
