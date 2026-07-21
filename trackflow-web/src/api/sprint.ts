@@ -75,5 +75,15 @@ export const sprintApi = {
   /** 获取 Sprint 负责人工作量分布 */
   assigneeDistribution(id: string) {
     return request.get<any, R<SprintAssigneeDistributionVO>>(`/sprints/${id}/assignee-distribution`)
+  },
+
+  /** 归档 Sprint（completed → archived） */
+  archive(id: string) {
+    return request.put<any, R<SprintVO>>(`/sprints/${id}/archive`)
+  },
+
+  /** 恢复 Sprint（archived → completed） */
+  restore(id: string) {
+    return request.put<any, R<SprintVO>>(`/sprints/${id}/restore`)
   }
 }

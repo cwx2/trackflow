@@ -94,6 +94,18 @@ public class SprintController {
         return R.ok(sprintService.getBurndownData(id));
     }
 
+    @PutMapping("/api/v1/sprints/{id}/archive")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
+    public R<SprintVO> archive(@PathVariable("id") Long id) {
+        return R.ok(sprintConverter.toVO(sprintService.archive(id)));
+    }
+
+    @PutMapping("/api/v1/sprints/{id}/restore")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
+    public R<SprintVO> restore(@PathVariable("id") Long id) {
+        return R.ok(sprintConverter.toVO(sprintService.restore(id)));
+    }
+
     @GetMapping("/api/v1/sprints/{id}/assignee-distribution")
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintAssigneeDistributionVO> assigneeDistribution(@PathVariable("id") Long id) {

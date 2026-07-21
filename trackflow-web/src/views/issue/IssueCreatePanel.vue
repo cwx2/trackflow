@@ -10,7 +10,7 @@
     @cancel="close"
   >
     <template #title>
-      <span class="panel-modal-title">{{ cloneData ? '克隆工单' : '创建工单' }}</span>
+      <span class="panel-modal-title">{{ cloneData ? '克隆工单' : draftId ? '继续编辑草稿' : '创建工单' }}</span>
     </template>
 
     <div class="create-panel">
@@ -299,6 +299,7 @@ import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } fro
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
+import { useDrafts } from './composables/useDrafts'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
 import type { CustomFieldDefinitionVO, IssueTemplateVO } from '@/api/types'
@@ -307,11 +308,13 @@ const props = defineProps<{
   visible: boolean
   projectId?: string
   cloneData?: { projectId: string; title: string; description: string; issueType: string; priority: string }
+  draftId?: string | null
 }>()
 
 const emit = defineEmits<{
   'update:visible': [val: boolean]
   created: []
+  'cancel-with-data': [formData: any]
 }>()
 
 const submitting = ref(false)
@@ -479,6 +482,10 @@ watch(() => props.visible, (val) => {
       form.priority = props.cloneData.priority
       onProjectChange(props.cloneData.projectId)
     }
+    // Restore draft data if draftId is provided
+    else if (props.draftId) {
+      loadDraftData(props.draftId)
+    }
   } else {
     window.removeEventListener('beforeunload', handleBeforeUnload)
   }
@@ -488,7 +495,7 @@ async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
   if (!pid) { members.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; return }
   try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
-  try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed') } catch { sprints.value = [] }
+  try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed' && s.status !== 'completed' && s.status !== 'Archived' && s.status !== 'archived') } catch { sprints.value = [] }
   // 加载项目模板
   try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
   selectedTemplateId.value = null
@@ -524,12 +531,28 @@ function clearTemplate() {
 function close() {
   if (isDirty.value) {
     Modal.confirm({
-      title: '有未保存的更改',
-      content: '当前表单中有未保存的内容，确定要离开吗？',
-      okText: '放弃更改',
-      cancelText: '继续编辑',
+      title: '保存为草稿？',
+      content: '当前表单中有未保存的内容。是否保存为草稿？',
+      okText: '保存草稿',
+      cancelText: '放弃更改',
       simple: false,
       onOk: () => {
+        // 发送表单数据给父组件保存为草稿
+        emit('cancel-with-data', {
+          title: form.title,
+          description: form.description,
+          projectId: form.projectId || '',
+          issueType: form.issueType,
+          priority: form.priority,
+          sprintId: form.sprintId || '',
+          assigneeId: form.assigneeId || '',
+          dueDate: form.dueDate || '',
+          estimatedHours: form.estimatedHours ?? null,
+          customFieldValues: { ...customFieldValues.value }
+        })
+        doClose()
+      },
+      onCancel: () => {
         doClose()
       }
     })
@@ -554,6 +577,35 @@ function resetForm() {
   form.estimatedHours = undefined
   selectedTemplateId.value = null
   cfValidationErrors.value = {}
+}
+
+/** 从 localStorage 加载草稿数据填充表单 */
+function loadDraftData(draftId: string) {
+  const { getDraft } = useDrafts()
+  const draft = getDraft(draftId)
+  if (!draft) return
+
+  form.title = draft.title || ''
+  form.description = draft.description || ''
+  form.issueType = draft.issueType || 'Task'
+  form.priority = draft.priority || 'Normal'
+  form.dueDate = draft.dueDate || ''
+  form.estimatedHours = draft.estimatedHours ?? undefined
+
+  if (draft.projectId) {
+    form.projectId = draft.projectId
+    onProjectChange(draft.projectId).then(() => {
+      // 项目数据加载完成后再设置关联字段
+      if (draft.assigneeId) form.assigneeId = draft.assigneeId
+      if (draft.sprintId) form.sprintId = draft.sprintId
+      // 恢复自定义字段值
+      if (draft.customFieldValues) {
+        Object.entries(draft.customFieldValues).forEach(([key, value]) => {
+          if (value) customFieldValues.value[key] = value
+        })
+      }
+    })
+  }
 }
 
 function onSplitSelect(action: string) {

@@ -590,10 +590,10 @@ const sidebarFields = computed<SidebarField[]>(() => {
   // 人员选项（仅在有分配权限时提供）
   const userOptions = canAssign ? members.value.map(m => ({ value: m.userId, label: m.displayName })) : []
 
-  // Sprint 选项（仅在有编辑权限时提供）
+  // Sprint 选项（仅在有编辑权限时提供，排除已归档 Sprint）
   const sprintOptions = canSprint ? [
     { value: '', label: 'Unscheduled' },
-    ...sprints.value.filter(s => s.projectId === i.projectId).map(s => ({ value: s.id, label: s.name }))
+    ...sprints.value.filter(s => s.projectId === i.projectId && s.status !== 'archived' && s.status !== 'Archived').map(s => ({ value: s.id, label: s.name }))
   ] : []
 
   // Sprint 显示值：优先使用 issue 自带的 sprintName，不依赖 sprints 列表

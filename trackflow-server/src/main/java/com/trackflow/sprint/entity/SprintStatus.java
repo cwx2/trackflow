@@ -15,7 +15,8 @@ public enum SprintStatus {
 
     PLANNED("planned", "计划中"),
     ACTIVE("active", "进行中"),
-    COMPLETED("completed", "已完成");
+    COMPLETED("completed", "已完成"),
+    ARCHIVED("archived", "已归档");
 
     @EnumValue
     @JsonValue
