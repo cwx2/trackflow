@@ -783,6 +783,25 @@ export interface BoardColumnItem {
   wipMax?: number | null
 }
 
+// ========== 看板聚合数据 ==========
+
+/** 看板聚合数据 — 按列分组的工单 */
+export interface BoardDataVO {
+  columns: BoardColumnData[]
+  totalIssueCount: number
+  truncated: boolean
+}
+
+/** 单列数据 */
+export interface BoardColumnData {
+  statusId: string
+  statusName: string
+  issues: IssueVO[]
+  totalCount: number
+  totalEstimation: number | null
+  collapsed: boolean
+}
+
 // ========== 看板卡片配置 ==========
 
 export interface BoardCardConfigVO {

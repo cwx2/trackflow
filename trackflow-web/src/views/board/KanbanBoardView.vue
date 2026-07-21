@@ -2930,124 +2930,182 @@ async function loadBoard() {
 }
 
 /** 看板安全上限：超过此数量的工单将截断并提示用户 */
-const BOARD_MAX_ISSUES = 500
+const BOARD_MAX_ISSUES = 2000
 const boardTruncated = ref(false)
 const boardTotalCount = ref(0)
 
 /**
- * 加载看板全量工单（自动分页循环加载）。
- * 看板需要展示所有工单以保证 WIP 计数和 Progress Indicator 准确。
+ * 加载看板工单数据（使用看板专用聚合 API，单次请求）。
+ * 服务端按列分组返回数据，前端无需客户端分组计算。
  */
 async function loadIssues() {
   if (!selectedProject.value) { issues.value = []; boardTruncated.value = false; return }
 
-  const PAGE_SIZE = 100
-  let page = 1
-  let allIssues: IssueVO[] = []
-  let total = 0
-
   // 计算 excludeDoneBefore 截止日期（服务端过滤已完成工单保留天数）
-  // 智能默认：当无活跃 Sprint 且未配置保留天数时，自动应用 14 天保留（避免全量已完成工单堆积）
-  let excludeDoneBefore: string | undefined
   const DEFAULT_DONE_RETENTION_DAYS = 14
   const effectiveRetention = boardDoneRetentionDays.value ??
     (!activeSprint.value && !selectedSprint.value ? DEFAULT_DONE_RETENTION_DAYS : null)
+  let excludeDoneBefore: string | undefined
   if (effectiveRetention !== null && effectiveRetention > 0) {
     const cutoffDate = new Date(Date.now() - effectiveRetention * 24 * 60 * 60 * 1000)
-    excludeDoneBefore = cutoffDate.toISOString().split('T')[0] // yyyy-MM-dd
+    excludeDoneBefore = cutoffDate.toISOString().split('T')[0]
   }
 
-  // Board Behavior: Query 模式 — 使用 QueryExecutor 服务端过滤
-  if (boardFilterMode.value === 'query' && boardFilterQuery.value) {
-    let filters: any[] = []
-    try {
-      filters = JSON.parse(boardFilterQuery.value)
-    } catch {
-      // 无效的 filter query，不加载
+  // Board Behavior: 确定 sprint 过滤参数
+  let effectiveSprintId = selectedSprint.value || undefined
+  if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
+    effectiveSprintId = activeSprint.value?.id
+    if (!effectiveSprintId) {
       issues.value = []
       boardTotalCount.value = 0
       boardTruncated.value = false
       return
     }
-    // 注入项目过滤条件
-    filters = [{ field: 'project', operator: 'eq', value: [selectedProject.value] }, ...filters]
-    // 如果有额外 Sprint 选中，也追加
-    if (selectedSprint.value) {
-      filters.push({ field: 'sprint', operator: 'eq', value: [selectedSprint.value] })
+  }
+
+  // Board Behavior: Query 模式 — 仍使用 QueryExecutor（聚合 API 暂不支持 query mode）
+  if (boardFilterMode.value === 'query' && boardFilterQuery.value) {
+    await loadIssuesViaQueryMode(excludeDoneBefore)
+    return
+  }
+
+  // 收集已折叠列的状态 ID（折叠列不需要返回具体工单）
+  const collapsedIds = [...collapsedColumns.value].join(',')
+
+  try {
+    const res = await boardApi.getBoardData({
+      projectId: selectedProject.value,
+      sprintId: effectiveSprintId,
+      assigneeId: effectiveAssigneeId.value || undefined,
+      keyword: keyword.value || undefined,
+      excludeDoneBefore,
+      collapsedStatusIds: collapsedIds || undefined
+    })
+
+    const boardData = res.data
+    if (!boardData) {
+      issues.value = []
+      boardTotalCount.value = 0
+      boardTruncated.value = false
+      return
     }
-    // 如果有搜索关键词，追加
-    if (keyword.value) {
-      filters.push({ field: 'keyword', operator: 'contains', value: [keyword.value] })
-    }
-    // 如果有负责人筛选，追加
-    if (effectiveAssigneeId.value) {
-      filters.push({ field: 'assignee', operator: 'eq', value: [effectiveAssigneeId.value] })
-    }
-    // 服务端过滤已完成工单保留天数：使用 resolvedAt gte 过滤
-    // QueryExecutor 支持 resolvedAt 日期字段，但这里的语义是"排除 resolved_at < cutoff 的已完成工单"
-    // 需要通过 status open + (resolvedAt gte cutoff) 组合实现
-    // 暂不在 query mode 中注入——query mode 用户自定义的 filter 可能已涵盖此逻辑
-    // 循环加载所有页
-    while (true) {
-      const res = await queryApi.executeAdhoc({ filters, page, pageSize: PAGE_SIZE })
-      const list = res.data?.list || []
-      total = res.data?.pagination?.total || 0
-      allIssues = allIssues.concat(list)
-      if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
-        break
-      }
-      page++
-    }
-    // Query 模式下客户端补充过滤（QueryExecutor 暂不支持 excludeDoneBefore 复合语义）
-    if (excludeDoneBefore) {
-      const cutoffDate = new Date(excludeDoneBefore)
-      const doneStatusIds = new Set(
-        allColumnConfigs.value
-          .filter(c => c.statusCategory === 'done')
-          .map(c => c.statusId)
-      )
-      allIssues = allIssues.filter(issue => {
-        if (!doneStatusIds.has(issue.statusId)) return true
-        const resolvedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : (issue.updatedAt ? new Date(issue.updatedAt) : null)
-        if (!resolvedDate) return true
-        return resolvedDate >= cutoffDate
-      })
-    }
-  } else {
-    // Board Behavior: 确定 sprint 过滤参数
-    let effectiveSprintId = selectedSprint.value || undefined
-    if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
-      effectiveSprintId = activeSprint.value?.id
-      // 如果没有活跃 Sprint，显示为空（无工单匹配）
-      if (!effectiveSprintId) {
-        issues.value = []
-        boardTotalCount.value = 0
-        boardTruncated.value = false
-        return
+
+    // 从聚合数据中提取所有工单（平铺，供 getColumnIssues/swimlanes 使用）
+    const allIssues: IssueVO[] = []
+    for (const col of boardData.columns) {
+      if (col.issues && col.issues.length > 0) {
+        allIssues.push(...col.issues)
       }
     }
 
-    // 循环加载所有页，直到获取全部工单或达到安全上限
-    while (true) {
-      const res = await issueApi.list({
-        projectId: selectedProject.value,
-        sprintId: effectiveSprintId,
-        assigneeId: effectiveAssigneeId.value || undefined,
-        keyword: keyword.value || undefined,
-        excludeDoneBefore,
-        page,
-        pageSize: PAGE_SIZE
-      })
-      const list = res.data?.list || []
-      total = res.data?.pagination?.total || 0
-      allIssues = allIssues.concat(list)
-
-      // 已加载全部 或 到达安全上限
-      if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
-        break
-      }
-      page++
+    boardTotalCount.value = boardData.totalIssueCount
+    boardTruncated.value = boardData.truncated
+    issues.value = allIssues
+  } catch (e: any) {
+    // 如果聚合 API 失败（如后端未部署），fallback 到旧方式
+    const status = e.response?.status
+    if (status === 404 || status === 405) {
+      await loadIssuesLegacy(effectiveSprintId, excludeDoneBefore)
+    } else {
+      throw e
     }
+  }
+}
+
+/**
+ * Board Behavior Query 模式：使用 QueryExecutor 的 adhoc 查询（保持原逻辑）。
+ */
+async function loadIssuesViaQueryMode(excludeDoneBefore: string | undefined) {
+  const PAGE_SIZE = 100
+  let page = 1
+  let allIssues: IssueVO[] = []
+  let total = 0
+
+  let filters: any[] = []
+  try {
+    filters = JSON.parse(boardFilterQuery.value!)
+  } catch {
+    issues.value = []
+    boardTotalCount.value = 0
+    boardTruncated.value = false
+    return
+  }
+
+  filters = [{ field: 'project', operator: 'eq', value: [selectedProject.value] }, ...filters]
+  if (selectedSprint.value) {
+    filters.push({ field: 'sprint', operator: 'eq', value: [selectedSprint.value] })
+  }
+  if (keyword.value) {
+    filters.push({ field: 'keyword', operator: 'contains', value: [keyword.value] })
+  }
+  if (effectiveAssigneeId.value) {
+    filters.push({ field: 'assignee', operator: 'eq', value: [effectiveAssigneeId.value] })
+  }
+
+  while (true) {
+    const res = await queryApi.executeAdhoc({ filters, page, pageSize: PAGE_SIZE })
+    const list = res.data?.list || []
+    total = res.data?.pagination?.total || 0
+    allIssues = allIssues.concat(list)
+    if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
+      break
+    }
+    page++
+  }
+
+  // 客户端补充过滤（QueryExecutor 暂不支持 excludeDoneBefore 复合语义）
+  if (excludeDoneBefore) {
+    const cutoffDate = new Date(excludeDoneBefore)
+    const doneStatusIds = new Set(
+      allColumnConfigs.value
+        .filter(c => c.statusCategory === 'done')
+        .map(c => c.statusId)
+    )
+    allIssues = allIssues.filter(issue => {
+      if (!doneStatusIds.has(issue.statusId)) return true
+      const resolvedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : (issue.updatedAt ? new Date(issue.updatedAt) : null)
+      if (!resolvedDate) return true
+      return resolvedDate >= cutoffDate
+    })
+  }
+
+  boardTotalCount.value = total
+  boardTruncated.value = allIssues.length < total
+  issues.value = allIssues
+}
+
+/**
+ * Legacy 加载方式（循环分页调用通用 Issue 列表 API）。
+ * 仅作为聚合 API 不可用时的 fallback。
+ */
+async function loadIssuesLegacy(effectiveSprintId: string | undefined, excludeDoneBefore: string | undefined) {
+  const PAGE_SIZE = 100
+  let page = 1
+  let allIssues: IssueVO[] = []
+  let total = 0
+
+  // 优化：传入可见列的 statusId 过滤，减少不必要的数据传输
+  const visibleStatusIds = visibleStatuses.value.map(s => s.id).join(',')
+
+  while (true) {
+    const res = await issueApi.list({
+      projectId: selectedProject.value!,
+      statusId: visibleStatusIds || undefined,
+      sprintId: effectiveSprintId,
+      assigneeId: effectiveAssigneeId.value || undefined,
+      keyword: keyword.value || undefined,
+      excludeDoneBefore,
+      page,
+      pageSize: PAGE_SIZE
+    })
+    const list = res.data?.list || []
+    total = res.data?.pagination?.total || 0
+    allIssues = allIssues.concat(list)
+
+    if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
+      break
+    }
+    page++
   }
 
   boardTotalCount.value = total

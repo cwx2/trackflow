@@ -1,10 +1,23 @@
 import request from './request'
-import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO } from './types'
+import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO, BoardDataVO } from './types'
 
 /**
  * 看板模块 API
  */
 export const boardApi = {
+  /** 获取看板聚合数据（按列分组，单次请求替代循环分页） */
+  getBoardData(params: {
+    projectId: string
+    sprintId?: string
+    assigneeId?: string
+    keyword?: string
+    excludeDoneBefore?: string
+    columnLimit?: number
+    collapsedStatusIds?: string
+  }) {
+    return request.get<any, R<BoardDataVO>>('/boards/data', { params })
+  },
+
   /** 获取项目看板列配置（纯读取，不触发写操作） */
   getColumns(projectId: string) {
     return request.get<any, R<BoardColumnVO[]>>('/boards/columns', {
@@ -54,7 +67,7 @@ export const boardApi = {
   },
 
   /** 保存项目看板泳道配置 */
-  saveSwimlaneConfig(projectId: string, data: { groupByField: string }) {
+  saveSwimlaneConfig(projectId: string, data: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }) {
     return request.put<any, R<void>>('/boards/swimlane-config', data, {
       params: { projectId }
     })
@@ -118,7 +131,7 @@ export const boardApi = {
     configVersion: number | null
     columns: { columns: Array<{ statusId: number; visible: boolean; sortOrder: number; collapsed?: boolean; wipMin?: number | null; wipMax?: number | null }> }
     cardConfig: { visibleFields: string[]; colorScheme: string }
-    swimlaneConfig: { groupByField: string }
+    swimlaneConfig: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }
     columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
     generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null }
     chartConfig?: { chartType: string; burndownCalculation: string; issueFilterMode: string; issueFilterQuery?: string | null; estimationFieldId?: number | null; originalEstimationFieldId?: number | null }

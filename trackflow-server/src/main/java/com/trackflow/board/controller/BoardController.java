@@ -1,5 +1,6 @@
 package com.trackflow.board.controller;
 
+import com.trackflow.board.dto.BoardDataQuery;
 import com.trackflow.board.dto.SaveBoardSettingsDTO;
 import com.trackflow.board.dto.UpdateBoardCardConfigDTO;
 import com.trackflow.board.dto.UpdateBoardChartConfigDTO;
@@ -13,6 +14,7 @@ import com.trackflow.board.service.BoardChartConfigService;
 import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
 import com.trackflow.board.service.BoardConfigVersionService;
+import com.trackflow.board.service.BoardDataService;
 import com.trackflow.board.service.BoardGeneralConfigService;
 import com.trackflow.board.service.BoardSettingsService;
 import com.trackflow.board.service.BoardSwimlaneConfigService;
@@ -20,6 +22,7 @@ import com.trackflow.board.vo.BoardCardConfigVO;
 import com.trackflow.board.vo.BoardChartConfigVO;
 import com.trackflow.board.vo.BoardColumnMergeGroupVO;
 import com.trackflow.board.vo.BoardColumnVO;
+import com.trackflow.board.vo.BoardDataVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
 import com.trackflow.board.vo.BoardSwimlaneConfigVO;
 import com.trackflow.common.model.R;
@@ -28,7 +31,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/boards")
@@ -44,6 +50,7 @@ public class BoardController {
     private final BoardAccessService boardAccessService;
     private final BoardConfigVersionService boardConfigVersionService;
     private final BoardSettingsService boardSettingsService;
+    private final BoardDataService boardDataService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
@@ -64,6 +71,30 @@ public class BoardController {
             columns = boardColumnService.getColumns(projectId);
         }
         return R.ok(columns);
+    }
+
+    /**
+     * 获取看板聚合数据 — 一次请求返回按列分组的工单数据。
+     * <p>
+     * 替代前端循环调用通用 Issue 列表 API 的方式，
+     * 服务端完成按列分组 + 统计，前端无需客户端 filter。
+     * <p>
+     * 需要项目查看权限 + 看板查看权限。
+     *
+     * @param query 查询参数（projectId 必填，sprintId/assigneeId/keyword/excludeDoneBefore 可选）
+     * @param collapsedStatusIds 已折叠的列状态 ID（逗号分隔），折叠列仅返回统计不返回具体工单
+     * @return 按列分组的看板数据
+     */
+    @GetMapping("/data")
+    @PreAuthorize("@perm.check(#query.projectId, 'project:view')")
+    public R<BoardDataVO> getBoardData(
+            @Valid BoardDataQuery query,
+            @RequestParam(value = "collapsedStatusIds", required = false) String collapsedStatusIds) {
+        boardAccessService.checkViewAccess(query.getProjectId());
+
+        Set<Long> collapsed = parseCollapsedStatusIds(collapsedStatusIds);
+        BoardDataVO data = boardDataService.aggregateBoardData(query, collapsed);
+        return R.ok(data);
     }
 
     /**
@@ -263,5 +294,28 @@ public class BoardController {
         boardAccessService.checkEditAccess(projectId);
         boardSettingsService.saveAllSettings(projectId, dto);
         return R.ok();
+    }
+
+    // ========== Private helpers ==========
+
+    /**
+     * 解析逗号分隔的折叠列状态 ID 字符串为 Set<Long>
+     */
+    private Set<Long> parseCollapsedStatusIds(String collapsedStatusIds) {
+        if (collapsedStatusIds == null || collapsedStatusIds.isBlank()) {
+            return Collections.emptySet();
+        }
+        Set<Long> result = new HashSet<>();
+        for (String idStr : collapsedStatusIds.split(",")) {
+            String trimmed = idStr.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    result.add(Long.parseLong(trimmed));
+                } catch (NumberFormatException e) {
+                    // 忽略无效的 ID
+                }
+            }
+        }
+        return result;
     }
 }
