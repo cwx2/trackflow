@@ -85,7 +85,7 @@ public class IssueService {
     /**
      * 创建 Issue
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Issue create(CreateIssueDTO dto) {
         // 归档项目不允许创建工单
         projectService.assertProjectActive(dto.getProjectId());
@@ -151,11 +151,9 @@ public class IssueService {
         // 保存自定义字段值到 EAV 表（带默认值应用 + 必填校验）
         Map<Long, String> userFieldValues = new java.util.HashMap<>();
         if (dto.getCustomFields() != null) {
-            for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
-                try {
-                    userFieldValues.put(Long.parseLong(entry.getKey()),
-                            entry.getValue() != null ? String.valueOf(entry.getValue()) : null);
-                } catch (NumberFormatException ignored) {}
+            for (Map.Entry<String, String> entry : dto.getCustomFields().entrySet()) {
+                Long fieldId = parseFieldId(entry.getKey());
+                userFieldValues.put(fieldId, entry.getValue());
             }
         }
         // 应用默认值并校验必填字段（始终执行，无论用户是否传了 customFields）
@@ -187,18 +185,13 @@ public class IssueService {
     }
 
     /**
-     * Issue 列表（支持多条件筛选）
-     */
-    public Page<Issue> list(Page<Issue> page, Long projectId, Long statusId, String priority,
-                            Long assigneeId, Long reporterId, Long sprintId, String issueType,
-                            String keyword) {
-        return list(page, projectId, statusId, priority, assigneeId, reporterId, sprintId, issueType, keyword,
-                null, null, null, null, null);
-    }
-
-    /**
      * Issue 列表（接受 IssueQuery，完整筛选支持）
      * 强制按用户所属项目过滤：如果指定了 projectId，校验成员关系；如果未指定，自动限定为所属项目。
+     * <p>
+     * 注：此方法使用 QueryWrapper（非 LambdaQueryWrapper），因为：
+     * 1. applyFilter/applyNegativeFilter 辅助方法通过动态列名参数化实现通用筛选
+     * 2. applyKeywordFilter 和 excludeDoneBefore 使用 .apply() 子查询语法，需要 raw SQL
+     * 这些场景 LambdaQueryWrapper 无法覆盖，故保留 QueryWrapper。
      */
     public Page<Issue> listByQuery(IssueQuery query) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -553,6 +546,10 @@ public class IssueService {
         }
     }
 
+    /**
+     * 通用筛选条件应用（支持逗号分隔多值和 "none" 关键字）。
+     * 使用字符串列名以实现多字段复用，避免为每个字段写重复代码。
+     */
     private void applyFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
         if (value == null || value.isBlank()) return;
         // "none" means IS NULL (e.g. sprintId=none → issues with no sprint)
@@ -598,86 +595,6 @@ public class IssueService {
                 .or()
                 .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} ESCAPE '\\' OR username LIKE {0} ESCAPE '\\')", likePattern)
         );
-    }
-
-    /**
-     * Issue 列表（支持正向+否定筛选，支持逗号分隔多值）
-     * 强制数据隔离：指定 projectId 时校验成员关系，未指定时限定为用户所属项目。
-     */
-    public Page<Issue> list(Page<Issue> page, Long projectId, Long statusId, String priority,
-                            Long assigneeId, Long reporterId, Long sprintId, String issueType,
-                            String keyword,
-                            String statusIdNot, String priorityNot, String assigneeIdNot,
-                            String sprintIdNot, String issueTypeNot) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        QueryWrapper<Issue> wrapper = new QueryWrapper<>();
-        wrapper.isNull("deleted_at");
-
-        // 数据隔离：与 listByQuery 保持一致
-        if (projectId != null) {
-            projectService.assertProjectAccessible(currentUserId, projectId);
-            wrapper.eq("project_id", projectId);
-        } else {
-            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
-            if (accessibleProjectIds != null) {
-                if (accessibleProjectIds.isEmpty()) {
-                    return new Page<>();
-                }
-                wrapper.in("project_id", accessibleProjectIds);
-            }
-        }
-        if (statusId != null) wrapper.eq("status_id", statusId);
-        if (priority != null) {
-            // Support comma-separated values (any_of)
-            if (priority.contains(",")) {
-                wrapper.in("priority", java.util.Arrays.asList(priority.split(",")));
-            } else {
-                wrapper.eq("priority", priority);
-            }
-        }
-        if (assigneeId != null) wrapper.eq("assignee_id", assigneeId);
-        if (reporterId != null) wrapper.eq("reporter_id", reporterId);
-        if (sprintId != null) wrapper.eq("sprint_id", sprintId);
-        if (issueType != null) {
-            if (issueType.contains(",")) {
-                wrapper.in("issue_type", java.util.Arrays.asList(issueType.split(",")));
-            } else {
-                wrapper.eq("issue_type", issueType);
-            }
-        }
-
-        // Negative filters
-        if (statusIdNot != null && !statusIdNot.isBlank()) {
-            List<Long> notIds = java.util.Arrays.stream(statusIdNot.split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty())
-                    .map(Long::parseLong).toList();
-            wrapper.notIn("status_id", notIds);
-        }
-        if (priorityNot != null && !priorityNot.isBlank()) {
-            wrapper.notIn("priority", java.util.Arrays.asList(priorityNot.split(",")));
-        }
-        if (assigneeIdNot != null && !assigneeIdNot.isBlank()) {
-            List<Long> notIds = java.util.Arrays.stream(assigneeIdNot.split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty())
-                    .map(Long::parseLong).toList();
-            wrapper.notIn("assignee_id", notIds);
-        }
-        if (sprintIdNot != null && !sprintIdNot.isBlank()) {
-            List<Long> notIds = java.util.Arrays.stream(sprintIdNot.split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty())
-                    .map(Long::parseLong).toList();
-            wrapper.notIn("sprint_id", notIds);
-        }
-        if (issueTypeNot != null && !issueTypeNot.isBlank()) {
-            wrapper.notIn("issue_type", java.util.Arrays.asList(issueTypeNot.split(",")));
-        }
-
-        if (keyword != null && !keyword.isBlank()) {
-            applyKeywordFilter(wrapper, keyword);
-        }
-
-        wrapper.orderByDesc("updated_at");
-        return issueMapper.selectPage(page, wrapper);
     }
 
     /**
@@ -756,7 +673,7 @@ public class IssueService {
     /**
      * 更新 Issue
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public UpdateResult update(Long id, UpdateIssueDTO dto) {
         Issue issue = getById(id);
         // 归档项目不允许编辑工单
@@ -961,11 +878,9 @@ public class IssueService {
         if (dto.getCustomFields() != null) {
             // 保存自定义字段值到 EAV 表（单一数据源）
             Map<Long, String> fieldValues = new java.util.HashMap<>();
-            for (Map.Entry<String, Object> entry : dto.getCustomFields().entrySet()) {
-                try {
-                    fieldValues.put(Long.parseLong(entry.getKey()),
-                            entry.getValue() != null ? String.valueOf(entry.getValue()) : null);
-                } catch (NumberFormatException ignored) {}
+            for (Map.Entry<String, String> entry : dto.getCustomFields().entrySet()) {
+                Long fieldId = parseFieldId(entry.getKey());
+                fieldValues.put(fieldId, entry.getValue());
             }
             customFieldService.saveValues(issue.getId(), fieldValues,
                     issue.getIssueType(), issue.getProjectId(),
@@ -992,7 +907,7 @@ public class IssueService {
     /**
      * 软删除 Issue
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         Issue issue = getById(id);
         // 归档项目不允许删除工单
@@ -1038,7 +953,7 @@ public class IssueService {
      * 5. 活动记录
      * 6. 通知触发
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Issue moveToProject(Long issueId, MoveIssueDTO dto) {
         Issue issue = getById(issueId);
         Long sourceProjectId = issue.getProjectId();
@@ -1552,7 +1467,7 @@ public class IssueService {
     /**
      * 状态变更
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment) {
         return transitStatus(id, newStatusId, comment, null, false, null, false);
     }
@@ -1566,7 +1481,7 @@ public class IssueService {
      * @param assigneeId            显式指定的 assignee（null 表示 unassign）
      * @param assigneeExplicitlySet true = 用户明确设置了 assignee（即使为 null）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet) {
         return transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, null, false);
@@ -1575,7 +1490,7 @@ public class IssueService {
     /**
      * 状态变更（带乐观锁版本校验）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet,
                               Integer expectedVersion) {
@@ -1585,7 +1500,7 @@ public class IssueService {
     /**
      * 状态变更（跳过工作流校验 - 仅限撤销操作内部调用）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatusSkipWorkflow(Long id, Long newStatusId, String comment) {
         return transitStatus(id, newStatusId, comment, null, false, null, true);
     }
@@ -1596,7 +1511,7 @@ public class IssueService {
      * @param skipWorkflowCheck true = 跳过工作流规则校验（仅用于撤销操作，目标状态已在 Controller 中校验为上一状态）
      * @return 动作执行结果摘要
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet,
                               Integer expectedVersion, boolean skipWorkflowCheck) {
@@ -1683,7 +1598,7 @@ public class IssueService {
     /**
      * 分配 Issue
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void assign(Long id, Long assigneeId) {
         Issue issue = getById(id);
         // 归档项目不允许分配工单
@@ -1720,7 +1635,7 @@ public class IssueService {
         );
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public IssueComment addComment(Long issueId, String content) {
         // 归档项目不允许添加评论
         Issue issue = getById(issueId);
@@ -1747,7 +1662,7 @@ public class IssueService {
         return comment;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public IssueComment updateComment(Long issueId, Long commentId, String newContent) {
         // 归档项目不允许编辑评论
         Issue issue = getById(issueId);
@@ -1778,7 +1693,7 @@ public class IssueService {
         return comment;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteComment(Long issueId, Long commentId) {
         // 归档项目不允许删除评论
         Issue issue = getById(issueId);
@@ -1966,7 +1881,7 @@ public class IssueService {
     /**
      * 上传附件
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public IssueAttachment uploadAttachment(Long issueId, MultipartFile file) {
         // 验证 Issue 存在
         Issue issue = getById(issueId);
@@ -2077,7 +1992,7 @@ public class IssueService {
      * 删除附件
      * 只有附件上传者或拥有 issue:manage_attachments 权限的用户可删除
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteAttachment(Long issueId, Long attachmentId) {
         // 归档项目不允许删除附件
         Issue issue = getById(issueId);
@@ -2135,7 +2050,7 @@ public class IssueService {
     /**
      * 恢复已删除的 Issue（从回收站还原）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void restore(Long id) {
         DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
         if (row == null || row.getDeletedAt() == null) {
@@ -2166,7 +2081,7 @@ public class IssueService {
     /**
      * 永久删除 Issue（物理删除），同时清理关联数据
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void permanentDelete(Long id) {
         DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
         if (row == null || row.getDeletedAt() == null) {
@@ -2304,6 +2219,18 @@ public class IssueService {
         activity.setNewDisplayValue(newDisplayValue);
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
+    }
+
+    /**
+     * 将自定义字段 key（字符串形式的字段ID）解析为 Long。
+     * 解析失败时抛出 BusinessException 而非静默忽略。
+     */
+    private Long parseFieldId(String key) {
+        try {
+            return Long.parseLong(key);
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "自定义字段 ID 格式错误: " + key);
+        }
     }
 }
 
