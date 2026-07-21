@@ -536,7 +536,7 @@
             </a-checkbox>
             <a-checkbox v-model="copyForm.options.custom_fields">
               <span class="copy-option-text">自定义字段绑定</span>
-              <span class="copy-option-count" v-if="copySummary">{{ copySummary.custom_fields || 0 }} 个</span>
+              <span class="copy-option-count" v-if="copySummary">{{ copySummary.customFields || 0 }} 个</span>
             </a-checkbox>
             <a-checkbox v-model="copyForm.options.board">
               <span class="copy-option-text">看板配置</span>
@@ -575,7 +575,7 @@ import {
   IconStarFill
 } from '@arco-design/web-vue/es/icon'
 import { projectApi, userApi, workflowApi } from '@/api'
-import type { ProjectActivityVO } from '@/api/types'
+import type { ProjectActivityVO, ProjectCopySummaryVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 
@@ -1241,7 +1241,7 @@ function formatRelativeTime(dateStr: string): string {
 const showCopyDialog = ref(false)
 const copying = ref(false)
 const copySourceProject = ref<any>(null)
-const copySummary = ref<Record<string, number> | null>(null)
+const copySummary = ref<ProjectCopySummaryVO | null>(null)
 const copyNameError = ref('')
 const copyKeyError = ref('')
 const copyForm = reactive({

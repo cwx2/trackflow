@@ -21,12 +21,17 @@ import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectCopyService;
 import com.trackflow.project.service.ProjectModuleService;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.project.vo.AssignedIssueCountVO;
+import com.trackflow.project.vo.FavoriteToggleVO;
+import com.trackflow.project.vo.MemberOperationResultVO;
 import com.trackflow.project.vo.ProjectActivityVO;
+import com.trackflow.project.vo.ProjectCopySummaryVO;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectModulesVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
+import com.trackflow.project.vo.ProjectTrashSettingsVO;
 import com.trackflow.project.vo.ProjectVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +39,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 @RestController
@@ -73,7 +77,7 @@ public class ProjectController {
 
     @GetMapping("/{id}/copy-summary")
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
-    public R<Map<String, Integer>> getCopySummary(@PathVariable("id") String id) {
+    public R<ProjectCopySummaryVO> getCopySummary(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         return R.ok(projectCopyService.getSourceProjectSummary(projectId));
     }
@@ -121,7 +125,7 @@ public class ProjectController {
 
     @GetMapping("/{id}/trash-settings")
     @PreAuthorize("@perm.checkProject(#id, 'project:edit')")
-    public R<Map<String, Object>> getTrashSettings(@PathVariable("id") String id) {
+    public R<ProjectTrashSettingsVO> getTrashSettings(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         return R.ok(projectService.getTrashSettings(projectId));
     }
@@ -185,30 +189,36 @@ public class ProjectController {
 
     @PutMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
-    public R<Map<String, Object>> updateMemberRole(@PathVariable("id") String id, @PathVariable("userId") Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
+    public R<MemberOperationResultVO> updateMemberRole(@PathVariable("id") String id, @PathVariable("userId") Long userId, @Valid @RequestBody UpdateMemberRoleDTO dto) {
         Long projectId = projectService.resolveProjectId(id);
         List<Long> effectiveRoleIds = dto.getEffectiveRoleIds();
         if (effectiveRoleIds.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "至少需要指定一个角色");
         }
         int affectedIssueCount = projectService.updateMemberRoles(projectId, userId, effectiveRoleIds);
-        return R.ok(Map.of("affectedIssueCount", affectedIssueCount));
+        MemberOperationResultVO vo = new MemberOperationResultVO();
+        vo.setAffectedIssueCount(affectedIssueCount);
+        return R.ok(vo);
     }
 
     @DeleteMapping("/{id}/members/{userId}")
     @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
-    public R<Map<String, Object>> removeMember(@PathVariable("id") String id, @PathVariable("userId") Long userId) {
+    public R<MemberOperationResultVO> removeMember(@PathVariable("id") String id, @PathVariable("userId") Long userId) {
         Long projectId = projectService.resolveProjectId(id);
         int affectedCount = projectService.removeMember(projectId, userId);
-        return R.ok(Map.of("affectedIssueCount", affectedCount));
+        MemberOperationResultVO vo = new MemberOperationResultVO();
+        vo.setAffectedIssueCount(affectedCount);
+        return R.ok(vo);
     }
 
     @GetMapping("/{id}/members/{userId}/assigned-issue-count")
     @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
-    public R<Map<String, Object>> getAssignedIssueCount(@PathVariable("id") String id, @PathVariable("userId") Long userId) {
+    public R<AssignedIssueCountVO> getAssignedIssueCount(@PathVariable("id") String id, @PathVariable("userId") Long userId) {
         Long projectId = projectService.resolveProjectId(id);
         int count = projectService.countAssignedIssues(projectId, userId);
-        return R.ok(Map.of("count", count));
+        AssignedIssueCountVO vo = new AssignedIssueCountVO();
+        vo.setCount(count);
+        return R.ok(vo);
     }
 
     // ========== 项目活动日志 ==========
@@ -331,14 +341,15 @@ public class ProjectController {
 
     /**
      * 切换项目收藏状态（Toggle）
-     * 返回 { favorited: true/false }
      */
     @PostMapping("/{id}/favorite")
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
-    public R<Map<String, Boolean>> toggleFavorite(@PathVariable("id") String id) {
+    public R<FavoriteToggleVO> toggleFavorite(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         Long userId = SecurityUtils.getCurrentUserId();
         boolean favorited = projectService.toggleFavorite(projectId, userId);
-        return R.ok(Map.of("favorited", favorited));
+        FavoriteToggleVO vo = new FavoriteToggleVO();
+        vo.setFavorited(favorited);
+        return R.ok(vo);
     }
 }

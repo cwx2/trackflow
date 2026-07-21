@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO, ProjectStatisticsVO, ProjectModulesVO } from './types'
+import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO, ProjectStatisticsVO, ProjectModulesVO, MemberOperationResultVO, FavoriteToggleVO, ProjectCopySummaryVO, ProjectTrashSettingsVO, AssignedIssueCountVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -81,17 +81,17 @@ export const projectApi = {
 
   /** 更新成员角色（全量替换） */
   updateMemberRole(projectId: string, userId: string, roleIds: number[]) {
-    return request.put<any, R<{ affectedIssueCount: number }>>(`/projects/${projectId}/members/${userId}`, { roleIds })
+    return request.put<any, R<MemberOperationResultVO>>(`/projects/${projectId}/members/${userId}`, { roleIds })
   },
 
   /** 查询成员被分配的工单数量（移除前预检） */
   getAssignedIssueCount(projectId: string, userId: string) {
-    return request.get<any, R<{ count: number }>>(`/projects/${projectId}/members/${userId}/assigned-issue-count`)
+    return request.get<any, R<AssignedIssueCountVO>>(`/projects/${projectId}/members/${userId}/assigned-issue-count`)
   },
 
   /** 移除成员（级联清空该成员被分配的工单负责人） */
   removeMember(projectId: string, userId: string) {
-    return request.delete<any, R<{ affectedIssueCount: number }>>(`/projects/${projectId}/members/${userId}`)
+    return request.delete<any, R<MemberOperationResultVO>>(`/projects/${projectId}/members/${userId}`)
   },
 
   /** 获取项目活动日志 */
@@ -101,7 +101,7 @@ export const projectApi = {
 
   /** 获取项目回收站保留策略 */
   getTrashSettings(projectId: string) {
-    return request.get<any, R<{ trashRetentionDays: number }>>(`/projects/${projectId}/trash-settings`)
+    return request.get<any, R<ProjectTrashSettingsVO>>(`/projects/${projectId}/trash-settings`)
   },
 
   /** 更新项目回收站保留策略 */
@@ -131,7 +131,7 @@ export const projectApi = {
 
   /** 获取项目可复制模块的概要统计 */
   getCopySummary(projectId: string) {
-    return request.get<any, R<Record<string, number>>>(`/projects/${projectId}/copy-summary`)
+    return request.get<any, R<ProjectCopySummaryVO>>(`/projects/${projectId}/copy-summary`)
   },
 
   /** 复制项目 */
@@ -141,7 +141,7 @@ export const projectApi = {
 
   /** 切换项目收藏状态 */
   toggleFavorite(projectId: string) {
-    return request.post<any, R<{ favorited: boolean }>>(`/projects/${projectId}/favorite`)
+    return request.post<any, R<FavoriteToggleVO>>(`/projects/${projectId}/favorite`)
   },
 
   /** 获取项目启用模块列表 */

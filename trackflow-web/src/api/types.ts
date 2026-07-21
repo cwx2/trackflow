@@ -137,6 +137,39 @@ export interface ProjectModulesVO {
   coreModules: string[]
 }
 
+// ========== 项目操作结果 ==========
+
+/** 成员操作结果（移除/角色变更后返回） */
+export interface MemberOperationResultVO {
+  affectedIssueCount: number
+}
+
+/** 收藏切换结果 */
+export interface FavoriteToggleVO {
+  favorited: boolean
+}
+
+/** 项目复制概要统计 */
+export interface ProjectCopySummaryVO {
+  workflow: number
+  tags: number
+  customFields: number
+  board: number
+  actions: number
+  members: number
+  queries: number
+}
+
+/** 项目回收站设置 */
+export interface ProjectTrashSettingsVO {
+  trashRetentionDays: number
+}
+
+/** 成员被分配工单数量 */
+export interface AssignedIssueCountVO {
+  count: number
+}
+
 // ========== 项目统计 ==========
 export interface ProjectStatisticsVO {
   totalIssues: number

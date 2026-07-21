@@ -21,6 +21,7 @@ import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.project.entity.ProjectVisibility;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.project.vo.ProjectCopySummaryVO;
 import com.trackflow.query.entity.SavedQuery;
 import com.trackflow.query.mapper.SavedQueryMapper;
 import com.trackflow.workflow.entity.TransitionAction;
@@ -150,26 +151,26 @@ public class ProjectCopyService {
     /**
      * 获取源项目的可复制模块概要信息（用于前端展示）。
      */
-    public Map<String, Integer> getSourceProjectSummary(Long sourceProjectId) {
-        Map<String, Integer> summary = new LinkedHashMap<>();
+    public ProjectCopySummaryVO getSourceProjectSummary(Long sourceProjectId) {
+        ProjectCopySummaryVO vo = new ProjectCopySummaryVO();
 
-        summary.put("workflow", Math.toIntExact(workflowTransitionMapper.selectCount(
+        vo.setWorkflow(Math.toIntExact(workflowTransitionMapper.selectCount(
                 new LambdaQueryWrapper<WorkflowTransition>().eq(WorkflowTransition::getProjectId, sourceProjectId))));
-        summary.put("tags", Math.toIntExact(issueTagMapper.selectCount(
+        vo.setTags(Math.toIntExact(issueTagMapper.selectCount(
                 new LambdaQueryWrapper<IssueTag>().eq(IssueTag::getProjectId, sourceProjectId))));
-        summary.put("custom_fields", Math.toIntExact(customFieldProjectMapper.selectCount(
+        vo.setCustomFields(Math.toIntExact(customFieldProjectMapper.selectCount(
                 new LambdaQueryWrapper<CustomFieldProject>().eq(CustomFieldProject::getProjectId, sourceProjectId))));
-        summary.put("board", Math.toIntExact(boardColumnConfigMapper.selectCount(
+        vo.setBoard(Math.toIntExact(boardColumnConfigMapper.selectCount(
                 new LambdaQueryWrapper<BoardColumnConfig>().eq(BoardColumnConfig::getProjectId, sourceProjectId))));
-        summary.put("actions", Math.toIntExact(transitionActionMapper.selectCount(
+        vo.setActions(Math.toIntExact(transitionActionMapper.selectCount(
                 new LambdaQueryWrapper<TransitionAction>().eq(TransitionAction::getProjectId, sourceProjectId))));
-        summary.put("members", projectMemberMapper.countDistinctUsers(sourceProjectId));
-        summary.put("queries", Math.toIntExact(savedQueryMapper.selectCount(
+        vo.setMembers(projectMemberMapper.countDistinctUsers(sourceProjectId));
+        vo.setQueries(Math.toIntExact(savedQueryMapper.selectCount(
                 new LambdaQueryWrapper<SavedQuery>()
                         .eq(SavedQuery::getProjectId, sourceProjectId)
                         .eq(SavedQuery::getShared, true))));
 
-        return summary;
+        return vo;
     }
 
     // ======== 私有方法 ========

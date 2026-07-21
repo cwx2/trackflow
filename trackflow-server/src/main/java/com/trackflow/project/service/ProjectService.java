@@ -49,6 +49,7 @@ import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
+import com.trackflow.project.vo.ProjectTrashSettingsVO;
 import com.trackflow.project.vo.ProjectVO;
 
 import java.time.LocalDateTime;
@@ -638,9 +639,11 @@ public class ProjectService {
     /**
      * 获取项目回收站保留策略
      */
-    public Map<String, Object> getTrashSettings(Long id) {
+    public ProjectTrashSettingsVO getTrashSettings(Long id) {
         Project project = getById(id);
-        return Map.of("trashRetentionDays", parseRetentionDays(project.getSettings()));
+        ProjectTrashSettingsVO vo = new ProjectTrashSettingsVO();
+        vo.setTrashRetentionDays(parseRetentionDays(project.getSettings()));
+        return vo;
     }
 
     /**
