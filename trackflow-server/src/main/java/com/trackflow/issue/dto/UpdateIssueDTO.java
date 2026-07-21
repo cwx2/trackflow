@@ -21,7 +21,7 @@ public class UpdateIssueDTO {
     private Long parentId;
     private LocalDate dueDate;
     private BigDecimal estimatedHours;
-    private Map<String, Object> customFields;
+    private Map<String, String> customFields;
 
     /**
      * 清空截止日期标志。为 true 时将 due_date 设为 NULL，

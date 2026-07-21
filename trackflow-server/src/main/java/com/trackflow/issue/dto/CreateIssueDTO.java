@@ -27,5 +27,5 @@ public class CreateIssueDTO {
     private Long parentId;
     private LocalDate dueDate;
     private BigDecimal estimatedHours;
-    private Map<String, Object> customFields;
+    private Map<String, String> customFields;
 }
