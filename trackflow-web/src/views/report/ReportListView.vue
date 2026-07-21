@@ -75,8 +75,14 @@
                 <a-doption @click="cloneReport(report)">
                   <span class="menu-item"><span class="menu-icon">📋</span>克隆</span>
                 </a-doption>
-                <a-doption @click="exportReport(report)">
+                <a-doption @click="exportReport(report, 'csv')">
                   <span class="menu-item"><span class="menu-icon">📥</span>导出 CSV</span>
+                </a-doption>
+                <a-doption @click="exportReport(report, 'xlsx')">
+                  <span class="menu-item"><span class="menu-icon">📊</span>导出 Excel</span>
+                </a-doption>
+                <a-doption @click="printReportCard(report)">
+                  <span class="menu-item"><span class="menu-icon">🖨️</span>打印</span>
                 </a-doption>
                 <a-doption v-if="canDeleteReport(report)" @click="confirmDelete(report)">
                   <span class="menu-item menu-danger"><span class="menu-icon">🗑️</span>删除</span>
@@ -636,22 +642,33 @@ async function toggleFavorite(report: ReportDefinitionVO) {
   }
 }
 
-async function exportReport(report: ReportDefinitionVO) {
+async function exportReport(report: ReportDefinitionVO, format: 'csv' | 'xlsx' = 'csv') {
   try {
-    const blob = await reportApi.exportCsv(report.id)
+    const blob = format === 'xlsx'
+      ? await reportApi.exportExcel(report.id)
+      : await reportApi.exportCsv(report.id)
     // 触发浏览器下载
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${report.name}.csv`
+    link.download = `${report.name}.${format}`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    Message.success('报表已导出')
+    Message.success(format === 'xlsx' ? 'Excel 已导出' : '报表已导出')
   } catch (e: any) {
     Message.error(e.response?.data?.message || '导出失败')
   }
+}
+
+function printReportCard(report: ReportDefinitionVO) {
+  // 先确保报表数据已加载
+  if (!reportData[report.id]) {
+    Message.info('请先点击报表加载数据，然后再打印')
+    return
+  }
+  window.print()
 }
 
 function resetForm() {
@@ -1342,5 +1359,70 @@ function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
   font-weight: 600;
   color: var(--tf-accent) !important;
   border-left: 1px solid var(--tf-border-light);
+}
+
+/* 打印样式 */
+@media print {
+  .report-page {
+    padding: 0;
+    overflow: visible;
+  }
+
+  .report-header,
+  .report-toolbar {
+    display: none;
+  }
+
+  .report-grid {
+    display: block;
+  }
+
+  .report-card {
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 16px;
+    box-shadow: none !important;
+  }
+
+  .card-menu-btn,
+  .favorite-btn,
+  .card-refresh-btn {
+    display: none !important;
+  }
+
+  .card-title {
+    color: #000 !important;
+  }
+
+  .card-meta {
+    color: #555 !important;
+  }
+
+  .chart-summary {
+    color: #333 !important;
+  }
+
+  .report-chart-instance {
+    height: 200px !important;
+  }
+
+  .matrix-table {
+    border-collapse: collapse;
+  }
+
+  .matrix-table th,
+  .matrix-table td {
+    border: 1px solid #ddd !important;
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .matrix-table th {
+    background: #f5f5f5 !important;
+  }
 }
 </style>

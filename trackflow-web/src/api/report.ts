@@ -142,6 +142,14 @@ export const reportApi = {
     })
   },
 
+  /** 导出报表为 Excel XLSX（返回 Blob） */
+  exportExcel(id: string) {
+    return request.get<any, Blob>(`/reports/${id}/export`, {
+      params: { format: 'xlsx' },
+      responseType: 'blob'
+    })
+  },
+
   // ─── Share API ─────────────────────────────────────────
 
   /** 获取报表共享列表 */
