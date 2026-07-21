@@ -1,9 +1,5 @@
 package com.trackflow.issue.controller;
 
-import com.trackflow.board.entity.BoardColumnConfig;
-import com.trackflow.board.mapper.BoardColumnConfigMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
@@ -16,18 +12,11 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueStatus;
-import com.trackflow.issue.mapper.IssueMapper;
-import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueTagService;
-import com.trackflow.issue.service.precheck.ClosePreCheckChain;
 import com.trackflow.issue.vo.*;
-import com.trackflow.sprint.entity.Sprint;
-import com.trackflow.sprint.mapper.SprintMapper;
-import com.trackflow.system.entity.SysUser;
-import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.ActionExecutionResult;
 import jakarta.validation.Valid;
@@ -39,7 +28,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/issues")
@@ -53,13 +41,7 @@ public class IssueController {
     private final WorkflowService workflowService;
     private final IssueLinkService linkService;
     private final IssueTagService tagService;
-    private final SysUserMapper sysUserMapper;
-    private final IssueStatusMapper issueStatusMapper;
-    private final IssueMapper issueMapper;
-    private final SprintMapper sprintMapper;
-    private final ClosePreCheckChain closePreCheckChain;
     private final CustomFieldService customFieldService;
-    private final BoardColumnConfigMapper boardColumnConfigMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -70,100 +52,7 @@ public class IssueController {
 
     @GetMapping
     public R<PageResult<IssueVO>> list(@Valid IssueQuery query) {
-        // listByQuery 内部已做项目成员校验
-        Page<Issue> result = issueService.listByQuery(query);
-        List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
-
-        // 批量填充 assigneeName + assigneeAvatarUrl + reporterName（合并一次查询）
-        Set<Long> userIds = new HashSet<>();
-        for (Issue issue : result.getRecords()) {
-            if (issue.getAssigneeId() != null) userIds.add(issue.getAssigneeId());
-            if (issue.getReporterId() != null) userIds.add(issue.getReporterId());
-        }
-        if (!userIds.isEmpty()) {
-            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(userIds).stream()
-                    .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
-            for (int i = 0; i < result.getRecords().size(); i++) {
-                Issue issue = result.getRecords().get(i);
-                if (issue.getAssigneeId() != null) {
-                    SysUser user = userMap.get(issue.getAssigneeId());
-                    if (user != null) {
-                        voList.get(i).setAssigneeName(user.getDisplayName());
-                        voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
-                    }
-                }
-                if (issue.getReporterId() != null) {
-                    SysUser user = userMap.get(issue.getReporterId());
-                    if (user != null) {
-                        voList.get(i).setReporterName(user.getDisplayName());
-                    }
-                }
-            }
-        }
-
-        // 填充子任务进度字段（childCount / childClosedCount）
-        for (int i = 0; i < result.getRecords().size(); i++) {
-            Issue issue = result.getRecords().get(i);
-            voList.get(i).setChildCount(issue.getChildCount());
-            voList.get(i).setChildClosedCount(issue.getChildClosedCount());
-        }
-
-        // 批量填充 statusName + statusColor（issue_status 表数据极少，一次全量查出）
-        Map<Long, IssueStatus> statusMap = issueStatusMapper.selectList(null).stream()
-                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
-        for (int i = 0; i < result.getRecords().size(); i++) {
-            Issue issue = result.getRecords().get(i);
-            if (issue.getStatusId() != null) {
-                IssueStatus status = statusMap.get(issue.getStatusId());
-                if (status != null) {
-                    voList.get(i).setStatusName(status.getName());
-                    voList.get(i).setStatusColor(status.getColor());
-                }
-            }
-        }
-
-        // 批量填充 sprintName（仅查询用到的 sprint）
-        Set<Long> sprintIds = new HashSet<>();
-        for (Issue issue : result.getRecords()) {
-            if (issue.getSprintId() != null) sprintIds.add(issue.getSprintId());
-        }
-        if (!sprintIds.isEmpty()) {
-            Map<Long, Sprint> sprintMap = sprintMapper.selectBatchIds(sprintIds).stream()
-                    .collect(Collectors.toMap(Sprint::getId, s -> s, (a, b) -> a));
-            for (int i = 0; i < result.getRecords().size(); i++) {
-                Issue issue = result.getRecords().get(i);
-                if (issue.getSprintId() != null) {
-                    Sprint sprint = sprintMap.get(issue.getSprintId());
-                    if (sprint != null) {
-                        voList.get(i).setSprintName(sprint.getName());
-                    }
-                }
-            }
-        }
-
-        // 批量填充自定义字段展示值
-        List<Long> issueIds = result.getRecords().stream()
-                .map(Issue::getId)
-                .toList();
-        if (!issueIds.isEmpty()) {
-            Map<Long, Map<String, String>> cfColorsMap = new HashMap<>();
-            Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds, cfColorsMap);
-            for (int i = 0; i < result.getRecords().size(); i++) {
-                Long issueId = result.getRecords().get(i).getId();
-                Map<String, String> cfValues = cfValuesMap.get(issueId);
-                if (cfValues != null && !cfValues.isEmpty()) {
-                    voList.get(i).setCustomFieldValues(cfValues);
-                }
-                Map<String, String> cfColors = cfColorsMap.get(issueId);
-                if (cfColors != null && !cfColors.isEmpty()) {
-                    voList.get(i).setCustomFieldColors(cfColors);
-                }
-            }
-        }
-
-        PageResult<IssueVO> pageResult = new PageResult<>(voList, result.getTotal(),
-                (int) result.getCurrent(), (int) result.getSize());
-        return R.ok(pageResult);
+        return R.ok(issueService.listWithDetails(query));
     }
 
     @GetMapping("/{id}")
@@ -269,7 +158,7 @@ public class IssueController {
         // WIP 限制预检查（仅 status 操作）
         if ("status".equals(dto.getOperation()) && dto.getStatusId() != null
                 && !Boolean.TRUE.equals(dto.getForceWip())) {
-            String wipWarning = checkBatchWipLimit(dto.getIssueIds(), dto.getStatusId());
+            String wipWarning = issueService.checkBatchWipLimit(dto.getIssueIds(), dto.getStatusId());
             if (wipWarning != null) {
                 return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, wipWarning);
             }
@@ -373,33 +262,17 @@ public class IssueController {
             return R.fail(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
         }
 
-        // WIP 限制校验：查询目标状态在该项目的看板列配置
-        if (!Boolean.TRUE.equals(dto.getForceWip())) {
-            BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
-                    new LambdaQueryWrapper<BoardColumnConfig>()
-                            .eq(BoardColumnConfig::getProjectId, issue.getProjectId())
-                            .eq(BoardColumnConfig::getStatusId, dto.getStatusId()));
-            if (columnConfig != null && columnConfig.getWipMax() != null) {
-                long currentCount = issueMapper.selectCount(
-                        new LambdaQueryWrapper<Issue>()
-                                .eq(Issue::getProjectId, issue.getProjectId())
-                                .eq(Issue::getStatusId, dto.getStatusId()));
-                if (currentCount >= columnConfig.getWipMax()) {
-                    String message = String.format("目标列已达到 WIP 上限（%d/%d），确定要继续移入吗？",
-                            currentCount, columnConfig.getWipMax());
-                    return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, message);
-                }
-            }
-        }
+        // WIP 限制 + 关闭前置检查（业务逻辑在 Service 层）
+        IssueService.TransitPreCheckResult preCheck = issueService.checkTransitPreConditions(
+                issue, dto.getStatusId(),
+                Boolean.TRUE.equals(dto.getForceWip()),
+                Boolean.TRUE.equals(dto.getForce()));
 
-        // 关闭状态时的前置检查链（非强制模式下返回警告）
-        IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
-        if (targetStatus != null && targetStatus.getIsClosed() && !Boolean.TRUE.equals(dto.getForce())) {
-            List<String> warnings = closePreCheckChain.execute(issue);
-            if (!warnings.isEmpty()) {
-                String message = "此工单" + String.join("，且", warnings) + "，确定要强制关闭吗？";
-                return R.fail(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, message);
-            }
+        if (preCheck.wipWarning() != null) {
+            return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, preCheck.wipWarning());
+        }
+        if (preCheck.closeWarning() != null) {
+            return R.fail(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
         }
 
         // Controller 已完成工作流校验，传入 skipWorkflowCheck=true 避免 Service 重复校验
@@ -436,23 +309,13 @@ public class IssueController {
         // 并发修改检测：检查该工单在状态变更之后是否有其他人做过修改
         Issue currentIssue = issueService.getById(id);
         if (currentIssue.getUpdatedBy() != null && !currentUserId.equals(currentIssue.getUpdatedBy())) {
-            // 如果最后修改人不是自己，说明有人在中间做了修改
             if (currentIssue.getUpdatedAt() != null && currentIssue.getUpdatedAt().isAfter(lastStatusChange.getCreatedAt())) {
                 throw new BusinessException(ErrorCode.CONFLICT, "工单已被其他人修改，无法撤销");
             }
         }
 
-        // 验证目标状态名称与上一次变更的旧状态一致
-        IssueStatus targetStatus = issueStatusMapper.selectById(dto.getStatusId());
-        if (targetStatus == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "目标状态不存在");
-        }
-        // 比较时兼容 name（英文）和 localizedName（中文）——活动记录可能存的是英文或中文
-        String oldValue = lastStatusChange.getOldValue();
-        if (!targetStatus.getName().equals(oldValue) && !targetStatus.getLocalizedName().equals(oldValue)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "撤销操作只能回退到上一个状态（" + lastStatusChange.getOldValue() + "），不允许任意跳转");
-        }
+        // 验证目标状态名称与上一次变更的旧状态一致（业务校验在 Service 层）
+        issueService.validateUndoTargetStatus(dto.getStatusId(), lastStatusChange);
 
         // 目标状态已验证为上一个状态，跳过工作流校验执行撤销
         ActionExecutionResult actionResult = issueService.transitStatusSkipWorkflow(id, dto.getStatusId(), "撤销状态变更");
@@ -587,51 +450,5 @@ public class IssueController {
                                  @Valid @RequestBody com.trackflow.issue.dto.MoveIssueDTO dto) {
         Issue moved = issueService.moveToProject(id, dto);
         return R.ok(issueService.getDetail(moved.getId()));
-    }
-
-    // ========== WIP 限制内部方法 ==========
-
-    /**
-     * 批量状态转换的 WIP 限制预检查。
-     * 按项目分组统计：移入后是否会超出目标列 WIP 上限。
-     *
-     * @return 超限警告信息；null 表示不超限或目标列无 WIP 配置
-     */
-    private String checkBatchWipLimit(List<Long> issueIds, Long targetStatusId) {
-        // 查询所有涉及的 issue，按项目分组
-        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
-        if (issues.isEmpty()) return null;
-
-        // 按项目分组，只统计会真正移入目标状态的（排除已经在目标状态的）
-        Map<Long, Long> projectMoveInCount = issues.stream()
-                .filter(i -> !targetStatusId.equals(i.getStatusId()))
-                .collect(Collectors.groupingBy(Issue::getProjectId, Collectors.counting()));
-
-        if (projectMoveInCount.isEmpty()) return null;
-
-        // 对每个项目检查 WIP 限制
-        List<String> warnings = new ArrayList<>();
-        for (Map.Entry<Long, Long> entry : projectMoveInCount.entrySet()) {
-            Long projectId = entry.getKey();
-            long moveInCount = entry.getValue();
-
-            BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
-                    new LambdaQueryWrapper<BoardColumnConfig>()
-                            .eq(BoardColumnConfig::getProjectId, projectId)
-                            .eq(BoardColumnConfig::getStatusId, targetStatusId));
-            if (columnConfig == null || columnConfig.getWipMax() == null) continue;
-
-            long currentCount = issueMapper.selectCount(
-                    new LambdaQueryWrapper<Issue>()
-                            .eq(Issue::getProjectId, projectId)
-                            .eq(Issue::getStatusId, targetStatusId));
-            long afterCount = currentCount + moveInCount;
-            if (afterCount > columnConfig.getWipMax()) {
-                warnings.add(String.format("项目中目标列将达到 %d/%d", afterCount, columnConfig.getWipMax()));
-            }
-        }
-
-        if (warnings.isEmpty()) return null;
-        return "批量操作将超出 WIP 上限（" + String.join("；", warnings) + "），确定要继续吗？";
     }
 }

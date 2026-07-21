@@ -78,6 +78,8 @@ public class IssueService {
     private final ApplicationEventPublisher eventPublisher;
     private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
     private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
+    private final com.trackflow.board.mapper.BoardColumnConfigMapper boardColumnConfigMapper;
+    private final com.trackflow.issue.service.precheck.ClosePreCheckChain closePreCheckChain;
 
     /**
      * 创建 Issue
@@ -304,6 +306,250 @@ public class IssueService {
 
         wrapper.orderByDesc("updated_at");
         return issueMapper.selectPage(query.toPage(), wrapper);
+    }
+
+    /**
+     * 工单列表查询（带关联数据填充）。
+     * 在 listByQuery 基础上批量填充用户名/头像、状态名/颜色、Sprint名、子任务进度、自定义字段值。
+     */
+    public PageResult<IssueVO> listWithDetails(IssueQuery query) {
+        Page<Issue> result = listByQuery(query);
+        List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
+
+        fillUserInfo(result.getRecords(), voList);
+        fillChildProgress(result.getRecords(), voList);
+        fillStatusInfo(result.getRecords(), voList);
+        fillSprintInfo(result.getRecords(), voList);
+        fillCustomFieldValues(result.getRecords(), voList);
+
+        return new PageResult<>(voList, result.getTotal(),
+                (int) result.getCurrent(), (int) result.getSize());
+    }
+
+    /**
+     * 批量填充 assigneeName/assigneeAvatarUrl/reporterName
+     */
+    private void fillUserInfo(List<Issue> issues, List<IssueVO> voList) {
+        Set<Long> userIds = new java.util.HashSet<>();
+        for (Issue issue : issues) {
+            if (issue.getAssigneeId() != null) userIds.add(issue.getAssigneeId());
+            if (issue.getReporterId() != null) userIds.add(issue.getReporterId());
+        }
+        if (userIds.isEmpty()) return;
+
+        Map<Long, com.trackflow.system.entity.SysUser> userMap = sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.trackflow.system.entity.SysUser::getId, u -> u, (a, b) -> a));
+
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            if (issue.getAssigneeId() != null) {
+                com.trackflow.system.entity.SysUser user = userMap.get(issue.getAssigneeId());
+                if (user != null) {
+                    voList.get(i).setAssigneeName(user.getDisplayName());
+                    voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
+                }
+            }
+            if (issue.getReporterId() != null) {
+                com.trackflow.system.entity.SysUser user = userMap.get(issue.getReporterId());
+                if (user != null) {
+                    voList.get(i).setReporterName(user.getDisplayName());
+                }
+            }
+        }
+    }
+
+    /**
+     * 填充子任务进度字段（childCount / childClosedCount）
+     */
+    private void fillChildProgress(List<Issue> issues, List<IssueVO> voList) {
+        for (int i = 0; i < issues.size(); i++) {
+            voList.get(i).setChildCount(issues.get(i).getChildCount());
+            voList.get(i).setChildClosedCount(issues.get(i).getChildClosedCount());
+        }
+    }
+
+    /**
+     * 批量填充 statusName/statusColor（status 表数据极少，全量缓存查出）
+     */
+    private void fillStatusInfo(List<Issue> issues, List<IssueVO> voList) {
+        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
+                .collect(java.util.stream.Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            if (issue.getStatusId() != null) {
+                IssueStatus status = statusMap.get(issue.getStatusId());
+                if (status != null) {
+                    voList.get(i).setStatusName(status.getName());
+                    voList.get(i).setStatusColor(status.getColor());
+                }
+            }
+        }
+    }
+
+    /**
+     * 批量填充 sprintName（仅查询用到的 Sprint）
+     */
+    private void fillSprintInfo(List<Issue> issues, List<IssueVO> voList) {
+        Set<Long> sprintIds = new java.util.HashSet<>();
+        for (Issue issue : issues) {
+            if (issue.getSprintId() != null) sprintIds.add(issue.getSprintId());
+        }
+        if (sprintIds.isEmpty()) return;
+
+        Map<Long, com.trackflow.sprint.entity.Sprint> sprintMap = sprintMapper.selectBatchIds(sprintIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.trackflow.sprint.entity.Sprint::getId, s -> s, (a, b) -> a));
+
+        for (int i = 0; i < issues.size(); i++) {
+            Issue issue = issues.get(i);
+            if (issue.getSprintId() != null) {
+                com.trackflow.sprint.entity.Sprint sprint = sprintMap.get(issue.getSprintId());
+                if (sprint != null) {
+                    voList.get(i).setSprintName(sprint.getName());
+                }
+            }
+        }
+    }
+
+    /**
+     * 批量填充自定义字段展示值和颜色
+     */
+    private void fillCustomFieldValues(List<Issue> issues, List<IssueVO> voList) {
+        List<Long> issueIds = issues.stream().map(Issue::getId).toList();
+        if (issueIds.isEmpty()) return;
+
+        Map<Long, Map<String, String>> cfColorsMap = new java.util.HashMap<>();
+        Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds, cfColorsMap);
+
+        for (int i = 0; i < issues.size(); i++) {
+            Long issueId = issues.get(i).getId();
+            Map<String, String> cfValues = cfValuesMap.get(issueId);
+            if (cfValues != null && !cfValues.isEmpty()) {
+                voList.get(i).setCustomFieldValues(cfValues);
+            }
+            Map<String, String> cfColors = cfColorsMap.get(issueId);
+            if (cfColors != null && !cfColors.isEmpty()) {
+                voList.get(i).setCustomFieldColors(cfColors);
+            }
+        }
+    }
+
+    /**
+     * WIP 限制校验：检查单个工单的状态转换是否会超出目标列 WIP 上限。
+     *
+     * @return 超限警告信息；null 表示不超限或目标列无 WIP 配置
+     */
+    public String checkWipLimit(Long projectId, Long targetStatusId) {
+        com.trackflow.board.entity.BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
+                new LambdaQueryWrapper<com.trackflow.board.entity.BoardColumnConfig>()
+                        .eq(com.trackflow.board.entity.BoardColumnConfig::getProjectId, projectId)
+                        .eq(com.trackflow.board.entity.BoardColumnConfig::getStatusId, targetStatusId));
+        if (columnConfig == null || columnConfig.getWipMax() == null) return null;
+
+        long currentCount = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .eq(Issue::getStatusId, targetStatusId));
+        if (currentCount >= columnConfig.getWipMax()) {
+            return String.format("目标列已达到 WIP 上限（%d/%d），确定要继续移入吗？",
+                    currentCount, columnConfig.getWipMax());
+        }
+        return null;
+    }
+
+    /**
+     * 批量状态转换的 WIP 限制预检查。
+     * 按项目分组统计：移入后是否会超出目标列 WIP 上限。
+     *
+     * @return 超限警告信息；null 表示不超限或目标列无 WIP 配置
+     */
+    public String checkBatchWipLimit(List<Long> issueIds, Long targetStatusId) {
+        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
+        if (issues.isEmpty()) return null;
+
+        // 按项目分组，只统计会真正移入目标状态的（排除已经在目标状态的）
+        Map<Long, Long> projectMoveInCount = issues.stream()
+                .filter(i -> !targetStatusId.equals(i.getStatusId()))
+                .collect(java.util.stream.Collectors.groupingBy(Issue::getProjectId, java.util.stream.Collectors.counting()));
+
+        if (projectMoveInCount.isEmpty()) return null;
+
+        List<String> warnings = new java.util.ArrayList<>();
+        for (Map.Entry<Long, Long> entry : projectMoveInCount.entrySet()) {
+            Long projectId = entry.getKey();
+            long moveInCount = entry.getValue();
+
+            com.trackflow.board.entity.BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
+                    new LambdaQueryWrapper<com.trackflow.board.entity.BoardColumnConfig>()
+                            .eq(com.trackflow.board.entity.BoardColumnConfig::getProjectId, projectId)
+                            .eq(com.trackflow.board.entity.BoardColumnConfig::getStatusId, targetStatusId));
+            if (columnConfig == null || columnConfig.getWipMax() == null) continue;
+
+            long currentCount = issueMapper.selectCount(
+                    new LambdaQueryWrapper<Issue>()
+                            .eq(Issue::getProjectId, projectId)
+                            .eq(Issue::getStatusId, targetStatusId));
+            long afterCount = currentCount + moveInCount;
+            if (afterCount > columnConfig.getWipMax()) {
+                warnings.add(String.format("项目中目标列将达到 %d/%d", afterCount, columnConfig.getWipMax()));
+            }
+        }
+
+        if (warnings.isEmpty()) return null;
+        return "批量操作将超出 WIP 上限（" + String.join("；", warnings) + "），确定要继续吗？";
+    }
+
+    /**
+     * 状态转换前置校验（WIP 限制 + 关闭前置检查）。
+     * Controller 调用此方法获取警告信息，由 Controller 决定返回给前端让用户确认。
+     *
+     * @return 警告信息列表（空表示无需确认，可直接转换）
+     */
+    public record TransitPreCheckResult(String wipWarning, String closeWarning) {
+        public boolean hasWarnings() {
+            return wipWarning != null || closeWarning != null;
+        }
+    }
+
+    public TransitPreCheckResult checkTransitPreConditions(Issue issue, Long targetStatusId, boolean forceWip, boolean forceClose) {
+        // WIP 限制校验
+        String wipWarning = null;
+        if (!forceWip) {
+            wipWarning = checkWipLimit(issue.getProjectId(), targetStatusId);
+        }
+
+        // 关闭状态前置检查
+        String closeWarning = null;
+        if (!forceClose) {
+            IssueStatus targetStatus = statusMapper.selectById(targetStatusId);
+            if (targetStatus != null && targetStatus.getIsClosed()) {
+                List<String> warnings = closePreCheckChain.execute(issue);
+                if (!warnings.isEmpty()) {
+                    closeWarning = "此工单" + String.join("，且", warnings) + "，确定要强制关闭吗？";
+                }
+            }
+        }
+
+        return new TransitPreCheckResult(wipWarning, closeWarning);
+    }
+
+    /**
+     * 撤销状态转换时验证目标状态是否为上次变更的旧状态。
+     *
+     * @throws BusinessException 如果目标状态不存在或不匹配
+     */
+    public void validateUndoTargetStatus(Long targetStatusId, IssueActivity lastStatusChange) {
+        IssueStatus targetStatus = statusMapper.selectById(targetStatusId);
+        if (targetStatus == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "目标状态不存在");
+        }
+        String oldValue = lastStatusChange.getOldValue();
+        if (!targetStatus.getName().equals(oldValue) && !targetStatus.getLocalizedName().equals(oldValue)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "撤销操作只能回退到上一个状态（" + lastStatusChange.getOldValue() + "），不允许任意跳转");
+        }
     }
 
     private void applyFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
