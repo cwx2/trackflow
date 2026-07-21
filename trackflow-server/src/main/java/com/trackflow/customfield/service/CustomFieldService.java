@@ -80,6 +80,8 @@ public class CustomFieldService {
         entity.setPosition(position);
         entity.setIsMulti("list".equals(dto.getFieldFormat()) && Boolean.TRUE.equals(dto.getIsMulti()));
         entity.setIsHiddenInList(Boolean.TRUE.equals(dto.getIsHiddenInList()));
+        entity.setAliases(dto.getAliases());
+        entity.setIsPrivate(Boolean.TRUE.equals(dto.getIsPrivate()));
         try {
             definitionMapper.insert(entity);
         } catch (DataIntegrityViolationException ex) {
@@ -172,6 +174,8 @@ public class CustomFieldService {
             }
         }
         if (dto.getIsHiddenInList() != null) entity.setIsHiddenInList(dto.getIsHiddenInList());
+        if (dto.getAliases() != null) entity.setAliases(dto.getAliases());
+        if (dto.getIsPrivate() != null) entity.setIsPrivate(dto.getIsPrivate());
         try {
             definitionMapper.updateById(entity);
         } catch (DataIntegrityViolationException ex) {

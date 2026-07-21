@@ -42,4 +42,10 @@ public class CustomFieldDefinition extends BaseEntity {
 
     /** 是否在工单列表的默认可选列中隐藏（管理员控制默认可见性） */
     private Boolean isHiddenInList;
+
+    /** 字段别名（逗号分隔），用户在搜索和命令中可用别名替代字段全名 */
+    private String aliases;
+
+    /** 是否为私有字段（仅拥有对应权限的用户可查看/编辑） */
+    private Boolean isPrivate;
 }

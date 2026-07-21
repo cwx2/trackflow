@@ -20,6 +20,10 @@ public class CustomFieldDefinitionVO {
     private Integer position;
     /** 是否在工单列表中隐藏（管理员设置） */
     private Boolean isHiddenInList;
+    /** 字段别名（逗号分隔），用户在搜索和命令中可用别名替代字段全名 */
+    private String aliases;
+    /** 是否为私有字段（仅拥有对应权限的用户可查看/编辑） */
+    private Boolean isPrivate;
     private List<CustomFieldOptionVO> options;
     private List<String> projectIds;
     private List<String> issueTypes;

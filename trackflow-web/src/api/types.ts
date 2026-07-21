@@ -540,6 +540,10 @@ export interface CustomFieldDefinitionVO {
   isMulti: boolean
   /** 是否在工单列表的默认列选择器中隐藏 */
   isHiddenInList: boolean
+  /** 字段别名（逗号分隔），用于搜索时字段名匹配 */
+  aliases?: string | null
+  /** 是否为私有字段 */
+  isPrivate: boolean
   defaultValue?: string
   minLength: number
   maxLength: number
