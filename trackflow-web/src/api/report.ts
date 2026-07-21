@@ -10,6 +10,8 @@ export interface ReportDefinitionVO {
   shared: boolean
   isSystem: boolean
   createdBy: string
+  /** 报表创建者显示名称 */
+  ownerDisplayName?: string
   shareCount: number
   /** 当前用户是否收藏了该报表 */
   favorited: boolean

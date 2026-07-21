@@ -115,7 +115,21 @@ public class ReportService {
         List<Long> reportIds = reports.stream().map(ReportDefinition::getId).collect(Collectors.toList());
         Map<Long, Integer> shareCountMap = getShareCountMap(reportIds);
         Set<Long> favoriteIds = getUserFavoriteReportIds(userId);
-        return new ReportListMetadata(reports, shareCountMap, favoriteIds);
+        Map<Long, String> ownerNameMap = getOwnerNameMap(reports);
+        return new ReportListMetadata(reports, shareCountMap, favoriteIds, ownerNameMap);
+    }
+
+    /**
+     * 批量获取报表创建者的显示名称（避免 N+1 查询）
+     */
+    private Map<Long, String> getOwnerNameMap(List<ReportDefinition> reports) {
+        Set<Long> ownerIds = reports.stream()
+                .map(ReportDefinition::getCreatedBy)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (ownerIds.isEmpty()) return Map.of();
+        return sysUserMapper.selectBatchIds(ownerIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName, (a, b) -> a));
     }
 
     /**
@@ -124,7 +138,8 @@ public class ReportService {
     public record ReportListMetadata(
             List<ReportDefinition> reports,
             Map<Long, Integer> shareCountMap,
-            Set<Long> favoriteIds
+            Set<Long> favoriteIds,
+            Map<Long, String> ownerNameMap
     ) {}
 
     /**

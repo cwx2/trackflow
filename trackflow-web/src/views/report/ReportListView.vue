@@ -95,6 +95,7 @@
         <div class="card-meta">
           <span v-if="report.shared" class="meta-shared">🔗 已共享</span>
           <span v-else-if="report.shareCount > 0" class="meta-shared">🔗 {{ report.shareCount }} 人</span>
+          <span v-if="isOtherOwner(report)" class="meta-owner">👤 {{ report.ownerDisplayName }}</span>
           <span v-if="reportData[report.id]?.calculatedAt" class="meta-calculated">
             ⏱ {{ formatRelativeTime(reportData[report.id].calculatedAt) }}
           </span>
@@ -353,6 +354,13 @@ function canShareReport(report: ReportDefinitionVO): boolean {
   if (report.isSystem) return false
   // 只有报表创建者可以管理共享
   return report.createdBy === authStore.user?.id
+}
+
+/** 判断报表是否由他人创建（用于显示创建者名称） */
+function isOtherOwner(report: ReportDefinitionVO): boolean {
+  if (!report.ownerDisplayName) return false
+  if (report.isSystem) return false
+  return report.createdBy !== authStore.user?.id
 }
 
 /** 打开共享设置弹窗 */
@@ -1191,6 +1199,10 @@ function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
 
 .meta-shared {
   color: var(--tf-accent);
+}
+
+.meta-owner {
+  color: var(--tf-text-secondary);
 }
 
 .meta-calculated {

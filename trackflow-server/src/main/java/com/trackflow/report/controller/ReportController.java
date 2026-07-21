@@ -47,13 +47,18 @@ public class ReportController {
     }
 
     /**
-     * 填充报表列表的元数据（共享数量、收藏状态）并按收藏优先+名称排序
+     * 填充报表列表的元数据（共享数量、收藏状态、创建者名称）并按收藏优先+名称排序
      */
     private void enrichAndSort(List<ReportDefinitionVO> voList, ReportService.ReportListMetadata metadata) {
         for (ReportDefinitionVO vo : voList) {
             Long reportId = Long.parseLong(vo.getId());
             vo.setShareCount(metadata.shareCountMap().getOrDefault(reportId, 0));
             vo.setFavorited(metadata.favoriteIds().contains(reportId));
+            // 填充创建者显示名称
+            if (vo.getCreatedBy() != null) {
+                Long ownerId = Long.parseLong(vo.getCreatedBy());
+                vo.setOwnerDisplayName(metadata.ownerNameMap().getOrDefault(ownerId, null));
+            }
         }
         voList.sort((a, b) -> {
             boolean aFav = Boolean.TRUE.equals(a.getFavorited());
