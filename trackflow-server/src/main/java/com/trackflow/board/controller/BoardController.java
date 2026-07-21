@@ -14,6 +14,7 @@ import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
 import com.trackflow.board.service.BoardConfigVersionService;
 import com.trackflow.board.service.BoardGeneralConfigService;
+import com.trackflow.board.service.BoardSettingsService;
 import com.trackflow.board.service.BoardSwimlaneConfigService;
 import com.trackflow.board.vo.BoardCardConfigVO;
 import com.trackflow.board.vo.BoardChartConfigVO;
@@ -25,7 +26,6 @@ import com.trackflow.common.model.R;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,16 +43,26 @@ public class BoardController {
     private final BoardGeneralConfigService boardGeneralConfigService;
     private final BoardAccessService boardAccessService;
     private final BoardConfigVersionService boardConfigVersionService;
+    private final BoardSettingsService boardSettingsService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
+     * 根据项目的 columnField 配置返回对应字段的列。
      * 需要项目查看权限 + 看板查看权限
      */
     @GetMapping("/columns")
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<List<BoardColumnVO>> getColumns(@RequestParam("projectId") Long projectId) {
         boardAccessService.checkViewAccess(projectId);
-        List<BoardColumnVO> columns = boardColumnService.getColumns(projectId);
+        // 检查 columnField 配置决定返回哪种列
+        BoardGeneralConfigVO generalConfig = boardGeneralConfigService.getGeneralConfig(projectId);
+        String columnField = generalConfig.getColumnField() != null ? generalConfig.getColumnField() : "status";
+        List<BoardColumnVO> columns;
+        if ("priority".equals(columnField)) {
+            columns = boardColumnService.getPriorityColumns(projectId);
+        } else {
+            columns = boardColumnService.getColumns(projectId);
+        }
         return R.ok(columns);
     }
 
@@ -247,27 +257,11 @@ public class BoardController {
      */
     @PutMapping("/settings")
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
-    @Transactional
     public R<Void> saveBoardSettings(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody SaveBoardSettingsDTO dto) {
         boardAccessService.checkEditAccess(projectId);
-
-        // 一次性版本检查
-        boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
-
-        // 依次保存各配置（已在同一事务中）
-        boardColumnService.saveColumns(projectId, dto.getColumns());
-        boardCardConfigService.saveCardConfig(projectId, dto.getCardConfig());
-        boardSwimlaneConfigService.saveSwimlaneConfig(projectId, dto.getSwimlaneConfig());
-        boardColumnMergeService.saveColumnMerges(projectId, dto.getColumnMerges());
-        boardGeneralConfigService.saveGeneralConfig(projectId, dto.getGeneralConfig());
-
-        // 图表配置为可选，有值时才保存
-        if (dto.getChartConfig() != null) {
-            boardChartConfigService.saveChartConfig(projectId, dto.getChartConfig());
-        }
-
+        boardSettingsService.saveAllSettings(projectId, dto);
         return R.ok();
     }
 }
