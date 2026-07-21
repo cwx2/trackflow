@@ -191,11 +191,32 @@ public class SavedQueryController {
                 .map(Issue::getId)
                 .toList();
         if (!issueIds.isEmpty()) {
-            Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds);
+            Map<Long, List<com.trackflow.customfield.vo.CustomFieldValueVO>> cfDetailsMap =
+                    customFieldService.getBatchCustomFieldDetails(issueIds);
             for (int i = 0; i < records.size(); i++) {
-                Map<String, String> cfValues = cfValuesMap.get(records.get(i).getId());
-                if (cfValues != null && !cfValues.isEmpty()) {
+                List<com.trackflow.customfield.vo.CustomFieldValueVO> details = cfDetailsMap.get(records.get(i).getId());
+                if (details != null && !details.isEmpty()) {
+                    voList.get(i).setCustomFieldDetails(details);
+
+                    // 兼容：继续填充旧的 Map 字段
+                    Map<String, String> cfValues = new java.util.HashMap<>();
+                    Map<String, String> cfColors = new java.util.HashMap<>();
+                    for (com.trackflow.customfield.vo.CustomFieldValueVO detail : details) {
+                        String cfKey = "cf_" + detail.getCustomFieldId();
+                        cfValues.put(cfKey, detail.getDisplayValue());
+                        if (detail.getColor() != null) {
+                            cfColors.put(cfKey, detail.getColor());
+                        } else if (detail.getColors() != null) {
+                            detail.getColors().stream()
+                                    .filter(java.util.Objects::nonNull)
+                                    .findFirst()
+                                    .ifPresent(c -> cfColors.put(cfKey, c));
+                        }
+                    }
                     voList.get(i).setCustomFieldValues(cfValues);
+                    if (!cfColors.isEmpty()) {
+                        voList.get(i).setCustomFieldColors(cfColors);
+                    }
                 }
             }
         }

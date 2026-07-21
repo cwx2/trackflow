@@ -230,9 +230,17 @@ export interface IssueVO {
   childClosedCount?: number
   /** 预估工时 */
   estimatedHours?: number
-  /** 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本 */
+  /** 自定义字段结构化详情，每个字段独立表达 value/values、displayValue/displayValues、color/colors */
+  customFieldDetails?: CustomFieldValueVO[]
+  /**
+   * @deprecated 使用 customFieldDetails 代替
+   * 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本
+   */
   customFieldValues?: Record<string, string>
-  /** 自定义字段颜色值，key 格式 "cf_{fieldId}"，value 为 HEX 颜色（仅有颜色的 list 类型字段） */
+  /**
+   * @deprecated 使用 customFieldDetails 代替
+   * 自定义字段颜色值，key 格式 "cf_{fieldId}"，value 为 HEX 颜色（仅有颜色的 list 类型字段）
+   */
   customFieldColors?: Record<string, string>
 }
 
@@ -251,8 +259,6 @@ export interface IssueDetailVO extends IssueVO {
   derivedSpentHours?: number
   /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
   derivedEstimatedHours?: number
-  /** 结构化自定义字段值（带字段名称和类型，用于前端渲染） */
-  customFieldDetails?: CustomFieldValueVO[]
   tags?: IssueTagVO[]
   resolvedAt?: string
   /** 创建者ID */

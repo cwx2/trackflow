@@ -632,11 +632,22 @@
 
         <!-- Custom field columns (cf_ prefix) -->
         <template #customFieldCell="{ record, column }">
-          <span
-            v-if="record.customFieldColors?.[column.dataIndex]"
-            class="cf-cell cf-badge"
-            :style="{ background: record.customFieldColors[column.dataIndex], color: '#fff' }"
-          >{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
+          <template v-if="getCustomFieldDetail(record, column.dataIndex)">
+            <span v-if="getCustomFieldDetail(record, column.dataIndex)!.isMulti" class="cf-cell cf-multi">
+              <span
+                v-for="(dv, idx) in getCustomFieldDetail(record, column.dataIndex)!.displayValues"
+                :key="idx"
+                class="cf-tag"
+                :style="getCustomFieldDetail(record, column.dataIndex)!.colors?.[idx] ? { background: getCustomFieldDetail(record, column.dataIndex)!.colors![idx]!, color: '#fff' } : {}"
+              >{{ dv }}</span>
+            </span>
+            <span
+              v-else-if="getCustomFieldDetail(record, column.dataIndex)!.color"
+              class="cf-cell cf-badge"
+              :style="{ background: getCustomFieldDetail(record, column.dataIndex)!.color!, color: '#fff' }"
+            >{{ getCustomFieldDetail(record, column.dataIndex)!.displayValue || '\u2014' }}</span>
+            <span v-else class="cf-cell">{{ getCustomFieldDetail(record, column.dataIndex)!.displayValue || '\u2014' }}</span>
+          </template>
           <span v-else class="cf-cell">{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
         </template>
 
@@ -708,7 +719,7 @@ import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
-import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/types'
+import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
@@ -1794,6 +1805,13 @@ const rowSelection = computed(() => {
 
 // a-table event handlers
 const selectedKeysArray = computed(() => [...selectedIds.value])
+
+/** 根据 column.dataIndex（格式 "cf_{fieldId}"）从 customFieldDetails 中查找对应字段详情 */
+function getCustomFieldDetail(record: any, dataIndex: string): CustomFieldValueVO | undefined {
+  if (!record.customFieldDetails || !dataIndex?.startsWith('cf_')) return undefined
+  const fieldId = dataIndex.substring(3) // 去掉 "cf_" 前缀
+  return record.customFieldDetails.find((d: CustomFieldValueVO) => d.customFieldId === fieldId)
+}
 
 function onRowClick(record: TableData) {
   if (previewMode.value === 'sidebar') {
@@ -2932,6 +2950,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 .issue-table :deep(.issue-resolved) .due-date-cell { color: var(--tf-text-quaternary); font-weight: 400; }
 .cf-cell { font-size: 12px; color: var(--tf-text-secondary); }
 .cf-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; line-height: 1.4; }
+.cf-multi { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.cf-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; line-height: 1.4; background: var(--tf-bg-elevated); color: var(--tf-text-secondary); }
 
 /* Child progress cell */
 .child-progress-cell { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }

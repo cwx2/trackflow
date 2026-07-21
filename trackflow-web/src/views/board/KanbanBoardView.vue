@@ -364,12 +364,14 @@
                 </div>
                 <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
                 <!-- M/L: custom fields -->
-                <div v-if="cardSize !== 'S' && issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0" class="card-custom-fields">
-                  <span
-                    v-for="(val, key) in getVisibleCustomFields(issue)"
-                    :key="key"
-                    class="card-cf-tag"
-                  >{{ val }}</span>
+                <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
+                  <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
+                    <template v-if="detail.isMulti && detail.displayValues">
+                      <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
+                    </template>
+                    <span v-else-if="detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
+                    <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
+                  </template>
                 </div>
                 <!-- Card metadata fields based on card config -->
                 <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
@@ -610,12 +612,14 @@
                       </div>
                       <div class="card-title" :class="`card-title--${cardSize}`">{{ issue.title }}</div>
                       <!-- M/L: custom fields -->
-                      <div v-if="cardSize !== 'S' && issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0" class="card-custom-fields">
-                        <span
-                          v-for="(val, key) in getVisibleCustomFields(issue)"
-                          :key="key"
-                          class="card-cf-tag"
-                        >{{ val }}</span>
+                      <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
+                        <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
+                          <template v-if="detail.isMulti && detail.displayValues">
+                            <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
+                          </template>
+                          <span v-else-if="detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
+                          <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
+                        </template>
                       </div>
                       <!-- Card metadata fields based on card config -->
                       <div v-if="cardSize !== 'S' && (isCardFieldVisible('dueDate') || isCardFieldVisible('sprint') || isCardFieldVisible('estimatedHours') || isCardFieldVisible('tags'))" class="card-meta-fields">
@@ -844,7 +848,20 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-/** 获取卡片可见的自定义字段（最多显示 3 个） */
+/** 检查卡片是否有可见的自定义字段 */
+function hasVisibleCustomFields(issue: IssueVO): boolean {
+  if (issue.customFieldDetails && issue.customFieldDetails.length > 0) return true
+  return !!(issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0)
+}
+
+/** 获取卡片可见的自定义字段详情（最多显示 maxFields 个） */
+function getVisibleCustomFieldDetails(issue: IssueVO) {
+  if (!issue.customFieldDetails) return []
+  const maxFields = cardSize.value === 'L' ? 4 : 2
+  return issue.customFieldDetails.slice(0, maxFields)
+}
+
+/** @deprecated 兼容旧数据格式 */
 function getVisibleCustomFields(issue: IssueVO): Record<string, string> {
   if (!issue.customFieldValues) return {}
   const entries = Object.entries(issue.customFieldValues)

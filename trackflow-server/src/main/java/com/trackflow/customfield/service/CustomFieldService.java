@@ -481,6 +481,11 @@ public class CustomFieldService {
         return displayService.getBatchDisplayValues(issueIds, colorOutMap);
     }
 
+    /** 委托给 {@link CustomFieldDisplayService} — 批量获取结构化自定义字段详情 */
+    public Map<Long, List<CustomFieldValueVO>> getBatchCustomFieldDetails(List<Long> issueIds) {
+        return displayService.getBatchCustomFieldDetails(issueIds);
+    }
+
     /** 委托给 {@link CustomFieldDisplayService} */
     public List<CustomFieldValueVO> getValuesForDisplay(Long issueId, Long projectId, String issueType) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);

@@ -75,7 +75,29 @@
         <span class="field-label">Sprint:</span>
         <span class="field-value">{{ issue.sprintName }}</span>
       </span>
-      <template v-if="issue.customFieldValues">
+      <template v-if="issue.customFieldDetails && issue.customFieldDetails.length > 0">
+        <span
+          v-for="detail in limitedCustomFieldDetails"
+          :key="detail.customFieldId"
+          class="item-field"
+        >
+          <template v-if="detail.isMulti && detail.displayValues">
+            <span
+              v-for="(dv, idx) in detail.displayValues"
+              :key="idx"
+              class="field-cf-badge"
+              :style="detail.colors?.[idx] ? { background: detail.colors[idx] } : {}"
+            >{{ dv }}</span>
+          </template>
+          <span
+            v-else-if="detail.color"
+            class="field-cf-badge"
+            :style="{ background: detail.color }"
+          >{{ detail.displayValue }}</span>
+          <span v-else class="field-value">{{ detail.displayValue }}</span>
+        </span>
+      </template>
+      <template v-else-if="issue.customFieldValues">
         <span
           v-for="(val, key) in limitedCustomFields"
           :key="key"
@@ -105,7 +127,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { IconRight, IconDown, IconLayers, IconDragDotVertical } from '@arco-design/web-vue/es/icon'
-import type { IssueVO } from '@/api/types'
+import type { IssueVO, CustomFieldValueVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
 
@@ -136,6 +158,10 @@ defineEmits<{
 }>()
 
 // Limit custom fields shown (max 4)
+const limitedCustomFieldDetails = computed((): CustomFieldValueVO[] => {
+  return (props.issue.customFieldDetails || []).slice(0, 4)
+})
+
 const limitedCustomFields = computed(() => {
   const cfv = props.issue.customFieldValues
   if (!cfv) return {}

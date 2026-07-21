@@ -447,18 +447,36 @@ public class IssueService {
         List<Long> issueIds = issues.stream().map(Issue::getId).toList();
         if (issueIds.isEmpty()) return;
 
-        Map<Long, Map<String, String>> cfColorsMap = new java.util.HashMap<>();
-        Map<Long, Map<String, String>> cfValuesMap = customFieldService.getBatchDisplayValues(issueIds, cfColorsMap);
+        // 使用结构化详情填充（支持多值字段独立渲染）
+        Map<Long, List<com.trackflow.customfield.vo.CustomFieldValueVO>> cfDetailsMap =
+                customFieldService.getBatchCustomFieldDetails(issueIds);
 
         for (int i = 0; i < issues.size(); i++) {
             Long issueId = issues.get(i).getId();
-            Map<String, String> cfValues = cfValuesMap.get(issueId);
-            if (cfValues != null && !cfValues.isEmpty()) {
+            List<com.trackflow.customfield.vo.CustomFieldValueVO> details = cfDetailsMap.get(issueId);
+            if (details != null && !details.isEmpty()) {
+                voList.get(i).setCustomFieldDetails(details);
+
+                // 兼容：继续填充旧的 Map 字段（前端逐步迁移后移除）
+                Map<String, String> cfValues = new java.util.HashMap<>();
+                Map<String, String> cfColors = new java.util.HashMap<>();
+                for (com.trackflow.customfield.vo.CustomFieldValueVO detail : details) {
+                    String cfKey = "cf_" + detail.getCustomFieldId();
+                    cfValues.put(cfKey, detail.getDisplayValue());
+                    if (detail.getColor() != null) {
+                        cfColors.put(cfKey, detail.getColor());
+                    } else if (detail.getColors() != null) {
+                        // 多值字段兼容：取第一个有效颜色
+                        detail.getColors().stream()
+                                .filter(java.util.Objects::nonNull)
+                                .findFirst()
+                                .ifPresent(c -> cfColors.put(cfKey, c));
+                    }
+                }
                 voList.get(i).setCustomFieldValues(cfValues);
-            }
-            Map<String, String> cfColors = cfColorsMap.get(issueId);
-            if (cfColors != null && !cfColors.isEmpty()) {
-                voList.get(i).setCustomFieldColors(cfColors);
+                if (!cfColors.isEmpty()) {
+                    voList.get(i).setCustomFieldColors(cfColors);
+                }
             }
         }
     }
