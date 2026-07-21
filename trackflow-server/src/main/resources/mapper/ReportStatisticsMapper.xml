@@ -680,10 +680,30 @@
             <foreach collection="params.assigneeIds" item="aid" open="(" separator="," close=")">#{aid}</foreach>
         </if>
         <if test="params.timeStart != null">
-            AND i.${params.timeField} >= #{params.timeStart}
+            <choose>
+                <when test="params.timeField == 'updated_at'">
+                    AND i.updated_at >= #{params.timeStart}
+                </when>
+                <when test="params.timeField == 'resolved_at'">
+                    AND i.resolved_at >= #{params.timeStart}
+                </when>
+                <otherwise>
+                    AND i.created_at >= #{params.timeStart}
+                </otherwise>
+            </choose>
         </if>
         <if test="params.timeEnd != null">
-            AND i.${params.timeField} &lt;= #{params.timeEnd}
+            <choose>
+                <when test="params.timeField == 'updated_at'">
+                    AND i.updated_at &lt;= #{params.timeEnd}
+                </when>
+                <when test="params.timeField == 'resolved_at'">
+                    AND i.resolved_at &lt;= #{params.timeEnd}
+                </when>
+                <otherwise>
+                    AND i.created_at &lt;= #{params.timeEnd}
+                </otherwise>
+            </choose>
         </if>
     </sql>
 
