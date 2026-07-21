@@ -2789,4 +2789,24 @@ public class CustomFieldService {
         }
         return visible;
     }
+
+    /**
+     * 根据 ID 获取自定义字段定义
+     *
+     * @param id 字段定义 ID
+     * @return 字段定义，不存在返回 null
+     */
+    public CustomFieldDefinition getDefinitionById(Long id) {
+        return definitionMapper.selectById(id);
+    }
+
+    /**
+     * 获取所有全局字段（is_for_all = true）
+     */
+    public List<CustomFieldDefinition> listGlobalFields() {
+        return definitionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getIsForAll, true)
+                        .orderByAsc(CustomFieldDefinition::getPosition));
+    }
 }

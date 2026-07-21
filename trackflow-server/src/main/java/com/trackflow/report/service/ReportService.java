@@ -366,9 +366,12 @@ public class ReportService {
         }
 
         // 类型与 groupBy 的一致性校验
+        // 注意：自定义字段分组维度(cf_*)不受类型限制——"按状态分布"报表也可以切换为按自定义字段分组
         ReportType reportType = ReportType.fromValue(type);
         if (reportType != null && reportType.getDefaultGroupBy() != null) {
-            if (groupBy != null && !groupBy.isBlank() && !groupBy.equals(reportType.getDefaultGroupBy())) {
+            if (groupBy != null && !groupBy.isBlank()
+                    && !groupBy.equals(reportType.getDefaultGroupBy())
+                    && !ReportGroupBy.isCustomFieldFormat(groupBy)) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                         "报表类型 " + type + " 的分组维度必须为 " + reportType.getDefaultGroupBy());
             }

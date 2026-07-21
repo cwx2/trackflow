@@ -715,6 +715,19 @@
     <select id="selectReportGrouped" resultType="com.trackflow.report.mapper.result.ReportGroupRow">
         SELECT
         <choose>
+            <when test="params.isCustomFieldGroupBy != null and params.isCustomFieldGroupBy">
+                <choose>
+                    <when test="params.customFieldIsListType != null and params.customFieldIsListType">
+                        COALESCE(cfo_primary.value, '未设置')
+                    </when>
+                    <when test="params.customFieldIsUserType != null and params.customFieldIsUserType">
+                        COALESCE(cfu_primary.display_name, '未设置')
+                    </when>
+                    <otherwise>
+                        COALESCE(cfv_primary.value, '未设置')
+                    </otherwise>
+                </choose>
+            </when>
             <when test="params.groupBy == 'status'">s.name</when>
             <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
             <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
@@ -732,10 +745,33 @@
         <if test="params.groupBy == 'project'">
             JOIN project p ON p.id = i.project_id
         </if>
+        <!-- 自定义字段 JOIN -->
+        <if test="params.isCustomFieldGroupBy != null and params.isCustomFieldGroupBy">
+            LEFT JOIN custom_field_value cfv_primary ON cfv_primary.issue_id = i.id AND cfv_primary.custom_field_id = #{params.customFieldId}
+            <if test="params.customFieldIsListType != null and params.customFieldIsListType">
+                LEFT JOIN custom_field_option cfo_primary ON cfo_primary.id = CAST(cfv_primary.value AS BIGINT)
+            </if>
+            <if test="params.customFieldIsUserType != null and params.customFieldIsUserType">
+                LEFT JOIN sys_user cfu_primary ON cfu_primary.id = CAST(cfv_primary.value AS BIGINT)
+            </if>
+        </if>
         WHERE i.deleted_at IS NULL
         <include refid="reportFilters"/>
         GROUP BY
         <choose>
+            <when test="params.isCustomFieldGroupBy != null and params.isCustomFieldGroupBy">
+                <choose>
+                    <when test="params.customFieldIsListType != null and params.customFieldIsListType">
+                        COALESCE(cfo_primary.value, '未设置')
+                    </when>
+                    <when test="params.customFieldIsUserType != null and params.customFieldIsUserType">
+                        COALESCE(cfu_primary.display_name, '未设置')
+                    </when>
+                    <otherwise>
+                        COALESCE(cfv_primary.value, '未设置')
+                    </otherwise>
+                </choose>
+            </when>
             <when test="params.groupBy == 'status'">s.name</when>
             <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
             <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
@@ -754,7 +790,21 @@
     <!-- 双维度交叉分组查询 -->
     <select id="selectReportCross" resultType="com.trackflow.report.mapper.result.ReportCrossRow">
         SELECT
+        <!-- 主维度 -->
         <choose>
+            <when test="params.isCustomFieldGroupBy != null and params.isCustomFieldGroupBy">
+                <choose>
+                    <when test="params.customFieldIsListType != null and params.customFieldIsListType">
+                        COALESCE(cfo_primary.value, '未设置')
+                    </when>
+                    <when test="params.customFieldIsUserType != null and params.customFieldIsUserType">
+                        COALESCE(cfu_primary.display_name, '未设置')
+                    </when>
+                    <otherwise>
+                        COALESCE(cfv_primary.value, '未设置')
+                    </otherwise>
+                </choose>
+            </when>
             <when test="params.groupBy == 'status'">s.name</when>
             <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
             <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
@@ -763,7 +813,21 @@
             <otherwise>s.name</otherwise>
         </choose>
         AS primary_label,
+        <!-- 第二维度 -->
         <choose>
+            <when test="params.isSecondCustomFieldGroupBy != null and params.isSecondCustomFieldGroupBy">
+                <choose>
+                    <when test="params.secondCustomFieldIsListType != null and params.secondCustomFieldIsListType">
+                        COALESCE(cfo_second.value, '未设置')
+                    </when>
+                    <when test="params.secondCustomFieldIsUserType != null and params.secondCustomFieldIsUserType">
+                        COALESCE(cfu_second.display_name, '未设置')
+                    </when>
+                    <otherwise>
+                        COALESCE(cfv_second.value, '未设置')
+                    </otherwise>
+                </choose>
+            </when>
             <when test="params.secondGroupBy == 'status'">s.name</when>
             <when test="params.secondGroupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
             <when test="params.secondGroupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
@@ -781,10 +845,44 @@
         <if test="params.groupBy == 'project' or params.secondGroupBy == 'project'">
             JOIN project p ON p.id = i.project_id
         </if>
+        <!-- 主维度自定义字段 JOIN -->
+        <if test="params.isCustomFieldGroupBy != null and params.isCustomFieldGroupBy">
+            LEFT JOIN custom_field_value cfv_primary ON cfv_primary.issue_id = i.id AND cfv_primary.custom_field_id = #{params.customFieldId}
+            <if test="params.customFieldIsListType != null and params.customFieldIsListType">
+                LEFT JOIN custom_field_option cfo_primary ON cfo_primary.id = CAST(cfv_primary.value AS BIGINT)
+            </if>
+            <if test="params.customFieldIsUserType != null and params.customFieldIsUserType">
+                LEFT JOIN sys_user cfu_primary ON cfu_primary.id = CAST(cfv_primary.value AS BIGINT)
+            </if>
+        </if>
+        <!-- 第二维度自定义字段 JOIN -->
+        <if test="params.isSecondCustomFieldGroupBy != null and params.isSecondCustomFieldGroupBy">
+            LEFT JOIN custom_field_value cfv_second ON cfv_second.issue_id = i.id AND cfv_second.custom_field_id = #{params.secondCustomFieldId}
+            <if test="params.secondCustomFieldIsListType != null and params.secondCustomFieldIsListType">
+                LEFT JOIN custom_field_option cfo_second ON cfo_second.id = CAST(cfv_second.value AS BIGINT)
+            </if>
+            <if test="params.secondCustomFieldIsUserType != null and params.secondCustomFieldIsUserType">
+                LEFT JOIN sys_user cfu_second ON cfu_second.id = CAST(cfv_second.value AS BIGINT)
+            </if>
+        </if>
         WHERE i.deleted_at IS NULL
         <include refid="reportFilters"/>
         GROUP BY
+        <!-- 主维度 GROUP BY -->
         <choose>
+            <when test="params.isCustomFieldGroupBy != null and params.isCustomFieldGroupBy">
+                <choose>
+                    <when test="params.customFieldIsListType != null and params.customFieldIsListType">
+                        COALESCE(cfo_primary.value, '未设置')
+                    </when>
+                    <when test="params.customFieldIsUserType != null and params.customFieldIsUserType">
+                        COALESCE(cfu_primary.display_name, '未设置')
+                    </when>
+                    <otherwise>
+                        COALESCE(cfv_primary.value, '未设置')
+                    </otherwise>
+                </choose>
+            </when>
             <when test="params.groupBy == 'status'">s.name</when>
             <when test="params.groupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
             <when test="params.groupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
@@ -793,7 +891,21 @@
             <otherwise>s.name</otherwise>
         </choose>
         ,
+        <!-- 第二维度 GROUP BY -->
         <choose>
+            <when test="params.isSecondCustomFieldGroupBy != null and params.isSecondCustomFieldGroupBy">
+                <choose>
+                    <when test="params.secondCustomFieldIsListType != null and params.secondCustomFieldIsListType">
+                        COALESCE(cfo_second.value, '未设置')
+                    </when>
+                    <when test="params.secondCustomFieldIsUserType != null and params.secondCustomFieldIsUserType">
+                        COALESCE(cfu_second.display_name, '未设置')
+                    </when>
+                    <otherwise>
+                        COALESCE(cfv_second.value, '未设置')
+                    </otherwise>
+                </choose>
+            </when>
             <when test="params.secondGroupBy == 'status'">s.name</when>
             <when test="params.secondGroupBy == 'priority'">COALESCE(i.priority, 'Normal')</when>
             <when test="params.secondGroupBy == 'type'">COALESCE(i.issue_type, 'Task')</when>
