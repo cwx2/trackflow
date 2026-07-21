@@ -18,9 +18,58 @@
         </a-input>
       </div>
 
+      <!-- Drafts section (YouTrack style) -->
+      <div v-if="hasDrafts || true" class="query-group drafts-group">
+        <div class="group-header" @click="toggleGroup('drafts')">
+          <span class="group-arrow">{{ expandedGroups.has('drafts') ? '▾' : '▸' }}</span>
+          <span class="group-title">草稿</span>
+          <span v-if="draftCount > 0" class="draft-count-badge">{{ draftCount }}</span>
+          <a-button
+            v-if="canCreateIssueGlobal"
+            type="text" size="mini" class="group-action-btn"
+            title="新建工单"
+            @click.stop="openDraftCreate"
+          >
+            <template #icon><icon-plus :size="12" /></template>
+          </a-button>
+        </div>
+        <div v-if="expandedGroups.has('drafts')" class="group-items">
+          <div v-if="draftList.length === 0" class="empty-drafts">
+            <span class="empty-icon">📝</span>
+            <span class="empty-text">暂无草稿</span>
+            <span class="empty-hint">取消创建工单时，已填写的内容会自动保存为草稿</span>
+          </div>
+          <a-dropdown
+            v-for="d in draftList"
+            :key="d.id"
+            trigger="contextMenu"
+            position="br"
+          >
+            <div class="query-item draft-item" @click="openDraft(d)">
+              <span class="query-icon">📄</span>
+              <span class="query-name draft-name">{{ d.title || '无标题草稿' }}</span>
+              <span class="draft-time">{{ formatDraftTime(d.updatedAt) }}</span>
+            </div>
+            <template #content>
+              <a-doption @click="openDraft(d)">
+                <template #icon><icon-edit /></template>
+                继续编辑
+              </a-doption>
+              <a-doption class="query-ctx-delete" @click="handleDeleteDraft(d.id)">
+                <template #icon><icon-delete /></template>
+                删除草稿
+              </a-doption>
+            </template>
+          </a-dropdown>
+          <div v-if="draftList.length > 0" class="drafts-actions">
+            <a-link type="text" @click="handleDeleteAllDrafts" class="delete-all-link">删除所有草稿</a-link>
+          </div>
+        </div>
+      </div>
+
       <div class="query-group">
         <div class="group-header" @click="toggleGroup('projects')">
-          <span class="group-arrow">{{ expandedGroups.has('projects') ? '\u25BE' : '\u25B8' }}</span>
+          <span class="group-arrow">{{ expandedGroups.has('projects') ? '▾' : '▸' }}</span>
           <span class="group-title">项目</span>
         </div>
         <div v-if="expandedGroups.has('projects')" class="group-items">
@@ -421,6 +470,12 @@
       </div>
 
       <!-- Issue table (Table layout mode) -->
+      <!-- Real-time update notification -->
+      <div v-if="hasNewUpdates" class="realtime-update-bar" @click="onRefreshForUpdates">
+        <span class="realtime-update-text">有新的工单变更，点击刷新</span>
+        <icon-loading v-if="loading" class="realtime-update-icon" />
+      </div>
+
       <a-table
         v-if="isTableLayout"
         class="issue-table"
@@ -626,7 +681,7 @@
     </section>
 
     <!-- Create issue panel -->
-    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" @created="refreshList" />
+    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" :draft-id="activeDraftId" @created="onCreatePanelCreated" @cancel-with-data="onCreatePanelCancel" />
 
     <!-- Sidebar preview drawer -->
     <IssuePreviewDrawer
@@ -657,7 +712,10 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/ty
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
-import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder } from './composables'
+import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
+import type { IssueDraft } from './composables'
+import { useIssueProjectSubscription } from '@/composables/useWebSocket'
+import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import RecentIssuesPanel from './components/RecentIssuesPanel.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -739,8 +797,49 @@ const projectList = ref<any[]>([])
 const activeQueryId = ref<string | null>(null)
 const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
 const activeQueryObj = ref<any>(null) // Track full active query object for chip-click
-const expandedGroups = reactive(new Set<string>(['saved', 'projects']))
+const expandedGroups = reactive(new Set<string>(['saved', 'projects', 'drafts']))
 const panelSearch = ref('')
+
+// ===== WebSocket 实时更新 =====
+// 新变更通知指示器（当有对列表外的更新时提示用户）
+const hasNewUpdates = ref(false)
+
+// 订阅当前项目的 Issue 变更事件
+useIssueProjectSubscription(
+  () => activeProjectId.value,
+  (event: IssueRealtimeEvent) => {
+    // 忽略自己的操作（已在本地更新）
+    const currentUserId = authStore.user?.id
+    if (currentUserId && String(event.operatorId) === String(currentUserId)) return
+
+    if (event.action === 'FIELD_UPDATED') {
+      // 更新列表中对应工单的字段
+      const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
+      if (idx !== -1) {
+        // 在列表中找到 → 就地更新字段（YouTrack 行为：不改变排序和筛选位置）
+        const patch: Partial<IssueVO> = {}
+        for (const [key, value] of Object.entries(event.changes)) {
+          ;(patch as any)[key] = value
+        }
+        updateLocalIssue(String(event.issueId), patch)
+      } else {
+        // 不在当前列表中 → 不添加（YouTrack 行为：新匹配的不自动加入）
+        hasNewUpdates.value = true
+      }
+    } else if (event.action === 'CREATED') {
+      // 新工单创建：不自动加入列表，只显示通知提示
+      hasNewUpdates.value = true
+    } else if (event.action === 'DELETED') {
+      // 工单被删除：从列表中移除
+      const idx = issues.value.findIndex(i => String(i.id) === String(event.issueId))
+      if (idx !== -1) {
+        issues.value.splice(idx, 1)
+        totalIssues.value = Math.max(0, totalIssues.value - 1)
+      }
+    }
+  }
+)
+// ===== End WebSocket =====
 
 // Manual order computed (depends on activeProjectId and activeQueryId)
 const isDraggable = computed(() => {
@@ -1449,6 +1548,70 @@ const quickForm = reactive({
   priority: 'Normal'
 })
 
+// Drafts
+const { draftList, draftCount, hasDrafts, saveDraft, deleteDraft, deleteAllDrafts, getDraft } = useDrafts()
+const activeDraftId = ref<string | null>(null)
+
+function formatDraftTime(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
+  return new Date(timestamp).toLocaleDateString()
+}
+
+function openDraftCreate() {
+  activeDraftId.value = null
+  showCreatePanel.value = true
+}
+
+function openDraft(draft: IssueDraft) {
+  activeDraftId.value = draft.id
+  showCreatePanel.value = true
+}
+
+function handleDeleteDraft(draftId: string) {
+  deleteDraft(draftId)
+  Message.success('草稿已删除')
+}
+
+function handleDeleteAllDrafts() {
+  Modal.confirm({
+    title: '删除所有草稿',
+    content: `确定要删除全部 ${draftCount.value} 个草稿吗？此操作不可撤销。`,
+    okText: '全部删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    onOk: () => {
+      deleteAllDrafts()
+      Message.success('所有草稿已删除')
+    }
+  })
+}
+
+/**
+ * 创建面板关闭时自动保存草稿
+ * IssueCreatePanel 的 @cancel 事件会调用此方法
+ */
+function onCreatePanelCancel(formData: any) {
+  if (formData && (formData.title?.trim() || formData.description?.trim())) {
+    saveDraft(formData, activeDraftId.value || undefined)
+    Message.info('已保存为草稿')
+  }
+  activeDraftId.value = null
+}
+
+function onCreatePanelCreated() {
+  // 如果从草稿创建成功，删除该草稿
+  if (activeDraftId.value) {
+    deleteDraft(activeDraftId.value)
+    activeDraftId.value = null
+  }
+  refreshList()
+}
+
 // Apply Command dialog
 const showCommandDialog = ref(false)
 
@@ -2107,6 +2270,11 @@ function buildFilters() {
 }
 function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames() }) }
 
+function onRefreshForUpdates() {
+  hasNewUpdates.value = false
+  refreshList()
+}
+
 /** 预加载当前列表中涉及到的 sprint 名称 */
 async function preloadSprintNames() {
   // 用户无 sprint:view 权限时跳过，避免触发 403
@@ -2611,6 +2779,20 @@ onBeforeRouteLeave((_to, _from, next) => {
 .query-icon { font-size: 12px; flex-shrink: 0; margin-right: 4px; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
 
+/* Drafts section */
+.drafts-group { border-bottom: 1px solid var(--tf-border); padding-bottom: 4px; margin-bottom: 4px; }
+.draft-count-badge { font-size: 10px; color: var(--tf-text-tertiary); background: var(--tf-bg-elevated); padding: 1px 5px; border-radius: 8px; margin-left: 4px; }
+.draft-item { position: relative; }
+.draft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-time { font-size: 10px; color: var(--tf-text-quaternary); flex-shrink: 0; margin-left: 4px; }
+.empty-drafts { padding: 12px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.empty-drafts .empty-icon { font-size: 20px; opacity: 0.5; }
+.empty-drafts .empty-text { font-size: 12px; color: var(--tf-text-tertiary); }
+.empty-drafts .empty-hint { font-size: 11px; color: var(--tf-text-quaternary); line-height: 1.4; }
+.drafts-actions { padding: 4px 8px; text-align: center; }
+.delete-all-link { font-size: 11px; color: var(--tf-text-tertiary); }
+.delete-all-link:hover { color: var(--color-danger-light-4); }
+
 /* Icon picker */
 .icon-picker { display: flex; flex-wrap: wrap; gap: 6px; }
 .icon-option { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--tf-border); transition: all 0.15s; }
@@ -2796,4 +2978,30 @@ onBeforeRouteLeave((_to, _from, next) => {
 /* Preview mode toggle dropdown active item */
 .doption-active { color: var(--tf-accent) !important; font-weight: 500; }
 .doption-active::before { content: '✓ '; }
+
+/* Real-time update notification bar */
+.realtime-update-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--color-primary-light-1, rgba(88, 166, 255, 0.1));
+  border: 1px solid var(--tf-accent, #58a6ff);
+  border-radius: 4px;
+  margin: 0 0 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.realtime-update-bar:hover {
+  background: var(--color-primary-light-2, rgba(88, 166, 255, 0.15));
+}
+.realtime-update-text {
+  font-size: 13px;
+  color: var(--tf-accent, #58a6ff);
+  font-weight: 500;
+}
+.realtime-update-icon {
+  color: var(--tf-accent, #58a6ff);
+}
 </style>

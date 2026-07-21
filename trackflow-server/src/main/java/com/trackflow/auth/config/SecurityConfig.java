@@ -72,7 +72,8 @@ public class SecurityConfig {
                     "/swagger-resources/**",
                     "/actuator/health",
                     "/favicon.ico",
-                    "/api/v1/auth/backchannel-logout"
+                    "/api/v1/auth/backchannel-logout",
+                    "/ws/**"
                 ).permitAll()
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().denyAll()

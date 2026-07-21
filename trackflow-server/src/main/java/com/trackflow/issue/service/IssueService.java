@@ -720,6 +720,7 @@ public class IssueService {
         // 归档项目不允许删除工单
         projectService.assertProjectActive(issue.getProjectId());
 
+        Long currentUserId = SecurityUtils.getCurrentUserId();
         Long parentId = issue.getParentId();
         Long projectId = issue.getProjectId();
 
@@ -730,9 +731,12 @@ public class IssueService {
         mutedThreadService.deleteByResource("issue", id);
 
         // 先记录活动（deleteById 后逻辑删除字段被填充，查询会过滤掉）
-        recordActivity(id, SecurityUtils.getCurrentUserId(), "deleted", null, null, null);
+        recordActivity(id, currentUserId, "deleted", null, null, null);
         // 使用 MyBatis-Plus 逻辑删除（自动设置 deleted_at = NOW()）
         issueMapper.deleteById(id);
+
+        // 实时推送删除事件 — 通知正在查看列表/详情的用户
+        eventPublisher.publishEvent(new IssueNotificationEvent.Deleted(issue, currentUserId));
 
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(projectId, "issue_deleted"));

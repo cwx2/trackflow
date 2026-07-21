@@ -113,4 +113,12 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
      * @param operatorId 操作者 ID
      */
     record Restored(Issue issue, Long operatorId) implements IssueNotificationEvent {}
+
+    /**
+     * 工单删除通知事件（用于实时推送，通知正在查看该工单的用户）。
+     *
+     * @param issue      被删除的工单（删除前的快照）
+     * @param operatorId 操作者 ID
+     */
+    record Deleted(Issue issue, Long operatorId) implements IssueNotificationEvent {}
 }

@@ -172,6 +172,8 @@ import { workItemAttributeApi } from '@/api/timeEntry'
 import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
 import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
+import { useIssueDetailSubscription } from '@/composables/useWebSocket'
+import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
 import { useRecentIssues } from './composables/useRecentIssues'
@@ -308,6 +310,88 @@ const sprints = ref<SprintVO[]>([])
 const customFieldDefs = ref<CustomFieldDefinitionVO[]>([])
 
 const issueId = computed(() => route.params.id as string || '')
+
+// ===== WebSocket 实时更新（详情页） =====
+const hasRealtimeUpdates = ref(false)
+
+useIssueDetailSubscription(
+  () => issue.value?.id,
+  (event: IssueRealtimeEvent) => {
+    // 忽略自己的操作
+    const myUserId = authStore.user?.userId
+    if (myUserId && String(event.operatorId) === String(myUserId)) return
+
+    if (event.action === 'FIELD_UPDATED' && issue.value) {
+      // 实时更新当前工单字段
+      for (const [key, value] of Object.entries(event.changes)) {
+        ;(issue.value as any)[key] = value
+      }
+      // 如果状态变更，重新加载可用转换
+      if ('statusId' in event.changes) {
+        loadTransitions()
+      }
+      Message.info({
+        content: `${event.operatorName || '其他用户'} 更新了此工单`,
+        duration: 3000
+      })
+    } else if (event.action === 'COMMENT_ADDED') {
+      // 有新评论 → 重新加载评论和活动列表
+      loadCommentsAndActivities()
+      Message.info({
+        content: `${event.operatorName || '其他用户'} 添加了新评论`,
+        duration: 3000
+      })
+    } else if (event.action === 'ATTACHMENT_CHANGED') {
+      // 附件变更 → 重新加载附件列表
+      loadAttachments()
+    } else if (event.action === 'LINK_CHANGED') {
+      // 关联变更 → 重新加载关联列表
+      loadLinks()
+    } else if (event.action === 'DELETED') {
+      // 工单被删除 → 提示用户并导航回列表
+      Message.warning({ content: '此工单已被删除', duration: 5000 })
+      router.push({ name: 'issues' })
+    }
+  }
+)
+
+// 辅助加载函数（用于实时更新时局部刷新）
+async function loadTransitions() {
+  if (!issue.value) return
+  try {
+    const res = await issueApi.getAvailableTransitions(issue.value.id)
+    if (res.code === 0) transitions.value = res.data || []
+  } catch { /* ignore */ }
+}
+
+async function loadCommentsAndActivities() {
+  if (!issue.value) return
+  try {
+    const [commRes, actRes] = await Promise.all([
+      issueApi.listComments(issue.value.id),
+      issueApi.listActivities(issue.value.id)
+    ])
+    if (commRes.code === 0) comments.value = commRes.data || []
+    if (actRes.code === 0) activities.value = actRes.data || []
+  } catch { /* ignore */ }
+}
+
+async function loadAttachments() {
+  if (!issue.value) return
+  try {
+    const res = await issueApi.listAttachments(issue.value.id)
+    if (res.code === 0) attachments.value = res.data || []
+  } catch { /* ignore */ }
+}
+
+async function loadLinks() {
+  if (!issue.value) return
+  try {
+    const res = await issueApi.listLinks(issue.value.id)
+    if (res.code === 0) links.value = res.data || []
+  } catch { /* ignore */ }
+}
+// ===== End WebSocket =====
 
 // ============ 加载数据 ============
 onMounted(() => loadAll())
