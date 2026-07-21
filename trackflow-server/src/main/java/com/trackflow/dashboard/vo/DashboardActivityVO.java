@@ -12,6 +12,7 @@ public class DashboardActivityVO {
     private String issueTitle;
     private String userId;
     private String userName;
+    private String userAvatar;
     private String action;
     private String fieldName;
     private String oldValue;

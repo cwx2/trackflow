@@ -32,6 +32,7 @@ public class ActivityRow {
 
     // JOIN sys_user
     private String userName;
+    private String userAvatar;
 
     // JOIN issue（仅 Dashboard 查询返回）
     private String issueKey;

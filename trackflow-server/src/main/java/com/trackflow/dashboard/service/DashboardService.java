@@ -275,6 +275,7 @@ public class DashboardService {
             vo.setIssueTitle(row.getIssueTitle());
             vo.setUserId(String.valueOf(row.getUserId()));
             vo.setUserName(row.getUserName());
+            vo.setUserAvatar(row.getUserAvatar());
             vo.setAction(row.getAction());
             vo.setFieldName(row.getFieldName());
             vo.setOldValue(row.getOldValue());

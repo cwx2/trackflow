@@ -28,6 +28,10 @@
             a.display_name AS assignee_name,
             a.avatar_url AS assignee_avatar_url,
             r.display_name AS reporter_name,
+            creator.id AS created_by_id,
+            creator.display_name AS created_by_name,
+            updater.id AS updated_by_id,
+            updater.display_name AS updated_by_name,
             sp.name AS sprint_name,
             pi.issue_key AS parent_key
         FROM issue i
@@ -35,6 +39,8 @@
         LEFT JOIN issue_status s ON s.id = i.status_id
         LEFT JOIN sys_user a ON a.id = i.assignee_id
         LEFT JOIN sys_user r ON r.id = i.reporter_id
+        LEFT JOIN sys_user creator ON creator.id = i.created_by
+        LEFT JOIN sys_user updater ON updater.id = i.updated_by
         LEFT JOIN sprint sp ON sp.id = i.sprint_id
         LEFT JOIN issue pi ON pi.id = i.parent_id AND pi.deleted_at IS NULL
         WHERE i.id = #{id} AND i.deleted_at IS NULL
@@ -58,7 +64,8 @@
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
             <include refid="activity_value_columns"/>,
             a.detail, a.created_at,
-            u.display_name AS user_name
+            u.display_name AS user_name,
+            u.avatar_url AS user_avatar
         FROM issue_activity a
         LEFT JOIN sys_user u ON u.id = a.user_id
         WHERE a.issue_id = #{issueId}
@@ -74,6 +81,7 @@
             <include refid="activity_value_columns"/>,
             a.created_at,
             u.display_name AS user_name,
+            u.avatar_url AS user_avatar,
             i.issue_key, i.title AS issue_title
         FROM issue_activity a
         LEFT JOIN sys_user u ON u.id = a.user_id
@@ -94,6 +102,7 @@
             <include refid="activity_value_columns"/>,
             a.created_at,
             u.display_name AS user_name,
+            u.avatar_url AS user_avatar,
             i.issue_key, i.title AS issue_title
         FROM issue_activity a
         INNER JOIN issue i ON i.id = a.issue_id AND i.deleted_at IS NULL

@@ -26,6 +26,7 @@ export interface DashboardActivityVO {
   issueTitle: string
   userId: string
   userName: string
+  userAvatar?: string
   action: string
   fieldName?: string
   oldValue?: string

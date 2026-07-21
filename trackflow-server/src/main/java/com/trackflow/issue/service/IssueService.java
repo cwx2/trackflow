@@ -1823,6 +1823,12 @@ public class IssueService {
         vo.setCreatedAt(row.getCreatedAt());
         vo.setUpdatedAt(row.getUpdatedAt());
 
+        // 创建者/更新者信息
+        vo.setCreatedById(row.getCreatedById() != null ? String.valueOf(row.getCreatedById()) : null);
+        vo.setCreatedByName(row.getCreatedByName());
+        vo.setUpdatedById(row.getUpdatedById() != null ? String.valueOf(row.getUpdatedById()) : null);
+        vo.setUpdatedByName(row.getUpdatedByName());
+
         // 乐观锁版本号
         vo.setVersion(row.getVersion());
 
@@ -1893,6 +1899,7 @@ public class IssueService {
             vo.setIssueId(String.valueOf(row.getIssueId()));
             vo.setUserId(String.valueOf(row.getUserId()));
             vo.setUserName(row.getUserName());
+            vo.setUserAvatar(row.getUserAvatar());
             vo.setAction(row.getAction());
             vo.setFieldName(row.getFieldName());
             vo.setOldValue(row.getOldValue());

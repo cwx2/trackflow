@@ -255,6 +255,14 @@ export interface IssueDetailVO extends IssueVO {
   customFieldDetails?: CustomFieldValueVO[]
   tags?: IssueTagVO[]
   resolvedAt?: string
+  /** 创建者ID */
+  createdById?: string
+  /** 创建者名称 */
+  createdByName?: string
+  /** 更新者ID */
+  updatedById?: string
+  /** 更新者名称 */
+  updatedByName?: string
   children?: ChildIssueVO[]
   childProgress?: ChildProgressVO
   /** 类型变更导致状态自动重置时为 true（仅 update 响应中出现） */
@@ -343,6 +351,7 @@ export interface IssueActivityVO {
   issueId: string
   userId: string
   userName?: string
+  userAvatar?: string
   action: string
   fieldName?: string
   oldValue?: string

@@ -212,7 +212,10 @@
             class="activity-item"
             @click="$router.push(`/issues/${activity.issueKey}`)"
           >
-            <div class="activity-avatar">{{ (activity.userName || 'U').charAt(0) }}</div>
+            <div v-if="activity.userAvatar" class="activity-avatar">
+              <img :src="activity.userAvatar" :alt="activity.userName" class="activity-avatar-img" />
+            </div>
+            <div v-else class="activity-avatar">{{ (activity.userName || 'U').charAt(0) }}</div>
             <div class="activity-content">
               <div class="activity-text">
                 <span class="activity-user">{{ activity.userName }}</span>
@@ -1176,6 +1179,13 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.activity-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .activity-content {

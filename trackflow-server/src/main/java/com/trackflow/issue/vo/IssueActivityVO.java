@@ -10,6 +10,7 @@ public class IssueActivityVO {
     private String issueId;
     private String userId;
     private String userName;
+    private String userAvatar;
     private String action;
     private String fieldName;
     private String oldValue;

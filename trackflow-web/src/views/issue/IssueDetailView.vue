@@ -12,7 +12,8 @@
     <DetailTopBar
       :project-name="projectName"
       :issue-key="issue.issueKey"
-      :reporter="reporterName"
+      :created-by="createdByName"
+      :updated-by="updatedByName"
       :created-ago="timeAgo(issue.createdAt)"
       :updated-ago="timeAgo(issue.updatedAt)"
       :show-create="canCreateIssue"
@@ -531,6 +532,8 @@ async function loadRelatedData() {
 // ============ Computed ============
 const projectName = computed(() => issue.value?.projectName || '')
 const reporterName = computed(() => issue.value?.reporterName || '未知')
+const createdByName = computed(() => issue.value?.createdByName || issue.value?.reporterName || '未知')
+const updatedByName = computed(() => issue.value?.updatedByName || '未知')
 
 const issueTags = computed(() => issue.value?.tags || [])
 const projectTags = computed(() => projectTagList.value)
@@ -745,6 +748,7 @@ const activityItems = computed<ActivityItem[]>(() => {
       type: 'comment',
       user: c.userName || '用户',
       userId: c.userId,
+      userAvatar: c.userAvatar || undefined,
       commentId: c.id,
       isEdited: c.isEdited || false,
       rawContent: c.content,
@@ -755,7 +759,7 @@ const activityItems = computed<ActivityItem[]>(() => {
   }
   for (const a of activities.value) {
     if (a.action === 'commented') continue
-    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
+    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
   }
   return items
 })

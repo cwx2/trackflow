@@ -34,7 +34,10 @@
 
     <div class="stream-list">
       <div v-for="item in sorted" :key="item.id" class="stream-item" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
-        <div class="avatar" :style="{ background: avatarBg(item.user) }">
+        <div v-if="item.userAvatar" class="avatar">
+          <img :src="item.userAvatar" :alt="item.user" class="avatar-img" />
+        </div>
+        <div v-else class="avatar" :style="{ background: avatarBg(item.user) }">
           {{ initial(item.user) }}
         </div>
         <div class="item-body">
@@ -132,6 +135,7 @@ export interface ActivityItem {
   type: 'comment' | 'change'
   user: string
   userId?: string
+  userAvatar?: string
   commentId?: string
   isEdited?: boolean
   rawContent?: string
@@ -309,6 +313,10 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: #fff; font-weight: 600;
+  overflow: hidden;
+}
+.avatar-img {
+  width: 100%; height: 100%; object-fit: cover;
 }
 .item-body { flex: 1; min-width: 0; }
 .item-head { display: flex; align-items: baseline; gap: 8px; }
