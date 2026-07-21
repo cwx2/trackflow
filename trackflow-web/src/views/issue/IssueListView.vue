@@ -317,11 +317,8 @@
         @open-command="showCommandDialog = true"
       />
 
-      <!-- Recent Issues Panel (YouTrack style) -->
-      <RecentIssuesPanel />
-
       <!-- Filter bar -->
-      <div v-else class="filter-bar">
+      <div v-if="selectedCount === 0" class="filter-bar">
         <div class="filter-left">
           <span class="current-query-name">{{ activeQueryName }}</span>
           <span class="issue-total-badge">{{ totalIssues }} 个问题</span>
@@ -391,6 +388,9 @@
           </a-dropdown>
         </div>
       </div>
+
+      <!-- Recent Issues Panel (YouTrack style) -->
+      <RecentIssuesPanel />
 
       <!-- Inline quick create -->
       <div v-if="showInlineCreate && selectedCount === 0" class="inline-create">
