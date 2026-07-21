@@ -9,17 +9,45 @@
       </div>
     </div>
 
+    <!-- Tab 切换：全部 / 我的报表 / 共享给我的 -->
+    <div class="report-tabs">
+      <a-radio-group v-model="viewMode" type="button" size="small">
+        <a-radio value="all">全部报表</a-radio>
+        <a-radio value="mine">我的报表</a-radio>
+        <a-radio value="shared">共享给我的</a-radio>
+      </a-radio-group>
+    </div>
+
     <!-- 筛选栏 -->
     <div class="report-toolbar">
+      <a-input-search
+        v-model="searchKeyword"
+        placeholder="搜索报表名称..."
+        allow-clear
+        size="small"
+        style="width: 240px; margin-right: 12px"
+      />
       <a-select
         v-model="selectedProjectId"
         placeholder="所有项目"
         allow-clear
         size="small"
-        style="width: 200px"
+        style="width: 200px; margin-right: 12px"
         @change="onProjectChange"
       >
         <a-option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</a-option>
+      </a-select>
+      <a-select
+        v-model="selectedTypeFilter"
+        placeholder="所有类型"
+        allow-clear
+        size="small"
+        style="width: 180px"
+      >
+        <a-option value="issue_distribution">Issue 分布</a-option>
+        <a-option value="timeline">时间线趋势</a-option>
+        <a-option value="state_transition">状态转换</a-option>
+        <a-option value="other">其他</a-option>
       </a-select>
     </div>
 
@@ -31,6 +59,19 @@
     </div>
 
     <!-- 空状态 -->
+    <div v-else-if="filteredReports.length === 0 && reports.length > 0" class="report-empty">
+      <div class="empty-icon">🔍</div>
+      <h3 class="empty-title">未找到匹配的报表</h3>
+      <p class="empty-desc">
+        {{ searchKeyword ? `没有名称包含"${searchKeyword}"的报表。` : '' }}
+        {{ viewMode === 'mine' ? '你还没有创建任何报表。' : '' }}
+        {{ viewMode === 'shared' ? '还没有其他人共享报表给你。' : '' }}
+        试试调整筛选条件或创建新报表。
+      </p>
+      <a-button v-if="canCreateReport" type="primary" size="small" @click="openCreateModal">
+        创建报表
+      </a-button>
+    </div>
     <div v-else-if="reports.length === 0" class="report-empty">
       <div class="empty-icon">📊</div>
       <h3 class="empty-title">暂无报表</h3>
@@ -44,8 +85,21 @@
 
     <!-- 报表列表 -->
     <div v-else class="report-grid">
+      <!-- 按类型分组展示时的分类标题 -->
+      <template v-if="selectedTypeFilter && filteredReports.length > 0">
+        <div class="report-category-header">
+          <span class="category-label">{{ typeCategoryLabel(selectedTypeFilter) }}</span>
+          <span class="category-count">{{ filteredReports.length }} 个报表</span>
+        </div>
+      </template>
+      <template v-else-if="!selectedTypeFilter && filteredReports.length > 0">
+        <div class="report-results-info">
+          <span class="results-count">共 {{ filteredReports.length }} 个报表</span>
+          <span v-if="searchKeyword" class="results-keyword">搜索: "{{ searchKeyword }}"</span>
+        </div>
+      </template>
       <div
-        v-for="report in reports"
+        v-for="report in filteredReports"
         :key="report.id"
         class="report-card"
         :class="{ 'is-loading': executingId === report.id }"
@@ -326,6 +380,64 @@ const reportData = ref<Record<string, ReportDataVO>>({})
 const executingId = ref<string | null>(null)
 const refreshingId = ref<string | null>(null)
 const autoRefreshTimers = ref<Record<string, ReturnType<typeof setInterval>>>({})
+const searchKeyword = ref('')
+const viewMode = ref<'all' | 'mine' | 'shared'>('all')
+const selectedTypeFilter = ref<string | undefined>(undefined)
+
+/** 报表类型 → 分类映射 */
+const typeCategories: Record<string, string> = {
+  issue_count: 'issue_distribution',
+  by_status: 'issue_distribution',
+  by_assignee: 'issue_distribution',
+  by_priority: 'issue_distribution',
+  by_type: 'issue_distribution',
+  burndown: 'timeline',
+  burndown_chart: 'timeline',
+  cumulative_flow: 'timeline',
+  resolution_time: 'timeline',
+  state_transition: 'state_transition',
+  time_report: 'other',
+  estimation_report: 'other',
+  custom: 'other'
+}
+
+/** 分类标签 */
+function typeCategoryLabel(category: string): string {
+  const map: Record<string, string> = {
+    issue_distribution: 'Issue 分布报表',
+    timeline: '时间线趋势报表',
+    state_transition: '状态转换报表',
+    other: '其他报表'
+  }
+  return map[category] || category
+}
+
+/** 经过搜索、视图模式、类型筛选后的报表列表 */
+const filteredReports = computed(() => {
+  let result = reports.value
+
+  // 1. 按视图模式筛选
+  if (viewMode.value === 'mine') {
+    const currentUserId = authStore.user?.id
+    result = result.filter(r => r.createdBy === currentUserId)
+  } else if (viewMode.value === 'shared') {
+    const currentUserId = authStore.user?.id
+    result = result.filter(r => r.createdBy !== currentUserId)
+  }
+
+  // 2. 按搜索关键词筛选
+  if (searchKeyword.value.trim()) {
+    const keyword = searchKeyword.value.trim().toLowerCase()
+    result = result.filter(r => r.name?.toLowerCase().includes(keyword))
+  }
+
+  // 3. 按类型分类筛选
+  if (selectedTypeFilter.value) {
+    result = result.filter(r => typeCategories[r.type] === selectedTypeFilter.value)
+  }
+
+  return result
+})
 
 // 创建/编辑相关
 const showFormModal = ref(false)
@@ -1145,8 +1257,59 @@ function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
   margin-right: 2px;
 }
 
+.report-tabs {
+  margin-bottom: 16px;
+}
+
 .report-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 20px;
+}
+
+.report-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--tf-bg-surface, #22252a);
+  border-radius: 6px;
+  border: 1px solid var(--tf-border, #30363d);
+  grid-column: 1 / -1;
+}
+
+.category-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-primary, #e6edf3);
+}
+
+.category-count {
+  font-size: 12px;
+  color: var(--tf-text-tertiary, #6b7280);
+}
+
+.report-results-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  grid-column: 1 / -1;
+}
+
+.results-count {
+  font-size: 13px;
+  color: var(--tf-text-secondary, #9ca3af);
+}
+
+.results-keyword {
+  font-size: 12px;
+  color: var(--tf-text-tertiary, #6b7280);
+  font-style: italic;
 }
 
 /* 加载状态 */
