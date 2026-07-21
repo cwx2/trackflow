@@ -607,10 +607,16 @@
         :active-issue-id="previewIssueId"
         :selected-ids="selectedIds"
         :show-checkbox="canBatchOps"
+        :draggable="isDraggable"
+        :is-manual-sorted="isManualSorted"
+        :is-owner-order="isOwnerOrder"
+        :sorted-issue-ids="sortedIssueIds"
         @item-click="onListItemClick"
         @item-dblclick="onListItemDblClick"
         @sort-change="onListSortChange"
         @select="onListItemSelect"
+        @order-change="onManualOrderChange"
+        @discard-order="onDiscardManualOrder"
       />
 
       <!-- Pagination -->
@@ -651,7 +657,7 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO } from '@/api/ty
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
-import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings } from './composables'
+import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import RecentIssuesPanel from './components/RecentIssuesPanel.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -688,6 +694,12 @@ const {
   isTreeMode, isListLayout, isTableLayout,
   setLayout, setDensity, setStructure
 } = useViewSettings()
+
+// Manual order (drag sorting)
+const {
+  isManualSorted, isOwnerOrder, manualOrderData,
+  loadManualOrder, saveOrder: saveManualOrder, discardOrder: discardManualOrder, reset: resetManualOrder
+} = useManualOrder()
 
 // 全局级创建权限：统一使用 authStore.canCreateIssue
 const authStore = useAuthStore()
@@ -729,6 +741,12 @@ const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
 const activeQueryObj = ref<any>(null) // Track full active query object for chip-click
 const expandedGroups = reactive(new Set<string>(['saved', 'projects']))
 const panelSearch = ref('')
+
+// Manual order computed (depends on activeProjectId and activeQueryId)
+const isDraggable = computed(() => {
+  return isListLayout.value && (!!activeProjectId.value || !!activeQueryId.value)
+})
+const sortedIssueIds = computed(() => manualOrderData.value?.issueIds || [])
 
 // Computed: whether the active query belongs to the current user (for edit permission)
 const activeQueryOwned = computed(() => {
@@ -1655,6 +1673,16 @@ function onListItemSelect(issue: IssueVO) {
   toggle(issue.id)
 }
 
+// Manual order handlers
+async function onManualOrderChange(issueIds: string[]) {
+  await saveManualOrder(issueIds)
+}
+
+async function onDiscardManualOrder() {
+  await discardManualOrder()
+  refreshList()
+}
+
 function onSelectionChange(rowKeys: (string | number)[]) {
   selectedIds.value = new Set(rowKeys.map(String))
 }
@@ -2276,6 +2304,17 @@ function selectProject(p: any) {
 
 watch(currentPage, () => refreshList())
 watch(sortState, () => refreshList(), { deep: true })
+
+// Load manual order when context changes
+watch([activeProjectId, activeQueryId], () => {
+  if (activeProjectId.value) {
+    loadManualOrder({ type: 'project', id: activeProjectId.value })
+  } else if (activeQueryId.value) {
+    loadManualOrder({ type: 'query', id: activeQueryId.value })
+  } else {
+    resetManualOrder()
+  }
+})
 
 // Init
 async function loadPanel() {

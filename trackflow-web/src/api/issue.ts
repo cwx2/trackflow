@@ -3,7 +3,7 @@ import type {
   R, PageResult, IssueVO, IssueDetailVO, IssueCommentVO,
   IssueActivityVO, IssueStatusVO, IssueAttachmentVO,
   IssueTagVO, IssueLinkVO, IssueTrashVO, BatchAvailableStatusVO,
-  TransitStatusResultVO
+  TransitStatusResultVO, ManualOrderVO
 } from './types'
 import { validateFile } from '@/utils/attachment'
 
@@ -256,5 +256,31 @@ export const issueApi = {
   /** 移动工单到目标项目 */
   move(issueId: string, targetProjectId: string) {
     return request.post<any, R<IssueDetailVO>>(`/issues/${issueId}/move`, { targetProjectId })
+  },
+
+  // ========== 手动排序 ==========
+
+  /** 获取手动排序 */
+  getManualOrder(contextType: string, contextId: string) {
+    return request.get<any, R<ManualOrderVO>>('/manual-orders', {
+      params: { contextType, contextId }
+    })
+  },
+
+  /** 保存完整手动排序 */
+  saveManualOrder(data: { contextType: string; contextId: number; issueIds: number[] }) {
+    return request.post<any, R<ManualOrderVO>>('/manual-orders', data)
+  },
+
+  /** 移动单个工单到指定位置 */
+  moveManualOrder(data: { contextType: string; contextId: number; issueId: number; targetPosition: number }) {
+    return request.put<any, R<ManualOrderVO>>('/manual-orders/move', data)
+  },
+
+  /** 丢弃手动排序 */
+  discardManualOrder(contextType: string, contextId: string) {
+    return request.delete<any, R<void>>('/manual-orders', {
+      params: { contextType, contextId }
+    })
   }
 }

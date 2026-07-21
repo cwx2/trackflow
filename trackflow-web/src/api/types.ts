@@ -851,3 +851,12 @@ export interface IssueTemplateVO {
   sortOrder: number
   createdBy?: string
 }
+
+// ========== 手动排序 ==========
+
+export interface ManualOrderVO {
+  contextType: string
+  contextId: string
+  ownerOrder: boolean
+  issueIds: string[]
+}

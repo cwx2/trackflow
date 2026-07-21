@@ -9,9 +9,15 @@
       'density-L': density === 'L'
     }"
     :style="{ paddingLeft: indent * 24 + 12 + 'px' }"
+    :data-id="issue.id"
     @click="$emit('click')"
     @dblclick="$emit('dblclick')"
   >
+    <!-- Drag handle -->
+    <span v-if="showDragHandle" class="drag-handle" @mousedown.stop title="拖拽排序">
+      <icon-drag-dot-vertical :size="14" />
+    </span>
+
     <!-- Selection checkbox -->
     <label v-if="showCheckbox" class="item-checkbox" @click.stop>
       <input
@@ -98,7 +104,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { IconRight, IconDown, IconLayers } from '@arco-design/web-vue/es/icon'
+import { IconRight, IconDown, IconLayers, IconDragDotVertical } from '@arco-design/web-vue/es/icon'
 import type { IssueVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
@@ -116,8 +122,10 @@ const props = withDefaults(defineProps<{
   active: boolean
   selected: boolean
   showCheckbox?: boolean
+  showDragHandle?: boolean
 }>(), {
-  showCheckbox: true
+  showCheckbox: true,
+  showDragHandle: false
 })
 
 defineEmits<{
@@ -216,6 +224,34 @@ function truncateDescription(desc?: string): string {
   height: 14px;
   cursor: pointer;
   accent-color: var(--tf-accent, var(--color-primary-6));
+}
+
+/* Drag handle */
+.drag-handle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  cursor: grab;
+  color: var(--tf-text-quaternary, var(--color-text-4));
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 100ms, color 100ms;
+}
+
+.issue-list-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--tf-text-secondary, var(--color-text-2));
+  background: var(--tf-bg-hover, var(--color-fill-2));
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 /* Expand button */

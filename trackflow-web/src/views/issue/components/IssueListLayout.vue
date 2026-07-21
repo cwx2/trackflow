@@ -15,6 +15,17 @@
           </a-doption>
         </template>
       </a-dropdown>
+
+      <!-- Manual order discard button -->
+      <div v-if="isManualSorted" class="manual-order-indicator">
+        <span class="manual-order-label">
+          <icon-drag-dot-vertical :size="12" />
+          手动排序{{ isOwnerOrder ? '(全局)' : '(个人)' }}
+        </span>
+        <a-button size="mini" type="text" class="discard-order-btn" @click="$emit('discard-order')">
+          丢弃自定义顺序
+        </a-button>
+      </div>
     </div>
 
     <!-- Issue items -->
@@ -29,52 +40,110 @@
       <p class="empty-desc">尝试调整筛选条件或创建新的工单</p>
     </div>
 
-    <div v-else class="list-items">
-      <!-- Tree mode: render with indentation -->
-      <template v-if="structure === 'tree'">
-        <template v-for="node in treeData" :key="node.issue.id">
+    <div v-else class="list-items" ref="listContainerRef">
+      <!-- Manually sorted section -->
+      <template v-if="isManualSorted && sortedIssues.length > 0">
+        <div class="sorted-section" ref="sortedSectionRef">
           <IssueListItem
-            :issue="node.issue"
+            v-for="issue in sortedIssues"
+            :key="issue.id"
+            :data-id="issue.id"
+            :issue="issue"
             :density="density"
-            :indent="node.depth"
-            :has-children="(node.issue.childCount || 0) > 0"
-            :expanded="expandedIds.has(node.issue.id)"
-            :active="activeIssueId === node.issue.id"
-            :selected="selectedIds.has(node.issue.id)"
+            :indent="0"
+            :has-children="false"
+            :expanded="false"
+            :active="activeIssueId === issue.id"
+            :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
-            @click="$emit('item-click', node.issue)"
-            @dblclick="$emit('item-dblclick', node.issue)"
-            @toggle-expand="toggleExpand(node.issue)"
-            @select="toggleSelect(node.issue)"
+            :show-drag-handle="draggable"
+            @click="$emit('item-click', issue)"
+            @dblclick="$emit('item-dblclick', issue)"
+            @select="toggleSelect(issue)"
           />
-        </template>
+        </div>
+
+        <!-- Separator between manually sorted and default sorted -->
+        <div v-if="unsortedIssues.length > 0" class="manual-order-separator">
+          <span class="separator-line"></span>
+          <span class="separator-text">以下为默认排序</span>
+          <span class="separator-line"></span>
+        </div>
+
+        <!-- Unsorted section -->
+        <div class="unsorted-section">
+          <IssueListItem
+            v-for="issue in unsortedIssues"
+            :key="issue.id"
+            :issue="issue"
+            :density="density"
+            :indent="0"
+            :has-children="false"
+            :expanded="false"
+            :active="activeIssueId === issue.id"
+            :selected="selectedIds.has(issue.id)"
+            :show-checkbox="showCheckbox"
+            :show-drag-handle="draggable"
+            @click="$emit('item-click', issue)"
+            @dblclick="$emit('item-dblclick', issue)"
+            @select="toggleSelect(issue)"
+          />
+        </div>
       </template>
 
-      <!-- Flat mode: simple list -->
+      <!-- Normal mode (no manual sort) -->
       <template v-else>
-        <IssueListItem
-          v-for="issue in issues"
-          :key="issue.id"
-          :issue="issue"
-          :density="density"
-          :indent="0"
-          :has-children="false"
-          :expanded="false"
-          :active="activeIssueId === issue.id"
-          :selected="selectedIds.has(issue.id)"
-          :show-checkbox="showCheckbox"
-          @click="$emit('item-click', issue)"
-          @dblclick="$emit('item-dblclick', issue)"
-          @select="toggleSelect(issue)"
-        />
+        <!-- Tree mode: render with indentation -->
+        <template v-if="structure === 'tree'">
+          <template v-for="node in treeData" :key="node.issue.id">
+            <IssueListItem
+              :issue="node.issue"
+              :data-id="node.issue.id"
+              :density="density"
+              :indent="node.depth"
+              :has-children="(node.issue.childCount || 0) > 0"
+              :expanded="expandedIds.has(node.issue.id)"
+              :active="activeIssueId === node.issue.id"
+              :selected="selectedIds.has(node.issue.id)"
+              :show-checkbox="showCheckbox"
+              :show-drag-handle="draggable"
+              @click="$emit('item-click', node.issue)"
+              @dblclick="$emit('item-dblclick', node.issue)"
+              @toggle-expand="toggleExpand(node.issue)"
+              @select="toggleSelect(node.issue)"
+            />
+          </template>
+        </template>
+
+        <!-- Flat mode: draggable list -->
+        <div v-else ref="flatListRef">
+          <IssueListItem
+            v-for="issue in issues"
+            :key="issue.id"
+            :data-id="issue.id"
+            :issue="issue"
+            :density="density"
+            :indent="0"
+            :has-children="false"
+            :expanded="false"
+            :active="activeIssueId === issue.id"
+            :selected="selectedIds.has(issue.id)"
+            :show-checkbox="showCheckbox"
+            :show-drag-handle="draggable"
+            @click="$emit('item-click', issue)"
+            @dblclick="$emit('item-dblclick', issue)"
+            @select="toggleSelect(issue)"
+          />
+        </div>
       </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { IconDown, IconSearch } from '@arco-design/web-vue/es/icon'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { IconDown, IconSearch, IconDragDotVertical } from '@arco-design/web-vue/es/icon'
+import Sortable from 'sortablejs'
 import type { IssueVO } from '@/api/types'
 import type { DensityLevel, StructureMode } from '../composables'
 import type { SortState } from '../composables/useIssueList'
@@ -93,8 +162,15 @@ const props = withDefaults(defineProps<{
   activeIssueId?: string | null
   selectedIds: Set<string>
   showCheckbox?: boolean
+  draggable?: boolean
+  isManualSorted?: boolean
+  isOwnerOrder?: boolean
+  sortedIssueIds?: string[]
 }>(), {
-  showCheckbox: true
+  showCheckbox: true,
+  draggable: false,
+  isManualSorted: false,
+  isOwnerOrder: false
 })
 
 const emit = defineEmits<{
@@ -102,7 +178,31 @@ const emit = defineEmits<{
   (e: 'item-dblclick', issue: IssueWithDesc): void
   (e: 'sort-change', field: string): void
   (e: 'select', issue: IssueWithDesc): void
+  (e: 'order-change', issueIds: string[]): void
+  (e: 'discard-order'): void
 }>()
+
+// Refs for Sortable.js
+const sortedSectionRef = ref<HTMLElement | null>(null)
+const flatListRef = ref<HTMLElement | null>(null)
+const listContainerRef = ref<HTMLElement | null>(null)
+let sortableInstance: Sortable | null = null
+
+// Compute sorted vs unsorted issues
+const sortedIssues = computed<IssueWithDesc[]>(() => {
+  if (!props.isManualSorted || !props.sortedIssueIds?.length) return []
+  const orderMap = new Map<string, number>()
+  props.sortedIssueIds.forEach((id, idx) => orderMap.set(id, idx))
+  return props.issues
+    .filter(i => orderMap.has(i.id))
+    .sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0))
+})
+
+const unsortedIssues = computed<IssueWithDesc[]>(() => {
+  if (!props.isManualSorted || !props.sortedIssueIds?.length) return []
+  const orderSet = new Set(props.sortedIssueIds)
+  return props.issues.filter(i => !orderSet.has(i.id))
+})
 
 // Expanded nodes for tree view
 const expandedIds = ref<Set<string>>(new Set())
@@ -128,7 +228,7 @@ function onSortSelect(field: string) {
   emit('sort-change', field)
 }
 
-// Tree data: flatten issues into tree nodes (only shows current page issues)
+// Tree data: flatten issues into tree nodes
 interface TreeNode {
   issue: IssueWithDesc
   depth: number
@@ -136,8 +236,6 @@ interface TreeNode {
 
 const treeData = computed<TreeNode[]>(() => {
   if (props.structure !== 'tree') return props.issues.map(i => ({ issue: i, depth: 0 }))
-  // In tree mode, all issues are at depth 0 (parent resolution requires separate API)
-  // For now, just show them flat; expanded children will be loaded separately
   return props.issues.map(issue => ({ issue, depth: 0 }))
 })
 
@@ -147,12 +245,83 @@ function toggleExpand(issue: IssueWithDesc) {
   } else {
     expandedIds.value.add(issue.id)
   }
-  expandedIds.value = new Set(expandedIds.value) // trigger reactivity
+  expandedIds.value = new Set(expandedIds.value)
 }
 
 function toggleSelect(issue: IssueWithDesc) {
   emit('select', issue)
 }
+
+// ========== Drag & Drop with Sortable.js ==========
+
+function initSortable() {
+  destroySortable()
+
+  if (!props.draggable) return
+
+  nextTick(() => {
+    // Determine which container to make sortable
+    const container = props.isManualSorted && sortedSectionRef.value
+      ? sortedSectionRef.value
+      : flatListRef.value
+
+    if (!container) return
+
+    sortableInstance = new Sortable(container, {
+      animation: 200,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      onEnd: (evt) => {
+        if (evt.oldIndex === undefined || evt.newIndex === undefined) return
+        if (evt.oldIndex === evt.newIndex) return
+
+        // Collect the new order from DOM
+        const items = container.querySelectorAll('[data-id]')
+        const newOrder: string[] = []
+        items.forEach(el => {
+          const id = (el as HTMLElement).dataset.id
+          if (id) newOrder.push(id)
+        })
+
+        // If we have unsorted items, append them to the order
+        if (props.isManualSorted && unsortedIssues.value.length > 0) {
+          // Keep only sorted section order
+          emit('order-change', newOrder)
+        } else {
+          emit('order-change', newOrder)
+        }
+      }
+    })
+  })
+}
+
+function destroySortable() {
+  if (sortableInstance) {
+    sortableInstance.destroy()
+    sortableInstance = null
+  }
+}
+
+// Watch for draggable and issues changes to reinit sortable
+watch(() => [props.draggable, props.issues, props.isManualSorted], () => {
+  if (props.draggable) {
+    nextTick(() => initSortable())
+  } else {
+    destroySortable()
+  }
+}, { flush: 'post' })
+
+onMounted(() => {
+  if (props.draggable) {
+    nextTick(() => initSortable())
+  }
+})
+
+onUnmounted(() => {
+  destroySortable()
+})
 </script>
 
 <style scoped>
@@ -168,6 +337,7 @@ function toggleSelect(issue: IssueWithDesc) {
   padding: 6px 12px;
   border-bottom: 1px solid var(--tf-border-secondary, var(--color-neutral-3));
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .sort-label {
@@ -188,6 +358,52 @@ function toggleSelect(issue: IssueWithDesc) {
 .sort-active {
   color: var(--tf-accent, var(--color-primary-6));
   font-weight: 500;
+}
+
+/* Manual order indicator */
+.manual-order-indicator {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  gap: 8px;
+}
+
+.manual-order-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
+}
+
+.discard-order-btn {
+  font-size: 11px;
+  color: var(--tf-accent, var(--color-primary-6));
+  padding: 0 4px;
+}
+
+.discard-order-btn:hover {
+  text-decoration: underline;
+}
+
+/* Separator between sorted and unsorted */
+.manual-order-separator {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.separator-line {
+  flex: 1;
+  height: 1px;
+  background: var(--tf-border-secondary, var(--color-neutral-3));
+}
+
+.separator-text {
+  font-size: 11px;
+  color: var(--tf-text-quaternary, var(--color-text-4));
+  white-space: nowrap;
 }
 
 .list-items {
@@ -231,5 +447,19 @@ function toggleSelect(issue: IssueWithDesc) {
   font-size: 12px;
   color: var(--tf-text-tertiary, var(--color-text-3));
   margin: 0;
+}
+
+/* Sortable.js styles */
+.sortable-ghost {
+  opacity: 0.4;
+  background: var(--tf-bg-hover, var(--color-fill-2));
+}
+
+.sortable-chosen {
+  background: var(--tf-bg-active, var(--color-fill-3));
+}
+
+.sortable-drag {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 </style>
