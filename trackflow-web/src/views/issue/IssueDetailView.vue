@@ -174,6 +174,7 @@ import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
+import { useRecentIssues } from './composables/useRecentIssues'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import QuickActionBar from './components/QuickActionBar.vue'
@@ -191,6 +192,7 @@ const route = useRoute()
 const router = useRouter()
 const tabStore = useTabStore()
 const timerStore = useTimerStore()
+const { recordVisit: recordRecentVisit } = useRecentIssues()
 const sidebarVisible = ref(true)
 const showCreatePanel = ref(false)
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
@@ -327,6 +329,12 @@ async function loadAll() {
     const res = isKey ? await issueApi.getByKey(id) : await issueApi.getById(id)
     if (res.code === 0 && res.data) {
       issue.value = res.data
+      // 记录最近浏览
+      recordRecentVisit({
+        id: res.data.id,
+        issueKey: res.data.issueKey,
+        title: res.data.title,
+      })
       // 更新标签标题为工单编号（替代路由守卫中的占位标题）
       tabStore.openTab({
         id: `issue-${id}`,

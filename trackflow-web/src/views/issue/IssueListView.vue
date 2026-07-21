@@ -317,6 +317,9 @@
         @open-command="showCommandDialog = true"
       />
 
+      <!-- Recent Issues Panel (YouTrack style) -->
+      <RecentIssuesPanel />
+
       <!-- Filter bar -->
       <div v-else class="filter-bar">
         <div class="filter-left">
@@ -650,6 +653,7 @@ import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings } from './composables'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
+import RecentIssuesPanel from './components/RecentIssuesPanel.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import IssuePreviewDrawer from '../board/IssuePreviewDrawer.vue'
@@ -671,7 +675,7 @@ const {
 
 const {
   selectedIds, selectedCount, selectedIssues,
-  clearSelection
+  toggle, clearSelection
 } = useSelection(issues)
 
 const { isCellEditing, executeEdit } = useInlineEdit(issues)
@@ -1648,12 +1652,7 @@ function onListSortChange(field: string) {
   refreshList()
 }
 function onListItemSelect(issue: IssueVO) {
-  if (selectedIds.value.has(issue.id)) {
-    selectedIds.value.delete(issue.id)
-  } else {
-    selectedIds.value.add(issue.id)
-  }
-  selectedIds.value = new Set(selectedIds.value)
+  toggle(issue.id)
 }
 
 function onSelectionChange(rowKeys: (string | number)[]) {
