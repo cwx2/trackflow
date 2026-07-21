@@ -14,6 +14,9 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.result.ColumnAggregationRow;
+import com.trackflow.issue.mapper.result.PriorityCountRow;
+import com.trackflow.issue.mapper.result.StatusCountRow;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,39 +95,48 @@ public class BoardColumnService {
                         .orderByAsc(BoardColumnConfig::getSortOrder)
         );
 
-        // 查询③：合并查询——状态工单计数 + 工作流状态（替代原 3 次独立查询）
-        List<Map<String, Object>> aggregatedRows = issueMapper.selectBoardColumnAggregation(projectId);
+        // 查询③：合并查询——状态工单计数 + 估时总和 + 工作流状态（替代原 3 次独立查询）
+        List<ColumnAggregationRow> aggregatedRows = issueMapper.selectBoardColumnAggregation(projectId);
         Map<Long, Integer> issueCountMap = new HashMap<>();
+        Map<Long, java.math.BigDecimal> estimationMap = new HashMap<>();
         Set<Long> usedStatusIds = new HashSet<>();
         Set<Long> workflowStatusIds = new HashSet<>();
-        parseAggregatedRows(aggregatedRows, issueCountMap, usedStatusIds, workflowStatusIds);
+        parseAggregatedRows(aggregatedRows, issueCountMap, estimationMap, usedStatusIds, workflowStatusIds);
 
         // 构建结果
         if (configs.isEmpty()) {
-            return buildDefaultView(allStatuses, usedStatusIds, issueCountMap, workflowStatusIds);
+            return buildDefaultView(allStatuses, usedStatusIds, issueCountMap, estimationMap, workflowStatusIds);
         }
-        return buildConfiguredView(allStatuses, configs, usedStatusIds, issueCountMap, workflowStatusIds);
+        return buildConfiguredView(allStatuses, configs, usedStatusIds, issueCountMap, estimationMap, workflowStatusIds);
     }
 
     /**
-     * 解析合并查询的结果行，填充 issueCountMap、usedStatusIds、workflowStatusIds。
+     * 解析合并查询的结果行，填充 issueCountMap、estimationMap、usedStatusIds、workflowStatusIds。
      * <p>
-     * 每行包含: status_id, issue_count（可为 0）, in_workflow（boolean）
+     * 每行包含: status_id, issue_count（可为 0）, total_estimation, in_workflow（boolean）
      */
-    private void parseAggregatedRows(List<Map<String, Object>> rows,
+    private void parseAggregatedRows(List<ColumnAggregationRow> rows,
                                      Map<Long, Integer> issueCountMap,
+                                     Map<Long, java.math.BigDecimal> estimationMap,
                                      Set<Long> usedStatusIds,
                                      Set<Long> workflowStatusIds) {
         if (rows == null || rows.isEmpty()) return;
-        for (Map<String, Object> row : rows) {
-            Long statusId = ((Number) row.get("status_id")).longValue();
-            int issueCount = ((Number) row.get("issue_count")).intValue();
-            boolean inWorkflow = (Boolean) row.get("in_workflow");
+        for (ColumnAggregationRow row : rows) {
+            Long statusId = row.getStatusId();
+            int issueCount = row.getIssueCount() != null ? row.getIssueCount() : 0;
+            boolean inWorkflow = row.getInWorkflow() != null && row.getInWorkflow();
 
             if (issueCount > 0) {
                 issueCountMap.put(statusId, issueCount);
                 usedStatusIds.add(statusId);
             }
+
+            // 解析估时总和
+            java.math.BigDecimal totalEst = row.getTotalEstimation();
+            if (totalEst != null && totalEst.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                estimationMap.put(statusId, totalEst);
+            }
+
             if (inWorkflow) {
                 workflowStatusIds.add(statusId);
             }
@@ -336,7 +348,9 @@ public class BoardColumnService {
      * 不执行任何写操作。
      */
     private List<BoardColumnVO> buildDefaultView(List<IssueStatus> allStatuses, Set<Long> usedStatusIds,
-                                                  Map<Long, Integer> issueCountMap, Set<Long> workflowStatusIds) {
+                                                  Map<Long, Integer> issueCountMap,
+                                                  Map<Long, java.math.BigDecimal> estimationMap,
+                                                  Set<Long> workflowStatusIds) {
         Set<Long> seedStatusIds = allStatuses.stream()
                 .filter(s -> SEED_STATUS_CODES.contains(s.getCode()))
                 .map(IssueStatus::getId)
@@ -347,6 +361,7 @@ public class BoardColumnService {
         for (IssueStatus status : allStatuses) {
             BoardColumnVO vo = new BoardColumnVO();
             vo.setStatusId(String.valueOf(status.getId()));
+            vo.setFieldValue(String.valueOf(status.getId()));
             vo.setStatusName(status.getName());
             vo.setStatusCode(status.getCode());
             vo.setStatusColor(status.getColor());
@@ -360,6 +375,7 @@ public class BoardColumnService {
             vo.setHasHiddenIssues(!visible && usedStatusIds.contains(status.getId()));
             // 新增字段
             vo.setIssueCount(issueCountMap.getOrDefault(status.getId(), 0));
+            vo.setTotalEstimation(estimationMap.get(status.getId()));
             vo.setInWorkflow(workflowStatusIds.contains(status.getId()));
             result.add(vo);
             order++;
@@ -376,6 +392,7 @@ public class BoardColumnService {
             List<BoardColumnConfig> configs,
             Set<Long> usedStatusIds,
             Map<Long, Integer> issueCountMap,
+            Map<Long, java.math.BigDecimal> estimationMap,
             Set<Long> workflowStatusIds) {
 
         Map<Long, BoardColumnConfig> configMap = configs.stream()
@@ -386,6 +403,7 @@ public class BoardColumnService {
             BoardColumnConfig config = configMap.get(status.getId());
             BoardColumnVO vo = new BoardColumnVO();
             vo.setStatusId(String.valueOf(status.getId()));
+            vo.setFieldValue(String.valueOf(status.getId()));
             vo.setStatusName(status.getName());
             vo.setStatusCode(status.getCode());
             vo.setStatusColor(status.getColor());
@@ -410,6 +428,7 @@ public class BoardColumnService {
 
             // 新增字段
             vo.setIssueCount(issueCountMap.getOrDefault(status.getId(), 0));
+            vo.setTotalEstimation(estimationMap.get(status.getId()));
             vo.setInWorkflow(workflowStatusIds.contains(status.getId()));
             result.add(vo);
         }
@@ -433,15 +452,13 @@ public class BoardColumnService {
      * 仅用于 initializeColumns（不需要缓存的初始化场景）。
      */
     private Map<Long, Integer> getProjectIssueCountByStatus(Long projectId) {
-        List<Map<String, Object>> rows = issueMapper.selectIssueCountByStatus(projectId);
+        List<StatusCountRow> rows = issueMapper.selectIssueCountByStatus(projectId);
         if (rows == null || rows.isEmpty()) {
             return Collections.emptyMap();
         }
         Map<Long, Integer> result = new HashMap<>();
-        for (Map<String, Object> row : rows) {
-            Long statusId = ((Number) row.get("status_id")).longValue();
-            Integer count = ((Number) row.get("cnt")).intValue();
-            result.put(statusId, count);
+        for (StatusCountRow row : rows) {
+            result.put(row.getStatusId(), row.getCnt());
         }
         return result;
     }
@@ -453,6 +470,48 @@ public class BoardColumnService {
     private Set<Long> getProjectWorkflowStatusIds(Long projectId) {
         Set<Long> ids = workflowTransitionMapper.selectWorkflowStatusIds(projectId);
         return ids != null ? ids : Collections.emptySet();
+    }
+
+    // ========== Cache methods ==========
+
+    /**
+     * 获取按 Priority 字段分列的列配置（用于 columnField='priority' 模式）。
+     * <p>
+     * Priority 列固定为 4 个：Critical、High、Normal、Low。
+     * 每列的工单计数从 Issue 表动态统计。
+     */
+    public List<BoardColumnVO> getPriorityColumns(Long projectId) {
+        // Priority 固定值集合
+        String[] priorities = {"Critical", "High", "Normal", "Low"};
+        String[] priorityColors = {"#ef4444", "#f59e0b", "#3b82f6", "#9ca3af"};
+
+        // 查询项目中各 priority 的工单数量
+        List<PriorityCountRow> rows = issueMapper.selectIssueCountByPriority(projectId);
+        Map<String, Integer> countMap = new HashMap<>();
+        if (rows != null) {
+            for (PriorityCountRow row : rows) {
+                countMap.put(row.getPriority(), row.getCnt());
+            }
+        }
+
+        List<BoardColumnVO> result = new ArrayList<>();
+        for (int i = 0; i < priorities.length; i++) {
+            BoardColumnVO vo = new BoardColumnVO();
+            vo.setStatusId(null); // priority 模式不使用 statusId
+            vo.setFieldValue(priorities[i]);
+            vo.setStatusName(priorities[i]);
+            vo.setStatusCode(priorities[i].toLowerCase());
+            vo.setStatusColor(priorityColors[i]);
+            vo.setStatusCategory(null);
+            vo.setVisible(true);
+            vo.setSortOrder(i);
+            vo.setCollapsed(false);
+            vo.setHasHiddenIssues(false);
+            vo.setIssueCount(countMap.getOrDefault(priorities[i], 0));
+            vo.setInWorkflow(true);
+            result.add(vo);
+        }
+        return result;
     }
 
     // ========== Cache methods ==========

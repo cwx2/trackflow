@@ -10,6 +10,8 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.result.BurndownRow;
+import com.trackflow.issue.mapper.result.IssueCreatedAtRow;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
 import com.trackflow.sprint.dto.DeleteSprintDTO;
@@ -843,15 +845,15 @@ public class SprintService {
         if (totalDays <= 0) totalDays = 1;
 
         // 投影查询：只返回 id, created_at, resolved_at（不加载 title/description 等大字段）
-        List<Map<String, Object>> projections = issueMapper.selectBurndownProjection(sprintId);
+        List<BurndownRow> projections = issueMapper.selectBurndownProjection(sprintId);
 
         // 将投影结果转为轻量数据结构
         record IssueBurndownData(Long id, LocalDateTime createdAt, LocalDateTime resolvedAt) {}
         List<IssueBurndownData> currentIssues = projections.stream()
                 .map(row -> new IssueBurndownData(
-                        ((Number) row.get("id")).longValue(),
-                        (LocalDateTime) row.get("created_at"),
-                        (LocalDateTime) row.get("resolved_at")
+                        row.getId(),
+                        row.getCreatedAt(),
+                        row.getResolvedAt()
                 ))
                 .toList();
 
@@ -901,11 +903,9 @@ public class SprintService {
 
         Map<Long, LocalDateTime> movedOutCreatedAtMap = new HashMap<>();
         if (!movedOutIssueIdsNeedingCreatedAt.isEmpty()) {
-            List<Map<String, Object>> createdAtRows = issueMapper.selectCreatedAtByIds(movedOutIssueIdsNeedingCreatedAt);
-            for (Map<String, Object> row : createdAtRows) {
-                Long issueId = ((Number) row.get("id")).longValue();
-                LocalDateTime createdAt = (LocalDateTime) row.get("created_at");
-                movedOutCreatedAtMap.put(issueId, createdAt);
+            List<IssueCreatedAtRow> createdAtRows = issueMapper.selectCreatedAtByIds(movedOutIssueIdsNeedingCreatedAt);
+            for (IssueCreatedAtRow row : createdAtRows) {
+                movedOutCreatedAtMap.put(row.getId(), row.getCreatedAt());
             }
         }
 

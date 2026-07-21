@@ -13,7 +13,7 @@
     <!-- ========== 查询 ========== -->
 
     <!-- Issue 详情：一次 JOIN 查出所有关联名称 -->
-    <select id="selectDetailById" resultType="map">
+    <select id="selectDetailById" resultType="com.trackflow.issue.mapper.result.IssueDetailRow">
         SELECT
             i.id, i.project_id, i.issue_key, i.title, i.description,
             i.issue_type, i.status_id, i.priority, i.assignee_id, i.reporter_id,
@@ -41,7 +41,7 @@
     </select>
 
     <!-- 评论列表：JOIN 用户表一次查出 -->
-    <select id="selectCommentsWithUser" resultType="map">
+    <select id="selectCommentsWithUser" resultType="com.trackflow.issue.mapper.result.CommentRow">
         SELECT
             c.id, c.issue_id, c.user_id, c.content, c.source,
             c.created_at, c.updated_at,
@@ -108,7 +108,7 @@
     </select>
 
     <!-- 回收站列表：查询已删除工单 + 删除人名称 -->
-    <select id="selectTrashPage" resultType="map">
+    <select id="selectTrashPage" resultType="com.trackflow.issue.mapper.result.TrashRow">
         SELECT
             i.id, i.project_id, i.issue_key, i.title,
             i.issue_type, i.priority, i.deleted_at,
@@ -128,11 +128,11 @@
     </select>
 
     <!-- 按 ID 查询（忽略逻辑删除过滤） -->
-    <select id="selectByIdIgnoreDeleted" resultType="map">
+    <select id="selectByIdIgnoreDeleted" resultType="com.trackflow.issue.mapper.result.DeletedIssueRow">
         SELECT
             i.id, i.project_id, i.issue_key, i.title,
             i.issue_type, i.priority, i.deleted_at,
-            i.assignee_id, i.reporter_id, i.sprint_id, i.status_id
+            i.assignee_id, i.reporter_id, i.sprint_id, i.status_id, i.parent_id
         FROM issue i
         WHERE i.id = #{id}
     </select>
@@ -148,7 +148,7 @@
     </delete>
 
     <!-- 查询超过保留期限的已删除工单（用于定时清理） -->
-    <select id="selectExpiredTrash" resultType="map">
+    <select id="selectExpiredTrash" resultType="com.trackflow.issue.mapper.result.ExpiredTrashRow">
         SELECT id FROM issue
         WHERE project_id = #{projectId}
           AND deleted_at IS NOT NULL
@@ -156,7 +156,7 @@
     </select>
 
     <!-- 子任务列表：查询指定父工单的所有子任务（带状态和负责人名称） -->
-    <select id="selectChildrenByParentId" resultType="map">
+    <select id="selectChildrenByParentId" resultType="com.trackflow.issue.mapper.result.ChildIssueRow">
         SELECT
             i.id, i.issue_key, i.title, i.issue_type, i.priority,
             s.name AS status_name, s.color AS status_color, s.category AS status_category,
@@ -183,7 +183,7 @@
     </select>
 
     <!-- 查询项目中各状态的工单数量（用于看板列设置的智能推荐） -->
-    <select id="selectIssueCountByStatus" resultType="java.util.Map">
+    <select id="selectIssueCountByStatus" resultType="com.trackflow.issue.mapper.result.StatusCountRow">
         SELECT status_id, COUNT(*) AS cnt
         FROM issue
         WHERE project_id = #{projectId}
@@ -191,10 +191,19 @@
         GROUP BY status_id
     </select>
 
+    <!-- 看板列标识字段为 priority 时的工单统计 -->
+    <select id="selectIssueCountByPriority" resultType="com.trackflow.issue.mapper.result.PriorityCountRow">
+        SELECT priority, COUNT(*) AS cnt
+        FROM issue
+        WHERE project_id = #{projectId}
+          AND deleted_at IS NULL
+        GROUP BY priority
+    </select>
+
     <!-- 看板列聚合查询：合并 status_count + workflow_status 为一条 CTE SQL -->
-    <select id="selectBoardColumnAggregation" resultType="java.util.Map">
+    <select id="selectBoardColumnAggregation" resultType="com.trackflow.issue.mapper.result.ColumnAggregationRow">
         WITH issue_counts AS (
-            SELECT status_id, COUNT(*) AS issue_count
+            SELECT status_id, COUNT(*) AS issue_count, COALESCE(SUM(estimated_hours), 0) AS total_estimation
             FROM issue
             WHERE project_id = #{projectId}
               AND deleted_at IS NULL
@@ -211,6 +220,7 @@
         )
         SELECT s.id AS status_id,
                COALESCE(ic.issue_count, 0) AS issue_count,
+               COALESCE(ic.total_estimation, 0) AS total_estimation,
                (ws.status_id IS NOT NULL) AS in_workflow
         FROM issue_status s
         LEFT JOIN issue_counts ic ON ic.status_id = s.id
@@ -218,7 +228,7 @@
     </select>
 
     <!-- 燃尽图投影查询：只返回 id, created_at, resolved_at（性能优化） -->
-    <select id="selectBurndownProjection" resultType="java.util.Map">
+    <select id="selectBurndownProjection" resultType="com.trackflow.issue.mapper.result.BurndownRow">
         SELECT id, created_at, resolved_at
         FROM issue
         WHERE sprint_id = #{sprintId}
@@ -226,7 +236,7 @@
     </select>
 
     <!-- 批量查询工单 created_at（消除 N+1） -->
-    <select id="selectCreatedAtByIds" resultType="java.util.Map">
+    <select id="selectCreatedAtByIds" resultType="com.trackflow.issue.mapper.result.IssueCreatedAtRow">
         SELECT id, created_at
         FROM issue
         WHERE id IN

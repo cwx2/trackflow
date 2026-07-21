@@ -21,7 +21,7 @@ import com.trackflow.issue.dto.MoveIssueDTO;
 import com.trackflow.issue.dto.UpdateIssueDTO;
 import com.trackflow.issue.entity.*;
 import com.trackflow.issue.mapper.*;
-import com.trackflow.issue.mapper.result.ActivityRow;
+import com.trackflow.issue.mapper.result.*;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -1151,18 +1151,18 @@ public class IssueService {
      * 查询子任务列表（VO）
      */
     public List<ChildIssueVO> listChildren(Long parentId) {
-        List<Map<String, Object>> rows = issueMapper.selectChildrenByParentId(parentId);
+        List<ChildIssueRow> rows = issueMapper.selectChildrenByParentId(parentId);
         return rows.stream().map(row -> {
             ChildIssueVO vo = new ChildIssueVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setIssueKey((String) row.get("issue_key"));
-            vo.setTitle((String) row.get("title"));
-            vo.setIssueType((String) row.get("issue_type"));
-            vo.setPriority((String) row.get("priority"));
-            vo.setStatusName((String) row.get("status_name"));
-            vo.setStatusColor((String) row.get("status_color"));
-            vo.setStatusCategory((String) row.get("status_category"));
-            vo.setAssigneeName((String) row.get("assignee_name"));
+            vo.setId(String.valueOf(row.getId()));
+            vo.setIssueKey(row.getIssueKey());
+            vo.setTitle(row.getTitle());
+            vo.setIssueType(row.getIssueType());
+            vo.setPriority(row.getPriority());
+            vo.setStatusName(row.getStatusName());
+            vo.setStatusColor(row.getStatusColor());
+            vo.setStatusCategory(row.getStatusCategory());
+            vo.setAssigneeName(row.getAssigneeName());
             return vo;
         }).toList();
     }
@@ -1482,14 +1482,14 @@ public class IssueService {
 
         for (Long issueId : issueIds) {
             try {
-                Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(issueId);
-                if (row == null || row.get("deleted_at") == null) {
+                DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
+                if (row == null || row.getDeletedAt() == null) {
                     result.addFailure(issueId, "?", "工单不在回收站中");
                     continue;
                 }
-                Long projectId = ((Number) row.get("project_id")).longValue();
+                Long projectId = row.getProjectId();
                 if (!permissionService.hasPermission(currentUserId, projectId, "issue:delete")) {
-                    String key = row.get("issue_key") != null ? (String) row.get("issue_key") : "?";
+                    String key = row.getIssueKey() != null ? row.getIssueKey() : "?";
                     result.addFailure(issueId, key, "无恢复权限");
                     continue;
                 }
@@ -1807,74 +1807,55 @@ public class IssueService {
      * 获取增强版 Issue 详情 —— 单次 SQL JOIN 替代 N+1 查询
      */
     public IssueDetailVO getDetail(Long id) {
-        Map<String, Object> row = issueMapper.selectDetailById(id);
+        IssueDetailRow row = issueMapper.selectDetailById(id);
         if (row == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
 
         IssueDetailVO vo = new IssueDetailVO();
-        vo.setId(String.valueOf(row.get("id")));
-        vo.setProjectId(String.valueOf(row.get("project_id")));
-        vo.setProjectName((String) row.get("project_name"));
-        vo.setProjectStatus((String) row.get("project_status"));
-        vo.setIssueKey((String) row.get("issue_key"));
-        vo.setTitle((String) row.get("title"));
-        vo.setDescription((String) row.get("description"));
-        vo.setIssueType((String) row.get("issue_type"));
-        vo.setStatusId(String.valueOf(row.get("status_id")));
-        vo.setPriority((String) row.get("priority"));
-        vo.setAssigneeId(row.get("assignee_id") != null ? String.valueOf(row.get("assignee_id")) : null);
-        vo.setAssigneeName((String) row.get("assignee_name"));
-        vo.setAssigneeAvatarUrl((String) row.get("assignee_avatar_url"));
-        vo.setReporterId(String.valueOf(row.get("reporter_id")));
-        vo.setReporterName((String) row.get("reporter_name"));
-        vo.setSprintId(row.get("sprint_id") != null ? String.valueOf(row.get("sprint_id")) : null);
-        vo.setSprintName((String) row.get("sprint_name"));
-        vo.setParentId(row.get("parent_id") != null ? String.valueOf(row.get("parent_id")) : null);
-        vo.setParentKey((String) row.get("parent_key"));
+        vo.setId(String.valueOf(row.getId()));
+        vo.setProjectId(String.valueOf(row.getProjectId()));
+        vo.setProjectName(row.getProjectName());
+        vo.setProjectStatus(row.getProjectStatus());
+        vo.setIssueKey(row.getIssueKey());
+        vo.setTitle(row.getTitle());
+        vo.setDescription(row.getDescription());
+        vo.setIssueType(row.getIssueType());
+        vo.setStatusId(String.valueOf(row.getStatusId()));
+        vo.setPriority(row.getPriority());
+        vo.setAssigneeId(row.getAssigneeId() != null ? String.valueOf(row.getAssigneeId()) : null);
+        vo.setAssigneeName(row.getAssigneeName());
+        vo.setAssigneeAvatarUrl(row.getAssigneeAvatarUrl());
+        vo.setReporterId(String.valueOf(row.getReporterId()));
+        vo.setReporterName(row.getReporterName());
+        vo.setSprintId(row.getSprintId() != null ? String.valueOf(row.getSprintId()) : null);
+        vo.setSprintName(row.getSprintName());
+        vo.setParentId(row.getParentId() != null ? String.valueOf(row.getParentId()) : null);
+        vo.setParentKey(row.getParentKey());
 
-        if (row.get("due_date") != null) {
-            vo.setDueDate(((java.sql.Date) row.get("due_date")).toLocalDate());
-        }
-        if (row.get("estimated_hours") != null) {
-            vo.setEstimatedHours((java.math.BigDecimal) row.get("estimated_hours"));
-        }
-        if (row.get("spent_hours") != null) {
-            vo.setSpentHours((java.math.BigDecimal) row.get("spent_hours"));
-        }
-        if (row.get("derived_estimated_hours") != null) {
-            vo.setDerivedEstimatedHours((java.math.BigDecimal) row.get("derived_estimated_hours"));
-        }
-        if (row.get("derived_spent_hours") != null) {
-            vo.setDerivedSpentHours((java.math.BigDecimal) row.get("derived_spent_hours"));
-        }
-
-        if (row.get("resolved_at") != null) {
-            vo.setResolvedAt(((java.sql.Timestamp) row.get("resolved_at")).toLocalDateTime());
-        }
-        if (row.get("created_at") != null) {
-            vo.setCreatedAt(((java.sql.Timestamp) row.get("created_at")).toLocalDateTime());
-        }
-        if (row.get("updated_at") != null) {
-            vo.setUpdatedAt(((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime());
-        }
+        vo.setDueDate(row.getDueDate());
+        vo.setEstimatedHours(row.getEstimatedHours());
+        vo.setSpentHours(row.getSpentHours());
+        vo.setDerivedEstimatedHours(row.getDerivedEstimatedHours());
+        vo.setDerivedSpentHours(row.getDerivedSpentHours());
+        vo.setResolvedAt(row.getResolvedAt());
+        vo.setCreatedAt(row.getCreatedAt());
+        vo.setUpdatedAt(row.getUpdatedAt());
 
         // 乐观锁版本号
-        if (row.get("version") != null) {
-            vo.setVersion(((Number) row.get("version")).intValue());
-        }
+        vo.setVersion(row.getVersion());
 
         // 状态对象
-        if (row.get("status_name") != null) {
+        if (row.getStatusName() != null) {
             IssueStatusVO statusVO = new IssueStatusVO();
-            statusVO.setId(String.valueOf(row.get("status_id")));
-            statusVO.setName((String) row.get("status_name"));
-            statusVO.setDisplayName((String) row.get("status_display_name"));
-            statusVO.setCode((String) row.get("status_code"));
-            statusVO.setColor((String) row.get("status_color"));
-            statusVO.setCategory((String) row.get("status_category"));
-            statusVO.setIsDefault((Boolean) row.get("status_is_default"));
-            statusVO.setIsClosed((Boolean) row.get("status_is_closed"));
+            statusVO.setId(String.valueOf(row.getStatusId()));
+            statusVO.setName(row.getStatusName());
+            statusVO.setDisplayName(row.getStatusDisplayName());
+            statusVO.setCode(row.getStatusCode());
+            statusVO.setColor(row.getStatusColor());
+            statusVO.setCategory(row.getStatusCategory());
+            statusVO.setIsDefault(row.getStatusIsDefault());
+            statusVO.setIsClosed(row.getStatusIsClosed());
             vo.setStatus(statusVO);
         }
 
@@ -1900,28 +1881,21 @@ public class IssueService {
      * 获取评论列表 —— 单次 JOIN 查询（消除 N+1）
      */
     public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
-        List<Map<String, Object>> rows = issueMapper.selectCommentsWithUser(issueId);
+        List<CommentRow> rows = issueMapper.selectCommentsWithUser(issueId);
         return rows.stream().map(row -> {
             IssueCommentVO vo = new IssueCommentVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setIssueId(String.valueOf(row.get("issue_id")));
-            vo.setUserId(String.valueOf(row.get("user_id")));
-            vo.setUserName((String) row.get("user_name"));
-            vo.setUserAvatar((String) row.get("user_avatar"));
-            vo.setContent((String) row.get("content"));
-            vo.setSource((String) row.get("source"));
-            LocalDateTime createdAt = null;
-            LocalDateTime updatedAt = null;
-            if (row.get("created_at") != null) {
-                createdAt = ((java.sql.Timestamp) row.get("created_at")).toLocalDateTime();
-                vo.setCreatedAt(createdAt);
-            }
-            if (row.get("updated_at") != null) {
-                updatedAt = ((java.sql.Timestamp) row.get("updated_at")).toLocalDateTime();
-                vo.setUpdatedAt(updatedAt);
-            }
+            vo.setId(String.valueOf(row.getId()));
+            vo.setIssueId(String.valueOf(row.getIssueId()));
+            vo.setUserId(String.valueOf(row.getUserId()));
+            vo.setUserName(row.getUserName());
+            vo.setUserAvatar(row.getUserAvatar());
+            vo.setContent(row.getContent());
+            vo.setSource(row.getSource());
+            vo.setCreatedAt(row.getCreatedAt());
+            vo.setUpdatedAt(row.getUpdatedAt());
             // 判断是否被编辑过：updated_at 比 created_at 晚超过 1 秒
-            vo.setIsEdited(createdAt != null && updatedAt != null && updatedAt.isAfter(createdAt.plusSeconds(1)));
+            vo.setIsEdited(row.getCreatedAt() != null && row.getUpdatedAt() != null
+                    && row.getUpdatedAt().isAfter(row.getCreatedAt().plusSeconds(1)));
             return vo;
         }).toList();
     }
@@ -2098,25 +2072,20 @@ public class IssueService {
     public PageResult<IssueTrashVO> listTrash(Long projectId, int page, int pageSize) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectAccessible(currentUserId, projectId);
-        Page<Map<String, Object>> p = new Page<>(page, pageSize);
-        Page<Map<String, Object>> result = issueMapper.selectTrashPage(p, projectId);
+        Page<TrashRow> p = new Page<>(page, pageSize);
+        Page<TrashRow> result = issueMapper.selectTrashPage(p, projectId);
 
         List<IssueTrashVO> voList = result.getRecords().stream().map(row -> {
             IssueTrashVO vo = new IssueTrashVO();
-            vo.setId(String.valueOf(row.get("id")));
-            vo.setProjectId(String.valueOf(row.get("project_id")));
-            vo.setIssueKey((String) row.get("issue_key"));
-            vo.setTitle((String) row.get("title"));
-            vo.setIssueType((String) row.get("issue_type"));
-            vo.setPriority((String) row.get("priority"));
-            vo.setAssigneeName((String) row.get("assignee_name"));
-            vo.setDeletedByName((String) row.get("deleted_by_name"));
-            Object deletedAt = row.get("deleted_at");
-            if (deletedAt instanceof java.sql.Timestamp ts) {
-                vo.setDeletedAt(ts.toLocalDateTime());
-            } else if (deletedAt instanceof LocalDateTime ldt) {
-                vo.setDeletedAt(ldt);
-            }
+            vo.setId(String.valueOf(row.getId()));
+            vo.setProjectId(String.valueOf(row.getProjectId()));
+            vo.setIssueKey(row.getIssueKey());
+            vo.setTitle(row.getTitle());
+            vo.setIssueType(row.getIssueType());
+            vo.setPriority(row.getPriority());
+            vo.setAssigneeName(row.getAssigneeName());
+            vo.setDeletedByName(row.getDeletedByName());
+            vo.setDeletedAt(row.getDeletedAt());
             return vo;
         }).toList();
 
@@ -2128,11 +2097,11 @@ public class IssueService {
      */
     @Transactional
     public void restore(Long id) {
-        Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(id);
-        if (row == null || row.get("deleted_at") == null) {
+        DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
+        if (row == null || row.getDeletedAt() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "工单不在回收站中");
         }
-        Long projectId = ((Number) row.get("project_id")).longValue();
+        Long projectId = row.getProjectId();
         projectService.assertProjectActive(projectId);
 
         int affected = issueMapper.restoreById(id);
@@ -2148,12 +2117,9 @@ public class IssueService {
         }
 
         // 恢复后刷新父工单的派生属性
-        Object parentIdObj = row.get("parent_id");
-        if (parentIdObj != null) {
-            Long parentId = ((Number) parentIdObj).longValue();
-            if (parentId != 0) {
-                ancestorRefreshService.refreshAncestorChain(parentId);
-            }
+        Long parentId = row.getParentId();
+        if (parentId != null && parentId != 0) {
+            ancestorRefreshService.refreshAncestorChain(parentId);
         }
     }
 
@@ -2162,8 +2128,8 @@ public class IssueService {
      */
     @Transactional
     public void permanentDelete(Long id) {
-        Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(id);
-        if (row == null || row.get("deleted_at") == null) {
+        DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(id);
+        if (row == null || row.getDeletedAt() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只能永久删除回收站中的工单");
         }
 
@@ -2193,11 +2159,11 @@ public class IssueService {
      * 获取已删除工单所属的 projectId（用于 @PreAuthorize SpEL）
      */
     public Long getDeletedIssueProjectId(Long issueId) {
-        Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(issueId);
+        DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
         if (row == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
-        return ((Number) row.get("project_id")).longValue();
+        return row.getProjectId();
     }
 
     // ========== 内部方法 ==========

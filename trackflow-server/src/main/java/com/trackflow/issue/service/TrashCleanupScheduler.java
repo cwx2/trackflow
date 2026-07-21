@@ -6,6 +6,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.service.ProjectService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.result.ExpiredTrashRow;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 回收站自动清理定时任务。
@@ -55,10 +55,10 @@ public class TrashCleanupScheduler {
             }
 
             LocalDateTime cutoff = LocalDateTime.now().minusDays(retentionDays);
-            List<Map<String, Object>> expiredIssues = issueMapper.selectExpiredTrash(project.getId(), cutoff);
+            List<ExpiredTrashRow> expiredIssues = issueMapper.selectExpiredTrash(project.getId(), cutoff);
 
-            for (Map<String, Object> row : expiredIssues) {
-                Long issueId = ((Number) row.get("id")).longValue();
+            for (ExpiredTrashRow row : expiredIssues) {
+                Long issueId = row.getId();
                 try {
                     issueService.permanentDelete(issueId);
                     totalCleaned++;

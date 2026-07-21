@@ -185,11 +185,11 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
 
         if (!isPermissionInScope(permission)) return false;
 
-        java.util.Map<String, Object> row = issueMapper.selectByIdIgnoreDeleted(issueId);
+        com.trackflow.issue.mapper.result.DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
         if (row == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
-        Long projectId = ((Number) row.get("project_id")).longValue();
+        Long projectId = row.getProjectId();
         return permissionService.hasPermission(userId, projectId, permission);
     }
 

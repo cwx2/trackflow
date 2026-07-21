@@ -998,8 +998,8 @@ public class TimeEntryService {
         Issue issue = issueMapper.selectById(issueId);
         if (issue == null) {
             // selectById 受逻辑删除过滤，再查一次确认是不存在还是已软删除
-            Map<String, Object> raw = issueMapper.selectByIdIgnoreDeleted(issueId);
-            if (raw != null && raw.get("deleted_at") != null) {
+            com.trackflow.issue.mapper.result.DeletedIssueRow raw = issueMapper.selectByIdIgnoreDeleted(issueId);
+            if (raw != null && raw.getDeletedAt() != null) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "工单已删除，无法操作工时");
             }
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
