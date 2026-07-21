@@ -42,6 +42,7 @@ public class IssueController {
     private final IssueLinkService linkService;
     private final IssueTagService tagService;
     private final CustomFieldService customFieldService;
+    private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -343,14 +344,18 @@ public class IssueController {
     @PostMapping("/{id}/comments")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<IssueCommentVO> addComment(@PathVariable("id") Long id, @Valid @RequestBody AddCommentDTO dto) {
-        return R.ok(issueConverter.toCommentVO(issueService.addComment(id, dto.getContent())));
+        IssueComment comment = issueService.addComment(id, dto.getContent(), dto.getVisibleToGroupIds());
+        return R.ok(issueConverter.toCommentVO(comment));
     }
 
     @PutMapping("/{id}/comments/{commentId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<IssueCommentVO> updateComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId,
                                             @Valid @RequestBody UpdateCommentDTO dto) {
-        return R.ok(issueConverter.toCommentVO(issueService.updateComment(id, commentId, dto.getContent())));
+        boolean updateVisibility = dto.getVisibleToGroupIds() != null;
+        IssueComment comment = issueService.updateComment(id, commentId, dto.getContent(),
+                dto.getVisibleToGroupIds(), updateVisibility);
+        return R.ok(issueConverter.toCommentVO(comment));
     }
 
     @DeleteMapping("/{id}/comments/{commentId}")
@@ -365,15 +370,28 @@ public class IssueController {
     @GetMapping("/{id}/attachments")
     public R<List<IssueAttachmentVO>> listAttachments(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
-        return R.ok(issueConverter.toAttachmentVOList(issueService.listAttachments(id)));
+        List<IssueAttachment> attachments = issueService.listAttachments(id);
+        return R.ok(buildAttachmentVOList(attachments));
     }
 
     @PostMapping("/{id}/attachments")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
-    public R<IssueAttachmentVO> uploadAttachment(@PathVariable("id") Long id,
-                                                  @RequestParam("file") MultipartFile file) {
-        IssueAttachment attachment = issueService.uploadAttachment(id, file);
-        return R.ok(issueConverter.toAttachmentVO(attachment));
+    public R<IssueAttachmentVO> uploadAttachment(
+            @PathVariable("id") Long id,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "visibleToGroupIds", required = false) List<Long> visibleToGroupIds) {
+        IssueAttachment attachment = issueService.uploadAttachment(id, file, visibleToGroupIds);
+        return R.ok(buildAttachmentVO(attachment));
+    }
+
+    @PutMapping("/{id}/attachments/{attachmentId}/visibility")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+    public R<IssueAttachmentVO> updateAttachmentVisibility(
+            @PathVariable("id") Long id,
+            @PathVariable("attachmentId") Long attachmentId,
+            @RequestBody com.trackflow.issue.dto.UpdateAttachmentVisibilityDTO dto) {
+        IssueAttachment attachment = issueService.updateAttachmentVisibility(id, attachmentId, dto.getVisibleToGroupIds());
+        return R.ok(buildAttachmentVO(attachment));
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
@@ -381,6 +399,32 @@ public class IssueController {
     public R<Void> deleteAttachment(@PathVariable("id") Long id, @PathVariable("attachmentId") Long attachmentId) {
         issueService.deleteAttachment(id, attachmentId);
         return R.ok();
+    }
+
+    /**
+     * 构建附件 VO（含可见性信息）
+     */
+    private IssueAttachmentVO buildAttachmentVO(IssueAttachment attachment) {
+        IssueAttachmentVO vo = issueConverter.toAttachmentVO(attachment);
+        vo.setIsPrivate(attachment.getVisibleToGroupIds() != null && !attachment.getVisibleToGroupIds().isEmpty());
+        if (Boolean.TRUE.equals(vo.getIsPrivate())) {
+            vo.setVisibleToGroupIds(attachment.getVisibleToGroupIds().stream()
+                    .map(String::valueOf).toList());
+            // 查询组名称
+            vo.setVisibleToGroupNames(resolveGroupNames(attachment.getVisibleToGroupIds()));
+        }
+        return vo;
+    }
+
+    private List<IssueAttachmentVO> buildAttachmentVOList(List<IssueAttachment> attachments) {
+        return attachments.stream().map(this::buildAttachmentVO).toList();
+    }
+
+    private List<String> resolveGroupNames(List<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) return List.of();
+        return userGroupMapper.selectBatchIds(groupIds).stream()
+                .map(g -> g.getName())
+                .toList();
     }
 
     // ========== 活动记录 ==========

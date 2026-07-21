@@ -1,6 +1,8 @@
 package com.trackflow.common.controller;
 
 import com.trackflow.common.service.MinioService;
+import com.trackflow.issue.entity.IssueAttachment;
+import com.trackflow.issue.service.IssueService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,10 +24,14 @@ import java.nio.charset.StandardCharsets;
 public class FileController {
 
     private final MinioService minioService;
+    private final IssueService issueService;
 
     /**
      * 文件下载/预览（支持任意深度路径）
      * GET /api/v1/files/issues/123/attachments/uuid.png
+     *
+     * 增加附件可见性校验：如果请求的文件路径对应一个有可见性限制的附件，
+     * 校验当前用户是否有权访问。
      */
     @GetMapping("/**")
     public void download(HttpServletResponse response,
@@ -33,6 +39,20 @@ public class FileController {
         // 提取完整路径（去掉 /api/v1/files/ 前缀）
         String fullPath = request.getRequestURI();
         String objectName = fullPath.substring("/api/v1/files/".length());
+
+        // 附件可见性校验：通过文件路径查找附件记录
+        if (objectName.startsWith("issues/") && objectName.contains("/attachments/")) {
+            IssueAttachment attachment = issueService.findByFilePath(objectName);
+            if (attachment != null
+                    && attachment.getVisibleToGroupIds() != null
+                    && !attachment.getVisibleToGroupIds().isEmpty()) {
+                // 私有附件——检查当前用户是否有权访问
+                if (!issueService.canAccessAttachment(attachment.getId())) {
+                    response.setStatus(403);
+                    return;
+                }
+            }
+        }
 
         try (InputStream is = minioService.getObject(objectName)) {
             // 根据文件扩展名设置 Content-Type

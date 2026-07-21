@@ -342,6 +342,8 @@ export interface IssueCommentVO {
   content: string
   source: string
   isEdited?: boolean
+  visibleToGroupIds?: string[]
+  visibleToGroupNames?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -368,6 +370,12 @@ export interface IssueAttachmentVO {
   contentType?: string
   uploadedBy: string
   createdAt: string
+  /** 是否为私有附件 */
+  isPrivate?: boolean
+  /** 可见性限制的组 ID 列表 */
+  visibleToGroupIds?: string[]
+  /** 可见性限制的组名称列表 */
+  visibleToGroupNames?: string[]
 }
 
 export interface IssueTagVO {
@@ -544,6 +552,8 @@ export interface CustomFieldDefinitionVO {
   aliases?: string | null
   /** 是否为私有字段 */
   isPrivate: boolean
+  /** 是否自动附加到新创建的项目（YouTrack Auto-attach 行为） */
+  isAutoAttach?: boolean
   defaultValue?: string
   minLength: number
   maxLength: number
@@ -929,4 +939,9 @@ export interface ManualOrderVO {
   contextId: string
   ownerOrder: boolean
   issueIds: string[]
+}
+
+export interface GroupSimpleVO {
+  id: string
+  name: string
 }

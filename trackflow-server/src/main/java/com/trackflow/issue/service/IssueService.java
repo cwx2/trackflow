@@ -26,6 +26,8 @@ import com.trackflow.issue.mapper.result.*;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.mapper.UserGroupMemberMapper;
+import com.trackflow.system.mapper.UserGroupMapper;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.TransitionActionEngine;
@@ -47,6 +49,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -76,6 +81,8 @@ public class IssueService {
     private final CustomFieldService customFieldService;
     private final CustomFieldSortHelper customFieldSortHelper;
     private final SysUserMapper sysUserMapper;
+    private final UserGroupMemberMapper userGroupMemberMapper;
+    private final UserGroupMapper userGroupMapper;
     private final AttachmentConfig attachmentConfig;
     private final AncestorRefreshService ancestorRefreshService;
     private final ApplicationEventPublisher eventPublisher;
@@ -1681,6 +1688,11 @@ public class IssueService {
 
     @Transactional(rollbackFor = Exception.class)
     public IssueComment addComment(Long issueId, String content) {
+        return addComment(issueId, content, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public IssueComment addComment(Long issueId, String content, List<Long> visibleToGroupIds) {
         // 归档项目不允许添加评论
         Issue issue = getById(issueId);
         projectService.assertProjectActive(issue.getProjectId());
@@ -1691,6 +1703,10 @@ public class IssueService {
         comment.setUserId(currentUserId);
         comment.setContent(content);
         comment.setSource("web");
+        // 设置可见性：空列表视为 null（全体可见）
+        if (visibleToGroupIds != null && !visibleToGroupIds.isEmpty()) {
+            comment.setVisibleToGroupIds(visibleToGroupIds);
+        }
         comment.setCreatedAt(LocalDateTime.now());
         comment.setUpdatedAt(LocalDateTime.now());
         commentMapper.insert(comment);
@@ -1708,6 +1724,21 @@ public class IssueService {
 
     @Transactional(rollbackFor = Exception.class)
     public IssueComment updateComment(Long issueId, Long commentId, String newContent) {
+        return updateComment(issueId, commentId, newContent, null, false);
+    }
+
+    /**
+     * 更新评论内容和/或可见性。
+     *
+     * @param issueId            工单 ID
+     * @param commentId          评论 ID
+     * @param newContent         新内容
+     * @param visibleToGroupIds  可见性组列表（null=不修改，空列表=移除限制）
+     * @param updateVisibility   是否更新可见性（区分 null="不修改" 与 "请求体中未传该字段"）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public IssueComment updateComment(Long issueId, Long commentId, String newContent,
+                                       List<Long> visibleToGroupIds, boolean updateVisibility) {
         // 归档项目不允许编辑评论
         Issue issue = getById(issueId);
         projectService.assertProjectActive(issue.getProjectId());
@@ -1729,6 +1760,11 @@ public class IssueService {
         }
 
         comment.setContent(newContent);
+        if (updateVisibility) {
+            // 空列表视为 null（移除限制）
+            comment.setVisibleToGroupIds(
+                    visibleToGroupIds != null && !visibleToGroupIds.isEmpty() ? visibleToGroupIds : null);
+        }
         comment.setUpdatedAt(LocalDateTime.now());
         commentMapper.updateById(comment);
 
@@ -1766,9 +1802,105 @@ public class IssueService {
 
     // ========== 附件 ==========
 
+    /**
+     * 查询附件列表（已按可见性过滤）
+     * - 公开附件（visibleToGroupIds=NULL）：所有项目成员可见
+     * - 私有附件：仅上传者、指定组成员、拥有 issue:read_private 权限的用户可见
+     */
     public List<IssueAttachment> listAttachments(Long issueId) {
-        return attachmentMapper.selectList(
+        List<IssueAttachment> allAttachments = attachmentMapper.selectList(
                 new LambdaQueryWrapper<IssueAttachment>().eq(IssueAttachment::getIssueId, issueId)
+        );
+        return filterAttachmentsByVisibility(allAttachments, issueId);
+    }
+
+    /**
+     * 按可见性规则过滤附件列表
+     */
+    private List<IssueAttachment> filterAttachmentsByVisibility(List<IssueAttachment> attachments, Long issueId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            // 未认证用户只能看公开附件
+            return attachments.stream()
+                    .filter(a -> a.getVisibleToGroupIds() == null || a.getVisibleToGroupIds().isEmpty())
+                    .toList();
+        }
+
+        // 快速路径：无私有附件则全量返回
+        boolean hasPrivate = attachments.stream()
+                .anyMatch(a -> a.getVisibleToGroupIds() != null && !a.getVisibleToGroupIds().isEmpty());
+        if (!hasPrivate) {
+            return attachments;
+        }
+
+        // 获取 issue 所属项目以检查权限
+        Issue issue = getById(issueId);
+        // 拥有 issue:read_private 权限的用户可以看到所有附件
+        if (permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:read_private")) {
+            return attachments;
+        }
+
+        // 获取当前用户的组 ID
+        List<Long> userGroupIds = userGroupMemberMapper.selectGroupIdsByUserId(currentUserId);
+        Set<Long> userGroupIdSet = userGroupIds != null ? Set.copyOf(userGroupIds) : Set.of();
+
+        return attachments.stream()
+                .filter(a -> {
+                    // 公开附件
+                    if (a.getVisibleToGroupIds() == null || a.getVisibleToGroupIds().isEmpty()) {
+                        return true;
+                    }
+                    // 上传者本人始终可见
+                    if (a.getUploadedBy() != null && a.getUploadedBy().equals(currentUserId)) {
+                        return true;
+                    }
+                    // 当前用户属于附件指定的任一组
+                    return a.getVisibleToGroupIds().stream().anyMatch(userGroupIdSet::contains);
+                })
+                .toList();
+    }
+
+    /**
+     * 检查当前用户是否有权访问指定附件
+     */
+    public boolean canAccessAttachment(Long attachmentId) {
+        IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
+        if (attachment == null) {
+            return false;
+        }
+        // 公开附件
+        if (attachment.getVisibleToGroupIds() == null || attachment.getVisibleToGroupIds().isEmpty()) {
+            return true;
+        }
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            return false;
+        }
+        // 上传者本人
+        if (attachment.getUploadedBy() != null && attachment.getUploadedBy().equals(currentUserId)) {
+            return true;
+        }
+        // issue:read_private 权限
+        Issue issue = getById(attachment.getIssueId());
+        if (permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:read_private")) {
+            return true;
+        }
+        // 组成员检查
+        List<Long> userGroupIds = userGroupMemberMapper.selectGroupIdsByUserId(currentUserId);
+        if (userGroupIds == null || userGroupIds.isEmpty()) {
+            return false;
+        }
+        Set<Long> userGroupIdSet = Set.copyOf(userGroupIds);
+        return attachment.getVisibleToGroupIds().stream().anyMatch(userGroupIdSet::contains);
+    }
+
+    /**
+     * 根据文件路径查找附件记录（用于文件下载时的权限校验）
+     */
+    public IssueAttachment findByFilePath(String filePath) {
+        return attachmentMapper.selectOne(
+                new LambdaQueryWrapper<IssueAttachment>().eq(IssueAttachment::getFilePath, filePath)
         );
     }
 
@@ -1887,7 +2019,36 @@ public class IssueService {
      */
     public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
         List<CommentRow> rows = issueMapper.selectCommentsWithUser(issueId);
-        return rows.stream().map(row -> {
+
+        // 获取当前用户信息用于可见性过滤
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        List<Long> currentUserGroupIds = userGroupMemberMapper.selectGroupIdsByUserId(currentUserId);
+
+        // 获取工单的 projectId 用于权限检查
+        Issue issue = getById(issueId);
+        boolean canManageComments = permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments");
+
+        // 过滤掉当前用户无权查看的评论
+        List<CommentRow> visibleRows = rows.stream()
+                .filter(row -> isCommentVisibleToUser(row, currentUserId, currentUserGroupIds, canManageComments))
+                .toList();
+
+        // 收集所有需要解析的组 ID，批量查询组名称
+        Set<Long> allGroupIds = visibleRows.stream()
+                .filter(row -> row.getVisibleToGroupIds() != null && !row.getVisibleToGroupIds().isEmpty())
+                .flatMap(row -> row.getVisibleToGroupIds().stream())
+                .collect(Collectors.toSet());
+
+        Map<Long, String> groupNameMap = Collections.emptyMap();
+        if (!allGroupIds.isEmpty()) {
+            groupNameMap = userGroupMapper.selectBatchIds(allGroupIds).stream()
+                    .collect(Collectors.toMap(
+                            com.trackflow.system.entity.UserGroup::getId,
+                            com.trackflow.system.entity.UserGroup::getName));
+        }
+
+        Map<Long, String> finalGroupNameMap = groupNameMap;
+        return visibleRows.stream().map(row -> {
             IssueCommentVO vo = new IssueCommentVO();
             vo.setId(String.valueOf(row.getId()));
             vo.setIssueId(String.valueOf(row.getIssueId()));
@@ -1901,8 +2062,51 @@ public class IssueService {
             // 判断是否被编辑过：updated_at 比 created_at 晚超过 1 秒
             vo.setIsEdited(row.getCreatedAt() != null && row.getUpdatedAt() != null
                     && row.getUpdatedAt().isAfter(row.getCreatedAt().plusSeconds(1)));
+            // 填充可见性信息
+            if (row.getVisibleToGroupIds() != null && !row.getVisibleToGroupIds().isEmpty()) {
+                vo.setVisibleToGroupIds(row.getVisibleToGroupIds().stream()
+                        .map(String::valueOf).toList());
+                vo.setVisibleToGroupNames(row.getVisibleToGroupIds().stream()
+                        .map(gid -> finalGroupNameMap.getOrDefault(gid, "未知组"))
+                        .toList());
+            }
             return vo;
         }).toList();
+    }
+
+    /**
+     * 判断当前用户是否有权查看某条评论。
+     * 规则：
+     * 1. 评论无可见性限制（visibleToGroupIds 为 null/空）→ 全体可见
+     * 2. 评论作者本人 → 始终可见
+     * 3. 用户拥有 issue:manage_comments 权限 → 始终可见
+     * 4. 用户所属的任一组在评论的 visibleToGroupIds 中 → 可见
+     * 5. 否则 → 不可见
+     */
+    private boolean isCommentVisibleToUser(CommentRow row, Long currentUserId,
+                                           List<Long> currentUserGroupIds, boolean canManageComments) {
+        // 无限制：全体可见
+        if (row.getVisibleToGroupIds() == null || row.getVisibleToGroupIds().isEmpty()) {
+            return true;
+        }
+        // 作者本人始终可见
+        if (row.getUserId().equals(currentUserId)) {
+            return true;
+        }
+        // 管理评论权限用户始终可见
+        if (canManageComments) {
+            return true;
+        }
+        // 检查用户组是否有交集
+        if (currentUserGroupIds == null || currentUserGroupIds.isEmpty()) {
+            return false;
+        }
+        for (Long groupId : row.getVisibleToGroupIds()) {
+            if (currentUserGroupIds.contains(groupId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1934,6 +2138,18 @@ public class IssueService {
      */
     @Transactional(rollbackFor = Exception.class)
     public IssueAttachment uploadAttachment(Long issueId, MultipartFile file) {
+        return uploadAttachment(issueId, file, null);
+    }
+
+    /**
+     * 上传附件（支持私有上传）
+     *
+     * @param issueId 工单 ID
+     * @param file 上传的文件
+     * @param visibleToGroupIds 可见性限制组 ID 列表；null 或空表示公开
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public IssueAttachment uploadAttachment(Long issueId, MultipartFile file, List<Long> visibleToGroupIds) {
         // 验证 Issue 存在
         Issue issue = getById(issueId);
         // 归档项目不允许上传附件
@@ -1960,6 +2176,8 @@ public class IssueService {
         attachment.setFileSize(file.getSize());
         attachment.setContentType(file.getContentType());
         attachment.setUploadedBy(currentUserId);
+        attachment.setVisibleToGroupIds(
+                visibleToGroupIds != null && !visibleToGroupIds.isEmpty() ? visibleToGroupIds : null);
         attachment.setCreatedAt(LocalDateTime.now());
         attachmentMapper.insert(attachment);
 
@@ -2068,6 +2286,41 @@ public class IssueService {
         attachmentMapper.deleteById(attachmentId);
 
         recordActivity(issueId, currentUserId, "attachment_removed", "attachment", attachment.getFileName(), null);
+    }
+
+    /**
+     * 更新附件可见性
+     * 仅上传者或拥有 issue:manage_attachments 权限的用户可修改
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public IssueAttachment updateAttachmentVisibility(Long issueId, Long attachmentId, List<Long> visibleToGroupIds) {
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
+        IssueAttachment attachment = attachmentMapper.selectById(attachmentId);
+        if (attachment == null || !attachment.getIssueId().equals(issueId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "附件不存在");
+        }
+
+        // 权限校验：上传者或 issue:manage_attachments
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!attachment.getUploadedBy().equals(currentUserId)) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_attachments")) {
+                throw new BusinessException(ErrorCode.OWNERSHIP_REQUIRED, "只能修改自己上传的附件可见性，或需要附件管理权限");
+            }
+        }
+
+        // 更新可见性
+        List<Long> newVisibility = (visibleToGroupIds != null && !visibleToGroupIds.isEmpty()) ? visibleToGroupIds : null;
+        attachment.setVisibleToGroupIds(newVisibility);
+        attachmentMapper.updateById(attachment);
+
+        // 记录活动
+        String visibilityDesc = newVisibility == null ? "公开" : "限制可见";
+        recordActivity(issueId, currentUserId, "attachment_visibility_changed", "attachment_visibility",
+                null, attachment.getFileName() + " → " + visibilityDesc);
+
+        return attachment;
     }
 
     // ========== 回收站 ==========

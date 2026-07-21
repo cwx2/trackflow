@@ -114,13 +114,17 @@ export const issueApi = {
   },
 
   /** 添加评论 */
-  addComment(issueId: string, content: string) {
-    return request.post<any, R<IssueCommentVO>>(`/issues/${issueId}/comments`, { content })
+  addComment(issueId: string, content: string, visibleToGroupIds?: string[]) {
+    return request.post<any, R<IssueCommentVO>>(`/issues/${issueId}/comments`, { content, visibleToGroupIds })
   },
 
   /** 编辑评论 */
-  updateComment(issueId: string, commentId: string, content: string) {
-    return request.put<any, R<IssueCommentVO>>(`/issues/${issueId}/comments/${commentId}`, { content })
+  updateComment(issueId: string, commentId: string, content: string, visibleToGroupIds?: string[] | null) {
+    const body: Record<string, any> = { content }
+    if (visibleToGroupIds !== undefined) {
+      body.visibleToGroupIds = visibleToGroupIds
+    }
+    return request.put<any, R<IssueCommentVO>>(`/issues/${issueId}/comments/${commentId}`, body)
   },
 
   /** 删除评论（软删除） */
@@ -143,7 +147,7 @@ export const issueApi = {
   },
 
   /** 上传附件（含客户端校验） */
-  uploadAttachment(issueId: string, file: File, onProgress?: (percent: number) => void) {
+  uploadAttachment(issueId: string, file: File, onProgress?: (percent: number) => void, visibleToGroupIds?: string[]) {
     // 客户端预校验（快速反馈，减少无效请求）
     const validation = validateFile(file)
     if (!validation.valid) {
@@ -152,6 +156,9 @@ export const issueApi = {
 
     const formData = new FormData()
     formData.append('file', file)
+    if (visibleToGroupIds && visibleToGroupIds.length > 0) {
+      visibleToGroupIds.forEach(id => formData.append('visibleToGroupIds', id))
+    }
     return request.post<any, R<IssueAttachmentVO>>(`/issues/${issueId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e: any) => {
@@ -159,6 +166,13 @@ export const issueApi = {
           onProgress(Math.round((e.loaded * 100) / e.total))
         }
       }
+    })
+  },
+
+  /** 更新附件可见性 */
+  updateAttachmentVisibility(issueId: string, attachmentId: string, visibleToGroupIds: string[] | null) {
+    return request.put<any, R<IssueAttachmentVO>>(`/issues/${issueId}/attachments/${attachmentId}/visibility`, {
+      visibleToGroupIds: visibleToGroupIds?.map(Number) ?? null
     })
   },
 

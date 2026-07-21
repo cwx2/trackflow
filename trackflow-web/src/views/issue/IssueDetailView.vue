@@ -52,7 +52,8 @@
         @add-tag="onAddTag"
         @create-tag="onCreateTag"
         @add-link="() => {}"
-        @upload="() => {}"
+        @upload="triggerUpload(false)"
+        @upload-private="triggerUpload(true)"
         @copy-id="onCopyId"
         @clone="onCloneIssue"
         @move="onMoveIssue"
@@ -549,7 +550,13 @@ const issueLinks = computed(() => {
 })
 
 const issueAttachments = computed(() => {
-  return attachments.value.map(a => ({ id: a.id, fileName: a.fileName, sizeText: formatSize(a.fileSize) }))
+  return attachments.value.map(a => ({
+    id: a.id,
+    fileName: a.fileName,
+    sizeText: formatSize(a.fileSize),
+    isPrivate: a.isPrivate || false,
+    visibleToGroupNames: a.visibleToGroupNames || []
+  }))
 })
 
 const currentStatus = computed<StatusInfo>(() => {
@@ -752,6 +759,7 @@ const activityItems = computed<ActivityItem[]>(() => {
       commentId: c.id,
       isEdited: c.isEdited || false,
       rawContent: c.content,
+      visibleToGroupNames: c.visibleToGroupNames || undefined,
       html: isHtml ? c.content : renderMarkdown(c.content),
       timeAgo: timeAgo(c.createdAt),
       ts: new Date(c.createdAt).getTime()
@@ -787,6 +795,38 @@ function onCloneIssue() {
     description: issue.value.description || '',
     issueType: issue.value.issueType,
     priority: issue.value.priority
+  }
+}
+
+// ========== 附件上传 ==========
+
+const pendingPrivateUpload = ref(false)
+
+function triggerUpload(isPrivate: boolean) {
+  pendingPrivateUpload.value = isPrivate
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.multiple = true
+  input.onchange = async () => {
+    if (!input.files || input.files.length === 0) return
+    for (const file of Array.from(input.files)) {
+      await doUploadFile(file, isPrivate)
+    }
+  }
+  input.click()
+}
+
+async function doUploadFile(file: File, isPrivate: boolean) {
+  if (!issue.value) return
+  try {
+    // 对于私有上传，暂时使用空组列表（后续可弹窗让用户选择组）
+    // 简化实现：私有上传时先上传，然后通过编辑可见性来设置组
+    const visibleToGroupIds = isPrivate ? [] : undefined
+    await issueApi.uploadAttachment(issue.value.id, file, undefined, visibleToGroupIds)
+    Message.success(`${file.name} 上传成功`)
+    loadAttachments()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || `${file.name} 上传失败`)
   }
 }
 
@@ -868,8 +908,8 @@ async function onCreateTag(name: string) {
   } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
 }
 
-async function onAddComment(content: string) {
-  try { await issueApi.addComment(issue.value!.id, content); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '评论失败') }
+async function onAddComment(content: string, visibleToGroupIds?: string[]) {
+  try { await issueApi.addComment(issue.value!.id, content, visibleToGroupIds); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '评论失败') }
 }
 
 async function onEditComment(commentId: string, content: string) {

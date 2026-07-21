@@ -143,10 +143,16 @@
     <section class="section">
       <div class="section-head">
         <h3>附件</h3>
-        <button v-if="!readonly" class="section-link" @click="$emit('upload')">上传</button>
+        <div v-if="!readonly" class="section-actions">
+          <button class="section-link" @click="$emit('upload')">上传</button>
+          <button class="section-link" @click="$emit('upload-private')">私有上传</button>
+        </div>
       </div>
       <div v-if="attachments.length > 0" class="att-grid">
-        <div v-for="att in attachments" :key="att.id" class="att-chip">
+        <div v-for="att in attachments" :key="att.id" class="att-chip" :class="{ 'att-private': att.isPrivate }">
+          <svg v-if="att.isPrivate" class="att-lock-icon" viewBox="0 0 16 16" width="12" height="12" :title="att.visibleToGroupNames?.join(', ') || '私有'">
+            <path fill="currentColor" d="M4 6V4a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h1zm2 0h4V4a2 2 0 1 0-4 0v2z"/>
+          </svg>
           <span class="att-name">{{ att.fileName }}</span>
           <span class="att-sz">{{ att.sizeText }}</span>
         </div>
@@ -169,7 +175,7 @@ import type { ChildIssueVO, ChildProgressVO } from '@/api/types'
 
 export interface TagItem { id: string; name: string; color: string }
 export interface LinkItem { id: string; typeLabel: string; issueId: string; issueKey: string; issueTitle: string; statusName: string; statusColor: string; isUnresolvedBlocker?: boolean }
-export interface AttachItem { id: string; fileName: string; sizeText: string }
+export interface AttachItem { id: string; fileName: string; sizeText: string; isPrivate?: boolean; visibleToGroupNames?: string[] }
 
 const props = defineProps<{
   issueKey: string
@@ -195,6 +201,7 @@ const emit = defineEmits<{
   'create-tag': [name: string]
   'add-link': []
   'upload': []
+  'upload-private': []
   'copy-id': []
   'clone': []
   'move': []
@@ -452,6 +459,10 @@ function commitDesc(content: string) {
   transition: background 150ms, border-color 150ms;
 }
 .att-chip:hover { border-color: var(--tf-accent); }
+.att-private { border-color: var(--color-warning-light, #d29922); background: rgba(210, 153, 34, 0.05); }
+.att-private:hover { border-color: var(--color-warning-light, #d29922); }
+.att-lock-icon { color: var(--color-warning-light, #d29922); flex-shrink: 0; }
 .att-sz { color: var(--tf-text-muted); font-size: 11px; }
+.section-actions { display: flex; gap: 12px; }
 .empty-hint { font-size: 11px; color: var(--tf-text-muted); margin: 0; }
 </style>
