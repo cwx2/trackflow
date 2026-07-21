@@ -10,26 +10,38 @@ import java.util.stream.Collectors;
  */
 public enum ReportType {
 
-    ISSUE_COUNT("issue_count", "工单数量统计", "status"),
-    BY_STATUS("by_status", "按状态分布", "status"),
-    BY_ASSIGNEE("by_assignee", "按负责人分布", "assignee"),
-    BY_PRIORITY("by_priority", "按优先级分布", "priority"),
-    BY_TYPE("by_type", "按工单类型分布", "type"),
-    BURNDOWN("burndown", "燃尽图", null),
-    CUSTOM("custom", "自定义报表", null);
+    // ─── Issue Distribution 类 ─────────────────────
+    ISSUE_COUNT("issue_count", "工单数量统计", "status", "distribution"),
+    BY_STATUS("by_status", "按状态分布", "status", "distribution"),
+    BY_ASSIGNEE("by_assignee", "按负责人分布", "assignee", "distribution"),
+    BY_PRIORITY("by_priority", "按优先级分布", "priority", "distribution"),
+    BY_TYPE("by_type", "按工单类型分布", "type", "distribution"),
+    CUSTOM("custom", "自定义报表", null, "distribution"),
+
+    // ─── Timeline 类（时间线趋势） ──────────────────
+    BURNDOWN("burndown", "燃尽图", null, "timeline"),
+    BURNDOWN_CHART("burndown_chart", "燃尽图报表", null, "timeline"),
+    CUMULATIVE_FLOW("cumulative_flow", "累积流图", null, "timeline"),
+    RESOLUTION_TIME("resolution_time", "解决时间分析", null, "timeline"),
+
+    // ─── State Transition 类（状态转换） ─────────────
+    STATE_TRANSITION("state_transition", "状态转换统计", null, "state_transition");
 
     private final String value;
     private final String label;
     /** 该类型对应的默认 groupBy，null 表示由用户自定义 */
     private final String defaultGroupBy;
+    /** 报表类别：distribution / timeline / state_transition */
+    private final String category;
 
     private static final Map<String, ReportType> VALUE_MAP = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(ReportType::getValue, t -> t));
 
-    ReportType(String value, String label, String defaultGroupBy) {
+    ReportType(String value, String label, String defaultGroupBy, String category) {
         this.value = value;
         this.label = label;
         this.defaultGroupBy = defaultGroupBy;
+        this.category = category;
     }
 
     public String getValue() {
@@ -42,6 +54,31 @@ public enum ReportType {
 
     public String getDefaultGroupBy() {
         return defaultGroupBy;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    /**
+     * 判断是否为时间线类报表
+     */
+    public boolean isTimeline() {
+        return "timeline".equals(category);
+    }
+
+    /**
+     * 判断是否为状态转换类报表
+     */
+    public boolean isStateTransition() {
+        return "state_transition".equals(category);
+    }
+
+    /**
+     * 判断是否为分布类报表（使用 GROUP BY 聚合）
+     */
+    public boolean isDistribution() {
+        return "distribution".equals(category);
     }
 
     /**

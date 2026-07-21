@@ -1408,6 +1408,42 @@ public class ReportService {
     private String buildCsv(ReportExecuteResultVO result) {
         StringBuilder sb = new StringBuilder();
 
+        // 时间序列模式（Timeline 报表）
+        if (result.getDates() != null && result.getSeries() != null && !result.getSeries().isEmpty()) {
+            // Header: "日期", series1.name, series2.name, ...
+            sb.append("\"日期\"");
+            for (ReportExecuteResultVO.TimeSeriesData series : result.getSeries()) {
+                sb.append(",\"").append(escapeCsv(series.getName())).append("\"");
+            }
+            sb.append("\n");
+
+            // Data rows
+            for (int i = 0; i < result.getDates().size(); i++) {
+                sb.append("\"").append(escapeCsv(result.getDates().get(i))).append("\"");
+                for (ReportExecuteResultVO.TimeSeriesData series : result.getSeries()) {
+                    Number val = (series.getData() != null && i < series.getData().size())
+                            ? series.getData().get(i) : null;
+                    sb.append(",").append(val != null ? val : "");
+                }
+                sb.append("\n");
+            }
+            return sb.toString();
+        }
+
+        // 状态转换模式
+        if (result.getTransitions() != null && !result.getTransitions().isEmpty()) {
+            sb.append("\"源状态\",\"目标状态\",\"转换次数\",\"平均停留时间(h)\"\n");
+            for (ReportExecuteResultVO.StateTransitionItem item : result.getTransitions()) {
+                sb.append("\"").append(escapeCsv(item.getFromStatus())).append("\",");
+                sb.append("\"").append(escapeCsv(item.getToStatus())).append("\",");
+                sb.append(item.getCount()).append(",");
+                sb.append(item.getAvgDurationHours() != null ? String.format("%.1f", item.getAvgDurationHours()) : "");
+                sb.append("\n");
+            }
+            sb.append("\"合计\",,").append(result.getTotal()).append(",\n");
+            return sb.toString();
+        }
+
         if (result.getMatrix() != null && result.getSecondLabels() != null) {
             // 双维度模式：行=primary, 列=secondary
             sb.append("\"\"");
@@ -1426,7 +1462,7 @@ public class ReportService {
                 }
                 sb.append(",").append(rowTotal).append("\n");
             }
-        } else {
+        } else if (result.getLabels() != null && result.getData() != null) {
             // 单维度模式
             sb.append("\"分组\",\"数量\"\n");
             for (int i = 0; i < result.getLabels().size(); i++) {

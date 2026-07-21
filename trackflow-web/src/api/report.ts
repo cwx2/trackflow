@@ -57,9 +57,11 @@ export interface ShareReportParams {
 
 export interface ReportDataVO {
   title: string
-  /** 图表类型（bar_horizontal/bar_vertical/pie/line/number_card） */
+  /** 图表类型（bar_horizontal/bar_vertical/pie/line/number_card/area/stacked_area） */
   chartType: string
   type: string
+  /** 报表类别：distribution / timeline / state_transition */
+  category?: string
   groupBy: string
   /** 第二分组依据（双维度交叉时使用） */
   secondGroupBy?: string
@@ -70,12 +72,48 @@ export interface ReportDataVO {
   /** 矩阵数据（双维度模式） matrix[i][j] = 主维度第i项 × 第二维度第j项 */
   matrix?: number[][]
   total: number
+
+  // ─── 时间序列数据（Timeline 类报表使用） ─────────────
+  /** 日期序列（ISO 格式：2026-07-01） */
+  dates?: string[]
+  /** 时间序列数据（多系列） */
+  series?: TimeSeriesData[]
+  /** 理想线数据（燃尽图专用） */
+  idealLine?: number[]
+  /** 概览信息 */
+  summary?: Record<string, any>
+
+  // ─── 状态转换数据 ────────────────────────────────────
+  /** 状态转换记录 */
+  transitions?: StateTransitionItem[]
+
+  // ─── 通用元数据 ──────────────────────────────────────
   /** 应用的筛选条件摘要 */
   appliedFilters?: Record<string, any>
   /** 数据计算时间（ISO 格式） */
   calculatedAt?: string
   /** 自动刷新间隔（秒），null/0 表示不自动刷新 */
   refreshInterval?: number | null
+}
+
+/** 时间序列数据项 */
+export interface TimeSeriesData {
+  /** 系列名称 */
+  name: string
+  /** 系列颜色 */
+  color?: string
+  /** 数据值（与 dates 等长） */
+  data: (number | null)[]
+  /** 系列类型（line/area） */
+  seriesType?: string
+}
+
+/** 状态转换统计项 */
+export interface StateTransitionItem {
+  fromStatus: string
+  toStatus: string
+  count: number
+  avgDurationHours?: number
 }
 
 /** 报表可用分组维度选项 */

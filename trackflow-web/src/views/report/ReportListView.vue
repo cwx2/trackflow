@@ -114,16 +114,34 @@
         <!-- 报表数据（展开后）— ECharts 图表 -->
         <div v-if="reportData[report.id]" class="card-chart" @click.stop>
           <div class="chart-summary">
-            <span class="chart-total">共 {{ reportData[report.id].total }} 个工单</span>
-            <span class="chart-group" v-if="!reportData[report.id].secondGroupBy">
+            <span class="chart-total" v-if="reportData[report.id].category === 'timeline'">
+              {{ reportData[report.id].summary?.sprintName || '' }}
+              {{ reportData[report.id].summary?.totalResolved ? `共解决 ${reportData[report.id].summary.totalResolved} 个工单` : '' }}
+            </span>
+            <span class="chart-total" v-else>共 {{ reportData[report.id].total }} 个工单</span>
+            <span class="chart-group" v-if="reportData[report.id].category === 'timeline'">
+              时间线趋势
+            </span>
+            <span class="chart-group" v-else-if="reportData[report.id].category === 'state_transition'">
+              状态转换统计
+            </span>
+            <span class="chart-group" v-else-if="!reportData[report.id].secondGroupBy">
               按 {{ groupByLabel(reportData[report.id].groupBy) }} 分组
             </span>
             <span class="chart-group" v-else>
               {{ groupByLabel(reportData[report.id].groupBy) }} × {{ groupByLabel(reportData[report.id].secondGroupBy!) }}
             </span>
           </div>
+          <!-- 时间线图表（line/area） -->
+          <div v-if="reportData[report.id].category === 'timeline' || reportData[report.id].category === 'state_transition'" class="chart-container">
+            <v-chart
+              :option="buildTimeSeriesChartOption(reportData[report.id])"
+              autoresize
+              class="report-chart-instance"
+            />
+          </div>
           <!-- 单维度图表 -->
-          <div v-if="!reportData[report.id].secondGroupBy" class="chart-container">
+          <div v-else-if="!reportData[report.id].secondGroupBy" class="chart-container">
             <v-chart
               :option="buildChartOption(reportData[report.id])"
               autoresize
@@ -204,12 +222,24 @@
         </a-form-item>
         <a-form-item label="报表类型" required>
           <a-select v-model="form.type" placeholder="选择类型">
-            <a-option value="issue_count">工单数量统计</a-option>
-            <a-option value="by_status">按状态分布</a-option>
-            <a-option value="by_assignee">按负责人分布</a-option>
-            <a-option value="by_priority">按优先级分布</a-option>
-            <a-option value="time_report">时间报表</a-option>
-            <a-option value="estimation_report">预估对比</a-option>
+            <a-option-group label="Issue 分布">
+              <a-option value="issue_count">工单数量统计</a-option>
+              <a-option value="by_status">按状态分布</a-option>
+              <a-option value="by_assignee">按负责人分布</a-option>
+              <a-option value="by_priority">按优先级分布</a-option>
+            </a-option-group>
+            <a-option-group label="时间线趋势">
+              <a-option value="burndown_chart">燃尽图</a-option>
+              <a-option value="cumulative_flow">累积流图</a-option>
+              <a-option value="resolution_time">解决时间分析</a-option>
+            </a-option-group>
+            <a-option-group label="状态转换">
+              <a-option value="state_transition">状态转换统计</a-option>
+            </a-option-group>
+            <a-option-group label="其他">
+              <a-option value="time_report">时间报表</a-option>
+              <a-option value="estimation_report">预估对比</a-option>
+            </a-option-group>
           </a-select>
         </a-form-item>
         <a-form-item label="分组依据">
@@ -272,7 +302,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, BarChart } from 'echarts/charts'
+import { PieChart, BarChart, LineChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { reportApi } from '@/api/report'
@@ -284,7 +314,7 @@ import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api
 import type { ProjectVO } from '@/api/types'
 
 // 注册 ECharts 组件（按需引入）
-use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, GridComponent])
+use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent])
 
 const authStore = useAuthStore()
 
@@ -381,8 +411,11 @@ const typeToGroupByMap: Record<string, string> = {
   by_priority: 'priority'
 }
 
-/** 当 type 有固定的 groupBy 映射时，禁用 groupBy 选择 */
-const isGroupByLocked = computed(() => form.type in typeToGroupByMap)
+/** 时间线类和状态转换类报表不需要 groupBy */
+const timelineTypes = new Set(['burndown_chart', 'cumulative_flow', 'resolution_time', 'state_transition'])
+
+/** 当 type 有固定的 groupBy 映射或为时间线类型时，禁用 groupBy 选择 */
+const isGroupByLocked = computed(() => form.type in typeToGroupByMap || timelineTypes.has(form.type))
 
 /** 可选的分组维度列表（从 API 动态加载） */
 const allDimensions = ref<{ value: string; label: string; category?: string }[]>([
@@ -698,6 +731,10 @@ function reportTypeLabel(type: string) {
     by_priority: '优先级分布',
     by_type: '类型分布',
     burndown: '燃尽图',
+    burndown_chart: '燃尽图',
+    cumulative_flow: '累积流图',
+    resolution_time: '解决时间',
+    state_transition: '状态转换',
     time_report: '时间报表',
     estimation_report: '预估对比',
     custom: '自定义'
@@ -962,6 +999,75 @@ function buildBarVerticalOption(data: ReportDataVO, c: typeof chartColors.value)
         itemStyle: { color: colors[idx], borderRadius: [3, 3, 0, 0] }
       }))
     }]
+  }
+}
+
+/**
+ * 时间序列图表（Timeline 和 State Transition 类报表）
+ */
+function buildTimeSeriesChartOption(data: ReportDataVO): Record<string, any> {
+  const c = chartColors.value
+
+  // 状态转换报表使用横向条形图
+  if (data.category === 'state_transition' && data.labels && data.data) {
+    return buildBarHorizontalOption(data, c)
+  }
+
+  // 时间线报表：折线图/面积图
+  const dates = data.dates || []
+  const series = data.series || []
+
+  const echartseries = series.map(s => ({
+    name: s.name,
+    type: 'line',
+    smooth: true,
+    symbol: 'circle',
+    symbolSize: 4,
+    lineStyle: { width: 2, color: s.color },
+    itemStyle: { color: s.color },
+    areaStyle: s.seriesType === 'area' ? { opacity: 0.3, color: s.color } : undefined,
+    stack: data.chartType === 'stacked_area' ? 'total' : undefined,
+    data: s.data
+  }))
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      textStyle: { color: c.tooltipText, fontSize: 12 }
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: c.textColor, fontSize: 11 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    grid: { left: 48, right: 16, top: 16, bottom: 36 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: c.axisColor } },
+      axisLabel: {
+        color: c.textColor,
+        fontSize: 10,
+        rotate: dates.length > 14 ? 30 : 0,
+        formatter: (val: string) => {
+          // 缩短日期显示
+          if (val.length >= 10) return val.substring(5) // 去掉年份
+          return val
+        }
+      },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisLabel: { color: c.textColor, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.axisColor, type: 'dashed' } }
+    },
+    series: echartseries
   }
 }
 

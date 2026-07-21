@@ -157,6 +157,50 @@ public class ReportStatisticsService {
         return buildResolutionTime(projectId != null ? List.of(projectId) : null, startDate, endDate, groupBy, null);
     }
 
+    // ─── 可创建报表体系桥接方法（供 ReportService 调用） ─────────
+
+    /**
+     * 获取燃尽图数据（供可创建报表使用）
+     */
+    public BurndownVO getBurndownData(Long projectId, Long sprintId) {
+        return buildBurndown(projectId, sprintId);
+    }
+
+    /**
+     * 获取累积流图数据（支持多项目范围）
+     */
+    public CumulativeFlowVO getCumulativeFlowData(List<Long> projectIds, LocalDate startDate, LocalDate endDate) {
+        return buildCumulativeFlow(projectIds, startDate, endDate, null);
+    }
+
+    /**
+     * 获取解决时间分析数据（支持多项目范围 + 分组）
+     */
+    public ResolutionTimeVO getResolutionTimeData(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy) {
+        return buildResolutionTime(projectIds, startDate, endDate, groupBy, null);
+    }
+
+    /**
+     * 获取状态转换统计数据
+     * 基于 issue_activity 表中的状态变更事件进行聚合
+     */
+    public List<com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem> getStateTransitionData(
+            List<Long> projectIds, LocalDateTime start, LocalDateTime end) {
+        List<StateTransitionRow> rows = reportStatisticsMapper.selectStateTransitions(projectIds, start, end);
+
+        List<com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem> items = new ArrayList<>();
+        for (StateTransitionRow row : rows) {
+            com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem item =
+                    new com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem();
+            item.setFromStatus(row.getFromStatus());
+            item.setToStatus(row.getToStatus());
+            item.setCount(row.getTransitionCount());
+            item.setAvgDurationHours(row.getAvgDurationHours());
+            items.add(item);
+        }
+        return items;
+    }
+
     // ─── Internal build methods (SQL aggregation) ────────────────────────
 
     private StatusDistributionVO buildStatusDistribution(List<Long> projectIds, Long sprintId, List<Long> issueIds) {

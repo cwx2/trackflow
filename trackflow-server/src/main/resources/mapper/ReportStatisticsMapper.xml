@@ -936,4 +936,37 @@
         ORDER BY cnt DESC
     </select>
 
+    <!-- 状态转换统计：基于 issue_activity 表的 change_status 事件 -->
+    <select id="selectStateTransitions" resultType="com.trackflow.report.mapper.result.StateTransitionRow">
+        WITH transitions AS (
+            SELECT
+                a.old_value,
+                a.new_value,
+                EXTRACT(EPOCH FROM (
+                    COALESCE(
+                        LEAD(a.created_at) OVER (PARTITION BY a.issue_id ORDER BY a.created_at),
+                        NOW()
+                    ) - a.created_at
+                )) / 3600.0 AS duration_hours
+            FROM issue_activity a
+            JOIN issue i ON i.id = a.issue_id
+            WHERE a.action = 'change_status'
+              AND a.field_name = 'status'
+              AND a.created_at BETWEEN #{start} AND #{end}
+            <if test="projectIds != null and projectIds.size() > 0">
+                AND i.project_id IN
+                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+            </if>
+        )
+        SELECT
+            COALESCE(old_value, '(无)') AS from_status,
+            COALESCE(new_value, '(无)') AS to_status,
+            COUNT(*) AS transition_count,
+            AVG(duration_hours) AS avg_duration_hours
+        FROM transitions
+        GROUP BY old_value, new_value
+        ORDER BY transition_count DESC
+        LIMIT 50
+    </select>
+
 </mapper>
