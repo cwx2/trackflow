@@ -73,7 +73,7 @@ public class ProjectCopyService {
      * @param dto 复制请求
      * @return 新创建的项目
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Project copyProject(CopyProjectDTO dto) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
 

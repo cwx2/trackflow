@@ -101,7 +101,7 @@ public class ProjectModuleService {
      * @param projectId   项目 ID
      * @param moduleNames 新的启用模块列表
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateEnabledModules(Long projectId, List<String> moduleNames) {
         // 校验：核心模块不可禁用
         for (String core : CORE_MODULES) {
@@ -141,7 +141,7 @@ public class ProjectModuleService {
     /**
      * 为新建项目初始化默认模块（全部启用）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void initializeDefaultModules(Long projectId) {
         for (String moduleName : ALL_MODULES) {
             ProjectEnabledModule module = new ProjectEnabledModule();

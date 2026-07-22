@@ -90,11 +90,13 @@ public class ProjectService {
     private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
     private final com.trackflow.system.service.GlobalMemberService globalMemberService;
     private final com.trackflow.project.service.ProjectModuleService projectModuleService;
+    private final com.trackflow.customfield.mapper.CustomFieldDefinitionMapper customFieldDefinitionMapper;
+    private final com.trackflow.customfield.mapper.CustomFieldProjectMapper customFieldProjectMapper;
 
     /**
      * 创建项目
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Project create(CreateProjectDTO dto) {
         // Key 唯一性检查（不区分大小写）
         Long count = projectMapper.selectCount(
@@ -147,8 +149,9 @@ public class ProjectService {
             memberMapper.insert(leadMember);
         }
 
-        // 根据模板类型初始化项目（工作流、看板列配置等）
-        projectInitializationService.initialize(project.getId(), dto.getTemplate());
+        // 根据模板类型初始化项目（工作流、看板列配置、默认 Saved Query 等）
+        projectInitializationService.initialize(project.getId(), dto.getTemplate(),
+                project.getKey(), currentUserId);
 
         // 初始化项目默认启用模块（全部启用）
         projectModuleService.initializeDefaultModules(project.getId());
@@ -156,7 +159,40 @@ public class ProjectService {
         // 同步全局分配的成员到新项目
         globalMemberService.syncGlobalMembersToProject(project.getId());
 
+        // 自动附加 isAutoAttach=true 的自定义字段到新项目（YouTrack Auto-attach 行为）
+        autoAttachCustomFieldsToProject(project.getId());
+
         return project;
+    }
+
+    /**
+     * 自动附加 isAutoAttach=true 的自定义字段到新创建的项目。
+     * 参考 YouTrack 行为：Enable auto-attach 使字段自动附加到新创建的项目。
+     */
+    private void autoAttachCustomFieldsToProject(Long projectId) {
+        List<com.trackflow.customfield.entity.CustomFieldDefinition> autoAttachFields =
+                customFieldDefinitionMapper.selectList(
+                        new LambdaQueryWrapper<com.trackflow.customfield.entity.CustomFieldDefinition>()
+                                .eq(com.trackflow.customfield.entity.CustomFieldDefinition::getIsAutoAttach, true)
+                                .orderByAsc(com.trackflow.customfield.entity.CustomFieldDefinition::getPosition));
+
+        for (int i = 0; i < autoAttachFields.size(); i++) {
+            com.trackflow.customfield.entity.CustomFieldDefinition field = autoAttachFields.get(i);
+            // 跳过已经是 isForAll=true 的字段（它们已经通过全局逻辑在项目中可见）
+            if (Boolean.TRUE.equals(field.getIsForAll())) {
+                continue;
+            }
+            // 创建 custom_field_project 关联记录
+            com.trackflow.customfield.entity.CustomFieldProject mapping = new com.trackflow.customfield.entity.CustomFieldProject();
+            mapping.setCustomFieldId(field.getId());
+            mapping.setProjectId(projectId);
+            mapping.setPosition(i);
+            customFieldProjectMapper.insert(mapping);
+        }
+
+        if (!autoAttachFields.isEmpty()) {
+            log.info("自动附加 {} 个自定义字段到新项目 {}", autoAttachFields.size(), projectId);
+        }
     }
 
     /**
@@ -366,7 +402,7 @@ public class ProjectService {
     /**
      * 更新项目
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Project update(Long id, UpdateProjectDTO dto) {
         Project project = getById(id);
         // 归档项目不允许修改
@@ -561,7 +597,7 @@ public class ProjectService {
      * 4. 记录项目活动日志
      * 5. 通知所有项目成员
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void archive(Long id) {
         Project project = getById(id);
         if (ProjectStatus.ARCHIVED == project.getStatus()) {
@@ -599,7 +635,7 @@ public class ProjectService {
      * 3. 记录项目活动日志
      * 4. 通知所有项目成员
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void restore(Long id) {
         Project project = getById(id);
         if (ProjectStatus.ARCHIVED != project.getStatus()) {
@@ -650,7 +686,7 @@ public class ProjectService {
      * 更新项目回收站保留策略
      * @param days 保留天数，0 表示永久保留
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateTrashSettings(Long id, int days) {
         updateProjectSetting(id, "trashRetentionDays", days);
     }
@@ -824,7 +860,7 @@ public class ProjectService {
     /**
      * 添加项目成员（支持多角色）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void addMember(Long projectId, AddMemberDTO dto) {
         // 1. 校验项目状态（归档项目不允许添加成员）
         Project project = getById(projectId);
@@ -899,7 +935,7 @@ public class ProjectService {
     /**
      * 更新成员角色（全量替换：设置用户在项目中的角色列表）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int updateMemberRole(Long projectId, Long userId, Long roleId) {
         return updateMemberRoles(projectId, userId, List.of(roleId));
     }
@@ -908,7 +944,7 @@ public class ProjectService {
      * 更新成员角色（多角色版本：全量替换）
      * @return 因角色降级而被清空 assignee 的工单数量
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int updateMemberRoles(Long projectId, Long userId, List<Long> newRoleIds) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
@@ -1077,7 +1113,7 @@ public class ProjectService {
      *
      * @return 受影响的工单数量
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int removeMember(Long projectId, Long userId) {
         // 校验项目状态（归档项目不允许管理成员）
         Project project = getById(projectId);
@@ -1328,7 +1364,7 @@ public class ProjectService {
      * 使用 FOR UPDATE 锁防止并发冲突。
      * 如果发现实际 max 序号高于项目记录的 sequence（数据不一致），自动校正。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int nextIssueSequence(Long projectId) {
         // 使用 FOR UPDATE 悲观锁锁定项目行，防止并发生成重复序号
         Project project = projectMapper.selectOne(
@@ -1422,7 +1458,7 @@ public class ProjectService {
      * @param projectId         项目 ID
      * @param confirmProjectKey 前端传入的项目 Key 用于二次确认
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteProject(Long projectId, String confirmProjectKey) {
         Project project = getById(projectId);
 
@@ -1612,7 +1648,7 @@ public class ProjectService {
      * 原子更新项目 settings JSONB 中的指定字段。
      * 使用 PostgreSQL jsonb_set 在数据库层完成更新，避免 Read-Modify-Write 竞态条件。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateProjectSetting(Long projectId, String key, Object value) {
         // 确保项目存在
         getById(projectId);
@@ -1692,7 +1728,7 @@ public class ProjectService {
      * 更新项目时间追踪启用/禁用设置。
      * 禁用时自动停止该项目所有活跃计时器。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateTimeTrackingEnabled(Long projectId, boolean enabled) {
         if (!enabled) {
             // 禁用时：自动停止所有活跃计时器
@@ -1762,7 +1798,7 @@ public class ProjectService {
      * 切换项目收藏状态（Toggle）
      * @return true=已收藏，false=已取消收藏
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public boolean toggleFavorite(Long projectId, Long userId) {
         // 确保项目存在
         Project project = projectMapper.selectById(projectId);

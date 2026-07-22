@@ -5,6 +5,8 @@ import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.query.entity.SavedQuery;
+import com.trackflow.query.mapper.SavedQueryMapper;
 import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class ProjectInitializationService {
     private final WorkflowTransitionMapper workflowTransitionMapper;
     private final BoardColumnConfigMapper boardColumnConfigMapper;
     private final IssueStatusMapper issueStatusMapper;
+    private final SavedQueryMapper savedQueryMapper;
 
     /**
      * 默认模板使用的核心状态 ID（标准软件开发流程）
@@ -53,8 +56,21 @@ public class ProjectInitializationService {
      * @param projectId 新创建的项目 ID
      * @param template  模板类型：default / scrum / kanban（null 等同于 default）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void initialize(Long projectId, String template) {
+        initialize(projectId, template, null, null);
+    }
+
+    /**
+     * 根据模板类型初始化项目（含默认 Saved Query 创建）
+     *
+     * @param projectId  新创建的项目 ID
+     * @param template   模板类型：default / scrum / kanban（null 等同于 default）
+     * @param projectKey 项目标识（用于生成默认 Saved Query 名称）
+     * @param creatorId  项目创建者 ID（Saved Query 归属人）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void initialize(Long projectId, String template, String projectKey, Long creatorId) {
         String tpl = (template == null || template.isBlank()) ? "default" : template;
 
         log.info("Initializing project {} with template: {}", projectId, tpl);
@@ -64,6 +80,11 @@ public class ProjectInitializationService {
 
         // 2. 初始化看板列配置
         initializeBoardColumns(projectId, tpl);
+
+        // 3. 为创建者生成默认 Saved Query（"未分配工单"）
+        if (projectKey != null && creatorId != null) {
+            createDefaultSavedQueries(projectId, projectKey, creatorId);
+        }
 
         log.info("Project {} initialization completed (template={})", projectId, tpl);
     }
@@ -176,5 +197,45 @@ public class ProjectInitializationService {
         }
         // 默认/Scrum 模板：Cancelled 折叠
         return "cancelled".equals(status.getCode());
+    }
+
+    /**
+     * 为项目创建者生成默认 Saved Query。
+     * 参考 YouTrack 行为：创建项目时自动生成 "Unassigned in <projectID>" 查询。
+     * TrackFlow 适配为中文名称："未分配工单 (<projectKey>)"。
+     *
+     * @param projectId  项目 ID
+     * @param projectKey 项目标识（如 "DE4"）
+     * @param creatorId  创建者用户 ID
+     */
+    private void createDefaultSavedQueries(Long projectId, String projectKey, Long creatorId) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // 创建"未分配工单"查询：project = X AND assignee 为空 AND 状态为 open
+        String filters = "[" +
+                "{\"field\":\"project\",\"operator\":\"eq\",\"value\":[\"" + projectId + "\"]}," +
+                "{\"field\":\"assignee\",\"operator\":\"is_empty\",\"value\":[]}," +
+                "{\"field\":\"status\",\"operator\":\"open\",\"value\":[]}" +
+                "]";
+
+        SavedQuery unassignedQuery = new SavedQuery();
+        unassignedQuery.setName("未分配工单 (" + projectKey + ")");
+        unassignedQuery.setProjectId(projectId);
+        unassignedQuery.setUserId(creatorId);
+        unassignedQuery.setShared(false);
+        unassignedQuery.setPinned(false);
+        unassignedQuery.setFolder(null);
+        unassignedQuery.setFilters(filters);
+        unassignedQuery.setColumns("[]");
+        unassignedQuery.setSortCriteria("[]");
+        unassignedQuery.setGroupBy(null);
+        unassignedQuery.setIcon("icon-unassigned");
+        unassignedQuery.setSortOrder(0);
+        unassignedQuery.setCreatedAt(now);
+        unassignedQuery.setUpdatedAt(now);
+        savedQueryMapper.insert(unassignedQuery);
+
+        log.info("Created default 'Unassigned' saved query for project {} (key={}), owner={}",
+                projectId, projectKey, creatorId);
     }
 }
