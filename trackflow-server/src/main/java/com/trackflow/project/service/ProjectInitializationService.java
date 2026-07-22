@@ -7,7 +7,11 @@ import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.query.entity.SavedQuery;
 import com.trackflow.query.mapper.SavedQueryMapper;
+import com.trackflow.workflow.entity.ProjectWorkflow;
+import com.trackflow.workflow.entity.WorkflowDefinition;
 import com.trackflow.workflow.entity.WorkflowTransition;
+import com.trackflow.workflow.mapper.ProjectWorkflowMapper;
+import com.trackflow.workflow.mapper.WorkflowDefinitionMapper;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +32,8 @@ import java.util.Set;
 public class ProjectInitializationService {
 
     private final WorkflowTransitionMapper workflowTransitionMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final ProjectWorkflowMapper projectWorkflowMapper;
     private final BoardColumnConfigMapper boardColumnConfigMapper;
     private final IssueStatusMapper issueStatusMapper;
     private final SavedQueryMapper savedQueryMapper;
@@ -75,8 +81,8 @@ public class ProjectInitializationService {
 
         log.info("Initializing project {} with template: {}", projectId, tpl);
 
-        // 1. 复制全局工作流到该项目
-        copyGlobalWorkflowToProject(projectId);
+        // 1. 复制全局工作流到该项目（为项目创建独立的工作流定义）
+        copyGlobalWorkflowToProject(projectId, projectKey, creatorId);
 
         // 2. 初始化看板列配置
         initializeBoardColumns(projectId, tpl);
@@ -90,55 +96,103 @@ public class ProjectInitializationService {
     }
 
     /**
-     * 复制全局默认工作流（project_id IS NULL）到指定项目。
-     * 这样每个项目有独立的工作流配置，可以后续自定义而不影响全局。
-     * 复制前先对全局规则按唯一键 (issue_type, role_id, old_status_id, new_status_id) 去重，
-     * 防止全局数据中存在重复记录导致唯一约束冲突。
+     * 复制全局默认工作流到指定项目。
+     * <p>
+     * 为新项目创建独立的 WorkflowDefinition，复制全局规则并绑定到该定义，
+     * 确保每个项目有独立的工作流配置，可以后续自定义而不影响全局或其他项目。
+     *
+     * @param projectId  新创建的项目 ID
+     * @param projectKey 项目标识（用于工作流定义命名，可为 null）
+     * @param creatorId  项目创建者 ID（作为工作流定义创建者，可为 null）
      */
-    private void copyGlobalWorkflowToProject(Long projectId) {
-        // 查询全局工作流规则
-        List<WorkflowTransition> globalTransitions = workflowTransitionMapper.selectList(
-                new LambdaQueryWrapper<WorkflowTransition>()
-                        .isNull(WorkflowTransition::getProjectId)
-        );
+    private void copyGlobalWorkflowToProject(Long projectId, String projectKey, Long creatorId) {
+        // 1. 查找系统默认工作流定义
+        WorkflowDefinition defaultDef = workflowDefinitionMapper.selectOne(
+                new LambdaQueryWrapper<WorkflowDefinition>()
+                        .eq(WorkflowDefinition::getIsDefault, true)
+                        .last("LIMIT 1"));
 
-        if (globalTransitions.isEmpty()) {
-            log.warn("No global workflow transitions found, skipping workflow init for project {}", projectId);
+        if (defaultDef == null) {
+            log.warn("No default workflow definition found, skipping workflow init for project {}", projectId);
             return;
         }
 
-        // 按唯一键去重（防止全局数据中存在重复记录）
-        Set<String> seen = new java.util.HashSet<>();
-        List<WorkflowTransition> uniqueTransitions = globalTransitions.stream()
-                .filter(t -> seen.add(buildTransitionKey(t)))
-                .toList();
+        // 2. 查询默认工作流定义下的全部转换规则
+        List<WorkflowTransition> globalTransitions = workflowTransitionMapper.selectList(
+                new LambdaQueryWrapper<WorkflowTransition>()
+                        .eq(WorkflowTransition::getWorkflowDefinitionId, defaultDef.getId())
+        );
 
-        if (uniqueTransitions.size() < globalTransitions.size()) {
-            log.warn("Found {} duplicate global workflow transitions (total={}, unique={})",
-                    globalTransitions.size() - uniqueTransitions.size(),
-                    globalTransitions.size(), uniqueTransitions.size());
+        if (globalTransitions.isEmpty()) {
+            log.warn("Default workflow definition (id={}) has no transitions, skipping workflow init for project {}",
+                    defaultDef.getId(), projectId);
+            return;
         }
 
-        // 复制到该项目
-        for (WorkflowTransition global : uniqueTransitions) {
+        // 3. 为新项目创建独立的 WorkflowDefinition
+        LocalDateTime now = LocalDateTime.now();
+        String defName = (projectKey != null ? projectKey : "Project-" + projectId) + " 工作流";
+
+        WorkflowDefinition projectDef = new WorkflowDefinition();
+        projectDef.setName(defName);
+        projectDef.setDescription("从系统默认工作流复制（项目初始化自动创建）");
+        projectDef.setIsDefault(false);
+        projectDef.setCreatedBy(creatorId);
+        projectDef.setUpdatedBy(creatorId);
+        projectDef.setCreatedAt(now);
+        projectDef.setUpdatedAt(now);
+        workflowDefinitionMapper.insert(projectDef);
+
+        Long newDefId = projectDef.getId();
+
+        // 4. 创建项目与工作流定义的绑定关系
+        ProjectWorkflow binding = new ProjectWorkflow();
+        binding.setProjectId(projectId);
+        binding.setWorkflowDefinitionId(newDefId);
+        binding.setCreatedAt(now);
+        projectWorkflowMapper.insert(binding);
+
+        // 5. 按唯一键去重后复制转换规则（设置新的 workflowDefinitionId）
+        Set<String> seen = new java.util.HashSet<>();
+        int copied = 0;
+        for (WorkflowTransition global : globalTransitions) {
+            String key = buildTransitionKey(global);
+            if (!seen.add(key)) {
+                continue;
+            }
+
             WorkflowTransition projectTransition = new WorkflowTransition();
             projectTransition.setProjectId(projectId);
+            projectTransition.setWorkflowDefinitionId(newDefId);
             projectTransition.setIssueType(global.getIssueType());
             projectTransition.setRoleId(global.getRoleId());
             projectTransition.setOldStatusId(global.getOldStatusId());
             projectTransition.setNewStatusId(global.getNewStatusId());
+            projectTransition.setAuthor(global.getAuthor());
+            projectTransition.setAssignee(global.getAssignee());
             projectTransition.setConditions(global.getConditions());
+            projectTransition.setRequireComment(global.getRequireComment());
             workflowTransitionMapper.insert(projectTransition);
+            copied++;
         }
 
-        log.info("Copied {} workflow transitions to project {}", uniqueTransitions.size(), projectId);
+        if (copied < globalTransitions.size()) {
+            log.warn("Deduplicated global workflow transitions: total={}, copied={} (for project {})",
+                    globalTransitions.size(), copied, projectId);
+        }
+
+        log.info("Copied {} workflow transitions to project {} (workflowDefinitionId={})",
+                copied, projectId, newDefId);
     }
 
     /**
-     * 构造工作流转换的唯一键（用于去重）
+     * 构造工作流转换的唯一键（用于去重）。
+     * 匹配 DB 唯一约束：(workflow_definition_id, issue_type, role_id, old_status_id, new_status_id, author, assignee)
+     * 注意：workflow_definition_id 在同一批复制中相同，不需要包含在去重 key 中。
      */
     private String buildTransitionKey(WorkflowTransition t) {
-        return t.getIssueType() + "|" + t.getRoleId() + "|" + t.getOldStatusId() + "|" + t.getNewStatusId();
+        return t.getIssueType() + "|" + t.getRoleId() + "|" + t.getOldStatusId() + "|" + t.getNewStatusId()
+                + "|" + t.getAuthor() + "|" + t.getAssignee();
     }
 
     /**
