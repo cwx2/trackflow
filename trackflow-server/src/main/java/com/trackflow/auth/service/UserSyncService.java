@@ -168,13 +168,58 @@ public class UserSyncService {
 
     /**
      * 同步 Keycloak 角色到本地 TrackFlow 角色。
-     * 策略：仅做"补充"操作（Keycloak 有 tf_admin 但本地缺少 system_admin 时补上），
-     * 不做"移除"操作（避免 Keycloak 配置错误导致管理员丢失权限）。
+     * 策略：双向同步——Keycloak 作为权限 Single Source of Truth。
+     * - Keycloak 有 tf_admin 但本地缺少 system_admin 时补上
+     * - Keycloak 无 tf_admin 但本地有 system_admin 时撤销（含安全保护）
      */
     private void syncKeycloakRolesToLocal(SysUser user, List<String> keycloakRoles) {
         if (keycloakRoles.contains(KC_ROLE_ADMIN)) {
             assignSystemAdminIfMissing(user);
+        } else {
+            // 反向同步：Keycloak 无 tf_admin 则考虑撤销本地 system_admin
+            revokeSystemAdminIfNoLongerInKeycloak(user);
         }
+    }
+
+    /**
+     * 撤销用户的 system_admin 角色（当 Keycloak 不再包含 tf_admin 时）。
+     * 安全保护：确保系统中至少保留一个 system_admin，避免无管理员状态。
+     */
+    private void revokeSystemAdminIfNoLongerInKeycloak(SysUser user) {
+        // 检查本地是否有 system_admin
+        Long userAdminCount = userRoleMapper.selectCount(
+                new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getUserId, user.getId())
+                        .eq(UserRole::getRoleId, SYSTEM_ADMIN_ROLE_ID)
+        );
+        if (userAdminCount == 0) {
+            return; // 本地也没有 system_admin，无需操作
+        }
+
+        // 安全保护：确保不会移除最后一个管理员
+        Long totalAdmins = userRoleMapper.selectCount(
+                new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getRoleId, SYSTEM_ADMIN_ROLE_ID)
+        );
+        if (totalAdmins <= 1) {
+            log.warn("Skipping admin role revocation for user '{}': " +
+                    "last system admin cannot be removed via Keycloak sync",
+                    user.getUsername());
+            return;
+        }
+
+        // 执行撤销
+        userRoleMapper.delete(
+                new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getUserId, user.getId())
+                        .eq(UserRole::getRoleId, SYSTEM_ADMIN_ROLE_ID)
+        );
+
+        // 失效权限缓存
+        permissionService.invalidateCache(user.getId());
+
+        log.info("Revoked system_admin from user '{}' (Keycloak tf_admin role removed)",
+                user.getUsername());
     }
 
     /**
