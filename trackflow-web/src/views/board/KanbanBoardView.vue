@@ -195,6 +195,28 @@
             ✅ 自动隐藏14天前完成
           </span>
         </div>
+        <!-- 未解决/未匹配列工单入口 -->
+        <a-tooltip v-if="selectedProject && orphanIssueCount > 0" :content="`${orphanIssueCount} 个工单未匹配看板列`">
+          <a-button
+            size="small"
+            status="warning"
+            @click="showOrphanPanel = !showOrphanPanel"
+          >
+            ⚠️ {{ orphanIssueCount }}
+          </a-button>
+        </a-tooltip>
+        <a-divider v-if="selectedProject && orphanIssueCount > 0" direction="vertical" style="margin: 0 4px" />
+        <!-- TV 模式按钮 -->
+        <a-tooltip :content="isTvMode ? '退出 TV 模式' : 'TV 模式（大屏显示）'">
+          <a-button
+            size="small"
+            :type="isTvMode ? 'primary' : 'secondary'"
+            :disabled="!selectedProject"
+            @click="toggleTvMode"
+          >
+            📺 TV
+          </a-button>
+        </a-tooltip>
         <a-tooltip :content="showBacklog ? '收起 Backlog' : '展开 Backlog'">
           <a-button
             size="small"
@@ -303,6 +325,30 @@
           @drag-start="onBacklogDragStart"
           @drag-end="onBacklogDragEnd"
         />
+        <!-- 未匹配列工单面板 -->
+        <transition name="slide-right">
+          <div v-if="showOrphanPanel && orphanIssueCount > 0" class="orphan-panel">
+            <div class="orphan-panel-header">
+              <span class="orphan-panel-title">⚠️ 未匹配列的工单（{{ orphanIssueCount }}）</span>
+              <a-button size="mini" type="text" @click="showOrphanPanel = false">✕</a-button>
+            </div>
+            <div class="orphan-panel-desc">
+              以下工单已分配到看板，但其状态不匹配任何可见列。
+            </div>
+            <div class="orphan-panel-list">
+              <div
+                v-for="issue in orphanIssues"
+                :key="issue.id"
+                class="orphan-issue-item"
+                @click="openIssue(issue)"
+              >
+                <span class="orphan-issue-key">{{ issue.issueKey }}</span>
+                <span class="orphan-issue-title">{{ issue.title }}</span>
+                <span v-if="issue.statusName" class="orphan-issue-status">{{ issue.statusName }}</span>
+              </div>
+            </div>
+          </div>
+        </transition>
       <!-- ===== 无分组模式（原始平面看板） ===== -->
       <div
         v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && !showSprintModeNoActiveState && swimlaneGroupBy === 'none'"
@@ -785,9 +831,10 @@
       @issue-updated="onPreviewIssueUpdated"
     />
 
-    <!-- 批量操作栏（底部固定） -->
+    <!-- 底部工具栏区域：默认 Footer / 批量操作栏 -->
     <transition name="slide-up">
-      <div v-if="selectedCount > 0" class="batch-toolbar-wrapper">
+      <!-- 批量操作栏（选中卡片时显示） -->
+      <div v-if="selectedCount > 0" class="batch-toolbar-wrapper" key="batch">
         <BatchActionToolbar
           :selected-count="selectedCount"
           :selected-issues="selectedIssues"
@@ -803,6 +850,33 @@
           @batch-link="onBatchLink"
           @batch-delete="onBatchDelete"
         />
+      </div>
+      <!-- 默认 Footer（无选中卡片时，显示 Sprint 目标和看板所有者） -->
+      <div v-else-if="selectedProject && !loading" class="board-footer-wrapper" key="footer">
+        <div class="board-footer">
+          <div class="board-footer-left">
+            <!-- Board owner（项目负责人） -->
+            <span v-if="boardOwnerName" class="footer-item footer-owner" :title="'看板所有者: ' + boardOwnerName">
+              <span class="footer-label">👤</span>
+              <span class="footer-value">{{ boardOwnerName }}</span>
+            </span>
+            <!-- Sprint 目标 -->
+            <span v-if="currentSprintGoal" class="footer-item footer-goal" :title="'Sprint 目标: ' + currentSprintGoal">
+              <span class="footer-label">🎯</span>
+              <span class="footer-value footer-goal-text">{{ currentSprintGoal }}</span>
+            </span>
+            <span v-else-if="currentSelectedSprint && !currentSprintGoal" class="footer-item footer-goal footer-goal--empty">
+              <span class="footer-label">🎯</span>
+              <span class="footer-value">暂无 Sprint 目标</span>
+            </span>
+          </div>
+          <div class="board-footer-right">
+            <!-- 工单统计 -->
+            <span v-if="issues.length > 0" class="footer-item footer-stats">
+              <span class="footer-value">{{ issues.length }} 个工单</span>
+            </span>
+          </div>
+        </div>
       </div>
     </transition>
 
@@ -910,19 +984,90 @@ const route = useRoute()
 const projectStore = useProjectStore()
 
 // ===== Card Size 控制 =====
-type CardSize = 'S' | 'M' | 'L'
+type CardSize = 'S' | 'M' | 'L' | 'XL'
 const CARD_SIZE_KEY = 'tf_kanban_card_size'
 const cardSize = ref<CardSize>((localStorage.getItem(CARD_SIZE_KEY) as CardSize) || 'M')
 const cardSizeOptions = [
   { value: 'S' as const, label: 'S' },
   { value: 'M' as const, label: 'M' },
-  { value: 'L' as const, label: 'L' }
+  { value: 'L' as const, label: 'L' },
+  { value: 'XL' as const, label: 'XL' }
 ]
 
 function setCardSize(size: CardSize) {
   cardSize.value = size
   localStorage.setItem(CARD_SIZE_KEY, size)
 }
+
+// ===== TV 模式（全屏大屏显示） =====
+const isTvMode = ref(false)
+const TV_MODE_KEY = 'tf_kanban_tv_mode'
+
+function toggleTvMode() {
+  if (!isTvMode.value) {
+    // 进入 TV 模式
+    const el = document.documentElement
+    if (el.requestFullscreen) {
+      el.requestFullscreen().then(() => {
+        isTvMode.value = true
+        cardSize.value = 'XL'
+        localStorage.setItem(TV_MODE_KEY, 'true')
+      }).catch(() => {
+        // Fullscreen denied — fallback to just large card mode
+        isTvMode.value = true
+        cardSize.value = 'XL'
+      })
+    } else {
+      isTvMode.value = true
+      cardSize.value = 'XL'
+    }
+  } else {
+    // 退出 TV 模式
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { /* ignore */ })
+    }
+    isTvMode.value = false
+    // 恢复之前的卡片尺寸
+    const saved = localStorage.getItem(CARD_SIZE_KEY) as CardSize
+    cardSize.value = saved || 'M'
+    localStorage.removeItem(TV_MODE_KEY)
+  }
+}
+
+// 监听全屏退出事件（用户按 Esc 退出）
+function onFullscreenChange() {
+  if (!document.fullscreenElement && isTvMode.value) {
+    isTvMode.value = false
+    const saved = localStorage.getItem(CARD_SIZE_KEY) as CardSize
+    cardSize.value = saved || 'M'
+    localStorage.removeItem(TV_MODE_KEY)
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('fullscreenchange', onFullscreenChange)
+})
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+})
+
+// ===== 未解决/未匹配列工单（Orphan Issues） =====
+const showOrphanPanel = ref(false)
+
+/** 不属于看板任何可见列的工单 */
+const orphanIssues = computed(() => {
+  if (!selectedProject.value || visibleStatuses.value.length === 0) return []
+  const visibleStatusIds = new Set(visibleStatuses.value.map(s => s.id))
+  return issues.value.filter(i => {
+    if (boardColumnField.value === 'priority') {
+      return !visibleStatusIds.has(i.priority || 'Normal')
+    }
+    return !visibleStatusIds.has(i.statusId)
+  })
+})
+
+/** 未匹配列的工单数量 */
+const orphanIssueCount = computed(() => orphanIssues.value.length)
 
 /** 获取负责人姓名首字母/缩写 */
 function getInitials(name: string): string {
@@ -1557,6 +1702,15 @@ const currentSelectedSprint = computed(() => {
   return sprints.value.find(s => s.id === selectedSprint.value) || null
 })
 
+/** 看板所有者（项目负责人 leadId 对应的显示名称） */
+const boardOwnerName = computed(() => {
+  if (!selectedProject.value) return ''
+  const proj = projects.value.find(p => p.id === selectedProject.value)
+  if (!proj || !proj.leadId) return ''
+  const member = projectMembers.value.find(m => m.userId === proj.leadId)
+  return member?.displayName || ''
+})
+
 /** 当前活跃 Sprint（status=active 或日期范围包含今天的 planned Sprint） */
 const activeSprint = computed(() => {
   const active = sprints.value.find(s => s.status === 'active')
@@ -1567,6 +1721,14 @@ const activeSprint = computed(() => {
     s.status === 'planned' && s.startDate && s.endDate &&
     s.startDate <= today && s.endDate >= today
   )
+})
+
+/** 当前 Sprint 目标文本 */
+const currentSprintGoal = computed(() => {
+  // 优先展示选中 Sprint 的目标，其次展示活跃 Sprint 的目标
+  const sprint = currentSelectedSprint.value || activeSprint.value
+  if (!sprint) return ''
+  return sprint.goal || ''
 })
 
 /** Sprint 剩余天数（选中的 Sprint 有 endDate 时显示——active 或已开始的 planned） */
@@ -4833,6 +4995,79 @@ onUnmounted(() => {
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* ===== 底部默认 Footer ===== */
+.board-footer-wrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 15;
+}
+
+.board-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: var(--color-bg-2);
+  border-top: 1px solid var(--color-border);
+  min-height: 36px;
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+
+.board-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.board-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.footer-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-label {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.footer-value {
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.footer-owner .footer-value {
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.footer-goal-text {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer-goal--empty .footer-value {
+  color: var(--color-text-4);
+  font-style: italic;
+}
+
+.footer-stats .footer-value {
+  color: var(--color-text-3);
+}
+
 .slide-up-enter-active,
 .slide-up-leave-active {
   transition: transform 200ms ease-out, opacity 200ms ease-out;
@@ -5017,5 +5252,139 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+}
+
+/* ===== TV 模式样式 ===== */
+.kanban-page:fullscreen {
+  background: var(--color-bg-1);
+}
+
+.kanban-page:fullscreen .board-toolbar {
+  padding: 16px 32px;
+}
+
+.kanban-page:fullscreen .kanban-card {
+  min-height: 100px;
+  font-size: 16px;
+}
+
+.kanban-page:fullscreen .card-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.kanban-page:fullscreen .column-header-title {
+  font-size: 16px;
+}
+
+.kanban-page:fullscreen .board-column {
+  min-width: 320px;
+}
+
+/* ===== XL 卡片尺寸 ===== */
+.kanban-card--XL {
+  padding: 14px 16px;
+  min-height: 90px;
+}
+
+.kanban-card--XL .card-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  -webkit-line-clamp: 4;
+}
+
+/* ===== Orphan Issues 面板 ===== */
+.orphan-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: var(--color-bg-2);
+  border-left: 1px solid var(--color-border);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+}
+
+.orphan-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.orphan-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.orphan-panel-desc {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--color-text-3);
+  border-bottom: 1px solid var(--color-border-2);
+}
+
+.orphan-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.orphan-issue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.orphan-issue-item:hover {
+  background: var(--color-fill-2);
+}
+
+.orphan-issue-key {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-2);
+  flex-shrink: 0;
+}
+
+.orphan-issue-title {
+  font-size: 13px;
+  color: var(--color-text-1);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orphan-issue-status {
+  font-size: 11px;
+  color: var(--color-text-3);
+  background: var(--color-fill-3);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Slide transition for orphan panel */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+
+.slide-right-enter-from,
+.slide-right-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 </style>
