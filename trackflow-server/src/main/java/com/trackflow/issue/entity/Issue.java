@@ -28,7 +28,9 @@ public class Issue implements Serializable {
     private Long sprintId;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long parentId;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate dueDate;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal estimatedHours;
     private BigDecimal spentHours;
     /** 派生字段：自身 + 所有后代 spent_hours 总和 */
@@ -39,6 +41,8 @@ public class Issue implements Serializable {
     private Integer childCount;
     /** 已关闭的直接子工单数 */
     private Integer childClosedCount;
+    /** 投票数冗余字段 */
+    private Integer voteCount;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime resolvedAt;
     private LocalDateTime deletedAt;
