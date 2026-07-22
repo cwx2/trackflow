@@ -61,8 +61,8 @@ public class NotificationAdminService {
     /**
      * 更新全局通知设置
      */
-    @Transactional
-    public NotificationSettingsVO updateSettings(UpdateNotificationSettingsDTO dto) {
+    @Transactional(rollbackFor = Exception.class)
+        public NotificationSettingsVO updateSettings(UpdateNotificationSettingsDTO dto) {
         if (dto.getInAppEnabled() != null) {
             upsertSetting("in_app_enabled", String.valueOf(dto.getInAppEnabled()),
                     "站内通知全局开关");

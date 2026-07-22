@@ -70,9 +70,9 @@ public class NotificationService {
      * @param resourceId   关联资源ID
      * @param projectId    关联项目ID（可为 null，如全局/系统通知）
      */
-    @Transactional
-    public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
-                       NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
+                           NotificationReason reason, String resourceType, Long resourceId, Long projectId) {
         // 防御性校验：actor_id 不应为 null（除系统自动通知外）
         if (actorId == null && type != NotificationType.issue_auto_assigned
                 && type != NotificationType.due_date_alert && type != NotificationType.overdue_alert) {
@@ -155,18 +155,18 @@ public class NotificationService {
     /**
      * 创建通知（无 reason 的兼容重载，向后兼容旧调用方）。
      */
-    @Transactional
-    public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
-                       String resourceType, Long resourceId, Long projectId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
+                           String resourceType, Long resourceId, Long projectId) {
         notify(userId, actorId, title, content, type, null, resourceType, resourceId, projectId);
     }
 
     /**
      * 创建通知（无 projectId 的兼容重载，用于不关联项目的系统通知）。
      */
-    @Transactional
-    public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
-                       String resourceType, Long resourceId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void notify(Long userId, Long actorId, String title, String content, NotificationType type,
+                           String resourceType, Long resourceId) {
         notify(userId, actorId, title, content, type, null, resourceType, resourceId, null);
     }
 
@@ -192,19 +192,19 @@ public class NotificationService {
      * @param resourceId   关联资源 ID
      * @param projectId    关联项目 ID（可为 null）
      */
-    @Transactional
-    public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
-                            NotificationType type, String resourceType, Long resourceId, Long projectId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
+                                NotificationType type, String resourceType, Long resourceId, Long projectId) {
         notifyBatch(userIds, actorId, title, content, type, null, resourceType, resourceId, projectId);
     }
 
     /**
      * 批量创建通知（含 reason），含聚合去重逻辑。
      */
-    @Transactional
-    public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
-                            NotificationType type, NotificationReason reason,
-                            String resourceType, Long resourceId, Long projectId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void notifyBatch(Collection<Long> userIds, Long actorId, String title, String content,
+                                NotificationType type, NotificationReason reason,
+                                String resourceType, Long resourceId, Long projectId) {
         if (userIds == null || userIds.isEmpty()) {
             return;
         }
@@ -394,8 +394,8 @@ public class NotificationService {
      *
      * @return 被抑制的通知数量
      */
-    @Transactional
-    public int suppressReadNotificationMails() {
+    @Transactional(rollbackFor = Exception.class)
+        public int suppressReadNotificationMails() {
         Notification update = new Notification();
         update.setMailSent(true);
         update.setMailSentAt(LocalDateTime.now());
@@ -409,8 +409,8 @@ public class NotificationService {
     /**
      * 批量标记通知邮件已发送（按 ID 列表）。
      */
-    @Transactional
-    public void markMailSentByIds(Collection<Long> notificationIds) {
+    @Transactional(rollbackFor = Exception.class)
+        public void markMailSentByIds(Collection<Long> notificationIds) {
         if (notificationIds.isEmpty()) return;
         Notification update = new Notification();
         update.setMailSent(true);
@@ -713,8 +713,8 @@ public class NotificationService {
     /**
      * 标记已读（带所有权校验）
      */
-    @Transactional
-    public void markRead(Long id, Long userId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void markRead(Long id, Long userId) {
         Notification n = notificationMapper.selectById(id);
         if (n == null || !n.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
@@ -726,8 +726,8 @@ public class NotificationService {
     /**
      * 全部标记已读
      */
-    @Transactional
-    public void markAllRead(Long userId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void markAllRead(Long userId) {
         Notification update = new Notification();
         update.setIsRead(true);
         notificationMapper.update(update,
@@ -751,8 +751,8 @@ public class NotificationService {
     /**
      * 删除单条通知（带所有权校验）
      */
-    @Transactional
-    public void delete(Long id, Long userId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void delete(Long id, Long userId) {
         Notification n = notificationMapper.selectById(id);
         if (n == null || !n.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
@@ -763,8 +763,8 @@ public class NotificationService {
     /**
      * 删除当前用户所有已读通知
      */
-    @Transactional
-    public int deleteAllRead(Long userId) {
+    @Transactional(rollbackFor = Exception.class)
+        public int deleteAllRead(Long userId) {
         return Math.toIntExact(notificationMapper.delete(
                 new LambdaQueryWrapper<Notification>()
                         .eq(Notification::getUserId, userId)
@@ -778,8 +778,8 @@ public class NotificationService {
      * @param retentionDays 保留天数
      * @return 清理数量
      */
-    @Transactional
-    public int cleanupExpiredNotifications(int retentionDays) {
+    @Transactional(rollbackFor = Exception.class)
+        public int cleanupExpiredNotifications(int retentionDays) {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(retentionDays);
         long deleted = notificationMapper.delete(
                 new LambdaQueryWrapper<Notification>()

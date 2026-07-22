@@ -46,8 +46,8 @@ public class NotificationOutboxService {
      * @param payload      完整事件参数 JSON
      * @param errorMessage 异常信息
      */
-    @Transactional
-    public void saveFailedEvent(String eventType, String payload, String errorMessage) {
+    @Transactional(rollbackFor = Exception.class)
+        public void saveFailedEvent(String eventType, String payload, String errorMessage) {
         NotificationOutbox outbox = new NotificationOutbox();
         outbox.setEventType(eventType);
         outbox.setPayload(payload);
@@ -73,8 +73,8 @@ public class NotificationOutboxService {
     /**
      * 标记重试成功。
      */
-    @Transactional
-    public void markCompleted(Long id) {
+    @Transactional(rollbackFor = Exception.class)
+        public void markCompleted(Long id) {
         NotificationOutbox outbox = outboxMapper.selectById(id);
         if (outbox == null) return;
         outbox.setStatus(NotificationOutbox.STATUS_COMPLETED);
@@ -88,8 +88,8 @@ public class NotificationOutboxService {
      * 标记重试失败，递增 retry_count 并计算下次重试时间。
      * 若超过最大重试次数则标记为 failed。
      */
-    @Transactional
-    public void markRetryFailed(Long id, String errorMessage) {
+    @Transactional(rollbackFor = Exception.class)
+        public void markRetryFailed(Long id, String errorMessage) {
         NotificationOutbox outbox = outboxMapper.selectById(id);
         if (outbox == null) return;
 
@@ -118,8 +118,8 @@ public class NotificationOutboxService {
      *
      * @return true 如果重置成功
      */
-    @Transactional
-    public boolean manualRetry(Long id) {
+    @Transactional(rollbackFor = Exception.class)
+        public boolean manualRetry(Long id) {
         NotificationOutbox outbox = outboxMapper.selectById(id);
         if (outbox == null) {
             return false;
@@ -177,8 +177,8 @@ public class NotificationOutboxService {
     /**
      * 清理已完成的旧记录（7 天前的 completed 记录）。
      */
-    @Transactional
-    public int cleanupCompleted() {
+    @Transactional(rollbackFor = Exception.class)
+        public int cleanupCompleted() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
         return outboxMapper.cleanupCompleted(cutoff);
     }

@@ -45,20 +45,20 @@ public class WebhookService {
         return webhookMapper.selectById(id);
     }
 
-    @Transactional
-    public Webhook create(Webhook webhook) {
+    @Transactional(rollbackFor = Exception.class)
+        public Webhook create(Webhook webhook) {
         webhookMapper.insert(webhook);
         return webhook;
     }
 
-    @Transactional
-    public Webhook update(Webhook webhook) {
+    @Transactional(rollbackFor = Exception.class)
+        public Webhook update(Webhook webhook) {
         webhookMapper.updateById(webhook);
         return webhookMapper.selectById(webhook.getId());
     }
 
-    @Transactional
-    public void delete(Long id) {
+    @Transactional(rollbackFor = Exception.class)
+        public void delete(Long id) {
         webhookMapper.deleteById(id);
         // 同时清理投递日志
         webhookLogMapper.delete(

@@ -32,8 +32,8 @@ public class MutedThreadService {
     /**
      * 静音指定资源的通知
      */
-    @Transactional
-    public void mute(Long userId, String resourceType, Long resourceId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void mute(Long userId, String resourceType, Long resourceId) {
         // 幂等：已存在则不重复插入
         if (isMuted(userId, resourceType, resourceId)) {
             return;
@@ -50,8 +50,8 @@ public class MutedThreadService {
     /**
      * 取消静音
      */
-    @Transactional
-    public void unmute(Long userId, String resourceType, Long resourceId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void unmute(Long userId, String resourceType, Long resourceId) {
         mutedThreadMapper.delete(
                 new LambdaQueryWrapper<MutedThread>()
                         .eq(MutedThread::getUserId, userId)
@@ -126,8 +126,8 @@ public class MutedThreadService {
      * @param resourceId   资源 ID
      * @return 删除的记录数
      */
-    @Transactional
-    public int deleteByResource(String resourceType, Long resourceId) {
+    @Transactional(rollbackFor = Exception.class)
+        public int deleteByResource(String resourceType, Long resourceId) {
         if (resourceId == null) {
             return 0;
         }
@@ -149,8 +149,8 @@ public class MutedThreadService {
      * @param resourceIds  资源 ID 集合
      * @return 删除的记录数
      */
-    @Transactional
-    public int deleteByResources(String resourceType, Collection<Long> resourceIds) {
+    @Transactional(rollbackFor = Exception.class)
+        public int deleteByResources(String resourceType, Collection<Long> resourceIds) {
         if (resourceIds == null || resourceIds.isEmpty()) {
             return 0;
         }
@@ -171,8 +171,8 @@ public class MutedThreadService {
      *
      * @return 删除的记录数
      */
-    @Transactional
-    public int cleanupOrphanedRecords() {
+    @Transactional(rollbackFor = Exception.class)
+        public int cleanupOrphanedRecords() {
         // 查询所有 resource_type='issue' 的记录
         List<MutedThread> issueThreads = mutedThreadMapper.selectList(
                 new LambdaQueryWrapper<MutedThread>()

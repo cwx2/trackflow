@@ -59,8 +59,8 @@ public class EmailConfigService {
     /**
      * 更新邮件配置
      */
-    @Transactional
-    public EmailConfigVO updateConfig(UpdateEmailConfigDTO dto) {
+    @Transactional(rollbackFor = Exception.class)
+        public EmailConfigVO updateConfig(UpdateEmailConfigDTO dto) {
         if (dto.getHost() != null) {
             upsertSetting("host", dto.getHost(), "SMTP 服务器地址");
         }

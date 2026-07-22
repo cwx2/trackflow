@@ -109,8 +109,8 @@ public class NotificationSubscriptionService {
     /**
      * 创建自定义订阅
      */
-    @Transactional
-    public NotificationSubscriptionVO create(Long userId, CreateSubscriptionDTO dto) {
+    @Transactional(rollbackFor = Exception.class)
+        public NotificationSubscriptionVO create(Long userId, CreateSubscriptionDTO dto) {
         Long sourceId = Long.parseLong(dto.getSourceId());
         String name;
 
@@ -168,8 +168,8 @@ public class NotificationSubscriptionService {
     /**
      * 更新订阅的事件配置
      */
-    @Transactional
-    public NotificationSubscriptionVO updateEvents(Long userId, Long subscriptionId, UpdateSubscriptionEventsDTO dto) {
+    @Transactional(rollbackFor = Exception.class)
+        public NotificationSubscriptionVO updateEvents(Long userId, Long subscriptionId, UpdateSubscriptionEventsDTO dto) {
         NotificationSubscription sub = subscriptionMapper.selectById(subscriptionId);
         if (sub == null || !sub.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "订阅不存在");
@@ -187,8 +187,8 @@ public class NotificationSubscriptionService {
     /**
      * 删除订阅（默认订阅不可删除）
      */
-    @Transactional
-    public void delete(Long userId, Long subscriptionId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void delete(Long userId, Long subscriptionId) {
         NotificationSubscription sub = subscriptionMapper.selectById(subscriptionId);
         if (sub == null || !sub.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "订阅不存在");

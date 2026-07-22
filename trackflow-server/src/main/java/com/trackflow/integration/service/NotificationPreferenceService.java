@@ -258,8 +258,8 @@ public class NotificationPreferenceService {
     /**
      * 更新用户通知偏好（全局，向后兼容）
      */
-    @Transactional
-    public NotificationPreference update(Long userId, UpdateNotificationPreferenceDTO dto) {
+    @Transactional(rollbackFor = Exception.class)
+        public NotificationPreference update(Long userId, UpdateNotificationPreferenceDTO dto) {
         return update(userId, null, dto);
     }
 
@@ -267,8 +267,8 @@ public class NotificationPreferenceService {
      * 更新用户通知偏好（支持全局或项目级）。
      * 若 projectId 非空且该项目的偏好不存在，则自动创建。
      */
-    @Transactional
-    public NotificationPreference update(Long userId, Long projectId, UpdateNotificationPreferenceDTO dto) {
+    @Transactional(rollbackFor = Exception.class)
+        public NotificationPreference update(Long userId, Long projectId, UpdateNotificationPreferenceDTO dto) {
         // 校验静音时段一致性：要么同时为 null，要么同时有值
         boolean hasStart = dto.getQuietHoursStart() != null && !dto.getQuietHoursStart().isEmpty();
         boolean hasEnd = dto.getQuietHoursEnd() != null && !dto.getQuietHoursEnd().isEmpty();
@@ -296,8 +296,8 @@ public class NotificationPreferenceService {
     /**
      * 删除用户指定项目的偏好（恢复使用全局设置）
      */
-    @Transactional
-    public void deleteProjectPreference(Long userId, Long projectId) {
+    @Transactional(rollbackFor = Exception.class)
+        public void deleteProjectPreference(Long userId, Long projectId) {
         preferenceMapper.delete(
                 new LambdaQueryWrapper<NotificationPreference>()
                         .eq(NotificationPreference::getUserId, userId)
