@@ -15,14 +15,16 @@ const authStore = useAuthStore()
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
+  const state = params.get('state')
 
-  if (!code) {
+  if (!code || !state) {
+    console.error('Auth callback missing required parameters (code or state)')
     router.push('/login')
     return
   }
 
   try {
-    await authStore.handleCallback(code)
+    await authStore.handleCallback(code, state)
     router.push('/issues')
   } catch (error) {
     console.error('Auth callback failed:', error)

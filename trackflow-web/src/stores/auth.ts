@@ -266,8 +266,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 处理 Keycloak 回调，用 code 换取 token
+   * 验证 state 参数防止 CSRF 攻击（RFC 6749 Section 10.12）
    */
-  async function handleCallback(code: string) {
+  async function handleCallback(code: string, state: string) {
+    // 验证 state 参数防止 CSRF 攻击
+    const savedState = sessionStorage.getItem('oauth_state')
+    if (!savedState || savedState !== state) {
+      sessionStorage.removeItem('pkce_code_verifier')
+      sessionStorage.removeItem('oauth_state')
+      throw new Error('OAuth state mismatch - possible CSRF attack')
+    }
+
     const codeVerifier = sessionStorage.getItem('pkce_code_verifier') || ''
 
     const params = new URLSearchParams({
@@ -298,7 +307,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 解析 JWT payload 获取用户信息
     user.value = parseJwtPayload(data.access_token)
 
-    // 清理
+    // 清理 OAuth 临时数据
     sessionStorage.removeItem('pkce_code_verifier')
     sessionStorage.removeItem('oauth_state')
   }
