@@ -33,14 +33,17 @@ public interface GlobalMemberMapper extends BaseMapper<GlobalMember> {
     List<Long> selectUserIdsByRoleId(@Param("roleId") Long roleId);
 
     /**
-     * 查询用户在指定项目中通过全局分配获得的权限
+     * 查询用户通过全局分配获得的项目级权限
      * （全局分配的角色等效于在每个项目中都有该角色）
+     * 仅返回 scope='project' 的权限——全局 scope 的权限不应在项目上下文中生效
      */
     @Select("""
             SELECT DISTINCT rp.permission
             FROM role_permission rp
             INNER JOIN global_member gm ON gm.role_id = rp.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
             WHERE gm.user_id = #{userId}
+              AND sp.scope = 'project'
             """)
     List<String> selectGlobalMemberPermissions(@Param("userId") Long userId);
 

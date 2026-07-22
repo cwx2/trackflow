@@ -32,6 +32,7 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
      * 匹配两种情况：
      * 1. ugr.project_id = 指定项目 ID（精确绑定）
      * 2. ugr.project_id IS NULL 且 role_type = 'project'（全局作用域，对所有项目生效）
+     * 仅返回 scope='project' 的权限——项目级分配时全局权限不应生效
      */
     @Select("""
             SELECT DISTINCT rp.permission
@@ -39,17 +40,20 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
             INNER JOIN user_group_role ugr ON ugr.role_id = rp.role_id
             INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
             INNER JOIN sys_role sr ON sr.id = ugr.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
             WHERE ugm.user_id = #{userId}
               AND (
                 ugr.project_id = #{projectId}
                 OR (ugr.project_id IS NULL AND sr.role_type = 'project')
               )
+              AND sp.scope = 'project'
             """)
     List<String> selectProjectPermissionsByUserAndProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
 
     /**
      * 查询用户通过组继承的所有项目级权限（不限项目）
      * 包含精确绑定项目的角色 + 全局作用域的项目角色
+     * 仅返回 scope='project' 的权限
      */
     @Select("""
             SELECT DISTINCT rp.permission
@@ -57,8 +61,10 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
             INNER JOIN user_group_role ugr ON ugr.role_id = rp.role_id
             INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
             INNER JOIN sys_role sr ON sr.id = ugr.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
             WHERE ugm.user_id = #{userId}
               AND sr.role_type = 'project'
+              AND sp.scope = 'project'
             """)
     List<String> selectAllProjectPermissionsByUserId(@Param("userId") Long userId);
 

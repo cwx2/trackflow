@@ -28,6 +28,7 @@ spring:
     baseline-on-migrate: true
     placeholder-replacement: false
     out-of-order: true
+    ignore-migration-patterns: "*:missing"
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
