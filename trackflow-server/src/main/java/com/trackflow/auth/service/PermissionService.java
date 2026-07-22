@@ -51,6 +51,28 @@ public class PermissionService {
     /** Anonymous 内置角色 ID（未登录访问 public 项目） */
     private static final Long ANONYMOUS_ROLE_ID = 9L;
 
+    /**
+     * Reporter 固有权限集合（Inherent Permissions）。
+     * 参考 YouTrack：Issue reporter 永远有权查看、编辑、评论自己创建的工单，
+     * 即使角色中没有显式授予 Read Issue / Update Issue / Add Comment 权限。
+     * 这是基于资源所有权的无条件自动授权，与 issue:edit_own 等可配置权限不同。
+     */
+    private static final Set<String> REPORTER_INHERENT_PERMISSIONS = Set.of(
+            "issue:view",
+            "issue:edit",
+            "issue:comment",
+            "issue:change_status"
+    );
+
+    /**
+     * Assignee 固有权限集合。
+     * 负责人对分配给自己的工单天然继承 view 权限。
+     * 编辑和状态变更仍需 issue:edit_assigned 权限（可配置的资源级规则）。
+     */
+    private static final Set<String> ASSIGNEE_INHERENT_PERMISSIONS = Set.of(
+            "issue:view"
+    );
+
     private final StringRedisTemplate redisTemplate;
     private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
@@ -467,14 +489,25 @@ public class PermissionService {
     /**
      * 检查用户对特定 Issue 的权限（含资源级规则）。
      *
-     * <p>资源级规则（可通过角色配置开启/关闭）：
-     * <ul>
-     *   <li>reporter 需要 issue:edit_own 权限才能编辑自己创建的工单</li>
-     *   <li>assignee 需要 issue:edit_assigned 权限才能编辑/变更分配给自己的工单</li>
-     * </ul>
+     * <p>权限检查优先级：
+     * <ol>
+     *   <li>项目级角色权限：直接通过 hasPermission 判断（含 system:admin 检查）</li>
+     *   <li>固有权限（Inherent Permissions）：基于资源所有权的无条件自动授权
+     *       <ul>
+     *         <li>reporter 对自己创建的工单天然继承 view/edit/comment 权限（无需额外权限码）</li>
+     *         <li>assignee 对分配给自己的工单天然继承 view 权限</li>
+     *       </ul>
+     *   </li>
+     *   <li>资源级规则（可通过角色配置开启/关闭）：
+     *       <ul>
+     *         <li>assignee 需要 issue:edit_assigned 权限才能编辑/变更状态</li>
+     *       </ul>
+     *   </li>
+     * </ol>
      *
-     * <p>这些权限由管理员在角色配置中控制，不再硬编码授予。
-     * 参考 OpenProject 的 edit_own_work_packages 模式。
+     * <p>固有权限参考 YouTrack Inherent Permissions 规则：
+     * Issue reporter 永远有权查看、编辑自己创建的工单的公共字段，即使角色中没有显式授予
+     * Read Issue 或 Update Issue 权限。
      *
      * @param userId     当前操作用户
      * @param issue      目标 Issue 对象
@@ -489,12 +522,25 @@ public class PermissionService {
             return true;
         }
 
-        // 2. 资源级规则：创建者（reporter）需要 issue:edit_own 权限
-        if ("issue:edit".equals(permission) && Objects.equals(userId, issue.getReporterId())) {
-            return hasPermission(userId, issue.getProjectId(), "issue:edit_own");
+        // 2. 固有权限（Inherent Permissions）：基于资源所有权的无条件自动授权
+        //    参考 YouTrack："Issue reporters always have permission to view public fields,
+        //    update public fields, and add links to the issues that they created...
+        //    even when they don't have Read Issue, Update Issue, and Link Issues permissions."
+        if (Objects.equals(userId, issue.getReporterId())) {
+            // Reporter 对自己创建的工单天然继承 view/edit/comment 权限
+            if (REPORTER_INHERENT_PERMISSIONS.contains(permission)) {
+                return true;
+            }
         }
 
-        // 3. 资源级规则：负责人（assignee）需要 issue:edit_assigned 权限
+        // Assignee 对分配给自己的工单天然继承 view 权限
+        if (Objects.equals(userId, issue.getAssigneeId())) {
+            if (ASSIGNEE_INHERENT_PERMISSIONS.contains(permission)) {
+                return true;
+            }
+        }
+
+        // 3. 资源级规则：负责人（assignee）编辑——需要 issue:edit_assigned 权限
         if ("issue:edit".equals(permission) && Objects.equals(userId, issue.getAssigneeId())) {
             return hasPermission(userId, issue.getProjectId(), "issue:edit_assigned");
         }
