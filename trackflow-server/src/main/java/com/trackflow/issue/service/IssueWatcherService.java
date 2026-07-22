@@ -44,7 +44,7 @@ public class IssueWatcherService {
      * 手动关注工单。
      * 校验：用户必须是工单所在项目的成员。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void watch(Long issueId, Long userId) {
         // 校验工单存在
         Issue issue = issueMapper.selectById(issueId);
@@ -72,7 +72,7 @@ public class IssueWatcherService {
     /**
      * 取消关注工单。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void unwatch(Long issueId, Long userId) {
         watcherMapper.delete(new LambdaQueryWrapper<IssueWatcher>()
                 .eq(IssueWatcher::getIssueId, issueId)

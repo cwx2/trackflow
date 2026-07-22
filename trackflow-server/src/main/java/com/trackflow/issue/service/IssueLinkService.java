@@ -111,7 +111,7 @@ public class IssueLinkService {
     /**
      * 创建关联
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void createIssueLink(Long issueId, CreateIssueLinkDTO dto) {
         // 校验 linkType 是否为合法枚举值（防御性编程，防绕过 DTO 校验）
         if (!VALID_LINK_TYPES.contains(dto.getLinkType())) {
@@ -183,7 +183,7 @@ public class IssueLinkService {
     /**
      * 删除关联
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteIssueLink(Long linkId) {
         IssueLink link = linkMapper.selectById(linkId);
         if (link == null) {

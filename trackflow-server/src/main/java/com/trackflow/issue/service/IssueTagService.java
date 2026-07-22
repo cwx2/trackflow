@@ -47,7 +47,7 @@ public class IssueTagService {
     /**
      * 创建标签
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public IssueTag createTag(Long projectId, CreateTagDTO dto) {
         // 归档项目不允许创建标签
         projectService.assertProjectActive(projectId);
@@ -90,7 +90,7 @@ public class IssueTagService {
     /**
      * 为 Issue 添加标签
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void addTagToIssue(Long issueId, Long tagId) {
         assertIssueProjectActive(issueId);
 
@@ -128,7 +128,7 @@ public class IssueTagService {
     /**
      * 移除 Issue 上的标签
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeTagFromIssue(Long issueId, Long tagId) {
         assertIssueProjectActive(issueId);
 
