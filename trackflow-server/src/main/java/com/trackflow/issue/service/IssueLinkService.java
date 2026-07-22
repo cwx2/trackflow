@@ -51,7 +51,8 @@ public class IssueLinkService {
     );
 
     /**
-     * 获取 Issue 的所有关联（包括作为 source 和 target 的）
+     * 获取 Issue 的所有关联（包括作为 source 和 target 的）。
+     * 使用批量查询避免 N+1 性能问题。
      */
     public List<IssueLinkVO> listIssueLinks(Long issueId) {
         // 查询作为 source 的链接
@@ -66,18 +67,41 @@ public class IssueLinkService {
                         .eq(IssueLink::getTargetIssueId, issueId)
         );
 
+        if (asSource.isEmpty() && asTarget.isEmpty()) {
+            return List.of();
+        }
+
+        // 收集所有关联的 Issue ID，一次性批量查询
+        Set<Long> linkedIssueIds = new HashSet<>();
+        for (IssueLink link : asSource) {
+            linkedIssueIds.add(link.getTargetIssueId());
+        }
+        for (IssueLink link : asTarget) {
+            linkedIssueIds.add(link.getSourceIssueId());
+        }
+
+        // 批量查询关联 Issue（1 次 DB 查询）
+        Map<Long, Issue> issueMap = issueMapper.selectBatchIds(linkedIssueIds).stream()
+                .collect(Collectors.toMap(Issue::getId, issue -> issue, (a, b) -> a));
+
+        // 批量获取所有状态（status 表数据极少，全量缓存）
+        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
         List<IssueLinkVO> result = new ArrayList<>();
 
         // source 关联：展示 target issue 信息
         for (IssueLink link : asSource) {
-            IssueLinkVO vo = buildLinkVO(link.getId(), link.getLinkType(), link.getTargetIssueId());
+            IssueLinkVO vo = buildLinkVOFromMaps(link.getId(), link.getLinkType(),
+                    link.getTargetIssueId(), issueMap, statusMap);
             if (vo != null) result.add(vo);
         }
 
         // target 关联：展示 source issue 信息，link type 取反义
         for (IssueLink link : asTarget) {
             String reverseType = getReverseLinkType(link.getLinkType());
-            IssueLinkVO vo = buildLinkVO(link.getId(), reverseType, link.getSourceIssueId());
+            IssueLinkVO vo = buildLinkVOFromMaps(link.getId(), reverseType,
+                    link.getSourceIssueId(), issueMap, statusMap);
             if (vo != null) result.add(vo);
         }
 
@@ -320,13 +344,15 @@ public class IssueLinkService {
 
     // ========== 私有方法 ==========
 
-    private IssueLinkVO buildLinkVO(Long linkId, String linkType, Long linkedIssueId) {
-        Issue issue = issueMapper.selectById(linkedIssueId);
+    /**
+     * 从预加载的 Map 中构建 IssueLinkVO（批量模式，避免 N+1）
+     */
+    private IssueLinkVO buildLinkVOFromMaps(Long linkId, String linkType, Long linkedIssueId,
+                                            Map<Long, Issue> issueMap, Map<Long, IssueStatus> statusMap) {
+        Issue issue = issueMap.get(linkedIssueId);
         if (issue == null || issue.getDeletedAt() != null) {
             return null;
         }
-
-        IssueStatus status = statusMapper.selectById(issue.getStatusId());
 
         IssueLinkVO vo = new IssueLinkVO();
         vo.setId(String.valueOf(linkId));
@@ -334,8 +360,11 @@ public class IssueLinkService {
         vo.setIssueId(String.valueOf(issue.getId()));
         vo.setIssueKey(issue.getIssueKey());
         vo.setIssueTitle(issue.getTitle());
-        if (status != null) {
-            vo.setIssueStatus(issueConverter.toStatusVO(status));
+        if (issue.getStatusId() != null) {
+            IssueStatus status = statusMap.get(issue.getStatusId());
+            if (status != null) {
+                vo.setIssueStatus(issueConverter.toStatusVO(status));
+            }
         }
         return vo;
     }
