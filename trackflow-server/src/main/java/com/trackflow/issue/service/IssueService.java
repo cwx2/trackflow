@@ -2510,6 +2510,11 @@ public class IssueService {
         // 清理活动记录
         activityMapper.delete(new LambdaQueryWrapper<IssueActivity>().eq(IssueActivity::getIssueId, id));
 
+        // 清理 Key 变更历史（FK 为 NO ACTION，必须手动清理）
+        issueKeyHistoryMapper.delete(
+                new LambdaQueryWrapper<IssueKeyHistory>().eq(IssueKeyHistory::getIssueId, id)
+        );
+
         // 清理通知静音记录（兜底，软删除时应已清理）
         mutedThreadService.deleteByResource("issue", id);
 
