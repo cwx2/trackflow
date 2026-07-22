@@ -268,7 +268,7 @@ const formData = reactive({
 
 // ==================== Computed ====================
 const filteredRules = computed(() => {
-  let list = rules.value
+  let list = rules.value.filter(r => r.ruleType !== 'on_schedule')
   if (searchKeyword.value) {
     const kw = searchKeyword.value.toLowerCase()
     list = list.filter(r => r.name.toLowerCase().includes(kw))
@@ -356,6 +356,7 @@ async function handleSubmit() {
     const dto: WorkflowRuleDTO = {
       name: formData.name,
       description: formData.description || undefined,
+      ruleType: 'on_change',
       triggerEvent: formData.triggerEvent,
       triggerField: formData.triggerField || undefined,
       conditionJson: JSON.stringify(formData.conditions.filter(c => c.field)),
