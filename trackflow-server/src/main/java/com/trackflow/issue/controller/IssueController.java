@@ -9,7 +9,6 @@ import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
-import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueStatus;
@@ -26,8 +25,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
@@ -307,41 +304,8 @@ public class IssueController {
     @PostMapping("/{id}/transitions/undo")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<TransitStatusResultVO> undoTransitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
-        // 撤销操作：验证目标状态必须是上一个状态（从活动记录获取），防止任意跳转
-        IssueActivity lastStatusChange = issueService.getLastStatusChange(id);
-        if (lastStatusChange == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "该工单没有状态变更记录，无法撤销");
-        }
-
-        // 时间窗口校验：撤销仅在 30 秒内有效
-        long elapsedSeconds = Duration.between(lastStatusChange.getCreatedAt(), LocalDateTime.now()).getSeconds();
-        if (elapsedSeconds > 30) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "撤销窗口已过期（30秒内有效）");
-        }
-
-        // 操作人校验：只能撤销自己的操作
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        if (!currentUserId.equals(lastStatusChange.getUserId())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "只能撤销自己的操作");
-        }
-
-        // 并发修改检测：检查该工单在状态变更之后是否有其他人做过修改
-        Issue currentIssue = issueService.getById(id);
-        if (currentIssue.getUpdatedBy() != null && !currentUserId.equals(currentIssue.getUpdatedBy())) {
-            if (currentIssue.getUpdatedAt() != null && currentIssue.getUpdatedAt().isAfter(lastStatusChange.getCreatedAt())) {
-                throw new BusinessException(ErrorCode.CONFLICT, "工单已被其他人修改，无法撤销");
-            }
-        }
-
-        // 验证目标状态名称与上一次变更的旧状态一致（业务校验在 Service 层）
-        issueService.validateUndoTargetStatus(dto.getStatusId(), lastStatusChange);
-
-        // 目标状态已验证为上一个状态，跳过工作流校验执行撤销
-        ActionExecutionResult actionResult = issueService.transitStatusSkipWorkflow(id, dto.getStatusId(), "撤销状态变更");
-
-        // 返回更新后的版本号
-        Issue updated = issueService.getById(id);
-        return R.ok(TransitStatusResultVO.of(updated.getVersion(), actionResult));
+        TransitStatusResultVO result = issueService.undoTransitStatus(id, dto.getStatusId());
+        return R.ok(result);
     }
 
     @PutMapping("/{id}/assign")
