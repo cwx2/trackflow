@@ -4,6 +4,23 @@
     <div class="board-toolbar">
       <div class="toolbar-left">
         <h2 class="page-title">{{ displayBoardName }}</h2>
+        <!-- 新建按钮（YouTrack 风格） -->
+        <a-dropdown v-if="selectedProject && canCreateIssue" trigger="click" @select="onNewMenuSelect">
+          <a-button type="primary" size="small">
+            <template #icon><icon-plus /></template>
+            新建...
+          </a-button>
+          <template #content>
+            <a-doption value="card">
+              <template #icon><icon-file /></template>
+              新建卡片
+            </a-doption>
+            <a-doption value="sprint">
+              <template #icon><icon-calendar /></template>
+              新建 Sprint
+            </a-doption>
+          </template>
+        </a-dropdown>
         <a-select
           v-model="selectedProject"
           placeholder="选择项目"
@@ -788,6 +805,79 @@
         />
       </div>
     </transition>
+
+    <!-- 新建卡片对话框（从头部"新建..."按钮触发） -->
+    <a-modal
+      v-model:visible="newCardModalVisible"
+      title="新建卡片"
+      :width="480"
+      :ok-loading="newCardSubmitting"
+      ok-text="创建"
+      cancel-text="取消"
+      @ok="submitNewCardModal"
+      @cancel="newCardModalVisible = false"
+    >
+      <a-form :model="newCardForm" layout="vertical" size="medium">
+        <a-form-item label="标题" required>
+          <a-input v-model="newCardForm.title" placeholder="输入工单标题" :max-length="200" />
+        </a-form-item>
+        <a-form-item label="类型">
+          <a-select v-model="newCardForm.issueType" placeholder="选择工单类型">
+            <a-option value="Task">任务</a-option>
+            <a-option value="Bug">缺陷</a-option>
+            <a-option value="Feature">需求</a-option>
+            <a-option value="Story">用户故事</a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="优先级">
+          <a-select v-model="newCardForm.priority" placeholder="选择优先级">
+            <a-option value="Urgent">紧急</a-option>
+            <a-option value="High">高</a-option>
+            <a-option value="Normal">普通</a-option>
+            <a-option value="Low">低</a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="负责人">
+          <a-select v-model="newCardForm.assigneeId" placeholder="选择负责人" allow-clear>
+            <a-option v-for="m in projectMembers" :key="m.userId" :value="m.userId">
+              {{ m.displayName }}
+            </a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="Sprint">
+          <a-select v-model="newCardForm.sprintId" placeholder="选择 Sprint" allow-clear>
+            <a-option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</a-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 新建 Sprint 对话框 -->
+    <a-modal
+      v-model:visible="newSprintModalVisible"
+      title="新建 Sprint"
+      :width="480"
+      :ok-loading="newSprintSubmitting"
+      ok-text="创建"
+      cancel-text="取消"
+      @ok="submitNewSprintModal"
+      @cancel="newSprintModalVisible = false"
+    >
+      <a-form :model="newSprintForm" layout="vertical" size="medium">
+        <a-form-item label="名称" required>
+          <a-input v-model="newSprintForm.name" placeholder="输入 Sprint 名称" :max-length="100" />
+        </a-form-item>
+        <a-form-item label="目标">
+          <a-textarea v-model="newSprintForm.goal" placeholder="Sprint 目标描述（可选）" :max-length="500" :auto-size="{ minRows: 2, maxRows: 4 }" />
+        </a-form-item>
+        <a-form-item label="开始日期">
+          <a-date-picker v-model="newSprintForm.startDate" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="结束日期">
+          <a-date-picker v-model="newSprintForm.endDate" style="width: 100%" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -813,7 +903,7 @@ import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
-import { IconSettings, IconSearch, IconList, IconBarChart } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const route = useRoute()
@@ -3409,6 +3499,128 @@ async function submitAddCard(statusId: string, swimlaneKey?: string) {
     keepFormOpen = false
   } finally {
     addCardSubmitting.value = false
+  }
+}
+
+// ===== 头部"新建..."按钮相关 =====
+const newCardModalVisible = ref(false)
+const newCardSubmitting = ref(false)
+const newCardForm = ref({
+  title: '',
+  issueType: 'Task',
+  priority: 'Normal',
+  assigneeId: undefined as string | undefined,
+  sprintId: undefined as string | undefined
+})
+
+const newSprintModalVisible = ref(false)
+const newSprintSubmitting = ref(false)
+const newSprintForm = ref({
+  name: '',
+  goal: '',
+  startDate: undefined as string | undefined,
+  endDate: undefined as string | undefined
+})
+
+/** "新建..."按钮下拉菜单选择处理 */
+function onNewMenuSelect(value: string | number | Record<string, any> | undefined) {
+  if (value === 'card') {
+    // 打开新建卡片对话框，预填当前 Sprint
+    newCardForm.value = {
+      title: '',
+      issueType: 'Task',
+      priority: 'Normal',
+      assigneeId: undefined,
+      sprintId: selectedSprint.value || getActiveSprintId() || undefined
+    }
+    newCardModalVisible.value = true
+  } else if (value === 'sprint') {
+    newSprintForm.value = { name: '', goal: '', startDate: undefined, endDate: undefined }
+    newSprintModalVisible.value = true
+  }
+}
+
+/** 提交新建卡片对话框 */
+async function submitNewCardModal() {
+  const title = newCardForm.value.title.trim()
+  if (!title || !selectedProject.value) {
+    Message.warning('请输入工单标题')
+    return
+  }
+
+  newCardSubmitting.value = true
+  try {
+    const createData: Record<string, any> = {
+      projectId: selectedProject.value,
+      title,
+      issueType: newCardForm.value.issueType
+    }
+    if (newCardForm.value.priority && newCardForm.value.priority !== 'Normal') {
+      createData.priority = newCardForm.value.priority
+    }
+    if (newCardForm.value.assigneeId) {
+      createData.assigneeId = newCardForm.value.assigneeId
+    }
+    if (newCardForm.value.sprintId) {
+      createData.sprintId = newCardForm.value.sprintId
+    }
+
+    const res = await issueApi.create(createData as any)
+    const newIssue = res.data
+    if (newIssue) {
+      // 构建本地 IssueVO 添加到看板
+      const issueVO: IssueVO = {
+        id: newIssue.id,
+        issueKey: newIssue.issueKey,
+        title: newIssue.title,
+        issueType: newIssue.issueType || newCardForm.value.issueType,
+        priority: newIssue.priority || newCardForm.value.priority,
+        statusId: newIssue.statusId,
+        projectId: selectedProject.value!,
+        sprintId: newCardForm.value.sprintId,
+        assigneeId: newIssue.assigneeId || newCardForm.value.assigneeId,
+        assigneeName: newIssue.assigneeName || '',
+        reporterId: newIssue.reporterId,
+        version: newIssue.version,
+        createdAt: newIssue.createdAt,
+        updatedAt: newIssue.updatedAt
+      }
+      issues.value.push(issueVO)
+      Message.success(`${newIssue.issueKey} 创建成功`)
+      newCardModalVisible.value = false
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '创建工单失败')
+  } finally {
+    newCardSubmitting.value = false
+  }
+}
+
+/** 提交新建 Sprint 对话框 */
+async function submitNewSprintModal() {
+  const name = newSprintForm.value.name.trim()
+  if (!name || !selectedProject.value) {
+    Message.warning('请输入 Sprint 名称')
+    return
+  }
+
+  newSprintSubmitting.value = true
+  try {
+    const res = await sprintApi.create(selectedProject.value, {
+      name,
+      goal: newSprintForm.value.goal || undefined,
+      startDate: newSprintForm.value.startDate || undefined,
+      endDate: newSprintForm.value.endDate || undefined
+    })
+    if (res.data) {
+      sprints.value.push(res.data)
+      Message.success(`Sprint「${res.data.name}」创建成功`)
+      newSprintModalVisible.value = false
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '创建 Sprint 失败')
+  } finally {
+    newSprintSubmitting.value = false
   }
 }
 
