@@ -22,8 +22,8 @@
       @toggle-sidebar="sidebarVisible = !sidebarVisible"
     />
 
-    <!-- 快捷动作栏 -->
-    <div v-if="!isProjectArchived" class="quick-action-wrapper">
+    <!-- 快捷动作栏（需要状态变更权限） -->
+    <div v-if="!isProjectArchived && canChangeStatus" class="quick-action-wrapper">
       <QuickActionBar
         :issue-id="issue.id"
         :project-id="issue.projectId"
@@ -118,6 +118,15 @@
     @confirm="onMoveConfirm"
   />
 
+  <!-- Transition Comment Modal -->
+  <TransitionCommentModal
+    :visible="showTransitionModal"
+    :target-status="transitionTarget"
+    :require-comment="transitionRequireComment"
+    @confirm="onTransitionConfirm"
+    @cancel="showTransitionModal = false"
+  />
+
   <!-- Add Time Entry Dialog -->
   <a-modal
     v-model:visible="showTimeDialog"
@@ -189,6 +198,7 @@ import ActivityStream from './components/ActivityStream.vue'
 import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import MoveIssueModal from './components/MoveIssueModal.vue'
+import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
@@ -301,6 +311,11 @@ const canMoveIssue = computed(() => {
 // Move modal state
 const showMoveModal = ref(false)
 const moveModalRef = ref<InstanceType<typeof MoveIssueModal> | null>(null)
+
+// Transition comment modal state
+const showTransitionModal = ref(false)
+const transitionTarget = ref<StatusInfo | null>(null)
+const transitionRequireComment = ref(false)
 
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
@@ -572,7 +587,8 @@ const availableTransitions = computed<StatusInfo[]>(() => {
     name: localizeStatusName(s.name),
     color: s.color,
     blocked: s.blocked || false,
-    blockedBy: s.blockedBy || []
+    blockedBy: s.blockedBy || [],
+    requireComment: s.requireComment || false
   }))
 })
 
@@ -938,8 +954,30 @@ async function onQuickActionExecuted() {
 }
 
 async function onTransition(target: StatusInfo) {
+  // If the transition requires a comment, show the modal first
+  if (target.requireComment) {
+    transitionTarget.value = target
+    transitionRequireComment.value = true
+    showTransitionModal.value = true
+    return
+  }
+
+  // Otherwise execute directly
+  await executeTransition(target, undefined)
+}
+
+/** Called when user confirms the transition comment modal */
+async function onTransitionConfirm(comment: string) {
+  showTransitionModal.value = false
+  if (transitionTarget.value) {
+    await executeTransition(transitionTarget.value, comment || undefined)
+  }
+}
+
+/** Execute the actual status transition API call */
+async function executeTransition(target: StatusInfo, comment: string | undefined) {
   try {
-    const res = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version)
+    const res = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version)
     if (res.code === 0) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
@@ -954,7 +992,7 @@ async function onTransition(target: StatusInfo) {
         hideCancel: false,
         onOk: async () => {
           try {
-            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version, undefined, true)
+            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version, undefined, true)
             if (forceRes.code === 0) {
               await loadAll()
               Message.success(`状态已变更为 ${target.name}`)
@@ -977,7 +1015,7 @@ async function onTransition(target: StatusInfo) {
         hideCancel: false,
         onOk: async () => {
           try {
-            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, undefined, issue.value!.version, true)
+            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version, true)
             if (forceRes.code === 0) {
               await loadAll()
               Message.success(`状态已变更为 ${target.name}`)

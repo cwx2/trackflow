@@ -28,11 +28,11 @@ public class QuickActionController {
     // ==================== 用户端 API ====================
 
     /**
-     * 获取当前 Issue 可用的快捷动作列表
+     * 获取当前 Issue 可用的快捷动作列表（返回当前用户可执行的动作，无权限时返回空数组）
      */
     @GetMapping("/issues/{issueId}/quick-actions")
     @PreAuthorize("isAuthenticated()")
-    public R<List<QuickActionDefinitionVO>> getAvailableActions(@PathVariable Long issueId) {
+    public R<List<QuickActionDefinitionVO>> getAvailableActions(@PathVariable("issueId") Long issueId) {
         List<QuickActionDefinitionVO> actions = quickActionService.getAvailableActions(issueId);
         return R.ok(actions);
     }
@@ -43,8 +43,8 @@ public class QuickActionController {
     @PostMapping("/issues/{issueId}/quick-actions/{actionKey}/execute")
     @PreAuthorize("isAuthenticated()")
     public R<QuickActionExecutionResultVO> execute(
-            @PathVariable Long issueId,
-            @PathVariable String actionKey,
+            @PathVariable("issueId") Long issueId,
+            @PathVariable("actionKey") String actionKey,
             @Valid @RequestBody ExecuteQuickActionDTO dto) {
         QuickActionExecutionResultVO result = quickActionService.execute(issueId, actionKey, dto);
         return R.ok(result);
@@ -56,8 +56,8 @@ public class QuickActionController {
     @PostMapping("/issues/{issueId}/quick-actions/{actionKey}/execute-rule")
     @PreAuthorize("isAuthenticated()")
     public R<QuickActionExecutionResultVO> executeRule(
-            @PathVariable Long issueId,
-            @PathVariable String actionKey) {
+            @PathVariable("issueId") Long issueId,
+            @PathVariable("actionKey") String actionKey) {
         QuickActionExecutionResultVO result = quickActionService.executeRule(issueId, actionKey);
         return R.ok(result);
     }
@@ -68,8 +68,8 @@ public class QuickActionController {
     @GetMapping("/issues/{issueId}/quick-actions/{actionKey}/mail-templates")
     @PreAuthorize("isAuthenticated()")
     public R<List<MailTemplateVO>> getMailTemplates(
-            @PathVariable Long issueId,
-            @PathVariable String actionKey,
+            @PathVariable("issueId") Long issueId,
+            @PathVariable("actionKey") String actionKey,
             @RequestParam(required = false) Long projectId) {
         List<MailTemplateVO> templates = quickActionService.getMailTemplates(actionKey, projectId);
         return R.ok(templates);
@@ -105,7 +105,7 @@ public class QuickActionController {
     @PutMapping("/quick-actions/definitions/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<QuickActionDefinitionVO> updateDefinition(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody SaveQuickActionDefinitionDTO dto) {
         QuickActionDefinitionVO vo = quickActionService.updateDefinition(id, dto);
         return R.ok(vo);
@@ -116,7 +116,7 @@ public class QuickActionController {
      */
     @DeleteMapping("/quick-actions/definitions/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
-    public R<Void> deleteDefinition(@PathVariable Long id) {
+    public R<Void> deleteDefinition(@PathVariable("id") Long id) {
         quickActionService.deleteDefinition(id);
         return R.ok();
     }
@@ -149,7 +149,7 @@ public class QuickActionController {
     @PutMapping("/mail-templates/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
     public R<MailTemplateVO> updateMailTemplate(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody SaveMailTemplateDTO dto) {
         MailTemplateVO vo = quickActionService.updateMailTemplate(id, dto);
         return R.ok(vo);
@@ -160,7 +160,7 @@ public class QuickActionController {
      */
     @DeleteMapping("/mail-templates/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
-    public R<Void> deleteMailTemplate(@PathVariable Long id) {
+    public R<Void> deleteMailTemplate(@PathVariable("id") Long id) {
         quickActionService.deleteMailTemplate(id);
         return R.ok();
     }
