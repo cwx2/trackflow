@@ -490,14 +490,23 @@ public class ReportService {
         if (dto.getName() != null && !dto.getName().isBlank()) {
             report.setName(dto.getName().trim());
         }
+        boolean computationFieldChanged = false;
         if (dto.getType() != null) {
             report.setType(dto.getType());
+            computationFieldChanged = true;
         }
         if (dto.getConfig() != null) {
             report.setConfig(dto.getConfig());
+            computationFieldChanged = true;
         }
         if (dto.getShared() != null) {
             report.setShared(dto.getShared());
+        }
+
+        // 配置变更时清除持久化缓存，确保下次查看返回新配置计算的结果
+        if (computationFieldChanged) {
+            report.setCachedResult(null);
+            report.setLastCalculatedAt(null);
         }
 
         report.setUpdatedAt(LocalDateTime.now());
@@ -821,7 +830,10 @@ public class ReportService {
         }
 
         // 缓存未命中或强制刷新：执行计算
-        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        // 使用 Owner 权限决定数据范围（对标 YouTrack：Report data is retrieved according to
+        // the access rights of the report owner），所有查看者看到相同数据
+        Long executionOwner = report.getCreatedBy();
+        List<Long> scopeProjectIds = resolveExecutionScope(report, executionOwner);
         ReportExecuteResultVO result = executeInternal(report, scopeProjectIds);
 
         // 持久化计算结果
