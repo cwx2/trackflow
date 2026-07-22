@@ -26,6 +26,13 @@ public class ReportDefinition implements Serializable {
     /** 系统预置报表标记（不可被普通用户删除） */
     private Boolean isSystem;
 
+    /** 上次计算完成时间 */
+    private LocalDateTime lastCalculatedAt;
+
+    /** 缓存的计算结果（JSON 格式，对应 ReportExecuteResultVO） */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String cachedResult;
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
     @TableField(fill = FieldFill.INSERT)

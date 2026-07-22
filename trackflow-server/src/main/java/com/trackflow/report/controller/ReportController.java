@@ -107,9 +107,10 @@ public class ReportController {
 
     @GetMapping("/{id}/data")
     @PreAuthorize("@perm.canViewReports()")
-    public R<ReportExecuteResultVO> execute(@PathVariable("id") Long id) {
+    public R<ReportExecuteResultVO> execute(@PathVariable("id") Long id,
+                                            @RequestParam(value = "force", required = false, defaultValue = "false") boolean force) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(reportService.executeWithAccessCheck(id, userId));
+        return R.ok(reportService.executeWithAccessCheck(id, userId, force));
     }
 
     /**

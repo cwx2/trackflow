@@ -160,8 +160,10 @@ export const reportApi = {
   },
 
   /** 执行报表（获取数据） */
-  execute(id: string) {
-    return request.get<any, R<ReportDataVO>>(`/reports/${id}/data`)
+  execute(id: string, force?: boolean) {
+    return request.get<any, R<ReportDataVO>>(`/reports/${id}/data`, {
+      params: force ? { force: true } : undefined
+    })
   },
 
   /** 克隆报表 */

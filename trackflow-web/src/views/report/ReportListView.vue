@@ -625,7 +625,7 @@ async function executeReport(report: ReportDefinitionVO) {
 async function refreshReport(report: ReportDefinitionVO) {
   refreshingId.value = report.id
   try {
-    const res = await reportApi.execute(report.id)
+    const res = await reportApi.execute(report.id, true)
     reportData.value[report.id] = res.data
     // 重置自动刷新定时器
     setupAutoRefresh(report.id, res.data?.refreshInterval)

@@ -436,7 +436,7 @@ function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
 
 // ─── 数据加载 ──────────────────────────────────────────
 
-async function loadData() {
+async function loadData(force = false) {
   if (!props.widget) return
 
   const { widgetType } = props.widget
@@ -489,7 +489,7 @@ async function loadData() {
     loading.value = true
     error.value = null
     try {
-      const res = await reportApi.execute(reportId)
+      const res = await reportApi.execute(reportId, force || undefined)
       reportDataResult.value = res.data || null
       dataLoaded.value = true
     } catch (e: any) {
@@ -518,7 +518,7 @@ async function refreshData() {
   overviewData.value = null
   numberValue.value = null
   dataLoaded.value = false
-  await loadData()
+  await loadData(true)
   refreshing.value = false
 }
 

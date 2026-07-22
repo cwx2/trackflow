@@ -783,11 +783,19 @@ public class ReportService {
     }
 
     /**
-     * 执行报表（带权限校验）
-     * 对全局报表（projectId=null），按当前用户可访问的项目范围限制数据。
-     * 系统管理员可查看任何报表。
+     * 带权限校验的报表执行（支持结果缓存）。
+     * <p>
+     * 缓存策略（对标 YouTrack）：
+     * - 如果缓存未过期且非强制刷新：直接返回缓存结果
+     * - 如果缓存过期或强制刷新：重新计算并持久化结果
+     * - 缓存过期判断：lastCalculatedAt + refreshInterval > now
+     * - 默认缓存 TTL：600 秒（10 分钟），如果报表未配置 refreshInterval
+     *
+     * @param id     报表 ID
+     * @param userId 当前用户 ID
+     * @param force  是否强制重新计算（忽略缓存）
      */
-    public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId) {
+    public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId, boolean force) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
 
@@ -803,8 +811,87 @@ public class ReportService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
         }
 
+        // 缓存命中判断（非强制刷新时）
+        if (!force && isCacheValid(report)) {
+            ReportExecuteResultVO cached = deserializeCachedResult(report.getCachedResult());
+            if (cached != null) {
+                log.debug("Report cache hit: id={}, lastCalculatedAt={}", id, report.getLastCalculatedAt());
+                return cached;
+            }
+        }
+
+        // 缓存未命中或强制刷新：执行计算
         List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
-        return executeInternal(report, scopeProjectIds);
+        ReportExecuteResultVO result = executeInternal(report, scopeProjectIds);
+
+        // 持久化计算结果
+        persistCachedResult(report, result);
+
+        return result;
+    }
+
+    /**
+     * 带权限校验的报表执行（默认不强制刷新）
+     */
+    public ReportExecuteResultVO executeWithAccessCheck(Long id, Long userId) {
+        return executeWithAccessCheck(id, userId, false);
+    }
+
+    /**
+     * 判断报表缓存是否仍然有效。
+     * 缓存有效条件：lastCalculatedAt 非空 且 未超过 refreshInterval（默认 600 秒）
+     */
+    private boolean isCacheValid(ReportDefinition report) {
+        if (report.getLastCalculatedAt() == null || report.getCachedResult() == null) {
+            return false;
+        }
+        int ttlSeconds = getEffectiveTtl(report);
+        LocalDateTime expireAt = report.getLastCalculatedAt().plusSeconds(ttlSeconds);
+        return LocalDateTime.now().isBefore(expireAt);
+    }
+
+    /**
+     * 获取报表的有效缓存 TTL（秒）。
+     * 优先使用报表配置中的 refreshInterval，否则使用默认值 600 秒（10 分钟）。
+     */
+    private int getEffectiveTtl(ReportDefinition report) {
+        Map<String, Object> configMap = parseConfig(report.getConfig());
+        ReportConfig config = ReportConfig.fromMap(configMap);
+        Integer interval = config.getRefreshInterval();
+        return (interval != null && interval > 0) ? interval : DEFAULT_CACHE_TTL_SECONDS;
+    }
+
+    /** 默认缓存 TTL：10 分钟 */
+    private static final int DEFAULT_CACHE_TTL_SECONDS = 600;
+
+    /**
+     * 反序列化缓存的报表结果
+     */
+    private ReportExecuteResultVO deserializeCachedResult(String cachedJson) {
+        if (cachedJson == null || cachedJson.isBlank()) return null;
+        try {
+            return objectMapper.readValue(cachedJson, ReportExecuteResultVO.class);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to deserialize report cached result, will recalculate: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 持久化报表计算结果到数据库
+     */
+    private void persistCachedResult(ReportDefinition report, ReportExecuteResultVO result) {
+        try {
+            String resultJson = objectMapper.writeValueAsString(result);
+            ReportDefinition update = new ReportDefinition();
+            update.setId(report.getId());
+            update.setLastCalculatedAt(LocalDateTime.now());
+            update.setCachedResult(resultJson);
+            reportMapper.updateById(update);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize report result for caching: id={}, error={}", report.getId(), e.getMessage());
+            // 缓存持久化失败不影响正常返回
+        }
     }
 
     /**
