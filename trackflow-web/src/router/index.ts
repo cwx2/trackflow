@@ -82,7 +82,8 @@ const routes = [
       {
         path: 'sprint-planning',
         name: 'SprintPlanning',
-        component: () => import('@/views/sprint/SprintPlanningView.vue')
+        component: () => import('@/views/sprint/SprintPlanningView.vue'),
+        meta: { requiresSprintManage: true }
       },
       {
         path: 'workflow',
@@ -245,6 +246,11 @@ const routes = [
         component: () => import('@/views/settings/NotificationSettingsView.vue')
       },
       {
+        path: 'settings/security',
+        name: 'AccountSecurity',
+        component: () => import('@/views/settings/AccountSecurityView.vue')
+      },
+      {
         path: ':pathMatch(.*)*',
         name: 'NotFound',
         component: () => import('@/views/error/NotFoundView.vue')
@@ -320,6 +326,15 @@ router.beforeEach(async (to, _from, next) => {
   // 报表路由权限检查：system:admin 或在任意项目中有 report:view
   if (to.meta.requiresReport && permissionCheckAvailable) {
     const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:report')
+    if (!canAccess) {
+      next({ name: 'Forbidden' })
+      return
+    }
+  }
+
+  // Sprint 规划路由权限检查：system:admin 或在任意项目中有 sprint:create/sprint:edit
+  if (to.meta.requiresSprintManage && permissionCheckAvailable) {
+    const canAccess = authStore.hasGlobalPermission('system:admin') || authStore.hasGlobalPermission('nav:sprint_manage')
     if (!canAccess) {
       next({ name: 'Forbidden' })
       return

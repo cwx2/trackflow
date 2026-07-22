@@ -25,7 +25,7 @@
         <a-button v-if="canCreateSprint" type="primary" size="small" :disabled="!selectedProject" @click="openCreateModal">
           + 新建迭代
         </a-button>
-        <a-button size="small" :disabled="!selectedProject" @click="router.push('/sprint-planning')">
+        <a-button v-if="canEditSprint" size="small" :disabled="!selectedProject" @click="router.push('/sprint-planning')">
           📋 规划
         </a-button>
       </div>
