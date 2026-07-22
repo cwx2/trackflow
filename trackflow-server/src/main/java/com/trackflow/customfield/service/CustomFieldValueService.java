@@ -101,7 +101,7 @@ public class CustomFieldValueService {
     /**
      * 保存自定义字段值（默认 FULL 模式，向后兼容）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            List<CustomFieldDefinition> applicableFields) {
         saveValues(issueId, fieldValues, issueType, projectId, applicableFields, CustomFieldValidateMode.FULL);
@@ -110,7 +110,7 @@ public class CustomFieldValueService {
     /**
      * 保存自定义字段值（指定验证模式）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            List<CustomFieldDefinition> applicableFields, CustomFieldValidateMode mode) {
         if (fieldValues == null || fieldValues.isEmpty()) return;
@@ -123,6 +123,19 @@ public class CustomFieldValueService {
         // Field-level editability check
         List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
         if (userRoleIds != null) {
+            // Check private field edit permissions first
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
+                CustomFieldDefinition field = fieldMap.get(entry.getKey());
+                if (field != null && Boolean.TRUE.equals(field.getIsPrivate())) {
+                    if (currentUserId == null || !permissionService.hasPermission(currentUserId, projectId, "issue:update_private_fields")) {
+                        String fieldName = field.getName();
+                        throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                                "您没有编辑私有字段「" + fieldName + "」的权限");
+                    }
+                }
+            }
+            // Then check role-based updatableByRoles
             for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
                 CustomFieldProject mapping = projectOverrides.get(entry.getKey());
                 if (mapping == null) continue;
@@ -258,7 +271,7 @@ public class CustomFieldValueService {
     /**
      * 保存单个自定义字段值（用于侧边栏内联编辑）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId,
                                  List<CustomFieldDefinition> applicableFields) {
         CustomFieldDefinition field = applicableFields.stream()
@@ -389,7 +402,7 @@ public class CustomFieldValueService {
      *
      * @return 被删除的字段 ID 列表
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<Long> removeOrphanValues(Long issueId, String newIssueType, Long projectId,
                                           List<CustomFieldDefinition> applicableFields) {
         Map<Long, String> currentValues = getValues(issueId);
@@ -433,7 +446,17 @@ public class CustomFieldValueService {
      */
     public void checkFieldEditable(Long projectId, Long fieldId) {
         List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
-        if (userRoleIds == null) return;
+        if (userRoleIds == null) return; // system admin — skip checks
+
+        // Private field edit permission check
+        CustomFieldDefinition fieldDef = definitionMapper.selectById(fieldId);
+        if (fieldDef != null && Boolean.TRUE.equals(fieldDef.getIsPrivate())) {
+            Long userId = SecurityUtils.getCurrentUserId();
+            if (userId == null || !permissionService.hasPermission(userId, projectId, "issue:update_private_fields")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED,
+                        "您没有编辑私有字段「" + fieldDef.getName() + "」的权限");
+            }
+        }
 
         CustomFieldProject mapping = projectMapper.selectOne(
                 new LambdaQueryWrapper<CustomFieldProject>()

@@ -66,7 +66,7 @@ public class CustomFieldOptionService {
      * 设置选项的归档状态。
      * 归档后选项不出现在工单编辑时的下拉列表中，但已有工单的值仍保留。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setOptionArchived(Long fieldId, Long optionId, boolean archived) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
@@ -137,7 +137,7 @@ public class CustomFieldOptionService {
      * 内联添加枚举字段选项值（工单详情页/创建表单快捷入口）。
      * 参考 YouTrack: 在工单编辑时直接添加新值到枚举字段。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
@@ -244,7 +244,7 @@ public class CustomFieldOptionService {
      * - DTO 中无 id 的选项 → INSERT（新增）
      * - DB 中存在但 DTO 中不存在的选项 → 检查是否被引用：有引用则归档，无引用则物理删除
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateListOptions(Long customFieldId, List<UpdateCustomFieldDTO.OptionItem> dtoOptions) {
         // 1. 加载当前数据库中所有选项
         List<CustomFieldOption> existingOptions = optionMapper.selectList(

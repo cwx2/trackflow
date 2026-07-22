@@ -73,7 +73,7 @@ public class CustomFieldService {
 
     // ========== 全局字段定义 CRUD ==========
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
         if (!CustomFieldValidationEngine.SUPPORTED_FORMATS.contains(dto.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的字段类型: " + dto.getFieldFormat());
@@ -151,7 +151,7 @@ public class CustomFieldService {
         return entity;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public CustomFieldDefinition update(Long id, UpdateCustomFieldDTO dto) {
         CustomFieldDefinition entity = definitionMapper.selectById(id);
         if (entity == null) {
@@ -347,7 +347,7 @@ public class CustomFieldService {
         log.info("Deleted custom field definition: {}", id);
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void reorder(List<Long> ids) {
         for (int i = 0; i < ids.size(); i++) {
             CustomFieldDefinition entity = new CustomFieldDefinition();
@@ -357,7 +357,7 @@ public class CustomFieldService {
         }
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setAutoAttach(Long fieldId, boolean enabled) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
@@ -456,7 +456,7 @@ public class CustomFieldService {
     }
 
     /** 委托给 {@link CustomFieldOptionService} */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color) {
         return optionService.addOptionInline(projectId, fieldId, value, color);
     }
@@ -468,14 +468,14 @@ public class CustomFieldService {
     }
 
     /** 委托给 {@link CustomFieldValueService} */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
         valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields);
     }
 
     /** 委托给 {@link CustomFieldValueService} */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            CustomFieldValidateMode mode) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
@@ -483,7 +483,7 @@ public class CustomFieldService {
     }
 
     /** 委托给 {@link CustomFieldValueService} */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
         valueService.saveSingleValue(issueId, customFieldId, value, issueType, projectId, applicableFields);
@@ -500,7 +500,7 @@ public class CustomFieldService {
     }
 
     /** 委托给 {@link CustomFieldValueService} */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<Long> removeOrphanValues(Long issueId, String newIssueType, Long projectId) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, newIssueType);
         return valueService.removeOrphanValues(issueId, newIssueType, projectId, applicableFields);
@@ -532,7 +532,7 @@ public class CustomFieldService {
         // Apply visibility filter
         Map<Long, CustomFieldProject> conditionsMap = getProjectFieldConditions(projectId);
         List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
-        applicableFields = filterFieldsByVisibility(applicableFields, conditionsMap, userRoleIds);
+        applicableFields = filterFieldsByVisibility(applicableFields, conditionsMap, userRoleIds, projectId);
         return displayService.getValuesForDisplay(issueId, projectId, issueType, applicableFields);
     }
 
@@ -662,7 +662,7 @@ public class CustomFieldService {
                 .toList();
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void attachFieldToProject(Long projectId, Long customFieldId) {
         CustomFieldDefinition field = definitionMapper.selectById(customFieldId);
         if (field == null) {
@@ -690,7 +690,7 @@ public class CustomFieldService {
         projectMapper.insert(cfp);
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void detachFieldFromProject(Long projectId, Long customFieldId) {
         CustomFieldDefinition field = definitionMapper.selectById(customFieldId);
         if (field == null) {
@@ -701,22 +701,39 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldProject>()
                         .eq(CustomFieldProject::getCustomFieldId, customFieldId)
                         .eq(CustomFieldProject::getProjectId, projectId));
-        if (mapping == null) {
-            if (Boolean.TRUE.equals(field.getIsForAll())) {
-                log.info("全局字段 {} 从项目 {} 中移除（通过 detach 操作）", customFieldId, projectId);
+
+        if (Boolean.TRUE.equals(field.getIsForAll())) {
+            // 全局字段：创建或更新排除记录（YouTrack 行为：即使全局字段也可从项目移除）
+            if (mapping == null) {
+                CustomFieldProject exclusion = new CustomFieldProject();
+                exclusion.setCustomFieldId(customFieldId);
+                exclusion.setProjectId(projectId);
+                exclusion.setPosition(0);
+                exclusion.setIsExcluded(true);
+                projectMapper.insert(exclusion);
+            } else if (!Boolean.TRUE.equals(mapping.getIsExcluded())) {
+                mapping.setIsExcluded(true);
+                projectMapper.updateById(mapping);
+            } else {
+                // 已经是排除状态，无需操作
                 return;
             }
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该字段未附加到本项目");
+            log.info("全局字段 {} 从项目 {} 中排除", customFieldId, projectId);
+        } else {
+            // 非全局字段：删除映射记录
+            if (mapping == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该字段未附加到本项目");
+            }
+            projectMapper.deleteById(mapping.getId());
         }
 
-        projectMapper.deleteById(mapping.getId());
-
+        // 无论全局还是非全局，都清除该项目内所有工单的字段值
         valueMapper.delete(new LambdaQueryWrapper<CustomFieldValue>()
                 .eq(CustomFieldValue::getCustomFieldId, customFieldId)
                 .apply("issue_id IN (SELECT id FROM issue WHERE project_id = {0} AND deleted_at IS NULL)", projectId));
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void reorderProjectFields(Long projectId, List<Long> fieldIds) {
         List<CustomFieldProject> mappings = projectMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldProject>()
@@ -745,7 +762,7 @@ public class CustomFieldService {
                 .collect(Collectors.toMap(CustomFieldProject::getCustomFieldId, m -> m, (a, b) -> a));
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setFieldCondition(Long projectId, Long fieldId, Long conditionFieldId, List<String> conditionValues) {
         CustomFieldDefinition targetField = definitionMapper.selectById(fieldId);
         if (targetField == null) {
@@ -831,7 +848,7 @@ public class CustomFieldService {
         }
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int clearHiddenValues(Long projectId, Long fieldId) {
         CustomFieldProject mapping = projectMapper.selectOne(
                 new LambdaQueryWrapper<CustomFieldProject>()
@@ -876,7 +893,7 @@ public class CustomFieldService {
 
     // ========== 可见性 ==========
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setFieldVisibility(Long projectId, Long fieldId, List<Long> visibleToRoles, List<Long> updatableByRoles) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
@@ -909,7 +926,7 @@ public class CustomFieldService {
                 projectId, fieldId, visibleToRoles, updatableByRoles);
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setFieldProjectOverride(Long projectId, Long fieldId, Boolean isRequired, String defaultValue) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
@@ -1107,6 +1124,14 @@ public class CustomFieldService {
             List<CustomFieldDefinition> fields,
             Map<Long, CustomFieldProject> conditionsMap,
             List<Long> userRoleIds) {
+        return filterFieldsByVisibility(fields, conditionsMap, userRoleIds, null);
+    }
+
+    public List<CustomFieldDefinition> filterFieldsByVisibility(
+            List<CustomFieldDefinition> fields,
+            Map<Long, CustomFieldProject> conditionsMap,
+            List<Long> userRoleIds,
+            Long projectId) {
         if (userRoleIds == null) {
             // system admin — no filtering needed
             return fields;
@@ -1121,7 +1146,7 @@ public class CustomFieldService {
                 }
                 // Note: userRoleIds != null means user is NOT system admin (already checked above)
                 // so we need to check the specific permission
-                if (!permissionService.hasPermission(userId, null, "issue:read_private_fields")) {
+                if (!permissionService.hasPermission(userId, projectId, "issue:read_private_fields")) {
                     continue; // user lacks permission to read private fields
                 }
             }
@@ -1179,7 +1204,7 @@ public class CustomFieldService {
         List<CustomFieldDefinition> fields = listByProject(projectId, issueType);
         Map<Long, CustomFieldProject> conditionsMap = getProjectFieldConditions(projectId);
         List<Long> userRoleIds = getCurrentUserRoleIds(projectId);
-        fields = filterFieldsByVisibility(fields, conditionsMap, userRoleIds);
+        fields = filterFieldsByVisibility(fields, conditionsMap, userRoleIds, projectId);
 
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
         List<Long> fieldIds = fields.stream().map(CustomFieldDefinition::getId).toList();
