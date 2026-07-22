@@ -59,8 +59,9 @@ public class RoleService {
     private final ProjectMapper projectMapper;
     private final UserConverter userConverter;
     private final WorkflowTransitionMapper workflowTransitionMapper;
+    private final PermissionImplicationService permissionImplicationService;
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SysRole create(CreateRoleDTO dto) {
         // 检查 code 唯一性
         Long count = roleMapper.selectCount(
@@ -98,7 +99,7 @@ public class RoleService {
         return role;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SysRole update(Long id, UpdateRoleDTO dto) {
         SysRole role = getById(id);
 
@@ -120,7 +121,7 @@ public class RoleService {
         return role;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         SysRole role = getById(id);
 
@@ -174,7 +175,7 @@ public class RoleService {
     /**
      * 克隆角色（复制角色定义 + 权限）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SysRole clone(Long sourceId, String newName, String newCode) {
         SysRole source = getById(sourceId);
 
@@ -226,7 +227,7 @@ public class RoleService {
      * - 移除权限不受此限制（只要有 manage_roles 权限即可移除任何权限）
      * - system_admin 用户不受此限制（拥有所有权限）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void replacePermissions(Long id, List<String> permissions) {
         SysRole role = getById(id); // 确保存在
 
@@ -244,13 +245,33 @@ public class RoleService {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         checkPrivilegeEscalation(currentUserId, oldPermissions, permissions);
 
+        // 解析隐含/依赖权限关系
+        Set<String> oldSet = new HashSet<>(oldPermissions);
+        Set<String> newSet = new HashSet<>(permissions);
+        Set<String> addedPermissions = newSet.stream().filter(p -> !oldSet.contains(p)).collect(Collectors.toSet());
+        Set<String> removedPermissions = oldSet.stream().filter(p -> !newSet.contains(p)).collect(Collectors.toSet());
+
+        // 添加上层权限时，自动包含其隐含的底层权限
+        if (!addedPermissions.isEmpty()) {
+            Set<String> impliedPermissions = permissionImplicationService.resolveImpliedPermissions(addedPermissions);
+            newSet.addAll(impliedPermissions);
+        }
+
+        // 移除底层权限时，自动级联移除依赖它的上层权限
+        if (!removedPermissions.isEmpty()) {
+            Set<String> dependentRemovals = permissionImplicationService.resolveDependentRemovals(removedPermissions, newSet);
+            newSet.removeAll(dependentRemovals);
+        }
+
+        List<String> resolvedPermissions = new ArrayList<>(newSet);
+
         // 删除旧权限
         rolePermissionMapper.delete(
                 new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRoleId, id)
         );
 
         // 插入新权限
-        for (String perm : permissions) {
+        for (String perm : resolvedPermissions) {
             RolePermission rp = new RolePermission();
             rp.setRoleId(id);
             rp.setPermission(perm);
@@ -264,7 +285,7 @@ public class RoleService {
         systemAuditService.log("update_role_permissions", "role", id,
                 Map.of("roleName", role.getName(),
                         "oldPermissions", oldPermissions,
-                        "newPermissions", permissions));
+                        "newPermissions", resolvedPermissions));
     }
 
     /**

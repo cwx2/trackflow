@@ -54,7 +54,7 @@ public class ApiKeyService {
      *
      * @return 包含明文 key 的 Map（明文仅此一次返回）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> create(Long userId, String name, List<String> permissions, LocalDateTime expiresAt) {
         // 校验：Key 数量上限
         long existingCount = apiKeyMapper.selectCount(
@@ -129,7 +129,7 @@ public class ApiKeyService {
     /**
      * 撤销 API Key
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void revoke(Long id, Long userId) {
         ApiKey apiKey = apiKeyMapper.selectById(id);
         if (apiKey == null || !apiKey.getUserId().equals(userId)) {
@@ -150,7 +150,7 @@ public class ApiKeyService {
      * @param userId 用户 ID
      * @return 被删除的 Key 数量
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int revokeAllByUser(Long userId) {
         List<ApiKey> keys = listByUser(userId);
         if (keys.isEmpty()) {

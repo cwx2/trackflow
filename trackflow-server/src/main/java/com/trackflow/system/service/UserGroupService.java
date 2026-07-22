@@ -102,7 +102,7 @@ public class UserGroupService {
     /**
      * 创建用户组
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public UserGroup create(CreateGroupDTO dto) {
         // 校验名称唯一
         Long count = groupMapper.selectCount(
@@ -127,7 +127,7 @@ public class UserGroupService {
     /**
      * 更新用户组
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public UserGroup update(Long groupId, UpdateGroupDTO dto) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
@@ -158,7 +158,7 @@ public class UserGroupService {
     /**
      * 删除用户组
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long groupId) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
@@ -181,7 +181,7 @@ public class UserGroupService {
     /**
      * 添加成员到组
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void addMembers(Long groupId, List<Long> userIds) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
@@ -224,7 +224,7 @@ public class UserGroupService {
     /**
      * 从组中移除成员
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeMembers(Long groupId, List<Long> userIds) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
@@ -248,7 +248,7 @@ public class UserGroupService {
     /**
      * 为组分配角色（支持全局作用域、多项目批量分配）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void assignRole(Long groupId, GroupRoleDTO dto) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {
@@ -345,7 +345,7 @@ public class UserGroupService {
     /**
      * 移除组的角色分配
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeRole(Long groupId, Long groupRoleId) {
         UserGroup group = groupMapper.selectById(groupId);
         if (group == null) {

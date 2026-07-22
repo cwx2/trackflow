@@ -55,7 +55,7 @@ public class GlobalMemberService {
      * 分配全局项目角色。
      * 效果：用户在所有现有项目中获得该角色，且未来新建项目时自动继承。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public GlobalMember assign(GlobalMemberDTO dto) {
         Long userId = dto.getUserId();
         Long roleId = dto.getRoleId();
@@ -112,7 +112,7 @@ public class GlobalMemberService {
      *  因为"全局撤销"的语义就是该角色不再有效。如果管理员想保留某些项目的独立分配，
      *  需要重新在那些项目中手动添加。）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int revoke(Long userId, Long roleId) {
         // 1. 检查记录存在
         LambdaQueryWrapper<GlobalMember> wrapper = new LambdaQueryWrapper<GlobalMember>()
@@ -252,7 +252,7 @@ public class GlobalMemberService {
      * @param projectId 新创建的项目 ID
      * @return 添加的成员数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int syncGlobalMembersToProject(Long projectId) {
         List<GlobalMember> globalMembers = globalMemberMapper.selectList(new LambdaQueryWrapper<>());
         if (globalMembers.isEmpty()) return 0;

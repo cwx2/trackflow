@@ -87,7 +87,7 @@ public class UserService {
      *
      * @return 新创建的用户实体
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SysUser createUser(CreateUserDTO dto) {
         // 1. 本地重复性校验
         Long usernameCount = userMapper.selectCount(
@@ -292,7 +292,7 @@ public class UserService {
     /**
      * 禁用用户
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void disable(Long id, DisableUserDTO dto) {
         SysUser user = getById(id);
 
@@ -357,7 +357,7 @@ public class UserService {
     /**
      * 启用用户
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void enable(Long id) {
         SysUser user = getById(id);
 
@@ -386,7 +386,7 @@ public class UserService {
     /**
      * 分配全局角色
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void assignGlobalRole(Long userId, Long roleId) {
         // 检查是否已存在
         Long count = userRoleMapper.selectCount(
@@ -414,7 +414,7 @@ public class UserService {
     /**
      * 移除全局角色
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeGlobalRole(Long userId, Long roleId) {
         // 禁止移除自己的系统管理员角色
         Long currentUserId = SecurityUtils.getCurrentUserId();

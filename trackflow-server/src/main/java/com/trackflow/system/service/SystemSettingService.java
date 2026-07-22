@@ -65,7 +65,7 @@ public class SystemSettingService {
     /**
      * 更新时间追踪设置（带工时重新计算支持）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TimeTrackingRecalculationResultVO updateTimeTrackingSettings(UpdateTimeTrackingSettingsDTO dto) {
         // 校验 workingDays 中的值在 1-7 范围内
         for (Integer day : dto.getWorkingDays()) {

@@ -27,7 +27,7 @@ public class OrganizationService {
     /**
      * 创建组织
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Organization create(CreateOrgDTO dto) {
         // 检查 code 唯一性
         Long count = organizationMapper.selectCount(
@@ -73,7 +73,7 @@ public class OrganizationService {
     /**
      * 更新组织
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Organization update(Long id, UpdateOrgDTO dto) {
         Organization org = getById(id);
         if (dto.getName() != null) {
@@ -93,7 +93,7 @@ public class OrganizationService {
     /**
      * 删除组织（有引用时拒绝）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         Organization org = getById(id);
 
