@@ -19,6 +19,7 @@ import com.trackflow.project.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,7 +44,7 @@ public class WebhookController {
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'webhook:manage')")
-    public R<WebhookVO> create(@Valid @RequestBody CreateWebhookDTO dto) {
+    public R<WebhookVO> create(@P("dto") @Valid @RequestBody CreateWebhookDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectMember(userId, dto.getProjectId());
 

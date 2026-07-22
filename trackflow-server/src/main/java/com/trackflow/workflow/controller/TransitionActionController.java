@@ -12,6 +12,7 @@ import com.trackflow.workflow.vo.TransitionActionVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -64,7 +65,7 @@ public class TransitionActionController {
      */
     @PostMapping
     @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#dto.projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#dto.projectId, 'project:manage_workflow')")
-    public R<TransitionActionVO> create(@RequestBody @Valid CreateTransitionActionDTO dto) {
+    public R<TransitionActionVO> create(@P("dto") @RequestBody @Valid CreateTransitionActionDTO dto) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         TransitionAction action = transitionActionService.create(dto, currentUserId);
         return R.ok(transitionActionConverter.toVO(action));

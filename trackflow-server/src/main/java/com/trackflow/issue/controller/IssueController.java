@@ -22,6 +22,7 @@ import com.trackflow.workflow.vo.ActionExecutionResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,7 +45,7 @@ public class IssueController {
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
-    public R<IssueDetailVO> create(@Valid @RequestBody CreateIssueDTO dto) {
+    public R<IssueDetailVO> create(@P("dto") @Valid @RequestBody CreateIssueDTO dto) {
         Issue issue = issueService.create(dto);
         return R.ok(issueService.getDetail(issue.getId()));
     }
