@@ -301,7 +301,7 @@ public class CustomFieldService {
         return usage;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, boolean confirm) {
         if (definitionMapper.selectById(id) == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
@@ -330,6 +330,7 @@ public class CustomFieldService {
             }
         }
 
+        // 清理条件字段引用
         if (conditionRefCount > 0) {
             projectMapper.update(null,
                     new LambdaUpdateWrapper<CustomFieldProject>()
@@ -339,7 +340,11 @@ public class CustomFieldService {
             log.info("Cleared condition references for deleted field {}: {} mappings affected", id, conditionRefCount);
         }
 
+        // 级联删除关联数据（参考 YouTrack/OpenProject：删除字段时清理所有相关值、选项及关联记录）
+        cascadeDeleteFieldRelations(id);
+
         definitionMapper.deleteById(id);
+        log.info("Deleted custom field definition: {}", id);
     }
 
     @Transactional
@@ -388,14 +393,49 @@ public class CustomFieldService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "字段ID列表不能为空");
         }
 
+        // 清理条件字段引用
         projectMapper.update(null,
                 new LambdaUpdateWrapper<CustomFieldProject>()
                         .in(CustomFieldProject::getConditionFieldId, ids)
                         .set(CustomFieldProject::getConditionFieldId, null)
                         .set(CustomFieldProject::getConditionValues, null));
 
+        // 级联删除关联数据（参考 YouTrack/OpenProject：删除字段时清理所有相关值、选项及关联记录）
+        for (Long id : ids) {
+            cascadeDeleteFieldRelations(id);
+        }
+
         definitionMapper.deleteBatchIds(ids);
         log.info("批量删除 {} 个自定义字段: {}", ids.size(), ids);
+    }
+
+    /**
+     * 级联删除自定义字段的所有关联记录。
+     * <p>按顺序删除 value、option、project、issueType 四张关联表中该字段的记录。
+     * 参考 OpenProject 的 dependent: :destroy 模式，在事务内按顺序清理所有依赖。</p>
+     *
+     * @param fieldId 要删除关联数据的字段ID
+     */
+    private void cascadeDeleteFieldRelations(Long fieldId) {
+        // 删除工单中该字段的值记录
+        long deletedValues = valueMapper.delete(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getCustomFieldId, fieldId));
+        // 删除该字段的选项定义
+        long deletedOptions = optionMapper.delete(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, fieldId));
+        // 删除该字段的项目关联配置
+        long deletedProjects = projectMapper.delete(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId));
+        // 删除该字段的工单类型绑定
+        long deletedIssueTypes = issueTypeMapper.delete(
+                new LambdaQueryWrapper<CustomFieldIssueType>()
+                        .eq(CustomFieldIssueType::getCustomFieldId, fieldId));
+
+        log.info("Cascade deleted relations for field {}: values={}, options={}, projects={}, issueTypes={}",
+                fieldId, deletedValues, deletedOptions, deletedProjects, deletedIssueTypes);
     }
 
     // ========== 委托方法（保持向后兼容 API） ==========
@@ -1068,10 +1108,23 @@ public class CustomFieldService {
             Map<Long, CustomFieldProject> conditionsMap,
             List<Long> userRoleIds) {
         if (userRoleIds == null) {
+            // system admin — no filtering needed
             return fields;
         }
         List<CustomFieldDefinition> visible = new ArrayList<>();
         for (CustomFieldDefinition field : fields) {
+            // Private field check: if field is private, user must have issue:read_private_fields permission
+            if (Boolean.TRUE.equals(field.getIsPrivate())) {
+                Long userId = SecurityUtils.getCurrentUserId();
+                if (userId == null) {
+                    continue; // skip private fields for unauthenticated users
+                }
+                // Note: userRoleIds != null means user is NOT system admin (already checked above)
+                // so we need to check the specific permission
+                if (!permissionService.hasPermission(userId, null, "issue:read_private_fields")) {
+                    continue; // user lacks permission to read private fields
+                }
+            }
             CustomFieldProject mapping = conditionsMap.get(field.getId());
             List<Long> visibleRoles = mapping != null ? parseRoleIds(mapping.getVisibleToRoles()) : null;
             if (isVisibleToUser(visibleRoles, userRoleIds)) {
