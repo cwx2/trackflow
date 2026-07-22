@@ -1,5 +1,6 @@
 package com.trackflow.auth.filter;
 
+import com.trackflow.auth.controller.BackChannelLogoutController;
 import com.trackflow.auth.service.UserSyncService;
 import com.trackflow.common.util.WebUtils;
 import com.trackflow.system.entity.SysUser;
@@ -79,6 +80,19 @@ public class UserSyncFilter extends OncePerRequestFilter {
                     return;
                 }
 
+                // Session 黑名单检查：用户已从 Keycloak 登出，session 已被 back-channel logout 失效
+                if (isSessionLoggedOut(jwt)) {
+                    log.warn("Request blocked by session logout blacklist: userId={}, username={}, sid={}",
+                            user.getId(), user.getUsername(), jwt.getClaimAsString("sid"));
+                    logSessionBlocked(user, request, "session_logged_out");
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write(
+                            "{\"code\":40100,\"message\":\"Session has been invalidated. Please login again.\",\"data\":null}"
+                    );
+                    return;
+                }
+
                 // 仅对"新颁发"的 token 记录登录事件（jti 去重 + 时间窗口）
                 if (shouldLogLogin(jwt)) {
                     logLoginEvent(user, jwt, request);
@@ -112,6 +126,37 @@ public class UserSyncFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             // Redis 不可用时 fallback 到 DB 检查（UserSyncService 已处理）
             log.warn("Redis blacklist check failed, falling back to DB: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 检查 JWT 所属的 session 是否已通过 back-channel logout 被注销。
+     * <p>
+     * 优先检查 sid (session ID) — 精确匹配单个 session。
+     * 如果 JWT 不含 sid claim，检查 sub (keycloak_id) 的 user-level 黑名单。
+     * <p>
+     * Redis 不可用时降级放行（与 isUserBlacklisted 策略一致）。
+     */
+    private boolean isSessionLoggedOut(Jwt jwt) {
+        try {
+            // 优先：按 session ID 检查
+            String sessionId = jwt.getClaimAsString("sid");
+            if (sessionId != null && !sessionId.isBlank()) {
+                return Boolean.TRUE.equals(redisTemplate.hasKey(
+                        BackChannelLogoutController.LOGOUT_SESSION_KEY_PREFIX + sessionId));
+            }
+
+            // 兜底：按 keycloak_id (sub) 检查 user-level 黑名单
+            String keycloakId = jwt.getSubject();
+            if (keycloakId != null && !keycloakId.isBlank()) {
+                return Boolean.TRUE.equals(redisTemplate.hasKey("auth:logout:user:" + keycloakId));
+            }
+
+            return false;
+        } catch (Exception e) {
+            // Redis 不可用时降级放行，退化为 JWT 自然过期
+            log.warn("Session logout blacklist check failed, falling back to JWT expiry: {}", e.getMessage());
             return false;
         }
     }

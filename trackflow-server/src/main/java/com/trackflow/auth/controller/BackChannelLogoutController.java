@@ -1,5 +1,6 @@
 package com.trackflow.auth.controller;
 
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.model.R;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -8,11 +9,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -42,6 +45,14 @@ public class BackChannelLogoutController {
     private final JwtDecoder jwtDecoder;
     private final SysUserMapper sysUserMapper;
     private final SystemAuditService systemAuditService;
+    private final StringRedisTemplate redisTemplate;
+    private final PermissionService permissionService;
+
+    /** Redis key 前缀：已注销的 session ID 黑名单 */
+    public static final String LOGOUT_SESSION_KEY_PREFIX = "auth:logout:session:";
+
+    /** 黑名单 TTL：覆盖 JWT 最大有效期（Keycloak 默认 5 分钟 + 1 分钟缓冲） */
+    private static final Duration LOGOUT_SESSION_TTL = Duration.ofMinutes(6);
 
     /**
      * Keycloak Back-Channel Logout 回调端点。
@@ -77,7 +88,11 @@ public class BackChannelLogoutController {
     }
 
     /**
-     * 处理已验证的 logout token
+     * 处理已验证的 logout token：
+     * 1. 提取 sub (keycloak_id) 和 sid (session_id)
+     * 2. 将 session ID 写入 Redis 黑名单（核心：使 JWT 即时失效）
+     * 3. 失效用户权限缓存
+     * 4. 记录审计日志
      */
     private void processLogoutToken(Jwt jwt, HttpServletRequest request) {
         String keycloakUserId = jwt.getSubject();
@@ -94,14 +109,20 @@ public class BackChannelLogoutController {
         Long userId = user != null ? user.getId() : null;
         String username = user != null ? user.getUsername() : "unknown";
 
-        // 提取 session_id（sid claim，如有）
-        String sessionId = "";
-        try {
-            Object sidClaim = jwt.getClaim("sid");
-            if (sidClaim != null) {
-                sessionId = sidClaim.toString();
+        // 提取 session_id（sid claim）
+        String sessionId = extractSessionId(jwt);
+
+        // ★ 核心：将 session ID 写入 Redis 黑名单，使该 session 的 JWT 即时失效
+        invalidateSession(sessionId, keycloakUserId);
+
+        // 失效该用户的权限缓存（即使 JWT 被拦截，也确保权限数据不再有效）
+        if (userId != null) {
+            try {
+                permissionService.invalidateCache(userId);
+            } catch (Exception e) {
+                log.warn("Failed to invalidate permission cache for userId={}: {}", userId, e.getMessage());
             }
-        } catch (Exception ignored) {}
+        }
 
         // 记录 logout 审计事件
         systemAuditService.logAuthEvent(
@@ -117,6 +138,57 @@ public class BackChannelLogoutController {
                 )
         );
 
-        log.info("Back-channel logout processed: keycloakId={}, username={}", keycloakUserId, username);
+        log.info("Back-channel logout processed: keycloakId={}, username={}, sessionId={}",
+                keycloakUserId, username, sessionId);
+    }
+
+    /**
+     * 从 JWT 中提取 session ID (sid claim)
+     */
+    private String extractSessionId(Jwt jwt) {
+        try {
+            Object sidClaim = jwt.getClaim("sid");
+            if (sidClaim != null) {
+                return sidClaim.toString();
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
+    }
+
+    /**
+     * 将 session 写入 Redis 黑名单。
+     * <p>
+     * 优先使用 session ID (sid) 作为 key——精确到单个 session，不影响同用户的其他活跃 session。
+     * 如果 sid 为空（兜底），使用 keycloak_id 作为 key——会使该用户所有 session 失效。
+     * <p>
+     * TTL 设为 6 分钟（覆盖 Keycloak JWT 默认 5 分钟有效期 + 时钟偏差缓冲）。
+     * 过期后自动清理，不会积累。
+     */
+    private void invalidateSession(String sessionId, String keycloakUserId) {
+        try {
+            if (sessionId != null && !sessionId.isBlank()) {
+                // 精确：按 session ID 失效
+                redisTemplate.opsForValue().set(
+                        LOGOUT_SESSION_KEY_PREFIX + sessionId,
+                        keycloakUserId,
+                        LOGOUT_SESSION_TTL
+                );
+                log.debug("Session blacklisted: sid={}, keycloakId={}", sessionId, keycloakUserId);
+            } else {
+                // 兜底：按 keycloak_id 失效（影响该用户所有 session）
+                String fallbackKey = "auth:logout:user:" + keycloakUserId;
+                redisTemplate.opsForValue().set(
+                        fallbackKey,
+                        String.valueOf(System.currentTimeMillis()),
+                        LOGOUT_SESSION_TTL
+                );
+                log.warn("Session ID not available in logout token, using user-level blacklist: keycloakId={}",
+                        keycloakUserId);
+            }
+        } catch (Exception e) {
+            // Redis 不可用时降级为当前行为（仅记录日志，不阻塞 logout 响应）
+            log.error("Failed to write session blacklist to Redis: {}", e.getMessage());
+        }
     }
 }
