@@ -492,9 +492,32 @@ public class WorkflowRuleEngine {
         a.setFieldName(field);
         a.setOldValue(oldVal);
         a.setNewValue(newVal);
+        // 对 ID 引用字段设置 displayValue，确保前端展示人类可读文本
+        if ("assignee".equals(field) || "assignee_id".equals(field)) {
+            a.setOldDisplayValue(resolveUserDisplayName(oldVal));
+            a.setNewDisplayValue(resolveUserDisplayName(newVal));
+        }
         a.setDetail("{\"source\":\"automation\",\"ruleId\":" + rule.getId() + ",\"ruleName\":\"" + rule.getName().replace("\"", "\\\"") + "\"}");
         a.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(a);
+    }
+
+    /**
+     * 将用户 ID 字符串解析为用户显示名。
+     * 返回 null 如果 idStr 为 null 或无法解析。
+     */
+    private String resolveUserDisplayName(String idStr) {
+        if (idStr == null || idStr.isBlank()) {
+            return null;
+        }
+        try {
+            Long userId = Long.valueOf(idStr);
+            SysUser user = sysUserMapper.selectById(userId);
+            return user != null ? user.getDisplayName() : idStr;
+        } catch (NumberFormatException e) {
+            // 值已经是用户名而非 ID
+            return idStr;
+        }
     }
 
     private String textOf(JsonNode node, String key) {

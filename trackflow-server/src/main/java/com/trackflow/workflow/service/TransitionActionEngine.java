@@ -219,7 +219,7 @@ public class TransitionActionEngine {
             issue.setAssigneeId(result);
             issueMapper.updateById(issue);
 
-            // 记录 auto_assigned activity
+            // 记录 auto_assigned activity（存储 ID + 显示名，前端通过 COALESCE 优先展示 displayValue）
             IssueActivity activity = new IssueActivity();
             activity.setIssueId(issue.getId());
             activity.setUserId(triggeredBy);
@@ -227,6 +227,8 @@ public class TransitionActionEngine {
             activity.setFieldName("assignee_id");
             activity.setOldValue(oldAssigneeId != null ? String.valueOf(oldAssigneeId) : null);
             activity.setNewValue(String.valueOf(result));
+            activity.setOldDisplayValue(oldAssigneeId != null ? getUserDisplayName(oldAssigneeId) : null);
+            activity.setNewDisplayValue(getUserDisplayName(result));
             activity.setDetail(String.format(
                     "{\"action_id\":%d,\"strategy\":\"%s\",\"triggered_by\":%d}",
                     action.getId(), usedStrategy, triggeredBy));
@@ -291,7 +293,7 @@ public class TransitionActionEngine {
             issue.setAssigneeId(result);
             issueMapper.updateById(issue);
 
-            // 记录 auto_assigned activity
+            // 记录 auto_assigned activity（创建时无 oldValue，只设置 newDisplayValue）
             IssueActivity activity = new IssueActivity();
             activity.setIssueId(issue.getId());
             activity.setUserId(creatorId);
@@ -299,6 +301,7 @@ public class TransitionActionEngine {
             activity.setFieldName("assignee_id");
             activity.setOldValue(null);
             activity.setNewValue(String.valueOf(result));
+            activity.setNewDisplayValue(getUserDisplayName(result));
             activity.setDetail(String.format(
                     "{\"action_id\":%d,\"strategy\":\"%s\",\"trigger\":\"on_create\",\"triggered_by\":%d}",
                     action.getId(), strategyKey, creatorId));
