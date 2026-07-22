@@ -19,10 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -148,40 +145,7 @@ public class ReportController {
                        @RequestParam(value = "format", defaultValue = "csv") String format,
                        HttpServletResponse response) throws IOException {
         Long userId = SecurityUtils.getCurrentUserId();
-
-        if ("xlsx".equalsIgnoreCase(format)) {
-            ReportService.ExcelExportResult excelResult = reportService.exportExcel(id, userId);
-            String fileName = excelResult.reportName() + ".xlsx";
-            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            response.setHeader("Content-Disposition",
-                    "attachment; filename=\"" + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
-            try (var workbook = excelResult.workbook()) {
-                workbook.write(response.getOutputStream());
-                response.getOutputStream().flush();
-            }
-            return;
-        }
-
-        if (!"csv".equalsIgnoreCase(format)) {
-            response.setStatus(400);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"code\":40000,\"message\":\"仅支持 csv 和 xlsx 格式导出\"}");
-            return;
-        }
-
-        String csv = reportService.exportCsv(id, userId);
-
-        // 获取报表名称用于文件名
-        String fileName = "report-" + id + ".csv";
-        response.setContentType("text/csv; charset=UTF-8");
-        response.setHeader("Content-Disposition",
-                "attachment; filename=\"" + java.net.URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
-        // BOM for Excel UTF-8 recognition
-        response.getOutputStream().write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
-        try (OutputStreamWriter writer = new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8)) {
-            writer.write(csv);
-            writer.flush();
-        }
+        reportService.exportToResponse(id, format, userId, response);
     }
 
     // ─── 共享管理 ────────────────────────────────────────

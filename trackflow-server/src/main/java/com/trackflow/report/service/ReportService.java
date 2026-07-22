@@ -45,6 +45,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -337,6 +343,64 @@ public class ReportService {
      * Excel 导出结果封装
      */
     public record ExcelExportResult(String reportName, org.apache.poi.xssf.streaming.SXSSFWorkbook workbook) {}
+
+    /**
+     * 导出报表到 HTTP 响应流（统一入口）
+     * <p>
+     * 处理格式路由、响应头构建、流式写入等逻辑。支持 csv 和 xlsx 两种格式。
+     *
+     * @param id       报表 ID
+     * @param format   导出格式（csv / xlsx）
+     * @param userId   当前用户 ID
+     * @param response HTTP 响应对象
+     */
+    public void exportToResponse(Long id, String format, Long userId, HttpServletResponse response) throws IOException {
+        if ("xlsx".equalsIgnoreCase(format)) {
+            writeExcelResponse(id, userId, response);
+        } else if ("csv".equalsIgnoreCase(format)) {
+            writeCsvResponse(id, userId, response);
+        } else {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "仅支持 csv 和 xlsx 格式导出");
+        }
+    }
+
+    /**
+     * 写入 Excel 格式导出响应
+     */
+    private void writeExcelResponse(Long id, Long userId, HttpServletResponse response) throws IOException {
+        ExcelExportResult excelResult = exportExcel(id, userId);
+        String fileName = excelResult.reportName() + ".xlsx";
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
+        try (var workbook = excelResult.workbook()) {
+            workbook.write(response.getOutputStream());
+            response.getOutputStream().flush();
+        }
+    }
+
+    /**
+     * 写入 CSV 格式导出响应（含 BOM 以兼容 Excel 打开 UTF-8）
+     */
+    private void writeCsvResponse(Long id, Long userId, HttpServletResponse response) throws IOException {
+        ReportDefinition report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在");
+        }
+        String reportName = report.getName() != null ? report.getName() : "report-" + id;
+        String csvContent = exportCsv(id, userId);
+
+        String fileName = reportName + ".csv";
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
+        // BOM for Excel UTF-8 recognition
+        response.getOutputStream().write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+        try (OutputStreamWriter writer = new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8)) {
+            writer.write(csvContent);
+            writer.flush();
+        }
+    }
 
     /**
      * 执行报表并返回结果（带权限校验），供导出使用。
