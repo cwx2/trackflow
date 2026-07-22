@@ -46,6 +46,14 @@ public class PermissionService {
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
     private static final String SYSTEM_ADMIN_PERMISSION = "system:admin";
 
+    /**
+     * 空权限缓存占位符。
+     * 当用户在某个项目/全局中确实没有任何权限时，将此占位符写入 Redis Set，
+     * 防止空结果穿透——下次请求命中此占位符即可直接返回空集合，不再查 DB。
+     * 使用 "__" 前缀确保不会与任何合法权限码冲突。
+     */
+    private static final String EMPTY_PERMISSIONS_PLACEHOLDER = "__NO_PERMISSIONS__";
+
     /** NonMember 内置角色 ID（登录但非成员访问 internal/public 项目） */
     private static final Long NON_MEMBER_ROLE_ID = 8L;
     /** Anonymous 内置角色 ID（未登录访问 public 项目） */
@@ -153,7 +161,8 @@ public class PermissionService {
     }
 
     /**
-     * 获取用户所有权限（缓存优先）
+     * 获取用户所有权限（缓存优先）。
+     * 空结果也会被缓存（使用占位符），防止无权限用户每次请求都穿透到 DB。
      */
     public Set<String> getPermissions(Long userId) {
         String cacheKey = CACHE_KEY_PREFIX + userId;
@@ -161,17 +170,22 @@ public class PermissionService {
         // 1. 缓存查询
         Set<String> cached = redisTemplate.opsForSet().members(cacheKey);
         if (cached != null && !cached.isEmpty()) {
+            if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
+                return Set.of(); // 缓存命中：确认无权限
+            }
             return cached;
         }
 
         // 2. 数据库查询
         Set<String> permissions = loadPermissionsFromDb(userId);
 
-        // 3. 写入缓存
-        if (!permissions.isEmpty()) {
+        // 3. 写入缓存（空结果写入占位符，防止穿透）
+        if (permissions.isEmpty()) {
+            redisTemplate.opsForSet().add(cacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
+        } else {
             redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
-            redisTemplate.expire(cacheKey, CACHE_TTL);
         }
+        redisTemplate.expire(cacheKey, CACHE_TTL);
 
         return permissions;
     }
@@ -281,7 +295,8 @@ public class PermissionService {
     }
 
     /**
-     * 获取用户在指定项目中的权限（缓存优先）
+     * 获取用户在指定项目中的权限（缓存优先）。
+     * 空结果也会被缓存（使用占位符），防止非成员用户对私有项目每次请求都穿透到 DB。
      *
      * 逻辑：
      * 1. 先查成员角色权限 → 有则返回
@@ -295,6 +310,9 @@ public class PermissionService {
 
         Set<String> cached = redisTemplate.opsForSet().members(cacheKey);
         if (cached != null && !cached.isEmpty()) {
+            if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
+                return Set.of(); // 缓存命中：确认无权限
+            }
             return cached;
         }
 
@@ -312,10 +330,13 @@ public class PermissionService {
                     projectId, permissions, permissionCategoryMap);
         }
 
-        if (!permissions.isEmpty()) {
+        // 写入缓存（空结果写入占位符，防止穿透）
+        if (permissions.isEmpty()) {
+            redisTemplate.opsForSet().add(cacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
+        } else {
             redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
-            redisTemplate.expire(cacheKey, CACHE_TTL);
         }
+        redisTemplate.expire(cacheKey, CACHE_TTL);
 
         return permissions;
     }
@@ -425,6 +446,7 @@ public class PermissionService {
     /**
      * 获取用户的导航权限集合（Redis 缓存优先）。
      * 结合全局权限 + 项目级权限聚合派生 nav:* 权限。
+     * 空结果也会被缓存（使用占位符），防止穿透。
      * <p>
      * 缓存命中：0 DB 查询
      * 缓存未命中：最多 2 次 DB 查询（1 次全局权限 + 1 次聚合项目权限）
@@ -438,6 +460,9 @@ public class PermissionService {
         // 1. 尝试从 Redis 获取缓存
         Set<String> cached = redisTemplate.opsForSet().members(navCacheKey);
         if (cached != null && !cached.isEmpty()) {
+            if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
+                return Set.of(); // 缓存命中：确认无权限
+            }
             return cached;
         }
 
@@ -477,11 +502,13 @@ public class PermissionService {
             }
         }
 
-        // 3. 写入 Redis 缓存
-        if (!permissions.isEmpty()) {
+        // 3. 写入 Redis 缓存（空结果写入占位符，防止穿透）
+        if (permissions.isEmpty()) {
+            redisTemplate.opsForSet().add(navCacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
+        } else {
             redisTemplate.opsForSet().add(navCacheKey, permissions.toArray(new String[0]));
-            redisTemplate.expire(navCacheKey, CACHE_TTL);
         }
+        redisTemplate.expire(navCacheKey, CACHE_TTL);
 
         return permissions;
     }
