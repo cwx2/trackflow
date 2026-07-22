@@ -47,10 +47,13 @@ import com.trackflow.common.event.ProjectNotificationEvent;
 import com.trackflow.integration.entity.NotificationType;
 
 import com.trackflow.project.vo.ProjectDetailVO;
+import com.trackflow.project.vo.ProjectGroupMemberVO;
 import com.trackflow.project.vo.ProjectMemberVO;
+import com.trackflow.project.vo.ProjectMembersViewVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
 import com.trackflow.project.vo.ProjectTrashSettingsVO;
 import com.trackflow.project.vo.ProjectVO;
+import com.trackflow.project.dto.AddGroupMemberDTO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -92,6 +95,9 @@ public class ProjectService {
     private final com.trackflow.project.service.ProjectModuleService projectModuleService;
     private final com.trackflow.customfield.mapper.CustomFieldDefinitionMapper customFieldDefinitionMapper;
     private final com.trackflow.customfield.mapper.CustomFieldProjectMapper customFieldProjectMapper;
+    private final com.trackflow.system.mapper.UserGroupRoleMapper userGroupRoleMapper;
+    private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
+    private final com.trackflow.system.mapper.UserGroupMemberMapper userGroupMemberMapper;
 
     /**
      * 创建项目
@@ -202,13 +208,19 @@ public class ProjectService {
     public Page<Project> list(Page<Project> page, String keyword, String status, Long userId) {
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
 
-        // 非系统管理员：成员项目 + internal/public 项目
+        // 非系统管理员：直接成员项目 + 通过用户组获得的项目 + internal/public 项目
         if (userId != null && !permissionService.isSystemAdmin(userId)) {
             List<Long> memberProjectIds = memberMapper.selectProjectIdsByUserId(userId);
-            // 显示：用户参与的项目 OR visibility 为 internal/public 的项目
+            List<Long> groupProjectIds = getProjectIdsByUserViaGroups(userId);
+
+            // 合并去重
+            Set<Long> allAccessibleIds = new java.util.LinkedHashSet<>(memberProjectIds);
+            allAccessibleIds.addAll(groupProjectIds);
+
+            // 显示：用户可访问的项目 OR visibility 为 internal/public 的项目
             wrapper.and(w -> {
-                if (!memberProjectIds.isEmpty()) {
-                    w.in(Project::getId, memberProjectIds)
+                if (!allAccessibleIds.isEmpty()) {
+                    w.in(Project::getId, allAccessibleIds)
                      .or()
                      .in(Project::getVisibility, List.of(ProjectVisibility.INTERNAL, ProjectVisibility.PUBLIC));
                 } else {
@@ -346,18 +358,25 @@ public class ProjectService {
         int memberCount = memberMapper.countDistinctUsers(projectId);
         vo.setMemberCount(memberCount);
 
-        // 查询当前用户在项目中的角色（当前模型：一个用户在一个项目中只有唯一角色）
+        // 查询当前用户在项目中的角色（支持多角色）
         if (currentUserId != null) {
             if (permissionService.isSystemAdmin(currentUserId)) {
                 vo.setMyRoleName("系统管理员");
                 vo.setMyRoleCode("system_admin");
+                vo.setMyRoleNames(java.util.List.of("系统管理员"));
+                vo.setMyRoleCodes(java.util.List.of("system_admin"));
             } else {
                 List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(currentUserId, projectId);
                 if (!roleIds.isEmpty()) {
-                    SysRole role = roleMapper.selectById(roleIds.get(0));
-                    if (role != null) {
-                        vo.setMyRoleName(role.getName());
-                        vo.setMyRoleCode(role.getCode());
+                    // 批量查询所有角色，支持多角色展示
+                    List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+                    if (roles != null && !roles.isEmpty()) {
+                        // 向后兼容：myRoleName/myRoleCode 填充第一个角色
+                        vo.setMyRoleName(roles.get(0).getName());
+                        vo.setMyRoleCode(roles.get(0).getCode());
+                        // 多角色列表
+                        vo.setMyRoleNames(roles.stream().map(SysRole::getName).toList());
+                        vo.setMyRoleCodes(roles.stream().map(SysRole::getCode).toList());
                     }
                 } else {
                     // 非成员但项目可见（internal/public）→ 显示 NonMember 角色
@@ -365,6 +384,8 @@ public class ProjectService {
                     if (ProjectVisibility.INTERNAL == visibility || ProjectVisibility.PUBLIC == visibility) {
                         vo.setMyRoleName("非成员");
                         vo.setMyRoleCode("non_member");
+                        vo.setMyRoleNames(java.util.List.of("非成员"));
+                        vo.setMyRoleCodes(java.util.List.of("non_member"));
                     }
                 }
             }
@@ -755,6 +776,175 @@ public class ProjectService {
             }
             return vo;
         }).toList();
+    }
+
+    /**
+     * 获取项目中通过用户组获得访问权的组成员列表。
+     * 查询 user_group_role 表中 project_id 匹配的组角色记录，
+     * 并展开组成员信息。
+     */
+    public List<ProjectGroupMemberVO> listProjectGroupMembers(Long projectId) {
+        // 1. 查询绑定到该项目的组角色分配
+        List<com.trackflow.system.entity.UserGroupRole> groupRoles =
+                userGroupRoleMapper.selectGroupRolesByProjectId(projectId);
+        if (groupRoles.isEmpty()) return List.of();
+
+        // 2. 收集组ID和角色ID
+        List<Long> groupIds = groupRoles.stream()
+                .map(com.trackflow.system.entity.UserGroupRole::getGroupId)
+                .distinct().toList();
+        List<Long> roleIds = groupRoles.stream()
+                .map(com.trackflow.system.entity.UserGroupRole::getRoleId)
+                .distinct().toList();
+
+        // 3. 批量查询组信息
+        var groups = userGroupMapper.selectBatchIds(groupIds);
+        Map<Long, com.trackflow.system.entity.UserGroup> groupMap = groups.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.trackflow.system.entity.UserGroup::getId, g -> g));
+
+        // 4. 批量查询角色名称
+        var roles = roleMapper.selectBatchIds(roleIds);
+        Map<Long, String> roleNameMap = roles.stream()
+                .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+
+        // 5. 查询组成员 - 避免 N+1
+        Map<Long, List<Long>> groupMembersMap = new java.util.HashMap<>();
+        Set<Long> allUserIds = new java.util.HashSet<>();
+        for (Long groupId : groupIds) {
+            List<com.trackflow.system.entity.UserGroupMember> members =
+                    userGroupMemberMapper.selectList(
+                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroupMember>()
+                                    .eq(com.trackflow.system.entity.UserGroupMember::getGroupId, groupId));
+            List<Long> userIds = members.stream()
+                    .map(com.trackflow.system.entity.UserGroupMember::getUserId).toList();
+            groupMembersMap.put(groupId, userIds);
+            allUserIds.addAll(userIds);
+        }
+
+        // 6. 批量查询用户信息
+        Map<Long, com.trackflow.system.entity.SysUser> userMap = new java.util.HashMap<>();
+        if (!allUserIds.isEmpty()) {
+            var users = userMapper.selectBatchIds(allUserIds);
+            userMap = users.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            com.trackflow.system.entity.SysUser::getId, u -> u));
+        }
+
+        // 7. 组装 VO
+        final Map<Long, com.trackflow.system.entity.SysUser> finalUserMap = userMap;
+        return groupRoles.stream().map(gr -> {
+            ProjectGroupMemberVO vo = new ProjectGroupMemberVO();
+            vo.setGroupId(gr.getGroupId().toString());
+            vo.setProjectId(projectId.toString());
+            vo.setRoleId(gr.getRoleId().toString());
+            vo.setRoleName(roleNameMap.getOrDefault(gr.getRoleId(), ""));
+            vo.setAssignedAt(gr.getCreatedAt());
+
+            var group = groupMap.get(gr.getGroupId());
+            if (group != null) {
+                vo.setGroupName(group.getName());
+            }
+
+            // 展开组成员
+            List<Long> memberUserIds = groupMembersMap.getOrDefault(gr.getGroupId(), List.of());
+            List<ProjectGroupMemberVO.GroupUserVO> userVOs = memberUserIds.stream().map(uid -> {
+                ProjectGroupMemberVO.GroupUserVO userVO = new ProjectGroupMemberVO.GroupUserVO();
+                userVO.setUserId(uid.toString());
+                var user = finalUserMap.get(uid);
+                if (user != null) {
+                    userVO.setUsername(user.getUsername());
+                    userVO.setDisplayName(user.getDisplayName());
+                    userVO.setEmail(user.getEmail());
+                }
+                return userVO;
+            }).toList();
+            vo.setUsers(userVOs);
+
+            return vo;
+        }).toList();
+    }
+
+    /**
+     * 获取项目成员完整视图（对标 YouTrack People 页面）
+     * 包含直接成员和组成员两部分
+     */
+    public ProjectMembersViewVO listMembersFullView(Long projectId) {
+        ProjectMembersViewVO view = new ProjectMembersViewVO();
+        view.setDirectMembers(listMembersVO(projectId));
+        view.setGroupMembers(listProjectGroupMembers(projectId));
+        return view;
+    }
+
+    /**
+     * 添加用户组到项目团队
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void addGroupMember(Long projectId, AddGroupMemberDTO dto) {
+        // 检查组是否存在
+        var group = userGroupMapper.selectById(dto.getGroupId());
+        if (group == null) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "用户组不存在: " + dto.getGroupId());
+        }
+        // 检查角色是否存在
+        var role = roleMapper.selectById(dto.getRoleId());
+        if (role == null) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "角色不存在: " + dto.getRoleId());
+        }
+        // 检查是否已经分配
+        var existing = userGroupRoleMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroupRole>()
+                        .eq(com.trackflow.system.entity.UserGroupRole::getGroupId, dto.getGroupId())
+                        .eq(com.trackflow.system.entity.UserGroupRole::getProjectId, projectId)
+        );
+        if (!existing.isEmpty()) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.BAD_REQUEST, "该用户组已在项目团队中");
+        }
+        // 插入记录
+        com.trackflow.system.entity.UserGroupRole ugr = new com.trackflow.system.entity.UserGroupRole();
+        ugr.setGroupId(dto.getGroupId());
+        ugr.setRoleId(dto.getRoleId());
+        ugr.setProjectId(projectId);
+        userGroupRoleMapper.insert(ugr);
+
+        // 失效组内所有用户的权限缓存
+        List<Long> userIds = userGroupRoleMapper.selectUserIdsByGroupId(dto.getGroupId());
+        for (Long userId : userIds) {
+            permissionService.invalidateCache(userId);
+        }
+
+        log.info("添加用户组 {} 到项目 {} 团队，角色: {}", dto.getGroupId(), projectId, dto.getRoleId());
+    }
+
+    /**
+     * 从项目团队中移除用户组
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void removeGroupMember(Long projectId, Long groupId) {
+        // 查找并删除
+        var records = userGroupRoleMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroupRole>()
+                        .eq(com.trackflow.system.entity.UserGroupRole::getGroupId, groupId)
+                        .eq(com.trackflow.system.entity.UserGroupRole::getProjectId, projectId)
+        );
+        if (records.isEmpty()) {
+            throw new com.trackflow.common.exception.BusinessException(
+                    com.trackflow.common.exception.ErrorCode.RESOURCE_NOT_FOUND, "该用户组不在项目团队中");
+        }
+        for (var record : records) {
+            userGroupRoleMapper.deleteById(record.getId());
+        }
+
+        // 失效组内所有用户的权限缓存
+        List<Long> userIds = userGroupRoleMapper.selectUserIdsByGroupId(groupId);
+        for (Long userId : userIds) {
+            permissionService.invalidateCache(userId);
+        }
+
+        log.info("从项目 {} 团队中移除用户组 {}", projectId, groupId);
     }
 
     /**
@@ -1318,12 +1508,16 @@ public class ProjectService {
         // 成员项目
         List<Long> memberProjectIds = memberMapper.selectProjectIdsByUserId(userId);
 
+        // 通过用户组获得的项目
+        List<Long> groupProjectIds = getProjectIdsByUserViaGroups(userId);
+
         // internal/public 项目
         List<Long> visibleProjectIds = projectMapper.selectProjectIdsByVisibility(
                 List.of(ProjectVisibility.INTERNAL.getValue(), ProjectVisibility.PUBLIC.getValue()));
 
         // 合并去重
         Set<Long> allIds = new java.util.LinkedHashSet<>(memberProjectIds);
+        allIds.addAll(groupProjectIds);
         allIds.addAll(visibleProjectIds);
         List<Long> projectIds = new java.util.ArrayList<>(allIds);
 
@@ -1332,6 +1526,29 @@ public class ProjectService {
         redisTemplate.opsForValue().set(cacheKey, value, java.time.Duration.ofSeconds(30));
 
         return projectIds;
+    }
+
+    /**
+     * 获取用户通过用户组获得的项目 ID 列表。
+     * 路径: user_group_member(user_id) → user_group_role(group_id, project_id IS NOT NULL)
+     * 使用已有 Mapper 方法组合查询，避免依赖未编译的新 Mapper 方法。
+     */
+    private List<Long> getProjectIdsByUserViaGroups(Long userId) {
+        // 获取用户所属的所有组
+        List<Long> groupIds = userGroupMemberMapper.selectGroupIdsByUserId(userId);
+        if (groupIds.isEmpty()) {
+            return List.of();
+        }
+        // 查询这些组的项目角色分配中有 project_id 的记录
+        List<com.trackflow.system.entity.UserGroupRole> groupRoles = userGroupRoleMapper.selectList(
+                new LambdaQueryWrapper<com.trackflow.system.entity.UserGroupRole>()
+                        .in(com.trackflow.system.entity.UserGroupRole::getGroupId, groupIds)
+                        .isNotNull(com.trackflow.system.entity.UserGroupRole::getProjectId)
+        );
+        return groupRoles.stream()
+                .map(com.trackflow.system.entity.UserGroupRole::getProjectId)
+                .distinct()
+                .toList();
     }
 
     /**

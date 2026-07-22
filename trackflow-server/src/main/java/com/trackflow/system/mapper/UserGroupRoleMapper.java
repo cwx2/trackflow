@@ -99,4 +99,29 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
             WHERE ugr.role_id = #{roleId}
             """)
     List<Long> selectUserIdsByRoleIdViaGroup(@Param("roleId") Long roleId);
+
+    /**
+     * 查询指定项目中通过用户组获得角色的所有组角色分配记录
+     * 仅查询精确绑定到项目的记录（project_id = 指定值）
+     */
+    @Select("""
+            SELECT ugr.*
+            FROM user_group_role ugr
+            WHERE ugr.project_id = #{projectId}
+            """)
+    List<UserGroupRole> selectGroupRolesByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 查询用户通过组获得的所有项目 ID（用于项目列表可见性）
+     * 路径: user_group_member(user_id) → user_group_role(group_id, project_id IS NOT NULL)
+     * 仅返回精确绑定到项目的角色分配（不含全局作用域）
+     */
+    @Select("""
+            SELECT DISTINCT ugr.project_id
+            FROM user_group_role ugr
+            INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+            WHERE ugm.user_id = #{userId}
+              AND ugr.project_id IS NOT NULL
+            """)
+    List<Long> selectProjectIdsByUserIdViaGroups(@Param("userId") Long userId);
 }

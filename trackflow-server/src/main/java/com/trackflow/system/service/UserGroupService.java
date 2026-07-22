@@ -17,6 +17,7 @@ import com.trackflow.system.vo.UserGroupDetailVO;
 import com.trackflow.system.vo.UserGroupVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserGroupService {
 
+    private static final String ACCESSIBLE_PROJECTS_CACHE_PREFIX = "accessible_projects:";
+
     private final UserGroupMapper groupMapper;
     private final UserGroupMemberMapper memberMapper;
     private final UserGroupRoleMapper groupRoleMapper;
@@ -40,6 +43,7 @@ public class UserGroupService {
     private final ProjectMapper projectMapper;
     private final PermissionService permissionService;
     private final SystemAuditService systemAuditService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 分页查询用户组列表
@@ -168,6 +172,8 @@ public class UserGroupService {
         // 删除前先失效所有组成员的权限缓存
         List<Long> memberUserIds = memberMapper.selectUserIdsByGroupId(groupId);
         memberUserIds.forEach(permissionService::invalidateCache);
+        // 失效所有组成员的可访问项目缓存
+        memberUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
         // 级联删除（数据库外键 ON DELETE CASCADE 会清理关联表）
         groupMapper.deleteById(groupId);
@@ -213,6 +219,8 @@ public class UserGroupService {
 
         // 失效新成员的权限缓存（他们现在可能继承了组的角色）
         addedUserIds.forEach(permissionService::invalidateCache);
+        // 失效新成员的可访问项目缓存（组的项目角色可能赋予他们新项目可见性）
+        addedUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
         if (!addedUserIds.isEmpty()) {
             systemAuditService.log("add_group_members", "user_group", groupId,
@@ -239,6 +247,8 @@ public class UserGroupService {
 
         // 失效被移除成员的权限缓存
         userIds.forEach(permissionService::invalidateCache);
+        // 失效被移除成员的可访问项目缓存
+        userIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
         systemAuditService.log("remove_group_members", "user_group", groupId,
                 Map.of("groupName", group.getName(), "removedCount", userIds.size()));
@@ -294,6 +304,8 @@ public class UserGroupService {
         // 失效所有组成员的权限缓存
         List<Long> memberUserIds = memberMapper.selectUserIdsByGroupId(groupId);
         memberUserIds.forEach(permissionService::invalidateCache);
+        // 失效所有组成员的可访问项目缓存（项目角色分配可能赋予新项目可见性）
+        memberUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
         String scopeDesc = isGlobalScope ? "全局(所有项目)" :
                 projectIds.isEmpty() ? "全局" : "项目:" + projectIds;
@@ -362,6 +374,8 @@ public class UserGroupService {
         // 失效所有组成员的权限缓存
         List<Long> memberUserIds = memberMapper.selectUserIdsByGroupId(groupId);
         memberUserIds.forEach(permissionService::invalidateCache);
+        // 失效所有组成员的可访问项目缓存
+        memberUserIds.forEach(uid -> redisTemplate.delete(ACCESSIBLE_PROJECTS_CACHE_PREFIX + uid));
 
         systemAuditService.log("remove_group_role", "user_group", groupId,
                 Map.of("groupName", group.getName(), "roleId", groupRole.getRoleId()));
