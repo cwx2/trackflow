@@ -23,7 +23,7 @@
     />
 
     <!-- 快捷动作栏（需要状态变更权限） -->
-    <div v-if="!isProjectArchived && canChangeStatus" class="quick-action-wrapper">
+    <div v-if="!isProjectArchived && canChangeStatusEffective" class="quick-action-wrapper">
       <QuickActionBar
         :issue-id="issue.id"
         :project-id="issue.projectId"
@@ -68,7 +68,7 @@
             @delete-comment="onDeleteComment"
           />
           <CommentInput
-            v-if="canComment"
+            v-if="canCommentEffective"
             :show-add-time="projectTimeTrackingEnabled && canLogTime"
             :timer-running="timerStore.isRunning"
             :timer-issue-match="timerStore.issueId === issue?.id"
@@ -282,23 +282,45 @@ const isAssignee = computed(() => {
   return dbUserId === issue.value.assigneeId
 })
 
-/** 综合权限：项目级 issue:edit OR 资源级（reporter + edit_own / assignee + edit_assigned） */
+/**
+ * 综合权限：项目级 issue:edit OR 固有权限（reporter 无条件） OR 资源级（reporter + edit_own / assignee + edit_assigned）
+ * 
+ * 固有权限（Inherent Permissions）参考 YouTrack：
+ * Reporter 天然拥有 issue:view, issue:edit, issue:comment, issue:change_status，无需角色显式授予。
+ */
 const canEditIssueEffective = computed(() => {
   if (isProjectArchived.value) return false
   if (canEditIssue.value) return true
-  // 资源级：reporter 需要 issue:edit_own 权限
+  // 固有权限：reporter 无条件拥有 edit 权限
+  if (isReporter.value) return true
+  // 资源级：reporter 需要 issue:edit_own 权限（覆盖场景：非 reporter 但有 edit_own）
   if (isReporter.value && hasProjectPermission('issue:edit_own')) return true
   // 资源级：assignee 需要 issue:edit_assigned 权限
   if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
   return false
 })
 
-/** 综合状态变更权限：项目级 issue:change_status OR assignee + edit_assigned */
+/**
+ * 综合状态变更权限：项目级 issue:change_status OR 固有权限（reporter 无条件） OR assignee + edit_assigned
+ */
 const canChangeStatusEffective = computed(() => {
   if (isProjectArchived.value) return false
   if (canChangeStatus.value) return true
+  // 固有权限：reporter 无条件拥有 change_status 权限
+  if (isReporter.value) return true
   // 资源级：assignee 需要 issue:edit_assigned 权限
   if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
+  return false
+})
+
+/**
+ * 综合评论权限：项目级 issue:comment OR 固有权限（reporter 无条件）
+ */
+const canCommentEffective = computed(() => {
+  if (isProjectArchived.value) return false
+  if (canComment.value) return true
+  // 固有权限：reporter 无条件拥有 comment 权限
+  if (isReporter.value) return true
   return false
 })
 

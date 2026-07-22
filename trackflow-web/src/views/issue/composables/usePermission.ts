@@ -49,8 +49,9 @@ export function usePermission(issues: Ref<IssueVO[]>) {
    * 
    * 检查逻辑（与后端 PermissionService.hasIssuePermission 一致）：
    * 1. 项目级 issue:edit 权限 → 允许
-   * 2. 是 reporter 且有 issue:edit_own → 允许
-   * 3. 是 assignee 且有 issue:edit_assigned → 允许
+   * 2. 固有权限：是 reporter → 无条件允许（Inherent Permissions）
+   * 3. 是 reporter 且有 issue:edit_own → 允许
+   * 4. 是 assignee 且有 issue:edit_assigned → 允许
    */
   function canEditIssue(issue: IssueVO): boolean {
     if (authStore.hasGlobalPermission('system:admin')) return true
@@ -58,10 +59,12 @@ export function usePermission(issues: Ref<IssueVO[]>) {
     if (!perms) return false // 未加载时默认隐藏，避免闪烁
     // 1. 项目级 issue:edit
     if (perms.has('issue:edit')) return true
-    // 2. 资源级：reporter + issue:edit_own
+    // 2. 固有权限：reporter 无条件拥有 edit 权限
     const userId = authStore.user?.userId
+    if (userId && userId === issue.reporterId) return true
+    // 3. 资源级：reporter + issue:edit_own
     if (userId && userId === issue.reporterId && perms.has('issue:edit_own')) return true
-    // 3. 资源级：assignee + issue:edit_assigned
+    // 4. 资源级：assignee + issue:edit_assigned
     if (userId && userId === issue.assigneeId && perms.has('issue:edit_assigned')) return true
     return false
   }
