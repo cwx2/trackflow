@@ -159,7 +159,9 @@ public class ProjectCopyService {
         vo.setTags(Math.toIntExact(issueTagMapper.selectCount(
                 new LambdaQueryWrapper<IssueTag>().eq(IssueTag::getProjectId, sourceProjectId))));
         vo.setCustomFields(Math.toIntExact(customFieldProjectMapper.selectCount(
-                new LambdaQueryWrapper<CustomFieldProject>().eq(CustomFieldProject::getProjectId, sourceProjectId))));
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, sourceProjectId)
+                        .eq(CustomFieldProject::getIsExcluded, false))));
         vo.setBoard(Math.toIntExact(boardColumnConfigMapper.selectCount(
                 new LambdaQueryWrapper<BoardColumnConfig>().eq(BoardColumnConfig::getProjectId, sourceProjectId))));
         vo.setActions(Math.toIntExact(transitionActionMapper.selectCount(
@@ -262,6 +264,7 @@ public class ProjectCopyService {
             cfp.setPosition(src.getPosition());
             cfp.setConditionFieldId(src.getConditionFieldId());
             cfp.setConditionValues(src.getConditionValues());
+            cfp.setIsExcluded(src.getIsExcluded());
             customFieldProjectMapper.insert(cfp);
         }
         log.info("Copied {} custom field bindings from project {} to {}", bindings.size(), sourceId, targetId);

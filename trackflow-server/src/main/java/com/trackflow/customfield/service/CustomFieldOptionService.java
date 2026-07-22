@@ -152,9 +152,20 @@ public class CustomFieldOptionService {
             CustomFieldProject mapping = projectMapper.selectOne(
                     new LambdaQueryWrapper<CustomFieldProject>()
                             .eq(CustomFieldProject::getCustomFieldId, fieldId)
-                            .eq(CustomFieldProject::getProjectId, projectId));
+                            .eq(CustomFieldProject::getProjectId, projectId)
+                            .eq(CustomFieldProject::getIsExcluded, false));
             if (mapping == null) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "该字段未关联到此项目");
+            }
+        } else {
+            // 全局字段也可能被从项目中排除
+            boolean excluded = projectMapper.exists(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                            .eq(CustomFieldProject::getProjectId, projectId)
+                            .eq(CustomFieldProject::getIsExcluded, true));
+            if (excluded) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "该字段已从此项目中移除");
             }
         }
 

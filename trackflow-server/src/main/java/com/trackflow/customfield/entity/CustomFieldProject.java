@@ -67,4 +67,28 @@ public class CustomFieldProject implements Serializable {
      * NULL = 继承全局设置。
      */
     private String defaultValue;
+
+    /**
+     * 值过滤依赖的源字段 ID（指向 custom_field_definition）。
+     * 为 NULL 表示无值过滤。
+     * 与条件显示（conditionFieldId）是两个独立机制：
+     * - 条件显示：控制字段本身是否出现
+     * - 值依赖过滤：字段出现，但下拉选项被缩小
+     */
+    private Long filterFieldId;
+
+    /**
+     * 过滤规则 JSON。
+     * 当源字段值为指定值时，本字段只展示指定选项。
+     * 格式: [{"whenValue":"optionId1","showOnly":["optionId3","optionId4"]}, ...]
+     */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String filterRules;
+
+    /**
+     * 是否为排除记录。
+     * true 表示全局字段被从此项目排除（YouTrack "Remove field from project" 行为）。
+     * 排除时同时清除该项目内所有工单的字段值。
+     */
+    private Boolean isExcluded;
 }

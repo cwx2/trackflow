@@ -539,14 +539,19 @@ public class CustomFieldService {
     // ========== 项目级字段查询 ==========
 
     public List<CustomFieldDefinition> listByProject(Long projectId, String issueType) {
+        // 获取该项目中被排除的全局字段 ID
+        Set<Long> excludedFieldIds = getExcludedFieldIds(projectId);
+
         List<CustomFieldDefinition> globalFields = definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
                         .eq(CustomFieldDefinition::getIsForAll, true)
+                        .notIn(!excludedFieldIds.isEmpty(), CustomFieldDefinition::getId, excludedFieldIds)
                         .orderByAsc(CustomFieldDefinition::getPosition));
 
         List<Long> projectFieldIds = projectMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldProject>()
-                        .eq(CustomFieldProject::getProjectId, projectId))
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .eq(CustomFieldProject::getIsExcluded, false))
                 .stream()
                 .map(CustomFieldProject::getCustomFieldId)
                 .toList();
@@ -611,14 +616,19 @@ public class CustomFieldService {
     // ========== 项目级字段管理 ==========
 
     public List<CustomFieldDefinition> listProjectFields(Long projectId) {
+        // 获取该项目中被排除的全局字段 ID
+        Set<Long> excludedFieldIds = getExcludedFieldIds(projectId);
+
         List<CustomFieldDefinition> globalFields = definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
                         .eq(CustomFieldDefinition::getIsForAll, true)
+                        .notIn(!excludedFieldIds.isEmpty(), CustomFieldDefinition::getId, excludedFieldIds)
                         .orderByAsc(CustomFieldDefinition::getPosition));
 
         List<CustomFieldProject> projectMappings = projectMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldProject>()
                         .eq(CustomFieldProject::getProjectId, projectId)
+                        .eq(CustomFieldProject::getIsExcluded, false)
                         .orderByAsc(CustomFieldProject::getPosition));
 
         List<Long> projectFieldIds = projectMappings.stream()
@@ -645,21 +655,36 @@ public class CustomFieldService {
     }
 
     public List<CustomFieldDefinition> listAvailableFieldsForProject(Long projectId) {
+        // 已附加（非排除）的字段 ID
         Set<Long> attachedIds = projectMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldProject>()
-                        .eq(CustomFieldProject::getProjectId, projectId))
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .eq(CustomFieldProject::getIsExcluded, false))
                 .stream()
                 .map(CustomFieldProject::getCustomFieldId)
                 .collect(Collectors.toSet());
 
+        // 非全局的、未附加的字段
         List<CustomFieldDefinition> allNonGlobal = definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
                         .eq(CustomFieldDefinition::getIsForAll, false)
                         .orderByAsc(CustomFieldDefinition::getPosition));
 
-        return allNonGlobal.stream()
+        List<CustomFieldDefinition> available = new ArrayList<>(allNonGlobal.stream()
                 .filter(f -> !attachedIds.contains(f.getId()))
-                .toList();
+                .toList());
+
+        // 被排除的全局字段也可重新附加
+        Set<Long> excludedFieldIds = getExcludedFieldIds(projectId);
+        if (!excludedFieldIds.isEmpty()) {
+            List<CustomFieldDefinition> excludedGlobalFields = definitionMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldDefinition>()
+                            .in(CustomFieldDefinition::getId, excludedFieldIds)
+                            .orderByAsc(CustomFieldDefinition::getPosition));
+            available.addAll(excludedGlobalFields);
+        }
+
+        return available;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -668,9 +693,23 @@ public class CustomFieldService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
+
         if (Boolean.TRUE.equals(field.getIsForAll())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "全局字段无需附加到项目，它已对所有项目可用");
+            // 全局字段：检查是否有排除记录，有则删除（恢复全局可见性）
+            CustomFieldProject exclusion = projectMapper.selectOne(
+                    new LambdaQueryWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getCustomFieldId, customFieldId)
+                            .eq(CustomFieldProject::getProjectId, projectId)
+                            .eq(CustomFieldProject::getIsExcluded, true));
+            if (exclusion == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "全局字段已对此项目可用，无需重复附加");
+            }
+            projectMapper.deleteById(exclusion.getId());
+            log.info("全局字段 {} 恢复到项目 {}（删除排除记录）", customFieldId, projectId);
+            return;
         }
+
+        // 非全局字段：正常附加逻辑
         boolean exists = projectMapper.exists(new LambdaQueryWrapper<CustomFieldProject>()
                 .eq(CustomFieldProject::getCustomFieldId, customFieldId)
                 .eq(CustomFieldProject::getProjectId, projectId));
@@ -680,13 +719,15 @@ public class CustomFieldService {
 
         Long count = projectMapper.selectCount(
                 new LambdaQueryWrapper<CustomFieldProject>()
-                        .eq(CustomFieldProject::getProjectId, projectId));
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .eq(CustomFieldProject::getIsExcluded, false));
         int position = count != null ? count.intValue() : 0;
 
         CustomFieldProject cfp = new CustomFieldProject();
         cfp.setCustomFieldId(customFieldId);
         cfp.setProjectId(projectId);
         cfp.setPosition(position);
+        cfp.setIsExcluded(false);
         projectMapper.insert(cfp);
     }
 
@@ -1265,6 +1306,19 @@ public class CustomFieldService {
     }
 
     // ========== 私有辅助方法 ==========
+
+    /**
+     * 获取某项目中被排除的全局字段 ID 集合
+     */
+    private Set<Long> getExcludedFieldIds(Long projectId) {
+        return projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .eq(CustomFieldProject::getIsExcluded, true))
+                .stream()
+                .map(CustomFieldProject::getCustomFieldId)
+                .collect(Collectors.toSet());
+    }
 
     private void cleanOrphanValuesForScopeReduction(Long customFieldId, List<Long> retainedProjectIds) {
         List<CustomFieldValue> existingValues = valueMapper.selectList(
