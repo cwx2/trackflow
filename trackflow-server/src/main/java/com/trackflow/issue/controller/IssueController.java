@@ -363,7 +363,7 @@ public class IssueController {
     @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<IssueCommentVO> addComment(@PathVariable("id") Long id, @Valid @RequestBody AddCommentDTO dto) {
         IssueComment comment = issueService.addComment(id, dto.getContent(), dto.getVisibleToGroupIds());
-        return R.ok(issueConverter.toCommentVO(comment));
+        return R.ok(issueService.toCommentVOWithUser(comment));
     }
 
     @PutMapping("/{id}/comments/{commentId}")
@@ -373,7 +373,7 @@ public class IssueController {
         boolean updateVisibility = dto.getVisibleToGroupIds() != null;
         IssueComment comment = issueService.updateComment(id, commentId, dto.getContent(),
                 dto.getVisibleToGroupIds(), updateVisibility);
-        return R.ok(issueConverter.toCommentVO(comment));
+        return R.ok(issueService.toCommentVOWithUser(comment));
     }
 
     @DeleteMapping("/{id}/comments/{commentId}")

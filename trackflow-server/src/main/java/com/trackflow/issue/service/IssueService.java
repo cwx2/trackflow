@@ -2033,6 +2033,38 @@ public class IssueService {
     }
 
     /**
+     * 将评论实体转为完整 VO（含 userName、userAvatar、isEdited）。
+     * 用于单条评论创建/更新后返回给前端，保证响应格式与列表一致。
+     */
+    public IssueCommentVO toCommentVOWithUser(IssueComment comment) {
+        IssueCommentVO vo = issueConverter.toCommentVO(comment);
+        // 填充用户信息
+        if (comment.getUserId() != null) {
+            SysUser user = sysUserMapper.selectById(comment.getUserId());
+            if (user != null) {
+                vo.setUserName(user.getDisplayName());
+                vo.setUserAvatar(user.getAvatarUrl());
+            }
+        }
+        // 填充 isEdited：updatedAt 比 createdAt 晚超过 1 秒视为已编辑
+        vo.setIsEdited(comment.getCreatedAt() != null && comment.getUpdatedAt() != null
+                && comment.getUpdatedAt().isAfter(comment.getCreatedAt().plusSeconds(1)));
+        // 填充可见性组名称
+        if (comment.getVisibleToGroupIds() != null && !comment.getVisibleToGroupIds().isEmpty()) {
+            vo.setVisibleToGroupIds(comment.getVisibleToGroupIds().stream()
+                    .map(String::valueOf).toList());
+            Map<Long, String> groupNameMap = userGroupMapper.selectBatchIds(comment.getVisibleToGroupIds()).stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            com.trackflow.system.entity.UserGroup::getId,
+                            com.trackflow.system.entity.UserGroup::getName));
+            vo.setVisibleToGroupNames(comment.getVisibleToGroupIds().stream()
+                    .map(gid -> groupNameMap.getOrDefault(gid, "未知组"))
+                    .toList());
+        }
+        return vo;
+    }
+
+    /**
      * 获取评论列表 —— 单次 JOIN 查询（消除 N+1）
      */
     public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
