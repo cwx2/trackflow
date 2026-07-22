@@ -153,7 +153,7 @@ public class ReportService {
      * - projectId 为空（全局报表）：需要系统管理员权限
      * 创建后自动添加到创建者的收藏列表（参照 YouTrack 行为）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ReportDefinition createWithAccessCheck(CreateReportDTO dto, Long userId) {
         if (dto.getProjectId() != null) {
             // 项目级报表：需要 project:edit 权限
@@ -172,7 +172,7 @@ public class ReportService {
         return report;
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ReportDefinition create(CreateReportDTO dto) {
         // 校验报表类型合法性
         if (!ReportType.isValid(dto.getType())) {
@@ -203,7 +203,7 @@ public class ReportService {
      * @param userId   当前用户ID
      * @return true=已收藏, false=已取消收藏
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public boolean toggleFavorite(Long reportId, Long userId) {
         // 确认报表存在
         ReportDefinition report = reportMapper.selectById(reportId);
@@ -272,7 +272,7 @@ public class ReportService {
      * 创建一份指定报表的副本，名称加"(副本)"后缀
      * 需要：用户对源报表有查看权限 + report:create 权限
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ReportDefinition clone(Long id, Long userId) {
         ReportDefinition source = reportMapper.selectById(id);
         if (source == null) {
@@ -438,7 +438,7 @@ public class ReportService {
     /**
      * 更新报表（带权限校验）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ReportDefinition updateWithAccessCheck(Long id, UpdateReportDTO dto, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) {
@@ -579,7 +579,7 @@ public class ReportService {
         }
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         reportMapper.deleteById(id);
     }
@@ -587,7 +587,7 @@ public class ReportService {
     /**
      * 删除报表（带权限校验）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteWithAccessCheck(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
         if (report == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found");
@@ -620,7 +620,7 @@ public class ReportService {
      * 设置报表共享（覆盖模式：传入全量共享列表）
      * 只有报表创建者或系统管理员可以管理共享
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<ReportShareVO> setShares(Long reportId, ShareReportDTO dto, Long userId) {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {
@@ -719,7 +719,7 @@ public class ReportService {
      * 移除单条共享
      * 只有报表创建者或系统管理员可以管理共享
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeShare(Long reportId, Long shareId, Long userId) {
         ReportDefinition report = reportMapper.selectById(reportId);
         if (report == null) {

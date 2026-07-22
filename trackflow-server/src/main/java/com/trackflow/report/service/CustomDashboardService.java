@@ -167,7 +167,7 @@ public class CustomDashboardService {
     /**
      * 创建仪表盘
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public DashboardDetailVO create(CreateDashboardDTO dto, Long userId) {
         Dashboard dashboard = new Dashboard();
         dashboard.setName(dto.getName());
@@ -191,7 +191,7 @@ public class CustomDashboardService {
     /**
      * 更新仪表盘（名称/描述/共享）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public DashboardDetailVO update(Long dashboardId, UpdateDashboardDTO dto, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
@@ -218,7 +218,7 @@ public class CustomDashboardService {
     /**
      * 删除仪表盘（只有 owner 可删除，级联删除 widget 和 share）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
@@ -243,7 +243,7 @@ public class CustomDashboardService {
     /**
      * 设置仪表盘共享（覆盖模式：传入全量共享列表）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<DashboardShareVO> setShares(Long dashboardId, ShareDashboardDTO dto, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
@@ -339,7 +339,7 @@ public class CustomDashboardService {
     /**
      * 移除单条共享
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void removeShare(Long dashboardId, Long shareId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
@@ -364,7 +364,7 @@ public class CustomDashboardService {
      * 切换收藏状态
      * @return true=已收藏, false=已取消收藏
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public boolean toggleFavorite(Long dashboardId, Long userId) {
         // 确认仪表盘存在且用户有权访问
         assertCanView(dashboardId, userId);
@@ -394,7 +394,7 @@ public class CustomDashboardService {
     /**
      * 设为默认仪表盘（自动收藏）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void setDefault(Long dashboardId, Long userId) {
         // 确认仪表盘存在且用户有权访问
         assertCanView(dashboardId, userId);
@@ -429,7 +429,7 @@ public class CustomDashboardService {
     /**
      * 取消默认仪表盘
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void unsetDefault(Long userId) {
         LambdaUpdateWrapper<DashboardFavorite> clearDefault = new LambdaUpdateWrapper<DashboardFavorite>()
                 .eq(DashboardFavorite::getUserId, userId)
@@ -455,7 +455,7 @@ public class CustomDashboardService {
     /**
      * 添加 Widget 到仪表盘
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public DashboardWidgetVO addWidget(Long dashboardId, CreateWidgetDTO dto, Long userId) {
         assertCanEdit(dashboardId, userId);
 
@@ -490,7 +490,7 @@ public class CustomDashboardService {
     /**
      * 更新 Widget（配置/位置/大小）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public DashboardWidgetVO updateWidget(Long dashboardId, Long widgetId, UpdateWidgetDTO dto, Long userId) {
         assertCanEdit(dashboardId, userId);
 
@@ -518,7 +518,7 @@ public class CustomDashboardService {
     /**
      * 删除 Widget
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteWidget(Long dashboardId, Long widgetId, Long userId) {
         assertCanEdit(dashboardId, userId);
 
@@ -535,7 +535,7 @@ public class CustomDashboardService {
      * 批量更新 Widget 位置（拖拽后保存布局）
      * 使用乐观锁防止并发覆盖，使用批量更新替代逐条 SQL。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateLayout(Long dashboardId, UpdateLayoutDTO dto, Long userId) {
         // 1. 权限校验 + 乐观锁校验
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
