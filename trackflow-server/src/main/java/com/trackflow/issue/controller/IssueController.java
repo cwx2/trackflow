@@ -11,6 +11,7 @@ import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueAttachment;
+import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueExportService;
@@ -240,6 +241,16 @@ public class IssueController {
         List<IssueStatus> statuses = workflowService.getAvailableTransitions(issue, userId);
         List<IssueStatusVO> voList = issueConverter.toStatusVOList(statuses);
 
+        // 查询哪些目标状态的转换需要强制评论
+        List<Long> targetStatusIds = statuses.stream().map(IssueStatus::getId).toList();
+        Set<Long> requireCommentIds = workflowService.getRequireCommentStatusIds(
+                issue.getStatusId(), targetStatusIds);
+        for (IssueStatusVO vo : voList) {
+            if (requireCommentIds.contains(Long.valueOf(vo.getId()))) {
+                vo.setRequireComment(true);
+            }
+        }
+
         // 检查阻塞关系：如果有未解决的 blocker，标注关闭状态为 blocked
         List<String> blockerKeys = linkService.getUnresolvedBlockerKeys(id);
         if (!blockerKeys.isEmpty()) {
@@ -261,6 +272,13 @@ public class IssueController {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
             return R.fail(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
+        }
+
+        // 强制评论校验：如果转换规则要求必须填写评论
+        if (workflowService.isCommentRequired(issue.getStatusId(), dto.getStatusId())) {
+            if (dto.getComment() == null || dto.getComment().isBlank()) {
+                return R.fail(ErrorCode.BAD_REQUEST, "此状态转换需要填写理由");
+            }
         }
 
         // WIP 限制 + 关闭前置检查（业务逻辑在 Service 层）
