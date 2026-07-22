@@ -8,7 +8,6 @@ import com.trackflow.board.dto.UpdateBoardColumnMergeDTO;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.dto.UpdateBoardGeneralConfigDTO;
 import com.trackflow.board.dto.UpdateBoardSwimlaneConfigDTO;
-import com.trackflow.board.service.BoardAccessService;
 import com.trackflow.board.service.BoardCardConfigService;
 import com.trackflow.board.service.BoardChartConfigService;
 import com.trackflow.board.service.BoardColumnMergeService;
@@ -47,7 +46,6 @@ public class BoardController {
     private final BoardSwimlaneConfigService boardSwimlaneConfigService;
     private final BoardColumnMergeService boardColumnMergeService;
     private final BoardGeneralConfigService boardGeneralConfigService;
-    private final BoardAccessService boardAccessService;
     private final BoardConfigVersionService boardConfigVersionService;
     private final BoardSettingsService boardSettingsService;
     private final BoardDataService boardDataService;
@@ -55,12 +53,11 @@ public class BoardController {
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
      * 根据项目的 columnField 配置返回对应字段的列。
-     * 需要项目查看权限 + 看板查看权限
+     * 需要看板查看权限
      */
     @GetMapping("/columns")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardView(#projectId)")
     public R<List<BoardColumnVO>> getColumns(@RequestParam("projectId") Long projectId) {
-        boardAccessService.checkViewAccess(projectId);
         // 检查 columnField 配置决定返回哪种列
         BoardGeneralConfigVO generalConfig = boardGeneralConfigService.getGeneralConfig(projectId);
         String columnField = generalConfig.getColumnField() != null ? generalConfig.getColumnField() : "status";
@@ -79,20 +76,18 @@ public class BoardController {
      * 替代前端循环调用通用 Issue 列表 API 的方式，
      * 服务端完成按列分组 + 统计，前端无需客户端 filter。
      * <p>
-     * 需要项目查看权限 + 看板查看权限。
+     * 需要看板查看权限。
      *
      * @param query 查询参数（projectId 必填，sprintId/assigneeId/keyword/excludeDoneBefore 可选）
      * @param collapsedStatusIds 已折叠的列状态 ID（逗号分隔），折叠列仅返回统计不返回具体工单
      * @return 按列分组的看板数据
      */
     @GetMapping("/data")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardView(#projectId)")
     public R<BoardDataVO> getBoardData(
             @Valid BoardDataQuery query,
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "collapsedStatusIds", required = false) String collapsedStatusIds) {
-        boardAccessService.checkViewAccess(query.getProjectId());
-
         Set<Long> collapsed = parseCollapsedStatusIds(collapsedStatusIds);
         BoardDataVO data = boardDataService.aggregateBoardData(query, collapsed);
         return R.ok(data);
@@ -107,9 +102,8 @@ public class BoardController {
      * 需要看板编辑权限。
      */
     @PostMapping("/columns/init")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<List<BoardColumnVO>> initializeColumns(@RequestParam("projectId") Long projectId) {
-        boardAccessService.checkEditAccess(projectId);
         List<BoardColumnVO> columns = boardColumnService.initializeColumns(projectId);
         return R.ok(columns);
     }
@@ -119,11 +113,10 @@ public class BoardController {
      * 需要看板编辑权限
      */
     @PutMapping("/columns")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveColumns(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardColumnsDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardColumnService.saveColumns(projectId, dto);
         return R.ok();
@@ -137,9 +130,8 @@ public class BoardController {
      * 需要看板查看权限。
      */
     @GetMapping("/card-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardView(#projectId)")
     public R<BoardCardConfigVO> getCardConfig(@RequestParam("projectId") Long projectId) {
-        boardAccessService.checkViewAccess(projectId);
         BoardCardConfigVO config = boardCardConfigService.getCardConfig(projectId);
         return R.ok(config);
     }
@@ -149,11 +141,10 @@ public class BoardController {
      * 需要看板编辑权限。
      */
     @PutMapping("/card-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveCardConfig(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardCardConfigDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardCardConfigService.saveCardConfig(projectId, dto);
         return R.ok();
@@ -167,9 +158,8 @@ public class BoardController {
      * 需要看板查看权限。
      */
     @GetMapping("/swimlane-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardView(#projectId)")
     public R<BoardSwimlaneConfigVO> getSwimlaneConfig(@RequestParam("projectId") Long projectId) {
-        boardAccessService.checkViewAccess(projectId);
         BoardSwimlaneConfigVO config = boardSwimlaneConfigService.getSwimlaneConfig(projectId);
         return R.ok(config);
     }
@@ -179,11 +169,10 @@ public class BoardController {
      * 需要看板编辑权限。
      */
     @PutMapping("/swimlane-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveSwimlaneConfig(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardSwimlaneConfigDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardSwimlaneConfigService.saveSwimlaneConfig(projectId, dto);
         return R.ok();
@@ -197,9 +186,8 @@ public class BoardController {
      * 需要看板查看权限。
      */
     @GetMapping("/column-merges")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardView(#projectId)")
     public R<List<BoardColumnMergeGroupVO>> getColumnMerges(@RequestParam("projectId") Long projectId) {
-        boardAccessService.checkViewAccess(projectId);
         List<BoardColumnMergeGroupVO> merges = boardColumnMergeService.getColumnMerges(projectId);
         return R.ok(merges);
     }
@@ -209,11 +197,10 @@ public class BoardController {
      * 需要看板编辑权限。
      */
     @PutMapping("/column-merges")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveColumnMerges(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardColumnMergeDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardColumnMergeService.saveColumnMerges(projectId, dto);
         return R.ok();
@@ -238,11 +225,10 @@ public class BoardController {
      * 需要看板编辑权限。
      */
     @PutMapping("/general-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveGeneralConfig(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardGeneralConfigDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardConfigVersionService.checkAndIncrement(projectId, dto.getConfigVersion());
         boardGeneralConfigService.saveGeneralConfig(projectId, dto);
         return R.ok();
@@ -256,9 +242,8 @@ public class BoardController {
      * 需要看板查看权限。
      */
     @GetMapping("/chart-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardView(#projectId)")
     public R<BoardChartConfigVO> getChartConfig(@RequestParam("projectId") Long projectId) {
-        boardAccessService.checkViewAccess(projectId);
         BoardChartConfigVO config = boardChartConfigService.getChartConfig(projectId);
         return R.ok(config);
     }
@@ -268,11 +253,10 @@ public class BoardController {
      * 需要看板编辑权限。
      */
     @PutMapping("/chart-config")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveChartConfig(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody UpdateBoardChartConfigDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardChartConfigService.saveChartConfig(projectId, dto);
         return R.ok();
     }
@@ -288,11 +272,10 @@ public class BoardController {
      * 推荐前端优先使用此接口，避免 5 个并行请求的竞态条件。
      */
     @PutMapping("/settings")
-    @PreAuthorize("@perm.check(#projectId, 'project:view')")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
     public R<Void> saveBoardSettings(
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody SaveBoardSettingsDTO dto) {
-        boardAccessService.checkEditAccess(projectId);
         boardSettingsService.saveAllSettings(projectId, dto);
         return R.ok();
     }

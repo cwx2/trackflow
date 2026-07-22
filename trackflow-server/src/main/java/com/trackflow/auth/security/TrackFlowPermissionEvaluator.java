@@ -1,6 +1,7 @@
 package com.trackflow.auth.security;
 
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.board.service.BoardAccessService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -41,6 +42,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
     private final com.trackflow.project.mapper.ProjectMapper projectMapper;
     private final TransitionActionMapper transitionActionMapper;
     private final SprintMapper sprintMapper;
+    private final BoardAccessService boardAccessService;
 
     /**
      * 检查项目级权限（通过项目标识符：Key 或 ID）
@@ -214,6 +216,36 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
         }
         return permissionService.hasPermission(userId, sprint.getProjectId(), permission);
+    }
+
+    /**
+     * 检查看板查看权限。
+     * <p>
+     * 基于 board_general_config 中的 can_view_roles 动态判断，
+     * 而非静态 permission code，因为看板的访问控制粒度比项目级更细。
+     * <p>
+     * 用于 @PreAuthorize("@perm.checkBoardView(#projectId)")
+     *
+     * @param projectId 项目 ID
+     * @return true 如果当前用户有看板查看权限
+     */
+    public boolean checkBoardView(Long projectId) {
+        if (projectId == null) return false;
+        return boardAccessService.hasViewAccess(projectId);
+    }
+
+    /**
+     * 检查看板编辑权限。
+     * <p>
+     * 基于 board_general_config 中的 can_edit_roles 动态判断。
+     * 用于 @PreAuthorize("@perm.checkBoardEdit(#projectId)")
+     *
+     * @param projectId 项目 ID
+     * @return true 如果当前用户有看板编辑权限
+     */
+    public boolean checkBoardEdit(Long projectId) {
+        if (projectId == null) return false;
+        return boardAccessService.hasEditAccess(projectId);
     }
 
     /**
