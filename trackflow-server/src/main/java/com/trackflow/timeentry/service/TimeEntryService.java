@@ -12,6 +12,7 @@ import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.timeentry.converter.TimeEntryConverter;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.StartTimerDTO;
 import com.trackflow.timeentry.dto.StopTimerDTO;
@@ -55,6 +56,7 @@ public class TimeEntryService {
     private final com.trackflow.project.service.ProjectService projectService;
     private final PermissionService permissionService;
     private final ApplicationEventPublisher eventPublisher;
+    private final TimeEntryConverter timeEntryConverter;
 
     /**
      * 创建工时记录
@@ -66,7 +68,7 @@ public class TimeEntryService {
      * @param currentUserId 当前登录用户 ID（操作执行人）
      * @param dto 创建参数（可含 forUserId 指定工时归属人）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TimeEntry create(Long currentUserId, CreateTimeEntryDTO dto) {
         // 1. 校验工单存在且未软删除
         Issue issue = getActiveIssueOrThrow(dto.getIssueId());
@@ -173,7 +175,7 @@ public class TimeEntryService {
      * - 他人工时：需要 time:edit_all 权限（管理员/技术负责人）
      * 支持孤立工时（工单已删除）的编辑：使用 time_entry.project_id 做权限判断
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TimeEntry update(Long id, Long userId, UpdateTimeEntryDTO dto) {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
@@ -288,7 +290,7 @@ public class TimeEntryService {
      * - 他人工时：需要 time:delete_all 权限（管理员/技术负责人）
      * 支持孤立工时（工单已删除）的删除：使用 time_entry.project_id 做权限判断
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id, Long userId) {
         TimeEntry entry = timeEntryMapper.selectById(id);
         if (entry == null) {
@@ -330,6 +332,22 @@ public class TimeEntryService {
     }
 
     /**
+     * 解析 activityId：向下兼容 workType 名称匹配。
+     * 若 activityId 已指定，直接返回；否则尝试从 workType 名称查找对应 ID。
+     *
+     * @param activityId 工作类型属性值 ID（优先）
+     * @param workType   工作类型名称（已废弃，向下兼容）
+     * @return 解析后的 activityId，或 null
+     */
+    public Long resolveActivityId(Long activityId, String workType) {
+        if (activityId != null) return activityId;
+        if (workType != null && !workType.isBlank()) {
+            return workItemAttributeService.findWorkTypeValueIdByName(workType);
+        }
+        return null;
+    }
+
+    /**
      * 查询用户在日期范围内的工时记录（带 issueKey）
      * 支持按项目和工作类型（activityId）筛选
      */
@@ -355,33 +373,16 @@ public class TimeEntryService {
         String ids = entries.stream().map(e -> String.valueOf(e.getId())).collect(Collectors.joining(","));
         Map<Long, Map<String, String>> attrByEntry = loadWorkTypeForEntries(ids);
 
-        return entries.stream().map(e -> {
-            TimeEntryVO vo = new TimeEntryVO();
-            vo.setId(String.valueOf(e.getId()));
-            vo.setIssueId(String.valueOf(e.getIssueId()));
-            vo.setProjectId(String.valueOf(e.getProjectId()));
-            vo.setUserId(String.valueOf(e.getUserId()));
-            vo.setWorkDate(e.getWorkDate() != null ? e.getWorkDate().toString() : null);
-            vo.setDuration(e.getDuration());
-            vo.setStartTime(e.getStartTime());
-            vo.setDescription(e.getDescription());
-            vo.setOngoing(e.getOngoing());
-            if (Boolean.TRUE.equals(e.getOngoing()) && e.getCreatedAt() != null) {
-                vo.setStartedAt(e.getCreatedAt().toString());
-            }
-            if (e.getCreatedAt() != null) vo.setCreatedAt(e.getCreatedAt().toString());
-            if (e.getUpdatedAt() != null) vo.setUpdatedAt(e.getUpdatedAt().toString());
+        return entries.stream().map(entry -> {
+            TimeEntryVO vo = timeEntryConverter.toVO(entry);
 
-            // loggedBy info
-            if (e.getLoggedBy() != null) {
-                vo.setLoggedBy(String.valueOf(e.getLoggedBy()));
-                if (!e.getLoggedBy().equals(e.getUserId())) {
-                    vo.setLoggedByName(getUserDisplayName(e.getLoggedBy()));
-                }
+            // loggedBy 名称（仅代录场景）
+            if (entry.getLoggedBy() != null && !entry.getLoggedBy().equals(entry.getUserId())) {
+                vo.setLoggedByName(getUserDisplayName(entry.getLoggedBy()));
             }
 
-            // Set work type from attribute values
-            Map<String, String> wtInfo = attrByEntry.get(e.getId());
+            // Set work type from batch-loaded attribute values
+            Map<String, String> wtInfo = attrByEntry.get(entry.getId());
             if (wtInfo != null) {
                 vo.setWorkType(wtInfo.get("name"));
                 vo.setWorkTypeId(wtInfo.get("id"));
@@ -608,7 +609,7 @@ public class TimeEntryService {
      * @param dto 启动参数（issueId 必填）
      * @return 创建的计时器 time_entry 记录
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TimeEntry startTimer(Long currentUserId, StartTimerDTO dto) {
         // 1. 校验工单存在且未软删除
         Issue issue = getActiveIssueOrThrow(dto.getIssueId());
@@ -672,7 +673,7 @@ public class TimeEntryService {
      * @param dto 停止参数（可选的 duration 覆盖、description、attributeValues）
      * @return 更新后的 time_entry 记录
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TimeEntry stopTimer(Long currentUserId, Long timeEntryId, StopTimerDTO dto) {
         TimeEntry entry = timeEntryMapper.selectById(timeEntryId);
         if (entry == null) {
@@ -773,29 +774,72 @@ public class TimeEntryService {
     public TimeEntryVO getActiveTimerVO(Long userId) {
         TimeEntry entry = getActiveTimerForUser(userId);
         if (entry == null) return null;
+        return buildEntryVO(entry);
+    }
 
-        TimeEntryVO vo = new TimeEntryVO();
-        vo.setId(String.valueOf(entry.getId()));
-        vo.setIssueId(String.valueOf(entry.getIssueId()));
-        vo.setProjectId(String.valueOf(entry.getProjectId()));
-        vo.setUserId(String.valueOf(entry.getUserId()));
-        vo.setWorkDate(entry.getWorkDate() != null ? entry.getWorkDate().toString() : null);
-        vo.setDuration(null);
-        vo.setStartTime(entry.getStartTime());
-        vo.setDescription(entry.getDescription());
-        vo.setOngoing(true);
-        vo.setCreatedAt(entry.getCreatedAt() != null ? entry.getCreatedAt().toString() : null);
-        vo.setStartedAt(entry.getCreatedAt() != null ? entry.getCreatedAt().toString() : null);
-        vo.setUpdatedAt(entry.getUpdatedAt() != null ? entry.getUpdatedAt().toString() : null);
+    /**
+     * 构建 TimeEntryVO（含关联信息：issueKey/issueTitle/属性值/loggedByName）。
+     * 此方法封装了所有 Entity→VO 的转换与关联查询逻辑，供 Controller 和内部列表方法统一调用。
+     *
+     * @param entry 工时记录实体
+     * @return 完整的 TimeEntryVO
+     */
+    public TimeEntryVO buildEntryVO(TimeEntry entry) {
+        TimeEntryVO vo = timeEntryConverter.toVO(entry);
 
-        // Enrich with issue info
-        Issue issue = issueMapper.selectById(entry.getIssueId());
-        if (issue != null) {
-            vo.setIssueKey(issue.getIssueKey());
-            vo.setIssueTitle(issue.getTitle());
+        // 工单信息（issueKey + issueTitle），计时器 badge 全局显示需要
+        enrichWithIssueInfo(vo, entry.getIssueId());
+
+        // loggedBy 名称（仅代录场景）
+        if (entry.getLoggedBy() != null && !entry.getLoggedBy().equals(entry.getUserId())) {
+            vo.setLoggedByName(getUserDisplayName(entry.getLoggedBy()));
         }
 
+        // 加载属性值
+        enrichWithAttributeValues(vo, entry.getId());
+
         return vo;
+    }
+
+    /**
+     * 填充工单关联信息（issueKey/issueTitle/issueDeleted）
+     */
+    private void enrichWithIssueInfo(TimeEntryVO vo, Long issueId) {
+        try {
+            Issue issue = issueMapper.selectById(issueId);
+            if (issue != null) {
+                vo.setIssueKey(issue.getIssueKey());
+                vo.setIssueTitle(issue.getTitle());
+                vo.setIssueDeleted(false);
+            } else {
+                vo.setIssueDeleted(true);
+            }
+        } catch (Exception e) {
+            vo.setIssueDeleted(true);
+        }
+    }
+
+    /**
+     * 填充工作项属性值（workType/workTypeColor/attributeValues）
+     */
+    private void enrichWithAttributeValues(TimeEntryVO vo, Long timeEntryId) {
+        Map<String, Map<String, String>> attrValues = workItemAttributeService.getTimeEntryAttributeValues(timeEntryId);
+        if (attrValues.isEmpty()) return;
+
+        vo.setAttributeValues(attrValues.entrySet().stream().map(e -> {
+            Map<String, String> item = new java.util.HashMap<>(e.getValue());
+            item.put("attributeId", e.getKey());
+            return item;
+        }).toList());
+
+        // Extract Work type specifically using dynamic attribute ID
+        String workTypeAttrId = String.valueOf(workItemAttributeService.getWorkTypeAttributeId());
+        Map<String, String> workTypeInfo = attrValues.get(workTypeAttrId);
+        if (workTypeInfo != null) {
+            vo.setWorkType(workTypeInfo.get("valueName"));
+            vo.setWorkTypeId(workTypeInfo.get("valueId"));
+            vo.setWorkTypeColor(workTypeInfo.get("valueColor"));
+        }
     }
 
     /**
@@ -823,7 +867,7 @@ public class TimeEntryService {
      *
      * @return 受影响的行数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int recalculateAllSpentHours() {
         return timeEntryMapper.recalculateAllSpentHours();
     }
@@ -1037,18 +1081,11 @@ public class TimeEntryService {
     }
 
     /**
-     * 获取用户显示名称，用于日志记录
+     * 获取用户显示名称，用于日志记录和 VO 构建
      */
     private String getUserDisplayName(Long userId) {
         SysUser user = sysUserMapper.selectById(userId);
         if (user == null) return "未知用户";
         return user.getDisplayName() != null ? user.getDisplayName() : user.getUsername();
-    }
-
-    /**
-     * 获取用户显示名称（供 Controller 构建 VO 使用）
-     */
-    public String getUserDisplayNamePublic(Long userId) {
-        return getUserDisplayName(userId);
     }
 }
