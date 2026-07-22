@@ -9,6 +9,7 @@ import com.trackflow.system.converter.ApiKeyConverter;
 import com.trackflow.system.dto.CreateApiKeyDTO;
 import com.trackflow.system.service.ApiKeyService;
 import com.trackflow.system.vo.ApiKeyVO;
+import com.trackflow.system.vo.CreateApiKeyResultVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/api-keys")
@@ -37,7 +37,7 @@ public class ApiKeyController {
      */
     @PostMapping
     @PreAuthorize("isAuthenticated()")
-    public R<Map<String, Object>> create(@Valid @RequestBody CreateApiKeyDTO dto) {
+    public R<CreateApiKeyResultVO> create(@Valid @RequestBody CreateApiKeyDTO dto) {
         // 禁止 API Key 认证的请求创建新 Key（防止自我复制形成持久化后门）
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof ApiKeyAuthenticationToken) {
@@ -47,7 +47,7 @@ public class ApiKeyController {
         Long userId = SecurityUtils.getCurrentUserId();
         LocalDateTime expiresAt = dto.getExpiresAt() != null && !dto.getExpiresAt().isBlank()
                 ? LocalDateTime.parse(dto.getExpiresAt()) : null;
-        Map<String, Object> result = apiKeyService.create(userId, dto.getName(), dto.getPermissions(), expiresAt);
+        CreateApiKeyResultVO result = apiKeyService.create(userId, dto.getName(), dto.getPermissions(), expiresAt);
         return R.ok(result);
     }
 

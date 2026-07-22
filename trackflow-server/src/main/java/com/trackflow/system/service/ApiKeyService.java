@@ -16,6 +16,8 @@ import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.trackflow.system.vo.CreateApiKeyResultVO;
+
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -52,10 +54,10 @@ public class ApiKeyService {
      * 1. 用户当前 Key 数量 < MAX_KEYS_PER_USER
      * 2. permissions 列表中每个值必须存在于系统已定义的权限集合中
      *
-     * @return 包含明文 key 的 Map（明文仅此一次返回）
+     * @return 包含明文 key 的 CreateApiKeyResultVO（明文仅此一次返回）
      */
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> create(Long userId, String name, List<String> permissions, LocalDateTime expiresAt) {
+    public CreateApiKeyResultVO create(Long userId, String name, List<String> permissions, LocalDateTime expiresAt) {
         // 校验：Key 数量上限
         long existingCount = apiKeyMapper.selectCount(
                 new LambdaQueryWrapper<ApiKey>().eq(ApiKey::getUserId, userId)
@@ -105,14 +107,16 @@ public class ApiKeyService {
         auditDetails.put("expires_at", expiresAt != null ? expiresAt.toString() : "never");
         systemAuditService.log("create_api_key", "api_key", apiKey.getId(), auditDetails);
 
-        return Map.of(
-                "id", String.valueOf(apiKey.getId()),
-                "name", apiKey.getName(),
-                "key", plainKey,  // 仅此一次返回明文
-                "prefix", apiKey.getPrefix(),
-                "expiresAt", expiresAt != null ? expiresAt.toString() : "",
-                "createdAt", apiKey.getCreatedAt().toString()
-        );
+        // 构建返回 VO（明文 key 仅此一次返回）
+        CreateApiKeyResultVO resultVO = new CreateApiKeyResultVO();
+        resultVO.setId(String.valueOf(apiKey.getId()));
+        resultVO.setName(apiKey.getName());
+        resultVO.setKey(plainKey);
+        resultVO.setPrefix(apiKey.getPrefix());
+        resultVO.setExpiresAt(expiresAt);
+        resultVO.setCreatedAt(apiKey.getCreatedAt());
+
+        return resultVO;
     }
 
     /**
