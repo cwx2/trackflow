@@ -2308,6 +2308,10 @@ function isDropAllowed(targetStatusId: string): boolean {
 
 async function onDrop(event: DragEvent, targetStatusId: string) {
   event.preventDefault()
+
+  // ★ Save the target swimlane key BEFORE clearing (for cross-swimlane drop handling)
+  const targetLaneKey = dragOverSwimlaneKey.value
+
   dragOverColumnId.value = null
   dragOverSwimlaneKey.value = null
 
@@ -2329,9 +2333,32 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     ? (issue.priority || 'Normal') === targetStatusId
     : issue.statusId === targetStatusId
 
-  if (isWithinColumnDrop && !isManualSortDisabled.value) {
-    await handleWithinColumnReorder(issue, targetStatusId, event)
-    return
+  if (isWithinColumnDrop) {
+    // ★ Even if same column, check for cross-swimlane movement (YouTrack behavior:
+    //    dragging to different row same column → only update swimlane field)
+    if (targetLaneKey && swimlaneGroupBy.value !== 'none') {
+      // Determine current lane key for the issue
+      let currentLaneKey: string | null = null
+      switch (swimlaneGroupBy.value) {
+        case 'assignee': currentLaneKey = issue.assigneeId || '__unassigned__'; break
+        case 'priority': currentLaneKey = issue.priority || 'Normal'; break
+        case 'type': currentLaneKey = issue.issueType; break
+        case 'sprint': currentLaneKey = issue.sprintId || '__no_sprint__'; break
+        case 'tag': currentLaneKey = null; break
+      }
+      if (currentLaneKey !== targetLaneKey) {
+        // Cross-swimlane, same column → update swimlane field only
+        draggingIssue.value = null
+        allowedTargetStatuses.value.clear()
+        await handleCrossSwimlaneUpdate(issue, targetLaneKey)
+        return
+      }
+    }
+    // True within-column drop (same column, same swimlane) → reorder
+    if (!isManualSortDisabled.value) {
+      await handleWithinColumnReorder(issue, targetStatusId, event)
+      return
+    }
   }
 
   // Priority mode: update priority field instead of status transition
@@ -2350,6 +2377,8 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       await issueApi.update(issue.id, { priority: targetPriority })
       issue.version = (issue.version || 0) + 1
       Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+      // ★ Cross-swimlane field update in priority mode
+      await handleCrossSwimlaneUpdate(issue, targetLaneKey)
     } catch (e: any) {
       issue.priority = oldPriority
       Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
@@ -2400,6 +2429,8 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
             else issue.version = (issue.version || 0) + 1
             showActionFeedback(res.data)
             pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
+            // ★ Cross-swimlane field update after comment-required transition
+            await handleCrossSwimlaneUpdate(issue, targetLaneKey)
           } else {
             issue.statusId = oldStatusId
             Message.error(res.message || '状态变更失败')
@@ -2447,6 +2478,8 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               else issue.version = (issue.version || 0) + 1
               showActionFeedback(forceRes.data)
               pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
+              // ★ Cross-swimlane field update after WIP force transition
+              await handleCrossSwimlaneUpdate(issue, targetLaneKey)
             } else {
               issue.statusId = oldStatusId
               Message.error(forceRes.message || '状态变更失败')
@@ -2483,12 +2516,139 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
     showActionFeedback(res.data)
 
     pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
+
+    // ★ Cross-swimlane field update (YouTrack behavior: drag to different row updates swimlane field)
+    await handleCrossSwimlaneUpdate(issue, targetLaneKey)
   } catch (e: any) {
     issue.statusId = oldStatusId
     const errMsg = e.response?.data?.message || '状态变更失败'
     Message.error(`${issue.issueKey} 移动失败：${errMsg}`)
   } finally {
     transitioningIssueIds.value.delete(issue.id)
+  }
+}
+
+/**
+ * Handle cross-swimlane drop: update the swimlane field value.
+ * Per YouTrack behavior:
+ * - When swimlane is by field value (assignee/priority/type/sprint),
+ *   dragging a card to another swimlane row updates that field.
+ * - Returns true if a cross-swimlane update was performed.
+ */
+async function handleCrossSwimlaneUpdate(issue: IssueVO, targetLaneKey: string | null): Promise<boolean> {
+  // No swimlane mode or no target lane → nothing to do
+  if (!targetLaneKey || swimlaneGroupBy.value === 'none') return false
+
+  // Determine the issue's current swimlane key based on the swimlaneGroupBy dimension
+  let currentLaneKey: string | null = null
+  switch (swimlaneGroupBy.value) {
+    case 'assignee':
+      currentLaneKey = issue.assigneeId || '__unassigned__'
+      break
+    case 'priority':
+      currentLaneKey = issue.priority || 'Normal'
+      break
+    case 'type':
+      currentLaneKey = issue.issueType
+      break
+    case 'sprint':
+      currentLaneKey = issue.sprintId || '__no_sprint__'
+      break
+    case 'tag':
+      // Tag swimlane uses tag id as key; complex to handle — skip for now
+      return false
+  }
+
+  // If the issue is already in the target swimlane, nothing to do
+  if (currentLaneKey === targetLaneKey) return false
+
+  // Build the update payload based on swimlaneGroupBy
+  const updateData: Record<string, any> = {}
+  switch (swimlaneGroupBy.value) {
+    case 'assignee':
+      // Special keys like '__unassigned__' mean set to null
+      if (targetLaneKey === '__unassigned__' || targetLaneKey === '__uncategorized__') {
+        updateData.assigneeId = null
+      } else {
+        updateData.assigneeId = targetLaneKey
+      }
+      break
+    case 'priority':
+      updateData.priority = targetLaneKey
+      break
+    case 'type':
+      updateData.issueType = targetLaneKey
+      break
+    case 'sprint':
+      if (targetLaneKey === '__no_sprint__' || targetLaneKey === '__uncategorized__') {
+        updateData.sprintId = null
+      } else {
+        updateData.sprintId = targetLaneKey
+      }
+      break
+    default:
+      return false
+  }
+
+  // Perform the update (optimistic + API call)
+  // Optimistic update - apply changes locally first
+  const rollbackData: Record<string, any> = {}
+  if ('assigneeId' in updateData) {
+    rollbackData.assigneeId = issue.assigneeId
+    rollbackData.assigneeName = issue.assigneeName
+    issue.assigneeId = updateData.assigneeId || undefined
+    // We don't know the assignee name for optimistic update;
+    // it will be resolved after reload or from projectMembers
+    if (updateData.assigneeId) {
+      const member = projectMembers.value.find(m => m.userId === updateData.assigneeId)
+      issue.assigneeName = member?.displayName || ''
+    } else {
+      issue.assigneeName = undefined
+    }
+  }
+  if ('priority' in updateData) {
+    rollbackData.priority = issue.priority
+    issue.priority = updateData.priority
+  }
+  if ('issueType' in updateData) {
+    rollbackData.issueType = issue.issueType
+    issue.issueType = updateData.issueType
+  }
+  if ('sprintId' in updateData) {
+    rollbackData.sprintId = issue.sprintId
+    issue.sprintId = updateData.sprintId || undefined
+  }
+
+  try {
+    await issueApi.update(issue.id, updateData)
+    issue.version = (issue.version || 0) + 1
+    // Build a descriptive message for the swimlane change
+    const fieldLabel = swimlaneGroupBy.value === 'assignee' ? '负责人'
+      : swimlaneGroupBy.value === 'priority' ? '优先级'
+      : swimlaneGroupBy.value === 'type' ? '类型'
+      : swimlaneGroupBy.value === 'sprint' ? '迭代' : ''
+    if (fieldLabel) {
+      Message.success(`${issue.issueKey} ${fieldLabel}已更新`)
+    }
+    return true
+  } catch (e: any) {
+    // Rollback optimistic update
+    if ('assigneeId' in rollbackData) {
+      issue.assigneeId = rollbackData.assigneeId
+      issue.assigneeName = rollbackData.assigneeName
+    }
+    if ('priority' in rollbackData) {
+      issue.priority = rollbackData.priority
+    }
+    if ('issueType' in rollbackData) {
+      issue.issueType = rollbackData.issueType
+    }
+    if ('sprintId' in rollbackData) {
+      issue.sprintId = rollbackData.sprintId
+    }
+    const errMsg = e.response?.data?.message || '字段更新失败'
+    Message.error(`${issue.issueKey} 跨泳道更新失败：${errMsg}`)
+    return false
   }
 }
 
