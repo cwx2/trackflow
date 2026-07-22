@@ -134,7 +134,7 @@ public class WorkflowDefinitionService {
     /**
      * 创建工作流定义
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkflowDefinition createDefinition(CreateWorkflowDefinitionDTO dto) {
         // 名称唯一性校验
         Long existCount = definitionMapper.selectCount(
@@ -166,7 +166,7 @@ public class WorkflowDefinitionService {
     /**
      * 更新工作流定义
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateDefinition(Long id, UpdateWorkflowDefinitionDTO dto) {
         WorkflowDefinition existing = definitionMapper.selectById(id);
         if (existing == null) {
@@ -208,7 +208,7 @@ public class WorkflowDefinitionService {
      * 不允许删除系统默认工作流。
      * 删除时级联删除关联的 project_workflow 和 workflow_transition。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteDefinition(Long id) {
         WorkflowDefinition existing = definitionMapper.selectById(id);
         if (existing == null) {
@@ -244,7 +244,7 @@ public class WorkflowDefinitionService {
      * @param newName  新名称
      * @return 克隆后的工作流定义
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkflowDefinition cloneDefinition(Long sourceId, String newName) {
         WorkflowDefinition source = definitionMapper.selectById(sourceId);
         if (source == null) {
@@ -295,9 +295,12 @@ public class WorkflowDefinitionService {
     }
 
     /**
-     * 将工作流定义附加到项目
+     * 将工作流定义附加到项目。
+     * <p>
+     * 对标 YouTrack 的行为性 attach 语义：附加后该工作流的转换规则立即对项目生效。
+     * 实现方式：将定义中的全局模板规则（project_id IS NULL）按项目 ID 复制到 workflow_transition 表。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void attachToProject(Long projectId, Long definitionId) {
         // 验证工作流定义存在
         WorkflowDefinition def = definitionMapper.selectById(definitionId);
@@ -320,20 +323,49 @@ public class WorkflowDefinitionService {
             throw new BusinessException(ErrorCode.DUPLICATE_RESOURCE, "项目已绑定该工作流");
         }
 
+        // 1. 插入 project_workflow 映射记录
         ProjectWorkflow binding = new ProjectWorkflow();
         binding.setProjectId(projectId);
         binding.setWorkflowDefinitionId(definitionId);
         binding.setCreatedAt(LocalDateTime.now());
         projectWorkflowMapper.insert(binding);
 
-        log.info("Attached workflow '{}' to project '{}'", def.getName(), project.getName());
+        // 2. 将定义中的全局模板规则复制为项目级规则，使其立即生效
+        List<WorkflowTransition> templateRules = transitionMapper.selectList(
+                new LambdaQueryWrapper<WorkflowTransition>()
+                        .eq(WorkflowTransition::getWorkflowDefinitionId, definitionId)
+                        .isNull(WorkflowTransition::getProjectId));
+
+        int copiedCount = 0;
+        for (WorkflowTransition template : templateRules) {
+            WorkflowTransition copy = new WorkflowTransition();
+            copy.setWorkflowDefinitionId(definitionId);
+            copy.setProjectId(projectId);
+            copy.setIssueType(template.getIssueType());
+            copy.setRoleId(template.getRoleId());
+            copy.setOldStatusId(template.getOldStatusId());
+            copy.setNewStatusId(template.getNewStatusId());
+            copy.setAuthor(template.getAuthor());
+            copy.setAssignee(template.getAssignee());
+            copy.setConditions(template.getConditions());
+            copy.setRequireComment(template.getRequireComment());
+            transitionMapper.insert(copy);
+            copiedCount++;
+        }
+
+        log.info("Attached workflow '{}' to project '{}', copied {} transition rules",
+                def.getName(), project.getName(), copiedCount);
     }
 
     /**
-     * 从项目分离工作流定义
+     * 从项目分离工作流定义。
+     * <p>
+     * 对标 YouTrack 的行为性 detach 语义：分离后该工作流的转换规则立即对项目停止生效。
+     * 实现方式：删除 workflow_transition 中属于该项目和定义的所有项目级规则。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void detachFromProject(Long projectId, Long definitionId) {
+        // 1. 删除 project_workflow 映射记录
         int deleted = projectWorkflowMapper.delete(
                 new LambdaQueryWrapper<ProjectWorkflow>()
                         .eq(ProjectWorkflow::getProjectId, projectId)
@@ -343,7 +375,14 @@ public class WorkflowDefinitionService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目未绑定该工作流");
         }
 
-        log.info("Detached workflow definition {} from project {}", definitionId, projectId);
+        // 2. 删除 workflow_transition 中该项目和该定义关联的所有项目级规则，使其立即停止生效
+        int rulesDeleted = transitionMapper.delete(
+                new LambdaQueryWrapper<WorkflowTransition>()
+                        .eq(WorkflowTransition::getProjectId, projectId)
+                        .eq(WorkflowTransition::getWorkflowDefinitionId, definitionId));
+
+        log.info("Detached workflow definition {} from project {}, removed {} transition rules",
+                definitionId, projectId, rulesDeleted);
     }
 
     /**

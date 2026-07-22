@@ -62,7 +62,7 @@ public class ScheduledRuleService {
     /**
      * 手动触发执行规则（用于测试）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkflowRuleExecutionLogVO executeRuleManually(Long ruleId) {
         WorkflowRule rule = ruleMapper.selectById(ruleId);
         if (rule == null || !"on_schedule".equals(rule.getRuleType())) {
@@ -83,7 +83,7 @@ public class ScheduledRuleService {
 
     // ============ 核心执行逻辑 ============
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     protected WorkflowRuleExecutionLogVO executeRule(WorkflowRule rule, LocalDateTime now) {
         long startTime = System.currentTimeMillis();
         int matched = 0, success = 0, failure = 0;

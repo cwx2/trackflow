@@ -67,7 +67,7 @@ public class WorkflowRuleService {
     /**
      * 创建规则
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkflowRuleVO createRule(Long projectId, WorkflowRuleDTO dto) {
         String ruleType = dto.getRuleType() != null ? dto.getRuleType() : "on_change";
         validateRuleTypeAndFields(ruleType, dto);
@@ -100,7 +100,7 @@ public class WorkflowRuleService {
     /**
      * 更新规则
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkflowRuleVO updateRule(Long id, WorkflowRuleDTO dto) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
@@ -138,7 +138,7 @@ public class WorkflowRuleService {
     /**
      * 删除规则
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
@@ -152,7 +152,7 @@ public class WorkflowRuleService {
     /**
      * 切换规则启用/禁用
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkflowRuleVO toggleRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {

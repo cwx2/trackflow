@@ -205,6 +205,38 @@ public class WorkflowService {
     }
 
     /**
+     * 查询指定 issue 的某些目标状态转换是否需要强制评论。
+     * 
+     * 规则：只要任一匹配的 workflow_transition 规则设置了 require_comment=true，
+     * 则该转换视为需要强制评论。
+     *
+     * @param oldStatusId   当前状态 ID
+     * @param newStatusIds  候选目标状态 ID 列表
+     * @return 需要强制评论的目标状态 ID 集合
+     */
+    public Set<Long> getRequireCommentStatusIds(Long oldStatusId, List<Long> newStatusIds) {
+        if (newStatusIds == null || newStatusIds.isEmpty()) {
+            return Set.of();
+        }
+        List<WorkflowTransition> transitions = transitionMapper.selectList(
+                new LambdaQueryWrapper<WorkflowTransition>()
+                        .eq(WorkflowTransition::getOldStatusId, oldStatusId)
+                        .in(WorkflowTransition::getNewStatusId, newStatusIds)
+                        .eq(WorkflowTransition::getRequireComment, true)
+        );
+        return transitions.stream()
+                .map(WorkflowTransition::getNewStatusId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 检查单个状态转换是否需要强制评论。
+     */
+    public boolean isCommentRequired(Long oldStatusId, Long newStatusId) {
+        return !getRequireCommentStatusIds(oldStatusId, List.of(newStatusId)).isEmpty();
+    }
+
+    /**
      * 获取项目的工作流转换矩阵（用于编辑器展示）。
      * 支持按 author/assignee 模式筛选。
      *
@@ -298,7 +330,7 @@ public class WorkflowService {
      * @param author  规则的 author 标记（Normal模式=false, Author模式=true）
      * @param assignee 规则的 assignee 标记（Normal模式=false, Assignee模式=true）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateTransitionMatrix(Long projectId, String issueType, Long roleId,
                                        Boolean author, Boolean assignee,
                                        List<WorkflowTransition> transitions) {
@@ -359,7 +391,7 @@ public class WorkflowService {
     /**
      * 从 DTO 批量更新工作流转换矩阵（含乐观锁版本校验）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updateTransitionMatrix(Long projectId, UpdateWorkflowDTO dto) {
         boolean effectiveAuthor = Boolean.TRUE.equals(dto.getAuthor());
         boolean effectiveAssignee = Boolean.TRUE.equals(dto.getAssignee());
@@ -381,6 +413,7 @@ public class WorkflowService {
                     WorkflowTransition wt = new WorkflowTransition();
                     wt.setOldStatusId(t.getFrom());
                     wt.setNewStatusId(t.getTo());
+                    wt.setRequireComment(Boolean.TRUE.equals(t.getRequireComment()));
                     return wt;
                 })
                 .toList();

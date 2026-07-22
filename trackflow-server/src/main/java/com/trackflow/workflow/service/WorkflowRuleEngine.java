@@ -60,7 +60,7 @@ public class WorkflowRuleEngine {
      * 从 DB 重新加载 issue 实体（确保获取最新已提交的状态），
      * 每条规则在独立上下文中执行，单条失败不影响其他规则。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void fireOnCreate(Long issueId, Long projectId) {
         List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "issue_created");
         if (rules.isEmpty()) return;
@@ -80,7 +80,7 @@ public class WorkflowRuleEngine {
      * 从 DB 重新加载 issue 实体，过滤匹配 changedField 的规则后执行。
      * oldValue 传递给条件评估，支持 old_value_equals 等操作符。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void fireOnFieldChanged(Long issueId, Long projectId, String changedField, String oldValue) {
         List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "field_changed");
         if (rules.isEmpty()) return;
