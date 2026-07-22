@@ -323,7 +323,10 @@ public class ReportService {
         }
         assertExportAccess(report, id, userId);
 
-        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        // 使用 Owner 权限决定数据范围，与 executeWithAccessCheck 一致
+        // （对标 YouTrack：导出数据等同于页面显示的数据，均按 Owner 权限范围计算）
+        Long executionOwner = report.getCreatedBy();
+        List<Long> scopeProjectIds = resolveExecutionScope(report, executionOwner);
         ReportExecuteResultVO result = executeInternal(report, scopeProjectIds);
 
         org.apache.poi.xssf.streaming.SXSSFWorkbook workbook = buildExcelWorkbook(result, report.getName());
@@ -336,7 +339,8 @@ public class ReportService {
     public record ExcelExportResult(String reportName, org.apache.poi.xssf.streaming.SXSSFWorkbook workbook) {}
 
     /**
-     * 执行报表并返回结果（带权限校验），供导出使用
+     * 执行报表并返回结果（带权限校验），供导出使用。
+     * 使用 Owner 权限决定数据范围，与 executeWithAccessCheck 一致。
      */
     private ReportExecuteResultVO executeForExport(Long id, Long userId) {
         ReportDefinition report = reportMapper.selectById(id);
@@ -345,7 +349,9 @@ public class ReportService {
         }
         assertExportAccess(report, id, userId);
 
-        List<Long> scopeProjectIds = resolveExecutionScope(report, userId);
+        // 对标 YouTrack：导出数据与页面查看一致，均按 Owner 权限范围计算
+        Long executionOwner = report.getCreatedBy();
+        List<Long> scopeProjectIds = resolveExecutionScope(report, executionOwner);
         return executeInternal(report, scopeProjectIds);
     }
 
