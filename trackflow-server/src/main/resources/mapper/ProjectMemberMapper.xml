@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trackflow.project.mapper.ProjectMemberMapper">
+
+    <!-- 批量统计多个项目的去重成员数量 -->
+    <select id="countDistinctUsersByProjects" resultType="com.trackflow.project.mapper.result.MemberCountRow">
+        SELECT project_id, COUNT(DISTINCT user_id) AS member_count
+        FROM project_member
+        WHERE project_id IN
+        <foreach item="id" collection="projectIds" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        GROUP BY project_id
+    </select>
+
+    <!-- 批量获取多个项目各自最早加入的前 topN 名成员（去重 user_id） -->
+    <select id="selectTopMembersByProjects" resultType="com.trackflow.project.mapper.result.TopMemberRow">
+        SELECT ranked.project_id, ranked.user_id, su.display_name
+        FROM (
+            SELECT project_id, user_id, ROW_NUMBER() OVER (
+                PARTITION BY project_id ORDER BY MIN(joined_at)
+            ) AS rn
+            FROM project_member
+            WHERE project_id IN
+            <foreach item="id" collection="projectIds" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+            GROUP BY project_id, user_id
+        ) ranked
+        JOIN sys_user su ON su.id = ranked.user_id
+        WHERE ranked.rn &lt;= #{topN}
+        ORDER BY ranked.project_id, ranked.rn
+    </select>
+
+</mapper>

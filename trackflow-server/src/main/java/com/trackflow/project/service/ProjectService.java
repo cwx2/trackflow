@@ -234,7 +234,8 @@ public class ProjectService {
 
     /**
      * 批量填充项目 VO 的成员摘要信息（memberCount + topMembers）。
-     * 使用两次批量查询：一次 COUNT 分组，一次 TOP N 成员查用户名。
+     * 使用 SQL 聚合查询替代全量加载——COUNT(DISTINCT) 统计成员数，
+     * ROW_NUMBER() 窗口函数获取每个项目前 5 名成员的 displayName。
      */
     public void populateMemberSummary(List<ProjectVO> voList) {
         if (voList == null || voList.isEmpty()) return;
@@ -243,51 +244,33 @@ public class ProjectService {
                 .map(vo -> Long.valueOf(vo.getId()))
                 .toList();
 
-        // 1. 批量查每个项目的成员数量
-        List<ProjectMember> allMembers = memberMapper.selectList(
-                new LambdaQueryWrapper<ProjectMember>().in(ProjectMember::getProjectId, projectIds)
-        );
-
-        // 按 projectId 分组，同一用户去重（一人可能有多角色）
-        Map<Long, List<Long>> projectUserMap = allMembers.stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        ProjectMember::getProjectId,
-                        java.util.stream.Collectors.mapping(ProjectMember::getUserId, java.util.stream.Collectors.toList())
+        // 1. SQL 聚合：一次查询获取每个项目的去重成员数
+        Map<Long, Integer> countMap = memberMapper.countDistinctUsersByProjects(projectIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.trackflow.project.mapper.result.MemberCountRow::getProjectId,
+                        com.trackflow.project.mapper.result.MemberCountRow::getMemberCount
                 ));
 
-        // 去重 userId per project
-        Map<Long, List<Long>> projectDistinctUsers = new java.util.HashMap<>();
-        projectUserMap.forEach((pid, userIds) -> {
-            projectDistinctUsers.put(pid, userIds.stream().distinct().toList());
-        });
+        // 2. SQL 窗口函数：一次查询获取每个项目前 5 名成员的 displayName
+        Map<Long, List<String>> topMembersMap = memberMapper.selectTopMembersByProjects(projectIds, 5)
+                .stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        com.trackflow.project.mapper.result.TopMemberRow::getProjectId,
+                        java.util.stream.Collectors.mapping(
+                                row -> {
+                                    String name = row.getDisplayName();
+                                    return (name != null && !name.isBlank()) ? name : "?";
+                                },
+                                java.util.stream.Collectors.toList()
+                        )
+                ));
 
-        // 2. 收集所有需要查询 displayName 的 userId（取每个项目前5）
-        Set<Long> topUserIds = new java.util.HashSet<>();
-        projectDistinctUsers.forEach((pid, userIds) -> {
-            userIds.stream().limit(5).forEach(topUserIds::add);
-        });
-
-        // 3. 批量查用户 displayName
-        Map<Long, String> userDisplayNameMap = new java.util.HashMap<>();
-        if (!topUserIds.isEmpty()) {
-            List<SysUser> users = userMapper.selectBatchIds(topUserIds);
-            users.forEach(u -> userDisplayNameMap.put(u.getId(), u.getDisplayName()));
-        }
-
-        // 4. 填充 VO
+        // 3. 填充 VO
         for (ProjectVO vo : voList) {
             Long pid = Long.valueOf(vo.getId());
-            List<Long> distinctUsers = projectDistinctUsers.getOrDefault(pid, List.of());
-            vo.setMemberCount(distinctUsers.size());
-
-            List<String> topMembers = distinctUsers.stream()
-                    .limit(5)
-                    .map(uid -> {
-                        String name = userDisplayNameMap.get(uid);
-                        return (name != null && !name.isBlank()) ? name : "?";
-                    })
-                    .toList();
-            vo.setTopMembers(topMembers);
+            vo.setMemberCount(countMap.getOrDefault(pid, 0));
+            vo.setTopMembers(topMembersMap.getOrDefault(pid, List.of()));
         }
     }
 

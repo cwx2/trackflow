@@ -2,6 +2,8 @@ package com.trackflow.project.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.project.mapper.result.MemberCountRow;
+import com.trackflow.project.mapper.result.TopMemberRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -49,4 +51,17 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
      */
     @Select("SELECT COUNT(DISTINCT user_id) FROM project_member WHERE project_id = #{projectId}")
     int countDistinctUsers(@Param("projectId") Long projectId);
+
+    /**
+     * 批量统计多个项目的去重成员数量。
+     * 返回每个项目的 (projectId, memberCount)，一次查询替代 N 次 countDistinctUsers。
+     */
+    List<MemberCountRow> countDistinctUsersByProjects(@Param("projectIds") List<Long> projectIds);
+
+    /**
+     * 批量获取多个项目各自最早加入的前 topN 名成员（去重）。
+     * 使用窗口函数 ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY joined_at)，
+     * 并 JOIN sys_user 直接返回 displayName，避免二次查询。
+     */
+    List<TopMemberRow> selectTopMembersByProjects(@Param("projectIds") List<Long> projectIds, @Param("topN") int topN);
 }
