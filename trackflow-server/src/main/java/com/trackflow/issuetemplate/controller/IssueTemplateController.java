@@ -31,7 +31,7 @@ public class IssueTemplateController {
      */
     @GetMapping
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
-    public R<List<IssueTemplateVO>> list(@PathVariable Long projectId) {
+    public R<List<IssueTemplateVO>> list(@PathVariable("projectId") Long projectId) {
         return R.ok(templateService.listByProject(projectId));
     }
 
@@ -40,7 +40,7 @@ public class IssueTemplateController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("@perm.check(#projectId, 'project:view')")
-    public R<IssueTemplateVO> getById(@PathVariable Long projectId, @PathVariable Long id) {
+    public R<IssueTemplateVO> getById(@PathVariable("projectId") Long projectId, @PathVariable("id") Long id) {
         return R.ok(templateService.getById(id));
     }
 
@@ -49,7 +49,7 @@ public class IssueTemplateController {
      */
     @PostMapping
     @PreAuthorize("@perm.check(#projectId, 'project:manage_templates')")
-    public R<IssueTemplateVO> create(@PathVariable Long projectId, @Valid @RequestBody SaveIssueTemplateDTO dto) {
+    public R<IssueTemplateVO> create(@PathVariable("projectId") Long projectId, @Valid @RequestBody SaveIssueTemplateDTO dto) {
         dto.setProjectId(projectId);
         return R.ok(templateService.create(dto));
     }
@@ -59,7 +59,7 @@ public class IssueTemplateController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_templates')")
-    public R<IssueTemplateVO> update(@PathVariable Long projectId, @PathVariable Long id, @Valid @RequestBody SaveIssueTemplateDTO dto) {
+    public R<IssueTemplateVO> update(@PathVariable("projectId") Long projectId, @PathVariable("id") Long id, @Valid @RequestBody SaveIssueTemplateDTO dto) {
         dto.setProjectId(projectId);
         return R.ok(templateService.update(id, dto));
     }
@@ -69,7 +69,7 @@ public class IssueTemplateController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_templates')")
-    public R<Void> delete(@PathVariable Long projectId, @PathVariable Long id) {
+    public R<Void> delete(@PathVariable("projectId") Long projectId, @PathVariable("id") Long id) {
         templateService.delete(id);
         return R.ok();
     }

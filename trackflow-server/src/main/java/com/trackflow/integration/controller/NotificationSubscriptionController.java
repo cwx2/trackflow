@@ -47,7 +47,7 @@ public class NotificationSubscriptionController {
      * 更新订阅的事件配置
      */
     @PutMapping("/{id}")
-    public R<NotificationSubscriptionVO> update(@PathVariable Long id,
+    public R<NotificationSubscriptionVO> update(@PathVariable("id") Long id,
                                                 @Valid @RequestBody UpdateSubscriptionEventsDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(subscriptionService.updateEvents(userId, id, dto));
@@ -57,7 +57,7 @@ public class NotificationSubscriptionController {
      * 删除订阅（默认订阅不可删除）
      */
     @DeleteMapping("/{id}")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         subscriptionService.delete(userId, id);
         return R.ok();

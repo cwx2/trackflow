@@ -41,7 +41,7 @@ public class RuleController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('rule:manage') or @perm.checkGlobal('rule:view_statistics')")
-    public R<RuleDefinitionVO> getRuleDetail(@PathVariable Long id) {
+    public R<RuleDefinitionVO> getRuleDetail(@PathVariable("id") Long id) {
         return R.ok(ruleService.getRuleDetail(id));
     }
 
@@ -53,28 +53,28 @@ public class RuleController {
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
-    public R<RuleDefinitionVO> updateRule(@PathVariable Long id,
+    public R<RuleDefinitionVO> updateRule(@PathVariable("id") Long id,
                                           @RequestBody @Valid SaveRuleDefinitionDTO dto) {
         return R.ok(ruleService.updateRule(id, dto));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
-    public R<Void> deleteRule(@PathVariable Long id) {
+    public R<Void> deleteRule(@PathVariable("id") Long id) {
         ruleService.deleteRule(id);
         return R.ok();
     }
 
     @PostMapping("/{id}/toggle")
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
-    public R<Void> toggleRule(@PathVariable Long id) {
+    public R<Void> toggleRule(@PathVariable("id") Long id) {
         ruleService.toggleRule(id);
         return R.ok();
     }
 
     @PostMapping("/{id}/execute-now")
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
-    public R<Map<String, Object>> executeNow(@PathVariable Long id) {
+    public R<Map<String, Object>> executeNow(@PathVariable("id") Long id) {
         int count = ruleService.executeRuleNow(id);
         return R.ok(Map.of("executedCount", count));
     }
@@ -95,7 +95,7 @@ public class RuleController {
 
     @DeleteMapping("/logs/{id}")
     @PreAuthorize("@perm.checkGlobal('rule:manage')")
-    public R<Void> deleteLog(@PathVariable Long id) {
+    public R<Void> deleteLog(@PathVariable("id") Long id) {
         ruleService.deleteLog(id);
         return R.ok();
     }
@@ -116,13 +116,13 @@ public class RuleController {
 
     @GetMapping("/issues/{issueId}/logs")
     @PreAuthorize("@perm.checkGlobal('rule:view_statistics')")
-    public R<List<RuleExecutionLogVO>> getIssueRuleLogs(@PathVariable Long issueId) {
+    public R<List<RuleExecutionLogVO>> getIssueRuleLogs(@PathVariable("issueId") Long issueId) {
         return R.ok(ruleService.getIssueRuleLogs(issueId));
     }
 
     @GetMapping("/issues/{issueId}/total-score")
     @PreAuthorize("@perm.checkGlobal('rule:view_statistics')")
-    public R<Map<String, Object>> getIssueTotalScore(@PathVariable Long issueId) {
+    public R<Map<String, Object>> getIssueTotalScore(@PathVariable("issueId") Long issueId) {
         BigDecimal total = ruleService.getIssueTotalScore(issueId);
         return R.ok(Map.of("totalScore", total));
     }

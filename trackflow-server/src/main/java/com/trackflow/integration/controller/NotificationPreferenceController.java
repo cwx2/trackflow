@@ -70,7 +70,7 @@ public class NotificationPreferenceController {
      * 获取当前用户指定项目的偏好（若不存在则返回 null，表示使用全局设置）
      */
     @GetMapping("/projects/{projectId}")
-    public R<NotificationPreferenceVO> getProjectPreference(@PathVariable Long projectId) {
+    public R<NotificationPreferenceVO> getProjectPreference(@PathVariable("projectId") Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         NotificationPreference pref = preferenceService.getProjectPreference(userId, projectId);
         if (pref == null) {
@@ -84,7 +84,7 @@ public class NotificationPreferenceController {
      */
     @PutMapping("/projects/{projectId}")
     public R<NotificationPreferenceVO> updateProjectPreference(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @Valid @RequestBody UpdateNotificationPreferenceDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         NotificationPreference pref = preferenceService.update(userId, projectId, dto);
@@ -95,7 +95,7 @@ public class NotificationPreferenceController {
      * 删除当前用户指定项目的偏好（恢复使用全局设置）
      */
     @DeleteMapping("/projects/{projectId}")
-    public R<Void> deleteProjectPreference(@PathVariable Long projectId) {
+    public R<Void> deleteProjectPreference(@PathVariable("projectId") Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         preferenceService.deleteProjectPreference(userId, projectId);
         return R.ok();

@@ -127,7 +127,7 @@ public class NotificationAdminController {
      */
     @PostMapping("/outbox/{id}/retry")
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
-    public R<Void> retryOutboxItem(@PathVariable Long id) {
+    public R<Void> retryOutboxItem(@PathVariable("id") Long id) {
         boolean success = outboxService.manualRetry(id);
         if (!success) {
             return R.fail(40400, "记录不存在或状态不是 failed");
