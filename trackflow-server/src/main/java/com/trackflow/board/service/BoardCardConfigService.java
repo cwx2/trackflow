@@ -59,7 +59,7 @@ public class BoardCardConfigService {
     /**
      * 保存项目的看板卡片配置（upsert 语义）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveCardConfig(Long projectId, UpdateBoardCardConfigDTO dto) {
         // 校验字段名称合法性
         for (String field : dto.getVisibleFields()) {

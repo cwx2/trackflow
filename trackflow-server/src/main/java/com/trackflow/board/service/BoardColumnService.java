@@ -3,8 +3,8 @@ package com.trackflow.board.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.toolkit.Db;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
@@ -159,7 +159,7 @@ public class BoardColumnService {
      *
      * @return 初始化后的列配置
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<BoardColumnVO> initializeColumns(Long projectId) {
         // 检查是否已有配置（幂等保护）
         Long existingCount = boardColumnConfigMapper.selectCount(
@@ -218,8 +218,8 @@ public class BoardColumnService {
         // 查询工单数量用于返回
         Map<Long, Integer> issueCountMap = getProjectIssueCountByStatus(projectId);
 
-        // 返回初始化后的视图
-        return buildConfiguredView(allStatuses, configs, usedStatusIds, issueCountMap, workflowStatusIds);
+        // 返回初始化后的视图（初始化时无估算数据，传空 map）
+        return buildConfiguredView(allStatuses, configs, usedStatusIds, issueCountMap, Map.of(), workflowStatusIds);
     }
 
     /**
@@ -231,7 +231,7 @@ public class BoardColumnService {
      * 3. WIP 限制值必须非负，且 wipMin <= wipMax
      * 4. 未在提交数据中出现的状态自动补全为 visible=false
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveColumns(Long projectId, UpdateBoardColumnsDTO dto) {
         List<UpdateBoardColumnsDTO.ColumnItem> items = dto.getColumns();
 

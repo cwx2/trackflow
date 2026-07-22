@@ -59,7 +59,7 @@ public class BoardColumnMergeService {
      * 保存项目的列合并配置（全量替换语义）。
      * 删除旧配置，插入新配置。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveColumnMerges(Long projectId, UpdateBoardColumnMergeDTO dto) {
         // 校验：同一状态不能出现在多个合并组中
         Set<Long> allStatusIds = new HashSet<>();

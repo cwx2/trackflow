@@ -78,6 +78,7 @@ public class BoardGeneralConfigService {
             vo.setFilterMode(config.getFilterMode() != null ? config.getFilterMode() : "all");
             vo.setFilterQuery(config.getFilterQuery());
             vo.setDoneRetentionDays(config.getDoneRetentionDays());
+            vo.setColumnField(config.getColumnField() != null ? config.getColumnField() : "status");
         } else {
             vo.setName("");
             vo.setCanViewRoles(DEFAULT_CAN_VIEW_ROLES);
@@ -85,6 +86,7 @@ public class BoardGeneralConfigService {
             vo.setFilterMode("all");
             vo.setFilterQuery(null);
             vo.setDoneRetentionDays(null);
+            vo.setColumnField("status");
         }
 
         // 计算当前用户的看板权限
@@ -100,7 +102,7 @@ public class BoardGeneralConfigService {
     /**
      * 保存项目的看板基本设置（upsert 语义）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveGeneralConfig(Long projectId, UpdateBoardGeneralConfigDTO dto) {
         validateRoleCodes(dto.getCanViewRoles(), "查看权限");
         validateRoleCodes(dto.getCanEditRoles(), "编辑权限");
@@ -127,6 +129,7 @@ public class BoardGeneralConfigService {
         String canViewJson = serializeRoles(dto.getCanViewRoles());
         String canEditJson = serializeRoles(dto.getCanEditRoles());
         Integer doneRetentionDays = dto.getDoneRetentionDays();
+        String columnField = dto.getColumnField() != null ? dto.getColumnField() : "status";
 
         if (existing != null) {
             existing.setName(name);
@@ -135,6 +138,7 @@ public class BoardGeneralConfigService {
             existing.setFilterMode(filterMode);
             existing.setFilterQuery(filterQuery);
             existing.setDoneRetentionDays(doneRetentionDays);
+            existing.setColumnField(columnField);
             existing.setUpdatedAt(now);
             boardGeneralConfigMapper.updateById(existing);
         } else {
@@ -146,6 +150,7 @@ public class BoardGeneralConfigService {
             config.setFilterMode(filterMode);
             config.setFilterQuery(filterQuery);
             config.setDoneRetentionDays(doneRetentionDays);
+            config.setColumnField(columnField);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardGeneralConfigMapper.insert(config);

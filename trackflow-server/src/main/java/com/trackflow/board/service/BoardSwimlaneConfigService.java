@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 public class BoardSwimlaneConfigService {
 
     private static final String DEFAULT_GROUP_BY = "none";
+    private static final String DEFAULT_UNCATEGORIZED_POSITION = "bottom";
 
     private final BoardSwimlaneConfigMapper swimlaneConfigMapper;
 
@@ -32,8 +33,14 @@ public class BoardSwimlaneConfigService {
         BoardSwimlaneConfigVO vo = new BoardSwimlaneConfigVO();
         if (config != null) {
             vo.setGroupByField(config.getGroupByField());
+            vo.setSelectedValues(config.getSelectedValues());
+            vo.setShowUncategorized(config.getShowUncategorized());
+            vo.setUncategorizedPosition(config.getUncategorizedPosition());
         } else {
             vo.setGroupByField(DEFAULT_GROUP_BY);
+            vo.setSelectedValues(null);
+            vo.setShowUncategorized(true);
+            vo.setUncategorizedPosition(DEFAULT_UNCATEGORIZED_POSITION);
         }
         return vo;
     }
@@ -41,7 +48,7 @@ public class BoardSwimlaneConfigService {
     /**
      * 保存项目的泳道配置（upsert 语义）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveSwimlaneConfig(Long projectId, UpdateBoardSwimlaneConfigDTO dto) {
         BoardSwimlaneConfig existing = swimlaneConfigMapper.selectOne(
                 new LambdaQueryWrapper<BoardSwimlaneConfig>()
@@ -52,12 +59,18 @@ public class BoardSwimlaneConfigService {
 
         if (existing != null) {
             existing.setGroupByField(dto.getGroupByField());
+            existing.setSelectedValues(dto.getSelectedValues());
+            existing.setShowUncategorized(dto.getShowUncategorized() != null ? dto.getShowUncategorized() : true);
+            existing.setUncategorizedPosition(dto.getUncategorizedPosition() != null ? dto.getUncategorizedPosition() : DEFAULT_UNCATEGORIZED_POSITION);
             existing.setUpdatedAt(now);
             swimlaneConfigMapper.updateById(existing);
         } else {
             BoardSwimlaneConfig config = new BoardSwimlaneConfig();
             config.setProjectId(projectId);
             config.setGroupByField(dto.getGroupByField());
+            config.setSelectedValues(dto.getSelectedValues());
+            config.setShowUncategorized(dto.getShowUncategorized() != null ? dto.getShowUncategorized() : true);
+            config.setUncategorizedPosition(dto.getUncategorizedPosition() != null ? dto.getUncategorizedPosition() : DEFAULT_UNCATEGORIZED_POSITION);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             swimlaneConfigMapper.insert(config);

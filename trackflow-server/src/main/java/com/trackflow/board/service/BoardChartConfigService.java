@@ -60,7 +60,7 @@ public class BoardChartConfigService {
     /**
      * 保存项目的看板图表配置（upsert 语义）。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveChartConfig(Long projectId, UpdateBoardChartConfigDTO dto) {
         BoardChartConfig existing = boardChartConfigMapper.selectOne(
                 new LambdaQueryWrapper<BoardChartConfig>()
