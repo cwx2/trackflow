@@ -86,9 +86,10 @@ public class BoardController {
      * @return 按列分组的看板数据
      */
     @GetMapping("/data")
-    @PreAuthorize("@perm.check(#query.projectId, 'project:view')")
+    @PreAuthorize("@perm.check(#projectId, 'project:view')")
     public R<BoardDataVO> getBoardData(
             @Valid BoardDataQuery query,
+            @RequestParam("projectId") Long projectId,
             @RequestParam(value = "collapsedStatusIds", required = false) String collapsedStatusIds) {
         boardAccessService.checkViewAccess(query.getProjectId());
 

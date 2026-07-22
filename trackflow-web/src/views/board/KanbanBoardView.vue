@@ -795,7 +795,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
-import { issueApi, sprintApi, boardApi, workflowApi, queryApi, projectApi } from '@/api'
+import { issueApi, sprintApi, boardApi, workflowApi, projectApi } from '@/api'
 import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
@@ -2003,6 +2003,7 @@ function scrollToColumn(statusId: string) {
 const draggingIssue = ref<IssueVO | null>(null)
 const dragOverColumnId = ref<string | null>(null)
 const allowedTargetStatuses = ref<Set<string>>(new Set())
+const requireCommentStatuses = ref<Set<string>>(new Set())
 const transitioningIssueIds = ref<Set<string>>(new Set())
 
 // Combined dragging state (from board card or backlog)
@@ -2250,8 +2251,10 @@ async function onDragStart(event: DragEvent, issue: IssueVO) {
     const res = await issueApi.getAvailableTransitions(issue.id)
     const allowed = res.data || []
     allowedTargetStatuses.value = new Set(allowed.map(s => s.id))
+    requireCommentStatuses.value = new Set(allowed.filter(s => s.requireComment).map(s => s.id))
   } catch {
     allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
+    requireCommentStatuses.value = new Set()
   }
 }
 
@@ -2260,6 +2263,7 @@ function onDragEnd() {
   dragOverColumnId.value = null
   dragOverSwimlaneKey.value = null
   allowedTargetStatuses.value.clear()
+  requireCommentStatuses.value.clear()
 }
 
 function onDragOver(event: DragEvent, statusId: string) {
@@ -2355,6 +2359,61 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
 
   const oldStatusId = issue.statusId
   const targetStatus = statuses.value.find(s => s.id === targetStatusId)
+
+  // If the target status requires a comment, prompt the user before executing
+  if (requireCommentStatuses.value.has(targetStatusId)) {
+    draggingIssue.value = null
+    allowedTargetStatuses.value.clear()
+    requireCommentStatuses.value.clear()
+    let commentText = ''
+    Modal.confirm({
+      title: '状态变更 — 请填写理由',
+      content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
+        h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+          h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
+          h('span', { style: `background:${targetStatus?.color || '#6b7280'};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(targetStatus?.name || ''))
+        ]),
+        h('textarea', {
+          placeholder: '请说明退回/变更的原因（必填）',
+          style: 'width:100%;min-height:80px;margin-top:8px;padding:8px;border:1px solid var(--color-border-2);border-radius:4px;resize:vertical;font-size:13px;background:var(--color-bg-2);color:var(--color-text-1)',
+          onInput: (e: Event) => { commentText = (e.target as HTMLTextAreaElement).value }
+        })
+      ]),
+      okText: '确认变更',
+      cancelText: '取消',
+      width: 480,
+      onBeforeOk: () => {
+        if (!commentText.trim()) {
+          Message.warning('请填写变更理由')
+          return false
+        }
+        return true
+      },
+      onOk: async () => {
+        issue.statusId = targetStatusId
+        transitioningIssueIds.value.add(issue.id)
+        try {
+          const res = await issueApi.transitStatus(issue.id, targetStatusId, commentText.trim(), issue.version)
+          if (res.code === 0) {
+            const newVersion = extractVersion(res.data)
+            if (newVersion != null) issue.version = newVersion
+            else issue.version = (issue.version || 0) + 1
+            showActionFeedback(res.data)
+            pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
+          } else {
+            issue.statusId = oldStatusId
+            Message.error(res.message || '状态变更失败')
+          }
+        } catch (e: any) {
+          issue.statusId = oldStatusId
+          Message.error(e.response?.data?.message || '状态变更失败')
+        } finally {
+          transitioningIssueIds.value.delete(issue.id)
+        }
+      }
+    })
+    return
+  }
 
   // 乐观更新
   issue.statusId = targetStatusId
@@ -2958,33 +3017,22 @@ const boardTotalCount = ref(0)
 async function loadIssues() {
   if (!selectedProject.value) { issues.value = []; boardTruncated.value = false; return }
 
-  // 计算 excludeDoneBefore 截止日期（服务端过滤已完成工单保留天数）
+  // Board Behavior 过滤逻辑现在由服务端统一执行（filterMode / filterQuery / doneRetentionDays）。
+  // 前端仅传递用户交互产生的显式筛选参数。
+
+  // 用户显式选择的 Sprint（通过 Sprint 下拉选择器）
+  const effectiveSprintId = selectedSprint.value || undefined
+
+  // 前端仍可显式传 excludeDoneBefore 覆盖服务端配置（当用户无活跃 Sprint 且无显式选择时保留前端 14 天默认值）
   const DEFAULT_DONE_RETENTION_DAYS = 14
-  const effectiveRetention = boardDoneRetentionDays.value ??
-    (!activeSprint.value && !selectedSprint.value ? DEFAULT_DONE_RETENTION_DAYS : null)
   let excludeDoneBefore: string | undefined
-  if (effectiveRetention !== null && effectiveRetention > 0) {
-    const cutoffDate = new Date(Date.now() - effectiveRetention * 24 * 60 * 60 * 1000)
+  // 仅当 filterMode 不是由服务端控制 doneRetentionDays（即 boardDoneRetentionDays 为 null）且无 Sprint 选择时，
+  // 前端使用默认 14 天保留（向后兼容）
+  if (boardDoneRetentionDays.value === null && !activeSprint.value && !selectedSprint.value) {
+    const cutoffDate = new Date(Date.now() - DEFAULT_DONE_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     excludeDoneBefore = cutoffDate.toISOString().split('T')[0]
   }
-
-  // Board Behavior: 确定 sprint 过滤参数
-  let effectiveSprintId = selectedSprint.value || undefined
-  if (!effectiveSprintId && boardFilterMode.value === 'active_sprint') {
-    effectiveSprintId = activeSprint.value?.id
-    if (!effectiveSprintId) {
-      issues.value = []
-      boardTotalCount.value = 0
-      boardTruncated.value = false
-      return
-    }
-  }
-
-  // Board Behavior: Query 模式 — 仍使用 QueryExecutor（聚合 API 暂不支持 query mode）
-  if (boardFilterMode.value === 'query' && boardFilterQuery.value) {
-    await loadIssuesViaQueryMode(excludeDoneBefore)
-    return
-  }
+  // 如果 boardDoneRetentionDays 已配置（非 null），服务端会自动应用，前端不传
 
   // 收集已折叠列的状态 ID（折叠列不需要返回具体工单）
   const collapsedIds = [...collapsedColumns.value].join(',')
@@ -3027,68 +3075,6 @@ async function loadIssues() {
       throw e
     }
   }
-}
-
-/**
- * Board Behavior Query 模式：使用 QueryExecutor 的 adhoc 查询（保持原逻辑）。
- */
-async function loadIssuesViaQueryMode(excludeDoneBefore: string | undefined) {
-  const PAGE_SIZE = 100
-  let page = 1
-  let allIssues: IssueVO[] = []
-  let total = 0
-
-  let filters: any[] = []
-  try {
-    filters = JSON.parse(boardFilterQuery.value!)
-  } catch {
-    issues.value = []
-    boardTotalCount.value = 0
-    boardTruncated.value = false
-    return
-  }
-
-  filters = [{ field: 'project', operator: 'eq', value: [selectedProject.value] }, ...filters]
-  if (selectedSprint.value) {
-    filters.push({ field: 'sprint', operator: 'eq', value: [selectedSprint.value] })
-  }
-  if (keyword.value) {
-    filters.push({ field: 'keyword', operator: 'contains', value: [keyword.value] })
-  }
-  if (effectiveAssigneeId.value) {
-    filters.push({ field: 'assignee', operator: 'eq', value: [effectiveAssigneeId.value] })
-  }
-
-  while (true) {
-    const res = await queryApi.executeAdhoc({ filters, page, pageSize: PAGE_SIZE })
-    const list = res.data?.list || []
-    total = res.data?.pagination?.total || 0
-    allIssues = allIssues.concat(list)
-    if (allIssues.length >= total || allIssues.length >= BOARD_MAX_ISSUES || list.length < PAGE_SIZE) {
-      break
-    }
-    page++
-  }
-
-  // 客户端补充过滤（QueryExecutor 暂不支持 excludeDoneBefore 复合语义）
-  if (excludeDoneBefore) {
-    const cutoffDate = new Date(excludeDoneBefore)
-    const doneStatusIds = new Set(
-      allColumnConfigs.value
-        .filter(c => c.statusCategory === 'done')
-        .map(c => c.statusId)
-    )
-    allIssues = allIssues.filter(issue => {
-      if (!doneStatusIds.has(issue.statusId)) return true
-      const resolvedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : (issue.updatedAt ? new Date(issue.updatedAt) : null)
-      if (!resolvedDate) return true
-      return resolvedDate >= cutoffDate
-    })
-  }
-
-  boardTotalCount.value = total
-  boardTruncated.value = allIssues.length < total
-  issues.value = allIssues
 }
 
 /**
