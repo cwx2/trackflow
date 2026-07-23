@@ -1,5 +1,7 @@
 package com.trackflow.project.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -23,9 +25,22 @@ public class CreateProjectDTO {
     private Long leadId;
 
     /**
+     * 所属组织ID（可选）
+     */
+    private Long orgId;
+
+    /**
      * 项目模板类型：default / scrum / kanban
      * 为空时等同于 "default"
      */
     @Pattern(regexp = "^(default|scrum|kanban)$", message = "模板类型无效，可选值：default、scrum、kanban")
     private String template;
+
+    /**
+     * Issue起始编号，可选，默认为0
+     * 设置后项目的第一个Issue编号将从 startingNumber + 1 开始
+     */
+    @Min(value = 0, message = "起始编号不能小于0")
+    @Max(value = 999999, message = "起始编号不能超过999999")
+    private Integer startingNumber;
 }

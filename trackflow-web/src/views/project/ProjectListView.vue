@@ -262,6 +262,16 @@
             :auto-size="{ minRows: 2, maxRows: 5 }"
           />
         </a-form-item>
+        <a-form-item label="起始编号" extra="设置后第一个工单编号将从此值 +1 开始，例如设为 100 则第一个工单为 KEY-101">
+          <a-input-number
+            v-model="createForm.startingNumber"
+            placeholder="可选，默认为 0"
+            :min="0"
+            :max="999999"
+            :precision="0"
+            style="width: 100%"
+          />
+        </a-form-item>
         <a-form-item label="项目模板">
           <a-radio-group v-model="createForm.template" direction="vertical">
             <a-radio value="default">
@@ -641,7 +651,9 @@ const createForm = reactive({
   name: '',
   key: '',
   description: '',
-  template: 'default'
+  template: 'default',
+  startingNumber: undefined as number | undefined,
+  orgId: undefined as string | undefined
 })
 
 // 编辑项目
@@ -940,7 +952,9 @@ async function handleCreateBeforeOk(done: (closed: boolean) => void) {
       name: createForm.name,
       key: createForm.key,
       description: createForm.description || undefined,
-      template: createForm.template || 'default'
+      template: createForm.template || 'default',
+      startingNumber: createForm.startingNumber != null ? createForm.startingNumber : undefined,
+      orgId: createForm.orgId || undefined
     })
     resetCreateForm()
     Message.success('项目创建成功')
@@ -974,6 +988,8 @@ function resetCreateForm() {
   createForm.key = ''
   createForm.description = ''
   createForm.template = 'default'
+  createForm.startingNumber = undefined
+  createForm.orgId = undefined
   createKeyError.value = ''
   createNameError.value = ''
 }

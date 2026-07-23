@@ -130,9 +130,10 @@ public class ProjectService {
         project.setKey(dto.getKey().toUpperCase());
         project.setDescription(dto.getDescription());
         project.setLeadId(leadId);
+        project.setOrgId(dto.getOrgId());
         project.setStatus(ProjectStatus.ACTIVE);
         project.setVisibility(ProjectVisibility.PRIVATE);
-        project.setIssueSequence(0);
+        project.setIssueSequence(dto.getStartingNumber() != null ? dto.getStartingNumber().longValue() : 0L);
         projectMapper.insert(project);
 
         // 自动添加创建者为项目管理员
@@ -493,6 +494,25 @@ public class ProjectService {
                 }
 
                 projectActivityService.log(id, currentUserId, "change_visibility", null, detail);
+            }
+        }
+
+        // 组织变更
+        if (dto.getOrgId() != null) {
+            Long newOrgId = dto.getOrgId();
+            // 传 0 表示清除组织关联
+            if (newOrgId == 0L) {
+                newOrgId = null;
+            }
+            if ((newOrgId == null && project.getOrgId() != null)
+                    || (newOrgId != null && !newOrgId.equals(project.getOrgId()))) {
+                Long oldOrgId = project.getOrgId();
+                project.setOrgId(newOrgId);
+                Map<String, Object> detail = new java.util.LinkedHashMap<>();
+                detail.put("field", "orgId");
+                detail.put("old_value", oldOrgId != null ? oldOrgId.toString() : null);
+                detail.put("new_value", newOrgId != null ? newOrgId.toString() : null);
+                projectActivityService.log(id, currentUserId, "update_project", null, detail);
             }
         }
 

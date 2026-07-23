@@ -25,12 +25,12 @@ export const projectApi = {
   },
 
   /** 创建项目 */
-  create(data: { name: string; key: string; description?: string; template?: string }) {
+  create(data: { name: string; key: string; description?: string; template?: string; startingNumber?: number; orgId?: string }) {
     return request.post<any, R<ProjectVO>>('/projects', data)
   },
 
   /** 更新项目 */
-  update(id: string, data: { name?: string; description?: string; leadId?: string; visibility?: string }) {
+  update(id: string, data: { name?: string; description?: string; leadId?: string; visibility?: string; orgId?: string | null }) {
     return request.put<any, R<ProjectVO>>(`/projects/${id}`, data)
   },
 
@@ -92,6 +92,21 @@ export const projectApi = {
   /** 移除成员（级联清空该成员被分配的工单负责人） */
   removeMember(projectId: string, userId: string) {
     return request.delete<any, R<MemberOperationResultVO>>(`/projects/${projectId}/members/${userId}`)
+  },
+
+  /** 获取项目成员完整视图（含直接成员 + 用户组成员） */
+  listMembersView(projectId: string) {
+    return request.get<any, R<ProjectMembersViewVO>>(`/projects/${projectId}/members-view`)
+  },
+
+  /** 添加用户组到项目团队 */
+  addGroupMember(projectId: string, data: { groupId: number; roleId: number }) {
+    return request.post<any, R<void>>(`/projects/${projectId}/group-members`, data)
+  },
+
+  /** 从项目团队中移除用户组 */
+  removeGroupMember(projectId: string, groupId: string) {
+    return request.delete<any, R<void>>(`/projects/${projectId}/group-members/${groupId}`)
   },
 
   /** 获取项目活动日志 */

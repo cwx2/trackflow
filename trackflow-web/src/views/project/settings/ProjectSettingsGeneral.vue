@@ -60,6 +60,26 @@
               <span class="field-hint">只能选择当前项目成员。变更后新负责人将自动升级为项目管理员。</span>
             </template>
           </a-form-item>
+
+          <a-form-item label="所属组织">
+            <a-select
+              v-model="form.orgId"
+              placeholder="选择所属组织（可选）..."
+              allow-search
+              allow-clear
+              :disabled="!canEdit || isArchived"
+              :loading="orgsLoading"
+              @focus="loadOrgsIfNeeded"
+            >
+              <a-option v-for="org in orgList" :key="org.id" :value="org.id">
+                {{ org.name }}
+                <span class="option-hint">{{ org.code }}</span>
+              </a-option>
+            </a-select>
+            <template #extra>
+              <span class="field-hint">将项目归属到某个组织下，方便分组管理。</span>
+            </template>
+          </a-form-item>
         </a-form>
 
         <!-- 保存按钮 -->
@@ -191,6 +211,8 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi } from '@/api'
+import { organizationApi } from '@/api'
+import type { OrgVO } from '@/api/organization'
 import { useAuthStore } from '@/stores/auth'
 import { invalidateProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
@@ -212,13 +234,19 @@ const authStore = useAuthStore()
 const form = reactive({
   name: '',
   description: '',
-  leadId: undefined as string | undefined
+  leadId: undefined as string | undefined,
+  orgId: undefined as string | undefined
 })
 
 const saving = ref(false)
 const membersLoading = ref(false)
 const memberList = ref<ProjectMemberVO[]>([])
 const membersLoaded = ref(false)
+
+// Organization
+const orgsLoading = ref(false)
+const orgList = ref<OrgVO[]>([])
+const orgsLoaded = ref(false)
 
 // Visibility
 const currentVisibility = ref(props.project.visibility)
@@ -252,10 +280,15 @@ function initForm() {
   form.name = props.project.name
   form.description = props.project.description || ''
   form.leadId = props.project.leadId || undefined
+  form.orgId = props.project.orgId || undefined
   currentVisibility.value = props.project.visibility
   // Load members for lead selector if project has a lead
   if (props.project.leadId) {
     loadMembersIfNeeded()
+  }
+  // Load orgs for org selector if project has an org
+  if (props.project.orgId) {
+    loadOrgsIfNeeded()
   }
 }
 
@@ -269,6 +302,7 @@ const hasChanges = computed(() => {
   return form.name !== props.project.name
     || form.description !== (props.project.description || '')
     || form.leadId !== (props.project.leadId || undefined)
+    || form.orgId !== (props.project.orgId || undefined)
 })
 
 function resetForm() {
@@ -290,6 +324,21 @@ async function loadMembersIfNeeded() {
   }
 }
 
+// Load organizations for org selector
+async function loadOrgsIfNeeded() {
+  if (orgsLoaded.value) return
+  orgsLoading.value = true
+  try {
+    const res = await organizationApi.list({ pageSize: 100 })
+    orgList.value = res.data?.list || []
+    orgsLoaded.value = true
+  } catch {
+    orgList.value = []
+  } finally {
+    orgsLoading.value = false
+  }
+}
+
 // Save basic info
 async function saveBasicInfo() {
   if (!form.name.trim()) {
@@ -302,6 +351,10 @@ async function saveBasicInfo() {
     if (form.name !== props.project.name) updateData.name = form.name
     if (form.description !== (props.project.description || '')) updateData.description = form.description || undefined
     if (form.leadId !== (props.project.leadId || undefined)) updateData.leadId = form.leadId || undefined
+    if (form.orgId !== (props.project.orgId || undefined)) {
+      // If orgId is cleared (undefined), send 0 to indicate "remove org association"
+      updateData.orgId = form.orgId || '0'
+    }
 
     await projectApi.update(props.project.key, updateData)
     Message.success('项目设置已保存')

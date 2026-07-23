@@ -38,6 +38,9 @@ export { workflowDefinitionApi } from './workflowDefinition'
 export { issueTemplateApi } from './issueTemplate'
 export { globalMemberApi } from './globalMember'
 export { issueWatcherApi } from './issueWatcher'
+export { issueVoteApi } from './issueVote'
+export { apiKeyApi } from './apiKey'
+export { organizationApi } from './organization'
 
 // 类型导出
 export type * from './types'

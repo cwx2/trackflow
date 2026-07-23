@@ -15,6 +15,11 @@ public class UpdateProjectDTO {
 
     private Long leadId;
 
+    /**
+     * 所属组织ID（可选，传 null 表示不修改，传 0 表示清除组织关联）
+     */
+    private Long orgId;
+
     @Pattern(regexp = "^(private|internal|public)$", message = "可见性无效，可选值：private、internal、public")
     private String visibility;
 

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.system.dto.CreateOrgDTO;
 import com.trackflow.system.dto.UpdateOrgDTO;
 import com.trackflow.system.entity.Organization;
@@ -23,6 +25,7 @@ public class OrganizationService {
 
     private final OrganizationMapper organizationMapper;
     private final SysUserMapper sysUserMapper;
+    private final ProjectMapper projectMapper;
 
     /**
      * 创建组织
@@ -103,6 +106,14 @@ public class OrganizationService {
         );
         if (userCount > 0) {
             throw new BusinessException(ErrorCode.ORG_HAS_REFERENCES);
+        }
+
+        // 检查是否有项目引用
+        Long projectCount = projectMapper.selectCount(
+                new LambdaQueryWrapper<Project>().eq(Project::getOrgId, id)
+        );
+        if (projectCount > 0) {
+            throw new BusinessException(ErrorCode.ORG_HAS_REFERENCES, "该组织下还有项目关联，无法删除");
         }
 
         organizationMapper.deleteById(id);
