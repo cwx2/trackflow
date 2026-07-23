@@ -29,6 +29,9 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "customFieldValues", ignore = true)
     @Mapping(target = "customFieldColors", ignore = true)
     @Mapping(target = "estimatedHours", source = "estimatedHours")
+    @Mapping(target = "spentHours", source = "spentHours")
+    @Mapping(target = "derivedSpentHours", source = "derivedSpentHours")
+    @Mapping(target = "derivedEstimatedHours", source = "derivedEstimatedHours")
     IssueVO toVO(Issue entity);
 
     List<IssueVO> toVOList(List<Issue> entities);

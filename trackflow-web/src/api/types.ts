@@ -262,6 +262,12 @@ export interface IssueVO {
   childClosedCount?: number
   /** 预估工时 */
   estimatedHours?: number
+  /** 已花时间 */
+  spentHours?: number
+  /** 派生字段：自身 + 所有后代 spent_hours 总和 */
+  derivedSpentHours?: number
+  /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
+  derivedEstimatedHours?: number
   /** 自定义字段结构化详情，每个字段独立表达 value/values、displayValue/displayValues、color/colors */
   customFieldDetails?: CustomFieldValueVO[]
   /**
@@ -285,12 +291,6 @@ export interface IssueDetailVO extends IssueVO {
   parentId?: string
   parentKey?: string
   status?: IssueStatusVO
-  estimatedHours?: number
-  spentHours?: number
-  /** 派生字段：自身 + 所有后代 spent_hours 总和 */
-  derivedSpentHours?: number
-  /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
-  derivedEstimatedHours?: number
   tags?: IssueTagVO[]
   resolvedAt?: string
   /** 创建者ID */
@@ -594,6 +594,8 @@ export interface CustomFieldDefinitionVO {
   isPrivate: boolean
   /** 是否自动附加到新创建的项目（YouTrack Auto-attach 行为） */
   isAutoAttach?: boolean
+  /** 选项排序模式: manual / name_asc / name_desc / name_ci_asc / name_ci_desc */
+  sortMode?: string
   defaultValue?: string
   minLength: number
   maxLength: number

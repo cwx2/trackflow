@@ -34,6 +34,12 @@ public class IssueVO {
 
     /** 预估工时 */
     private BigDecimal estimatedHours;
+    /** 已花时间 */
+    private BigDecimal spentHours;
+    /** 派生字段：自身 + 所有后代 spent_hours 总和 */
+    private BigDecimal derivedSpentHours;
+    /** 派生字段：自身 + 所有后代 estimated_hours 总和 */
+    private BigDecimal derivedEstimatedHours;
 
     /** 直接子工单总数 */
     private Integer childCount;

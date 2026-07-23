@@ -57,6 +57,14 @@
       {{ issue.childClosedCount || 0 }}/{{ issue.childCount }}
     </span>
 
+    <!-- Time progress indicator (YouTrack Estimation Progress) -->
+    <TimeProgressIndicator
+      v-if="effectiveEstimated > 0"
+      :spent="effectiveSpent"
+      :estimated="effectiveEstimated"
+      :size="14"
+    />
+
     <!-- Right side: updated time -->
     <span class="item-time">{{ formatTime(issue.updatedAt) }}</span>
 
@@ -130,6 +138,7 @@ import { IconRight, IconDown, IconLayers, IconDragDotVertical } from '@arco-desi
 import type { IssueVO, CustomFieldValueVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
+import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 interface IssueListItemIssue extends IssueVO {
   description?: string
@@ -160,6 +169,21 @@ defineEmits<{
 // Limit custom fields shown (max 4)
 const limitedCustomFieldDetails = computed((): CustomFieldValueVO[] => {
   return (props.issue.customFieldDetails || []).slice(0, 4)
+})
+
+// Time progress: use derived values for parent issues, direct values for leaf issues
+const effectiveEstimated = computed(() => {
+  if (props.issue.derivedEstimatedHours != null && props.issue.derivedEstimatedHours > 0) {
+    return props.issue.derivedEstimatedHours
+  }
+  return props.issue.estimatedHours || 0
+})
+
+const effectiveSpent = computed(() => {
+  if (props.issue.derivedSpentHours != null) {
+    return props.issue.derivedSpentHours
+  }
+  return props.issue.spentHours || 0
 })
 
 const limitedCustomFields = computed(() => {
