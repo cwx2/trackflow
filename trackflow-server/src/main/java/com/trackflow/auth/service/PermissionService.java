@@ -163,60 +163,77 @@ public class PermissionService {
     /**
      * 获取用户所有权限（缓存优先）。
      * 空结果也会被缓存（使用占位符），防止无权限用户每次请求都穿透到 DB。
+     * Redis 不可用时自动降级到数据库查询，保证系统可用性。
      */
     public Set<String> getPermissions(Long userId) {
         String cacheKey = CACHE_KEY_PREFIX + userId;
 
-        // 1. 缓存查询
-        Set<String> cached = redisTemplate.opsForSet().members(cacheKey);
-        if (cached != null && !cached.isEmpty()) {
-            if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
-                return Set.of(); // 缓存命中：确认无权限
+        // 1. 尝试从 Redis 读取缓存
+        try {
+            Set<String> cached = redisTemplate.opsForSet().members(cacheKey);
+            if (cached != null && !cached.isEmpty()) {
+                if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
+                    return Set.of(); // 缓存命中：确认无权限
+                }
+                return cached;
             }
-            return cached;
+        } catch (Exception e) {
+            log.warn("Redis read failed for global permissions (userId={}), falling back to DB: {}",
+                    userId, e.getMessage());
+            return loadPermissionsFromDb(userId);
         }
 
-        // 2. 数据库查询
+        // 2. 缓存未命中，从数据库加载
         Set<String> permissions = loadPermissionsFromDb(userId);
 
-        // 3. 写入缓存（空结果写入占位符，防止穿透）
-        if (permissions.isEmpty()) {
-            redisTemplate.opsForSet().add(cacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
-        } else {
-            redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
+        // 3. 尝试写入缓存（best-effort，失败不影响返回结果）
+        try {
+            if (permissions.isEmpty()) {
+                redisTemplate.opsForSet().add(cacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
+            } else {
+                redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
+            }
+            redisTemplate.expire(cacheKey, CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("Redis write failed for global permissions (userId={}): {}", userId, e.getMessage());
         }
-        redisTemplate.expire(cacheKey, CACHE_TTL);
 
         return permissions;
     }
 
     /**
      * 失效指定用户的所有权限缓存（全局 + 导航 + 所有项目级）
-     * 使用 SCAN 迭代匹配项目级 key，避免 KEYS 命令阻塞 Redis
+     * 使用 SCAN 迭代匹配项目级 key，避免 KEYS 命令阻塞 Redis。
+     * Redis 不可用时仅记录警告，不阻断调用方（缓存会在 TTL 后自然过期）。
      */
     public void invalidateCache(Long userId) {
-        // 1. 删除全局权限缓存
-        String globalKey = CACHE_KEY_PREFIX + userId;
-        redisTemplate.delete(globalKey);
+        try {
+            // 1. 删除全局权限缓存
+            String globalKey = CACHE_KEY_PREFIX + userId;
+            redisTemplate.delete(globalKey);
 
-        // 2. 删除导航权限缓存
-        String navKey = NAV_CACHE_KEY_PREFIX + userId;
-        redisTemplate.delete(navKey);
+            // 2. 删除导航权限缓存
+            String navKey = NAV_CACHE_KEY_PREFIX + userId;
+            redisTemplate.delete(navKey);
 
-        // 3. 使用 SCAN 迭代删除该用户所有项目级权限缓存
-        String projectPattern = PROJECT_CACHE_KEY_PREFIX + userId + ":*";
-        Set<String> projectKeys = scanKeys(projectPattern);
-        if (!projectKeys.isEmpty()) {
-            redisTemplate.delete(projectKeys);
-            log.debug("Permission cache invalidated for user {}: global + nav + {} project keys", userId, projectKeys.size());
-        } else {
-            log.debug("Permission cache invalidated for user {}: global + nav", userId);
+            // 3. 使用 SCAN 迭代删除该用户所有项目级权限缓存
+            String projectPattern = PROJECT_CACHE_KEY_PREFIX + userId + ":*";
+            Set<String> projectKeys = scanKeys(projectPattern);
+            if (!projectKeys.isEmpty()) {
+                redisTemplate.delete(projectKeys);
+                log.debug("Permission cache invalidated for user {}: global + nav + {} project keys", userId, projectKeys.size());
+            } else {
+                log.debug("Permission cache invalidated for user {}: global + nav", userId);
+            }
+        } catch (Exception e) {
+            log.warn("Redis cache invalidation failed for user {}: {}", userId, e.getMessage());
         }
     }
 
     /**
      * 使用 SCAN 命令迭代匹配 Redis key（非阻塞，生产安全）
-     * 每次迭代扫描 100 个 key，避免长时间阻塞 Redis
+     * 每次迭代扫描 100 个 key，避免长时间阻塞 Redis。
+     * Redis 不可用时返回空集合。
      */
     private Set<String> scanKeys(String pattern) {
         Set<String> keys = new HashSet<>();
@@ -225,6 +242,8 @@ public class PermissionService {
             while (cursor.hasNext()) {
                 keys.add(cursor.next());
             }
+        } catch (Exception e) {
+            log.warn("Redis SCAN failed for pattern '{}': {}", pattern, e.getMessage());
         }
         return keys;
     }
@@ -236,18 +255,24 @@ public class PermissionService {
      * 变更后必须清除所有用户在该项目上的缓存，强制下次请求重新计算。
      * <p>
      * 使用 SCAN 匹配 perm:user:project:*:{projectId} 模式，避免 KEYS 阻塞。
+     * Redis 不可用时仅记录警告，缓存会在 TTL 后自然过期。
      *
      * @param projectId 项目 ID
      * @return 清除的缓存 key 数量
      */
     public int invalidateCacheForProject(Long projectId) {
-        String pattern = PROJECT_CACHE_KEY_PREFIX + "*:" + projectId;
-        Set<String> keys = scanKeys(pattern);
-        if (!keys.isEmpty()) {
-            redisTemplate.unlink(keys);
-            log.debug("Permission cache invalidated for project {}: {} keys removed", projectId, keys.size());
+        try {
+            String pattern = PROJECT_CACHE_KEY_PREFIX + "*:" + projectId;
+            Set<String> keys = scanKeys(pattern);
+            if (!keys.isEmpty()) {
+                redisTemplate.unlink(keys);
+                log.debug("Permission cache invalidated for project {}: {} keys removed", projectId, keys.size());
+            }
+            return keys.size();
+        } catch (Exception e) {
+            log.warn("Redis cache invalidation failed for project {}: {}", projectId, e.getMessage());
+            return 0;
         }
-        return keys.size();
     }
 
     /**
@@ -297,6 +322,7 @@ public class PermissionService {
     /**
      * 获取用户在指定项目中的权限（缓存优先）。
      * 空结果也会被缓存（使用占位符），防止非成员用户对私有项目每次请求都穿透到 DB。
+     * Redis 不可用时自动降级到数据库查询，保证系统可用性。
      *
      * 逻辑：
      * 1. 先查成员角色权限 → 有则返回
@@ -308,14 +334,45 @@ public class PermissionService {
     public Set<String> getProjectPermissions(Long userId, Long projectId) {
         String cacheKey = PROJECT_CACHE_KEY_PREFIX + userId + ":" + projectId;
 
-        Set<String> cached = redisTemplate.opsForSet().members(cacheKey);
-        if (cached != null && !cached.isEmpty()) {
-            if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
-                return Set.of(); // 缓存命中：确认无权限
+        // 1. 尝试从 Redis 读取缓存
+        try {
+            Set<String> cached = redisTemplate.opsForSet().members(cacheKey);
+            if (cached != null && !cached.isEmpty()) {
+                if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
+                    return Set.of(); // 缓存命中：确认无权限
+                }
+                return cached;
             }
-            return cached;
+        } catch (Exception e) {
+            log.warn("Redis read failed for project permissions (userId={}, projectId={}), falling back to DB: {}",
+                    userId, projectId, e.getMessage());
+            return loadProjectPermissionsWithFallback(userId, projectId);
         }
 
+        // 2. 缓存未命中，从数据库加载
+        Set<String> permissions = loadProjectPermissionsWithFallback(userId, projectId);
+
+        // 3. 尝试写入缓存（best-effort，失败不影响返回结果）
+        try {
+            if (permissions.isEmpty()) {
+                redisTemplate.opsForSet().add(cacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
+            } else {
+                redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
+            }
+            redisTemplate.expire(cacheKey, CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("Redis write failed for project permissions (userId={}, projectId={}): {}",
+                    userId, projectId, e.getMessage());
+        }
+
+        return permissions;
+    }
+
+    /**
+     * 从数据库加载项目权限，含 NonMember fallback 和模块过滤逻辑。
+     * 提取为独立方法，供缓存命中失败和缓存未命中两个路径复用。
+     */
+    private Set<String> loadProjectPermissionsWithFallback(Long userId, Long projectId) {
         // 从数据库加载：project_member → role_permission
         Set<String> permissions = loadProjectPermissionsFromDb(userId, projectId);
 
@@ -324,19 +381,11 @@ public class PermissionService {
             permissions = loadNonMemberPermissions(projectId);
         }
 
-        // ★ 模块过滤：只保留项目已启用模块下的权限
+        // 模块过滤：只保留项目已启用模块下的权限
         if (!permissions.isEmpty()) {
             permissions = projectModuleService.filterByEnabledModules(
                     projectId, permissions, permissionCategoryMap);
         }
-
-        // 写入缓存（空结果写入占位符，防止穿透）
-        if (permissions.isEmpty()) {
-            redisTemplate.opsForSet().add(cacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
-        } else {
-            redisTemplate.opsForSet().add(cacheKey, permissions.toArray(new String[0]));
-        }
-        redisTemplate.expire(cacheKey, CACHE_TTL);
 
         return permissions;
     }
@@ -447,6 +496,7 @@ public class PermissionService {
      * 获取用户的导航权限集合（Redis 缓存优先）。
      * 结合全局权限 + 项目级权限聚合派生 nav:* 权限。
      * 空结果也会被缓存（使用占位符），防止穿透。
+     * Redis 不可用时自动降级到数据库查询，保证系统可用性。
      * <p>
      * 缓存命中：0 DB 查询
      * 缓存未命中：最多 2 次 DB 查询（1 次全局权限 + 1 次聚合项目权限）
@@ -458,15 +508,43 @@ public class PermissionService {
         String navCacheKey = NAV_CACHE_KEY_PREFIX + userId;
 
         // 1. 尝试从 Redis 获取缓存
-        Set<String> cached = redisTemplate.opsForSet().members(navCacheKey);
-        if (cached != null && !cached.isEmpty()) {
-            if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
-                return Set.of(); // 缓存命中：确认无权限
+        try {
+            Set<String> cached = redisTemplate.opsForSet().members(navCacheKey);
+            if (cached != null && !cached.isEmpty()) {
+                if (cached.contains(EMPTY_PERMISSIONS_PLACEHOLDER)) {
+                    return Set.of(); // 缓存命中：确认无权限
+                }
+                return cached;
             }
-            return cached;
+        } catch (Exception e) {
+            log.warn("Redis read failed for navigation permissions (userId={}), falling back to DB: {}",
+                    userId, e.getMessage());
+            return computeNavigationPermissions(userId);
         }
 
-        // 2. 计算：全局权限 + 导航派生权限
+        // 2. 缓存未命中，计算导航权限
+        Set<String> permissions = computeNavigationPermissions(userId);
+
+        // 3. 尝试写入 Redis 缓存（best-effort）
+        try {
+            if (permissions.isEmpty()) {
+                redisTemplate.opsForSet().add(navCacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
+            } else {
+                redisTemplate.opsForSet().add(navCacheKey, permissions.toArray(new String[0]));
+            }
+            redisTemplate.expire(navCacheKey, CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("Redis write failed for navigation permissions (userId={}): {}", userId, e.getMessage());
+        }
+
+        return permissions;
+    }
+
+    /**
+     * 计算用户的导航权限集合（全局权限 + nav:* 派生权限）。
+     * 提取为独立方法，供缓存命中失败和缓存未命中两个路径复用。
+     */
+    private Set<String> computeNavigationPermissions(Long userId) {
         Set<String> permissions = new HashSet<>(getPermissions(userId));
 
         if (!permissions.contains(SYSTEM_ADMIN_PERMISSION)) {
@@ -501,14 +579,6 @@ public class PermissionService {
                 permissions.add("nav:batch_ops");
             }
         }
-
-        // 3. 写入 Redis 缓存（空结果写入占位符，防止穿透）
-        if (permissions.isEmpty()) {
-            redisTemplate.opsForSet().add(navCacheKey, EMPTY_PERMISSIONS_PLACEHOLDER);
-        } else {
-            redisTemplate.opsForSet().add(navCacheKey, permissions.toArray(new String[0]));
-        }
-        redisTemplate.expire(navCacheKey, CACHE_TTL);
 
         return permissions;
     }
