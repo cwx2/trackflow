@@ -1,6 +1,7 @@
 package com.trackflow.system.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.auth.security.NoAuthorizationRequired;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.PageHelper;
@@ -35,6 +36,7 @@ public class GroupController {
      * 查询所有用户组简要信息（id + name），用于下拉选择器（如评论可见性）。
      * 不需要管理权限，任何已认证用户都可访问。
      */
+    @NoAuthorizationRequired(reason = "下拉选择器数据，任何已认证用户可访问")
     @GetMapping("/simple")
     public R<List<GroupSimpleVO>> listSimple() {
         return R.ok(groupService.listSimple());

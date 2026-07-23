@@ -1,5 +1,6 @@
 package com.trackflow.auth.controller;
 
+import com.trackflow.auth.security.NoAuthorizationRequired;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.model.R;
 import com.trackflow.system.entity.SysUser;
@@ -63,6 +64,7 @@ public class BackChannelLogoutController {
      * @param logoutToken Keycloak 签发的 logout_token（JWT）
      * @return 200 OK 表示成功处理（OIDC 规范要求返回 200）
      */
+    @NoAuthorizationRequired(reason = "Keycloak server-to-server 回调，通过验证 logout_token JWT 签名确保合法性")
     @PostMapping("/backchannel-logout")
     public R<Void> handleBackChannelLogout(
             @RequestParam("logout_token") String logoutToken,

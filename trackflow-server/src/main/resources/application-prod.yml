@@ -36,6 +36,9 @@ logging:
 
 # TrackFlow 生产配置
 trackflow:
+  security:
+    # 生产环境强制检查：缺失授权注解的端点将阻断启动（fail-fast）
+    enforce-authorization-check: true
   cors:
     # 生产环境必须通过 TRACKFLOW_CORS_ORIGINS 环境变量配置前端域名
     # 多个域名用逗号分隔，如: https://trackflow.company.com,https://admin.company.com
