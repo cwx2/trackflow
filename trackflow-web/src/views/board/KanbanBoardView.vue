@@ -960,7 +960,7 @@ import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi, projectApi } from '@/api'
-import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO } from '@/api/types'
+import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
@@ -968,6 +968,9 @@ import { usePermission } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
+
+/** 看板中使用的工单类型 — 可以是精简卡片 VO（聚合 API）或完整 IssueVO（Legacy fallback） */
+type BoardIssue = IssueVO | BoardCardVO
 import { useManualOrder } from '@/views/issue/composables/useManualOrder'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
@@ -1084,22 +1087,23 @@ function getInitials(name: string): string {
 }
 
 /** 检查卡片是否有可见的自定义字段 */
-function hasVisibleCustomFields(issue: IssueVO): boolean {
+function hasVisibleCustomFields(issue: BoardIssue): boolean {
   if (issue.customFieldDetails && issue.customFieldDetails.length > 0) return true
-  return !!(issue.customFieldValues && Object.keys(issue.customFieldValues).length > 0)
+  return !!((issue as any).customFieldValues && Object.keys((issue as any).customFieldValues).length > 0)
 }
 
 /** 获取卡片可见的自定义字段详情（最多显示 maxFields 个） */
-function getVisibleCustomFieldDetails(issue: IssueVO) {
+function getVisibleCustomFieldDetails(issue: BoardIssue) {
   if (!issue.customFieldDetails) return []
   const maxFields = cardSize.value === 'L' ? 4 : 2
   return issue.customFieldDetails.slice(0, maxFields)
 }
 
 /** @deprecated 兼容旧数据格式 */
-function getVisibleCustomFields(issue: IssueVO): Record<string, string> {
-  if (!issue.customFieldValues) return {}
-  const entries = Object.entries(issue.customFieldValues)
+function getVisibleCustomFields(issue: BoardIssue): Record<string, string> {
+  const cfValues = (issue as any).customFieldValues as Record<string, string> | undefined
+  if (!cfValues) return {}
+  const entries = Object.entries(cfValues)
   const maxFields = cardSize.value === 'L' ? 4 : 2
   return Object.fromEntries(entries.slice(0, maxFields))
 }
@@ -1110,7 +1114,7 @@ function isCardFieldVisible(field: string): boolean {
 }
 
 /** 获取卡片的颜色方案 CSS class */
-function getCardColorClass(issue: IssueVO): string {
+function getCardColorClass(issue: BoardIssue): string {
   const scheme = cardConfig.value.colorScheme
   if (scheme === 'none') return ''
   if (scheme === 'priority') {
@@ -1125,7 +1129,7 @@ function getCardColorClass(issue: IssueVO): string {
 }
 
 /** 获取卡片截止日期的状态 class */
-function getCardDueDateClass(issue: IssueVO): string {
+function getCardDueDateClass(issue: BoardIssue): string {
   if (!issue.dueDate) return ''
   const isClosed = isIssueResolved(issue.statusId)
   const info = getDueDateInfo(issue.dueDate, isClosed)
@@ -1135,7 +1139,7 @@ function getCardDueDateClass(issue: IssueVO): string {
 }
 
 /** 获取卡片截止日期的 tooltip */
-function getCardDueDateTooltip(issue: IssueVO): string {
+function getCardDueDateTooltip(issue: BoardIssue): string {
   if (!issue.dueDate) return ''
   const isClosed = isIssueResolved(issue.statusId)
   const info = getDueDateInfo(issue.dueDate, isClosed)
@@ -1345,13 +1349,13 @@ const isSmartDefaultDoneRetentionActive = computed(() => {
 const BACKLOG_VISIBLE_KEY = 'tf_kanban_backlog_visible'
 const showBacklog = ref(localStorage.getItem(BACKLOG_VISIBLE_KEY) === 'true')
 const backlogPanelRef = ref<InstanceType<typeof BacklogPanel> | null>(null)
-const backlogDraggingIssue = ref<IssueVO | null>(null)
+const backlogDraggingIssue = ref<BoardIssue | null>(null)
 
 // ===== 工单预览面板 =====
 const previewVisible = ref(false)
 const previewIssueId = ref<string | null>(null)
 
-function openPreview(issue: IssueVO) {
+function openPreview(issue: BoardIssue) {
   previewIssueId.value = issue.id
   previewVisible.value = true
 }
@@ -1388,7 +1392,7 @@ function toggleBacklog() {
   localStorage.setItem(BACKLOG_VISIBLE_KEY, String(showBacklog.value))
 }
 
-function onBacklogDragStart(issue: IssueVO) {
+function onBacklogDragStart(issue: BoardIssue) {
   backlogDraggingIssue.value = issue
   // Fetch available transitions for the backlog issue's current status
   // For backlog items, all open statuses should be valid targets
@@ -1453,7 +1457,7 @@ function toggleSwimlane(key: string) {
 interface SwimlaneRow {
   key: string
   label: string
-  issues: IssueVO[]
+  issues: BoardIssue[]
 }
 
 // 类型映射（使用共享工具）
@@ -1490,7 +1494,7 @@ const swimlanes = computed<SwimlaneRow[]>(() => {
   if (selected && selected.length > 0) {
     const selectedSet = new Set(selected)
     const filteredRows: SwimlaneRow[] = []
-    const uncategorizedIssues: IssueVO[] = []
+    const uncategorizedIssues: BoardIssue[] = []
 
     for (const row of rows) {
       if (selectedSet.has(row.key)) {
@@ -1524,9 +1528,9 @@ const swimlanes = computed<SwimlaneRow[]>(() => {
   return rows
 })
 
-function groupByAssignee(allIssues: IssueVO[]): SwimlaneRow[] {
-  const groups = new Map<string, IssueVO[]>()
-  const unassigned: IssueVO[] = []
+function groupByAssignee(allIssues: BoardIssue[]): SwimlaneRow[] {
+  const groups = new Map<string, BoardIssue[]>()
+  const unassigned: BoardIssue[] = []
 
   for (const issue of allIssues) {
     if (!issue.assigneeId || !issue.assigneeName) {
@@ -1555,9 +1559,9 @@ function groupByAssignee(allIssues: IssueVO[]): SwimlaneRow[] {
   return rows
 }
 
-function groupByPriority(allIssues: IssueVO[]): SwimlaneRow[] {
+function groupByPriority(allIssues: BoardIssue[]): SwimlaneRow[] {
   const priorities = ['Critical', 'High', 'Normal', 'Low']
-  const groups = new Map<string, IssueVO[]>()
+  const groups = new Map<string, BoardIssue[]>()
   for (const p of priorities) groups.set(p, [])
 
   for (const issue of allIssues) {
@@ -1575,10 +1579,10 @@ function groupByPriority(allIssues: IssueVO[]): SwimlaneRow[] {
     }))
 }
 
-function groupByType(allIssues: IssueVO[]): SwimlaneRow[] {
+function groupByType(allIssues: BoardIssue[]): SwimlaneRow[] {
   const types = ['Bug', 'Task', 'Feature', 'Story']
-  const groups = new Map<string, IssueVO[]>()
-  const other: IssueVO[] = []
+  const groups = new Map<string, BoardIssue[]>()
+  const other: BoardIssue[] = []
 
   for (const issue of allIssues) {
     const t = issue.issueType
@@ -1605,9 +1609,9 @@ function groupByType(allIssues: IssueVO[]): SwimlaneRow[] {
   return rows
 }
 
-function groupBySprint(allIssues: IssueVO[]): SwimlaneRow[] {
-  const groups = new Map<string, IssueVO[]>()
-  const noSprint: IssueVO[] = []
+function groupBySprint(allIssues: BoardIssue[]): SwimlaneRow[] {
+  const groups = new Map<string, BoardIssue[]>()
+  const noSprint: BoardIssue[] = []
 
   for (const issue of allIssues) {
     if (!issue.sprintId) {
@@ -1634,9 +1638,9 @@ function groupBySprint(allIssues: IssueVO[]): SwimlaneRow[] {
   return rows
 }
 
-function groupByTag(allIssues: IssueVO[]): SwimlaneRow[] {
-  const groups = new Map<string, IssueVO[]>()
-  const noTag: IssueVO[] = []
+function groupByTag(allIssues: BoardIssue[]): SwimlaneRow[] {
+  const groups = new Map<string, BoardIssue[]>()
+  const noTag: BoardIssue[] = []
 
   for (const issue of allIssues) {
     const tags = (issue as any).tags as Array<{ id: string; name: string }> | undefined
@@ -1668,7 +1672,7 @@ function groupByTag(allIssues: IssueVO[]): SwimlaneRow[] {
 }
 
 /** 获取某泳道中某状态列的工单 */
-function getSwimlaneColumnIssues(laneKey: string, statusId: string): IssueVO[] {
+function getSwimlaneColumnIssues(laneKey: string, statusId: string): BoardIssue[] {
   const lane = swimlanes.value.find(l => l.key === laneKey)
   if (!lane) return []
   return lane.issues.filter(i => i.statusId === statusId)
@@ -1936,7 +1940,7 @@ function onSprintChange() {
 }
 const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
-const issues = ref<IssueVO[]>([])
+const issues = ref<BoardIssue[]>([])
 
 // ===== 卡片多选 =====
 const {
@@ -2123,12 +2127,12 @@ const effectiveColumns = computed<EffectiveColumn[]>(() => {
 })
 
 /** 获取有效列（考虑合并）中某列的所有工单 */
-function getEffectiveColumnIssues(column: EffectiveColumn): IssueVO[] {
+function getEffectiveColumnIssues(column: EffectiveColumn): BoardIssue[] {
   return issues.value.filter(i => column.statusIds.includes(i.statusId))
 }
 
 /** 获取 Swimlane 中某有效列的工单 */
-function getSwimlaneEffectiveColumnIssues(laneKey: string, column: EffectiveColumn): IssueVO[] {
+function getSwimlaneEffectiveColumnIssues(laneKey: string, column: EffectiveColumn): BoardIssue[] {
   const lane = swimlanes.value.find(l => l.key === laneKey)
   if (!lane) return []
   return lane.issues.filter(i => column.statusIds.includes(i.statusId))
@@ -2252,7 +2256,7 @@ function scrollToColumn(statusId: string) {
 }
 
 // ===== 拖拽状态 =====
-const draggingIssue = ref<IssueVO | null>(null)
+const draggingIssue = ref<BoardIssue | null>(null)
 const dragOverColumnId = ref<string | null>(null)
 const allowedTargetStatuses = ref<Set<string>>(new Set())
 const requireCommentStatuses = ref<Set<string>>(new Set())
@@ -2277,8 +2281,8 @@ interface UndoEntry {
 const undoStack = ref<UndoEntry[]>([])
 const UNDO_TIMEOUT = 10000
 
-function getColumnIssues(statusId: string): IssueVO[] {
-  let columnIssues: IssueVO[]
+function getColumnIssues(statusId: string): BoardIssue[] {
+  let columnIssues: BoardIssue[]
   if (boardColumnField.value === 'priority') {
     // Priority mode: statusId parameter is actually the priority value (Critical/High/Normal/Low)
     columnIssues = issues.value.filter(i => (i.priority || 'Normal') === statusId)
@@ -2397,7 +2401,7 @@ function typeLabel(type: string): string {
   return localizeIssueType(type)
 }
 
-function openIssue(issue: IssueVO) {
+function openIssue(issue: BoardIssue) {
   if (draggingIssue.value) return
   openPreview(issue)
 }
@@ -2409,7 +2413,7 @@ function openIssue(issue: IssueVO) {
  */
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 
-function onCardClick(event: MouseEvent | KeyboardEvent, issue: IssueVO) {
+function onCardClick(event: MouseEvent | KeyboardEvent, issue: BoardIssue) {
   if (draggingIssue.value) return
 
   if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey)) {
@@ -2431,7 +2435,7 @@ function onCardClick(event: MouseEvent | KeyboardEvent, issue: IssueVO) {
 /**
  * 卡片双击：跳转详情页（取消单击的预览）
  */
-function onCardDblClick(issue: IssueVO) {
+function onCardDblClick(issue: BoardIssue) {
   if (draggingIssue.value) return
   // Cancel the pending single-click preview
   if (clickTimer) {
@@ -2447,7 +2451,7 @@ function onCardDblClick(issue: IssueVO) {
  * 卡片 Enter 键：若有选中则切换选中状态，否则打开预览
  * Space 键：打开预览（保持与单击一致）
  */
-function onCardKeydown(event: KeyboardEvent, issue: IssueVO) {
+function onCardKeydown(event: KeyboardEvent, issue: BoardIssue) {
   if (event.key === 'Enter') {
     if (selectedCount.value > 0 || event.ctrlKey || event.metaKey) {
       toggleCardSelection(issue.id)
@@ -2471,7 +2475,7 @@ function onCardKeydown(event: KeyboardEvent, issue: IssueVO) {
 
 // ===== 拖拽逻辑 =====
 
-function isCardDraggable(issue: IssueVO): boolean {
+function isCardDraggable(issue: BoardIssue): boolean {
   // Priority mode: always draggable (no workflow constraint, just needs edit permission)
   if (boardColumnField.value === 'priority') return true
   if (!canChangeStatus.value) return false
@@ -2479,7 +2483,7 @@ function isCardDraggable(issue: IssueVO): boolean {
   return transitionableSourceStatuses.value.has(issue.statusId)
 }
 
-async function onDragStart(event: DragEvent, issue: IssueVO) {
+async function onDragStart(event: DragEvent, issue: BoardIssue) {
   if (!isCardDraggable(issue)) {
     event.preventDefault()
     Message.warning('该工单当前状态不允许变更')
@@ -2787,7 +2791,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
  *   dragging a card to another swimlane row updates that field.
  * - Returns true if a cross-swimlane update was performed.
  */
-async function handleCrossSwimlaneUpdate(issue: IssueVO, targetLaneKey: string | null): Promise<boolean> {
+async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: string | null): Promise<boolean> {
   // No swimlane mode or no target lane → nothing to do
   if (!targetLaneKey || swimlaneGroupBy.value === 'none') return false
 
@@ -2905,7 +2909,7 @@ async function handleCrossSwimlaneUpdate(issue: IssueVO, targetLaneKey: string |
 }
 
 /** Handle within-column drop: reorder card using manual order API */
-async function handleWithinColumnReorder(issue: IssueVO, columnId: string, event: DragEvent) {
+async function handleWithinColumnReorder(issue: BoardIssue, columnId: string, event: DragEvent) {
   // Determine the drop target position within the column
   const columnIssues = getColumnIssues(columnId)
   const draggedIndex = columnIssues.findIndex(i => i.id === issue.id)
@@ -2984,7 +2988,7 @@ async function handleWithinColumnReorder(issue: IssueVO, columnId: string, event
 }
 
 /** Handle drop from Backlog panel: assign sprint + change status */
-async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
+async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
   backlogDraggingIssue.value = null
   allowedTargetStatuses.value.clear()
 
@@ -3021,11 +3025,10 @@ async function handleBacklogDrop(issue: IssueVO, targetStatusId: string) {
     backlogPanelRef.value?.removeIssue(issue.id)
 
     // Add to board issues list
-    const updatedIssue: IssueVO = {
+    const updatedIssue: BoardIssue = {
       ...issue,
       statusId: targetStatusId,
       sprintId: targetSprintId,
-      version: newVersion
     }
     issues.value.push(updatedIssue)
 
@@ -3044,7 +3047,7 @@ function getActiveSprintId(): string | undefined {
 // ===== 撤销逻辑 =====
 
 /** 推送撤销通知（复用于正常拖拽和强制 WIP 确认后的成功路径） */
-function pushUndoNotification(issue: IssueVO, oldStatusId: string, newStatusId: string, targetStatus: IssueStatusVO | undefined) {
+function pushUndoNotification(issue: BoardIssue, oldStatusId: string, newStatusId: string, targetStatus: IssueStatusVO | undefined) {
   const undoEntry: UndoEntry = {
     issueId: issue.id,
     issueKey: issue.issueKey,
@@ -3468,7 +3471,7 @@ async function loadIssues() {
     }
 
     // 从聚合数据中提取所有工单（平铺，供 getColumnIssues/swimlanes 使用）
-    const allIssues: IssueVO[] = []
+    const allIssues: BoardCardVO[] = []
     for (const col of boardData.columns) {
       if (col.issues && col.issues.length > 0) {
         allIssues.push(...col.issues)
@@ -3496,7 +3499,7 @@ async function loadIssues() {
 async function loadIssuesLegacy(effectiveSprintId: string | undefined, excludeDoneBefore: string | undefined) {
   const PAGE_SIZE = 100
   let page = 1
-  let allIssues: IssueVO[] = []
+  let allIssues: BoardIssue[] = []
   let total = 0
 
   // 优化：传入可见列的 statusId 过滤，减少不必要的数据传输
@@ -3626,8 +3629,8 @@ async function submitAddCard(statusId: string, swimlaneKey?: string) {
         }
       }
 
-      // 构建本地 IssueVO 添加到看板
-      const issueVO: IssueVO = {
+      // 构建本地 BoardIssue 添加到看板
+      const issueVO: BoardIssue = {
         id: newIssue.id,
         issueKey: newIssue.issueKey,
         title: newIssue.title,
@@ -3638,10 +3641,6 @@ async function submitAddCard(statusId: string, swimlaneKey?: string) {
         sprintId: sprintId || undefined,
         assigneeId: newIssue.assigneeId || assigneeId,
         assigneeName: newIssue.assigneeName || '',
-        reporterId: newIssue.reporterId,
-        version: newIssue.version,
-        createdAt: newIssue.createdAt,
-        updatedAt: newIssue.updatedAt
       }
       issues.value.push(issueVO)
 
@@ -3730,8 +3729,8 @@ async function submitNewCardModal() {
     const res = await issueApi.create(createData as any)
     const newIssue = res.data
     if (newIssue) {
-      // 构建本地 IssueVO 添加到看板
-      const issueVO: IssueVO = {
+      // 构建本地 BoardIssue 添加到看板
+      const issueVO: BoardIssue = {
         id: newIssue.id,
         issueKey: newIssue.issueKey,
         title: newIssue.title,
@@ -3742,10 +3741,6 @@ async function submitNewCardModal() {
         sprintId: newCardForm.value.sprintId,
         assigneeId: newIssue.assigneeId || newCardForm.value.assigneeId,
         assigneeName: newIssue.assigneeName || '',
-        reporterId: newIssue.reporterId,
-        version: newIssue.version,
-        createdAt: newIssue.createdAt,
-        updatedAt: newIssue.updatedAt
       }
       issues.value.push(issueVO)
       Message.success(`${newIssue.issueKey} 创建成功`)

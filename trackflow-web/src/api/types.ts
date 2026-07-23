@@ -89,10 +89,14 @@ export interface ProjectVO {
 }
 
 export interface ProjectDetailVO extends ProjectVO {
-  /** 当前登录用户在该项目中的角色名称 */
+  /** 当前登录用户在该项目中的角色名称（向后兼容，取第一个角色） */
   myRoleName?: string
-  /** 当前登录用户在该项目中的角色代码 */
+  /** 当前登录用户在该项目中的角色代码（向后兼容，取第一个角色） */
   myRoleCode?: string
+  /** 当前登录用户在该项目中的所有角色名称列表 */
+  myRoleNames?: string[]
+  /** 当前登录用户在该项目中的所有角色代码列表 */
+  myRoleCodes?: string[]
   /** 项目成员总数 */
   memberCount?: number
   /** 项目负责人显示名称 */
@@ -115,6 +119,32 @@ export interface ProjectMemberVO {
   displayName: string
   email?: string
   joinedAt: string
+}
+
+/** 通过用户组获得项目访问权的组信息 */
+export interface ProjectGroupMemberVO {
+  groupId: string
+  groupName: string
+  projectId: string
+  roleId: string
+  roleName: string
+  users: GroupUserVO[]
+  assignedAt: string
+}
+
+export interface GroupUserVO {
+  userId: string
+  username: string
+  displayName: string
+  email?: string
+}
+
+/** 项目成员完整视图（对标 YouTrack People 页面） */
+export interface ProjectMembersViewVO {
+  /** 直接添加到项目的个人成员 */
+  directMembers: ProjectMemberVO[]
+  /** 通过用户组获得项目访问权的组 */
+  groupMembers: ProjectGroupMemberVO[]
 }
 
 // ========== 项目活动日志 ==========
@@ -311,6 +341,8 @@ export interface IssueStatusVO {
   blocked?: boolean
   /** 阻塞方的 issueKey 列表 */
   blockedBy?: string[]
+  /** 此转换是否要求必须填写评论/理由 */
+  requireComment?: boolean
 }
 
 /** 批量操作中每个状态的可达性信息 */
@@ -588,6 +620,28 @@ export interface CustomFieldDefinitionVO {
   effectiveIsRequired?: boolean
   /** 有效默认值（考虑项目覆盖后的实际值） */
   effectiveDefaultValue?: string | null
+  /**
+   * 值依赖过滤 - 源字段 ID（项目级配置）。
+   * 当此字段不为 null 时，表示该字段的可选值取决于 filterFieldId 对应字段的当前值。
+   * 参考 YouTrack "Filter values based on" 功能。
+   */
+  filterFieldId?: string | null
+  /**
+   * 值依赖过滤规则（JSON 字符串，解析后为 FilterRule[] 数组）。
+   * 每条规则描述：当源字段值为 whenValue 时，只显示 showOnly 中的选项 ID。
+   */
+  filterRules?: string | null
+}
+
+/**
+ * 值依赖过滤规则接口。
+ * 当源字段值等于 whenValue 时，仅显示 showOnly 列表中的选项。
+ */
+export interface FilterRule {
+  /** 源字段的选项值 ID */
+  whenValue: string
+  /** 允许显示的目标字段选项 ID 列表 */
+  showOnly: string[]
 }
 
 export interface CustomFieldOptionVO {
@@ -791,6 +845,31 @@ export interface BoardColumnItem {
 
 // ========== 看板聚合数据 ==========
 
+/** 看板卡片精简 VO — 仅包含卡片渲染所需字段（替代完整 IssueVO，性能优化） */
+export interface BoardCardVO {
+  id: string
+  projectId: string
+  issueKey: string
+  title: string
+  issueType: string
+  statusId: string
+  statusName?: string
+  statusColor?: string
+  priority: string
+  assigneeId?: string
+  assigneeName?: string
+  assigneeAvatarUrl?: string
+  sprintId?: string
+  sprintName?: string
+  dueDate?: string
+  estimatedHours?: number
+  createdAt?: string
+  resolvedAt?: string
+  childCount?: number
+  childClosedCount?: number
+  customFieldDetails?: CustomFieldValueVO[]
+}
+
 /** 看板聚合数据 — 按列分组的工单 */
 export interface BoardDataVO {
   columns: BoardColumnData[]
@@ -802,7 +881,7 @@ export interface BoardDataVO {
 export interface BoardColumnData {
   statusId: string
   statusName: string
-  issues: IssueVO[]
+  issues: BoardCardVO[]
   totalCount: number
   totalEstimation: number | null
   collapsed: boolean
@@ -969,4 +1048,31 @@ export interface ManualOrderVO {
 export interface GroupSimpleVO {
   id: string
   name: string
+}
+
+// ========== API Key / Permanent Token ==========
+
+/** API Key 列表项 */
+export interface ApiKeyVO {
+  id: string
+  userId: string
+  name: string
+  /** Key 前缀（如 "tf_abc1"），用于识别 */
+  prefix: string
+  /** 权限范围（逗号分隔或描述文本） */
+  permissions: string
+  expiresAt?: string
+  lastUsedAt?: string
+  createdAt: string
+}
+
+/** API Key 创建结果（仅返回一次，包含明文 Key） */
+export interface ApiKeyCreatedVO {
+  id: string
+  name: string
+  /** 完整的 API Key 明文，仅此一次展示 */
+  key: string
+  prefix: string
+  expiresAt?: string
+  createdAt: string
 }

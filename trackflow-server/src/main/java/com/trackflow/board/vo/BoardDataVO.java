@@ -1,6 +1,5 @@
 package com.trackflow.board.vo;
 
-import com.trackflow.issue.vo.IssueVO;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -35,8 +34,8 @@ public class BoardDataVO {
         /** 状态名称（冗余，前端可直接使用） */
         private String statusName;
 
-        /** 该列的工单列表（按 position/创建时间排序） */
-        private List<IssueVO> issues;
+        /** 该列的工单列表（精简卡片数据，按 position/创建时间排序） */
+        private List<BoardCardVO> issues;
 
         /** 该列的工单总数（可能大于 issues.size()，列级分页时使用） */
         private int totalCount;

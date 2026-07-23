@@ -2,12 +2,15 @@ package com.trackflow.board.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.board.dto.BoardDataQuery;
+import com.trackflow.board.vo.BoardCardVO;
 import com.trackflow.board.vo.BoardColumnVO;
 import com.trackflow.board.vo.BoardDataVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
-import com.trackflow.issue.dto.IssueQuery;
-import com.trackflow.issue.service.IssueService;
-import com.trackflow.issue.vo.IssueVO;
+import com.trackflow.board.vo.BoardCardConfigVO;
+import com.trackflow.customfield.service.CustomFieldService;
+import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.result.BoardCardRow;
 import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
@@ -20,18 +23,20 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * 看板数据聚合服务 — 提供已按列分组的看板工单数据。
  * <p>
- * 核心优化：前端从循环 N 次 HTTP 请求 → 1 次 HTTP 请求。
- * 服务端完成分组，前端无需客户端 filter。
+ * 核心优化：
+ * - 前端从循环 N 次 HTTP 请求 → 1 次 HTTP 请求（REQ-101）
+ * - 服务端从循环分页 + 逐页富化 → 单次 JOIN SQL 查询（REQ-231）
  * <p>
  * 设计原则：
- * - 复用 IssueService.listWithDetails() 的已有逻辑（填充 user/status/sprint/customField）
- * - 利用大 pageSize（无 500 上限硬编码）一次加载，服务端分组
+ * - 使用专用 selectBoardCards SQL，一次 JOIN 查出卡片所需全部字段
+ * - 自定义字段按需加载（仅卡片配置中 visibleFields 包含的自定义字段）
  * - 折叠列只返回 totalCount 和 totalEstimation，不返回具体工单
  *
  * @author TrackFlow
@@ -48,22 +53,25 @@ public class BoardDataService {
     /** 看板全量最大工单数（安全保护，防止内存溢出） */
     private static final int BOARD_MAX_ISSUES = 2000;
 
-    private final IssueService issueService;
+    private final IssueMapper issueMapper;
     private final BoardColumnService boardColumnService;
     private final BoardGeneralConfigService boardGeneralConfigService;
+    private final BoardCardConfigService boardCardConfigService;
+    private final CustomFieldService customFieldService;
     private final SprintMapper sprintMapper;
     private final QueryExecutor queryExecutor;
     private final ObjectMapper objectMapper;
 
     /**
-     * 聚合看板数据：一次查询返回按列分组的工单。
+     * 聚合看板数据：单次查询 + 内存分组，返回按列分组的工单。
      * <p>
      * 流程：
      * 1. 获取列配置（确定可见列和折叠列）
      * 2. 应用 Board Behavior 配置（filterMode / filterQuery / doneRetentionDays）
-     * 3. 查询可见列的工单（利用 statusId IN 过滤，内部循环分页）
-     * 4. 按 statusId 分组，封装为 BoardDataVO
-     * 5. 折叠列仅返回统计信息（从列配置中获取 issueCount + totalEstimation）
+     * 3. 单次 SQL 查询所有卡片数据（JOIN status + user + sprint）
+     * 4. 按需批量加载自定义字段值
+     * 5. 按 statusId/priority 分组，封装为 BoardDataVO
+     * 6. 折叠列仅返回统计信息
      *
      * @param query 查询参数
      * @param collapsedStatusIds 前端传递的已折叠列状态 ID 集合（折叠列不返回具体工单）
@@ -72,9 +80,10 @@ public class BoardDataService {
     public BoardDataVO aggregateBoardData(BoardDataQuery query, Set<Long> collapsedStatusIds) {
         Long projectId = query.getProjectId();
 
-        // 1. 获取列配置（含统计数据）+ Board Behavior 配置
+        // 1. 获取列配置 + Board Behavior 配置 + 卡片字段配置
         BoardGeneralConfigVO generalConfig = boardGeneralConfigService.getGeneralConfig(projectId);
         String columnField = generalConfig.getColumnField() != null ? generalConfig.getColumnField() : "status";
+        BoardCardConfigVO cardConfig = boardCardConfigService.getCardConfig(projectId);
 
         // 2. 应用 Board Behavior：filterMode / doneRetentionDays / filterQuery
         applyBoardBehavior(query, generalConfig);
@@ -104,53 +113,60 @@ public class BoardDataService {
             }
         }
 
-        // 4. 构建 IssueQuery，使用 statusId IN 过滤仅加载需要的列
-        String statusIdFilter = buildStatusIdFilter(loadColumns, columnField);
+        // 4. 构建查询参数并执行单次 SQL
+        List<Long> statusIds = null;
+        List<String> priorities = null;
 
-        // 4.1 如果 filterMode='query'，先获取匹配的 issue IDs 进行交集过滤
-        Set<Long> queryFilteredIssueIds = resolveQueryFilterIssueIds(generalConfig, projectId);
-
-        // 内部循环加载所有工单（PageHelper 限制每页 100，这里服务端循环绕过）
-        List<IssueVO> allIssues = new ArrayList<>();
-        long totalInDb = 0;
-        int pageNum = 1;
-        final int PAGE_SIZE = 100;
-
-        while (true) {
-            IssueQuery issueQuery = buildIssueQuery(query, statusIdFilter, columnField, pageNum, PAGE_SIZE);
-            var pageResult = issueService.listWithDetails(issueQuery);
-            List<IssueVO> pageIssues = pageResult.getList();
-            totalInDb = pageResult.getPagination().getTotal();
-            allIssues.addAll(pageIssues);
-
-            // 已加载全部 或 达到安全上限
-            if (allIssues.size() >= totalInDb || allIssues.size() >= BOARD_MAX_ISSUES || pageIssues.size() < PAGE_SIZE) {
-                break;
-            }
-            pageNum++;
-        }
-
-        // 4.2 如果有 query 过滤结果，做交集
-        if (queryFilteredIssueIds != null) {
-            allIssues = allIssues.stream()
-                    .filter(issue -> {
+        if ("priority".equals(columnField)) {
+            priorities = loadColumns.stream()
+                    .map(BoardColumnVO::getFieldValue)
+                    .filter(Objects::nonNull)
+                    .toList();
+        } else {
+            statusIds = loadColumns.stream()
+                    .map(col -> {
                         try {
-                            Long issueId = Long.parseLong(issue.getId());
-                            return queryFilteredIssueIds.contains(issueId);
+                            return col.getStatusId() != null ? Long.parseLong(col.getStatusId()) : null;
                         } catch (NumberFormatException e) {
-                            return false;
+                            return null;
                         }
                     })
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
+
+        Long sprintId = query.getSprintId();
+        Long assigneeId = query.getAssigneeId();
+        String keyword = query.getKeyword() != null && !query.getKeyword().isBlank() ? query.getKeyword() : null;
+        LocalDateTime excludeDoneBefore = query.getExcludeDoneBeforeAsDate() != null
+                ? query.getExcludeDoneBeforeAsDate().atStartOfDay() : null;
+
+        List<BoardCardRow> cardRows = issueMapper.selectBoardCards(
+                projectId, statusIds, priorities, sprintId, assigneeId, keyword,
+                excludeDoneBefore, BOARD_MAX_ISSUES
+        );
+
+        // 4.1 如果 filterMode='query'，获取匹配的 issue IDs 做交集
+        Set<Long> queryFilteredIssueIds = resolveQueryFilterIssueIds(generalConfig, projectId);
+        if (queryFilteredIssueIds != null) {
+            cardRows = cardRows.stream()
+                    .filter(row -> queryFilteredIssueIds.contains(row.getId()))
                     .collect(Collectors.toList());
         }
 
-        // 5. 按列分组
+        long totalInDb = cardRows.size();
+
+        // 5. 转换为 BoardCardVO + 按需加载自定义字段
+        List<BoardCardVO> allCards = convertToCardVOs(cardRows);
+        loadCustomFieldsForCards(allCards, cardRows, cardConfig);
+
+        // 6. 按列分组
         int columnLimit = query.getColumnLimit() != null && query.getColumnLimit() > 0
                 ? query.getColumnLimit() : DEFAULT_COLUMN_LIMIT;
 
-        Map<String, List<IssueVO>> groupedIssues = groupIssuesByColumn(allIssues, columnField);
+        Map<String, List<BoardCardVO>> groupedCards = groupCardsByColumn(allCards, columnField);
 
-        // 6. 构建 BoardDataVO
+        // 7. 构建 BoardDataVO
         BoardDataVO result = new BoardDataVO();
         List<BoardDataVO.ColumnData> columnDataList = new ArrayList<>();
         int totalIssueCount = 0;
@@ -172,19 +188,19 @@ public class BoardDataService {
                 colData.setTotalEstimation(col.getTotalEstimation());
             } else {
                 // 展开列：返回实际工单（限制每列数量）
-                List<IssueVO> columnIssues = groupedIssues.getOrDefault(colKey, Collections.emptyList());
-                int columnTotalCount = columnIssues.size();
+                List<BoardCardVO> columnCards = groupedCards.getOrDefault(colKey, Collections.emptyList());
+                int columnTotalCount = columnCards.size();
 
-                if (columnIssues.size() > columnLimit) {
-                    colData.setIssues(columnIssues.subList(0, columnLimit));
+                if (columnCards.size() > columnLimit) {
+                    colData.setIssues(columnCards.subList(0, columnLimit));
                 } else {
-                    colData.setIssues(columnIssues);
+                    colData.setIssues(columnCards);
                 }
                 colData.setTotalCount(columnTotalCount);
 
                 // 计算该列 estimation 总和
-                BigDecimal estimation = columnIssues.stream()
-                        .map(IssueVO::getEstimatedHours)
+                BigDecimal estimation = columnCards.stream()
+                        .map(BoardCardVO::getEstimatedHours)
                         .filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
                 colData.setTotalEstimation(estimation.compareTo(BigDecimal.ZERO) > 0 ? estimation : null);
@@ -196,9 +212,65 @@ public class BoardDataService {
 
         result.setColumns(columnDataList);
         result.setTotalIssueCount(totalIssueCount);
-        result.setTruncated(allIssues.size() < totalInDb);
+        result.setTruncated(totalInDb >= BOARD_MAX_ISSUES);
 
         return result;
+    }
+
+    /**
+     * 将 BoardCardRow 列表转换为 BoardCardVO 列表。
+     * Long ID 字段统一转为 String（防止 JS 精度丢失）。
+     */
+    private List<BoardCardVO> convertToCardVOs(List<BoardCardRow> rows) {
+        List<BoardCardVO> cards = new ArrayList<>(rows.size());
+        for (BoardCardRow row : rows) {
+            BoardCardVO card = new BoardCardVO();
+            card.setId(String.valueOf(row.getId()));
+            card.setProjectId(String.valueOf(row.getProjectId()));
+            card.setIssueKey(row.getIssueKey());
+            card.setTitle(row.getTitle());
+            card.setIssueType(row.getIssueType());
+            card.setStatusId(String.valueOf(row.getStatusId()));
+            card.setStatusName(row.getStatusName());
+            card.setStatusColor(row.getStatusColor());
+            card.setPriority(row.getPriority());
+            card.setAssigneeId(row.getAssigneeId() != null ? String.valueOf(row.getAssigneeId()) : null);
+            card.setAssigneeName(row.getAssigneeName());
+            card.setAssigneeAvatarUrl(row.getAssigneeAvatarUrl());
+            card.setSprintId(row.getSprintId() != null ? String.valueOf(row.getSprintId()) : null);
+            card.setSprintName(row.getSprintName());
+            card.setDueDate(row.getDueDate());
+            card.setEstimatedHours(row.getEstimatedHours());
+            card.setChildCount(row.getChildCount());
+            card.setChildClosedCount(row.getChildClosedCount());
+            card.setCreatedAt(row.getCreatedAt());
+            card.setResolvedAt(row.getResolvedAt());
+            cards.add(card);
+        }
+        return cards;
+    }
+
+    /**
+     * 按需加载自定义字段值。
+     * 看板卡片始终加载自定义字段详情（与列表行为一致），
+     * 因为卡片模板中会根据 cardConfig.visibleFields 动态展示。
+     */
+    private void loadCustomFieldsForCards(List<BoardCardVO> cards, List<BoardCardRow> rows, BoardCardConfigVO cardConfig) {
+        if (cards.isEmpty()) {
+            return;
+        }
+
+        // 批量加载所有卡片的自定义字段详情
+        List<Long> issueIds = rows.stream().map(BoardCardRow::getId).toList();
+        Map<Long, List<CustomFieldValueVO>> cfDetailsMap = customFieldService.getBatchCustomFieldDetails(issueIds);
+
+        for (int i = 0; i < cards.size(); i++) {
+            Long issueId = rows.get(i).getId();
+            List<CustomFieldValueVO> details = cfDetailsMap.get(issueId);
+            if (details != null && !details.isEmpty()) {
+                cards.get(i).setCustomFieldDetails(details);
+            }
+        }
     }
 
     /**
@@ -284,66 +356,16 @@ public class BoardDataService {
     }
 
     /**
-     * 构建 IssueQuery 对象（每页独立构建以避免状态泄漏）
+     * 按列分组看板卡片
      */
-    private IssueQuery buildIssueQuery(BoardDataQuery query, String statusIdFilter, String columnField, int page, int pageSize) {
-        IssueQuery issueQuery = new IssueQuery();
-        issueQuery.setProjectId(query.getProjectId());
-        if (statusIdFilter != null && !statusIdFilter.isEmpty()) {
-            if ("priority".equals(columnField)) {
-                issueQuery.setPriority(statusIdFilter);
-            } else {
-                issueQuery.setStatusId(statusIdFilter);
-            }
-        }
-        if (query.getSprintId() != null) {
-            issueQuery.setSprintId(String.valueOf(query.getSprintId()));
-        }
-        if (query.getAssigneeId() != null) {
-            issueQuery.setAssigneeId(String.valueOf(query.getAssigneeId()));
-        }
-        if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
-            issueQuery.setKeyword(query.getKeyword());
-        }
-        if (query.getExcludeDoneBeforeAsDate() != null) {
-            issueQuery.setExcludeDoneBefore(query.getExcludeDoneBeforeAsDate());
-        }
-        issueQuery.setPage(page);
-        issueQuery.setPageSize(pageSize);
-        issueQuery.setSort("created_at:desc");
-        return issueQuery;
-    }
-
-    /**
-     * 构建状态 ID 过滤字符串（逗号分隔）
-     */
-    private String buildStatusIdFilter(List<BoardColumnVO> columns, String columnField) {
-        if (columns.isEmpty()) return null;
-
+    private Map<String, List<BoardCardVO>> groupCardsByColumn(List<BoardCardVO> cards, String columnField) {
         if ("priority".equals(columnField)) {
-            return columns.stream()
-                    .map(BoardColumnVO::getFieldValue)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.joining(","));
-        }
-
-        return columns.stream()
-                .map(BoardColumnVO::getStatusId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.joining(","));
-    }
-
-    /**
-     * 按列分组工单
-     */
-    private Map<String, List<IssueVO>> groupIssuesByColumn(List<IssueVO> issues, String columnField) {
-        if ("priority".equals(columnField)) {
-            return issues.stream().collect(Collectors.groupingBy(
-                    i -> i.getPriority() != null ? i.getPriority() : "Normal"
+            return cards.stream().collect(Collectors.groupingBy(
+                    card -> card.getPriority() != null ? card.getPriority() : "Normal"
             ));
         }
-        return issues.stream().collect(Collectors.groupingBy(
-                i -> i.getStatusId() != null ? i.getStatusId() : ""
+        return cards.stream().collect(Collectors.groupingBy(
+                card -> card.getStatusId() != null ? card.getStatusId() : ""
         ));
     }
 

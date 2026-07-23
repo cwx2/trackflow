@@ -1,7 +1,11 @@
 import { ref, computed, watch, onMounted, onUnmounted, type Ref } from 'vue'
-import type { IssueVO } from '@/api/types'
 
-export function useSelection(issues: Ref<IssueVO[]>) {
+/** 最小化的工单接口 — 只要有 id 就能参与选择 */
+interface Selectable {
+  id: string
+}
+
+export function useSelection<T extends Selectable>(issues: Ref<T[]>) {
   const selectedIds = ref<Set<string>>(new Set())
   /** 记录最后一次点击选中的 issue id，用于 Shift+点击范围选择 */
   const lastSelectedId = ref<string | null>(null)

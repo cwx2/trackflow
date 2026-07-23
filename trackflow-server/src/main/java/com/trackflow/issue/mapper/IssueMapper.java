@@ -111,4 +111,28 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * 用于获取已移出 Sprint 的工单进入时间。
      */
     List<IssueCreatedAtRow> selectCreatedAtByIds(@Param("issueIds") List<Long> issueIds);
+
+    /**
+     * 看板卡片精简查询：单次 JOIN 查出卡片渲染所需的全部字段（status_name, assignee_name, sprint_name）。
+     * 替代循环分页 + 逐页 fillXxxInfo 的重量级方式。
+     *
+     * @param projectId        项目 ID（必填）
+     * @param statusIds        可见列的状态 ID 集合（可选，columnField=status 时使用）
+     * @param priorities       可见列的优先级值集合（可选，columnField=priority 时使用）
+     * @param sprintId         Sprint 过滤（可选）
+     * @param assigneeId       负责人过滤（可选）
+     * @param keyword          关键词搜索（可选，搜标题/key）
+     * @param excludeDoneBefore 排除此日期前已完成的工单（可选）
+     * @param limit            最大返回数量（安全上限）
+     */
+    List<BoardCardRow> selectBoardCards(
+            @Param("projectId") Long projectId,
+            @Param("statusIds") List<Long> statusIds,
+            @Param("priorities") List<String> priorities,
+            @Param("sprintId") Long sprintId,
+            @Param("assigneeId") Long assigneeId,
+            @Param("keyword") String keyword,
+            @Param("excludeDoneBefore") java.time.LocalDateTime excludeDoneBefore,
+            @Param("limit") int limit
+    );
 }
