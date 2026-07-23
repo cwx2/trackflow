@@ -10,6 +10,7 @@
     </div>
 
     <DetailTopBar
+      :issue-id="issueId"
       :project-name="projectName"
       :issue-key="issue.issueKey"
       :created-by="createdByName"
@@ -44,6 +45,7 @@
         :readonly="!canEditIssueEffective"
         :can-delete="canDeleteIssue"
         :can-move="canMoveIssue"
+        :show-add-time="projectTimeTrackingEnabled && canLogTime"
         :children="issue.children || []"
         :child-progress="issue.childProgress || null"
         @update-title="onUpdateTitle"
@@ -58,6 +60,7 @@
         @clone="onCloneIssue"
         @move="onMoveIssue"
         @delete="onDeleteIssue"
+        @add-time="openTimeDialog"
       >
         <template #activity>
           <ActivityStream

@@ -30,6 +30,26 @@
                 <template #icon><icon-copy /></template>
                 复制工单 ID
               </a-doption>
+              <a-doption @click="handlePrint">
+                <template #icon><icon-printer /></template>
+                打印工单
+              </a-doption>
+              <a-doption v-if="showAddTime" @click="$emit('add-time')">
+                <template #icon><icon-clock-circle /></template>
+                添加工时记录
+              </a-doption>
+              <a-doption @click="$emit('upload')">
+                <template #icon><icon-upload /></template>
+                上传附件
+              </a-doption>
+              <a-doption @click="$emit('upload-private')">
+                <template #icon><icon-lock /></template>
+                上传私有附件
+              </a-doption>
+              <a-doption @click="handleFindSimilar">
+                <template #icon><icon-search /></template>
+                查找相似工单
+              </a-doption>
               <a-doption @click="$emit('clone')">
                 <template #icon><icon-branch /></template>
                 克隆工单
@@ -167,7 +187,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { IconCopy, IconDelete, IconBranch, IconSwap } from '@arco-design/web-vue/es/icon'
+import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'
@@ -189,6 +209,7 @@ const props = defineProps<{
   readonly?: boolean
   canDelete?: boolean
   canMove?: boolean
+  showAddTime?: boolean
   children?: ChildIssueVO[]
   childProgress?: ChildProgressVO | null
 }>()
@@ -206,6 +227,8 @@ const emit = defineEmits<{
   'clone': []
   'move': []
   'delete': []
+  'add-time': []
+  'find-similar': []
 }>()
 
 const editingTitle = ref(false)
@@ -239,6 +262,18 @@ function createNewTag() {
   emit('create-tag', tagSearch.value.trim())
   showTagPicker.value = false
   tagSearch.value = ''
+}
+
+// --- Show More menu actions ---
+function handlePrint() {
+  window.print()
+}
+
+function handleFindSimilar() {
+  // Open list page in new tab with current issue title as search keyword
+  const keywords = props.title.split(/\s+/).slice(0, 5).join(' ')
+  const url = `/issues?keyword=${encodeURIComponent(keywords)}`
+  window.open(url, '_blank')
 }
 
 function startEditTitle() {
