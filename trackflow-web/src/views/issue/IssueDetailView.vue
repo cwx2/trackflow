@@ -10,7 +10,7 @@
     </div>
 
     <DetailTopBar
-      :issue-id="issueId"
+      :issue-id="issue.id"
       :project-name="projectName"
       :issue-key="issue.issueKey"
       :created-by="createdByName"
