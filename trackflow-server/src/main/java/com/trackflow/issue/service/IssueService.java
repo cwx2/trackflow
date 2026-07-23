@@ -1411,46 +1411,51 @@ public class IssueService {
     /**
      * 获取批量操作中每个状态的可达性信息。
      * 对选中的所有工单，统计每个状态可被多少个工单转换到。
+     * <p>
+     * 性能优化：按 (projectId, issueType, statusId, isAuthor, isAssignee) 分组，
+     * 相同组合的工单共享同一工作流转换结果，将 O(N) 次 DB 调用降至 O(G) 次（G=分组数，通常 2-5）。
      */
     public List<BatchAvailableStatusVO> getBatchAvailableTransitions(List<Long> issueIds) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
-        // 获取所有状态
+        // 1. 批量获取所有工单（1 次 DB 查询）
+        List<Issue> issues = issueMapper.selectBatchIds(issueIds);
+        if (issues.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 获取所有状态（1 次 DB 查询）
         List<IssueStatus> allStatuses = statusMapper.selectList(
                 new LambdaQueryWrapper<IssueStatus>().orderByAsc(IssueStatus::getSortOrder));
 
-        // 获取每个工单的可用转换
-        // Key: statusId, Value: 可以转换到此状态的工单数量
+        // 3. 按 (projectId, issueType, statusId, isAuthor, isAssignee) 分组
+        //    相同组合的工单可用转换完全相同——无需逐个查询
+        Map<String, List<Issue>> groupedIssues = issues.stream()
+                .collect(Collectors.groupingBy(issue -> buildTransitionGroupKey(issue, currentUserId)));
+
+        // 4. 每组只查一次可用转换（通常 2-5 组，最多 G 次 DB）
         Map<Long, Integer> reachabilityMap = new java.util.HashMap<>();
-        for (IssueStatus status : allStatuses) {
-            reachabilityMap.put(status.getId(), 0);
-        }
 
-        // 收集选中工单的当前状态（排除当前状态本身）
-        Set<Long> currentStatusIds = new java.util.HashSet<>();
+        for (Map.Entry<String, List<Issue>> entry : groupedIssues.entrySet()) {
+            Issue representative = entry.getValue().get(0);
+            int groupSize = entry.getValue().size();
 
-        for (Long issueId : issueIds) {
             try {
-                Issue issue = getById(issueId);
-                currentStatusIds.add(issue.getStatusId());
-                List<IssueStatus> available = workflowService.getAvailableTransitions(issue, currentUserId);
-                for (IssueStatus s : available) {
-                    reachabilityMap.merge(s.getId(), 1, Integer::sum);
+                List<IssueStatus> available = workflowService.getAvailableTransitions(representative, currentUserId);
+                for (IssueStatus status : available) {
+                    reachabilityMap.merge(status.getId(), groupSize, Integer::sum);
                 }
             } catch (Exception e) {
-                log.warn("获取工单可用转换失败 issueId={}", issueId, e);
-                // 跳过无法访问的工单
+                log.warn("获取工单可用转换失败 groupKey={}, representativeId={}",
+                        entry.getKey(), representative.getId(), e);
             }
         }
 
-        int totalCount = issueIds.size();
+        // 5. 构建结果
+        int totalCount = issues.size();
         List<BatchAvailableStatusVO> result = new java.util.ArrayList<>();
         for (IssueStatus status : allStatuses) {
             int reachable = reachabilityMap.getOrDefault(status.getId(), 0);
-            // 排除没有任何工单能转换到的状态（除非是当前状态，也排除）
-            if (reachable == 0 && currentStatusIds.contains(status.getId())) {
-                continue; // 当前状态不需要显示在目标列表中
-            }
             if (reachable == 0) {
                 continue; // 完全不可达的状态不显示
             }
@@ -1467,6 +1472,17 @@ public class IssueService {
         }
 
         return result;
+    }
+
+    /**
+     * 构建工作流转换分组 key。
+     * 相同 key 的工单，其可用状态转换完全一致（工作流规则仅依赖这些维度）。
+     */
+    private String buildTransitionGroupKey(Issue issue, Long currentUserId) {
+        boolean isAuthor = currentUserId.equals(issue.getCreatedBy());
+        boolean isAssignee = currentUserId.equals(issue.getAssigneeId());
+        return issue.getProjectId() + ":" + issue.getIssueType() + ":"
+                + issue.getStatusId() + ":" + isAuthor + ":" + isAssignee;
     }
 
     /**
