@@ -47,97 +47,129 @@ public class RateLimitService {
 
     /**
      * 检查某 IP 是否已被封禁（认证失败过多）。
+     * <p>
+     * Redis 不可用时降级为"未封禁"（fail-open），优先保证系统可用性。
      *
      * @param clientIp 客户端 IP
      * @return true 表示已被封禁，应直接返回 429
      */
     public boolean isAuthBanned(String clientIp) {
-        String banKey = KEY_AUTH_BAN + clientIp;
-        return Boolean.TRUE.equals(redisTemplate.hasKey(banKey));
+        try {
+            String banKey = KEY_AUTH_BAN + clientIp;
+            return Boolean.TRUE.equals(redisTemplate.hasKey(banKey));
+        } catch (Exception e) {
+            log.warn("Redis rate limit check failed (isAuthBanned), degrading to no-limit: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
      * 记录一次认证失败并判断是否触发封禁。
      * <p>
      * 使用 Redis INCR + EXPIRE 实现简单窗口计数。当失败次数超过阈值时设置封禁标记。
+     * Redis 不可用时降级为"不记录"（fail-open），优先保证系统可用性。
      *
      * @param clientIp 客户端 IP
      * @return true 表示此次失败后触发了封禁
      */
     public boolean recordAuthFailure(String clientIp) {
-        String failKey = KEY_AUTH_FAILURE + clientIp;
+        try {
+            String failKey = KEY_AUTH_FAILURE + clientIp;
 
-        Long count = redisTemplate.opsForValue().increment(failKey);
-        if (count == null) {
+            Long count = redisTemplate.opsForValue().increment(failKey);
+            if (count == null) {
+                return false;
+            }
+
+            // 首次写入时设置过期时间
+            if (count == 1) {
+                redisTemplate.expire(failKey, Duration.ofSeconds(AUTH_FAILURE_WINDOW_SECONDS));
+            }
+
+            // 检查是否超过阈值
+            if (count >= AUTH_FAILURE_MAX_ATTEMPTS) {
+                // 设置封禁标记
+                String banKey = KEY_AUTH_BAN + clientIp;
+                redisTemplate.opsForValue().set(banKey, String.valueOf(count),
+                        Duration.ofSeconds(AUTH_BAN_DURATION_SECONDS));
+                // 清除失败计数（已封禁，不再需要计数）
+                redisTemplate.delete(failKey);
+
+                log.warn("IP {} banned for {} seconds after {} auth failures",
+                        clientIp, AUTH_BAN_DURATION_SECONDS, count);
+                return true;
+            }
+
+            return false;
+        } catch (Exception e) {
+            log.warn("Redis rate limit record failed (recordAuthFailure), skipping: {}", e.getMessage());
             return false;
         }
-
-        // 首次写入时设置过期时间
-        if (count == 1) {
-            redisTemplate.expire(failKey, Duration.ofSeconds(AUTH_FAILURE_WINDOW_SECONDS));
-        }
-
-        // 检查是否超过阈值
-        if (count >= AUTH_FAILURE_MAX_ATTEMPTS) {
-            // 设置封禁标记
-            String banKey = KEY_AUTH_BAN + clientIp;
-            redisTemplate.opsForValue().set(banKey, String.valueOf(count),
-                    Duration.ofSeconds(AUTH_BAN_DURATION_SECONDS));
-            // 清除失败计数（已封禁，不再需要计数）
-            redisTemplate.delete(failKey);
-
-            log.warn("IP {} banned for {} seconds after {} auth failures",
-                    clientIp, AUTH_BAN_DURATION_SECONDS, count);
-            return true;
-        }
-
-        return false;
     }
 
     /**
      * 检查全局 API 频率限制。
      * <p>
      * 同一 IP 每分钟最多 {@link #GLOBAL_API_MAX_REQUESTS} 次请求。
+     * Redis 不可用时降级为"不限流"（fail-open），优先保证系统可用性。
      *
      * @param clientIp 客户端 IP
      * @return true 表示超过限制，应返回 429
      */
     public boolean isGlobalApiLimited(String clientIp) {
-        String apiKey = KEY_GLOBAL_API + clientIp;
+        try {
+            String apiKey = KEY_GLOBAL_API + clientIp;
 
-        Long count = redisTemplate.opsForValue().increment(apiKey);
-        if (count == null) {
+            Long count = redisTemplate.opsForValue().increment(apiKey);
+            if (count == null) {
+                return false;
+            }
+
+            // 首次写入时设置过期时间
+            if (count == 1) {
+                redisTemplate.expire(apiKey, Duration.ofSeconds(GLOBAL_API_WINDOW_SECONDS));
+            }
+
+            return count > GLOBAL_API_MAX_REQUESTS;
+        } catch (Exception e) {
+            log.warn("Redis rate limit check failed (isGlobalApiLimited), degrading to no-limit: {}", e.getMessage());
             return false;
         }
-
-        // 首次写入时设置过期时间
-        if (count == 1) {
-            redisTemplate.expire(apiKey, Duration.ofSeconds(GLOBAL_API_WINDOW_SECONDS));
-        }
-
-        return count > GLOBAL_API_MAX_REQUESTS;
     }
 
     /**
      * 认证成功后清除该 IP 的失败计数（正常用户不应被误封）。
+     * <p>
+     * Redis 不可用时静默跳过（不影响正常认证流程）。
      *
      * @param clientIp 客户端 IP
      */
     public void clearAuthFailures(String clientIp) {
-        String failKey = KEY_AUTH_FAILURE + clientIp;
-        redisTemplate.delete(failKey);
+        try {
+            String failKey = KEY_AUTH_FAILURE + clientIp;
+            redisTemplate.delete(failKey);
+        } catch (Exception e) {
+            log.warn("Redis rate limit clear failed (clearAuthFailures), skipping: {}", e.getMessage());
+        }
     }
 
     /**
      * 获取封禁剩余时间（秒）。
+     * <p>
+     * Redis 不可用时返回 0（即无封禁）。
      *
      * @param clientIp 客户端 IP
-     * @return 剩余秒数，如果未被封禁返回 0
+     * @return 剩余秒数，如果未被封禁或 Redis 不可用返回 0
      */
     public long getBanRemainingSeconds(String clientIp) {
-        String banKey = KEY_AUTH_BAN + clientIp;
-        Long ttl = redisTemplate.getExpire(banKey);
-        return (ttl != null && ttl > 0) ? ttl : 0;
+        try {
+            String banKey = KEY_AUTH_BAN + clientIp;
+            Long ttl = redisTemplate.getExpire(banKey);
+            return (ttl != null && ttl > 0) ? ttl : 0;
+        } catch (Exception e) {
+            log.warn("Redis rate limit check failed (getBanRemainingSeconds), returning 0: {}", e.getMessage());
+            return 0;
+        }
     }
 
     /**
