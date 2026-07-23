@@ -43,6 +43,14 @@ public class SprintVO {
     /** 未分配负责人的工单数（assignee_id IS NULL） */
     private int unassignedIssues;
 
+    // ===== 激活快照 =====
+    /** Sprint 实际激活时间 */
+    private LocalDateTime startedAt;
+    /** 激活时的总预估工时快照 */
+    private Double startScopeHours;
+    /** 激活时的工单数量快照 */
+    private Integer startScopeIssues;
+
     // ===== 工时统计 =====
     /** 该 Sprint 所有工单的预估总工时（estimated_hours 之和） */
     private double totalEstimatedHours;

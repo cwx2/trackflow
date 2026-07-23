@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 燃尽图数据 VO
+ * 燃尽图数据 VO — 支持工单数模式和估时模式
  */
 @Data
 public class BurndownVO {
@@ -15,11 +15,11 @@ public class BurndownVO {
     private String sprintName;
     /** X 轴日期列表 (yyyy-MM-dd) */
     private List<String> dates;
-    /** 理想线：基于 Sprint 开始时的工单数线性递减 */
+    /** 理想线：基于 Sprint 开始时的工单数/工时线性递减 */
     private List<Double> idealLine;
-    /** 实际线：每天的实际剩余工单数（scope - resolved，仅到今天） */
+    /** 实际线：每天的实际剩余工单数/工时（scope - resolved，仅到今天） */
     private List<Integer> actualLine;
-    /** 范围线：每天的实际工单总数（追踪 scope change） */
+    /** 范围线：每天的实际工单总数/总工时（追踪 scope change） */
     private List<Integer> scopeLine;
     /** 今天在 dates 数组中的索引（-1 表示不在 Sprint 范围内） */
     private int todayIndex;
@@ -31,4 +31,10 @@ public class BurndownVO {
     private Double velocity;
     /** 按当前速率预测的完成日期 (yyyy-MM-dd)，null 表示速率为 0 */
     private String forecastDate;
+
+    // ===== 估时模式字段 =====
+    /** Sprint 激活时的总预估工时快照 */
+    private Double startScopeHours;
+    /** 当前模式: "issue_count" 或 "estimation" */
+    private String mode;
 }

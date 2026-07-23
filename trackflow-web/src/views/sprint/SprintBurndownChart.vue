@@ -4,15 +4,26 @@
       <div class="burndown-title">
         <span class="chart-icon">📉</span>
         <span class="chart-label">燃尽图</span>
+        <a-radio-group
+          v-model="currentMode"
+          size="mini"
+          type="button"
+          class="mode-switch"
+          @change="onModeChange"
+        >
+          <a-radio value="issue_count">工单数</a-radio>
+          <a-radio value="estimation">工时</a-radio>
+        </a-radio-group>
       </div>
       <div class="burndown-meta" v-if="burndownData">
         <span class="meta-item" v-if="burndownData.velocity > 0">
           <span class="meta-label">日均速率</span>
-          <span class="meta-value">{{ burndownData.velocity }} 工单/天</span>
+          <span class="meta-value">{{ burndownData.velocity }} {{ modeUnit }}/天</span>
         </span>
         <span class="meta-item" v-if="hasScopeChange">
           <span class="meta-label">起始/当前</span>
-          <span class="meta-value scope-change">{{ burndownData.startScopeIssues }} → {{ burndownData.totalIssues }}</span>
+          <span class="meta-value scope-change" v-if="currentMode === 'issue_count'">{{ burndownData.startScopeIssues }} → {{ burndownData.totalIssues }}</span>
+          <span class="meta-value scope-change" v-else>{{ formatHours(burndownData.startScopeHours) }}h</span>
         </span>
         <span class="meta-item forecast" v-if="burndownData.forecastDate && !isCompleted">
           <span class="meta-label">预计完成</span>
@@ -63,6 +74,9 @@ const props = defineProps<{
 const burndownData = ref<SprintBurndownVO | null>(null)
 const loading = ref(false)
 const error = ref(false)
+const currentMode = ref<'issue_count' | 'estimation'>('issue_count')
+
+const modeUnit = computed(() => currentMode.value === 'estimation' ? '小时' : '工单')
 
 const isForecastLate = computed(() => {
   if (!burndownData.value?.forecastDate || !props.sprintEndDate) return false
@@ -71,12 +85,24 @@ const isForecastLate = computed(() => {
 
 const hasScopeChange = computed(() => {
   if (!burndownData.value) return false
+  if (currentMode.value === 'estimation') {
+    return burndownData.value.startScopeHours != null && burndownData.value.startScopeHours > 0
+  }
   return burndownData.value.startScopeIssues !== burndownData.value.totalIssues
 })
+
+function formatHours(hours?: number): string {
+  if (hours == null) return '0'
+  return hours % 1 === 0 ? String(hours) : hours.toFixed(1)
+}
 
 function formatForecastDate(dateStr: string): string {
   const d = new Date(dateStr)
   return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function onModeChange() {
+  loadData()
 }
 
 const chartOption = computed(() => {
@@ -173,13 +199,14 @@ const chartOption = computed(() => {
         if (!params || params.length === 0) return ''
         const dateIdx = params[0].dataIndex
         const fullDate = dates[dateIdx]
+        const unit = currentMode.value === 'estimation' ? '小时' : '工单'
         let html = `<div style="font-weight:500;margin-bottom:4px">${fullDate}</div>`
         for (const p of params) {
           if (p.value !== undefined) {
-            const unit = p.seriesName === '范围' ? '工单（总范围）' : '工单'
+            const seriesUnit = p.seriesName === '范围' ? `${unit}（总范围）` : unit
             html += `<div style="display:flex;align-items:center;gap:6px;">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
-              <span>${p.seriesName}：<b>${p.value}</b> ${unit}</span>
+              <span>${p.seriesName}：<b>${p.value}</b> ${seriesUnit}</span>
             </div>`
           }
         }
@@ -222,7 +249,7 @@ async function loadData() {
   loading.value = true
   error.value = false
   try {
-    const res = await sprintApi.burndown(props.sprintId)
+    const res = await sprintApi.burndown(props.sprintId, currentMode.value)
     burndownData.value = res.data
   } catch {
     error.value = true
@@ -268,6 +295,17 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text-1);
+}
+
+.mode-switch {
+  margin-left: 12px;
+}
+
+.mode-switch :deep(.arco-radio-button) {
+  font-size: 11px;
+  padding: 0 8px;
+  height: 22px;
+  line-height: 22px;
 }
 
 .burndown-meta {

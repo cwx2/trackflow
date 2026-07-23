@@ -3,7 +3,7 @@
 -- 参考 YouTrack: 每个项目可以独立管理其属性值子集
 
 -- 1. 创建属性值-项目关联表
-CREATE TABLE work_item_attribute_value_project (
+CREATE TABLE IF NOT EXISTS work_item_attribute_value_project (
     id          BIGSERIAL PRIMARY KEY,
     value_id    BIGINT NOT NULL REFERENCES work_item_attribute_value(id) ON DELETE CASCADE,
     project_id  BIGINT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
@@ -13,8 +13,8 @@ CREATE TABLE work_item_attribute_value_project (
 );
 
 -- 2. 添加索引
-CREATE INDEX idx_wavp_value_id ON work_item_attribute_value_project(value_id);
-CREATE INDEX idx_wavp_project_id ON work_item_attribute_value_project(project_id);
+CREATE INDEX IF NOT EXISTS idx_wavp_value_id ON work_item_attribute_value_project(value_id);
+CREATE INDEX IF NOT EXISTS idx_wavp_project_id ON work_item_attribute_value_project(project_id);
 
 -- 3. 数据迁移：为所有现有的属性-项目关联，自动生成对应的值-项目关联
 -- 逻辑：如果属性A关联了项目P，则属性A的所有值也自动关联到项目P

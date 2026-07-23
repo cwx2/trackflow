@@ -27,6 +27,7 @@ public class SprintController {
     private final SprintService sprintService;
     private final SprintConverter sprintConverter;
 
+
     @GetMapping("/api/v1/projects/{projectId}/sprints")
     @PreAuthorize("@perm.check(#projectId, 'sprint:view')")
     public R<List<SprintVO>> list(@PathVariable("projectId") Long projectId) {
@@ -90,8 +91,9 @@ public class SprintController {
 
     @GetMapping("/api/v1/sprints/{id}/burndown")
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
-    public R<BurndownVO> burndown(@PathVariable("id") Long id) {
-        return R.ok(sprintService.getBurndownData(id));
+    public R<BurndownVO> burndown(@PathVariable("id") Long id,
+                                  @RequestParam(value = "mode", defaultValue = "issue_count") String mode) {
+        return R.ok(sprintService.getBurndownData(id, mode));
     }
 
     @PutMapping("/api/v1/sprints/{id}/archive")

@@ -68,8 +68,10 @@ export const sprintApi = {
   },
 
   /** 获取 Sprint 燃尽图数据 */
-  burndown(id: string) {
-    return request.get<any, R<SprintBurndownVO>>(`/sprints/${id}/burndown`)
+  burndown(id: string, mode?: 'issue_count' | 'estimation') {
+    return request.get<any, R<SprintBurndownVO>>(`/sprints/${id}/burndown`, {
+      params: mode ? { mode } : undefined
+    })
   },
 
   /** 获取 Sprint 负责人工作量分布 */

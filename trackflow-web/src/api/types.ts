@@ -463,6 +463,12 @@ export interface SprintVO {
   totalEstimatedHours: number
   /** 该 Sprint 已完成工单的预估工时总和 */
   completedEstimatedHours: number
+  /** Sprint 实际激活时间 */
+  startedAt?: string
+  /** 激活时的总预估工时快照 */
+  startScopeHours?: number
+  /** 激活时的工单数量快照 */
+  startScopeIssues?: number
 }
 
 /** Sprint 燃尽图数据 */
@@ -471,11 +477,11 @@ export interface SprintBurndownVO {
   sprintName: string
   /** X 轴日期列表 (yyyy-MM-dd) */
   dates: string[]
-  /** 理想线：基于 Sprint 开始时的工单数线性递减 */
+  /** 理想线：基于 Sprint 开始时的工单数/工时线性递减 */
   idealLine: number[]
-  /** 实际线：每天的实际剩余工单数（scope - resolved，仅到今天） */
+  /** 实际线：每天的实际剩余工单数/工时（scope - resolved，仅到今天） */
   actualLine: number[]
-  /** 范围线：每天的实际工单总数（追踪 scope change） */
+  /** 范围线：每天的实际工单总数/总工时（追踪 scope change） */
   scopeLine: number[]
   /** 今天在 dates 中的索引（-1 = 不在范围内） */
   todayIndex: number
@@ -487,6 +493,10 @@ export interface SprintBurndownVO {
   velocity: number
   /** 预测完成日期 (yyyy-MM-dd)，null 表示速率为 0 */
   forecastDate: string | null
+  /** Sprint 激活时的总预估工时快照 */
+  startScopeHours?: number
+  /** 当前模式: "issue_count" 或 "estimation" */
+  mode?: string
 }
 
 /** Sprint 负责人工作量分布 */
