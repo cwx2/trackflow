@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CustomFieldValueService {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper JACKSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
     private final CustomFieldDefinitionMapper definitionMapper;
     private final CustomFieldValueMapper valueMapper;
     private final CustomFieldOptionMapper optionMapper;
@@ -361,6 +363,180 @@ public class CustomFieldValueService {
                 String displayNewValue = displayService.resolveDisplayValue(field, newValue);
                 recordCustomFieldActivity(issueId, field.getName(), displayOldValue, displayNewValue);
             }
+        }
+    }
+
+    /**
+     * 级联清除依赖字段的失效值。
+     * <p>
+     * 当源字段（filterFieldId）的值变更后，检查同项目中所有依赖该字段进行值过滤的字段，
+     * 如果依赖字段当前存储的值不在新过滤规则允许的选项集合中，则自动清除并记录活动日志。
+     * <p>
+     * 对标 YouTrack 行为："If a user selects a value in the dependent field that does not match
+     * the current filtering conditions, the system automatically clears the value for the dependent field."
+     *
+     * @param issueId      工单 ID
+     * @param sourceFieldId 刚被修改的源字段 ID
+     * @param newSourceValue 源字段的新值
+     * @param projectId    项目 ID
+     * @return 被级联清除的字段名称列表（用于前端提示）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> cascadeClearDependentValues(Long issueId, Long sourceFieldId, String newSourceValue, Long projectId) {
+        // 查找所有依赖此源字段的 custom_field_project 记录
+        List<CustomFieldProject> dependents = projectMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getProjectId, projectId)
+                        .eq(CustomFieldProject::getFilterFieldId, sourceFieldId)
+                        .isNotNull(CustomFieldProject::getFilterRules));
+
+        if (dependents.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> clearedFieldNames = new ArrayList<>();
+
+        for (CustomFieldProject dep : dependents) {
+            Long depFieldId = dep.getCustomFieldId();
+            String filterRulesJson = dep.getFilterRules();
+
+            // 解析 filterRules 确定允许的选项 ID 集
+            Set<String> allowedOptionIds = resolveAllowedOptions(filterRulesJson, newSourceValue);
+
+            // 如果 allowedOptionIds 为 null，表示无限制（不清除）
+            if (allowedOptionIds == null) {
+                continue;
+            }
+
+            // 获取该依赖字段当前的存储值
+            List<CustomFieldValue> storedValues = valueMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldValue>()
+                            .eq(CustomFieldValue::getIssueId, issueId)
+                            .eq(CustomFieldValue::getCustomFieldId, depFieldId));
+
+            if (storedValues.isEmpty()) {
+                continue;
+            }
+
+            // 检查存储值是否在允许集合中
+            List<CustomFieldValue> invalidValues = storedValues.stream()
+                    .filter(v -> v.getValue() != null && !allowedOptionIds.contains(v.getValue()))
+                    .toList();
+
+            if (invalidValues.isEmpty()) {
+                continue;
+            }
+
+            // 清除无效值
+            CustomFieldDefinition fieldDef = definitionMapper.selectById(depFieldId);
+            String fieldName = fieldDef != null ? fieldDef.getName() : "ID:" + depFieldId;
+
+            // 记录活动日志
+            if (fieldDef != null) {
+                boolean isMulti = Boolean.TRUE.equals(fieldDef.getIsMulti());
+                if (isMulti) {
+                    List<String> oldVals = storedValues.stream().map(CustomFieldValue::getValue).toList();
+                    List<String> remainingVals = storedValues.stream()
+                            .filter(v -> v.getValue() != null && allowedOptionIds.contains(v.getValue()))
+                            .map(CustomFieldValue::getValue)
+                            .toList();
+                    String displayOld = displayService.resolveMultiDisplayValue(fieldDef, oldVals);
+                    String displayNew = remainingVals.isEmpty() ? null : displayService.resolveMultiDisplayValue(fieldDef, remainingVals);
+                    recordCustomFieldActivity(issueId, fieldName, displayOld, displayNew);
+
+                    // 删除无效值记录
+                    List<Long> invalidIds = invalidValues.stream().map(CustomFieldValue::getId).toList();
+                    valueMapper.deleteBatchIds(invalidIds);
+                } else {
+                    String oldVal = storedValues.get(0).getValue();
+                    String displayOld = displayService.resolveDisplayValue(fieldDef, oldVal);
+                    recordCustomFieldActivity(issueId, fieldName, displayOld, null);
+
+                    // 删除值记录
+                    valueMapper.deleteById(storedValues.get(0).getId());
+                }
+            } else {
+                // 字段定义不存在（理论上不会发生），直接删除
+                List<Long> invalidIds = invalidValues.stream().map(CustomFieldValue::getId).toList();
+                valueMapper.deleteBatchIds(invalidIds);
+            }
+
+            clearedFieldNames.add(fieldName);
+            log.info("Issue {}: cascade cleared field '{}' (value no longer valid after source field {} changed to '{}')",
+                    issueId, fieldName, sourceFieldId, newSourceValue);
+        }
+
+        return clearedFieldNames;
+    }
+
+    /**
+     * 解析 filterRules JSON，根据源字段新值确定允许的选项 ID 集合。
+     *
+     * @param filterRulesJson filterRules JSON 字符串，格式: [{"whenValue":"optId1","showOnly":["optId3","optId4"]}]
+     * @param sourceValue     源字段的当前值
+     * @return 允许的选项 ID 集合；null 表示无限制（不需要清除）
+     */
+    private Set<String> resolveAllowedOptions(String filterRulesJson, String sourceValue) {
+        if (filterRulesJson == null || filterRulesJson.isBlank()) {
+            return null; // 无规则 → 无限制
+        }
+
+        List<Map<String, Object>> rules = parseFilterRules(filterRulesJson);
+        if (rules.isEmpty()) {
+            return null;
+        }
+
+        // 如果源字段为空/null，则没有激活的规则 → 所有选项有效
+        if (sourceValue == null || sourceValue.isBlank()) {
+            return null;
+        }
+
+        // 查找匹配当前源值的规则
+        for (Map<String, Object> rule : rules) {
+            String whenValue = (String) rule.get("whenValue");
+            if (sourceValue.equals(whenValue)) {
+                @SuppressWarnings("unchecked")
+                List<String> showOnly = (List<String>) rule.get("showOnly");
+                if (showOnly != null && !showOnly.isEmpty()) {
+                    return new HashSet<>(showOnly);
+                }
+                return null; // 规则匹配但 showOnly 为空 → 无限制
+            }
+        }
+
+        // 没有匹配规则 → 无限制（所有选项有效）
+        return null;
+    }
+
+    /**
+     * 解析 filterRules JSON 为结构化的 rule 列表。
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseFilterRules(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        String trimmed = json.trim();
+        if (!trimmed.startsWith("[")) return List.of();
+
+        try {
+            List<Map<String, Object>> result = new ArrayList<>();
+            com.fasterxml.jackson.databind.ObjectMapper mapper = JACKSON_MAPPER;
+            List<Map<String, Object>> parsed = mapper.readValue(trimmed,
+                    mapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            for (Map<String, Object> item : parsed) {
+                if (item.containsKey("whenValue")) {
+                    Map<String, Object> rule = new HashMap<>();
+                    rule.put("whenValue", String.valueOf(item.get("whenValue")));
+                    Object showOnlyRaw = item.get("showOnly");
+                    if (showOnlyRaw instanceof List<?> list) {
+                        rule.put("showOnly", list.stream().map(String::valueOf).toList());
+                    }
+                    result.add(rule);
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("Failed to parse filterRules JSON: {}", json, e);
+            return List.of();
         }
     }
 

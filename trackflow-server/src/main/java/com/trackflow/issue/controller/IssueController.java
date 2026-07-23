@@ -82,6 +82,7 @@ public class IssueController {
     /**
      * 更新单个自定义字段值（内联编辑）。
      * 单值字段传 { "value": "xxx" }，多值字段传 { "values": ["id1","id2"] }。
+     * 如果该字段是其他字段的值过滤源，会级联清除依赖字段中不再有效的值。
      */
     @PutMapping("/{id}/custom-fields/{fieldId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
@@ -101,8 +102,17 @@ public class IssueController {
         } else {
             effectiveValue = dto.getValue();
         }
-        customFieldService.saveSingleValue(id, fieldId, effectiveValue, issue.getIssueType(), issue.getProjectId());
-        return R.ok(issueService.getDetail(id));
+        List<String> cascadeCleared = customFieldService.saveSingleValue(id, fieldId, effectiveValue, issue.getIssueType(), issue.getProjectId());
+
+        IssueDetailVO detail = issueService.getDetail(id);
+
+        if (!cascadeCleared.isEmpty()) {
+            List<String> warnings = cascadeCleared.stream()
+                    .map(name -> "字段「" + name + "」的值已自动清除（不再匹配过滤条件）")
+                    .toList();
+            return R.okWithWarnings(detail, warnings);
+        }
+        return R.ok(detail);
     }
 
     @DeleteMapping("/{id}")

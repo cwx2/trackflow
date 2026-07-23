@@ -445,6 +445,11 @@ public class CustomFieldService {
         optionService.reorderOptions(fieldId, optionIds);
     }
 
+    /** 委托给 {@link CustomFieldOptionService}：设置字段选项排序模式 */
+    public void setSortMode(Long fieldId, String sortMode) {
+        optionService.setSortMode(fieldId, sortMode);
+    }
+
     /** 委托给 {@link CustomFieldOptionService} */
     public void setOptionArchived(Long fieldId, Long optionId, boolean archived) {
         optionService.setOptionArchived(fieldId, optionId, archived);
@@ -467,26 +472,53 @@ public class CustomFieldService {
         return valueService.applyDefaultsAndValidate(userProvided, issueType, projectId, applicableFields);
     }
 
-    /** 委托给 {@link CustomFieldValueService} */
+    /** 委托给 {@link CustomFieldValueService}，并触发级联清除 */
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
         valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields);
+        // 级联清除：每个被修改的字段都可能是其他字段的 filterFieldId
+        cascadeClearForBatch(issueId, fieldValues, projectId);
     }
 
-    /** 委托给 {@link CustomFieldValueService} */
+    /** 委托给 {@link CustomFieldValueService}，并触发级联清除 */
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            CustomFieldValidateMode mode) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
         valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields, mode);
+        // 级联清除
+        cascadeClearForBatch(issueId, fieldValues, projectId);
     }
 
-    /** 委托给 {@link CustomFieldValueService} */
+    /**
+     * 对批量保存中修改的每个字段执行级联清除。
+     * 使用 Set 防止同一字段被重复清除（A→B→A 循环场景保护）。
+     */
+    private void cascadeClearForBatch(Long issueId, Map<Long, String> fieldValues, Long projectId) {
+        if (fieldValues == null || fieldValues.isEmpty()) return;
+        Set<Long> processedFields = new HashSet<>(fieldValues.keySet());
+        for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
+            List<String> cleared = valueService.cascadeClearDependentValues(issueId, entry.getKey(), entry.getValue(), projectId);
+            // 如果级联清除了某个字段，该字段又可能是别的字段的源 → 继续传播
+            // 但为防止无限循环，不做递归传播（YouTrack 也仅做一层级联）
+            if (!cleared.isEmpty()) {
+                log.debug("Batch save cascade cleared fields: {} (source field: {})", cleared, entry.getKey());
+            }
+        }
+    }
+
+    /**
+     * 保存单个字段值，并触发级联清除依赖字段的失效值。
+     *
+     * @return 被级联清除的字段名称列表（空列表表示无级联清除发生）
+     */
     @Transactional(rollbackFor = Exception.class)
-    public void saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId) {
+    public List<String> saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
         valueService.saveSingleValue(issueId, customFieldId, value, issueType, projectId, applicableFields);
+        // 级联清除：如果被修改的字段是其他字段的 filterFieldId，清除失效的依赖值
+        return valueService.cascadeClearDependentValues(issueId, customFieldId, value, projectId);
     }
 
     /** 委托给 {@link CustomFieldValueService} */

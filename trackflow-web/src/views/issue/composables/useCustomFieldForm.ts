@@ -112,6 +112,69 @@ export function useCustomFieldForm(
     return errors
   }
 
+  /**
+   * 当源字段值变化时，级联清除依赖字段中不再有效的值。
+   * 对标 YouTrack: "If a user selects a value in the dependent field that does not match
+   * the current filtering conditions, the system automatically clears the value."
+   */
+  function cascadeClearOnSourceChange(sourceFieldId: string, newSourceValue: string) {
+    for (const field of allFields.value) {
+      if (field.filterFieldId !== sourceFieldId || !field.filterRules) continue
+
+      try {
+        const rules: { whenValue: string; showOnly: string[] }[] = JSON.parse(field.filterRules)
+        if (!rules || rules.length === 0) continue
+
+        if (!newSourceValue) continue // 源字段清空时不做限制
+
+        const matchedRule = rules.find(r => r.whenValue === newSourceValue)
+        if (!matchedRule || !matchedRule.showOnly || matchedRule.showOnly.length === 0) continue
+
+        const allowedSet = new Set(matchedRule.showOnly)
+        const currentValue = values.value[field.id]
+
+        if (!currentValue) continue
+
+        // 多值字段：逐个检查
+        if (field.isMulti && currentValue.includes(',')) {
+          const currentIds = currentValue.split(',').filter(s => s.trim())
+          const validIds = currentIds.filter(id => allowedSet.has(id))
+          if (validIds.length < currentIds.length) {
+            values.value[field.id] = validIds.join(',')
+          }
+        } else {
+          // 单值字段
+          if (!allowedSet.has(currentValue)) {
+            values.value[field.id] = ''
+          }
+        }
+      } catch {
+        // filterRules 解析失败 → 跳过
+      }
+    }
+  }
+
+  // 监听 values 变化，触发级联清除（用 deep watch + 防止无限循环）
+  let cascadeGuard = false
+  let prevValues: Record<string, string> = {}
+  watch(values, (newVals) => {
+    if (cascadeGuard) return
+
+    // 找出变化的字段
+    for (const fieldId of Object.keys(newVals)) {
+      if (newVals[fieldId] !== prevValues[fieldId]) {
+        // 检查该字段是否是某个字段的 filterFieldId
+        const hasDependents = allFields.value.some(f => f.filterFieldId === fieldId)
+        if (hasDependents) {
+          cascadeGuard = true
+          cascadeClearOnSourceChange(fieldId, newVals[fieldId] || '')
+          cascadeGuard = false
+        }
+      }
+    }
+    prevValues = { ...newVals }
+  }, { deep: true })
+
   // 当项目或类型变化时重新加载字段
   watch([projectId, issueType], () => {
     fetchFields()

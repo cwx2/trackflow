@@ -1218,8 +1218,12 @@ async function onEditField(key: string, newValue: string | string[]) {
   if (key.startsWith('cf_')) {
     const fieldId = key.substring(3)
     try {
-      await issueApi.updateCustomFieldValue(issue.value!.id, fieldId, newValue)
+      const res = await issueApi.updateCustomFieldValue(issue.value!.id, fieldId, newValue)
       await loadAll()
+      // 显示级联清除警告（源字段值变更导致依赖字段值被自动清除）
+      if (res.warnings?.length) {
+        res.warnings.forEach((w: string) => Message.info({ content: w, duration: 5000 }))
+      }
       Message.success('已更新')
     } catch (e: any) { handleUpdateError(e) }
     return
