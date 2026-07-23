@@ -76,7 +76,7 @@ public class IssueController {
         if (result.statusAutoReset()) {
             detail.setStatusAutoReset(true);
         }
-        return R.ok(detail);
+        return R.okWithWarnings(detail, result.warnings());
     }
 
     /**

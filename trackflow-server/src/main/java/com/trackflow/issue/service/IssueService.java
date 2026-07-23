@@ -61,9 +61,13 @@ import java.util.stream.Collectors;
 public class IssueService {
 
     /**
-     * Update 操作结果，包含更新后的实体和附加标志
+     * Update 操作结果，包含更新后的实体、附加标志和字段级警告
      */
-    public record UpdateResult(Issue issue, boolean statusAutoReset) {}
+    public record UpdateResult(Issue issue, boolean statusAutoReset, java.util.List<String> warnings) {
+        public UpdateResult(Issue issue, boolean statusAutoReset) {
+            this(issue, statusAutoReset, java.util.List.of());
+        }
+    }
 
     private final IssueMapper issueMapper;
     private final IssueStatusMapper statusMapper;
@@ -821,6 +825,7 @@ public class IssueService {
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
         boolean statusAutoReset = false;
+        List<String> warnings = new java.util.ArrayList<>();
 
         // 收集旧值快照——在字段赋值之前记录，供规则引擎事件使用
         Map<String, String> oldValues = new java.util.HashMap<>();
@@ -920,27 +925,31 @@ public class IssueService {
         if (dto.getSprintId() != null) {
             // Sprint 修改需要 sprint:edit 权限（仅 project_admin 具有）
             if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")) {
-                throw new BusinessException(ErrorCode.ACCESS_DENIED, "修改迭代需要 sprint:edit 权限");
+                // 权限不足时跳过 Sprint 字段并收集警告（不阻塞其他合法字段更新）
+                warnings.add("Sprint 修改被跳过：需要 sprint:edit 权限");
+                log.info("Issue {} sprint update skipped: user {} lacks sprint:edit permission on project {}",
+                        id, currentUserId, issue.getProjectId());
+            } else {
+                String oldSprintId = null;
+                String oldSprintName = null;
+                if (issue.getSprintId() != null) {
+                    var oldSprint = sprintMapper.selectById(issue.getSprintId());
+                    oldSprintId = String.valueOf(issue.getSprintId());
+                    oldSprintName = oldSprint != null ? oldSprint.getName() : null;
+                }
+                String newSprintId = null;
+                String newSprintName = null;
+                if (dto.getSprintId() != 0) {
+                    var newSprint = sprintMapper.selectById(dto.getSprintId());
+                    newSprintId = String.valueOf(dto.getSprintId());
+                    newSprintName = newSprint != null ? newSprint.getName() : null;
+                }
+                recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
+                // 0 means "clear sprint" → set to null (DB convention: sprint_id IS NULL for Backlog)
+                issue.setSprintId(dto.getSprintId() == 0 ? null : dto.getSprintId());
+                // 收集迭代变更
+                fieldChanges.put("sprint", new String[]{oldSprintName, newSprintName});
             }
-            String oldSprintId = null;
-            String oldSprintName = null;
-            if (issue.getSprintId() != null) {
-                var oldSprint = sprintMapper.selectById(issue.getSprintId());
-                oldSprintId = String.valueOf(issue.getSprintId());
-                oldSprintName = oldSprint != null ? oldSprint.getName() : null;
-            }
-            String newSprintId = null;
-            String newSprintName = null;
-            if (dto.getSprintId() != 0) {
-                var newSprint = sprintMapper.selectById(dto.getSprintId());
-                newSprintId = String.valueOf(dto.getSprintId());
-                newSprintName = newSprint != null ? newSprint.getName() : null;
-            }
-            recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
-            // 0 means "clear sprint" → set to null (DB convention: sprint_id IS NULL for Backlog)
-            issue.setSprintId(dto.getSprintId() == 0 ? null : dto.getSprintId());
-            // 收集迭代变更
-            fieldChanges.put("sprint", new String[]{oldSprintName, newSprintName});
         }
         if (dto.getParentId() != null) {
             Long oldParentId = issue.getParentId();
@@ -1038,7 +1047,7 @@ public class IssueService {
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(issue.getProjectId(), "issue_updated"));
 
-        return new UpdateResult(issue, statusAutoReset);
+        return new UpdateResult(issue, statusAutoReset, warnings);
     }
 
     /**

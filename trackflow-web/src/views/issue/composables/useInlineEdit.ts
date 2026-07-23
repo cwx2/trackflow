@@ -89,6 +89,12 @@ export function useInlineEdit(issues: { value: IssueVO[] }) {
       } else {
         issue.version = (issue.version || 0) + 1
       }
+      // 处理字段级警告（部分字段权限不足被跳过）
+      if (res?.warnings?.length) {
+        // 有警告意味着当前字段被跳过——回滚乐观更新
+        ;(issue as any)[field] = previousValue
+        res.warnings.forEach((w: string) => Message.warning({ content: w, duration: 5000 }))
+      }
       editingCell.value = null
     } catch (e: any) {
       // 回滚

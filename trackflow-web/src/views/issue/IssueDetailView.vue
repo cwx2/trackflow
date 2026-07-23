@@ -1235,6 +1235,9 @@ async function onEditField(key: string, newValue: string | string[]) {
       if (res.data?.statusAutoReset) {
         Message.warning({ content: '类型变更导致状态与工作流不兼容，已自动重置为默认状态', duration: 5000 })
       }
+      if (res.warnings?.length) {
+        res.warnings.forEach((w: string) => Message.warning({ content: w, duration: 5000 }))
+      }
     }
     await loadAll()
     Message.success('已更新')

@@ -7,6 +7,8 @@ export interface R<T = any> {
   data: T
   timestamp: number
   traceId?: string
+  /** 字段级警告信息（部分字段因权限不足被跳过时出现） */
+  warnings?: string[]
 }
 
 /**

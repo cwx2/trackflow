@@ -2876,7 +2876,15 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
   }
 
   try {
-    await issueApi.update(issue.id, updateData)
+    const updateRes = await issueApi.update(issue.id, updateData)
+    if (updateRes.warnings?.length) {
+      updateRes.warnings.forEach((w: string) => Message.warning({ content: w, duration: 5000 }))
+      // Rollback optimistic update for skipped fields
+      if ('sprintId' in rollbackData) {
+        issue.sprintId = rollbackData.sprintId
+      }
+      return false
+    }
     issue.version = (issue.version || 0) + 1
     // Build a descriptive message for the swimlane change
     const fieldLabel = swimlaneGroupBy.value === 'assignee' ? '负责人'
