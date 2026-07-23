@@ -24,6 +24,13 @@ public class ReportConfig {
     private ReportTimeRange timeRange;
 
     /**
+     * Issue 自由查询语法筛选条件（JSON 数组字符串，与工单列表/仪表盘使用相同格式）。
+     * 通过 QueryExecutor.executeFilterToIds() 解析为 Issue ID 列表来限定报表数据范围。
+     * 格式示例：[{"field":"type","operator":"eq","value":["Bug"]},{"field":"priority","operator":"eq","value":["High"]}]
+     */
+    private String issueFilter;
+
+    /**
      * 自动刷新间隔（秒）。
      * 0 或 null 表示不自动刷新（手动刷新）。
      * 常见值：600（10分钟）、3600（1小时）、86400（每天）。
@@ -74,6 +81,12 @@ public class ReportConfig {
         config.setSecondGroupBy((String) map.get("secondGroupBy"));
         config.setChartType((String) map.get("chartType"));
         config.setSortBy((String) map.get("sortBy"));
+
+        // 解析 issueFilter（自由查询语法字符串）
+        Object issueFilterObj = map.get("issueFilter");
+        if (issueFilterObj instanceof String s && !s.isBlank()) {
+            config.setIssueFilter(s);
+        }
 
         // 解析 filters
         Object filtersObj = map.get("filters");
@@ -254,6 +267,7 @@ public class ReportConfig {
      * 判断 filters 是否为空（没有任何有效过滤条件）
      */
     public boolean hasFilters() {
+        if (issueFilter != null && !issueFilter.isBlank()) return true;
         if (filters == null) return false;
         return hasContent(filters.getStatuses())
                 || hasContent(filters.getStatusesExclude())

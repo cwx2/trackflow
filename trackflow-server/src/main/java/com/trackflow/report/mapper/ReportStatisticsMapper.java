@@ -205,5 +205,6 @@ public interface ReportStatisticsMapper {
     List<StateTransitionRow> selectStateTransitions(
             @Param("projectIds") List<Long> projectIds,
             @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+            @Param("end") LocalDateTime end,
+            @Param("issueIds") List<Long> issueIds);
 }

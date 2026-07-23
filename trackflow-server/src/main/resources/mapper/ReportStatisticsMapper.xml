@@ -633,6 +633,10 @@
                 AND 1=0 <!-- 空列表 = 无权限 = 返回空集 -->
             </when>
         </choose>
+        <if test="params.issueIds != null and params.issueIds.size() > 0">
+            AND i.id IN
+            <foreach collection="params.issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
+        </if>
         <if test="params.sprintId != null">
             AND i.sprint_id = #{params.sprintId}
         </if>
@@ -956,6 +960,10 @@
             <if test="projectIds != null and projectIds.size() > 0">
                 AND i.project_id IN
                 <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+            </if>
+            <if test="issueIds != null and issueIds.size() > 0">
+                AND i.id IN
+                <foreach collection="issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
             </if>
         )
         SELECT

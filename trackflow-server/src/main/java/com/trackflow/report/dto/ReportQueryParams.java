@@ -69,6 +69,11 @@ public class ReportQueryParams {
     /** 活跃 Sprint ID 列表（activeSprint 语义筛选时使用） */
     private List<Long> activeSprintIds;
 
+    // ─── Issue ID 列表过滤（来自 issueFilter 自由查询语法） ──
+
+    /** 通过 QueryExecutor 解析 issueFilter 得到的 Issue ID 列表 */
+    private List<Long> issueIds;
+
     // ─── 语义快捷筛选 ──────────────────────────────────────
 
     /** 已关闭状态 ID 集合（配合 onlyClosedStatus / excludeClosedStatus 使用） */

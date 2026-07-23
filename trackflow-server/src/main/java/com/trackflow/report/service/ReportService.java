@@ -12,6 +12,7 @@ import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.dto.ReportQueryParams;
 import com.trackflow.report.dto.ShareReportDTO;
@@ -73,6 +74,7 @@ public class ReportService {
     private final UserGroupMapper userGroupMapper;
     private final CustomFieldService customFieldService;
     private final ReportStatisticsService reportStatisticsService;
+    private final QueryExecutor queryExecutor;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
@@ -1141,6 +1143,9 @@ public class ReportService {
             } catch (NumberFormatException ignore) {}
         }
 
+        // 解析 issueFilter（自由查询语法）
+        List<Long> issueIds = resolveIssueFilterIds(config, projectIds);
+
         switch (reportType) {
             case BURNDOWN, BURNDOWN_CHART -> {
                 if (sprintId == null) {
@@ -1159,8 +1164,8 @@ public class ReportService {
                 }
                 executeBurndownReport(result, report.getProjectId(), sprintId);
             }
-            case CUMULATIVE_FLOW -> executeCumulativeFlowReport(result, projectIds, startDate, endDate);
-            case RESOLUTION_TIME -> executeResolutionTimeReport(result, projectIds, startDate, endDate, config);
+            case CUMULATIVE_FLOW -> executeCumulativeFlowReport(result, projectIds, startDate, endDate, issueIds);
+            case RESOLUTION_TIME -> executeResolutionTimeReport(result, projectIds, startDate, endDate, config, issueIds);
             default -> {
                 // Fallback to distribution for unknown timeline types
                 return executeDistributionReport(report, projectIds);
@@ -1220,10 +1225,11 @@ public class ReportService {
      * 执行累积流图报表
      */
     private void executeCumulativeFlowReport(ReportExecuteResultVO result, List<Long> projectIds,
-                                              java.time.LocalDate startDate, java.time.LocalDate endDate) {
+                                              java.time.LocalDate startDate, java.time.LocalDate endDate,
+                                              List<Long> issueIds) {
         result.setChartType("stacked_area");
 
-        CumulativeFlowVO cfd = reportStatisticsService.getCumulativeFlowData(projectIds, startDate, endDate);
+        CumulativeFlowVO cfd = reportStatisticsService.getCumulativeFlowData(projectIds, startDate, endDate, issueIds);
 
         result.setDates(cfd.getDates());
 
@@ -1248,12 +1254,12 @@ public class ReportService {
      */
     private void executeResolutionTimeReport(ReportExecuteResultVO result, List<Long> projectIds,
                                               java.time.LocalDate startDate, java.time.LocalDate endDate,
-                                              ReportConfig config) {
+                                              ReportConfig config, List<Long> issueIds) {
         result.setChartType("line");
 
         // 从 config 的 groupBy 中获取解决时间的分组（可选）
         String groupBy = config.getGroupBy();
-        ResolutionTimeVO rt = reportStatisticsService.getResolutionTimeData(projectIds, startDate, endDate, groupBy);
+        ResolutionTimeVO rt = reportStatisticsService.getResolutionTimeData(projectIds, startDate, endDate, groupBy, issueIds);
 
         result.setDates(rt.getDates());
 
@@ -1324,9 +1330,12 @@ public class ReportService {
         LocalDateTime start = timeRange != null ? timeRange[0] : LocalDateTime.now().minusDays(30);
         LocalDateTime end = timeRange != null ? timeRange[1] : LocalDateTime.now();
 
+        // 解析 issueFilter（自由查询语法）
+        List<Long> issueIds = resolveIssueFilterIds(config, projectIds);
+
         // 查询状态转换数据（基于 issue_activity 表）
         List<ReportExecuteResultVO.StateTransitionItem> transitions =
-                reportStatisticsService.getStateTransitionData(projectIds, start, end);
+                reportStatisticsService.getStateTransitionData(projectIds, start, end, issueIds);
 
         result.setTransitions(transitions);
 
@@ -1538,7 +1547,45 @@ public class ReportService {
             }
         }
 
+        // ── Issue Filter 自由查询语法 ──
+        resolveIssueFilterToParams(config, projectIds, params);
+
         return params;
+    }
+
+    /**
+     * 解析 config.issueFilter（自由查询语法 JSON 数组），通过 QueryExecutor 得到匹配的 Issue ID 列表，
+     * 注入到 params.issueIds 中。与 ReportStatisticsController.dashboard 使用相同逻辑。
+     */
+    @SuppressWarnings("unchecked")
+    private void resolveIssueFilterToParams(ReportConfig config, List<Long> projectIds, ReportQueryParams params) {
+        List<Long> issueIds = resolveIssueFilterIds(config, projectIds);
+        if (issueIds != null) {
+            params.setIssueIds(issueIds);
+        }
+    }
+
+    /**
+     * 解析 config.issueFilter 为 Issue ID 列表。
+     * @return 匹配的 Issue ID 列表，null 表示无筛选
+     */
+    @SuppressWarnings("unchecked")
+    private List<Long> resolveIssueFilterIds(ReportConfig config, List<Long> projectIds) {
+        String issueFilter = config.getIssueFilter();
+        if (issueFilter == null || issueFilter.isBlank()) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> filters = objectMapper.readValue(issueFilter,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            if (filters.isEmpty()) {
+                return null;
+            }
+            return queryExecutor.executeFilterToIds(filters, projectIds);
+        } catch (Exception e) {
+            log.warn("Failed to parse issueFilter in report config: {}", issueFilter, e);
+            return null;
+        }
     }
 
     /**
@@ -1554,6 +1601,10 @@ public class ReportService {
                 summary.put("timeRange", tr.getStartDate() + " ~ " + tr.getEndDate());
             }
             summary.put("timeField", tr.getField());
+        }
+        // issueFilter 自由查询语法
+        if (config.getIssueFilter() != null && !config.getIssueFilter().isBlank()) {
+            summary.put("issueFilter", config.getIssueFilter());
         }
         ReportConfig.ReportFilters filters = config.getFilters();
         if (filters != null) {

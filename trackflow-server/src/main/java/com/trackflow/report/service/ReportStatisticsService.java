@@ -174,10 +174,24 @@ public class ReportStatisticsService {
     }
 
     /**
+     * 获取累积流图数据（支持多项目范围 + Issue 筛选）
+     */
+    public CumulativeFlowVO getCumulativeFlowData(List<Long> projectIds, LocalDate startDate, LocalDate endDate, List<Long> issueIds) {
+        return buildCumulativeFlow(projectIds, startDate, endDate, issueIds);
+    }
+
+    /**
      * 获取解决时间分析数据（支持多项目范围 + 分组）
      */
     public ResolutionTimeVO getResolutionTimeData(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy) {
         return buildResolutionTime(projectIds, startDate, endDate, groupBy, null);
+    }
+
+    /**
+     * 获取解决时间分析数据（支持多项目范围 + 分组 + Issue 筛选）
+     */
+    public ResolutionTimeVO getResolutionTimeData(List<Long> projectIds, LocalDate startDate, LocalDate endDate, String groupBy, List<Long> issueIds) {
+        return buildResolutionTime(projectIds, startDate, endDate, groupBy, issueIds);
     }
 
     /**
@@ -186,7 +200,16 @@ public class ReportStatisticsService {
      */
     public List<com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem> getStateTransitionData(
             List<Long> projectIds, LocalDateTime start, LocalDateTime end) {
-        List<StateTransitionRow> rows = reportStatisticsMapper.selectStateTransitions(projectIds, start, end);
+        return getStateTransitionData(projectIds, start, end, null);
+    }
+
+    /**
+     * 获取状态转换统计数据（支持 Issue 筛选）
+     * 基于 issue_activity 表中的状态变更事件进行聚合
+     */
+    public List<com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem> getStateTransitionData(
+            List<Long> projectIds, LocalDateTime start, LocalDateTime end, List<Long> issueIds) {
+        List<StateTransitionRow> rows = reportStatisticsMapper.selectStateTransitions(projectIds, start, end, issueIds);
 
         List<com.trackflow.report.vo.ReportExecuteResultVO.StateTransitionItem> items = new ArrayList<>();
         for (StateTransitionRow row : rows) {

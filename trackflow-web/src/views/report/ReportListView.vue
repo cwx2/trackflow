@@ -325,6 +325,14 @@
           </a-select>
           <span class="form-hint">选择后将生成双维度交叉矩阵（如"状态 × 负责人"）</span>
         </a-form-item>
+        <a-form-item label="Issue 筛选">
+          <a-textarea
+            v-model="form.issueFilter"
+            placeholder="输入筛选条件限定报表数据范围，如：type: Bug, priority: High&#10;支持字段：type / status / priority / assignee / sprint / tag / keyword"
+            :auto-size="{ minRows: 2, maxRows: 4 }"
+          />
+          <span class="form-hint">使用与工单列表相同的筛选语法，留空则统计所有工单</span>
+        </a-form-item>
         <a-form-item label="共享">
           <a-switch v-model="form.shared" />
           <span class="form-hint">共享后项目其他成员也可查看此报表</span>
@@ -450,7 +458,8 @@ const form = reactive({
   groupBy: 'status',
   secondGroupBy: '' as string,
   shared: false,
-  refreshInterval: 0
+  refreshInterval: 0,
+  issueFilter: ''
 })
 
 /** 是否有创建报表权限（system:admin 或 nav:report_create） */
@@ -658,6 +667,61 @@ function clearAutoRefresh(reportId: string) {
   }
 }
 
+/**
+ * 将用户友好的筛选文本（如 "type: Bug, priority: High"）转为 QueryExecutor JSON 格式。
+ * 如果输入已经是 JSON 数组，直接返回。留空返回空字符串。
+ */
+function parseIssueFilterToJson(text: string): string {
+  if (!text || !text.trim()) return ''
+  const trimmed = text.trim()
+  // 如果已经是 JSON 数组格式，直接返回
+  if (trimmed.startsWith('[')) {
+    try {
+      JSON.parse(trimmed)
+      return trimmed
+    } catch { /* not valid JSON, parse as text */ }
+  }
+  // 解析 "field: value" 文本格式
+  const filters: object[] = []
+  const parts = trimmed.split(/[,;]\s*|\s*\n\s*/)
+  for (const part of parts) {
+    const match = part.match(/^\s*(\w+)\s*:\s*(.+?)\s*$/)
+    if (match) {
+      const [, field, value] = match
+      const fieldMap: Record<string, string> = {
+        type: 'type', assignee: 'assignee', priority: 'priority',
+        status: 'status', reporter: 'reporter', sprint: 'sprint',
+        keyword: 'keyword', tag: 'tag'
+      }
+      const mappedField = fieldMap[field.toLowerCase()] || field
+      if (mappedField === 'status' && (value === 'open' || value === 'closed')) {
+        filters.push({ field: mappedField, operator: value, value: [value] })
+      } else {
+        filters.push({ field: mappedField, operator: 'eq', value: [value] })
+      }
+    } else if (part.trim()) {
+      filters.push({ field: 'keyword', operator: 'contains', value: [part.trim()] })
+    }
+  }
+  return filters.length > 0 ? JSON.stringify(filters) : ''
+}
+
+/**
+ * 将 JSON 格式的 issueFilter 转为用户友好的文本格式（用于编辑时显示）
+ */
+function issueFilterJsonToText(json: string): string {
+  if (!json || !json.trim()) return ''
+  try {
+    const filters = JSON.parse(json) as Array<{ field: string; operator: string; value: string[] }>
+    return filters.map(f => {
+      const value = f.value?.join(', ') || ''
+      return `${f.field}: ${value}`
+    }).join(', ')
+  } catch {
+    return json // 无法解析时直接返回原始文本
+  }
+}
+
 async function handleSubmit() {
   if (!form.name.trim()) {
     Message.warning('请输入报表名称')
@@ -680,6 +744,12 @@ async function handleSubmit() {
     }
     if (form.refreshInterval > 0) {
       configObj.refreshInterval = form.refreshInterval
+    }
+    if (form.issueFilter.trim()) {
+      const parsedFilter = parseIssueFilterToJson(form.issueFilter)
+      if (parsedFilter) {
+        configObj.issueFilter = parsedFilter
+      }
     }
     const config = JSON.stringify(configObj)
 
@@ -739,10 +809,12 @@ function startEdit(report: ReportDefinitionVO) {
     form.groupBy = config.groupBy || 'status'
     form.secondGroupBy = config.secondGroupBy || ''
     form.refreshInterval = config.refreshInterval || 0
+    form.issueFilter = config.issueFilter ? issueFilterJsonToText(config.issueFilter) : ''
   } catch {
     form.groupBy = 'status'
     form.secondGroupBy = ''
     form.refreshInterval = 0
+    form.issueFilter = ''
   }
 
   showFormModal.value = true
@@ -833,6 +905,7 @@ function resetForm() {
   form.secondGroupBy = ''
   form.shared = false
   form.refreshInterval = 0
+  form.issueFilter = ''
 }
 
 function reportTypeLabel(type: string) {
