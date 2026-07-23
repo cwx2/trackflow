@@ -198,6 +198,19 @@ public class DashboardController {
     }
 
     /**
+     * 移动 Widget 到另一个仪表盘
+     */
+    @PostMapping("/{id}/widgets/{widgetId}/move")
+    @PreAuthorize("@perm.canViewReports()")
+    public R<DashboardWidgetVO> moveWidget(
+            @PathVariable("id") Long sourceDashboardId,
+            @PathVariable("widgetId") Long widgetId,
+            @RequestParam("targetDashboardId") Long targetDashboardId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(dashboardService.moveWidget(sourceDashboardId, widgetId, targetDashboardId, userId));
+    }
+
+    /**
      * 批量更新 Widget 位置（拖拽后保存布局）
      */
     @PutMapping("/{id}/layout")

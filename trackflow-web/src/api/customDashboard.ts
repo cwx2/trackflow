@@ -180,6 +180,13 @@ export const customDashboardApi = {
     return request.delete<any, R<void>>(`/dashboards/${dashboardId}/widgets/${widgetId}`)
   },
 
+  /** 移动 Widget 到另一个仪表盘 */
+  moveWidget(dashboardId: string, widgetId: string, targetDashboardId: string) {
+    return request.post<any, R<DashboardWidgetVO>>(`/dashboards/${dashboardId}/widgets/${widgetId}/move`, null, {
+      params: { targetDashboardId }
+    })
+  },
+
   /** 批量更新布局（拖拽后保存） */
   updateLayout(dashboardId: string, items: LayoutItem[], version: number) {
     return request.put<any, R<void>>(`/dashboards/${dashboardId}/layout`, { items, version })

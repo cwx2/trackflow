@@ -164,6 +164,7 @@
                 :is-owner="isOwner"
                 @edit="editWidget"
                 @delete="deleteWidget"
+                @move="openMoveWidget"
               />
             </GridItem>
           </GridLayout>
@@ -270,6 +271,19 @@
           <a-input v-model="widgetConfigForm.title" placeholder="微件标题" :max-length="100" />
         </a-form-item>
 
+        <!-- 自动刷新频率（所有类型通用） -->
+        <a-form-item label="自动刷新频率">
+          <a-select v-model="widgetConfigForm.refreshInterval" placeholder="选择刷新频率">
+            <a-option :value="0">不自动刷新</a-option>
+            <a-option :value="60">每 1 分钟</a-option>
+            <a-option :value="300">每 5 分钟</a-option>
+            <a-option :value="600">每 10 分钟（默认）</a-option>
+            <a-option :value="1800">每 30 分钟</a-option>
+            <a-option :value="3600">每 1 小时</a-option>
+          </a-select>
+          <span class="form-hint">设置微件数据的自动刷新间隔</span>
+        </a-form-item>
+
         <!-- number_card 配置 -->
         <template v-if="editingWidgetType === 'number_card'">
           <a-form-item label="数据来源">
@@ -321,11 +335,34 @@
       :dashboard-id="currentDashboard?.id || ''"
       @saved="onShareSaved"
     />
+
+    <!-- 移动微件弹窗 -->
+    <a-modal
+      v-model:visible="showMoveWidgetModal"
+      title="移动微件到其他仪表盘"
+      :width="480"
+      @ok="handleMoveWidget"
+      :ok-loading="movingWidget"
+      ok-text="移动"
+      cancel-text="取消"
+    >
+      <div class="move-widget-body">
+        <p class="move-hint">将「{{ movingWidgetTitle }}」移动到：</p>
+        <a-select v-model="moveTargetDashboardId" placeholder="选择目标仪表盘">
+          <a-option
+            v-for="d in moveTargetDashboards"
+            :key="d.id"
+            :value="d.id"
+          >{{ d.name }}</a-option>
+        </a-select>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import {
@@ -353,6 +390,7 @@ const widgetTypes = [
 
 // ─── 状态 ─────────────────────────────────────────────
 
+const route = useRoute()
 const loadingList = ref(false)
 const loadingDetail = ref(false)
 const creating = ref(false)
@@ -378,6 +416,7 @@ const savingWidgetConfig = ref(false)
 const availableReports = ref<ReportDefinitionVO[]>([])
 const widgetConfigForm = ref<{
   title: string
+  refreshInterval?: number
   queryType?: string
   staticValue?: number
   label?: string
@@ -385,11 +424,27 @@ const widgetConfigForm = ref<{
   noteContent?: string
 }>({
   title: '',
+  refreshInterval: 600,
   queryType: undefined,
   staticValue: undefined,
   label: '',
   reportId: undefined,
   noteContent: ''
+})
+
+// Move widget state
+const showMoveWidgetModal = ref(false)
+const movingWidget = ref(false)
+const moveTargetDashboardId = ref<string | null>(null)
+const movingWidgetRef = ref<DashboardWidgetVO | null>(null)
+
+const movingWidgetTitle = computed(() => {
+  return movingWidgetRef.value?.title || movingWidgetRef.value?.widgetType || '微件'
+})
+
+const moveTargetDashboards = computed(() => {
+  if (!currentDashboard.value) return []
+  return dashboards.value.filter(d => d.id !== currentDashboard.value!.id)
 })
 
 // ─── 计算属性 ─────────────────────────────────────────
@@ -488,14 +543,21 @@ async function loadDashboards() {
   try {
     const res = await customDashboardApi.list()
     dashboards.value = res.data || []
-    // 自动选中：优先默认仪表盘 > 上次选中 > 第一个
+    // 自动选中：URL 参数优先 > 默认仪表盘 > 上次选中 > 第一个
     if (dashboards.value.length > 0) {
+      const urlDashboardId = route.query.id as string | undefined
       const defaultDashboard = dashboards.value.find(d => d.isDefault)
-      const targetId = activeDashboardId.value && dashboards.value.find(d => d.id === activeDashboardId.value)
-        ? activeDashboardId.value
-        : defaultDashboard
-          ? defaultDashboard.id
-          : dashboards.value[0].id
+
+      let targetId: string
+      if (urlDashboardId && dashboards.value.find(d => d.id === urlDashboardId)) {
+        targetId = urlDashboardId
+      } else if (activeDashboardId.value && dashboards.value.find(d => d.id === activeDashboardId.value)) {
+        targetId = activeDashboardId.value
+      } else if (defaultDashboard) {
+        targetId = defaultDashboard.id
+      } else {
+        targetId = dashboards.value[0].id
+      }
       await selectDashboard(targetId)
     }
   } catch (e: any) {
@@ -700,6 +762,7 @@ function editWidget(widget: DashboardWidgetVO) {
 
   widgetConfigForm.value = {
     title: widget.title || '',
+    refreshInterval: config.refreshInterval ?? 600,
     queryType: config.queryType || undefined,
     staticValue: config.value ?? undefined,
     label: config.label || '',
@@ -741,6 +804,11 @@ async function handleWidgetConfigSave() {
       if (form.noteContent) config.content = form.noteContent
     }
     // report_distribution / report: reportId is saved separately
+
+    // Always save refreshInterval if set
+    if (form.refreshInterval != null && form.refreshInterval > 0) {
+      config.refreshInterval = form.refreshInterval
+    }
 
     const updateData: Record<string, any> = {
       title: form.title || undefined,
@@ -787,6 +855,36 @@ async function deleteWidget(widget: DashboardWidgetVO) {
       }
     }
   })
+}
+
+function openMoveWidget(widget: DashboardWidgetVO) {
+  movingWidgetRef.value = widget
+  moveTargetDashboardId.value = null
+  showMoveWidgetModal.value = true
+}
+
+async function handleMoveWidget() {
+  if (!currentDashboard.value || !movingWidgetRef.value || !moveTargetDashboardId.value) {
+    Message.warning('请选择目标仪表盘')
+    return
+  }
+  movingWidget.value = true
+  try {
+    await customDashboardApi.moveWidget(
+      currentDashboard.value.id,
+      movingWidgetRef.value.id,
+      moveTargetDashboardId.value
+    )
+    Message.success('微件已移动')
+    showMoveWidgetModal.value = false
+    movingWidgetRef.value = null
+    await selectDashboard(currentDashboard.value.id)
+    await loadDashboards()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '移动失败')
+  } finally {
+    movingWidget.value = false
+  }
 }
 
 // 打开编辑弹窗时填充表单
@@ -1079,5 +1177,16 @@ watch(showEditModal, (val) => {
 
 .danger-option {
   color: var(--tf-danger) !important;
+}
+
+/* Move widget modal */
+.move-widget-body {
+  padding: 4px 0;
+}
+
+.move-hint {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+  margin: 0 0 12px;
 }
 </style>

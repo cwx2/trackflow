@@ -532,6 +532,39 @@ public class CustomDashboardService {
     }
 
     /**
+     * 移动 Widget 到另一个仪表盘
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public DashboardWidgetVO moveWidget(Long sourceDashboardId, Long widgetId, Long targetDashboardId, Long userId) {
+        // 校验源仪表盘编辑权限
+        assertCanEdit(sourceDashboardId, userId);
+        // 校验目标仪表盘编辑权限
+        assertCanEdit(targetDashboardId, userId);
+
+        if (sourceDashboardId.equals(targetDashboardId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移动到当前仪表盘");
+        }
+
+        DashboardWidget widget = widgetMapper.selectById(widgetId);
+        if (widget == null || !widget.getDashboardId().equals(sourceDashboardId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "微件不存在");
+        }
+
+        // 计算目标仪表盘中的新位置
+        Long maxSort = widgetMapper.selectCount(new LambdaQueryWrapper<DashboardWidget>()
+                .eq(DashboardWidget::getDashboardId, targetDashboardId));
+
+        widget.setDashboardId(targetDashboardId);
+        widget.setPositionX(0);
+        widget.setPositionY(maxSort.intValue() * 3);
+        widget.setSortOrder(maxSort.intValue());
+        widgetMapper.updateById(widget);
+
+        log.info("Widget moved: id={}, from dashboard={} to dashboard={}", widgetId, sourceDashboardId, targetDashboardId);
+        return dashboardConverter.toWidgetVO(widget);
+    }
+
+    /**
      * 批量更新 Widget 位置（拖拽后保存布局）
      * 使用乐观锁防止并发覆盖，使用批量更新替代逐条 SQL。
      */

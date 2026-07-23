@@ -24,6 +24,14 @@
               <template #icon><icon-edit /></template>
               编辑配置
             </a-doption>
+            <a-doption @click="handleCopyLink">
+              <template #icon><icon-link /></template>
+              复制链接
+            </a-doption>
+            <a-doption @click="$emit('move', widget)">
+              <template #icon><icon-swap /></template>
+              移动到其他仪表盘
+            </a-doption>
             <a-doption class="danger-option" @click="$emit('delete', widget)">
               <template #icon><icon-delete /></template>
               删除微件
@@ -144,13 +152,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import {
-  IconMore, IconEdit, IconDelete, IconRefresh,
+  IconMore, IconEdit, IconDelete, IconRefresh, IconLink, IconSwap,
   IconExclamationCircleFill, IconBarChart,
   IconList, IconNotification, IconThunderbolt, IconCalendar, IconQuestionCircle
 } from '@arco-design/web-vue/es/icon'
@@ -171,6 +180,7 @@ const props = defineProps<{
 defineEmits<{
   edit: [widget: DashboardWidgetVO]
   delete: [widget: DashboardWidgetVO]
+  move: [widget: DashboardWidgetVO]
 }>()
 
 // ─── 状态 ─────────────────────────────────────────────
@@ -520,6 +530,25 @@ async function refreshData() {
   dataLoaded.value = false
   await loadData(true)
   refreshing.value = false
+}
+
+async function handleCopyLink() {
+  if (!props.widget) return
+  const baseUrl = window.location.origin
+  const link = `${baseUrl}/reports/dashboards?id=${props.widget.dashboardId}&widget=${props.widget.id}`
+  try {
+    await navigator.clipboard.writeText(link)
+    Message.success('链接已复制到剪贴板')
+  } catch {
+    // Fallback for non-HTTPS environments
+    const textarea = document.createElement('textarea')
+    textarea.value = link
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    Message.success('链接已复制到剪贴板')
+  }
 }
 
 // ─── Lifecycle ────────────────────────────────────────
