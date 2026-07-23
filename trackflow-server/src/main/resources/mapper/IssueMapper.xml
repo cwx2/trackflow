@@ -260,6 +260,7 @@
     </select>
 
     <!-- 看板卡片精简查询：单次 JOIN 查出所有卡片渲染字段，避免循环分页 + 逐页富化 -->
+    <!-- REQ-274: 看板卡片查询支持手动排序感知的截断策略 -->
     <select id="selectBoardCards" resultType="com.trackflow.issue.mapper.result.BoardCardRow">
         SELECT
             i.id, i.project_id, i.issue_key, i.title, i.issue_type,
@@ -273,6 +274,13 @@
         LEFT JOIN issue_status s ON s.id = i.status_id
         LEFT JOIN sys_user u ON u.id = i.assignee_id
         LEFT JOIN sprint sp ON sp.id = i.sprint_id
+        <if test="manualOrderContextType != null and manualOrderContextId != null">
+            LEFT JOIN issue_manual_order mo
+                ON mo.issue_id = i.id
+                AND mo.context_type = #{manualOrderContextType}
+                AND mo.context_id = #{manualOrderContextId}
+                AND mo.user_id IS NULL
+        </if>
         WHERE i.project_id = #{projectId}
           AND i.deleted_at IS NULL
           <if test="statusIds != null and statusIds.size() > 0">
@@ -304,7 +312,14 @@
                 OR i.resolved_at >= #{excludeDoneBefore}
             )
           </if>
-        ORDER BY i.created_at DESC
+        <choose>
+            <when test="manualOrderContextType != null and manualOrderContextId != null">
+                ORDER BY COALESCE(mo.position, 2147483647) ASC, i.created_at DESC
+            </when>
+            <otherwise>
+                ORDER BY i.created_at DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit}
     </select>
 

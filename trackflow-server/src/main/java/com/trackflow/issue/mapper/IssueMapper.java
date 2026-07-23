@@ -115,15 +115,20 @@ public interface IssueMapper extends BaseMapper<Issue> {
     /**
      * 看板卡片精简查询：单次 JOIN 查出卡片渲染所需的全部字段（status_name, assignee_name, sprint_name）。
      * 替代循环分页 + 逐页 fillXxxInfo 的重量级方式。
+     * <p>
+     * 当项目存在手动排序时，通过 LEFT JOIN issue_manual_order 表在服务端直接按手动排序截断，
+     * 确保 LIMIT 截断丢弃的是"排序靠后"的卡片，而非"创建时间早"的卡片（REQ-274）。
      *
-     * @param projectId        项目 ID（必填）
-     * @param statusIds        可见列的状态 ID 集合（可选，columnField=status 时使用）
-     * @param priorities       可见列的优先级值集合（可选，columnField=priority 时使用）
-     * @param sprintId         Sprint 过滤（可选）
-     * @param assigneeId       负责人过滤（可选）
-     * @param keyword          关键词搜索（可选，搜标题/key）
+     * @param projectId         项目 ID（必填）
+     * @param statusIds         可见列的状态 ID 集合（可选，columnField=status 时使用）
+     * @param priorities        可见列的优先级值集合（可选，columnField=priority 时使用）
+     * @param sprintId          Sprint 过滤（可选）
+     * @param assigneeId        负责人过滤（可选）
+     * @param keyword           关键词搜索（可选，搜标题/key）
      * @param excludeDoneBefore 排除此日期前已完成的工单（可选）
-     * @param limit            最大返回数量（安全上限）
+     * @param limit             最大返回数量（安全上限）
+     * @param manualOrderContextType 手动排序上下文类型（可选，如 'project'）
+     * @param manualOrderContextId   手动排序上下文 ID（可选，如 projectId）
      */
     List<BoardCardRow> selectBoardCards(
             @Param("projectId") Long projectId,
@@ -133,7 +138,9 @@ public interface IssueMapper extends BaseMapper<Issue> {
             @Param("assigneeId") Long assigneeId,
             @Param("keyword") String keyword,
             @Param("excludeDoneBefore") java.time.LocalDateTime excludeDoneBefore,
-            @Param("limit") int limit
+            @Param("limit") int limit,
+            @Param("manualOrderContextType") String manualOrderContextType,
+            @Param("manualOrderContextId") Long manualOrderContextId
     );
 
     /**

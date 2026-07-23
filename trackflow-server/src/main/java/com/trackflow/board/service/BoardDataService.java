@@ -10,6 +10,7 @@ import com.trackflow.board.vo.BoardCardConfigVO;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.IssueManualOrderMapper;
 import com.trackflow.issue.mapper.result.BoardCardRow;
 import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.sprint.entity.Sprint;
@@ -62,6 +63,7 @@ public class BoardDataService {
     private final SprintMapper sprintMapper;
     private final QueryExecutor queryExecutor;
     private final ObjectMapper objectMapper;
+    private final IssueManualOrderMapper issueManualOrderMapper;
 
     /**
      * 聚合看板数据：单次查询 + 内存分组，返回按列分组的工单。
@@ -143,9 +145,15 @@ public class BoardDataService {
         LocalDateTime excludeDoneBefore = query.getExcludeDoneBeforeAsDate() != null
                 ? query.getExcludeDoneBeforeAsDate().atStartOfDay() : null;
 
+        // REQ-274: 检查项目是否有手动排序，有则在 SQL 层面按手动排序截断
+        boolean projectHasManualOrder = hasManualOrder(projectId);
+        String manualOrderContextType = projectHasManualOrder ? "project" : null;
+        Long manualOrderContextId = projectHasManualOrder ? projectId : null;
+
         List<BoardCardRow> cardRows = issueMapper.selectBoardCards(
                 projectId, statusIds, priorities, sprintId, assigneeId, keyword,
-                excludeDoneBefore, BOARD_MAX_ISSUES
+                excludeDoneBefore, BOARD_MAX_ISSUES,
+                manualOrderContextType, manualOrderContextId
         );
 
         // 4.1 如果 filterMode='query'，获取匹配的 issue IDs 做交集
@@ -393,5 +401,18 @@ public class BoardDataService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * 判断指定项目是否存在手动排序数据（REQ-274）。
+     * <p>
+     * 当项目存在手动排序时，看板 SQL 应按手动排序截断，确保排序靠前的卡片不被 LIMIT 丢弃。
+     *
+     * @param projectId 项目 ID
+     * @return 是否存在手动排序数据
+     */
+    private boolean hasManualOrder(Long projectId) {
+        List<Long> issueIds = issueManualOrderMapper.selectIssueIdsByContext("project", projectId, null);
+        return issueIds != null && !issueIds.isEmpty();
     }
 }
