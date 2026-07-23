@@ -18,6 +18,7 @@ import com.trackflow.sprint.mapper.SprintMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -77,6 +78,7 @@ public class BoardDataService {
      * @param collapsedStatusIds 前端传递的已折叠列状态 ID 集合（折叠列不返回具体工单）
      * @return 按列分组的看板数据
      */
+    @Transactional(readOnly = true)
     public BoardDataVO aggregateBoardData(BoardDataQuery query, Set<Long> collapsedStatusIds) {
         Long projectId = query.getProjectId();
 
@@ -211,6 +213,7 @@ public class BoardDataService {
         }
 
         result.setColumns(columnDataList);
+        result.setColumnConfigs(columnConfigs);
         result.setTotalIssueCount(totalIssueCount);
         result.setTruncated(totalInDb >= BOARD_MAX_ISSUES);
 
