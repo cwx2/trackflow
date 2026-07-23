@@ -189,7 +189,7 @@ import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
 import { useRecentIssues } from './composables/useRecentIssues'
-import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO } from '@/api/types'
+import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import QuickActionBar from './components/QuickActionBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
@@ -286,7 +286,8 @@ const isAssignee = computed(() => {
  * 综合权限：项目级 issue:edit OR 固有权限（reporter 无条件） OR 资源级（reporter + edit_own / assignee + edit_assigned）
  * 
  * 固有权限（Inherent Permissions）参考 YouTrack：
- * Reporter 天然拥有 issue:view, issue:edit, issue:comment, issue:change_status，无需角色显式授予。
+ * Reporter 天然拥有 issue:view, issue:edit, issue:comment，无需角色显式授予。
+ * 注意：不包含 issue:change_status，状态转换需通过工作流引擎控制，需要明确的角色权限授权。
  */
 const canEditIssueEffective = computed(() => {
   if (isProjectArchived.value) return false
@@ -301,13 +302,12 @@ const canEditIssueEffective = computed(() => {
 })
 
 /**
- * 综合状态变更权限：项目级 issue:change_status OR 固有权限（reporter 无条件） OR assignee + edit_assigned
+ * 综合状态变更权限：项目级 issue:change_status OR assignee + edit_assigned
+ * 注意：Reporter 的固有权限不包含 change_status，状态变更需要明确的角色权限授权。
  */
 const canChangeStatusEffective = computed(() => {
   if (isProjectArchived.value) return false
   if (canChangeStatus.value) return true
-  // 固有权限：reporter 无条件拥有 change_status 权限
-  if (isReporter.value) return true
   // 资源级：assignee 需要 issue:edit_assigned 权限
   if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
   return false
@@ -674,6 +674,47 @@ const sidebarFields = computed<SidebarField[]>(() => {
 })
 
 /**
+ * 获取自定义字段（list 类型）经过 filterRules 过滤后的可选项。
+ * 实现 YouTrack "Filter values based on" 功能：
+ * - 如果字段配置了 filterFieldId 和 filterRules，根据源字段当前值过滤选项
+ * - 如果未配置，则仅过滤归档选项
+ */
+function getFilteredOptions(
+  cf: CustomFieldDefinitionVO,
+  valuesMap: Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>
+): { value: string; label: string }[] {
+  // 基础过滤：排除归档选项
+  let activeOptions = (cf.options || []).filter(o => !o.isArchived)
+
+  // 值依赖过滤：如果配置了 filterFieldId 和 filterRules
+  if (cf.filterFieldId && cf.filterRules) {
+    try {
+      const rules: FilterRule[] = JSON.parse(cf.filterRules)
+      if (rules && rules.length > 0) {
+        // 获取源字段的当前值
+        const sourceStored = valuesMap.get(cf.filterFieldId)
+        const sourceValue = sourceStored?.value || ''
+
+        if (sourceValue) {
+          // 查找匹配当前源字段值的规则
+          const matchedRule = rules.find(r => r.whenValue === sourceValue)
+          if (matchedRule && matchedRule.showOnly && matchedRule.showOnly.length > 0) {
+            // 只显示规则中允许的选项
+            activeOptions = activeOptions.filter(o => matchedRule.showOnly.includes(o.id))
+          }
+          // 如果没有匹配的规则，显示所有非归档选项（无限制）
+        }
+        // 如果源字段无值，显示所有非归档选项
+      }
+    } catch {
+      // filterRules 解析失败时回退到显示所有非归档选项
+    }
+  }
+
+  return activeOptions.map(o => ({ value: o.id, label: o.value }))
+}
+
+/**
  * 将自定义字段定义 + 已存储的值转为 SidebarField 数组
  * 支持条件显示：根据条件源字段的当前值动态过滤
  */
@@ -726,9 +767,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
         editType = isMulti ? 'multi-select' : 'select'
         // Only show active (non-archived) options in the selector;
         // if current value references an archived option, it's still displayed via displayValue
-        options = (cf.options || [])
-          .filter(o => !o.isArchived)
-          .map(o => ({ value: o.id, label: o.value }))
+        options = getFilteredOptions(cf, valuesMap)
         break
       case 'user':
         editType = 'user-select'

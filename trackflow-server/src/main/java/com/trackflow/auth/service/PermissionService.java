@@ -64,12 +64,12 @@ public class PermissionService {
      * 参考 YouTrack：Issue reporter 永远有权查看、编辑、评论自己创建的工单，
      * 即使角色中没有显式授予 Read Issue / Update Issue / Add Comment 权限。
      * 这是基于资源所有权的无条件自动授权，与 issue:edit_own 等可配置权限不同。
+     * 注意：不包含 issue:change_status，状态转换需通过工作流引擎控制，需要明确的角色权限授权。
      */
     private static final Set<String> REPORTER_INHERENT_PERMISSIONS = Set.of(
             "issue:view",
             "issue:edit",
-            "issue:comment",
-            "issue:change_status"
+            "issue:comment"
     );
 
     /**
