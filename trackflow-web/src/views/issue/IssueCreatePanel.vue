@@ -120,7 +120,7 @@
         <div class="props-panel">
           <div class="prop-row">
             <span class="prop-label">项目</span>
-            <a-select v-model="form.projectId" placeholder="选择项目" allow-search size="small" :loading="projectLoadState === 'loading'" @change="onProjectChange">
+            <a-select v-model="form.projectId" placeholder="选择项目" allow-search size="small" :loading="projectLoadState === 'loading'" :disabled="lockSprint" @change="onProjectChange">
               <template v-if="projectLoadState === 'error'" #empty>
                 <div class="select-error-state">
                   <span>加载失败</span>
@@ -149,7 +149,7 @@
           </div>
           <div class="prop-row">
             <span class="prop-label">Sprint</span>
-            <a-select v-model="form.sprintId" :placeholder="form.projectId ? '未排期' : '请先选择项目'" size="small" allow-clear :disabled="!form.projectId">
+            <a-select v-model="form.sprintId" :placeholder="form.projectId ? '未排期' : '请先选择项目'" size="small" allow-clear :disabled="!form.projectId || lockSprint">
               <a-option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</a-option>
             </a-select>
           </div>
@@ -357,6 +357,8 @@ import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule } from '@/api
 const props = defineProps<{
   visible: boolean
   projectId?: string
+  sprintId?: string | null
+  lockSprint?: boolean
   cloneData?: { projectId: string; title: string; description: string; issueType: string; priority: string }
   draftId?: string | null
 }>()
@@ -585,7 +587,8 @@ const isDirty = computed(() => {
   if (form.title.trim()) return true
   if (form.description && form.description.trim()) return true
   if (form.assigneeId) return true
-  if (form.sprintId) return true
+  // When sprintId is pre-set via props (lockSprint), it's not user-entered data
+  if (form.sprintId && !(props.lockSprint && form.sprintId === props.sprintId)) return true
   if (form.dueDate) return true
   if (form.estimatedHours != null && form.estimatedHours > 0) return true
   // 检查自定义字段是否有值
@@ -636,6 +639,10 @@ watch(() => props.visible, (val) => {
     else if (props.draftId) {
       loadDraftData(props.draftId)
     }
+    // When opened with pre-set projectId (e.g. from sprint planning), load project data
+    else if (props.projectId && form.projectId) {
+      onProjectChange(form.projectId)
+    }
   } else {
     window.removeEventListener('beforeunload', handleBeforeUnload)
   }
@@ -649,6 +656,10 @@ async function onProjectChange(val: any) {
   // 加载项目模板
   try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
   selectedTemplateId.value = null
+  // Apply sprintId prop after sprints are loaded (ensures select shows correct label)
+  if (props.sprintId !== undefined && props.sprintId !== null && props.lockSprint) {
+    form.sprintId = props.sprintId || undefined
+  }
 }
 
 /**

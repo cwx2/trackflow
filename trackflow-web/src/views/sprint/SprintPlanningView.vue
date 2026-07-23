@@ -57,6 +57,13 @@
             <h3 class="panel-title">Backlog</h3>
             <span class="panel-count">{{ backlogIssues.length }}</span>
           </div>
+          <div class="panel-header-right">
+            <a-tooltip content="创建工单到 Backlog">
+              <button class="panel-create-btn" @click="openCreateForBacklog">
+                <icon-plus />
+              </button>
+            </a-tooltip>
+          </div>
         </div>
 
         <!-- 筛选区 -->
@@ -139,6 +146,20 @@
                 <div class="empty-desc">所有工单都已分配到 Sprint</div>
               </div>
             </div>
+
+            <!-- Quick Add 内联输入框 -->
+            <div class="quick-add-row">
+              <input
+                ref="backlogQuickAddRef"
+                v-model="backlogQuickAddTitle"
+                class="quick-add-input"
+                placeholder="+ 快速创建工单..."
+                @keydown.enter="quickCreateForBacklog"
+                @focus="backlogQuickAddFocused = true"
+                @blur="backlogQuickAddFocused = false"
+              />
+              <a-spin v-if="backlogQuickAddLoading" :size="14" class="quick-add-spinner" />
+            </div>
           </a-spin>
         </div>
       </div>
@@ -158,9 +179,14 @@
               <h3 class="panel-title">{{ sprint.name }}</h3>
               <span class="panel-count">{{ getSprintIssues(sprint.id).length }}</span>
             </div>
-            <div class="panel-header-right" v-if="sprint.startDate">
+            <div class="panel-header-right">
               <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0">⏱ {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
-              <span class="sprint-dates">{{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}</span>
+              <span v-if="sprint.startDate" class="sprint-dates">{{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}</span>
+              <a-tooltip content="创建工单到此 Sprint">
+                <button class="panel-create-btn" @click="openCreateForSprint(sprint.id)">
+                  <icon-plus />
+                </button>
+              </a-tooltip>
             </div>
           </div>
 
@@ -205,8 +231,19 @@
               <div v-if="getSprintIssues(sprint.id).length === 0" class="panel-empty panel-empty--sprint">
                 <div class="empty-icon">🎯</div>
                 <div class="empty-title">暂无工单</div>
-                <div class="empty-desc">从 Backlog 拖拽工单到此处</div>
+                <div class="empty-desc">从 Backlog 拖拽工单到此处，或使用下方输入框快速创建</div>
               </div>
+            </div>
+
+            <!-- Quick Add 内联输入框 -->
+            <div class="quick-add-row">
+              <input
+                v-model="sprintQuickAddTitles[sprint.id]"
+                class="quick-add-input"
+                placeholder="+ 快速创建工单..."
+                @keydown.enter="quickCreateForSprint(sprint.id)"
+              />
+              <a-spin v-if="sprintQuickAddLoadingId === sprint.id" :size="14" class="quick-add-spinner" />
             </div>
           </div>
         </div>
@@ -256,6 +293,15 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 创建工单弹窗 -->
+    <IssueCreatePanel
+      v-model:visible="showCreatePanel"
+      :project-id="selectedProject || undefined"
+      :sprint-id="createPanelSprintId"
+      :lock-sprint="createPanelLockSprint"
+      @created="onIssueCreated"
+    />
   </div>
 </template>
 
@@ -263,11 +309,12 @@
 import { ref, computed, watch, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconSearch } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
+import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
 import type { IssueVO, SprintVO, ProjectMemberVO } from '@/api/types'
 
 const router = useRouter()
@@ -307,6 +354,19 @@ const backlogDropHighlight = ref(false)
 
 // ===== Assign Popover =====
 const assignPopoverVisible = ref(false)
+
+// ===== Quick Add =====
+const backlogQuickAddRef = ref<HTMLInputElement | null>(null)
+const backlogQuickAddTitle = ref('')
+const backlogQuickAddFocused = ref(false)
+const backlogQuickAddLoading = ref(false)
+const sprintQuickAddTitles = ref<Record<string, string>>({})
+const sprintQuickAddLoadingId = ref<string | null>(null)
+
+// ===== Create Panel =====
+const showCreatePanel = ref(false)
+const createPanelSprintId = ref<string | null>(null)
+const createPanelLockSprint = ref(false)
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -711,6 +771,89 @@ function goToSprintPage() {
   router.push('/sprints')
 }
 
+// ===== Create Issue =====
+
+function openCreateForBacklog() {
+  createPanelSprintId.value = null
+  createPanelLockSprint.value = true
+  showCreatePanel.value = true
+}
+
+function openCreateForSprint(sprintId: string) {
+  createPanelSprintId.value = sprintId
+  createPanelLockSprint.value = true
+  showCreatePanel.value = true
+}
+
+function onIssueCreated() {
+  // Reload all data after issue creation
+  loadBacklog()
+  loadAllSprintIssues()
+}
+
+async function quickCreateForBacklog() {
+  const title = backlogQuickAddTitle.value.trim()
+  if (!title || !selectedProject.value) return
+
+  backlogQuickAddLoading.value = true
+  try {
+    await issueApi.create({
+      projectId: selectedProject.value,
+      title,
+      issueType: 'Task',
+      priority: 'Normal'
+    })
+    Message.success('工单已创建到 Backlog')
+    backlogQuickAddTitle.value = ''
+    await loadBacklog()
+  } catch (e: any) {
+    const errorMsg = e.response?.data?.message || ''
+    // If validation fails (required custom fields etc), fall back to full create panel
+    if (e.response?.status === 400 && errorMsg.includes('字段')) {
+      Message.warning('该项目有必填字段，已打开完整创建表单')
+      createPanelSprintId.value = null
+      createPanelLockSprint.value = true
+      showCreatePanel.value = true
+      // Keep the title so user doesn't have to retype
+    } else {
+      Message.error(errorMsg || '创建失败')
+    }
+  } finally {
+    backlogQuickAddLoading.value = false
+  }
+}
+
+async function quickCreateForSprint(sprintId: string) {
+  const title = (sprintQuickAddTitles.value[sprintId] || '').trim()
+  if (!title || !selectedProject.value) return
+
+  sprintQuickAddLoadingId.value = sprintId
+  try {
+    await issueApi.create({
+      projectId: selectedProject.value,
+      title,
+      issueType: 'Task',
+      priority: 'Normal',
+      sprintId
+    })
+    Message.success('工单已创建到 Sprint')
+    sprintQuickAddTitles.value[sprintId] = ''
+    await loadAllSprintIssues()
+  } catch (e: any) {
+    const errorMsg = e.response?.data?.message || ''
+    if (e.response?.status === 400 && errorMsg.includes('字段')) {
+      Message.warning('该项目有必填字段，已打开完整创建表单')
+      createPanelSprintId.value = sprintId
+      createPanelLockSprint.value = true
+      showCreatePanel.value = true
+    } else {
+      Message.error(errorMsg || '创建失败')
+    }
+  } finally {
+    sprintQuickAddLoadingId.value = null
+  }
+}
+
 // ===== Lifecycle =====
 watch(selectedProject, (val) => {
   if (val) onProjectChange()
@@ -1103,5 +1246,63 @@ onMounted(async () => {
   height: 1px;
   background: var(--color-border);
   margin: 4px 0;
+}
+
+/* ===== Create Button ===== */
+.panel-create-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-3);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 14px;
+}
+.panel-create-btn:hover {
+  background: var(--color-fill-3);
+  color: rgb(var(--primary-6));
+}
+.panel-create-btn:active {
+  background: var(--color-fill-4);
+}
+
+/* ===== Quick Add ===== */
+.quick-add-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 4px 4px;
+  flex-shrink: 0;
+  position: relative;
+}
+.quick-add-input {
+  flex: 1;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-1);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.quick-add-input::placeholder {
+  color: var(--color-text-4);
+}
+.quick-add-input:focus {
+  border-color: rgb(var(--primary-6));
+  border-style: solid;
+  background: var(--color-bg-2);
+}
+.quick-add-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 </style>
