@@ -11,10 +11,12 @@ import com.trackflow.workitemattr.entity.TimeEntryAttributeValue;
 import com.trackflow.workitemattr.entity.WorkItemAttribute;
 import com.trackflow.workitemattr.entity.WorkItemAttributeProject;
 import com.trackflow.workitemattr.entity.WorkItemAttributeValue;
+import com.trackflow.workitemattr.entity.WorkItemAttributeValueProject;
 import com.trackflow.workitemattr.mapper.TimeEntryAttributeValueMapper;
 import com.trackflow.workitemattr.mapper.WorkItemAttributeMapper;
 import com.trackflow.workitemattr.mapper.WorkItemAttributeProjectMapper;
 import com.trackflow.workitemattr.mapper.WorkItemAttributeValueMapper;
+import com.trackflow.workitemattr.mapper.WorkItemAttributeValueProjectMapper;
 import com.trackflow.workitemattr.vo.AttributeProjectVO;
 import com.trackflow.workitemattr.vo.AttributeValueVO;
 import com.trackflow.workitemattr.vo.WorkItemAttributeVO;
@@ -41,6 +43,7 @@ public class WorkItemAttributeService {
     private final WorkItemAttributeMapper attributeMapper;
     private final WorkItemAttributeValueMapper valueMapper;
     private final WorkItemAttributeProjectMapper projectMapper;
+    private final WorkItemAttributeValueProjectMapper valueProjectMapper;
     private final TimeEntryAttributeValueMapper entryValueMapper;
     private final ProjectMapper projMapper;
 
@@ -293,7 +296,15 @@ public class WorkItemAttributeService {
                     "该属性已被 " + usageCount + " 条工时记录使用，请先将工时转移到其他属性或逐个删除属性值的引用");
         }
 
-        // 先删除属性值（FK RESTRICT 要求先清理子表）
+        // 先删除属性值的项目关联
+        List<WorkItemAttributeValue> values = valueMapper.selectList(
+                new QueryWrapper<WorkItemAttributeValue>().eq("attribute_id", id));
+        if (!values.isEmpty()) {
+            List<Long> valueIds = values.stream().map(WorkItemAttributeValue::getId).toList();
+            valueProjectMapper.delete(
+                    new QueryWrapper<WorkItemAttributeValueProject>().in("value_id", valueIds));
+        }
+        // 删除属性值（FK RESTRICT 要求先清理子表）
         valueMapper.delete(new QueryWrapper<WorkItemAttributeValue>().eq("attribute_id", id));
         // 删除项目关联
         projectMapper.delete(new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", id));
@@ -304,6 +315,7 @@ public class WorkItemAttributeService {
 
     /**
      * 管理属性的项目分配（全量覆盖）
+     * 新增的项目关联自动获得该属性的全部值
      */
     @Transactional
     public WorkItemAttributeVO manageProjects(Long id, ManageAttributeProjectsDTO dto) {
@@ -312,10 +324,18 @@ public class WorkItemAttributeService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
         }
 
+        // 获取旧的项目分配列表
+        List<WorkItemAttributeProject> oldRels = projectMapper.selectList(
+                new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", id));
+        Set<Long> oldProjectIds = oldRels.stream()
+                .map(WorkItemAttributeProject::getProjectId)
+                .collect(Collectors.toSet());
+
         // 删除旧的项目分配
         projectMapper.delete(new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", id));
 
         // 建立新的项目分配
+        Set<Long> newProjectIds = new HashSet<>(dto.getProjectIds());
         for (Long projectId : dto.getProjectIds()) {
             WorkItemAttributeProject rel = new WorkItemAttributeProject();
             rel.setAttributeId(id);
@@ -324,13 +344,33 @@ public class WorkItemAttributeService {
             projectMapper.insert(rel);
         }
 
+        // 新增的项目：自动关联全部属性值
+        for (Long projectId : newProjectIds) {
+            if (!oldProjectIds.contains(projectId)) {
+                autoAttachValuesToProject(id, projectId);
+            }
+        }
+
+        // 被移除的项目：清理值-项目关联
+        for (Long oldPid : oldProjectIds) {
+            if (!newProjectIds.contains(oldPid)) {
+                valueProjectMapper.delete(
+                        new QueryWrapper<WorkItemAttributeValueProject>()
+                                .eq("project_id", oldPid)
+                                .inSql("value_id",
+                                        "SELECT id FROM work_item_attribute_value WHERE attribute_id = " + id));
+            }
+        }
+
         log.info("更新属性项目分配: attributeId={}, projectCount={}", id, dto.getProjectIds().size());
         return getById(id);
     }
 
     /**
-     * 获取指定项目可用的工作项属性（含值列表）
+     * 获取指定项目可用的工作项属性（含项目级过滤后的值列表）
      * 用于前端工时弹窗动态加载
+     *
+     * 对标 YouTrack: 每个项目只看到本项目启用的值子集
      */
     public List<WorkItemAttributeVO> listByProject(Long projectId) {
         // 查询分配到该项目的属性 ID
@@ -344,7 +384,14 @@ public class WorkItemAttributeService {
         List<WorkItemAttribute> attrs = attributeMapper.selectList(
                 new QueryWrapper<WorkItemAttribute>().in("id", attrIds).orderByAsc("position", "id"));
 
-        // 批量查询值
+        // 查询该项目启用的属性值 ID（通过 value_project 关联表过滤）
+        List<WorkItemAttributeValueProject> valueProjectRels = valueProjectMapper.selectList(
+                new QueryWrapper<WorkItemAttributeValueProject>().eq("project_id", projectId));
+        Set<Long> enabledValueIds = valueProjectRels.stream()
+                .map(WorkItemAttributeValueProject::getValueId)
+                .collect(Collectors.toSet());
+
+        // 批量查询属性的所有值
         Map<Long, List<WorkItemAttributeValue>> valuesMap = valueMapper.selectList(
                 new QueryWrapper<WorkItemAttributeValue>()
                         .in("attribute_id", attrIds)
@@ -358,11 +405,152 @@ public class WorkItemAttributeService {
             vo.setIsBuiltin(attr.getIsBuiltin());
             vo.setPosition(attr.getPosition());
 
+            // 只返回项目中启用的值
             List<WorkItemAttributeValue> values = valuesMap.getOrDefault(attr.getId(), List.of());
-            vo.setValues(values.stream().map(this::toValueVO).toList());
+            vo.setValues(values.stream()
+                    .filter(v -> enabledValueIds.contains(v.getId()))
+                    .map(this::toValueVO)
+                    .toList());
 
             return vo;
         }).toList();
+    }
+
+    /**
+     * 管理项目中某个属性的值可见性（全量替换策略）
+     * 对标 YouTrack：项目管理员可以独立管理本项目中属性值的可见性
+     *
+     * @param attributeId 属性 ID
+     * @param projectId 项目 ID
+     * @param valueIds 项目中启用的值 ID 列表
+     * @return 更新后的属性 VO
+     */
+    @Transactional
+    public WorkItemAttributeVO manageProjectValues(Long attributeId, Long projectId, List<Long> valueIds) {
+        // 校验属性存在
+        WorkItemAttribute attr = attributeMapper.selectById(attributeId);
+        if (attr == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工作项属性不存在");
+        }
+
+        // 校验项目已关联该属性
+        Long relCount = projectMapper.selectCount(
+                new QueryWrapper<WorkItemAttributeProject>()
+                        .eq("attribute_id", attributeId)
+                        .eq("project_id", projectId));
+        if (relCount == 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "该属性未分配到此项目");
+        }
+
+        // 校验所有 valueIds 都属于该属性
+        if (valueIds != null && !valueIds.isEmpty()) {
+            List<WorkItemAttributeValue> validValues = valueMapper.selectList(
+                    new QueryWrapper<WorkItemAttributeValue>()
+                            .eq("attribute_id", attributeId)
+                            .in("id", valueIds));
+            Set<Long> validIds = validValues.stream()
+                    .map(WorkItemAttributeValue::getId)
+                    .collect(Collectors.toSet());
+            for (Long vid : valueIds) {
+                if (!validIds.contains(vid)) {
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                            "属性值 " + vid + " 不属于属性 " + attributeId);
+                }
+            }
+        }
+
+        // 获取当前项目关联的值（用于检测被移除的值）
+        List<WorkItemAttributeValueProject> currentRels = valueProjectMapper.selectList(
+                new QueryWrapper<WorkItemAttributeValueProject>()
+                        .eq("project_id", projectId)
+                        .inSql("value_id",
+                                "SELECT id FROM work_item_attribute_value WHERE attribute_id = " + attributeId));
+        Set<Long> currentValueIds = currentRels.stream()
+                .map(WorkItemAttributeValueProject::getValueId)
+                .collect(Collectors.toSet());
+
+        // 计算被移除的值 ID
+        Set<Long> newValueIds = valueIds != null ? new HashSet<>(valueIds) : new HashSet<>();
+        Set<Long> removedValueIds = new HashSet<>(currentValueIds);
+        removedValueIds.removeAll(newValueIds);
+
+        // 对标 YouTrack：移除值时，永久删除本项目内使用该值的工时记录中的对应属性值
+        if (!removedValueIds.isEmpty()) {
+            for (Long removedValueId : removedValueIds) {
+                // 删除本项目工时记录中该值的引用
+                entryValueMapper.deleteByProjectAndValue(projectId, removedValueId);
+            }
+        }
+
+        // 删除该属性的旧值-项目关联
+        valueProjectMapper.delete(
+                new QueryWrapper<WorkItemAttributeValueProject>()
+                        .eq("project_id", projectId)
+                        .inSql("value_id",
+                                "SELECT id FROM work_item_attribute_value WHERE attribute_id = " + attributeId));
+
+        // 建立新的值-项目关联
+        if (valueIds != null) {
+            for (int i = 0; i < valueIds.size(); i++) {
+                WorkItemAttributeValueProject rel = new WorkItemAttributeValueProject();
+                rel.setValueId(valueIds.get(i));
+                rel.setProjectId(projectId);
+                rel.setPosition(i);
+                rel.setCreatedAt(LocalDateTime.now());
+                valueProjectMapper.insert(rel);
+            }
+        }
+
+        log.info("更新项目属性值关联: attributeId={}, projectId={}, valueCount={}, removedCount={}",
+                attributeId, projectId,
+                valueIds != null ? valueIds.size() : 0,
+                removedValueIds.size());
+
+        return getById(attributeId);
+    }
+
+    /**
+     * 为新建项目自动关联全部已有属性值（auto-attach）
+     * 当项目新增属性关联时调用
+     */
+    @Transactional
+    public void autoAttachValuesToProject(Long attributeId, Long projectId) {
+        List<WorkItemAttributeValue> values = valueMapper.selectList(
+                new QueryWrapper<WorkItemAttributeValue>()
+                        .eq("attribute_id", attributeId)
+                        .orderByAsc("position", "id"));
+        for (WorkItemAttributeValue value : values) {
+            // 检查是否已存在关联（避免重复）
+            Long existCount = valueProjectMapper.selectCount(
+                    new QueryWrapper<WorkItemAttributeValueProject>()
+                            .eq("value_id", value.getId())
+                            .eq("project_id", projectId));
+            if (existCount == 0) {
+                WorkItemAttributeValueProject rel = new WorkItemAttributeValueProject();
+                rel.setValueId(value.getId());
+                rel.setProjectId(projectId);
+                rel.setPosition(value.getPosition());
+                rel.setCreatedAt(LocalDateTime.now());
+                valueProjectMapper.insert(rel);
+            }
+        }
+    }
+
+    /**
+     * 新增属性值时，自动关联到已分配该属性的所有项目
+     */
+    @Transactional
+    public void autoAttachNewValueToProjects(Long attributeId, Long valueId, Integer position) {
+        List<WorkItemAttributeProject> projects = projectMapper.selectList(
+                new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", attributeId));
+        for (WorkItemAttributeProject proj : projects) {
+            WorkItemAttributeValueProject rel = new WorkItemAttributeValueProject();
+            rel.setValueId(valueId);
+            rel.setProjectId(proj.getProjectId());
+            rel.setPosition(position != null ? position : 0);
+            rel.setCreatedAt(LocalDateTime.now());
+            valueProjectMapper.insert(rel);
+        }
     }
 
     /**
@@ -554,6 +742,8 @@ public class WorkItemAttributeService {
                 val.setCreatedAt(LocalDateTime.now());
                 valueMapper.insert(val);
                 newIds.add(val.getId());
+                // 新增值自动关联到已分配该属性的所有项目
+                autoAttachNewValueToProjects(attributeId, val.getId(), i);
             }
         }
 
@@ -566,6 +756,9 @@ public class WorkItemAttributeService {
                     throw new BusinessException(ErrorCode.CONFLICT,
                             "值\"" + old.getName() + "\"已被 " + usageCount + " 条工时记录使用，请先转移到其他值再删除");
                 }
+                // 删除值-项目关联
+                valueProjectMapper.delete(
+                        new QueryWrapper<WorkItemAttributeValueProject>().eq("value_id", old.getId()));
                 valueMapper.deleteById(old.getId());
             }
         }

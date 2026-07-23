@@ -2,6 +2,7 @@ package com.trackflow.workitemattr.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.trackflow.workitemattr.entity.TimeEntryAttributeValue;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -57,4 +58,20 @@ public interface TimeEntryAttributeValueMapper extends BaseMapper<TimeEntryAttri
     """)
     int transferValueReferences(@Param("fromValueId") Long fromValueId,
                                 @Param("targetValueId") Long targetValueId);
+
+    /**
+     * 删除指定项目中引用某属性值的工时记录属性关联
+     * 对标 YouTrack: 在项目中移除一个值时，永久删除本项目内使用该值的工时记录中的对应属性值
+     *
+     * @return 受影响的行数
+     */
+    @Delete("""
+        DELETE FROM time_entry_attribute_value
+        WHERE value_id = #{valueId}
+          AND time_entry_id IN (
+              SELECT id FROM time_entry WHERE project_id = #{projectId}
+          )
+    """)
+    int deleteByProjectAndValue(@Param("projectId") Long projectId,
+                                @Param("valueId") Long valueId);
 }

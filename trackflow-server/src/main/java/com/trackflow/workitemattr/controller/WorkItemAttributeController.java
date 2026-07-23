@@ -3,6 +3,7 @@ package com.trackflow.workitemattr.controller;
 import com.trackflow.common.model.R;
 import com.trackflow.workitemattr.dto.CreateWorkItemAttributeDTO;
 import com.trackflow.workitemattr.dto.ManageAttributeProjectsDTO;
+import com.trackflow.workitemattr.dto.ManageProjectAttributeValuesDTO;
 import com.trackflow.workitemattr.dto.TransferAttributeValueDTO;
 import com.trackflow.workitemattr.dto.UpdateWorkItemAttributeDTO;
 import com.trackflow.workitemattr.service.WorkItemAttributeService;
@@ -121,5 +122,18 @@ public class WorkItemAttributeController {
             @Valid @RequestBody TransferAttributeValueDTO dto) {
         int transferred = attributeService.transferValueReferences(id, valueId, dto.getTargetValueId());
         return R.ok(transferred);
+    }
+
+    /**
+     * 管理项目中某个属性的值可见性
+     * 对标 YouTrack: 项目管理员可以独立管理本项目中属性值的可见性
+     */
+    @PutMapping("/{id}/projects/{projectId}/values")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage')")
+    public R<WorkItemAttributeVO> manageProjectValues(
+            @PathVariable("id") Long id,
+            @PathVariable("projectId") Long projectId,
+            @Valid @RequestBody ManageProjectAttributeValuesDTO dto) {
+        return R.ok(attributeService.manageProjectValues(id, projectId, dto.getValueIds()));
     }
 }
