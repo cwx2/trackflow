@@ -884,7 +884,10 @@ public class SprintService {
      * <p>
      * 算法：遍历 Sprint 日期范围的每一天，计算该天结束时剩余未关闭工单数。
      * 使用 issue.resolved_at 来判断工单何时被关闭（resolved_at 的日期 ≤ 当天 → 已关闭）。
+     * <p>
+     * 使用 readOnly 事务确保多步查询在同一个数据库快照中执行，避免并发修改导致数据不一致。
      */
+    @Transactional(readOnly = true)
     public BurndownVO getBurndownData(Long sprintId) {
         Sprint sprint = getById(sprintId);
 
@@ -892,122 +895,185 @@ public class SprintService {
         vo.setSprintId(String.valueOf(sprint.getId()));
         vo.setSprintName(sprint.getName());
 
-        // 没有日期范围时返回空结构
         if (sprint.getStartDate() == null || sprint.getEndDate() == null) {
-            vo.setDates(List.of());
-            vo.setIdealLine(List.of());
-            vo.setActualLine(List.of());
-            vo.setScopeLine(List.of());
-            vo.setTodayIndex(-1);
-            vo.setTotalIssues(0);
-            vo.setStartScopeIssues(0);
-            vo.setVelocity(0.0);
-            vo.setForecastDate(null);
-            return vo;
+            return buildEmptyBurndown(vo);
         }
 
         LocalDate sprintStart = sprint.getStartDate();
         LocalDate sprintEnd = sprint.getEndDate();
         LocalDate today = LocalDate.now();
+        long totalDays = Math.max(1, sprintStart.until(sprintEnd).getDays());
 
-        long totalDays = sprintStart.until(sprintEnd).getDays();
-        if (totalDays <= 0) totalDays = 1;
+        // 加载原始数据
+        BurndownRawData rawData = loadBurndownRawData(sprintId);
 
-        // 投影查询：只返回 id, created_at, resolved_at（不加载 title/description 等大字段）
+        // 构建每日 scope 变化时间线
+        ScopeTimeline scopeTimeline = buildScopeChangeTimeline(rawData, sprintStart);
+
+        // 计算每日指标
+        calculateDailyMetrics(vo, scopeTimeline, rawData, sprintStart, sprintEnd, today, totalDays);
+
+        // 计算速率和预测
+        calculateVelocityAndForecast(vo, scopeTimeline.startScope, today, totalDays);
+
+        vo.setTotalIssues(rawData.currentIssues.size());
+        vo.setStartScopeIssues((int) scopeTimeline.startScope);
+
+        return vo;
+    }
+
+    // ==================== 燃尽图私有辅助方法 ====================
+
+    /**
+     * 构建空燃尽图响应（Sprint 缺少日期范围时使用）。
+     */
+    private BurndownVO buildEmptyBurndown(BurndownVO vo) {
+        vo.setDates(List.of());
+        vo.setIdealLine(List.of());
+        vo.setActualLine(List.of());
+        vo.setScopeLine(List.of());
+        vo.setTodayIndex(-1);
+        vo.setTotalIssues(0);
+        vo.setStartScopeIssues(0);
+        vo.setVelocity(0.0);
+        vo.setForecastDate(null);
+        return vo;
+    }
+
+    /**
+     * 燃尽图原始数据聚合结构。
+     */
+    private record BurndownIssueData(Long id, LocalDateTime createdAt, LocalDateTime resolvedAt) {}
+
+    private record BurndownRawData(
+            List<BurndownIssueData> currentIssues,
+            Set<Long> currentIssueIds,
+            Map<Long, LocalDateTime> movedInMap,
+            List<IssueActivity> movedOutActivities,
+            Map<Long, LocalDateTime> movedOutCreatedAtMap
+    ) {}
+
+    /**
+     * 加载燃尽图计算所需的全部原始数据（Sprint 工单投影 + 活动记录）。
+     */
+    private BurndownRawData loadBurndownRawData(Long sprintId) {
         List<BurndownRow> projections = issueMapper.selectBurndownProjection(sprintId);
-
-        // 将投影结果转为轻量数据结构
-        record IssueBurndownData(Long id, LocalDateTime createdAt, LocalDateTime resolvedAt) {}
-        List<IssueBurndownData> currentIssues = projections.stream()
-                .map(row -> new IssueBurndownData(
-                        row.getId(),
-                        row.getCreatedAt(),
-                        row.getResolvedAt()
-                ))
+        List<BurndownIssueData> currentIssues = projections.stream()
+                .map(row -> new BurndownIssueData(row.getId(), row.getCreatedAt(), row.getResolvedAt()))
                 .toList();
 
-        // 使用投影查询获取 sprint 活动记录（利用部分索引加速）
+        Set<Long> currentIssueIds = currentIssues.stream()
+                .map(BurndownIssueData::id)
+                .collect(Collectors.toSet());
+
         String sprintIdStr = String.valueOf(sprintId);
         List<IssueActivity> movedInActivities = activityMapper.selectMovedInBySprint(sprintIdStr);
         List<IssueActivity> movedOutActivities = activityMapper.selectMovedOutBySprint(sprintIdStr);
 
-        // 构建每天的范围变化：addedByDay, removedByDay
-        Map<LocalDate, Long> addedByDay = new LinkedHashMap<>();
-        Map<LocalDate, Long> removedByDay = new LinkedHashMap<>();
-
-        // 对于当前在 Sprint 中的工单，判断进入时间：
-        // - 如果有 movedIn 活动记录，取该记录时间（可能被多次移入，取最新的）
-        // - 否则使用 issue.created_at（直接创建时分配到此 Sprint）
         Map<Long, LocalDateTime> movedInMap = movedInActivities.stream()
                 .collect(Collectors.toMap(
                         IssueActivity::getIssueId,
                         IssueActivity::getCreatedAt,
-                        (a, b) -> b.isAfter(a) ? b : a  // 多次移入取最新
+                        (a, b) -> b.isAfter(a) ? b : a
                 ));
 
-        // 构建 currentIssues 的 ID 集合用于快速查找
-        Set<Long> currentIssueIds = currentIssues.stream()
-                .map(IssueBurndownData::id)
-                .collect(Collectors.toSet());
+        Map<Long, LocalDateTime> movedOutCreatedAtMap = loadMovedOutCreatedAtMap(
+                movedOutActivities, currentIssueIds, movedInMap);
 
-        for (IssueBurndownData issue : currentIssues) {
-            LocalDate enteredDate;
-            LocalDateTime movedInAt = movedInMap.get(issue.id());
-            if (movedInAt != null) {
-                enteredDate = movedInAt.toLocalDate();
-            } else {
-                // 没有移入记录 = 创建时就在此 Sprint
-                enteredDate = issue.createdAt().toLocalDate();
-            }
-            addedByDay.merge(enteredDate, 1L, Long::sum);
-        }
+        return new BurndownRawData(currentIssues, currentIssueIds, movedInMap,
+                movedOutActivities, movedOutCreatedAtMap);
+    }
 
-        // 批量获取已移出工单的 createdAt（消除 N+1）
-        List<Long> movedOutIssueIdsNeedingCreatedAt = movedOutActivities.stream()
+    /**
+     * 批量获取已移出工单的 createdAt（消除 N+1 查询）。
+     */
+    private Map<Long, LocalDateTime> loadMovedOutCreatedAtMap(
+            List<IssueActivity> movedOutActivities,
+            Set<Long> currentIssueIds,
+            Map<Long, LocalDateTime> movedInMap) {
+
+        List<Long> idsNeedingCreatedAt = movedOutActivities.stream()
                 .filter(a -> !currentIssueIds.contains(a.getIssueId()))
                 .filter(a -> !movedInMap.containsKey(a.getIssueId()))
                 .map(IssueActivity::getIssueId)
                 .distinct()
                 .toList();
 
-        Map<Long, LocalDateTime> movedOutCreatedAtMap = new HashMap<>();
-        if (!movedOutIssueIdsNeedingCreatedAt.isEmpty()) {
-            List<IssueCreatedAtRow> createdAtRows = issueMapper.selectCreatedAtByIds(movedOutIssueIdsNeedingCreatedAt);
-            for (IssueCreatedAtRow row : createdAtRows) {
-                movedOutCreatedAtMap.put(row.getId(), row.getCreatedAt());
-            }
+        if (idsNeedingCreatedAt.isEmpty()) {
+            return Map.of();
         }
 
-        // 处理已移出 Sprint 的工单
-        for (IssueActivity movedOut : movedOutActivities) {
-            LocalDate removedDate = movedOut.getCreatedAt().toLocalDate();
-            removedByDay.merge(removedDate, 1L, Long::sum);
+        Map<Long, LocalDateTime> result = new HashMap<>();
+        List<IssueCreatedAtRow> createdAtRows = issueMapper.selectCreatedAtByIds(idsNeedingCreatedAt);
+        for (IssueCreatedAtRow row : createdAtRows) {
+            result.put(row.getId(), row.getCreatedAt());
+        }
+        return result;
+    }
 
-            // 检查该工单是否有对应的"移入"记录
-            LocalDateTime correspondingMovedIn = movedInMap.get(movedOut.getIssueId());
+    /**
+     * Scope 变化时间线聚合结构。
+     */
+    private record ScopeTimeline(
+            Map<LocalDate, Long> addedByDay,
+            Map<LocalDate, Long> removedByDay,
+            Map<LocalDate, Long> resolvedByDay,
+            long startScope
+    ) {}
+
+    /**
+     * 构建每日 scope 变化时间线（工单加入/移出/解决的每日统计）。
+     */
+    private ScopeTimeline buildScopeChangeTimeline(BurndownRawData rawData, LocalDate sprintStart) {
+        Map<LocalDate, Long> addedByDay = new LinkedHashMap<>();
+        Map<LocalDate, Long> removedByDay = new LinkedHashMap<>();
+
+        // 当前 Sprint 中工单的加入时间
+        for (BurndownIssueData issue : rawData.currentIssues) {
+            LocalDateTime movedInAt = rawData.movedInMap.get(issue.id());
+            LocalDate enteredDate = (movedInAt != null)
+                    ? movedInAt.toLocalDate()
+                    : issue.createdAt().toLocalDate();
+            addedByDay.merge(enteredDate, 1L, Long::sum);
+        }
+
+        // 已移出 Sprint 的工单
+        for (IssueActivity movedOut : rawData.movedOutActivities) {
+            removedByDay.merge(movedOut.getCreatedAt().toLocalDate(), 1L, Long::sum);
+
+            LocalDateTime correspondingMovedIn = rawData.movedInMap.get(movedOut.getIssueId());
             if (correspondingMovedIn != null) {
-                // 只处理"当前不在此Sprint"的情况
-                if (!currentIssueIds.contains(movedOut.getIssueId())) {
+                if (!rawData.currentIssueIds.contains(movedOut.getIssueId())) {
                     addedByDay.merge(correspondingMovedIn.toLocalDate(), 1L, Long::sum);
                 }
             } else {
-                // 没有移入记录 = 直接创建时在此 Sprint，后来被移出
-                LocalDateTime createdAt = movedOutCreatedAtMap.get(movedOut.getIssueId());
+                LocalDateTime createdAt = rawData.movedOutCreatedAtMap.get(movedOut.getIssueId());
                 if (createdAt != null) {
                     addedByDay.merge(createdAt.toLocalDate(), 1L, Long::sum);
                 }
             }
         }
 
-        // 按解决日期分组统计每天关闭的工单数（只包含当前在 Sprint 中的工单）
-        Map<LocalDate, Long> resolvedByDay = currentIssues.stream()
-                .filter(i -> i.resolvedAt() != null)
+        // 按解决日期分组统计
+        Map<LocalDate, Long> resolvedByDay = rawData.currentIssues.stream()
+                .filter(issue -> issue.resolvedAt() != null)
                 .collect(Collectors.groupingBy(
-                        i -> i.resolvedAt().toLocalDate(),
+                        issue -> issue.resolvedAt().toLocalDate(),
                         Collectors.counting()
                 ));
 
-        // 计算 Sprint 开始时的实际范围（开始日期之前或当天加入的工单数）
+        // 计算 Sprint 开始时的 scope
+        long startScope = calculateStartScope(addedByDay, removedByDay, sprintStart);
+
+        return new ScopeTimeline(addedByDay, removedByDay, resolvedByDay, startScope);
+    }
+
+    /**
+     * 计算 Sprint 开始时的实际范围（开始日期之前或当天加入的工单数 - 移出的工单数）。
+     */
+    private long calculateStartScope(Map<LocalDate, Long> addedByDay,
+                                     Map<LocalDate, Long> removedByDay,
+                                     LocalDate sprintStart) {
         long startScope = 0;
         for (Map.Entry<LocalDate, Long> entry : addedByDay.entrySet()) {
             if (!entry.getKey().isAfter(sprintStart)) {
@@ -1019,52 +1085,43 @@ public class SprintService {
                 startScope -= entry.getValue();
             }
         }
-        if (startScope < 0) startScope = 0;
+        return Math.max(0, startScope);
+    }
 
-        vo.setStartScopeIssues((int) startScope);
-        vo.setTotalIssues(currentIssues.size());
-
-        // 理想线基于 Sprint 开始时的范围线性递减
-        double idealDecrement = startScope > 0 ? (double) startScope / totalDays : 0.0;
+    /**
+     * 计算每日的 ideal/actual/scope 指标并填充到 VO 中。
+     */
+    private void calculateDailyMetrics(BurndownVO vo, ScopeTimeline timeline,
+                                       BurndownRawData rawData,
+                                       LocalDate sprintStart, LocalDate sprintEnd,
+                                       LocalDate today, long totalDays) {
+        double idealDecrement = timeline.startScope > 0 ? (double) timeline.startScope / totalDays : 0.0;
 
         List<String> dates = new ArrayList<>();
         List<Double> idealLine = new ArrayList<>();
         List<Integer> actualLine = new ArrayList<>();
         List<Integer> scopeLine = new ArrayList<>();
 
-        long scope = startScope;
-        long resolved = 0;
-        double idealRemaining = startScope;
+        long scope = timeline.startScope;
+        long resolved = calculateResolvedBeforeStart(timeline.resolvedByDay, sprintStart);
+        double idealRemaining = timeline.startScope;
         int todayIndex = -1;
 
-        // 统计 Sprint 开始前已完成的工单
-        long resolvedBeforeStart = resolvedByDay.entrySet().stream()
-                .filter(e -> e.getKey().isBefore(sprintStart))
-                .mapToLong(Map.Entry::getValue)
-                .sum();
-        resolved += resolvedBeforeStart;
-
-        // 实际线只计算到 today（未来的天不绘制实际值）
         LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
-
         LocalDate current = sprintStart;
         int dayIndex = 0;
+
         while (!current.isAfter(sprintEnd)) {
             dates.add(current.toString());
-
-            // 理想线从 startScope 递减到 0
             idealLine.add(Math.max(0, Math.round(idealRemaining * 10.0) / 10.0));
             idealRemaining -= idealDecrement;
 
             if (!current.isAfter(endForActual)) {
-                // 当天新增到 Sprint 的工单（首天之后的才是 scope change）
                 if (current.isAfter(sprintStart)) {
-                    scope += addedByDay.getOrDefault(current, 0L);
-                    scope -= removedByDay.getOrDefault(current, 0L);
+                    scope += timeline.addedByDay.getOrDefault(current, 0L);
+                    scope -= timeline.removedByDay.getOrDefault(current, 0L);
                 }
-                // 当天关闭的工单
-                resolved += resolvedByDay.getOrDefault(current, 0L);
-
+                resolved += timeline.resolvedByDay.getOrDefault(current, 0L);
                 scopeLine.add((int) Math.max(0, scope));
                 actualLine.add((int) Math.max(0, scope - resolved));
             }
@@ -1081,24 +1138,47 @@ public class SprintService {
         vo.setActualLine(actualLine);
         vo.setScopeLine(scopeLine);
         vo.setTodayIndex(todayIndex);
+    }
 
-        // 计算日均完成速率（velocity）
+    /**
+     * 统计 Sprint 开始前已完成的工单数。
+     */
+    private long calculateResolvedBeforeStart(Map<LocalDate, Long> resolvedByDay, LocalDate sprintStart) {
+        return resolvedByDay.entrySet().stream()
+                .filter(entry -> entry.getKey().isBefore(sprintStart))
+                .mapToLong(Map.Entry::getValue)
+                .sum();
+    }
+
+    /**
+     * 计算日均完成速率和预测完成日期。
+     */
+    private void calculateVelocityAndForecast(BurndownVO vo, long startScope,
+                                              LocalDate today, long totalDays) {
+        int todayIndex = vo.getTodayIndex();
         int daysElapsed = todayIndex >= 0 ? todayIndex + 1 : (int) totalDays;
+
+        // 从 actualLine 反推已完成数：scope - actual = resolved
+        long resolved = 0;
+        long scope = startScope;
+        if (!vo.getActualLine().isEmpty() && !vo.getScopeLine().isEmpty()) {
+            int lastIdx = vo.getActualLine().size() - 1;
+            scope = vo.getScopeLine().get(lastIdx);
+            long actual = vo.getActualLine().get(lastIdx);
+            resolved = scope - actual;
+        }
+
         double velocity = daysElapsed > 0 ? (double) resolved / daysElapsed : 0.0;
         vo.setVelocity(Math.round(velocity * 100.0) / 100.0);
 
-        // 预测完成日期
         long remaining = scope - resolved;
         if (velocity > 0 && remaining > 0) {
             long daysNeeded = (long) Math.ceil(remaining / velocity);
-            LocalDate forecast = today.plusDays(daysNeeded);
-            vo.setForecastDate(forecast.toString());
+            vo.setForecastDate(today.plusDays(daysNeeded).toString());
         } else if (remaining <= 0) {
             vo.setForecastDate(today.toString());
         } else {
             vo.setForecastDate(null);
         }
-
-        return vo;
     }
 }
