@@ -183,6 +183,7 @@ public class GlobalExceptionHandler {
      */
     private static final Map<String, ErrorCode> CONSTRAINT_ERROR_MAP = Map.of(
             "project_key_key", ErrorCode.PROJECT_KEY_DUPLICATE,
+            "idx_project_name_unique", ErrorCode.PROJECT_NAME_DUPLICATE,
             "organization_code_key", ErrorCode.ORG_CODE_DUPLICATE,
             "sys_role_code_key", ErrorCode.ROLE_CODE_DUPLICATE,
             "issue_tag_project_id_name_key", ErrorCode.DUPLICATE_RESOURCE,

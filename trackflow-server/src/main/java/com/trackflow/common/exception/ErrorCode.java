@@ -51,6 +51,7 @@ public enum ErrorCode {
     ROLE_IN_USE(40903, 409, "角色正在使用中，无法删除"),
     ROLE_CODE_DUPLICATE(40904, 409, "角色编码已存在"),
     PROJECT_KEY_DUPLICATE(40905, 409, "项目标识已存在"),
+    PROJECT_NAME_DUPLICATE(40907, 409, "项目名称已存在"),
     CLOSE_CONFIRMATION_REQUIRED(40910, 409, "关闭前需要用户确认"),
     SPRINT_DATE_OVERLAP(40913, 409, "Sprint 日期与已有迭代重叠"),
     WIP_LIMIT_EXCEEDED(40914, 409, "目标列已达到 WIP 上限"),

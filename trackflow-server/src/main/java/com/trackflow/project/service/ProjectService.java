@@ -112,6 +112,14 @@ public class ProjectService {
             throw new BusinessException(ErrorCode.PROJECT_KEY_DUPLICATE);
         }
 
+        // Name 唯一性检查（不区分大小写，对标 YouTrack: "The project name must be unique."）
+        Long nameCount = projectMapper.selectCount(
+                new LambdaQueryWrapper<Project>().apply("LOWER(name) = LOWER({0})", dto.getName().trim())
+        );
+        if (nameCount > 0) {
+            throw new BusinessException(ErrorCode.PROJECT_NAME_DUPLICATE);
+        }
+
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
         // leadId 校验：如果指定了 leadId，校验用户存在且状态为 active
@@ -427,6 +435,15 @@ public class ProjectService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "项目名称不能为空");
             }
             if (!trimmedName.equals(project.getName())) {
+                // 名称唯一性检查（排除当前项目自身，不区分大小写）
+                Long nameCount = projectMapper.selectCount(
+                        new LambdaQueryWrapper<Project>()
+                                .apply("LOWER(name) = LOWER({0})", trimmedName)
+                                .ne(Project::getId, id)
+                );
+                if (nameCount > 0) {
+                    throw new BusinessException(ErrorCode.PROJECT_NAME_DUPLICATE);
+                }
                 String oldName = project.getName();
                 project.setName(trimmedName);
                 Map<String, Object> detail = new java.util.LinkedHashMap<>();

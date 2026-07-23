@@ -91,7 +91,15 @@ public class ProjectCopyService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "项目标识 " + dto.getKey() + " 已存在");
         }
 
-        // 3. 创建新项目
+        // 3. 验证 Name 唯一性（不区分大小写，对标 YouTrack: "The project name must be unique."）
+        Long nameCount = projectMapper.selectCount(
+                new LambdaQueryWrapper<Project>().apply("LOWER(name) = LOWER({0})", dto.getName().trim())
+        );
+        if (nameCount > 0) {
+            throw new BusinessException(ErrorCode.PROJECT_NAME_DUPLICATE);
+        }
+
+        // 4. 创建新项目
         Project newProject = new Project();
         newProject.setName(dto.getName());
         newProject.setKey(dto.getKey());
