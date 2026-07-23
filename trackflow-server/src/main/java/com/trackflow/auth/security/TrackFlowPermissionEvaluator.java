@@ -16,11 +16,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.io.Serializable;
-import java.util.Set;
 
 /**
  * 自定义权限评估器：集成到 Spring Security @PreAuthorize 中
@@ -101,11 +99,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        // API Key scope 过滤：如果有 scope 限制且请求的权限不在 scope 中，直接拒绝
-        if (!isPermissionInScope(permission)) {
-            return false;
-        }
-
+        // Scope 过滤已下沉到 PermissionService 内部，此处无需额外检查
         return permissionService.hasPermission(userId, projectId, permission);
     }
 
@@ -122,9 +116,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        if (!isPermissionInScope(permission)) {
-            return false;
-        }
+        // Scope 过滤已下沉到 PermissionService 内部
 
         Issue issue = issueMapper.selectOne(
                 new LambdaQueryWrapper<Issue>()
@@ -158,15 +150,12 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "转换动作不存在");
         }
 
+        // Scope 过滤已下沉到 PermissionService 内部
         Long projectId = WorkflowScope.toApi(action.getProjectId());
         if (WorkflowScope.isGlobal(projectId)) {
-            String permission = "system:admin";
-            if (!isPermissionInScope(permission)) return false;
-            return permissionService.hasGlobalPermission(userId, permission);
+            return permissionService.hasGlobalPermission(userId, "system:admin");
         } else {
-            String permission = "project:manage_workflow";
-            if (!isPermissionInScope(permission)) return false;
-            return permissionService.hasPermission(userId, projectId, permission);
+            return permissionService.hasPermission(userId, projectId, "project:manage_workflow");
         }
     }
 
@@ -185,7 +174,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        if (!isPermissionInScope(permission)) return false;
+        // Scope 过滤已下沉到 PermissionService 内部
 
         com.trackflow.issue.mapper.result.DeletedIssueRow row = issueMapper.selectByIdIgnoreDeleted(issueId);
         if (row == null) {
@@ -209,7 +198,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        if (!isPermissionInScope(permission)) return false;
+        // Scope 过滤已下沉到 PermissionService 内部
 
         Sprint sprint = sprintMapper.selectById(sprintId);
         if (sprint == null) {
@@ -255,11 +244,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        // API Key scope 过滤
-        if (!isPermissionInScope(permission)) {
-            return false;
-        }
-
+        // Scope 过滤已下沉到 PermissionService 内部
         return permissionService.hasGlobalPermission(userId, permission);
     }
 
@@ -270,9 +255,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         if (userId == null) return false;
 
         String perm = permission.toString();
-        if (!isPermissionInScope(perm)) {
-            return false;
-        }
+        // Scope 过滤已下沉到 PermissionService 内部
 
         Long projectId = null;
         if (targetDomainObject instanceof Long) {
@@ -288,9 +271,7 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         if (userId == null) return false;
 
         String perm = permission.toString();
-        if (!isPermissionInScope(perm)) {
-            return false;
-        }
+        // Scope 过滤已下沉到 PermissionService 内部
 
         Long projectId = targetId instanceof Long ? (Long) targetId : null;
         return permissionService.hasPermission(userId, projectId, perm);
@@ -306,11 +287,9 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        String permission = "report:view";
-        if (!isPermissionInScope(permission)) return false;
-
+        // Scope 过滤已下沉到 PermissionService 内部
         return permissionService.isSystemAdmin(userId)
-                || permissionService.hasPermissionInAnyProject(userId, permission);
+                || permissionService.hasPermissionInAnyProject(userId, "report:view");
     }
 
     /**
@@ -323,11 +302,9 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        String permission = "report:create";
-        if (!isPermissionInScope(permission)) return false;
-
+        // Scope 过滤已下沉到 PermissionService 内部
         return permissionService.isSystemAdmin(userId)
-                || permissionService.hasPermissionInAnyProject(userId, permission);
+                || permissionService.hasPermissionInAnyProject(userId, "report:create");
     }
 
     /**
@@ -340,32 +317,14 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return false;
 
-        String permission = "report:view";
-        if (!isPermissionInScope(permission)) return false;
+        // Scope 过滤已下沉到 PermissionService 内部
 
         if (permissionService.isSystemAdmin(userId)) return true;
 
         if (projectId != null) {
-            return permissionService.hasPermission(userId, projectId, permission);
+            return permissionService.hasPermission(userId, projectId, "report:view");
         }
-        return permissionService.hasPermissionInAnyProject(userId, permission);
+        return permissionService.hasPermissionInAnyProject(userId, "report:view");
     }
 
-    /**
-     * 判断请求的权限是否在当前 API Key 的 scope 范围内。
-     * <p>
-     * 规则：
-     * - 非 API Key 认证 → 不限制（返回 true）
-     * - API Key scope 为空 → 不限制（返回 true，向后兼容）
-     * - API Key scope 非空 → permission 必须在 scope 中
-     */
-    private boolean isPermissionInScope(String permission) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication instanceof ApiKeyAuthenticationToken apiKeyToken) {
-            if (apiKeyToken.hasScopeRestriction()) {
-                return apiKeyToken.getScope().contains(permission);
-            }
-        }
-        return true;
-    }
 }

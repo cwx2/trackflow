@@ -1,5 +1,6 @@
 package com.trackflow.auth.service;
 
+import com.trackflow.auth.security.ApiKeyAuthenticationToken;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.entity.Project;
@@ -16,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -122,15 +125,34 @@ public class PermissionService {
     }
 
     /**
-     * 检查用户是否拥有指定权限（全局 + 项目级）
+     * 检查用户是否拥有指定权限（全局 + 项目级）。
+     * <p>
+     * 内置 API Key scope 过滤：当请求通过 API Key 认证且 scope 非空时，
+     * 实际权限 = 用户角色权限 ∩ apiKeyScope。无论调用方是 Controller 层
+     * 的 @PreAuthorize 还是 Service 层的直接调用，scope 过滤都不可绕过。
+     * <p>
+     * system:admin 处理规则：
+     * - 如果 API Key scope 包含 "system:admin"，则允许所有操作（管理员不受限制）
+     * - 如果 API Key scope 不包含 "system:admin"，即使用户是管理员也必须按 scope 限制执行
      */
     public boolean hasPermission(Long userId, Long projectId, String permission) {
         if (userId == null) return false;
 
+        // API Key scope 过滤：如果有 scope 限制且请求的权限不在 scope 中，直接拒绝
+        if (!isPermissionInCurrentScope(permission)) {
+            return false;
+        }
+
         // 先检查全局权限
         Set<String> globalPerms = getPermissions(userId);
         if (globalPerms.contains(SYSTEM_ADMIN_PERMISSION)) {
-            return true;
+            // system:admin 用户——如果 scope 允许 system:admin 或无 scope 限制，则放行一切
+            // 如果 scope 不含 system:admin（如只含 issue:view），则管理员身份不生效，
+            // 但上面 isPermissionInCurrentScope(permission) 已通过，继续检查具体权限
+            if (isPermissionInCurrentScope(SYSTEM_ADMIN_PERMISSION)) {
+                return true;
+            }
+            // scope 不含 system:admin，但含所请求的 permission → 继续检查角色权限
         }
         if (globalPerms.contains(permission)) {
             return true;
@@ -153,11 +175,38 @@ public class PermissionService {
     }
 
     /**
-     * 检查用户是否是系统管理员
+     * 检查用户是否是系统管理员。
+     * <p>
+     * 内置 API Key scope 过滤：即使用户拥有 system:admin 角色权限，
+     * 如果 API Key scope 中没有 "system:admin"，也返回 false。
      */
     public boolean isSystemAdmin(Long userId) {
+        if (!isPermissionInCurrentScope(SYSTEM_ADMIN_PERMISSION)) {
+            return false;
+        }
         Set<String> permissions = getPermissions(userId);
         return permissions.contains(SYSTEM_ADMIN_PERMISSION);
+    }
+
+    /**
+     * 判断请求的权限是否在当前 API Key 的 scope 范围内。
+     * <p>
+     * 规则：
+     * - 非 API Key 认证（JWT 等） → 不限制（返回 true）
+     * - API Key scope 为空 → 不限制（返回 true，向后兼容）
+     * - API Key scope 非空 → permission 必须在 scope 中
+     * <p>
+     * 此方法确保 scope 过滤在权限检查的最底层执行，
+     * 无论是 @PreAuthorize 触发还是 Service 层直接调用，都无法绕过。
+     */
+    private boolean isPermissionInCurrentScope(String permission) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof ApiKeyAuthenticationToken apiKeyToken) {
+            if (apiKeyToken.hasScopeRestriction()) {
+                return apiKeyToken.getScope().contains(permission);
+            }
+        }
+        return true;
     }
 
     /**
@@ -456,12 +505,20 @@ public class PermissionService {
     }
 
     /**
-     * 检查用户是否在任何项目中拥有指定权限
-     * 用于导航级别的权限判断（如：用户在任何项目中是否可以管理工作流）
-     * 检查范围包括：直接项目成员角色 + 组继承的项目角色
+     * 检查用户是否在任何项目中拥有指定权限。
+     * 用于导航级别的权限判断（如：用户在任何项目中是否可以管理工作流）。
+     * 检查范围包括：直接项目成员角色 + 组继承的项目角色。
+     * <p>
+     * 内置 API Key scope 过滤。
      */
     public boolean hasPermissionInAnyProject(Long userId, String permission) {
         if (userId == null) return false;
+
+        // API Key scope 过滤
+        if (!isPermissionInCurrentScope(permission)) {
+            return false;
+        }
+
         // system:admin 拥有所有权限
         if (isSystemAdmin(userId)) return true;
         // 1. 直接项目成员角色
@@ -614,7 +671,12 @@ public class PermissionService {
     public boolean hasIssuePermission(Long userId, Issue issue, String permission) {
         if (userId == null || issue == null) return false;
 
-        // 1. 项目级权限直接满足（含 system:admin 检查）
+        // API Key scope 过滤：即使是固有权限，也必须在 scope 范围内
+        if (!isPermissionInCurrentScope(permission)) {
+            return false;
+        }
+
+        // 1. 项目级权限直接满足（含 system:admin 检查，hasPermission 内部已含 scope 检查，此处不会重复）
         if (hasPermission(userId, issue.getProjectId(), permission)) {
             return true;
         }
