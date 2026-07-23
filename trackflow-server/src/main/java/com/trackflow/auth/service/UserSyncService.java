@@ -173,6 +173,22 @@ public class UserSyncService {
     }
 
     /**
+     * 仅同步 Keycloak 角色到本地（不更新用户基本信息）。
+     * 供 UserSyncFilter 快速路径中检测到角色变化时调用，避免完整 syncFromJwt 的开销。
+     *
+     * @param userId        本地用户 ID
+     * @param keycloakRoles 当前 JWT 中的 realm_access.roles 列表
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void syncKeycloakRolesOnly(Long userId, List<String> keycloakRoles) {
+        SysUser user = userMapper.selectById(userId);
+        if (user == null || "disabled".equals(user.getStatus())) {
+            return;
+        }
+        syncKeycloakRolesToLocal(user, keycloakRoles);
+    }
+
+    /**
      * 同步 Keycloak 角色到本地 TrackFlow 角色。
      * 策略：双向同步——Keycloak 作为权限 Single Source of Truth。
      * - Keycloak 有 tf_admin 但本地缺少 system_admin 时补上

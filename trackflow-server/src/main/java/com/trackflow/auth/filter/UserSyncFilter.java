@@ -20,8 +20,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -88,14 +91,24 @@ public class UserSyncFilter extends OncePerRequestFilter {
                 SysUser user = null;
 
                 if (cached != null && !cached.isExpired()) {
-                    // 缓存命中 — 直接使用 cachedUserId，不调用 syncFromJwt
+                    // 缓存命中 — 但需检测 Keycloak 角色是否变更
                     userId = cached.userId();
+                    Set<String> currentRoles = Set.copyOf(extractRealmRoles(jwt));
+                    if (!currentRoles.equals(cached.cachedRoles())) {
+                        // 角色变化：触发角色同步（仅角色，不重走完整 syncFromJwt）
+                        userSyncService.syncKeycloakRolesOnly(userId, List.copyOf(currentRoles));
+                        // 更新缓存中的角色快照
+                        syncCache.put(keycloakId, new SyncCacheEntry(userId, cached.cachedAt(), currentRoles));
+                        log.info("Keycloak roles changed for user {}, synced immediately: {} -> {}",
+                                keycloakId, cached.cachedRoles(), currentRoles);
+                    }
                 } else {
                     // 缓存未命中或已过期 — 执行完整同步
                     user = userSyncService.syncFromJwt(jwt);
                     userId = user.getId();
+                    Set<String> currentRoles = Set.copyOf(extractRealmRoles(jwt));
                     // 更新缓存
-                    syncCache.put(keycloakId, new SyncCacheEntry(userId, System.currentTimeMillis()));
+                    syncCache.put(keycloakId, new SyncCacheEntry(userId, System.currentTimeMillis(), currentRoles));
                     // 定期清理过期条目（概率触发）
                     cleanupSyncCacheIfNeeded();
                 }
@@ -162,9 +175,12 @@ public class UserSyncFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 同步缓存条目：存储用户 ID 和缓存创建时间。
+     * 同步缓存条目：存储用户 ID、缓存创建时间和缓存时的 Keycloak realm 角色。
+     * <p>
+     * cachedRoles 用于快速路径中检测角色变更：
+     * 若 JWT 中的 realm roles 与缓存不同，触发 syncKeycloakRolesToLocal，确保角色变更即时生效。
      */
-    private record SyncCacheEntry(Long userId, long cachedAt) {
+    private record SyncCacheEntry(Long userId, long cachedAt, Set<String> cachedRoles) {
         boolean isExpired() {
             return System.currentTimeMillis() - cachedAt > SYNC_CACHE_TTL_MS;
         }
@@ -178,6 +194,23 @@ public class UserSyncFilter extends OncePerRequestFilter {
         if (keycloakId != null) {
             syncCache.remove(keycloakId);
         }
+    }
+
+    /**
+     * 从 JWT 中提取 Keycloak realm_access.roles 列表。
+     * 用于快速路径中比较角色变化，不依赖 UserSyncService（避免注入完整同步流程）。
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> extractRealmRoles(Jwt jwt) {
+        Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+        if (realmAccess == null) {
+            return Collections.emptyList();
+        }
+        Object roles = realmAccess.get("roles");
+        if (roles instanceof List<?>) {
+            return (List<String>) roles;
+        }
+        return Collections.emptyList();
     }
 
     /**
