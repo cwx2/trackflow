@@ -126,9 +126,15 @@ public class UserSyncService {
                 throw new BusinessException(ErrorCode.USER_DISABLED);
             }
 
-            // 更新基本信息
-            user.setDisplayName(displayName != null ? displayName : user.getDisplayName());
-            user.setEmail(email != null ? email : user.getEmail());
+            // 由于 Filter 层 syncCache 机制，此方法现在仅在缓存过期时被调用（约每 5 分钟一次/用户）。
+            // 因此每次调用都执行 UPDATE 是可接受的（频率已从 ~2500/min 降至 ~50/min）。
+            // 仅在 displayName/email 实际变化时更新对应字段。
+            if (displayName != null && !displayName.equals(user.getDisplayName())) {
+                user.setDisplayName(displayName);
+            }
+            if (email != null && !email.equals(user.getEmail())) {
+                user.setEmail(email);
+            }
             user.setLastLoginAt(LocalDateTime.now());
             userMapper.updateById(user);
 

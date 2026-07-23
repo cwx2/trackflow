@@ -20,12 +20,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 用户同步过滤器：在 JWT 认证成功后同步用户信息到本地数据库，
  * 并将本地用户 ID 设置到 Authentication details 中。
+ * <p>
+ * 性能优化：使用本地缓存（syncCache）避免每次请求都执行 DB 同步。
+ * 同一 keycloakId 在缓存有效期内（5 分钟）只同步一次，后续请求直接使用缓存的 userId。
  * <p>
  * 同时负责记录认证安全审计日志（login / first_login）。
  * 使用 JWT ID (jti) 去重，确保每个 token 只记录一次登录事件。
@@ -43,14 +47,29 @@ public class UserSyncFilter extends OncePerRequestFilter {
     private static final String DISABLED_USER_KEY_PREFIX = "auth:disabled:";
 
     /**
+     * 用户同步结果缓存：避免每次请求都执行 DB 查询和 UPDATE。
+     * key: keycloakId (jwt.subject), value: SyncCacheEntry (userId + 缓存时间)
+     * <p>
+     * 缓存命中（快速路径，99% 请求）：直接取 cachedUserId 设入 Authentication.details，跳过 syncFromJwt。
+     * 缓存未命中或过期（慢速路径）：执行完整 syncFromJwt 并更新缓存。
+     */
+    private final ConcurrentHashMap<String, SyncCacheEntry> syncCache = new ConcurrentHashMap<>();
+
+    /** 同步缓存 TTL：5 分钟（与 Keycloak JWT 有效期对齐） */
+    private static final long SYNC_CACHE_TTL_MS = 5 * 60 * 1000L;
+
+    /** 同步缓存最大条目数（防内存泄漏，超过后触发清理） */
+    private static final int SYNC_CACHE_MAX_SIZE = 1000;
+
+    /**
      * 已记录过登录事件的 JWT ID 缓存。
      * key: jti (JWT ID), value: 写入时间戳（用于定期清理过期条目）。
      * 由于 Keycloak token 有效期为 5 分钟，缓存条目在 10 分钟后自动清理。
      */
     private final ConcurrentHashMap<String, Long> loggedTokenIds = new ConcurrentHashMap<>();
 
-    /** 缓存条目过期时间：10 分钟（毫秒） */
-    private static final long CACHE_EXPIRY_MS = 10 * 60 * 1000L;
+    /** 登录事件缓存过期时间：10 分钟（毫秒） */
+    private static final long LOGIN_CACHE_EXPIRY_MS = 10 * 60 * 1000L;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -61,17 +80,37 @@ public class UserSyncFilter extends OncePerRequestFilter {
         if (authentication instanceof JwtAuthenticationToken jwtAuth && jwtAuth.isAuthenticated()) {
             try {
                 Jwt jwt = jwtAuth.getToken();
-                SysUser user = userSyncService.syncFromJwt(jwt);
+                String keycloakId = jwt.getSubject();
+
+                // 快速路径：缓存命中且未过期，跳过 DB 同步
+                SyncCacheEntry cached = syncCache.get(keycloakId);
+                Long userId;
+                SysUser user = null;
+
+                if (cached != null && !cached.isExpired()) {
+                    // 缓存命中 — 直接使用 cachedUserId，不调用 syncFromJwt
+                    userId = cached.userId();
+                } else {
+                    // 缓存未命中或已过期 — 执行完整同步
+                    user = userSyncService.syncFromJwt(jwt);
+                    userId = user.getId();
+                    // 更新缓存
+                    syncCache.put(keycloakId, new SyncCacheEntry(userId, System.currentTimeMillis()));
+                    // 定期清理过期条目（概率触发）
+                    cleanupSyncCacheIfNeeded();
+                }
+
                 // 将本地用户 ID 设置到 details 中，供后续 SecurityUtils 获取
-                jwtAuth.setDetails(user.getId());
+                jwtAuth.setDetails(userId);
 
                 // Redis 黑名单快速检查：用户被禁用后即时拦截（O(1)）
-                // 放在 syncFromJwt 之后，因为需要 user.getId()；
-                // syncFromJwt 本身也会检查 DB status（双重保障）
-                if (isUserBlacklisted(user.getId())) {
+                if (isUserBlacklisted(userId)) {
+                    // 禁用后移除缓存，确保下次走慢速路径
+                    syncCache.remove(keycloakId);
+                    String username = user != null ? user.getUsername() : keycloakId;
                     log.warn("Request blocked by Redis blacklist: userId={}, username={}",
-                            user.getId(), user.getUsername());
-                    logSessionBlocked(user, request, "user_disabled");
+                            userId, username);
+                    logSessionBlockedById(userId, username, request, "user_disabled");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
@@ -82,9 +121,11 @@ public class UserSyncFilter extends OncePerRequestFilter {
 
                 // Session 黑名单检查：用户已从 Keycloak 登出，session 已被 back-channel logout 失效
                 if (isSessionLoggedOut(jwt)) {
+                    syncCache.remove(keycloakId);
+                    String username = user != null ? user.getUsername() : keycloakId;
                     log.warn("Request blocked by session logout blacklist: userId={}, username={}, sid={}",
-                            user.getId(), user.getUsername(), jwt.getClaimAsString("sid"));
-                    logSessionBlocked(user, request, "session_logged_out");
+                            userId, username, jwt.getClaimAsString("sid"));
+                    logSessionBlockedById(userId, username, request, "session_logged_out");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(
@@ -95,6 +136,10 @@ public class UserSyncFilter extends OncePerRequestFilter {
 
                 // 仅对"新颁发"的 token 记录登录事件（jti 去重 + 时间窗口）
                 if (shouldLogLogin(jwt)) {
+                    // 登录审计需要完整 user 对象；若走缓存路径未加载，需查一次
+                    if (user == null) {
+                        user = userSyncService.syncFromJwt(jwt);
+                    }
                     logLoginEvent(user, jwt, request);
                 }
             } catch (Exception e) {
@@ -114,6 +159,42 @@ public class UserSyncFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 同步缓存条目：存储用户 ID 和缓存创建时间。
+     */
+    private record SyncCacheEntry(Long userId, long cachedAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > SYNC_CACHE_TTL_MS;
+        }
+    }
+
+    /**
+     * 主动失效指定用户的同步缓存。
+     * 在用户被禁用、角色变更等场景下由外部调用，确保下次请求走慢速路径重新同步。
+     */
+    public void invalidateSyncCache(String keycloakId) {
+        if (keycloakId != null) {
+            syncCache.remove(keycloakId);
+        }
+    }
+
+    /**
+     * 清理过期的同步缓存条目。
+     * 仅在缓存大小超过阈值时触发（概率清理），避免每次请求都遍历。
+     */
+    private void cleanupSyncCacheIfNeeded() {
+        if (syncCache.size() > SYNC_CACHE_MAX_SIZE) {
+            long cutoff = System.currentTimeMillis() - SYNC_CACHE_TTL_MS;
+            Iterator<Map.Entry<String, SyncCacheEntry>> iterator = syncCache.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<String, SyncCacheEntry> entry = iterator.next();
+                if (entry.getValue().cachedAt() < cutoff) {
+                    iterator.remove();
+                }
+            }
+        }
     }
 
     /**
@@ -184,7 +265,7 @@ public class UserSyncFilter extends OncePerRequestFilter {
 
         // 定期清理过期条目（简单概率清理，避免内存泄漏）
         if (loggedTokenIds.size() > 100) {
-            long cutoff = System.currentTimeMillis() - CACHE_EXPIRY_MS;
+            long cutoff = System.currentTimeMillis() - LOGIN_CACHE_EXPIRY_MS;
             loggedTokenIds.entrySet().removeIf(entry -> entry.getValue() < cutoff);
         }
 
@@ -194,7 +275,7 @@ public class UserSyncFilter extends OncePerRequestFilter {
 
     /**
      * 记录 JWT 登录成功审计事件。
-     * 仅在新 token 首次使用时调用（由 isNewToken 判断）。
+     * 仅在新 token 首次使用时调用（由 shouldLogLogin 判断）。
      */
     private void logLoginEvent(SysUser user, Jwt jwt, HttpServletRequest request) {
         try {
@@ -236,18 +317,17 @@ public class UserSyncFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 记录会话被阻断事件（用户被禁用后使用旧 JWT 请求）。
-     * 区分于 login_failed：login_failed 是认证阶段失败，
-     * session_blocked 是已认证用户因账号状态变化而被拦截。
+     * 记录会话被阻断事件（通过 userId 和 username）。
+     * 在缓存路径中可能没有完整 SysUser 对象，因此接受原始字段。
      */
-    private void logSessionBlocked(SysUser user, HttpServletRequest request, String reason) {
+    private void logSessionBlockedById(Long userId, String username, HttpServletRequest request, String reason) {
         try {
             systemAuditService.logAuthEvent(
                     "session_blocked",
-                    user.getId(),
+                    userId,
                     WebUtils.getClientIp(request),
                     request.getHeader("User-Agent"),
-                    Map.of("method", "jwt", "reason", reason, "username", user.getUsername())
+                    Map.of("method", "jwt", "reason", reason, "username", username)
             );
         } catch (Exception e) {
             log.warn("Failed to log session_blocked event: {}", e.getMessage());
