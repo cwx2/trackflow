@@ -991,7 +991,10 @@ public class IssueService {
                     CustomFieldValidateMode.PARTIAL);
         }
 
-        issueMapper.updateById(issue);
+        int rows = issueMapper.updateById(issue);
+        if (rows == 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该工单已被其他人修改，请刷新页面后重试");
+        }
 
         // 触发 on-field-changed 自动化规则（通过事件，解耦）
         fireFieldChangeRules(issue, dto, oldValues);
@@ -1142,7 +1145,10 @@ public class IssueService {
             }
         }
 
-        issueMapper.updateById(issue);
+        int rows = issueMapper.updateById(issue);
+        if (rows == 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该工单已被其他人修改，请刷新页面后重试");
+        }
 
         // 自定义字段清理：移除不适用于目标项目的字段值
         customFieldService.removeOrphanValues(issueId, issue.getIssueType(), targetProjectId);
@@ -1670,7 +1676,10 @@ public class IssueService {
         } else {
             issue.setResolvedAt(null);
         }
-        issueMapper.updateById(issue);
+        int rows = issueMapper.updateById(issue);
+        if (rows == 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该工单已被其他人修改，请刷新页面后重试");
+        }
 
         // 记录状态变更活动
         IssueStatus oldStatus = statusMapper.selectById(oldStatusId);
@@ -1735,7 +1744,10 @@ public class IssueService {
         String newAssigneeName = getUserDisplayName(normalizedAssigneeId);
         recordActivity(id, currentUserId, "assigned", "assignee", oldAssigneeName, newAssigneeName);
         issue.setAssigneeId(normalizedAssigneeId);
-        issueMapper.updateById(issue);
+        int rows = issueMapper.updateById(issue);
+        if (rows == 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该工单已被其他人修改，请刷新页面后重试");
+        }
 
         // 通知被分配人（仅当实际分配给某人时）— 事务提交后触发
         if (normalizedAssigneeId != null) {
