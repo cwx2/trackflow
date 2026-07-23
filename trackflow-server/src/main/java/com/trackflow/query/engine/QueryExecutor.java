@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 查询执行引擎：将 JSON 筛选条件动态转换为 SQL 查询
@@ -263,6 +264,8 @@ public class QueryExecutor {
                 case "type" -> applyFilter(wrapper, "issue_type", operator, values);
                 case "sprint" -> applyUserFilter(wrapper, "sprint_id", operator, values, currentUserId);
                 case "keyword" -> applyKeywordFilter(wrapper, values);
+                case "tag" -> applyTagFilter(wrapper, operator, values);
+                case "parent" -> applyParentFilter(wrapper, operator, values);
                 case "dueDate" -> applyDateFilter(wrapper, "due_date", operator, values);
                 case "createdAt" -> applyDateFilter(wrapper, "created_at", operator, values);
                 case "updatedAt" -> applyDateFilter(wrapper, "updated_at", operator, values);
@@ -359,6 +362,39 @@ public class QueryExecutor {
                 // assignee 名称匹配
                 .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} OR username ILIKE {0})", likePattern)
         );
+    }
+
+    private void applyTagFilter(QueryWrapper<Issue> wrapper, String operator, List<String> values) {
+        if (values.isEmpty()) return;
+        switch (operator) {
+            case "eq", "in" -> {
+                // EXISTS subquery: issue has any of the specified tags (OR semantics)
+                List<Long> tagIds = values.stream().map(Long::parseLong).toList();
+                if (tagIds.size() == 1) {
+                    wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id = {0})", tagIds.get(0));
+                } else {
+                    wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id IN ("
+                            + tagIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "))");
+                }
+            }
+            case "not_in" -> {
+                // NOT EXISTS: issue does not have any of the specified tags
+                List<Long> tagIds = values.stream().map(Long::parseLong).toList();
+                wrapper.apply("NOT EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id IN ("
+                        + tagIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "))");
+            }
+            case "is_empty" -> wrapper.apply("NOT EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id)");
+            case "is_not_empty" -> wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id)");
+        }
+    }
+
+    private void applyParentFilter(QueryWrapper<Issue> wrapper, String operator, List<String> values) {
+        switch (operator) {
+            case "eq" -> wrapper.eq("parent_id", Long.parseLong(values.get(0)));
+            case "in" -> wrapper.in("parent_id", values.stream().map(Long::parseLong).toList());
+            case "is_empty" -> wrapper.isNull("parent_id");     // top-level issues only
+            case "is_not_empty" -> wrapper.isNotNull("parent_id"); // sub-tasks only
+        }
     }
 
     private void applyDateFilter(QueryWrapper<Issue> wrapper, String column, String operator, List<String> values) {

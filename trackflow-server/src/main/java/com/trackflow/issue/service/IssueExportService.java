@@ -141,6 +141,45 @@ public class IssueExportService {
         applyNegativeFilter(wrapper, "sprint_id", dto.getSprintIdNot(), true);
         applyNegativeFilter(wrapper, "issue_type", dto.getIssueTypeNot(), false);
 
+        // Tag filter
+        if (dto.getTagId() != null && !dto.getTagId().isBlank()) {
+            String tagIdValue = dto.getTagId().trim();
+            if (tagIdValue.contains(",")) {
+                List<Long> tagIds = Arrays.stream(tagIdValue.split(","))
+                        .map(String::trim).filter(s -> !s.isEmpty())
+                        .map(Long::parseLong).toList();
+                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id IN ("
+                        + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "))");
+            } else {
+                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id = {0})",
+                        Long.parseLong(tagIdValue));
+            }
+        }
+
+        // Parent/child filters
+        if (dto.getParentId() != null) {
+            wrapper.eq("parent_id", dto.getParentId());
+        }
+        if ("true".equals(dto.getHasParent())) {
+            wrapper.isNotNull("parent_id");
+        } else if ("false".equals(dto.getHasParent())) {
+            wrapper.isNull("parent_id");
+        }
+
+        // Date range filters
+        if (dto.getCreatedAfter() != null && !dto.getCreatedAfter().isBlank()) {
+            wrapper.ge("created_at", LocalDate.parse(dto.getCreatedAfter()).atStartOfDay());
+        }
+        if (dto.getCreatedBefore() != null && !dto.getCreatedBefore().isBlank()) {
+            wrapper.le("created_at", LocalDate.parse(dto.getCreatedBefore()).atTime(23, 59, 59));
+        }
+        if (dto.getUpdatedAfter() != null && !dto.getUpdatedAfter().isBlank()) {
+            wrapper.ge("updated_at", LocalDate.parse(dto.getUpdatedAfter()).atStartOfDay());
+        }
+        if (dto.getUpdatedBefore() != null && !dto.getUpdatedBefore().isBlank()) {
+            wrapper.le("updated_at", LocalDate.parse(dto.getUpdatedBefore()).atTime(23, 59, 59));
+        }
+
         // hideResolved
         if ("true".equals(dto.getHideResolved())) {
             Set<Long> closedStatusIds = issueStatusMapper.selectList(null).stream()

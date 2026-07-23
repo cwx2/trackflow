@@ -25,6 +25,17 @@ export interface IssueListFilters {
   assigneeIdNot?: string
   sprintIdNot?: string
   issueTypeNot?: string
+  // Tag & parent filters
+  tagId?: string
+  parentId?: string
+  hasParent?: string
+  // Date range filters
+  createdAfter?: string
+  createdBefore?: string
+  updatedAfter?: string
+  updatedBefore?: string
+  resolvedAfter?: string
+  resolvedBefore?: string
   // Special filters
   overdue?: string
   dueSoon?: string
@@ -95,6 +106,17 @@ export function useIssueList() {
       if (filters.assigneeIdNot) params.assigneeIdNot = filters.assigneeIdNot
       if (filters.sprintIdNot) params.sprintIdNot = filters.sprintIdNot
       if (filters.issueTypeNot) params.issueTypeNot = filters.issueTypeNot
+      // Tag & parent filters
+      if (filters.tagId) params.tagId = filters.tagId
+      if (filters.parentId) params.parentId = filters.parentId
+      if (filters.hasParent) params.hasParent = filters.hasParent
+      // Date range filters
+      if (filters.createdAfter) params.createdAfter = filters.createdAfter
+      if (filters.createdBefore) params.createdBefore = filters.createdBefore
+      if (filters.updatedAfter) params.updatedAfter = filters.updatedAfter
+      if (filters.updatedBefore) params.updatedBefore = filters.updatedBefore
+      if (filters.resolvedAfter) params.resolvedAfter = filters.resolvedAfter
+      if (filters.resolvedBefore) params.resolvedBefore = filters.resolvedBefore
       // Special filters
       if (filters.overdue) params.overdue = filters.overdue
       if (filters.dueSoon) params.dueSoon = filters.dueSoon

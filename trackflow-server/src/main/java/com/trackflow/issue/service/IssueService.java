@@ -267,6 +267,51 @@ public class IssueService {
         applyNegativeFilter(wrapper, "sprint_id", query.getSprintIdNot(), true);
         applyNegativeFilter(wrapper, "issue_type", query.getIssueTypeNot(), false);
 
+        // Tag filter: EXISTS subquery on issue_tag_relation (OR semantics for multiple tags)
+        if (query.getTagId() != null && !query.getTagId().isBlank()) {
+            String tagIdValue = query.getTagId().trim();
+            if (tagIdValue.contains(",")) {
+                List<Long> tagIds = java.util.Arrays.stream(tagIdValue.split(","))
+                        .map(String::trim).filter(s -> !s.isEmpty())
+                        .map(Long::parseLong).toList();
+                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id IN ("
+                        + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "))");
+            } else {
+                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id = {0})",
+                        Long.parseLong(tagIdValue));
+            }
+        }
+
+        // Parent/child relationship filters
+        if (query.getParentId() != null) {
+            wrapper.eq("parent_id", query.getParentId());
+        }
+        if ("true".equals(query.getHasParent())) {
+            wrapper.isNotNull("parent_id");
+        } else if ("false".equals(query.getHasParent())) {
+            wrapper.isNull("parent_id");
+        }
+
+        // Date range filters
+        if (query.getCreatedAfter() != null) {
+            wrapper.ge("created_at", query.getCreatedAfter().atStartOfDay());
+        }
+        if (query.getCreatedBefore() != null) {
+            wrapper.le("created_at", query.getCreatedBefore().atTime(23, 59, 59));
+        }
+        if (query.getUpdatedAfter() != null) {
+            wrapper.ge("updated_at", query.getUpdatedAfter().atStartOfDay());
+        }
+        if (query.getUpdatedBefore() != null) {
+            wrapper.le("updated_at", query.getUpdatedBefore().atTime(23, 59, 59));
+        }
+        if (query.getResolvedAfter() != null) {
+            wrapper.ge("resolved_at", query.getResolvedAfter().atStartOfDay());
+        }
+        if (query.getResolvedBefore() != null) {
+            wrapper.le("resolved_at", query.getResolvedBefore().atTime(23, 59, 59));
+        }
+
         // hideResolved: exclude all is_closed=true statuses
         if ("true".equals(query.getHideResolved())) {
             Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();

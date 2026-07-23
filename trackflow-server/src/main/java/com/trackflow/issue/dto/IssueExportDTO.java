@@ -37,6 +37,17 @@ public class IssueExportDTO {
     private String sprintIdNot;
     private String issueTypeNot;
 
+    // Tag & parent filters
+    private String tagId;
+    private Long parentId;
+    private String hasParent;
+
+    // Date range filters (ISO date format yyyy-MM-dd)
+    private String createdAfter;
+    private String createdBefore;
+    private String updatedAfter;
+    private String updatedBefore;
+
     // Special filters
     private String overdue;
     private String dueSoon;

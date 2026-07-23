@@ -131,42 +131,75 @@
       <Teleport to="body">
         <div v-if="showValuePopup" class="popup-overlay">
           <div class="popup-panel value-popup" :style="popupPosition" ref="valuePopupRef">
-            <div class="popup-search">
-              <input
-                ref="valueSearchRef"
-                v-model="valueSearchText"
-                class="popup-search-input"
-                placeholder="搜索值..."
-                @keydown.escape="closeAllPopups"
-                @keydown.enter="selectFirstValueSuggestion"
-                @keydown.down.prevent="moveValueSuggestion(1)"
-                @keydown.up.prevent="moveValueSuggestion(-1)"
-              />
-            </div>
-            <div v-if="valueOptionsLoading" class="popup-loading">
-              <span class="loading-spinner"></span>
-            </div>
-            <div v-else class="popup-options">
-              <div
-                v-for="(opt, i) in filteredValueOptions"
-                :key="opt.id"
-                class="popup-item"
-                :class="{
-                  active: valueSuggestionIndex === i,
-                  selected: isValueSelected(opt.id)
-                }"
-                @click="toggleValue(opt)"
-                @mouseenter="valueSuggestionIndex = i"
-              >
-                <span v-if="isMultiSelect" class="check-icon">{{ isValueSelected(opt.id) ? '☑' : '☐' }}</span>
-                <span v-if="opt.color" class="value-dot" :style="{ background: opt.color }"></span>
-                <span class="value-label">{{ opt.label }}</span>
+            <!-- Date/text input mode (for date fields and parent ID) -->
+            <template v-if="editingFieldType === 'date' || (editingFieldType === 'text' && editingFieldKey === 'parent')">
+              <div class="text-input-popup">
+                <div class="text-input-label">
+                  {{ editingFieldKey === 'parent' ? '输入父工单 ID' : (editingOperator === 'between' ? '起始日期 (yyyy-MM-dd)' : '日期 (yyyy-MM-dd)') }}
+                </div>
+                <input
+                  ref="valueSearchRef"
+                  v-model="dateInputValue"
+                  class="popup-search-input"
+                  :placeholder="editingFieldKey === 'parent' ? '工单 ID...' : 'yyyy-MM-dd'"
+                  @keydown.escape="closeAllPopups"
+                  @keydown.enter="confirmTextInput"
+                />
+                <div v-if="editingOperator === 'between'" class="text-input-label" style="margin-top: 8px">
+                  结束日期 (yyyy-MM-dd)
+                </div>
+                <input
+                  v-if="editingOperator === 'between'"
+                  v-model="dateInputValue2"
+                  class="popup-search-input"
+                  placeholder="yyyy-MM-dd"
+                  @keydown.escape="closeAllPopups"
+                  @keydown.enter="confirmTextInput"
+                />
+                <div class="popup-footer">
+                  <button class="popup-confirm-btn" @click="confirmTextInput">确定</button>
+                </div>
               </div>
-              <div v-if="filteredValueOptions.length === 0" class="popup-empty">无匹配选项</div>
-            </div>
-            <div v-if="isMultiSelect && tempSelectedValues.length > 0" class="popup-footer">
-              <button class="popup-confirm-btn" @click="confirmMultiSelect">确定</button>
-            </div>
+            </template>
+            <!-- Dropdown mode (for enum/user fields) -->
+            <template v-else>
+              <div class="popup-search">
+                <input
+                  ref="valueSearchRef"
+                  v-model="valueSearchText"
+                  class="popup-search-input"
+                  placeholder="搜索值..."
+                  @keydown.escape="closeAllPopups"
+                  @keydown.enter="selectFirstValueSuggestion"
+                  @keydown.down.prevent="moveValueSuggestion(1)"
+                  @keydown.up.prevent="moveValueSuggestion(-1)"
+                />
+              </div>
+              <div v-if="valueOptionsLoading" class="popup-loading">
+                <span class="loading-spinner"></span>
+              </div>
+              <div v-else class="popup-options">
+                <div
+                  v-for="(opt, i) in filteredValueOptions"
+                  :key="opt.id"
+                  class="popup-item"
+                  :class="{
+                    active: valueSuggestionIndex === i,
+                    selected: isValueSelected(opt.id)
+                  }"
+                  @click="toggleValue(opt)"
+                  @mouseenter="valueSuggestionIndex = i"
+                >
+                  <span v-if="isMultiSelect" class="check-icon">{{ isValueSelected(opt.id) ? '☑' : '☐' }}</span>
+                  <span v-if="opt.color" class="value-dot" :style="{ background: opt.color }"></span>
+                  <span class="value-label">{{ opt.label }}</span>
+                </div>
+                <div v-if="filteredValueOptions.length === 0" class="popup-empty">无匹配选项</div>
+              </div>
+              <div v-if="isMultiSelect && tempSelectedValues.length > 0" class="popup-footer">
+                <button class="popup-confirm-btn" @click="confirmMultiSelect">确定</button>
+              </div>
+            </template>
           </div>
         </div>
       </Teleport>
@@ -177,8 +210,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
-import { projectApi, sprintApi } from '@/api'
-import type { IssueStatusVO, ProjectVO, SprintVO } from '@/api/types'
+import { projectApi, sprintApi, tagApi } from '@/api'
+import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
 import QueryInput from './QueryInput.vue'
 
@@ -256,6 +289,18 @@ const OPERATORS_USER: OperatorDef[] = [
   { key: 'none_of', label: '不属于', multi: true },
 ]
 
+const OPERATORS_DATE: OperatorDef[] = [
+  { key: 'after', label: '晚于' },
+  { key: 'before', label: '早于' },
+  { key: 'between', label: '在范围内' },
+]
+
+const OPERATORS_PARENT: OperatorDef[] = [
+  { key: 'is', label: '是' },
+  { key: 'has', label: '有父工单' },
+  { key: 'has_not', label: '无父工单' },
+]
+
 const FILTER_FIELDS: FilterField[] = [
   { key: 'project', label: '项目', icon: '📁', type: 'enum', operators: OPERATORS_ENUM },
   { key: 'status', label: '状态', icon: '🔵', type: 'enum', operators: OPERATORS_ENUM },
@@ -263,6 +308,10 @@ const FILTER_FIELDS: FilterField[] = [
   { key: 'assignee', label: '负责人', icon: '👤', type: 'user', operators: OPERATORS_USER },
   { key: 'issueType', label: '类型', icon: '📋', type: 'enum', operators: OPERATORS_ENUM },
   { key: 'sprint', label: 'Sprint', icon: '🏃', type: 'enum', operators: OPERATORS_ENUM },
+  { key: 'tag', label: '标签', icon: '🏷️', type: 'enum', operators: OPERATORS_ENUM },
+  { key: 'parent', label: '父工单', icon: '🔗', type: 'text', operators: OPERATORS_PARENT },
+  { key: 'createdAt', label: '创建时间', icon: '📅', type: 'date', operators: OPERATORS_DATE },
+  { key: 'updatedAt', label: '更新时间', icon: '📅', type: 'date', operators: OPERATORS_DATE },
 ]
 
 // ==================== State ====================
@@ -296,6 +345,31 @@ const valueOptions = ref<ValueOption[]>([])
 const tempSelectedValues = ref<string[]>([])
 const operatorPopupRef = ref<HTMLElement | null>(null)
 const valuePopupRef = ref<HTMLElement | null>(null)
+
+// Date/text input state
+const dateInputValue = ref('')
+const dateInputValue2 = ref('')  // For "between" operator (end date)
+
+// Computed: which field type is currently being edited
+const editingFieldType = computed(() => {
+  if (!editingChip.value) return null
+  const chip = activeFilters.value[editingChip.value.index]
+  if (!chip) return null
+  const field = FILTER_FIELDS.find(f => f.key === chip.fieldKey)
+  return field?.type || null
+})
+
+const editingFieldKey = computed(() => {
+  if (!editingChip.value) return null
+  const chip = activeFilters.value[editingChip.value.index]
+  return chip?.fieldKey || null
+})
+
+const editingOperator = computed(() => {
+  if (!editingChip.value) return null
+  const chip = activeFilters.value[editingChip.value.index]
+  return chip?.operator || null
+})
 
 // ==================== Computed ====================
 
@@ -463,6 +537,12 @@ function selectOperator(op: OperatorDef) {
     updateChipValueLabel(chip)
   }
 
+  // For parent field with 'has' / 'has_not' operators, apply immediately (no value needed)
+  if (chip.fieldKey === 'parent' && (op.key === 'has' || op.key === 'has_not')) {
+    chip.values = ['_']
+    chip.valueLabel = op.key === 'has' ? '是' : '否'
+  }
+
   showOperatorPopup.value = false
   emitFilters()
 }
@@ -493,6 +573,18 @@ async function openValueSelector(index: number) {
   valueSearchText.value = ''
   valueSuggestionIndex.value = 0
   tempSelectedValues.value = [...chip.values]
+
+  // Initialize date/text input values from existing chip values
+  const field = FILTER_FIELDS.find(f => f.key === chip.fieldKey)
+  if (field?.type === 'date' || (field?.type === 'text' && chip.fieldKey === 'parent')) {
+    // For parent with 'has'/'has_not', don't open value popup
+    if (chip.fieldKey === 'parent' && (chip.operator === 'has' || chip.operator === 'has_not')) {
+      return
+    }
+    dateInputValue.value = chip.values[0] && chip.values[0] !== '_' ? chip.values[0] : ''
+    dateInputValue2.value = chip.values[1] || ''
+  }
+
   showValuePopup.value = true
   showOperatorPopup.value = false
 
@@ -596,6 +688,47 @@ async function loadValueOptions(fieldKey: string) {
         }
         break
       }
+
+      case 'tag': {
+        // Load tags from the selected project (or all projects)
+        const tagProjectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
+        const tagPid = tagProjectFilter?.values[0] || props.projectId
+        if (tagPid) {
+          const res = await tagApi.listProjectTags(tagPid, { _silent403: true })
+          const tags = res.data || []
+          valueOptions.value = tags.map((t: IssueTagVO) => ({
+            id: t.id,
+            label: t.name,
+            color: t.color
+          }))
+        } else {
+          // Aggregate tags from visible projects (deduplicated by name)
+          const allTags: ValueOption[] = []
+          const seen = new Set<string>()
+          for (const p of props.projectList.slice(0, 10)) {
+            try {
+              const res = await tagApi.listProjectTags(p.id, { _silent403: true })
+              const tags = res.data || []
+              tags.forEach((t: IssueTagVO) => {
+                if (!seen.has(t.id)) {
+                  seen.add(t.id)
+                  allTags.push({ id: t.id, label: `${t.name}`, color: t.color })
+                }
+              })
+            } catch { /* ignore */ }
+          }
+          valueOptions.value = allTags
+        }
+        break
+      }
+
+      case 'parent':
+      case 'createdAt':
+      case 'updatedAt':
+        // These use text/date input — no dropdown options needed
+        valueOptions.value = []
+        valueOptionsLoading.value = false
+        return
     }
   } catch {
     valueOptions.value = []
@@ -636,6 +769,44 @@ function confirmMultiSelect() {
   chip.values = [...tempSelectedValues.value]
   updateChipValueLabel(chip)
   showValuePopup.value = false
+  emitFilters()
+}
+
+function confirmTextInput() {
+  if (!editingChip.value) return
+  const chip = activeFilters.value[editingChip.value.index]
+  if (!chip) return
+
+  if (chip.fieldKey === 'parent') {
+    // Parent: the operator 'has' / 'has_not' don't need a value
+    if (chip.operator === 'is') {
+      const val = dateInputValue.value.trim()
+      if (!val) return
+      chip.values = [val]
+      chip.valueLabel = val
+    } else {
+      // 'has' or 'has_not' — no value needed, set a display label
+      chip.values = ['_']  // placeholder to indicate filter is active
+      chip.valueLabel = chip.operator === 'has' ? '是' : '否'
+    }
+  } else {
+    // Date field
+    const val = dateInputValue.value.trim()
+    if (!val) return
+    if (chip.operator === 'between') {
+      const val2 = dateInputValue2.value.trim()
+      if (!val2) return
+      chip.values = [val, val2]
+      chip.valueLabel = `${val} ~ ${val2}`
+    } else {
+      chip.values = [val]
+      chip.valueLabel = val
+    }
+  }
+
+  showValuePopup.value = false
+  dateInputValue.value = ''
+  dateInputValue2.value = ''
   emitFilters()
 }
 
@@ -713,6 +884,38 @@ function emitFilters() {
         break
       case 'reporter':
         if (chip.values.includes('me')) filters.reportedByMe = 'true'
+        break
+      case 'tag':
+        if (!isNegative) filters.tagId = chip.values.join(',')
+        break
+      case 'parent':
+        if (chip.operator === 'is' && chip.values[0]) {
+          filters.parentId = chip.values[0]
+        } else if (chip.operator === 'has') {
+          filters.hasParent = 'true'
+        } else if (chip.operator === 'has_not') {
+          filters.hasParent = 'false'
+        }
+        break
+      case 'createdAt':
+        if (chip.operator === 'after' && chip.values[0]) {
+          filters.createdAfter = chip.values[0]
+        } else if (chip.operator === 'before' && chip.values[0]) {
+          filters.createdBefore = chip.values[0]
+        } else if (chip.operator === 'between' && chip.values[0] && chip.values[1]) {
+          filters.createdAfter = chip.values[0]
+          filters.createdBefore = chip.values[1]
+        }
+        break
+      case 'updatedAt':
+        if (chip.operator === 'after' && chip.values[0]) {
+          filters.updatedAfter = chip.values[0]
+        } else if (chip.operator === 'before' && chip.values[0]) {
+          filters.updatedBefore = chip.values[0]
+        } else if (chip.operator === 'between' && chip.values[0] && chip.values[1]) {
+          filters.updatedAfter = chip.values[0]
+          filters.updatedBefore = chip.values[1]
+        }
         break
     }
   }
@@ -1311,5 +1514,16 @@ defineExpose({ clearAll, setFilters })
 
 .popup-confirm-btn:hover {
   opacity: 0.9;
+}
+
+.text-input-popup {
+  padding: 8px;
+}
+
+.text-input-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin-bottom: 4px;
+  padding: 0 2px;
 }
 </style>

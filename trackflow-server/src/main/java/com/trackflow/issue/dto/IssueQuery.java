@@ -29,6 +29,21 @@ public class IssueQuery extends PageQuery {
     private String sprintIdNot;
     private String issueTypeNot;
 
+    // Tag filter: single tag ID or comma-separated tag IDs (OR semantics)
+    private String tagId;
+
+    // Parent/child relationship filters
+    private Long parentId;         // Filter by parent issue ID (show children of this parent)
+    private String hasParent;      // "true" = only sub-tasks, "false" = only top-level issues
+
+    // Date range filters (ISO date format yyyy-MM-dd)
+    private LocalDate createdAfter;
+    private LocalDate createdBefore;
+    private LocalDate updatedAfter;
+    private LocalDate updatedBefore;
+    private LocalDate resolvedAfter;
+    private LocalDate resolvedBefore;
+
     // Special filters
     private String overdue;   // "true" = due_date < today AND status not done
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
