@@ -56,6 +56,12 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 报表服务 - 处理报表的创建、执行、缓存、导出、分享等业务逻辑
+ *
+ * @author TrackFlow
+ * @since 1.0
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -1035,6 +1041,9 @@ public class ReportService {
         if (reportType != null && reportType.isStateTransition()) {
             return executeStateTransitionReport(report, projectIds);
         }
+        if (reportType != null && reportType.isTimeManagement()) {
+            return executeTimeManagementReport(report, reportType, projectIds);
+        }
 
         // 分布类报表：原有逻辑
         return executeDistributionReport(report, projectIds);
@@ -1358,6 +1367,134 @@ public class ReportService {
         }
 
         return result;
+    }
+
+    /**
+     * 执行时间管理类报表（时间报表、预估对比）
+     * 委托给 ReportStatisticsService 执行实际数据计算，然后适配为 ReportExecuteResultVO 格式
+     */
+    private ReportExecuteResultVO executeTimeManagementReport(ReportDefinition report, ReportType reportType, List<Long> projectIds) {
+        Map<String, Object> rawConfig = parseConfig(report.getConfig());
+        ReportConfig config = ReportConfig.fromMap(rawConfig);
+
+        ReportExecuteResultVO result = new ReportExecuteResultVO();
+        result.setTitle(report.getName());
+        result.setType(report.getType());
+        result.setCategory("time_management");
+        result.setCalculatedAt(LocalDateTime.now());
+        result.setRefreshInterval(config.getRefreshInterval());
+
+        switch (reportType) {
+            case TIME_REPORT -> executeTimeReport(result, config, projectIds);
+            case ESTIMATION_REPORT -> executeEstimationReport(result, projectIds);
+            default -> {
+                // Fallback to distribution
+                return executeDistributionReport(report, projectIds);
+            }
+        }
+
+        // 设置筛选摘要
+        if (config.hasFilters() || config.getTimeRange() != null) {
+            result.setAppliedFilters(buildFilterSummary(config));
+        }
+
+        return result;
+    }
+
+    /**
+     * 执行时间报表：按人员/项目/工作类型汇总工时，生成趋势数据
+     */
+    private void executeTimeReport(ReportExecuteResultVO result, ReportConfig config, List<Long> projectIds) {
+        result.setChartType("bar_horizontal");
+
+        // 解析时间范围
+        LocalDateTime[] timeRange = config.resolveTimeRange();
+        java.time.LocalDate startDate = timeRange != null ? timeRange[0].toLocalDate() : java.time.LocalDate.now().minusDays(29);
+        java.time.LocalDate endDate = timeRange != null ? timeRange[1].toLocalDate() : java.time.LocalDate.now();
+
+        String startStr = startDate.toString();
+        String endStr = endDate.toString();
+
+        // 按人员分组数据（作为主维度）
+        List<TimeByUserRow> byUserRows = reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
+        int totalMinutes = byUserRows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+
+        List<String> labels = new ArrayList<>();
+        List<Long> data = new ArrayList<>();
+        for (TimeByUserRow row : byUserRows) {
+            labels.add(row.getUserName());
+            data.add((long) (row.getTotalMinutes() != null ? row.getTotalMinutes() : 0));
+        }
+        result.setLabels(labels);
+        result.setData(data);
+        result.setTotal(totalMinutes);
+
+        // 每日工时趋势（作为时间序列）
+        List<TimeTrendRow> trendRows = reportStatisticsMapper.selectTimeTrend(projectIds, startStr, endStr);
+        Map<String, Integer> trendByDay = new HashMap<>();
+        for (TimeTrendRow row : trendRows) {
+            trendByDay.put(row.getWorkDate(), row.getTotalMinutes() != null ? row.getTotalMinutes() : 0);
+        }
+        List<String> trendDates = new ArrayList<>();
+        List<Number> trendMinutes = new ArrayList<>();
+        java.time.LocalDate current = startDate;
+        while (!current.isAfter(endDate)) {
+            trendDates.add(current.toString());
+            trendMinutes.add(trendByDay.getOrDefault(current.toString(), 0));
+            current = current.plusDays(1);
+        }
+        result.setDates(trendDates);
+
+        ReportExecuteResultVO.TimeSeriesData trendSeries = new ReportExecuteResultVO.TimeSeriesData();
+        trendSeries.setName("每日工时(分钟)");
+        trendSeries.setColor("#58a6ff");
+        trendSeries.setData(trendMinutes);
+        trendSeries.setSeriesType("area");
+        result.setSeries(List.of(trendSeries));
+
+        // summary 信息
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalMinutes", totalMinutes);
+        summary.put("totalHours", Math.round(totalMinutes / 60.0 * 100.0) / 100.0);
+        summary.put("userCount", byUserRows.size());
+        summary.put("dateRange", startStr + " ~ " + endStr);
+        result.setSummary(summary);
+    }
+
+    /**
+     * 执行预估对比报表：估时 vs 实际花费
+     */
+    private void executeEstimationReport(ReportExecuteResultVO result, List<Long> projectIds) {
+        result.setChartType("bar_horizontal");
+
+        // 按项目汇总
+        List<EstimationSummaryRow> summaryRows = reportStatisticsMapper.selectEstimationSummary(projectIds);
+
+        double totalEstimated = 0;
+        double totalSpent = 0;
+        List<String> labels = new ArrayList<>();
+        List<Long> data = new ArrayList<>();
+
+        for (EstimationSummaryRow row : summaryRows) {
+            double est = row.getEstimatedHoursSum() != null ? row.getEstimatedHoursSum() : 0;
+            double spt = row.getSpentHoursSum() != null ? row.getSpentHoursSum() : 0;
+            totalEstimated += est;
+            totalSpent += spt;
+            labels.add(row.getProjectName());
+            data.add(Math.round(spt * 100) / 100L);  // 实际花费小时数（四舍五入到整数）
+        }
+
+        result.setLabels(labels);
+        result.setData(data);
+        result.setTotal(Math.round(totalSpent));
+
+        // summary 信息
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalEstimatedHours", Math.round(totalEstimated * 100.0) / 100.0);
+        summary.put("totalSpentHours", Math.round(totalSpent * 100.0) / 100.0);
+        summary.put("overallDeviationRate", totalEstimated > 0 ? Math.round((totalSpent / totalEstimated - 1) * 1000.0) / 1000.0 : 0);
+        summary.put("projectCount", summaryRows.size());
+        result.setSummary(summary);
     }
 
     /**
