@@ -703,8 +703,9 @@ public class IssueService {
      * <p>
      * 搜索策略（OR 组合，确保覆盖范围不缩小）：
      * <ul>
-     *   <li>全文搜索 (tsvector @@ plainto_tsquery) — 利用 idx_issue_fulltext GIN 索引，对英文和空格分隔的词效果最佳</li>
+     *   <li>全文搜索 (tsvector @@ plainto_tsquery) — 利用 idx_issue_fulltext GIN 索引，对空格分隔的英文词效果最佳</li>
      *   <li>title ILIKE — 利用 idx_issue_title_trgm trigram GIN 索引，对中文子串匹配有效</li>
+     *   <li>description ILIKE — 利用 idx_issue_description_trgm trigram GIN 索引，匹配描述中的关键词</li>
      *   <li>issue_key ILIKE — 精确匹配工单编号</li>
      *   <li>assignee 名称 ILIKE — 利用 idx_sys_user_display_name_trgm 索引</li>
      * </ul>
@@ -718,6 +719,9 @@ public class IssueService {
                 .or()
                 // title 子串匹配：利用 idx_issue_title_trgm trigram GIN 索引（对中文子串有效）
                 .apply("title ILIKE {0}", likePattern)
+                .or()
+                // description 子串匹配：利用 idx_issue_description_trgm trigram GIN 索引
+                .apply("description ILIKE {0}", likePattern)
                 .or()
                 // issue_key 匹配
                 .apply("issue_key ILIKE {0}", likePattern)

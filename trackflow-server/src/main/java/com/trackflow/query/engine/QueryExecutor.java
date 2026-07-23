@@ -323,11 +323,24 @@ public class QueryExecutor {
 
     private void applyKeywordFilter(QueryWrapper<Issue> wrapper, List<String> values) {
         if (values.isEmpty()) return;
-        String kw = SqlUtils.escapeLikePattern(values.get(0));
+        String keyword = values.get(0);
+        String escaped = SqlUtils.escapeLikePattern(keyword);
+        String likePattern = "%" + escaped + "%";
         wrapper.and(w -> w
-                .apply("title LIKE {0} ESCAPE '\\'", "%" + kw + "%")
-                .or().apply("description LIKE {0} ESCAPE '\\'", "%" + kw + "%")
-                .or().apply("issue_key LIKE {0} ESCAPE '\\'", "%" + kw + "%")
+                // 全文搜索：利用 idx_issue_fulltext GIN 索引
+                .apply("to_tsvector('simple', COALESCE(title,'') || ' ' || COALESCE(description,'')) @@ plainto_tsquery('simple', {0})", keyword)
+                .or()
+                // title 子串匹配：利用 idx_issue_title_trgm trigram GIN 索引
+                .apply("title ILIKE {0}", likePattern)
+                .or()
+                // description 子串匹配：利用 idx_issue_description_trgm trigram GIN 索引
+                .apply("description ILIKE {0}", likePattern)
+                .or()
+                // issue_key 匹配
+                .apply("issue_key ILIKE {0}", likePattern)
+                .or()
+                // assignee 名称匹配
+                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} OR username ILIKE {0})", likePattern)
         );
     }
 
