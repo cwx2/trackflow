@@ -18,6 +18,7 @@ spring:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI}
           jwk-set-uri: ${KEYCLOAK_JWKS_URI}
+          audiences: ${KEYCLOAK_AUDIENCE:account}
 
 minio:
   endpoint: ${MINIO_ENDPOINT}
@@ -32,3 +33,10 @@ logging:
   level:
     com.trackflow: INFO
     org.springframework.security: WARN
+
+# TrackFlow 生产配置
+trackflow:
+  cors:
+    # 生产环境必须通过 TRACKFLOW_CORS_ORIGINS 环境变量配置前端域名
+    # 多个域名用逗号分隔，如: https://trackflow.company.com,https://admin.company.com
+    allowed-origins: ${TRACKFLOW_CORS_ORIGINS}

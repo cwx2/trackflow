@@ -25,6 +25,7 @@ spring:
         jwt:
           issuer-uri: http://localhost:8080/realms/trackflow
           jwk-set-uri: http://localhost:8080/realms/trackflow/protocol/openid-connect/certs
+          audiences: ${KEYCLOAK_AUDIENCE:account}
 
   devtools:
     restart:
