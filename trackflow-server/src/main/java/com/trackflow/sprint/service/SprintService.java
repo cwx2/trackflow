@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.trackflow.common.event.SprintNotificationEvent;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -535,6 +536,20 @@ public class SprintService {
                     "迭代结束日期（" + sprint.getEndDate() + "）已过，无法激活一个已过期的迭代");
         }
 
+        // 拍摄估算快照 — 记录 Sprint 激活时的范围作为燃尽图基线
+        List<Issue> sprintIssues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getSprintId, id)
+                        .isNull(Issue::getDeletedAt)
+        );
+        BigDecimal totalEstimatedHours = sprintIssues.stream()
+                .map(Issue::getEstimatedHours)
+                .filter(h -> h != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        sprint.setStartedAt(LocalDateTime.now());
+        sprint.setStartScopeHours(totalEstimatedHours);
+        sprint.setStartScopeIssues(sprintIssues.size());
+
         sprint.setStatus(SprintStatus.ACTIVE);
         sprintMapper.updateById(sprint);
 
@@ -585,8 +600,10 @@ public class SprintService {
                 if (targetSprint == null || !targetSprint.getProjectId().equals(sprint.getProjectId())) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代不存在或不属于当前项目");
                 }
-                if (targetSprint.getStatus() == SprintStatus.COMPLETED) {
-                    throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代已完成，无法移入");
+                // 仅允许移入计划中或进行中的迭代（白名单校验）
+                if (targetSprint.getStatus() != SprintStatus.PLANNED && targetSprint.getStatus() != SprintStatus.ACTIVE) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "目标迭代状态为「" + targetSprint.getStatus().getLabel() + "」，只能移入计划中或进行中的迭代");
                 }
                 newSprintId = dto.getTargetSprintId();
                 newSprintName = targetSprint.getName();
@@ -835,8 +852,10 @@ public class SprintService {
                 if (targetSprint == null || !targetSprint.getProjectId().equals(sprint.getProjectId())) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代不存在或不属于当前项目");
                 }
-                if (targetSprint.getStatus() == SprintStatus.COMPLETED) {
-                    throw new BusinessException(ErrorCode.BAD_REQUEST, "目标迭代已完成，无法移入");
+                // 仅允许移入计划中或进行中的迭代（白名单校验）
+                if (targetSprint.getStatus() != SprintStatus.PLANNED && targetSprint.getStatus() != SprintStatus.ACTIVE) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "目标迭代状态为「" + targetSprint.getStatus().getLabel() + "」，只能移入计划中或进行中的迭代");
                 }
                 newSprintId = dto.getTargetSprintId();
                 newSprintName = targetSprint.getName();
@@ -901,11 +920,28 @@ public class SprintService {
      */
     @Transactional(readOnly = true)
     public BurndownVO getBurndownData(Long sprintId) {
+        return getBurndownData(sprintId, "issue_count");
+    }
+
+    /**
+     * 获取 Sprint 燃尽图数据。
+     *
+     * @param sprintId Sprint ID
+     * @param mode     计算模式: "issue_count"（工单数）或 "estimation"（预估工时）
+     */
+    @Transactional(readOnly = true)
+    public BurndownVO getBurndownData(Long sprintId, String mode) {
         Sprint sprint = getById(sprintId);
 
         BurndownVO vo = new BurndownVO();
         vo.setSprintId(String.valueOf(sprint.getId()));
         vo.setSprintName(sprint.getName());
+        vo.setMode(mode);
+
+        // 设置快照工时信息
+        if (sprint.getStartScopeHours() != null) {
+            vo.setStartScopeHours(sprint.getStartScopeHours().doubleValue());
+        }
 
         if (sprint.getStartDate() == null || sprint.getEndDate() == null) {
             return buildEmptyBurndown(vo);
@@ -916,20 +952,18 @@ public class SprintService {
         LocalDate today = LocalDate.now();
         long totalDays = Math.max(1, sprintStart.until(sprintEnd).getDays());
 
-        // 加载原始数据
-        BurndownRawData rawData = loadBurndownRawData(sprintId);
-
-        // 构建每日 scope 变化时间线
-        ScopeTimeline scopeTimeline = buildScopeChangeTimeline(rawData, sprintStart);
-
-        // 计算每日指标
-        calculateDailyMetrics(vo, scopeTimeline, rawData, sprintStart, sprintEnd, today, totalDays);
-
-        // 计算速率和预测
-        calculateVelocityAndForecast(vo, scopeTimeline.startScope, today, totalDays);
-
-        vo.setTotalIssues(rawData.currentIssues.size());
-        vo.setStartScopeIssues((int) scopeTimeline.startScope);
+        if ("estimation".equals(mode)) {
+            // 估时模式：基于 estimated_hours 计算燃尽
+            calculateEstimationBurndown(vo, sprint, sprintStart, sprintEnd, today, totalDays);
+        } else {
+            // 工单数模式：原有逻辑
+            BurndownRawData rawData = loadBurndownRawData(sprintId);
+            ScopeTimeline scopeTimeline = buildScopeChangeTimeline(rawData, sprintStart);
+            calculateDailyMetrics(vo, scopeTimeline, rawData, sprintStart, sprintEnd, today, totalDays);
+            calculateVelocityAndForecast(vo, scopeTimeline.startScope, today, totalDays);
+            vo.setTotalIssues(rawData.currentIssues.size());
+            vo.setStartScopeIssues((int) scopeTimeline.startScope);
+        }
 
         return vo;
     }
@@ -1188,6 +1222,118 @@ public class SprintService {
             long daysNeeded = (long) Math.ceil(remaining / velocity);
             vo.setForecastDate(today.plusDays(daysNeeded).toString());
         } else if (remaining <= 0) {
+            vo.setForecastDate(today.toString());
+        } else {
+            vo.setForecastDate(null);
+        }
+    }
+
+    /**
+     * 估时模式燃尽图：基于 estimated_hours 计算理想线/实际线/范围线。
+     * <p>
+     * 理想线从 startScopeHours（快照）线性递减到 0。
+     * 实际线为每天结束时未完成工单的 estimated_hours 总和。
+     * 范围线为每天的所有工单（含已完成）的 estimated_hours 总和。
+     */
+    private void calculateEstimationBurndown(BurndownVO vo, Sprint sprint,
+                                             LocalDate sprintStart, LocalDate sprintEnd,
+                                             LocalDate today, long totalDays) {
+        Long sprintId = sprint.getId();
+
+        // 使用快照值作为理想线起点，如果无快照则实时计算
+        double startHours;
+        if (sprint.getStartScopeHours() != null && sprint.getStartScopeHours().compareTo(BigDecimal.ZERO) > 0) {
+            startHours = sprint.getStartScopeHours().doubleValue();
+        } else {
+            // 回退：实时统计当前 Sprint 所有工单的 estimated_hours
+            List<Issue> allIssues = issueMapper.selectList(
+                    new LambdaQueryWrapper<Issue>()
+                            .eq(Issue::getSprintId, sprintId)
+                            .isNull(Issue::getDeletedAt)
+            );
+            startHours = allIssues.stream()
+                    .map(Issue::getEstimatedHours)
+                    .filter(h -> h != null)
+                    .mapToDouble(BigDecimal::doubleValue)
+                    .sum();
+        }
+
+        // 加载当前 Sprint 所有工单（含估时和完成时间）
+        List<Issue> currentIssues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getSprintId, sprintId)
+                        .isNull(Issue::getDeletedAt)
+                        .select(Issue::getId, Issue::getEstimatedHours, Issue::getResolvedAt, Issue::getCreatedAt)
+        );
+
+        // 当前总工时
+        double currentTotalHours = currentIssues.stream()
+                .map(Issue::getEstimatedHours)
+                .filter(h -> h != null)
+                .mapToDouble(BigDecimal::doubleValue)
+                .sum();
+
+        // 按解决日期分组统计工时
+        Map<LocalDate, Double> resolvedHoursByDay = currentIssues.stream()
+                .filter(issue -> issue.getResolvedAt() != null && issue.getEstimatedHours() != null)
+                .collect(Collectors.groupingBy(
+                        issue -> issue.getResolvedAt().toLocalDate(),
+                        Collectors.summingDouble(issue -> issue.getEstimatedHours().doubleValue())
+                ));
+
+        // 计算每日指标
+        double idealDecrement = startHours > 0 ? startHours / totalDays : 0.0;
+        List<String> dates = new ArrayList<>();
+        List<Double> idealLine = new ArrayList<>();
+        List<Integer> actualLine = new ArrayList<>();
+        List<Integer> scopeLine = new ArrayList<>();
+
+        double idealRemaining = startHours;
+        double resolvedHours = 0;
+        int todayIndex = -1;
+        LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
+        LocalDate current = sprintStart;
+        int dayIndex = 0;
+
+        while (!current.isAfter(sprintEnd)) {
+            dates.add(current.toString());
+            idealLine.add(Math.max(0, Math.round(idealRemaining * 10.0) / 10.0));
+            idealRemaining -= idealDecrement;
+
+            if (!current.isAfter(endForActual)) {
+                resolvedHours += resolvedHoursByDay.getOrDefault(current, 0.0);
+                // scopeLine 为当前总工时（简化：使用固定的当前快照，未做每日追踪）
+                scopeLine.add((int) Math.round(currentTotalHours));
+                // actualLine 为剩余工时 = 当前总工时 - 已完成工时
+                actualLine.add((int) Math.round(Math.max(0, currentTotalHours - resolvedHours)));
+            }
+
+            if (current.isEqual(today)) {
+                todayIndex = dayIndex;
+            }
+            current = current.plusDays(1);
+            dayIndex++;
+        }
+
+        vo.setDates(dates);
+        vo.setIdealLine(idealLine);
+        vo.setActualLine(actualLine);
+        vo.setScopeLine(scopeLine);
+        vo.setTodayIndex(todayIndex);
+        vo.setTotalIssues(currentIssues.size());
+        vo.setStartScopeIssues(sprint.getStartScopeIssues() != null ? sprint.getStartScopeIssues() : currentIssues.size());
+        vo.setStartScopeHours(startHours);
+
+        // 计算速率和预测（基于工时）
+        int daysElapsed = todayIndex >= 0 ? todayIndex + 1 : (int) totalDays;
+        double hoursVelocity = daysElapsed > 0 ? resolvedHours / daysElapsed : 0.0;
+        vo.setVelocity(Math.round(hoursVelocity * 100.0) / 100.0);
+
+        double remainingHours = currentTotalHours - resolvedHours;
+        if (hoursVelocity > 0 && remainingHours > 0) {
+            long daysNeeded = (long) Math.ceil(remainingHours / hoursVelocity);
+            vo.setForecastDate(today.plusDays(daysNeeded).toString());
+        } else if (remainingHours <= 0) {
             vo.setForecastDate(today.toString());
         } else {
             vo.setForecastDate(null);
