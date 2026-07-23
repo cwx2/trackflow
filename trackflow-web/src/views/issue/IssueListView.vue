@@ -369,7 +369,29 @@
       <!-- Filter bar -->
       <div v-if="selectedCount === 0" class="filter-bar">
         <div class="filter-left">
-          <span class="current-query-name">{{ activeQueryName }}</span>
+          <!-- Breadcrumb filter navigation (YouTrack style) -->
+          <nav class="breadcrumb-nav" aria-label="筛选导航">
+            <span
+              class="breadcrumb-item"
+              :class="{ clickable: activeProjectId !== null || activeQueryId !== null }"
+              @click="selectAllProjects"
+            >所有工单</span>
+            <template v-if="activeProjectId && !activeQueryId">
+              <span class="breadcrumb-separator"><icon-right /></span>
+              <span class="breadcrumb-item current">{{ activeProjectName }}</span>
+            </template>
+            <template v-if="activeQueryId">
+              <template v-if="activeQueryProjectName">
+                <span class="breadcrumb-separator"><icon-right /></span>
+                <span
+                  class="breadcrumb-item clickable"
+                  @click="navigateToQueryProject"
+                >{{ activeQueryProjectName }}</span>
+              </template>
+              <span class="breadcrumb-separator"><icon-right /></span>
+              <span class="breadcrumb-item current">{{ activeQueryName }}</span>
+            </template>
+          </nav>
           <span class="issue-total-badge">{{ totalIssues }} 个问题</span>
           <button
             class="hide-resolved-toggle"
@@ -714,7 +736,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -810,6 +832,51 @@ const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
 const activeQueryObj = ref<any>(null) // Track full active query object for chip-click
 const expandedGroups = reactive(new Set<string>(['saved', 'projects', 'drafts']))
 const panelSearch = ref('')
+
+// ===== Breadcrumb navigation computed =====
+const activeProjectName = computed(() => {
+  if (!activeProjectId.value) return ''
+  const p = projectList.value.find(pr => pr.id === activeProjectId.value)
+  return p?.name || ''
+})
+const activeQueryProjectName = computed(() => {
+  // If the active saved query has a project scope, show it in breadcrumb
+  if (!activeQueryObj.value) return ''
+  const filtersRaw = activeQueryObj.value.filters
+  if (!filtersRaw) return ''
+  let filters: any[]
+  if (typeof filtersRaw === 'string') {
+    try { filters = JSON.parse(filtersRaw) } catch { return '' }
+  } else {
+    filters = filtersRaw
+  }
+  if (!Array.isArray(filters)) return ''
+  const projectFilter = filters.find((f: any) => f.field === 'project')
+  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return ''
+  const projId = projectFilter.value[0]
+  const p = projectList.value.find(pr => pr.id === projId)
+  return p?.name || ''
+})
+function navigateToQueryProject() {
+  // Navigate from saved query breadcrumb to the query's project
+  if (!activeQueryObj.value) return
+  const filtersRaw = activeQueryObj.value.filters
+  if (!filtersRaw) return
+  let filters: any[]
+  if (typeof filtersRaw === 'string') {
+    try { filters = JSON.parse(filtersRaw) } catch { return }
+  } else {
+    filters = filtersRaw
+  }
+  if (!Array.isArray(filters)) return
+  const projectFilter = filters.find((f: any) => f.field === 'project')
+  if (!projectFilter || !projectFilter.value || projectFilter.value.length === 0) return
+  const projId = projectFilter.value[0]
+  const p = projectList.value.find(pr => pr.id === projId)
+  if (p) {
+    selectProject(p)
+  }
+}
 
 // ===== WebSocket 实时更新 =====
 // 新变更通知指示器（当有对列表外的更新时提示用户）
@@ -1981,7 +2048,39 @@ async function openStatusEdit(issue: IssueVO) {
 }
 function selectStatus(issue: IssueVO, status: IssueStatusVO) {
   statusDropdowns[issue.id] = false
-  executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, undefined, issue.version))
+  if (status.requireComment) {
+    // Show a modal to collect comment before transitioning
+    let commentText = ''
+    Modal.confirm({
+      title: '状态变更 — 请填写理由',
+      content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
+        h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+          h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
+          h('span', { style: `background:${status.color};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(status.name))
+        ]),
+        h('textarea', {
+          placeholder: '请说明退回/变更的原因（必填）',
+          style: 'width:100%;min-height:80px;margin-top:8px;padding:8px;border:1px solid var(--color-border-2);border-radius:4px;resize:vertical;font-size:13px;background:var(--color-bg-2);color:var(--color-text-1)',
+          onInput: (e: Event) => { commentText = (e.target as HTMLTextAreaElement).value }
+        })
+      ]),
+      okText: '确认变更',
+      cancelText: '取消',
+      width: 480,
+      onBeforeOk: () => {
+        if (!commentText.trim()) {
+          Message.warning('请填写变更理由')
+          return false
+        }
+        return true
+      },
+      onOk: () => {
+        executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, commentText.trim(), issue.version))
+      }
+    })
+  } else {
+    executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, undefined, issue.version))
+  }
 }
 
 // Inline edit - Assignee
@@ -2868,6 +2967,38 @@ onBeforeRouteLeave((_to, _from, next) => {
 .filter-left { display: flex; align-items: center; gap: 12px; }
 .current-query-name { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); }
 .issue-total-badge { font-size: 12px; color: var(--tf-text-tertiary); }
+
+/* Breadcrumb filter navigation */
+.breadcrumb-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.breadcrumb-item {
+  color: var(--tf-text-tertiary);
+  font-weight: 400;
+  white-space: nowrap;
+  transition: color 150ms;
+}
+.breadcrumb-item.clickable {
+  cursor: pointer;
+  color: var(--tf-text-secondary);
+}
+.breadcrumb-item.clickable:hover {
+  color: var(--color-primary-6, var(--tf-accent));
+  text-decoration: underline;
+}
+.breadcrumb-item.current {
+  color: var(--tf-text-primary);
+  font-weight: 500;
+}
+.breadcrumb-separator {
+  display: inline-flex;
+  align-items: center;
+  color: var(--tf-text-quaternary);
+  font-size: 12px;
+}
 
 /* Hide resolved toggle */
 .hide-resolved-toggle {
