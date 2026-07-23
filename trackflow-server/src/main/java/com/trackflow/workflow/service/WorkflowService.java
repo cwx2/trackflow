@@ -10,6 +10,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.result.StatusCountRow;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.entity.SysRole;
@@ -626,23 +627,21 @@ public class WorkflowService {
             return Map.of();
         }
 
-        // 对每个 statusId 单独统计（数量通常不超过 18 个状态）
+        // 规范化 issueType：null/"*"/空白 统一为 null（表示不过滤）
+        String effectiveIssueType = (issueType != null && !"*".equals(issueType) && !issueType.isBlank())
+                ? issueType : null;
+
+        // 单次 GROUP BY 查询获取所有状态的计数（消除 O(N) 串行查询）
+        List<StatusCountRow> rows =
+                issueMapper.selectIssueCountByStatuses(statusIds, projectId, effectiveIssueType);
+
+        // 构建结果 Map，确保所有请求的 statusId 都有对应条目（count=0 的状态也要返回）
         Map<Long, Long> result = new java.util.LinkedHashMap<>();
         for (Long statusId : statusIds) {
-            LambdaQueryWrapper<Issue> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Issue::getStatusId, statusId);
-            wrapper.isNull(Issue::getDeletedAt);
-
-            if (projectId != null) {
-                wrapper.eq(Issue::getProjectId, projectId);
-            }
-
-            if (issueType != null && !"*".equals(issueType) && !issueType.isBlank()) {
-                wrapper.eq(Issue::getIssueType, issueType);
-            }
-
-            long count = issueMapper.selectCount(wrapper);
-            result.put(statusId, count);
+            result.put(statusId, 0L);
+        }
+        for (StatusCountRow row : rows) {
+            result.put(row.getStatusId(), row.getCnt().longValue());
         }
 
         return result;

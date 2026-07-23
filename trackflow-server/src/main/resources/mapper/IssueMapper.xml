@@ -308,4 +308,22 @@
         LIMIT #{limit}
     </select>
 
+    <!-- 工作流影响分析：按状态 ID 列表聚合工单数量（单次 GROUP BY 查询，消除 N+1） -->
+    <select id="selectIssueCountByStatuses" resultType="com.trackflow.issue.mapper.result.StatusCountRow">
+        SELECT status_id, COUNT(*) AS cnt
+        FROM issue
+        WHERE deleted_at IS NULL
+          AND status_id IN
+            <foreach item="statusId" collection="statusIds" open="(" separator="," close=")">
+                #{statusId}
+            </foreach>
+          <if test="projectId != null">
+            AND project_id = #{projectId}
+          </if>
+          <if test="issueType != null">
+            AND issue_type = #{issueType}
+          </if>
+        GROUP BY status_id
+    </select>
+
 </mapper>

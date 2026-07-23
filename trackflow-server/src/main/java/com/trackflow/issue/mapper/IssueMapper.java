@@ -135,4 +135,18 @@ public interface IssueMapper extends BaseMapper<Issue> {
             @Param("excludeDoneBefore") java.time.LocalDateTime excludeDoneBefore,
             @Param("limit") int limit
     );
+
+    /**
+     * 工作流影响分析：按状态 ID 列表聚合工单数量（单次 GROUP BY 查询，消除 N+1）。
+     *
+     * @param statusIds 需要统计的状态 ID 列表
+     * @param projectId 项目 ID（null 表示全局统计）
+     * @param issueType 工单类型（null 表示所有类型）
+     * @return 每个状态的工单数量
+     */
+    List<StatusCountRow> selectIssueCountByStatuses(
+            @Param("statusIds") List<Long> statusIds,
+            @Param("projectId") Long projectId,
+            @Param("issueType") String issueType
+    );
 }
