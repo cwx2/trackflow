@@ -12,6 +12,7 @@ import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
+import com.trackflow.common.service.DistributedLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -46,6 +47,7 @@ public class SprintAutoCompleteScheduler {
     private final IssueMapper issueMapper;
     private final ProjectActivityService projectActivityService;
     private final ApplicationEventPublisher eventPublisher;
+    private final DistributedLockService distributedLockService;
 
     /**
      * 每日 23:59:00 检查并自动完成已过期的 active Sprint。
@@ -55,6 +57,10 @@ public class SprintAutoCompleteScheduler {
      */
     @Scheduled(cron = "0 59 23 * * ?")
     public void autoCompleteExpiredSprints() {
+        distributedLockService.executeWithLock("sprint_auto_complete", this::doAutoCompleteExpiredSprints);
+    }
+
+    private void doAutoCompleteExpiredSprints() {
         log.info("[SprintAutoComplete] 开始检查到期 Sprint...");
 
         LocalDate today = LocalDate.now();

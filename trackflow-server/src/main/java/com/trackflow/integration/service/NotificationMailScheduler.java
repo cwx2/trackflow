@@ -1,5 +1,6 @@
 package com.trackflow.integration.service;
 
+import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
@@ -38,6 +39,7 @@ public class NotificationMailScheduler {
     private final NotificationPreferenceService preferenceService;
     private final SysUserMapper sysUserMapper;
     private final NotificationUrlBuilder urlBuilder;
+    private final DistributedLockService distributedLockService;
 
     /**
      * 每批最多处理的通知数量（避免长时间占用线程）
@@ -49,6 +51,10 @@ public class NotificationMailScheduler {
      */
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     public void processDelayedMails() {
+        distributedLockService.executeWithLock("notification_mail", this::doProcessDelayedMails);
+    }
+
+    private void doProcessDelayedMails() {
         // Phase 1: 抑制已读通知（IAN 已读 → 不发邮件）
         int suppressed = notificationService.suppressReadNotificationMails();
         if (suppressed > 0) {

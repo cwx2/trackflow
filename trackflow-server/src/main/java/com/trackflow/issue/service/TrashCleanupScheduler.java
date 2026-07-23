@@ -1,5 +1,6 @@
 package com.trackflow.issue.service;
 
+import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.project.mapper.ProjectMapper;
@@ -33,12 +34,17 @@ public class TrashCleanupScheduler {
     private final ProjectService projectService;
     private final IssueMapper issueMapper;
     private final IssueService issueService;
+    private final DistributedLockService distributedLockService;
 
     /**
      * 每天凌晨 3:00 执行清理
      */
     @Scheduled(cron = "0 0 3 * * ?")
     public void cleanExpiredTrash() {
+        distributedLockService.executeWithLock("trash_cleanup", this::doCleanExpiredTrash);
+    }
+
+    private void doCleanExpiredTrash() {
         log.info("[TrashCleanup] 开始执行回收站自动清理...");
         int totalCleaned = 0;
 

@@ -1,6 +1,7 @@
 package com.trackflow.system.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.system.entity.SysAuditLog;
 import com.trackflow.system.mapper.SysAuditLogMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,12 +25,17 @@ public class AuditLogCleanupScheduler {
 
     private final SysAuditLogMapper auditLogMapper;
     private final SystemSettingService systemSettingService;
+    private final DistributedLockService distributedLockService;
 
     /**
      * 每天凌晨 3:30 执行清理
      */
     @Scheduled(cron = "0 30 3 * * ?")
     public void cleanExpiredAuditLogs() {
+        distributedLockService.executeWithLock("audit_log_cleanup", this::doCleanExpiredAuditLogs);
+    }
+
+    private void doCleanExpiredAuditLogs() {
         int retentionDays;
         try {
             retentionDays = Integer.parseInt(

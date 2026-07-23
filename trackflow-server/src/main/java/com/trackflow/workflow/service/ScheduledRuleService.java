@@ -3,6 +3,7 @@ package com.trackflow.workflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
@@ -37,12 +38,17 @@ public class ScheduledRuleService {
     private final IssueMapper issueMapper;
     private final WorkflowRuleEngine ruleEngine;
     private final ObjectMapper objectMapper;
+    private final DistributedLockService distributedLockService;
 
     /**
      * 每分钟执行一次调度检查。
      */
     @Scheduled(fixedDelay = 60000, initialDelay = 30000)
     public void checkAndExecuteScheduledRules() {
+        distributedLockService.executeWithLock("workflow_scheduled_rules", this::doCheckAndExecuteScheduledRules);
+    }
+
+    private void doCheckAndExecuteScheduledRules() {
         List<WorkflowRule> rules = ruleMapper.findEnabledScheduledRules();
         if (rules.isEmpty()) return;
 
