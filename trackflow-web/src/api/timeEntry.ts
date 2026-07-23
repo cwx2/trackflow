@@ -3,6 +3,7 @@ import type { R } from './types'
 
 export interface TimeEntryAttributeValueItem {
   attributeId: string
+  attributeName?: string
   valueId: string
   valueName: string
   valueColor?: string

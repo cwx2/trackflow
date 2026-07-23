@@ -3,7 +3,6 @@ package com.trackflow.timeentry.vo;
 import lombok.Data;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 public class TimeEntryVO {
@@ -72,5 +71,5 @@ public class TimeEntryVO {
      * 工作项属性值列表
      * 每项包含: attributeId, attributeName, valueId, valueName, valueColor
      */
-    private List<Map<String, String>> attributeValues;
+    private List<TimeEntryAttributeValueVO> attributeValues;
 }

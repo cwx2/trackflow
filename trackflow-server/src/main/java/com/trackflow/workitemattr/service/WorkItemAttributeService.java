@@ -440,6 +440,7 @@ public class WorkItemAttributeService {
             WorkItemAttributeValue val = valueMapper.selectById(teav.getValueId());
             if (attr != null && val != null) {
                 Map<String, String> valInfo = new HashMap<>();
+                valInfo.put("attributeName", attr.getName());
                 valInfo.put("valueId", String.valueOf(val.getId()));
                 valInfo.put("valueName", val.getName());
                 valInfo.put("valueColor", val.getColor());
@@ -447,6 +448,22 @@ public class WorkItemAttributeService {
             }
         }
         return result;
+    }
+
+    /**
+     * 批量获取工时记录的全部属性值（含属性名）。
+     * 返回 Map: time_entry_id → List<属性值信息>
+     * 每个属性值信息包含: attributeId, attributeName, valueId, valueName, valueColor
+     *
+     * @param timeEntryIds 逗号分隔的工时记录 ID
+     * @return 按工时记录 ID 分组的属性值列表
+     */
+    public Map<Long, List<Map<String, Object>>> getAttributeValuesForEntries(String timeEntryIds) {
+        if (timeEntryIds == null || timeEntryIds.isBlank()) return Map.of();
+        List<Map<String, Object>> rows = entryValueMapper.selectAttributeValuesForEntries(timeEntryIds);
+        return rows.stream().collect(Collectors.groupingBy(
+                row -> ((Number) row.get("time_entry_id")).longValue()
+        ));
     }
 
     /**

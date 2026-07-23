@@ -20,6 +20,7 @@ import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
 import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
+import com.trackflow.timeentry.vo.TimeEntryAttributeValueVO;
 import com.trackflow.timeentry.vo.TimeEntryUserVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import lombok.RequiredArgsConstructor;
@@ -369,24 +370,45 @@ public class TimeEntryService {
         List<TimeEntry> entries = timeEntryMapper.selectList(wrapper);
         if (entries.isEmpty()) return List.of();
 
-        // 批量加载属性值
+        // 批量加载用户名（含 loggedBy 用户）
+        Set<Long> userIds = new HashSet<>();
+        entries.forEach(e -> {
+            userIds.add(e.getUserId());
+            if (e.getLoggedBy() != null) userIds.add(e.getLoggedBy());
+        });
+        Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, user ->
+                        user.getDisplayName() != null ? user.getDisplayName() : user.getUsername()));
+
+        // 批量加载属性值（含 workType）
         String ids = entries.stream().map(e -> String.valueOf(e.getId())).collect(Collectors.joining(","));
-        Map<Long, Map<String, String>> attrByEntry = loadWorkTypeForEntries(ids);
+        Map<Long, List<Map<String, Object>>> attrByEntry = workItemAttributeService.getAttributeValuesForEntries(ids);
+        Long workTypeAttrId = workItemAttributeService.getWorkTypeAttributeId();
 
         return entries.stream().map(entry -> {
             TimeEntryVO vo = timeEntryConverter.toVO(entry);
 
+            // 填充 userName
+            vo.setUserName(userNameMap.getOrDefault(entry.getUserId(), "未知用户"));
+
             // loggedBy 名称（仅代录场景）
             if (entry.getLoggedBy() != null && !entry.getLoggedBy().equals(entry.getUserId())) {
-                vo.setLoggedByName(getUserDisplayName(entry.getLoggedBy()));
+                vo.setLoggedByName(userNameMap.getOrDefault(entry.getLoggedBy(), "未知用户"));
             }
 
-            // Set work type from batch-loaded attribute values
-            Map<String, String> wtInfo = attrByEntry.get(entry.getId());
-            if (wtInfo != null) {
-                vo.setWorkType(wtInfo.get("name"));
-                vo.setWorkTypeId(wtInfo.get("id"));
-                vo.setWorkTypeColor(wtInfo.get("color"));
+            // 填充属性值列表 + 工作类型
+            List<Map<String, Object>> entryAttrs = attrByEntry.get(entry.getId());
+            if (entryAttrs != null && !entryAttrs.isEmpty()) {
+                vo.setAttributeValues(buildAttributeValueVOs(entryAttrs));
+                // 提取 Work type
+                entryAttrs.stream()
+                        .filter(row -> workTypeAttrId.equals(((Number) row.get("attribute_id")).longValue()))
+                        .findFirst()
+                        .ifPresent(row -> {
+                            vo.setWorkType((String) row.get("value_name"));
+                            vo.setWorkTypeId(String.valueOf(row.get("value_id")));
+                            vo.setWorkTypeColor((String) row.get("value_color"));
+                        });
             }
 
             return vo;
@@ -790,6 +812,9 @@ public class TimeEntryService {
         // 工单信息（issueKey + issueTitle），计时器 badge 全局显示需要
         enrichWithIssueInfo(vo, entry.getIssueId());
 
+        // 用户名
+        vo.setUserName(getUserDisplayName(entry.getUserId()));
+
         // loggedBy 名称（仅代录场景）
         if (entry.getLoggedBy() != null && !entry.getLoggedBy().equals(entry.getUserId())) {
             vo.setLoggedByName(getUserDisplayName(entry.getLoggedBy()));
@@ -827,8 +852,12 @@ public class TimeEntryService {
         if (attrValues.isEmpty()) return;
 
         vo.setAttributeValues(attrValues.entrySet().stream().map(e -> {
-            Map<String, String> item = new java.util.HashMap<>(e.getValue());
-            item.put("attributeId", e.getKey());
+            TimeEntryAttributeValueVO item = new TimeEntryAttributeValueVO();
+            item.setAttributeId(e.getKey());
+            item.setAttributeName(e.getValue().get("attributeName"));
+            item.setValueId(e.getValue().get("valueId"));
+            item.setValueName(e.getValue().get("valueName"));
+            item.setValueColor(e.getValue().get("valueColor"));
             return item;
         }).toList());
 
@@ -840,6 +869,22 @@ public class TimeEntryService {
             vo.setWorkTypeId(workTypeInfo.get("valueId"));
             vo.setWorkTypeColor(workTypeInfo.get("valueColor"));
         }
+    }
+
+    /**
+     * 从批量查询的属性值行数据构建 TimeEntryAttributeValueVO 列表。
+     * 每行包含: time_entry_id, attribute_id, attribute_name, value_id, value_name, value_color
+     */
+    private List<TimeEntryAttributeValueVO> buildAttributeValueVOs(List<Map<String, Object>> rows) {
+        return rows.stream().map(row -> {
+            TimeEntryAttributeValueVO item = new TimeEntryAttributeValueVO();
+            item.setAttributeId(String.valueOf(row.get("attribute_id")));
+            item.setAttributeName((String) row.get("attribute_name"));
+            item.setValueId(String.valueOf(row.get("value_id")));
+            item.setValueName((String) row.get("value_name"));
+            item.setValueColor((String) row.get("value_color"));
+            return item;
+        }).toList();
     }
 
     /**
