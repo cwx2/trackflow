@@ -30,8 +30,13 @@ import com.trackflow.system.mapper.UserGroupMapper;
 import com.trackflow.system.mapper.UserGroupMemberMapper;
 import com.trackflow.system.mapper.UserGroupRoleMapper;
 import com.trackflow.system.mapper.UserRoleMapper;
+import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserProfileVO;
 import com.trackflow.system.vo.UserVO;
+import com.trackflow.issue.entity.IssueAttachment;
+import com.trackflow.issue.entity.IssueComment;
+import com.trackflow.issue.mapper.IssueAttachmentMapper;
+import com.trackflow.issue.mapper.IssueCommentMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +45,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +77,8 @@ public class UserService {
     private final ProjectMapper projectMapper;
     private final IssueActivityMapper issueActivityMapper;
     private final IssueMapper issueMapper;
+    private final IssueCommentMapper issueCommentMapper;
+    private final IssueAttachmentMapper issueAttachmentMapper;
     private final KeycloakAdminService keycloakAdminService;
     private final ApiKeyService apiKeyService;
     private final StringRedisTemplate redisTemplate;
@@ -657,6 +666,200 @@ public class UserService {
                 info.setIssueTitle(issue.getTitle());
             }
             return info;
+        }).toList();
+    }
+
+    /**
+     * 导出指定用户的所有个人数据（GDPR 数据可携权）
+     *
+     * @param userId 目标用户ID
+     * @return 包含用户所有数据的导出对象
+     * @throws BusinessException 当用户不存在时
+     */
+    public UserDataExportVO exportUserData(Long userId) {
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
+        }
+
+        UserDataExportVO export = new UserDataExportVO();
+        export.setExportDate(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        export.setExportedBy(SecurityUtils.getCurrentUsername());
+
+        // 1. 用户基本信息
+        export.setUserInfo(buildUserBasicInfo(user));
+
+        // 2. 全局角色
+        export.setGlobalRoles(buildGlobalRoles(userId));
+
+        // 3. 项目成员关系
+        export.setProjectMemberships(buildProjectMemberships(userId));
+
+        // 4. 创建的工单
+        export.setCreatedIssues(buildIssuesByReporter(userId));
+
+        // 5. 分配给该用户的工单
+        export.setAssignedIssues(buildIssuesByAssignee(userId));
+
+        // 6. 评论
+        export.setComments(buildComments(userId));
+
+        // 7. 活动记录
+        export.setActivities(buildActivities(userId));
+
+        // 8. 附件
+        export.setAttachments(buildAttachments(userId));
+
+        log.info("用户数据导出完成: userId={}, exportedBy={}", userId, export.getExportedBy());
+        return export;
+    }
+
+    private UserDataExportVO.UserBasicInfo buildUserBasicInfo(SysUser user) {
+        UserDataExportVO.UserBasicInfo info = new UserDataExportVO.UserBasicInfo();
+        info.setId(String.valueOf(user.getId()));
+        info.setUsername(user.getUsername());
+        info.setDisplayName(user.getDisplayName());
+        info.setEmail(user.getEmail());
+        info.setPhone(user.getPhone());
+        info.setAvatarUrl(user.getAvatarUrl());
+        info.setStatus(user.getStatus());
+        info.setBanStatus(user.getBanStatus());
+        info.setBanReason(user.getBanReason());
+        info.setBannedAt(user.getBannedAt());
+        info.setLastLoginAt(user.getLastLoginAt());
+        info.setCreatedAt(user.getCreatedAt());
+        info.setUpdatedAt(user.getUpdatedAt());
+        return info;
+    }
+
+    private List<String> buildGlobalRoles(Long userId) {
+        List<Long> roleIds = getUserGlobalRoleIds(userId);
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
+        List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+        return roles.stream().map(SysRole::getName).toList();
+    }
+
+    private List<UserDataExportVO.ProjectMembership> buildProjectMemberships(Long userId) {
+        List<ProjectMember> members = projectMemberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getUserId, userId)
+        );
+        if (members.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> projectIds = members.stream().map(ProjectMember::getProjectId).distinct().toList();
+        List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
+
+        Map<Long, Project> projectMap = projectMapper.selectBatchIds(projectIds).stream()
+                .collect(Collectors.toMap(Project::getId, p -> p));
+        Map<Long, SysRole> roleMap = roleMapper.selectBatchIds(roleIds).stream()
+                .collect(Collectors.toMap(SysRole::getId, r -> r));
+
+        return members.stream().map(member -> {
+            UserDataExportVO.ProjectMembership pm = new UserDataExportVO.ProjectMembership();
+            pm.setProjectId(String.valueOf(member.getProjectId()));
+            pm.setJoinedAt(member.getCreatedAt());
+
+            Project project = projectMap.get(member.getProjectId());
+            if (project != null) {
+                pm.setProjectName(project.getName());
+                pm.setProjectKey(project.getKey());
+            }
+
+            SysRole role = roleMap.get(member.getRoleId());
+            if (role != null) {
+                pm.setRoleName(role.getName());
+            }
+            return pm;
+        }).toList();
+    }
+
+    private List<UserDataExportVO.IssueData> buildIssuesByReporter(Long userId) {
+        List<Issue> issues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getReporterId, userId)
+                        .isNull(Issue::getDeletedAt)
+                        .orderByDesc(Issue::getCreatedAt)
+        );
+        return issues.stream().map(this::toIssueData).toList();
+    }
+
+    private List<UserDataExportVO.IssueData> buildIssuesByAssignee(Long userId) {
+        List<Issue> issues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getAssigneeId, userId)
+                        .isNull(Issue::getDeletedAt)
+                        .orderByDesc(Issue::getCreatedAt)
+        );
+        return issues.stream().map(this::toIssueData).toList();
+    }
+
+    private UserDataExportVO.IssueData toIssueData(Issue issue) {
+        UserDataExportVO.IssueData data = new UserDataExportVO.IssueData();
+        data.setId(String.valueOf(issue.getId()));
+        data.setIssueKey(issue.getIssueKey());
+        data.setTitle(issue.getTitle());
+        data.setIssueType(issue.getIssueType());
+        data.setPriority(issue.getPriority());
+        data.setCreatedAt(issue.getCreatedAt());
+        data.setUpdatedAt(issue.getUpdatedAt());
+        return data;
+    }
+
+    private List<UserDataExportVO.CommentData> buildComments(Long userId) {
+        List<IssueComment> comments = issueCommentMapper.selectList(
+                new LambdaQueryWrapper<IssueComment>()
+                        .eq(IssueComment::getUserId, userId)
+                        .isNull(IssueComment::getDeletedAt)
+                        .orderByDesc(IssueComment::getCreatedAt)
+        );
+        return comments.stream().map(comment -> {
+            UserDataExportVO.CommentData data = new UserDataExportVO.CommentData();
+            data.setId(String.valueOf(comment.getId()));
+            data.setIssueId(String.valueOf(comment.getIssueId()));
+            data.setContent(comment.getContent());
+            data.setSource(comment.getSource());
+            data.setCreatedAt(comment.getCreatedAt());
+            return data;
+        }).toList();
+    }
+
+    private List<UserDataExportVO.ActivityData> buildActivities(Long userId) {
+        List<IssueActivity> activities = issueActivityMapper.selectList(
+                new LambdaQueryWrapper<IssueActivity>()
+                        .eq(IssueActivity::getUserId, userId)
+                        .orderByDesc(IssueActivity::getCreatedAt)
+        );
+        return activities.stream().map(activity -> {
+            UserDataExportVO.ActivityData data = new UserDataExportVO.ActivityData();
+            data.setId(String.valueOf(activity.getId()));
+            data.setIssueId(String.valueOf(activity.getIssueId()));
+            data.setAction(activity.getAction());
+            data.setFieldName(activity.getFieldName());
+            data.setOldValue(activity.getOldValue());
+            data.setNewValue(activity.getNewValue());
+            data.setCreatedAt(activity.getCreatedAt());
+            return data;
+        }).toList();
+    }
+
+    private List<UserDataExportVO.AttachmentData> buildAttachments(Long userId) {
+        List<IssueAttachment> attachments = issueAttachmentMapper.selectList(
+                new LambdaQueryWrapper<IssueAttachment>()
+                        .eq(IssueAttachment::getUploadedBy, userId)
+                        .orderByDesc(IssueAttachment::getCreatedAt)
+        );
+        return attachments.stream().map(attachment -> {
+            UserDataExportVO.AttachmentData data = new UserDataExportVO.AttachmentData();
+            data.setId(String.valueOf(attachment.getId()));
+            data.setIssueId(String.valueOf(attachment.getIssueId()));
+            data.setFileName(attachment.getFileName());
+            data.setFileSize(attachment.getFileSize());
+            data.setContentType(attachment.getContentType());
+            data.setCreatedAt(attachment.getCreatedAt());
+            return data;
         }).toList();
     }
 }

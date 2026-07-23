@@ -14,6 +14,7 @@ import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
 import com.trackflow.system.service.UserService;
+import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserDetailVO;
 import com.trackflow.system.vo.UserProfileVO;
 import com.trackflow.system.vo.UserVO;
@@ -137,5 +138,19 @@ public class UserController {
     public R<Void> removeRole(@PathVariable("id") Long id, @PathVariable("roleId") Long roleId) {
         userService.removeGlobalRole(id, roleId);
         return R.ok();
+    }
+
+    /**
+     * 导出指定用户的所有个人数据
+     * 用于满足 GDPR「数据可携权」（Right to Data Portability）要求
+     *
+     * @param id 用户ID
+     * @return 用户的完整个人数据
+     */
+    @GetMapping("/{id}/export")
+    @PreAuthorize("@perm.checkGlobal('system:manage_users')")
+    public R<UserDataExportVO> exportUserData(@PathVariable("id") Long id) {
+        UserDataExportVO exportData = userService.exportUserData(id);
+        return R.ok(exportData);
     }
 }

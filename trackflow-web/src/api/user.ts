@@ -47,6 +47,11 @@ export const userApi = {
   /** 移除全局角色 */
   removeRole(userId: string, roleId: string) {
     return request.delete<any, R<void>>(`/users/${userId}/roles/${roleId}`)
+  },
+
+  /** 导出用户数据（GDPR 数据可携权） */
+  exportData(userId: string) {
+    return request.get<any, R<UserDataExportVO>>(`/users/${userId}/export`)
   }
 }
 
@@ -99,4 +104,78 @@ export interface UserProfileActivityInfo {
   oldValue?: string
   newValue?: string
   createdAt: string
+}
+
+
+/** 用户数据导出 VO */
+export interface UserDataExportVO {
+  exportDate: string
+  exportedBy: string
+  userInfo: {
+    id: string
+    username: string
+    displayName: string
+    email: string
+    phone?: string
+    avatarUrl?: string
+    status: string
+    banStatus?: string
+    banReason?: string
+    bannedAt?: string
+    lastLoginAt?: string
+    createdAt: string
+    updatedAt: string
+  }
+  globalRoles: string[]
+  projectMemberships: Array<{
+    projectId: string
+    projectName: string
+    projectKey: string
+    roleName: string
+    joinedAt: string
+  }>
+  createdIssues: Array<{
+    id: string
+    issueKey: string
+    title: string
+    issueType: string
+    priority: string
+    status?: string
+    createdAt: string
+    updatedAt: string
+  }>
+  assignedIssues: Array<{
+    id: string
+    issueKey: string
+    title: string
+    issueType: string
+    priority: string
+    status?: string
+    createdAt: string
+    updatedAt: string
+  }>
+  comments: Array<{
+    id: string
+    issueId: string
+    content: string
+    source?: string
+    createdAt: string
+  }>
+  activities: Array<{
+    id: string
+    issueId: string
+    action: string
+    fieldName?: string
+    oldValue?: string
+    newValue?: string
+    createdAt: string
+  }>
+  attachments: Array<{
+    id: string
+    issueId: string
+    fileName: string
+    fileSize: number
+    contentType: string
+    createdAt: string
+  }>
 }

@@ -74,6 +74,11 @@
         </div>
         <div class="actions-section">
           <button
+            class="btn-secondary"
+            @click="handleExportUserData"
+            :disabled="exporting"
+          >{{ exporting ? '导出中...' : '导出用户数据' }}</button>
+          <button
             v-if="profile.status === 'active'"
             class="btn-secondary danger"
             @click="handleDisable"
@@ -255,6 +260,7 @@ const router = useRouter()
 const profile = ref<UserProfileVO | null>(null)
 const loading = ref(true)
 const error = ref('')
+const exporting = ref(false)
 const showRoleDialog = ref(false)
 const globalRoles = ref<any[]>([])
 
@@ -377,6 +383,30 @@ async function handleEnable() {
       }
     }
   })
+}
+
+async function handleExportUserData() {
+  if (!profile.value) return
+  exporting.value = true
+  try {
+    const res = await userApi.exportData(userId.value)
+    const data = res.data
+    // 触发浏览器下载 JSON 文件
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `user-data-${profile.value.username}-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    Message.success('用户数据导出成功')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '导出失败')
+  } finally {
+    exporting.value = false
+  }
 }
 
 const BAN_STATUS_LABELS: Record<string, string> = {
