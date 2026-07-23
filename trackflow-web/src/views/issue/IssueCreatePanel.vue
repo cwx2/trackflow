@@ -64,6 +64,56 @@
               </template>
             </a-upload>
           </div>
+
+          <!-- 关联工单区域 -->
+          <div class="link-issue-area">
+            <div class="link-issue-header" @click="showLinkSection = !showLinkSection">
+              <icon-link />
+              <span class="link-issue-title">Link issue</span>
+              <icon-down v-if="!showLinkSection" style="margin-left: auto; font-size: 12px" />
+              <icon-up v-else style="margin-left: auto; font-size: 12px" />
+            </div>
+            <div v-if="showLinkSection" class="link-issue-body">
+              <!-- 已添加的关联列表 -->
+              <div v-if="linkedIssues.length > 0" class="linked-list">
+                <div v-for="(link, idx) in linkedIssues" :key="idx" class="linked-item">
+                  <span class="link-type-label">{{ getLinkTypeLabel(link.linkType) }}</span>
+                  <span class="linked-issue-key">{{ link.issueKey }}</span>
+                  <span class="linked-issue-title">{{ link.title }}</span>
+                  <icon-close class="remove-link-btn" @click="removeLink(idx)" />
+                </div>
+              </div>
+              <!-- 添加新关联 -->
+              <div class="add-link-row">
+                <a-select v-model="newLinkType" size="small" placeholder="关联类型" style="width: 140px">
+                  <a-option value="relates_to">relates to</a-option>
+                  <a-option value="blocks">blocks</a-option>
+                  <a-option value="blocked_by">is blocked by</a-option>
+                  <a-option value="duplicates">duplicates</a-option>
+                  <a-option value="duplicated_by">is duplicated by</a-option>
+                  <a-option value="parent_of">parent of</a-option>
+                  <a-option value="child_of">subtask of</a-option>
+                </a-select>
+                <a-select
+                  v-model="newLinkTargetId"
+                  size="small"
+                  placeholder="搜索工单..."
+                  allow-search
+                  :filter-option="false"
+                  :loading="linkSearchLoading"
+                  style="flex: 1"
+                  @search="onLinkSearch"
+                >
+                  <a-option v-for="item in linkSearchResults" :key="item.id" :value="item.id">
+                    {{ item.issueKey }} - {{ item.title }}
+                  </a-option>
+                </a-select>
+                <a-button size="small" type="text" :disabled="!newLinkType || !newLinkTargetId" @click="addLink">
+                  <icon-plus />
+                </a-button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 右侧：属性面板 -->
@@ -212,7 +262,7 @@
                 multiple
                 allow-clear
               >
-                <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
                 <template #footer v-if="canAddFieldOption">
                   <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
                     <span class="add-icon">+</span> 添加新值
@@ -233,7 +283,7 @@
                 allow-clear
                 @change="clearFieldError(cf.id)"
               >
-                <a-option v-for="opt in (cf.options || []).filter(o => !o.isArchived)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
                 <template #footer v-if="canAddFieldOption">
                   <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
                     <span class="add-icon">+</span> 添加新值
@@ -294,7 +344,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconDown, IconAttachment } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -302,7 +352,7 @@ import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
-import type { CustomFieldDefinitionVO, IssueTemplateVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule } from '@/api/types'
 
 const props = defineProps<{
   visible: boolean
@@ -319,6 +369,73 @@ const emit = defineEmits<{
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+
+// Link issue 状态
+const showLinkSection = ref(false)
+const newLinkType = ref<string>('relates_to')
+const newLinkTargetId = ref<string | undefined>(undefined)
+const linkSearchLoading = ref(false)
+const linkSearchResults = ref<any[]>([])
+const linkedIssues = ref<Array<{ targetIssueId: string; linkType: string; issueKey: string; title: string }>>([])
+
+const linkTypeLabels: Record<string, string> = {
+  relates_to: 'relates to',
+  blocks: 'blocks',
+  blocked_by: 'is blocked by',
+  duplicates: 'duplicates',
+  duplicated_by: 'is duplicated by',
+  parent_of: 'parent of',
+  child_of: 'subtask of'
+}
+
+function getLinkTypeLabel(type: string): string {
+  return linkTypeLabels[type] || type
+}
+
+let linkSearchTimer: any = null
+async function onLinkSearch(keyword: string) {
+  if (!keyword || keyword.length < 2) {
+    linkSearchResults.value = []
+    return
+  }
+  if (linkSearchTimer) clearTimeout(linkSearchTimer)
+  linkSearchTimer = setTimeout(async () => {
+    linkSearchLoading.value = true
+    try {
+      const res = await issueApi.list({ keyword, pageSize: 10, projectId: form.projectId })
+      linkSearchResults.value = res.data?.list || []
+    } catch {
+      linkSearchResults.value = []
+    } finally {
+      linkSearchLoading.value = false
+    }
+  }, 300)
+}
+
+function addLink() {
+  if (!newLinkType.value || !newLinkTargetId.value) return
+  // 避免重复添加
+  const exists = linkedIssues.value.some(l => l.targetIssueId === newLinkTargetId.value && l.linkType === newLinkType.value)
+  if (exists) {
+    Message.warning('该关联已添加')
+    return
+  }
+  // 从搜索结果中找到对应工单信息
+  const target = linkSearchResults.value.find(i => i.id === newLinkTargetId.value)
+  if (target) {
+    linkedIssues.value.push({
+      targetIssueId: newLinkTargetId.value,
+      linkType: newLinkType.value,
+      issueKey: target.issueKey,
+      title: target.title
+    })
+  }
+  newLinkTargetId.value = undefined
+}
+
+function removeLink(idx: number) {
+  linkedIssues.value.splice(idx, 1)
+}
 
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
@@ -379,6 +496,39 @@ async function confirmAddOptionInSelect(cf: CustomFieldDefinitionVO) {
     Message.error(e.response?.data?.message || '添加选项失败')
   }
 }
+
+/**
+ * 获取自定义字段（list 类型）经过 filterRules 过滤后的可选项列表。
+ * 实现 YouTrack "Filter values based on" 功能：
+ * - 如果字段配置了 filterFieldId 和 filterRules，根据源字段的当前值过滤选项
+ * - 如果未配置或源字段无值，则仅过滤归档选项
+ */
+function getFilteredOptionsForField(cf: CustomFieldDefinitionVO) {
+  // 基础过滤：排除归档选项
+  let activeOptions = (cf.options || []).filter(o => !o.isArchived)
+
+  // 值依赖过滤
+  if (cf.filterFieldId && cf.filterRules) {
+    try {
+      const rules: FilterRule[] = JSON.parse(cf.filterRules)
+      if (rules && rules.length > 0) {
+        // 获取源字段当前值
+        const sourceValue = customFieldValues[cf.filterFieldId] || ''
+        if (sourceValue) {
+          const matchedRule = rules.find(r => r.whenValue === sourceValue)
+          if (matchedRule && matchedRule.showOnly && matchedRule.showOnly.length > 0) {
+            activeOptions = activeOptions.filter(o => matchedRule.showOnly.includes(o.id))
+          }
+        }
+      }
+    } catch {
+      // 解析失败时回退到显示所有非归档选项
+    }
+  }
+
+  return activeOptions
+}
+
 /**
  * 根据字段类型和配置生成占位文字
  * 优先使用 effectiveDefaultValue 作为引导提示（类似 YouTrack Empty Value Name）
@@ -577,6 +727,12 @@ function resetForm() {
   form.estimatedHours = undefined
   selectedTemplateId.value = null
   cfValidationErrors.value = {}
+  // 重置 link 状态
+  linkedIssues.value = []
+  newLinkType.value = 'relates_to'
+  newLinkTargetId.value = undefined
+  showLinkSection.value = false
+  linkSearchResults.value = []
 }
 
 /** 从 localStorage 加载草稿数据填充表单 */
@@ -668,7 +824,10 @@ async function doSubmit(): Promise<boolean> {
       estimatedHours: form.estimatedHours || undefined,
       sprintId: form.sprintId || undefined,
       assigneeId: form.assigneeId || undefined,
-      customFields: getCustomFieldPayload()
+      customFields: getCustomFieldPayload(),
+      links: linkedIssues.value.length > 0
+        ? linkedIssues.value.map(l => ({ targetIssueId: l.targetIssueId, linkType: l.linkType }))
+        : undefined
     })
     Message.success('工单创建成功')
     // Remember last used project for quick create
@@ -855,6 +1014,63 @@ onMounted(() => {
   cursor: pointer;
 }
 .add-opt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Link issue area styles */
+.link-issue-area {
+  margin-top: 12px;
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+  border-radius: 6px;
+  overflow: hidden;
+}
+.link-issue-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-2);
+  transition: background 120ms;
+}
+.link-issue-header:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
+.link-issue-title { font-weight: 500; }
+.link-issue-body { padding: 8px 12px; }
+.linked-list { margin-bottom: 8px; }
+.linked-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--color-text-1);
+}
+.link-type-label {
+  color: var(--color-text-3);
+  font-size: 11px;
+  min-width: 80px;
+}
+.linked-issue-key {
+  font-weight: 500;
+  color: var(--tf-accent, rgb(var(--primary-6)));
+}
+.linked-issue-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remove-link-btn {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-3);
+  transition: color 120ms;
+}
+.remove-link-btn:hover { color: var(--color-danger-light-4, #f53f3f); }
+.add-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 </style>
 
 <style>

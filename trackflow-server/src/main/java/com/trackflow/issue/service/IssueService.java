@@ -17,6 +17,7 @@ import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.customfield.service.CustomFieldValidateMode;
 import com.trackflow.issue.dto.CreateIssueDTO;
+import com.trackflow.issue.dto.CreateIssueLinkDTO;
 import com.trackflow.issue.dto.IssueQuery;
 import com.trackflow.issue.dto.MoveIssueDTO;
 import com.trackflow.issue.dto.UpdateIssueDTO;
@@ -74,6 +75,7 @@ public class IssueService {
     private final ProjectService projectService;
     private final MinioService minioService;
     private final IssueConverter issueConverter;
+    private final IssueLinkService issueLinkService;
     private final IssueTagService tagService;
     private final PermissionService permissionService;
     private final TransitionActionEngine transitionActionEngine;
@@ -176,6 +178,19 @@ public class IssueService {
 
         // 记录活动
         recordActivity(issue.getId(), currentUserId, "created", null, null, null);
+
+        // 创建关联（如果创建时指定了 links）
+        if (dto.getLinks() != null && !dto.getLinks().isEmpty()) {
+            for (CreateIssueLinkDTO linkDto : dto.getLinks()) {
+                try {
+                    issueLinkService.createIssueLink(issue.getId(), linkDto);
+                } catch (Exception e) {
+                    // 关联创建失败不阻塞主工单创建，仅记录警告
+                    log.warn("创建工单时建立关联失败: issueId={}, targetIssueId={}, linkType={}, error={}",
+                            issue.getId(), linkDto.getTargetIssueId(), linkDto.getLinkType(), e.getMessage());
+                }
+            }
+        }
 
         // 通知被分配人（若创建时指定了 assignee）— 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.Created(issue, currentUserId));
@@ -684,20 +699,31 @@ public class IssueService {
     }
 
     /**
-     * 关键词过滤：匹配 title、description、issue_key 或 assignee 的 display_name/username。
-     * 使用参数化查询防止 SQL 注入。LIKE 通配符已转义以确保字面匹配。
+     * 关键词过滤：使用混合搜索策略兼顾中英文和性能。
+     * <p>
+     * 搜索策略（OR 组合，确保覆盖范围不缩小）：
+     * <ul>
+     *   <li>全文搜索 (tsvector @@ plainto_tsquery) — 利用 idx_issue_fulltext GIN 索引，对英文和空格分隔的词效果最佳</li>
+     *   <li>title ILIKE — 利用 idx_issue_title_trgm trigram GIN 索引，对中文子串匹配有效</li>
+     *   <li>issue_key ILIKE — 精确匹配工单编号</li>
+     *   <li>assignee 名称 ILIKE — 利用 idx_sys_user_display_name_trgm 索引</li>
+     * </ul>
      */
     private void applyKeywordFilter(QueryWrapper<Issue> wrapper, String keyword) {
         String escaped = SqlUtils.escapeLikePattern(keyword);
         String likePattern = "%" + escaped + "%";
         wrapper.and(w -> w
-                .apply("title LIKE {0} ESCAPE '\\'", likePattern)
+                // 全文搜索：利用 idx_issue_fulltext GIN 索引（对空格分隔的英文词效果最佳）
+                .apply("to_tsvector('simple', COALESCE(title,'') || ' ' || COALESCE(description,'')) @@ plainto_tsquery('simple', {0})", keyword)
                 .or()
-                .apply("description LIKE {0} ESCAPE '\\'", likePattern)
+                // title 子串匹配：利用 idx_issue_title_trgm trigram GIN 索引（对中文子串有效）
+                .apply("title ILIKE {0}", likePattern)
                 .or()
-                .apply("issue_key LIKE {0} ESCAPE '\\'", likePattern)
+                // issue_key 匹配
+                .apply("issue_key ILIKE {0}", likePattern)
                 .or()
-                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} ESCAPE '\\' OR username LIKE {0} ESCAPE '\\')", likePattern)
+                // assignee 名称匹配：利用 idx_sys_user_display_name_trgm / idx_sys_user_username_trgm
+                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} OR username ILIKE {0})", likePattern)
         );
     }
 

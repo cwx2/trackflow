@@ -5,8 +5,11 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import jakarta.validation.Valid;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -28,4 +31,11 @@ public class CreateIssueDTO {
     private LocalDate dueDate;
     private BigDecimal estimatedHours;
     private Map<String, String> customFields;
+
+    /**
+     * 创建工单时同时建立的关联（可选）。
+     * 支持在创建工单的同时指定与已有工单的关联关系。
+     */
+    @Valid
+    private List<CreateIssueLinkDTO> links;
 }
