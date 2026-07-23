@@ -50,6 +50,8 @@ logging:
 
 # 附件上传限制
 trackflow:
+  cors:
+    allowed-origins: http://localhost:3000
   attachment:
     max-file-size: 52428800  # 50MB
     max-attachments-per-issue: 50

@@ -4,11 +4,13 @@ import com.trackflow.auth.filter.ApiKeyAuthFilter;
 import com.trackflow.auth.filter.RateLimitFilter;
 import com.trackflow.auth.filter.UserSyncFilter;
 import com.trackflow.auth.service.RateLimitService;
+import com.trackflow.common.config.CorsProperties;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.WebUtils;
 import com.trackflow.system.service.SystemAuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +27,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -38,6 +44,7 @@ import java.util.Map;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(CorsProperties.class)
 public class SecurityConfig {
 
     private final ApiKeyAuthFilter apiKeyAuthFilter;
@@ -45,23 +52,26 @@ public class SecurityConfig {
     private final UserSyncFilter userSyncFilter;
     private final SystemAuditService systemAuditService;
     private final RateLimitService rateLimitService;
+    private final CorsProperties corsProperties;
 
     public SecurityConfig(ApiKeyAuthFilter apiKeyAuthFilter,
                           RateLimitFilter rateLimitFilter,
                           UserSyncFilter userSyncFilter,
                           SystemAuditService systemAuditService,
-                          RateLimitService rateLimitService) {
+                          RateLimitService rateLimitService,
+                          CorsProperties corsProperties) {
         this.apiKeyAuthFilter = apiKeyAuthFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.userSyncFilter = userSyncFilter;
         this.systemAuditService = systemAuditService;
         this.rateLimitService = rateLimitService;
+        this.corsProperties = corsProperties;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> {})  // 启用 Spring Security CORS，委托给 WebMvcConfigurer 中的配置
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
@@ -237,5 +247,29 @@ public class SecurityConfig {
         FilterRegistrationBean<UserSyncFilter> registration = new FilterRegistrationBean<>(userSyncFilter);
         registration.setEnabled(false);
         return registration;
+    }
+
+    /**
+     * CORS 配置源 — 基于配置文件白名单。
+     * <p>
+     * 开发环境默认允许 http://localhost:3000，
+     * 生产环境通过 trackflow.cors.allowed-origins 环境变量指定前端域名。
+     * <p>
+     * 此 Bean 被 Spring Security 的 CorsFilter 使用，在认证过滤器之前处理 preflight 请求，
+     * 确保合法来源的 OPTIONS 请求不会被 401 拦截。
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(corsProperties.getAllowedOriginsList());
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        source.registerCorsConfiguration("/ws/**", configuration);
+        return source;
     }
 }
