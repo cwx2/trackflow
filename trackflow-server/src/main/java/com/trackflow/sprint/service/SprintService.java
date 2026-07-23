@@ -62,7 +62,9 @@ public class SprintService {
     /**
      * 查询项目的 Sprint 列表（带工单统计 + 状态推导）。
      * MyBatis resultMap 直接映射为 SprintVO，然后根据日期推导状态一致性。
+     * 使用 readOnly 事务确保多步查询在同一个数据库快照中执行，避免并发修改导致数据不一致。
      */
+    @Transactional(readOnly = true)
     public List<SprintVO> listByProjectWithStats(Long projectId) {
         List<SprintVO> sprints = sprintMapper.selectSprintsWithStats(projectId);
         LocalDate today = LocalDate.now();
@@ -113,7 +115,9 @@ public class SprintService {
     /**
      * 查询单个 Sprint，带工单统计数据（与列表接口统计逻辑一致）。
      * 供 Controller 的 getById 端点使用。
+     * 使用 readOnly 事务确保统计数据与 Sprint 基本信息在同一个快照中获取。
      */
+    @Transactional(readOnly = true)
     public SprintVO getByIdWithStats(Long id) {
         SprintVO vo = sprintMapper.selectSprintWithStats(id);
         if (vo == null) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Sprint not found");
@@ -124,7 +128,9 @@ public class SprintService {
     /**
      * 获取 Sprint 中按负责人分组的工单分布统计。
      * 技术负责人用于评估 Sprint 工作分配均衡性。
+     * 使用 readOnly 事务确保 Sprint 信息和分布统计在同一个快照中获取。
      */
+    @Transactional(readOnly = true)
     public SprintAssigneeDistributionVO getAssigneeDistribution(Long sprintId) {
         Sprint sprint = getById(sprintId);
         List<Map<String, Object>> rows = sprintMapper.selectAssigneeDistribution(sprintId);
@@ -381,7 +387,9 @@ public class SprintService {
      * 获取创建 Sprint 的预览信息：
      * - 是否存在活跃 Sprint 及其未完成工单数
      * - 是否已设置默认 Sprint
+     * 使用 readOnly 事务确保预览数据在同一个快照中获取。
      */
+    @Transactional(readOnly = true)
     public CreationPreviewVO getCreationPreview(Long projectId) {
         CreationPreviewVO vo = new CreationPreviewVO();
 
@@ -711,8 +719,10 @@ public class SprintService {
     }
 
     /**
-     * 获取 Sprint 完成预览信息：未完成工单列表 + 可迁移的目标 Sprint
+     * 获取 Sprint 完成预览信息：未完成工单列表 + 可迁移的目标 Sprint。
+     * 使用 readOnly 事务确保未完成工单列表和可迁移目标在同一个快照中获取。
      */
+    @Transactional(readOnly = true)
     public CompletionPreviewVO getCompletionPreview(Long sprintId) {
         Sprint sprint = getById(sprintId);
         projectService.assertProjectActive(sprint.getProjectId());
@@ -754,7 +764,9 @@ public class SprintService {
 
     /**
      * 获取 Sprint 删除预览：展示受影响工单数量和可迁移目标。
+     * 使用 readOnly 事务确保受影响工单数量和可迁移目标在同一个快照中获取。
      */
+    @Transactional(readOnly = true)
     public DeletionPreviewVO getDeletionPreview(Long sprintId) {
         Sprint sprint = getById(sprintId);
         projectService.assertProjectActive(sprint.getProjectId());
