@@ -3470,6 +3470,11 @@ async function loadIssues() {
       return
     }
 
+    // 从聚合数据中同步列配置（消除 getColumns 竞态：列定义与工单数据来自同一响应）
+    if (boardData.columnConfigs && boardData.columnConfigs.length > 0) {
+      allColumnConfigs.value = boardData.columnConfigs
+    }
+
     // 从聚合数据中提取所有工单（平铺，供 getColumnIssues/swimlanes 使用）
     const allIssues: BoardCardVO[] = []
     for (const col of boardData.columns) {

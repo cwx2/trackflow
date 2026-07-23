@@ -873,6 +873,8 @@ export interface BoardCardVO {
 /** 看板聚合数据 — 按列分组的工单 */
 export interface BoardDataVO {
   columns: BoardColumnData[]
+  /** 本次聚合所使用的完整列配置快照（含可见+隐藏列），前端直接使用此字段渲染列 */
+  columnConfigs: BoardColumnVO[]
   totalIssueCount: number
   truncated: boolean
 }
