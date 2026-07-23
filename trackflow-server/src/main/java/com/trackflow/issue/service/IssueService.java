@@ -1599,6 +1599,8 @@ public class IssueService {
                 if (restoredIssue != null) {
                     eventPublisher.publishEvent(new IssueNotificationEvent.Restored(restoredIssue, currentUserId));
                 }
+                // 失效 Dashboard + 看板缓存（恢复的工单重新出现在列统计中）
+                eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(projectId, "issue_restored"));
                 result.addSuccess();
             } catch (Exception e) {
                 result.addFailure(issueId, "?", "恢复失败");
