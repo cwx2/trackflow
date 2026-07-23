@@ -46,4 +46,13 @@ public interface NotificationSubscriptionMapper extends BaseMapper<NotificationS
             "WHERE source_type = 'project' AND source_id = #{projectId} " +
             "AND (events->>#{eventKey})::boolean = true")
     List<Long> selectUserIdsByProjectAndEvent(@Param("projectId") Long projectId, @Param("eventKey") String eventKey);
+
+    /**
+     * 查询所有 saved_query 类型订阅中启用了指定事件的记录（含 source_id 和 user_id）。
+     * 用于通知分发时批量评估哪些 saved search 订阅匹配当前工单。
+     */
+    @Select("SELECT id, user_id, source_id FROM notification_subscription " +
+            "WHERE source_type = 'saved_query' " +
+            "AND (events->>#{eventKey})::boolean = true")
+    List<NotificationSubscription> selectSavedQuerySubscriptionsByEvent(@Param("eventKey") String eventKey);
 }

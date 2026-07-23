@@ -245,6 +245,33 @@ public class NotificationSubscriptionService {
         return ids != null ? new HashSet<>(ids) : Collections.emptySet();
     }
 
+    /**
+     * 查找指定 Saved Query 订阅中对应事件已启用的用户ID集合。
+     *
+     * @param savedQueryId 保存搜索ID
+     * @param eventKey     事件键（"onCreated"/"onUpdated"/"onResolved"/"onCommented"）
+     * @return 匹配的用户 ID 集合
+     */
+    public Set<Long> findSubscribersBySavedQuery(Long savedQueryId, String eventKey) {
+        if (savedQueryId == null) {
+            return Collections.emptySet();
+        }
+        List<Long> ids = subscriptionMapper.selectUserIdsBySavedQueryAndEvent(savedQueryId, eventKey);
+        return ids != null ? new HashSet<>(ids) : Collections.emptySet();
+    }
+
+    /**
+     * 获取所有启用了指定事件的 Saved Query 订阅记录。
+     * 用于通知分发时批量评估哪些 saved search 匹配当前工单。
+     *
+     * @param eventKey 事件键
+     * @return saved_query 订阅列表（含 sourceId 和 userId）
+     */
+    public List<NotificationSubscription> getSavedQuerySubscriptionsForEvent(String eventKey) {
+        List<NotificationSubscription> subs = subscriptionMapper.selectSavedQuerySubscriptionsByEvent(eventKey);
+        return subs != null ? subs : Collections.emptyList();
+    }
+
     // ==================== 私有方法 ====================
 
     private NotificationSubscriptionVO toVO(NotificationSubscription sub) {

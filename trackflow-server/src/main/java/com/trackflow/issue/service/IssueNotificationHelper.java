@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationReason;
+import com.trackflow.integration.entity.NotificationSubscription;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationOutboxWriter;
 import com.trackflow.integration.service.NotificationPreferenceService;
@@ -17,6 +18,9 @@ import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
 import com.trackflow.issue.mapper.IssueWatcherMapper;
 import com.trackflow.project.mapper.ProjectMapper;
+import com.trackflow.query.engine.QueryExecutor;
+import com.trackflow.query.entity.SavedQuery;
+import com.trackflow.query.mapper.SavedQueryMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +56,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private final ProjectMapper projectMapper;
     private final IssueWatcherMapper watcherMapper;
     private final IssueTagRelationMapper tagRelationMapper;
+    private final QueryExecutor queryExecutor;
+    private final SavedQueryMapper savedQueryMapper;
 
     public IssueNotificationHelper(NotificationService notificationService,
                                    NotificationPreferenceService preferenceService,
@@ -62,7 +68,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                                    ProjectMapper projectMapper,
                                    IssueWatcherMapper watcherMapper,
                                    IssueTagRelationMapper tagRelationMapper,
-                                   SysUserMapper sysUserMapper) {
+                                   SysUserMapper sysUserMapper,
+                                   QueryExecutor queryExecutor,
+                                   SavedQueryMapper savedQueryMapper) {
         super(sysUserMapper, null); // IssueNotificationHelper 不需要 ProjectMemberMapper
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
@@ -73,6 +81,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         this.projectMapper = projectMapper;
         this.watcherMapper = watcherMapper;
         this.tagRelationMapper = tagRelationMapper;
+        this.queryExecutor = queryExecutor;
+        this.savedQueryMapper = savedQueryMapper;
     }
 
     // ==================== 公共通知方法 ====================
@@ -889,7 +899,9 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * - 之前评论者 → commenter
      * - 报告人 → reporter
      * - 负责人 → assigned
-     * 去重，排除评论者自己。若一人有多个角色，优先级：assigned > reporter > commenter > watched。
+     * - Builtin 订阅匹配（assigned_to_me/reported_by_me）→ subscription
+     * - Saved Search 订阅匹配 → subscription
+     * 去重，排除评论者自己。若一人有多个角色，优先级：assigned > reporter > commenter > watched > subscription。
      */
     private Map<Long, NotificationReason> collectCommentRecipientsWithReason(Issue issue, Long excludeUserId) {
         Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
@@ -902,6 +914,26 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             }
         } catch (Exception e) {
             log.trace("[IssueNotification] 项目订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Saved Search 订阅匹配（优先级与项目订阅相同）
+        try {
+            Set<Long> savedQuerySubscribers = collectSavedQuerySubscribers(issue, "onCommented");
+            for (Long id : savedQuerySubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] Saved Search 订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Builtin 订阅匹配（优先级与项目订阅相同）
+        try {
+            Set<Long> builtinSubscribers = collectBuiltinSubscribers(issue, "onCommented");
+            for (Long id : builtinSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] Builtin 订阅匹配跳过: {}", e.getMessage());
         }
 
         // Watcher 优先级高于项目订阅
@@ -951,6 +983,8 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * - watcher → watched（最低优先级）
      * - 报告人 → reporter
      * - 负责人 → assigned
+     * - Builtin 订阅匹配（assigned_to_me/reported_by_me）→ subscription
+     * - Saved Search 订阅匹配 → subscription
      * 去重，排除操作者自己。
      */
     private Map<Long, NotificationReason> collectStatusChangeRecipientsWithReason(Issue issue, Long excludeUserId) {
@@ -964,6 +998,26 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             }
         } catch (Exception e) {
             log.trace("[IssueNotification] 项目订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Saved Search 订阅匹配（优先级与项目订阅相同）
+        try {
+            Set<Long> savedQuerySubscribers = collectSavedQuerySubscribers(issue, "onUpdated");
+            for (Long id : savedQuerySubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] Saved Search 订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Builtin 订阅匹配（优先级与项目订阅相同）
+        try {
+            Set<Long> builtinSubscribers = collectBuiltinSubscribers(issue, "onUpdated");
+            for (Long id : builtinSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] Builtin 订阅匹配跳过: {}", e.getMessage());
         }
 
         // Watcher 优先级高于项目订阅
@@ -1009,6 +1063,99 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         } catch (Exception e) {
             return String.valueOf(statusId);
         }
+    }
+
+    /**
+     * 收集 Builtin 订阅匹配的用户。
+     * <p>
+     * 匹配逻辑：
+     * - assigned_to_me：订阅了此 builtin 的用户中，只有当该用户恰好是工单的 assignee 时才匹配
+     * - reported_by_me：订阅了此 builtin 的用户中，只有当该用户恰好是工单的 reporter 时才匹配
+     *
+     * @param issue    当前变更的工单
+     * @param eventKey 事件键
+     * @return 匹配的用户 ID 集合
+     */
+    private Set<Long> collectBuiltinSubscribers(Issue issue, String eventKey) {
+        Set<Long> result = new HashSet<>();
+
+        // assigned_to_me：获取所有订阅了此 builtin 的用户，交叉匹配工单 assignee
+        if (issue.getAssigneeId() != null) {
+            Set<Long> assignedSubscribers = subscriptionService.findBuiltinSubscribers("assigned_to_me", eventKey);
+            if (assignedSubscribers.contains(issue.getAssigneeId())) {
+                result.add(issue.getAssigneeId());
+            }
+        }
+
+        // reported_by_me：获取所有订阅了此 builtin 的用户，交叉匹配工单 reporter
+        if (issue.getReporterId() != null) {
+            Set<Long> reportedSubscribers = subscriptionService.findBuiltinSubscribers("reported_by_me", eventKey);
+            if (reportedSubscribers.contains(issue.getReporterId())) {
+                result.add(issue.getReporterId());
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 收集 Saved Search 订阅匹配的用户。
+     * <p>
+     * 匹配逻辑：
+     * 1. 查出所有启用了指定事件的 saved_query 类型订阅
+     * 2. 按 savedQueryId 分组，对每个 savedQuery 评估工单是否匹配其 filters
+     * 3. 匹配成功则将该 savedQuery 的所有订阅者加入结果集
+     *
+     * @param issue    当前变更的工单
+     * @param eventKey 事件键
+     * @return 匹配的用户 ID 集合
+     */
+    @SuppressWarnings("unchecked")
+    private Set<Long> collectSavedQuerySubscribers(Issue issue, String eventKey) {
+        List<NotificationSubscription> savedQuerySubs = subscriptionService.getSavedQuerySubscriptionsForEvent(eventKey);
+        if (savedQuerySubs.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        // 按 savedQueryId 分组
+        Map<Long, List<Long>> queryIdToUserIds = new LinkedHashMap<>();
+        for (NotificationSubscription sub : savedQuerySubs) {
+            if (sub.getSourceId() != null) {
+                queryIdToUserIds.computeIfAbsent(sub.getSourceId(), k -> new ArrayList<>()).add(sub.getUserId());
+            }
+        }
+
+        Set<Long> result = new HashSet<>();
+
+        for (Map.Entry<Long, List<Long>> entry : queryIdToUserIds.entrySet()) {
+            Long savedQueryId = entry.getKey();
+            try {
+                SavedQuery savedQuery = savedQueryMapper.selectById(savedQueryId);
+                if (savedQuery == null || savedQuery.getFilters() == null || savedQuery.getFilters().isBlank()) {
+                    continue;
+                }
+
+                // 解析 filters JSON
+                List<Map<String, Object>> filters;
+                try {
+                    var objectMapper = new tools.jackson.databind.ObjectMapper();
+                    filters = objectMapper.readValue(savedQuery.getFilters(),
+                            objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+                } catch (Exception parseEx) {
+                    log.trace("[IssueNotification] 解析 SavedQuery filters 失败: queryId={}", savedQueryId);
+                    continue;
+                }
+
+                // 使用 QueryExecutor 判断工单是否匹配
+                if (queryExecutor.matchesIssue(issue.getId(), filters)) {
+                    result.addAll(entry.getValue());
+                }
+            } catch (Exception e) {
+                log.trace("[IssueNotification] Saved Search 匹配评估异常: queryId={}, error={}", savedQueryId, e.getMessage());
+            }
+        }
+
+        return result;
     }
 
     /**

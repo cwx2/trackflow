@@ -113,6 +113,23 @@ public class QueryExecutor {
     }
 
     /**
+     * 判断指定工单是否匹配给定的筛选条件。
+     * 用于通知订阅匹配——评估 Saved Search 的 filters 是否覆盖该工单。
+     *
+     * @param issueId 工单 ID
+     * @param filters 筛选条件 JSON 列表
+     * @return true 如果工单匹配筛选条件
+     */
+    public boolean matchesIssue(Long issueId, List<Map<String, Object>> filters) {
+        if (issueId == null) {
+            return false;
+        }
+        QueryWrapper<Issue> wrapper = buildWrapper(filters);
+        wrapper.eq("id", issueId);
+        return issueMapper.selectCount(wrapper) > 0;
+    }
+
+    /**
      * 计数查询（带项目成员过滤）
      */
     public long countWithProjectFilter(List<Map<String, Object>> filters, List<Long> accessibleProjectIds) {
