@@ -394,9 +394,20 @@ public class UserService {
 
     /**
      * 分配全局角色
+     * 仅允许 role_type='global' 的角色被分配为全局角色（防御性校验）
      */
     @Transactional(rollbackFor = Exception.class)
     public void assignGlobalRole(Long userId, Long roleId) {
+        // 校验角色存在且为 global 类型（防御性校验，Controller 已有前置校验）
+        SysRole role = roleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "角色不存在: " + roleId);
+        }
+        if (!"global".equals(role.getRoleType())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "只有全局角色可以通过此路径分配，「" + role.getName() + "」是项目角色");
+        }
+
         // 检查是否已存在
         Long count = userRoleMapper.selectCount(
                 new LambdaQueryWrapper<UserRole>()
@@ -412,8 +423,7 @@ public class UserService {
         permissionService.invalidateCache(userId);
 
         // 审计日志
-        SysRole role = roleMapper.selectById(roleId);
-        String roleName = role != null ? role.getName() : String.valueOf(roleId);
+        String roleName = role.getName();
         SysUser user = userMapper.selectById(userId);
         String username = user != null ? user.getUsername() : String.valueOf(userId);
         systemAuditService.log("assign_global_role", "user", userId,

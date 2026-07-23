@@ -13,12 +13,15 @@ public interface RolePermissionMapper extends BaseMapper<RolePermission> {
 
     /**
      * 查询用户的所有全局权限（通过 user_role → role_permission）
+     * 仅返回 scope='global' 的权限——全局路径不应获得项目级权限
      */
     @Select("""
             SELECT DISTINCT rp.permission
             FROM role_permission rp
             INNER JOIN user_role ur ON ur.role_id = rp.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
             WHERE ur.user_id = #{userId}
+              AND sp.scope = 'global'
             """)
     List<String> selectPermissionsByUserId(@Param("userId") Long userId);
 

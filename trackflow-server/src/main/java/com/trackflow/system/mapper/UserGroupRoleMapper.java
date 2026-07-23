@@ -14,6 +14,7 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
     /**
      * 查询用户通过组继承的全局权限
      * 路径: user_group_member → user_group_role (project_id IS NULL + role.role_type='global') → role_permission
+     * 仅返回 scope='global' 的权限——全局路径不应获得项目级权限
      */
     @Select("""
             SELECT DISTINCT rp.permission
@@ -21,9 +22,11 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
             INNER JOIN user_group_role ugr ON ugr.role_id = rp.role_id
             INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
             INNER JOIN sys_role sr ON sr.id = ugr.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
             WHERE ugm.user_id = #{userId}
               AND ugr.project_id IS NULL
               AND sr.role_type = 'global'
+              AND sp.scope = 'global'
             """)
     List<String> selectGlobalPermissionsByUserId(@Param("userId") Long userId);
 
