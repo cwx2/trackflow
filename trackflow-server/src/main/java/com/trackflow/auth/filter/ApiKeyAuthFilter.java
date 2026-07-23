@@ -25,6 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * API Key 认证过滤器
@@ -39,6 +40,25 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_PREFIX = "tf_";
     private static final String BEARER_PREFIX = "Bearer ";
+
+    /**
+     * last_used_at 更新节流间隔（毫秒）。
+     * 同一 API Key 在此间隔内多次请求只触发一次 updateById。
+     * 参考 YouTrack 的行为：Token "Last used" 显示精度为日级别，无需每请求精确更新。
+     */
+    private static final long LAST_USED_THROTTLE_INTERVAL_MS = 5 * 60 * 1000L; // 5 分钟
+
+    /**
+     * 缓存最大容量，防止内存泄漏。
+     * 当达到上限时，清除全部缓存（简单策略，因为 API Key 数量通常有限）。
+     */
+    private static final int LAST_USED_CACHE_MAX_SIZE = 1000;
+
+    /**
+     * 缓存：API Key prefix → 上次执行 updateById 的时间戳（epoch millis）。
+     * 用于节流 last_used_at 的更新频率，避免高频 API 调用时产生无效写放大。
+     */
+    private final ConcurrentHashMap<String, Long> lastUsedUpdateCache = new ConcurrentHashMap<>();
 
     private final ApiKeyMapper apiKeyMapper;
     private final SysUserMapper sysUserMapper;
@@ -152,15 +172,48 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         // 认证成功，清除该 IP 的失败计数
         rateLimitService.clearAuthFailures(WebUtils.getClientIp(request));
 
-        // 更新 last_used_at
-        apiKey.setLastUsedAt(LocalDateTime.now());
-        apiKeyMapper.updateById(apiKey);
+        // 节流更新 last_used_at：同一 API Key 在 5 分钟内只执行一次 updateById
+        updateLastUsedAtThrottled(apiKey, prefix);
 
         // 记录 API Key 认证成功审计日志
         logApiKeyUsed(user, apiKey, request);
 
         log.debug("API Key authenticated: user={}, key={}, scope={}", user.getUsername(), prefix, scope);
         return true;
+    }
+
+    /**
+     * 节流更新 last_used_at。
+     * <p>
+     * 同一 API Key 在 LAST_USED_THROTTLE_INTERVAL_MS 间隔内多次请求，
+     * 只触发一次 updateById，以避免高频 API 调用场景下的无效数据库写放大。
+     * <p>
+     * 首次使用的 API Key 会立即更新 last_used_at。
+     *
+     * @param apiKey API Key 实体
+     * @param prefix API Key 前缀（用作缓存 key）
+     */
+    private void updateLastUsedAtThrottled(ApiKey apiKey, String prefix) {
+        long now = System.currentTimeMillis();
+        Long lastUpdate = lastUsedUpdateCache.get(prefix);
+
+        // 首次使用或距上次更新超过阈值时，执行 updateById
+        if (lastUpdate == null || (now - lastUpdate) >= LAST_USED_THROTTLE_INTERVAL_MS) {
+            apiKey.setLastUsedAt(LocalDateTime.now());
+            apiKeyMapper.updateById(apiKey);
+
+            // 缓存满时清除全部（API Key 数量通常有限，简单策略即可）
+            if (lastUsedUpdateCache.size() >= LAST_USED_CACHE_MAX_SIZE) {
+                lastUsedUpdateCache.clear();
+                log.debug("lastUsedUpdateCache cleared due to reaching max size: {}", LAST_USED_CACHE_MAX_SIZE);
+            }
+            lastUsedUpdateCache.put(prefix, now);
+
+            log.debug("Updated last_used_at for API Key: {}", prefix);
+        } else {
+            log.debug("Skipped last_used_at update for API Key: {} (throttled, {}ms since last update)",
+                    prefix, now - lastUpdate);
+        }
     }
 
     /**
