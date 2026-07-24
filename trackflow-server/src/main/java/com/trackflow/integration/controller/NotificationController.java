@@ -9,6 +9,10 @@ import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationCategory;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.integration.vo.NotificationVO;
+import com.trackflow.integration.vo.UnreadCountVO;
+import com.trackflow.integration.vo.CategoryUnreadCountVO;
+import com.trackflow.integration.vo.DeletedCountVO;
+import com.trackflow.integration.vo.MuteStatusVO;
 import com.trackflow.integration.service.MutedThreadService;
 import com.trackflow.integration.vo.MutedThreadVO;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +20,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
@@ -42,16 +45,16 @@ public class NotificationController {
     }
 
     @GetMapping("/unread-count")
-    public R<Map<String, Long>> unreadCount() {
+    public R<UnreadCountVO> unreadCount() {
         Long userId = SecurityUtils.getCurrentUserId();
-        return R.ok(Map.of("count", notificationService.unreadCount(userId)));
+        return R.ok(new UnreadCountVO(notificationService.unreadCount(userId)));
     }
 
     /**
      * 获取各分类的未读计数（用于标签页 badge 展示）
      */
     @GetMapping("/unread-count-by-category")
-    public R<Map<String, Long>> unreadCountByCategory() {
+    public R<CategoryUnreadCountVO> unreadCountByCategory() {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(notificationService.unreadCountByCategory(userId));
     }
@@ -94,10 +97,10 @@ public class NotificationController {
      * 清除当前用户所有已读通知
      */
     @DeleteMapping("/read")
-    public R<Map<String, Integer>> deleteAllRead() {
+    public R<DeletedCountVO> deleteAllRead() {
         Long userId = SecurityUtils.getCurrentUserId();
         int deleted = notificationService.deleteAllRead(userId);
-        return R.ok(Map.of("deleted", deleted));
+        return R.ok(new DeletedCountVO(deleted));
     }
 
     // ===== 线程静音 API =====
@@ -106,7 +109,7 @@ public class NotificationController {
      * 静音指定资源的通知（静音后不再收到该资源的更新通知，@提及除外）
      */
     @PostMapping("/mute")
-    public R<Void> muteThread(@RequestParam String resourceType, @RequestParam Long resourceId) {
+    public R<Void> muteThread(@RequestParam("resourceType") String resourceType, @RequestParam("resourceId") Long resourceId) {
         Long userId = SecurityUtils.getCurrentUserId();
         mutedThreadService.mute(userId, resourceType, resourceId);
         return R.ok();
@@ -116,7 +119,7 @@ public class NotificationController {
      * 取消静音
      */
     @DeleteMapping("/mute")
-    public R<Void> unmuteThread(@RequestParam String resourceType, @RequestParam Long resourceId) {
+    public R<Void> unmuteThread(@RequestParam("resourceType") String resourceType, @RequestParam("resourceId") Long resourceId) {
         Long userId = SecurityUtils.getCurrentUserId();
         mutedThreadService.unmute(userId, resourceType, resourceId);
         return R.ok();
@@ -126,10 +129,10 @@ public class NotificationController {
      * 检查指定资源是否已静音
      */
     @GetMapping("/mute/check")
-    public R<Map<String, Boolean>> checkMuted(@RequestParam String resourceType, @RequestParam Long resourceId) {
+    public R<MuteStatusVO> checkMuted(@RequestParam("resourceType") String resourceType, @RequestParam("resourceId") Long resourceId) {
         Long userId = SecurityUtils.getCurrentUserId();
         boolean muted = mutedThreadService.isMuted(userId, resourceType, resourceId);
-        return R.ok(Map.of("muted", muted));
+        return R.ok(new MuteStatusVO(muted));
     }
 
     /**

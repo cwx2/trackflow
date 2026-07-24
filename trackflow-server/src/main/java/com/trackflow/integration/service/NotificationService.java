@@ -13,6 +13,7 @@ import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.integration.vo.NotificationVO;
+import com.trackflow.integration.vo.CategoryUnreadCountVO;
 import com.trackflow.integration.converter.NotificationConverter;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
@@ -711,19 +712,24 @@ public class NotificationService {
     }
 
     /**
-     * 获取各分类的未读计数。
-     * 返回 Map: { "all": N, "mention": N, "subscription": N, "system": N }
+     * 获取各分类的未读计数（用于标签页 badge 展示）
      */
-    public Map<String, Long> unreadCountByCategory(Long userId) {
-        Map<String, Long> counts = new LinkedHashMap<>();
+    public CategoryUnreadCountVO unreadCountByCategory(Long userId) {
+        CategoryUnreadCountVO vo = new CategoryUnreadCountVO();
         for (NotificationCategory cat : NotificationCategory.values()) {
             LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(Notification::getUserId, userId)
                     .eq(Notification::getIsRead, false);
             applyCategory(wrapper, cat);
-            counts.put(cat.name(), notificationMapper.selectCount(wrapper));
+            long count = notificationMapper.selectCount(wrapper);
+            switch (cat) {
+                case all -> vo.setAll(count);
+                case mention -> vo.setMention(count);
+                case subscription -> vo.setSubscription(count);
+                case system -> vo.setSystem(count);
+            }
         }
-        return counts;
+        return vo;
     }
 
     /**
