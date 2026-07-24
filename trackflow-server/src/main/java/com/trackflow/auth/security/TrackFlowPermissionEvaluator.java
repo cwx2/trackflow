@@ -137,6 +137,41 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
     }
 
     /**
+     * 检查 Issue 自定义字段编辑权限。
+     * <p>
+     * 满足以下任一条件即可：
+     * 1. 通过 checkIssue(id, 'issue:edit') → 用户有完整编辑权限
+     * 2. 用户在该工单所属项目中拥有 issue:edit_custom_fields 权限
+     * <p>
+     * 用于 @PreAuthorize("@perm.checkIssueCustomField(#id)")
+     *
+     * @param issueId Issue 的数据库 ID
+     * @return true 如果用户可以编辑该工单的自定义字段
+     * @throws BusinessException RESOURCE_NOT_FOUND 当 Issue 不存在时
+     */
+    public boolean checkIssueCustomField(Long issueId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        Issue issue = issueMapper.selectOne(
+                new LambdaQueryWrapper<Issue>()
+                        .select(Issue::getProjectId, Issue::getReporterId, Issue::getAssigneeId)
+                        .eq(Issue::getId, issueId)
+                        .isNull(Issue::getDeletedAt)
+        );
+        if (issue == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
+        }
+
+        // 先检查完整编辑权限（issue:edit + 资源级规则）
+        if (permissionService.hasIssuePermission(userId, issue, "issue:edit")) {
+            return true;
+        }
+        // 再检查独立的自定义字段编辑权限
+        return permissionService.hasPermission(userId, issue.getProjectId(), "issue:edit_custom_fields");
+    }
+
+    /**
      * 检查转换动作的工作流管理权限。
      * <p>
      * 全局动作 → 要求 system:admin；项目级动作 → 要求 project:manage_workflow。

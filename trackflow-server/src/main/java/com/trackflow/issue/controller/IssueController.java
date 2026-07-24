@@ -87,7 +87,7 @@ public class IssueController {
      * 如果该字段是其他字段的值过滤源，会级联清除依赖字段中不再有效的值。
      */
     @PutMapping("/{id}/custom-fields/{fieldId}")
-    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:edit') or @perm.checkIssue(#id, 'issue:edit_custom_fields')")
     public R<IssueDetailVO> updateCustomFieldValue(
             @PathVariable("id") Long id,
             @PathVariable("fieldId") Long fieldId,

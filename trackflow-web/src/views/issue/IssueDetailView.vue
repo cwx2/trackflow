@@ -624,6 +624,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
   // 权限判断（使用资源级覆盖后的综合权限）
   const canEdit = canEditIssueEffective.value
+  const canEditCF = canEdit || hasProjectPermission('issue:edit_custom_fields')
   const canTransition = canChangeStatusEffective.value
   const canAssign = canAssignIssue.value
   const canSprint = canEditSprint.value
@@ -670,7 +671,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true }] : []),
     ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [{ key: 'derivedSpentHours', label: '总花费时间', value: `${i.derivedSpentHours}h`, readonly: true }] : []),
     // 自定义字段
-    ...buildCustomFieldSidebarEntries(i, canEdit),
+    ...buildCustomFieldSidebarEntries(i, canEditCF),
     { key: '_sep', label: '', value: '', readonly: true },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(i.createdAt), readonly: true },
     { key: 'updatedAt', label: '更新时间', value: formatDateTime(i.updatedAt), readonly: true },
