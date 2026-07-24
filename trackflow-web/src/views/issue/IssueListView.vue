@@ -92,6 +92,65 @@
         </div>
       </div>
 
+      <!-- Tags section (YouTrack style) -->
+      <div class="query-group">
+        <div class="group-header" @click="toggleGroup('tags')">
+          <span class="group-arrow">{{ expandedGroups.has('tags') ? '▾' : '▸' }}</span>
+          <span class="group-title">标签</span>
+          <a-button
+            type="text" size="mini" class="group-action-btn"
+            title="管理标签收藏"
+            @click.stop="openManageTagsModal"
+          >
+            <template #icon><icon-settings :size="12" /></template>
+          </a-button>
+        </div>
+        <div v-if="expandedGroups.has('tags')" class="group-items">
+          <div
+            v-for="tag in favoriteTags"
+            :key="tag.id"
+            class="query-item"
+            :class="{ active: activeTagId === tag.id }"
+            @click="selectTag(tag)"
+          >
+            <span class="tag-color-dot" :style="{ backgroundColor: tag.color }"></span>
+            <span class="query-name">{{ tag.name }}</span>
+            <span class="query-count">{{ formatCount(tag.count) }}</span>
+          </div>
+          <div v-if="favoriteTags.length === 0" class="empty-queries">
+            <span>暂无收藏标签</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manage Tags Modal -->
+      <a-modal
+        v-model:visible="showManageTagsModal"
+        title="管理标签收藏"
+        :width="440"
+        :footer="false"
+      >
+        <div class="manage-tags-content">
+          <div v-if="availableTags.length === 0" class="empty-queries" style="padding: 16px; text-align: center;">
+            暂无可用标签
+          </div>
+          <div v-else class="manage-tags-list">
+            <div
+              v-for="tag in availableTags"
+              :key="tag.id"
+              class="manage-tag-item"
+              @click="toggleTagFavorite(tag)"
+            >
+              <span class="tag-color-dot" :style="{ backgroundColor: tag.color }"></span>
+              <span class="manage-tag-name">{{ tag.name }}</span>
+              <span class="manage-tag-action">
+                {{ tag.favorited ? '移除收藏' : '添加收藏' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </a-modal>
+
       <div class="query-group">
         <div class="group-header" @click="toggleGroup('saved')">
           <span class="group-arrow">{{ expandedGroups.has('saved') ? '\u25BE' : '\u25B8' }}</span>
@@ -740,8 +799,9 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
-import { projectApi, issueApi, queryApi, sprintApi } from '@/api'
+import { projectApi, issueApi, queryApi, sprintApi, tagApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
+import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
@@ -830,8 +890,14 @@ const projectList = ref<any[]>([])
 const activeQueryId = ref<string | null>(null)
 const activeQueryName = ref('\u6240\u6709\u5de5\u5355') // "所有工单"
 const activeQueryObj = ref<any>(null) // Track full active query object for chip-click
-const expandedGroups = reactive(new Set<string>(['saved', 'projects', 'drafts']))
+const expandedGroups = reactive(new Set<string>(['saved', 'projects', 'drafts', 'tags']))
 const panelSearch = ref('')
+
+// Tags panel state
+const favoriteTags = ref<TagPanelItemVO[]>([])
+const activeTagId = ref<string | null>(null)
+const showManageTagsModal = ref(false)
+const availableTags = ref<AvailableTagVO[]>([])
 
 // ===== Breadcrumb navigation computed =====
 const activeProjectName = computed(() => {
@@ -2556,7 +2622,7 @@ function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): 
 }
 
 function selectQuery(q: any) {
-  activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; activeTagId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
@@ -2567,12 +2633,13 @@ function selectQuery(q: any) {
   refreshList()
 }
 function selectAllProjects() {
-  if (activeProjectId.value === null) return // Already showing all projects
-  activeProjectId.value = null; activeQueryId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; currentPage.value = 1
+  if (activeProjectId.value === null && activeTagId.value === null) return // Already showing all
+  activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
   refreshList()
   loadPanel()
+  loadTags()
 }
 function selectProject(p: any) {
   if (activeProjectId.value === p.id) {
@@ -2581,10 +2648,11 @@ function selectProject(p: any) {
     return
   }
   // Select project
-  activeProjectId.value = p.id; activeQueryId.value = null; activeQueryName.value = p.name; activeQueryObj.value = null; filterProject.value = p.id; currentPage.value = 1
+  activeProjectId.value = p.id; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = p.name; activeQueryObj.value = null; filterProject.value = p.id; globalFilterParams.value = {}; currentPage.value = 1
   router.replace({ query: { ...route.query, project: p.key } })
   refreshList()
   loadPanel()
+  loadTags()
 }
 
 watch(currentPage, () => refreshList())
@@ -2619,6 +2687,61 @@ async function loadProjects() {
   try { const res = await projectApi.list({ pageSize: 50 }); projectList.value = res.data?.list || [] }
   catch { projectList.value = [] }
 }
+async function loadTags() {
+  try {
+    const res = await tagApi.getFavoritePanel(activeProjectId.value || undefined)
+    favoriteTags.value = res.data || []
+  } catch {
+    favoriteTags.value = []
+  }
+}
+function selectTag(tag: TagPanelItemVO) {
+  if (activeTagId.value === tag.id) {
+    // Deselect tag — back to all
+    activeTagId.value = null
+    activeQueryId.value = null
+    activeQueryName.value = '所有工单'
+    activeQueryObj.value = null
+    globalFilterParams.value = {}
+    currentPage.value = 1
+    refreshList()
+    return
+  }
+  activeTagId.value = tag.id
+  activeQueryId.value = null
+  activeQueryName.value = tag.name
+  activeQueryObj.value = null
+  activeProjectId.value = null
+  filterProject.value = undefined
+  currentPage.value = 1
+  // Set global filter to filter by tag
+  globalFilterParams.value = { tagId: tag.id }
+  refreshList()
+}
+async function openManageTagsModal() {
+  showManageTagsModal.value = true
+  try {
+    const res = await tagApi.listAvailableTags(activeProjectId.value || undefined)
+    availableTags.value = res.data || []
+  } catch {
+    availableTags.value = []
+  }
+}
+async function toggleTagFavorite(tag: AvailableTagVO) {
+  try {
+    if (tag.favorited) {
+      await tagApi.removeFavorite(tag.id)
+      tag.favorited = false
+    } else {
+      await tagApi.addFavorite(tag.id)
+      tag.favorited = true
+    }
+    // Reload tags panel
+    await loadTags()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
 async function loadStatuses() {
   try { const res = await issueApi.listStatuses(); statusCache.value = res.data || [] }
   catch { statusCache.value = [] }
@@ -2627,6 +2750,7 @@ async function loadStatuses() {
 onMounted(async () => {
   await loadPanel()
   await loadProjects()
+  await loadTags()
   await loadStatuses()
 
   // Resolve project from URL param (supports both key and id for backward compat)
@@ -2895,6 +3019,15 @@ onBeforeRouteLeave((_to, _from, next) => {
 .query-count { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; margin-left: 8px; }
 .query-icon { font-size: 12px; flex-shrink: 0; margin-right: 4px; }
 .empty-queries { padding: 12px; font-size: 12px; color: var(--tf-text-tertiary); text-align: center; }
+
+/* Tags section */
+.tag-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 6px; }
+.manage-tags-content { max-height: 360px; overflow-y: auto; }
+.manage-tags-list { display: flex; flex-direction: column; gap: 2px; }
+.manage-tag-item { display: flex; align-items: center; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+.manage-tag-item:hover { background: var(--tf-bg-hover); }
+.manage-tag-name { flex: 1; font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manage-tag-action { font-size: 12px; color: var(--tf-accent); flex-shrink: 0; margin-left: 8px; }
 
 /* Drafts section */
 .drafts-group { border-bottom: 1px solid var(--tf-border); padding-bottom: 4px; margin-bottom: 4px; }
