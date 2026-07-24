@@ -419,6 +419,88 @@ public class IssueService {
     }
 
     /**
+     * 查找与给定关键词相似的工单（用于创建工单时的重复检测）。
+     * 使用全文索引 + trigram 匹配搜索标题相似的工单，结果轻量只包含展示必要字段。
+     *
+     * @param keyword   搜索关键词（来自新工单的标题）
+     * @param projectId 限定搜索的项目 ID（可选，为 null 时搜索用户有权访问的所有项目）
+     * @param limit     最大返回数量
+     * @return 相似工单列表
+     */
+    public List<SimilarIssueVO> findSimilar(String keyword, Long projectId, int limit) {
+        if (keyword == null || keyword.isBlank() || keyword.length() < 3) {
+            return Collections.emptyList();
+        }
+
+        QueryWrapper<Issue> wrapper = new QueryWrapper<>();
+        wrapper.isNull("deleted_at");
+
+        // 限定项目范围
+        if (projectId != null) {
+            wrapper.eq("project_id", projectId);
+        } else {
+            // 如果未指定项目，限制搜索范围为用户可访问的项目
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
+            if (accessibleProjectIds != null) {
+                if (accessibleProjectIds.isEmpty()) {
+                    return Collections.emptyList();
+                }
+                wrapper.in("project_id", accessibleProjectIds);
+            }
+            // null 表示系统管理员，不加限制
+        }
+
+        // 复用关键词搜索逻辑
+        applyKeywordFilter(wrapper, keyword);
+
+        // 只取标题相关度最高的结果，按更新时间倒序
+        wrapper.orderByDesc("updated_at");
+
+        Page<Issue> page = new Page<>(1, limit);
+        page.setSearchCount(false); // 不需要 count 查询，提高性能
+        Page<Issue> result = issueMapper.selectPage(page, wrapper);
+
+        if (result.getRecords().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 填充状态和负责人信息
+        List<Issue> issues = result.getRecords();
+        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
+        Set<Long> userIds = issues.stream()
+                .map(Issue::getAssigneeId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<Long, SysUser> userMap = userIds.isEmpty() ? Collections.emptyMap()
+                : sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
+
+        return issues.stream().map(issue -> {
+            SimilarIssueVO vo = new SimilarIssueVO();
+            vo.setId(String.valueOf(issue.getId()));
+            vo.setIssueKey(issue.getIssueKey());
+            vo.setTitle(issue.getTitle());
+            if (issue.getStatusId() != null) {
+                IssueStatus status = statusMap.get(issue.getStatusId());
+                if (status != null) {
+                    vo.setStatusName(status.getName());
+                    vo.setStatusColor(status.getColor());
+                }
+            }
+            if (issue.getAssigneeId() != null) {
+                SysUser user = userMap.get(issue.getAssigneeId());
+                if (user != null) {
+                    vo.setAssigneeName(user.getDisplayName());
+                }
+            }
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    /**
      * 批量填充 assigneeName/assigneeAvatarUrl/reporterName
      */
     private void fillUserInfo(List<Issue> issues, List<IssueVO> voList) {
@@ -1883,6 +1965,15 @@ public class IssueService {
         projectService.assertProjectActive(issue.getProjectId());
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        // 权限校验：设置评论可见性需要 issue:edit 权限
+        // 无权用户静默忽略 visibleToGroupIds 字段
+        if (visibleToGroupIds != null && !visibleToGroupIds.isEmpty()) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")) {
+                visibleToGroupIds = null;
+            }
+        }
+
         IssueComment comment = new IssueComment();
         comment.setIssueId(issueId);
         comment.setUserId(currentUserId);
@@ -1946,9 +2037,13 @@ public class IssueService {
 
         comment.setContent(newContent);
         if (updateVisibility) {
-            // 空列表视为 null（移除限制）
-            comment.setVisibleToGroupIds(
-                    visibleToGroupIds != null && !visibleToGroupIds.isEmpty() ? visibleToGroupIds : null);
+            // 权限校验：设置评论可见性需要 issue:edit 权限
+            // 无权用户静默忽略可见性修改
+            if (permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:edit")) {
+                // 空列表视为 null（移除限制）
+                comment.setVisibleToGroupIds(
+                        visibleToGroupIds != null && !visibleToGroupIds.isEmpty() ? visibleToGroupIds : null);
+            }
         }
         comment.setUpdatedAt(LocalDateTime.now());
         commentMapper.updateById(comment);

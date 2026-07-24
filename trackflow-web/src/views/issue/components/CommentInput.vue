@@ -10,7 +10,7 @@
       >{{ btn.icon }}</button>
       <div class="toolbar-spacer"></div>
       <!-- Visible to selector -->
-      <div class="visibility-selector" v-if="groups.length > 0">
+      <div class="visibility-selector" v-if="groups.length > 0 && canSetVisibility">
         <button class="visibility-btn" :class="{ restricted: selectedGroupIds.length > 0 }" @click="showVisibilityDropdown = !showVisibilityDropdown" title="设置评论可见范围">
           <span class="lock-icon">{{ selectedGroupIds.length > 0 ? '🔒' : '👁' }}</span>
           <span class="visibility-label">{{ visibilityLabel }}</span>
@@ -65,11 +65,13 @@ const props = withDefaults(defineProps<{
   timerRunning?: boolean
   timerIssueMatch?: boolean
   timerElapsed?: string
+  canSetVisibility?: boolean
 }>(), {
   showAddTime: true,
   timerRunning: false,
   timerIssueMatch: false,
-  timerElapsed: '0:00'
+  timerElapsed: '0:00',
+  canSetVisibility: false
 })
 
 const emit = defineEmits<{

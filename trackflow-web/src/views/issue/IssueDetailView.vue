@@ -73,6 +73,7 @@
           <CommentInput
             v-if="canCommentEffective"
             :show-add-time="projectTimeTrackingEnabled && canLogTime"
+            :can-set-visibility="canEditIssue"
             :timer-running="timerStore.isRunning"
             :timer-issue-match="timerStore.issueId === issue?.id"
             :timer-elapsed="timerStore.elapsedDisplay"
