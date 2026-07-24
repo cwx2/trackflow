@@ -153,14 +153,33 @@ public class CustomFieldValueService {
 
         List<CustomFieldValidationEngine.FieldValidationError> allErrors = new ArrayList<>();
 
-        // 构建条件评估上下文
-        Map<Long, String> conditionContext;
+        // 构建条件评估上下文（使用 MultiMap 避免多值字段逗号拼接歧义）
+        Map<Long, List<String>> conditionContextMulti;
         if (mode == CustomFieldValidateMode.PARTIAL) {
-            Map<Long, String> existingValues = getValues(issueId);
-            conditionContext = new HashMap<>(existingValues);
-            conditionContext.putAll(fieldValues);
+            conditionContextMulti = new HashMap<>(getValuesAsMultiMap(issueId));
+            // 合并用户本次提交的值（覆盖已有值）
+            for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
+                String val = entry.getValue();
+                if (val == null || val.isBlank()) continue;
+                CustomFieldDefinition field = fieldMap.get(entry.getKey());
+                if (field != null && Boolean.TRUE.equals(field.getIsMulti())) {
+                    conditionContextMulti.put(entry.getKey(), parseMultiValueInput(val));
+                } else {
+                    conditionContextMulti.put(entry.getKey(), List.of(val));
+                }
+            }
         } else {
-            conditionContext = fieldValues;
+            conditionContextMulti = new HashMap<>();
+            for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
+                String val = entry.getValue();
+                if (val == null || val.isBlank()) continue;
+                CustomFieldDefinition field = fieldMap.get(entry.getKey());
+                if (field != null && Boolean.TRUE.equals(field.getIsMulti())) {
+                    conditionContextMulti.put(entry.getKey(), parseMultiValueInput(val));
+                } else {
+                    conditionContextMulti.put(entry.getKey(), List.of(val));
+                }
+            }
         }
 
         for (Map.Entry<Long, String> entry : fieldValues.entrySet()) {
@@ -170,7 +189,7 @@ public class CustomFieldValueService {
 
             Boolean effectiveRequired = (override != null && override.getIsRequired() != null)
                     ? override.getIsRequired() : null;
-            if (!isFieldConditionMet(override, conditionContext)) {
+            if (!isFieldConditionMetMulti(override, conditionContextMulti)) {
                 effectiveRequired = false;
             }
             allErrors.addAll(validationEngine.validate(field, entry.getValue(), projectId, effectiveRequired));
@@ -179,7 +198,7 @@ public class CustomFieldValueService {
         // 必填字段检查
         for (CustomFieldDefinition field : applicableFields) {
             CustomFieldProject mapping = projectOverrides.get(field.getId());
-            if (!isFieldConditionMet(mapping, conditionContext)) {
+            if (!isFieldConditionMetMulti(mapping, conditionContextMulti)) {
                 continue;
             }
             if (isFieldRequired(field, mapping) && !fieldValues.containsKey(field.getId())) {
@@ -541,20 +560,16 @@ public class CustomFieldValueService {
     }
 
     /**
-     * 获取单值字段值 Map。多值字段以逗号分隔聚合返回。
+     * 获取字段值 Map（扁平格式，向后兼容）。
+     * 单值字段返回单个值字符串，多值字段以逗号分隔聚合返回。
+     *
+     * <p><b>注意：</b>多值字段返回逗号拼接字符串，消费者需要知道字段是否为多值才能正确解析。
+     * 如需明确区分单值/多值，请使用 {@link #getValuesAsMultiMap(Long)}。
      */
     public Map<Long, String> getValues(Long issueId) {
-        List<CustomFieldValue> allValues = valueMapper.selectList(
-                new LambdaQueryWrapper<CustomFieldValue>()
-                        .eq(CustomFieldValue::getIssueId, issueId));
-
-        Map<Long, List<String>> grouped = allValues.stream()
-                .collect(Collectors.groupingBy(
-                        CustomFieldValue::getCustomFieldId,
-                        Collectors.mapping(CustomFieldValue::getValue, Collectors.toList())));
-
+        Map<Long, List<String>> multiMap = getValuesAsMultiMap(issueId);
         Map<Long, String> result = new HashMap<>();
-        for (Map.Entry<Long, List<String>> entry : grouped.entrySet()) {
+        for (Map.Entry<Long, List<String>> entry : multiMap.entrySet()) {
             List<String> values = entry.getValue();
             if (values.size() == 1) {
                 result.put(entry.getKey(), values.get(0));
@@ -563,6 +578,23 @@ public class CustomFieldValueService {
             }
         }
         return result;
+    }
+
+    /**
+     * 获取字段值 MultiMap（明确区分单值/多值）。
+     * 所有字段统一返回 List&lt;String&gt;：单值字段为 1 元素列表，多值字段为 N 元素列表。
+     *
+     * <p>此方法是条件判定、活动记录等场景的首选，避免逗号分隔的歧义。
+     */
+    public Map<Long, List<String>> getValuesAsMultiMap(Long issueId) {
+        List<CustomFieldValue> allValues = valueMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getIssueId, issueId));
+
+        return allValues.stream()
+                .collect(Collectors.groupingBy(
+                        CustomFieldValue::getCustomFieldId,
+                        Collectors.mapping(CustomFieldValue::getValue, Collectors.toList())));
     }
 
     /**
@@ -581,14 +613,14 @@ public class CustomFieldValueService {
     @Transactional(rollbackFor = Exception.class)
     public List<Long> removeOrphanValues(Long issueId, String newIssueType, Long projectId,
                                           List<CustomFieldDefinition> applicableFields) {
-        Map<Long, String> currentValues = getValues(issueId);
-        if (currentValues.isEmpty()) return List.of();
+        Map<Long, List<String>> currentValuesMulti = getValuesAsMultiMap(issueId);
+        if (currentValuesMulti.isEmpty()) return List.of();
 
         Set<Long> applicableFieldIds = applicableFields.stream()
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
 
-        List<Long> orphanFieldIds = currentValues.keySet().stream()
+        List<Long> orphanFieldIds = currentValuesMulti.keySet().stream()
                 .filter(fieldId -> !applicableFieldIds.contains(fieldId))
                 .toList();
 
@@ -600,9 +632,15 @@ public class CustomFieldValueService {
 
         for (Long fieldId : orphanFieldIds) {
             CustomFieldDefinition field = fieldMap.get(fieldId);
-            String rawValue = currentValues.get(fieldId);
-            if (field != null && rawValue != null && !rawValue.isBlank()) {
-                String displayValue = displayService.resolveDisplayValue(field, rawValue);
+            List<String> values = currentValuesMulti.get(fieldId);
+            if (field != null && values != null && !values.isEmpty()) {
+                // 使用多值感知的显示值解析，避免逗号拼接字符串传入 resolveDisplayValue
+                String displayValue;
+                if (values.size() > 1 || Boolean.TRUE.equals(field.getIsMulti())) {
+                    displayValue = displayService.resolveMultiDisplayValue(field, values);
+                } else {
+                    displayValue = displayService.resolveDisplayValue(field, values.get(0));
+                }
                 recordCustomFieldActivity(issueId, field.getName(), displayValue, null);
             }
         }
@@ -718,7 +756,36 @@ public class CustomFieldValueService {
         if (conditionValues.isEmpty()) {
             return true;
         }
+        // 处理多值场景：conditionFieldValue 可能是逗号分隔的多个值
+        // ANY 语义：只要有一个值匹配 conditionValues 就满足条件
+        if (conditionFieldValue.contains(",")) {
+            List<String> fieldValues = Arrays.stream(conditionFieldValue.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+            return fieldValues.stream().anyMatch(conditionValues::contains);
+        }
         return conditionValues.contains(conditionFieldValue);
+    }
+
+    /**
+     * 条件判定（基于 MultiMap，无歧义版本）。
+     * 多值字段使用 ANY 语义：只要该字段的任一值匹配条件列表中的某个值，即视为满足条件。
+     */
+    private boolean isFieldConditionMetMulti(CustomFieldProject mapping, Map<Long, List<String>> currentValues) {
+        if (mapping == null || mapping.getConditionFieldId() == null) {
+            return true;
+        }
+        List<String> fieldValues = currentValues.get(mapping.getConditionFieldId());
+        if (fieldValues == null || fieldValues.isEmpty()) {
+            return false;
+        }
+        List<String> conditionValues = parseJsonArray(mapping.getConditionValues());
+        if (conditionValues.isEmpty()) {
+            return true;
+        }
+        // ANY 语义：只要有一个值匹配条件列表即满足
+        return fieldValues.stream().anyMatch(conditionValues::contains);
     }
 
     Map<Long, CustomFieldProject> getProjectFieldConditions(Long projectId) {

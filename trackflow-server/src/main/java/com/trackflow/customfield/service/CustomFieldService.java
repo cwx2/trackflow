@@ -556,6 +556,14 @@ public class CustomFieldService {
         return valueService.getValues(issueId);
     }
 
+    /**
+     * 获取字段值 MultiMap（明确区分单值/多值）。
+     * 委托给 {@link CustomFieldValueService#getValuesAsMultiMap(Long)}
+     */
+    public Map<Long, List<String>> getValuesAsMultiMap(Long issueId) {
+        return valueService.getValuesAsMultiMap(issueId);
+    }
+
     /** 委托给 {@link CustomFieldValueService} */
     public void deleteValuesByIssue(Long issueId) {
         valueService.deleteValuesByIssue(issueId);
