@@ -66,6 +66,18 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
      * @throws BusinessException RESOURCE_NOT_FOUND 当项目不存在时
      */
     private Long resolveProjectIdForPerm(String identifier) {
+        // Key 优先策略：项目 Key 必须以字母开头
+        if (Character.isLetter(identifier.charAt(0))) {
+            com.trackflow.project.entity.Project project = projectMapper.selectOne(
+                    new LambdaQueryWrapper<com.trackflow.project.entity.Project>()
+                            .select(com.trackflow.project.entity.Project::getId)
+                            .apply("LOWER(\"key\") = LOWER({0})", identifier)
+            );
+            if (project != null) {
+                return project.getId();
+            }
+        }
+
         // 尝试按数字 ID 解析
         try {
             Long id = Long.parseLong(identifier);
@@ -74,22 +86,15 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
                     new LambdaQueryWrapper<com.trackflow.project.entity.Project>()
                             .eq(com.trackflow.project.entity.Project::getId, id)
             );
-            if (count == null || count == 0) {
-                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            if (count != null && count > 0) {
+                return id;
             }
-            return id;
-        } catch (NumberFormatException e) {
-            // 非数字，按 key 查询
+        } catch (NumberFormatException ignored) {
+            // 非数字格式，忽略
         }
-        com.trackflow.project.entity.Project project = projectMapper.selectOne(
-                new LambdaQueryWrapper<com.trackflow.project.entity.Project>()
-                        .select(com.trackflow.project.entity.Project::getId)
-                        .apply("LOWER(\"key\") = LOWER({0})", identifier)
-        );
-        if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + identifier);
-        }
-        return project.getId();
+
+        // 两者都未命中
+        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在: " + identifier);
     }
 
     /**
