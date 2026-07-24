@@ -109,8 +109,7 @@ const tabs = [
   { key: 'overview', label: '概览', icon: '📊', to: '/reports' },
   { key: 'list', label: '报表列表', icon: '📋', to: '/reports/list' },
   { key: 'time', label: '时间报表', icon: '⏱️', to: '/reports/time' },
-  { key: 'estimation', label: '预估对比', icon: '📐', to: '/reports/estimation' },
-  { key: 'dashboards', label: '仪表盘', icon: '🖥️', to: '/reports/dashboards' }
+  { key: 'estimation', label: '预估对比', icon: '📐', to: '/reports/estimation' }
 ]
 
 function isTabActive(key: string): boolean {
@@ -124,8 +123,6 @@ function isTabActive(key: string): boolean {
       return name === 'TimeReport'
     case 'estimation':
       return name === 'EstimationReport'
-    case 'dashboards':
-      return name === 'CustomDashboards'
     default:
       return false
   }

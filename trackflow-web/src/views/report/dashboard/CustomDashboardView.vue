@@ -2,6 +2,9 @@
   <div class="custom-dashboard-page">
     <!-- 页面头部 -->
     <div class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">仪表盘</h1>
+      </div>
       <div class="header-right">
         <a-button type="primary" size="small" @click="showCreateModal = true">
           <template #icon><icon-plus /></template>
@@ -371,6 +374,62 @@
             <span class="form-hint">选择要显示状态分布的 Sprint</span>
           </a-form-item>
         </template>
+
+        <!-- activity_feed 配置 -->
+        <template v-if="editingWidgetType === 'activity_feed'">
+          <a-form-item label="项目范围">
+            <a-select
+              v-model="widgetConfigForm.activityProjectIds"
+              placeholder="留空 = 所有可见项目"
+              multiple
+              allow-clear
+              :max-tag-count="3"
+            >
+              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要监控的项目，留空表示所有项目</span>
+          </a-form-item>
+          <a-form-item label="活动类型">
+            <a-select
+              v-model="widgetConfigForm.activityActions"
+              placeholder="留空 = 所有类型"
+              multiple
+              allow-clear
+              :max-tag-count="3"
+            >
+              <a-option v-for="opt in activityTypeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要显示的活动类型，留空表示全部</span>
+          </a-form-item>
+          <a-form-item label="用户范围">
+            <a-select
+              v-model="widgetConfigForm.activityUserIds"
+              placeholder="留空 = 所有人"
+              multiple
+              allow-clear
+              :max-tag-count="3"
+            >
+              <a-option v-for="u in availableUsers" :key="u.id" :value="u.id">
+                {{ u.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要关注的用户，留空表示所有人</span>
+          </a-form-item>
+          <a-form-item label="显示条数">
+            <a-input-number
+              v-model="widgetConfigForm.activityLimit"
+              :min="1"
+              :max="50"
+              placeholder="默认 10"
+              style="width: 100%"
+            />
+            <span class="form-hint">1-50 条，默认显示最近 10 条</span>
+          </a-form-item>
+        </template>
       </a-form>
     </a-modal>
 
@@ -417,6 +476,7 @@ import { customDashboardApi } from '@/api'
 import { reportApi } from '@/api/report'
 import { sprintApi } from '@/api/sprint'
 import { projectApi } from '@/api/project'
+import { userApi } from '@/api/user'
 import type { DashboardListVO, DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
 import type { ReportDefinitionVO } from '@/api/report'
 import type { SprintVO } from '@/api/types'
@@ -477,6 +537,11 @@ const widgetConfigForm = ref<{
   sprintId?: string
   projectId?: string
   chartType?: string
+  // Activity Feed Widget config
+  activityProjectIds?: string[]
+  activityActions?: string[]
+  activityUserIds?: string[]
+  activityLimit?: number
 }>({
   title: '',
   refreshInterval: 600,
@@ -487,8 +552,30 @@ const widgetConfigForm = ref<{
   noteContent: '',
   sprintId: undefined,
   projectId: undefined,
-  chartType: 'burndown'
+  chartType: 'burndown',
+  activityProjectIds: [],
+  activityActions: [],
+  activityUserIds: [],
+  activityLimit: 10
 })
+
+// Available users for activity feed widget
+const availableUsers = ref<Array<{ id: string; name: string }>>([])
+
+// Activity type options for activity feed widget
+const activityTypeOptions = [
+  { value: 'commented', label: '评论' },
+  { value: 'status_changed', label: '状态变更' },
+  { value: 'field_change', label: '字段变更' },
+  { value: 'update', label: '更新' },
+  { value: 'assigned', label: '分配' },
+  { value: 'attachment_added', label: '附件上传' },
+  { value: 'link_added', label: '关联添加' },
+  { value: 'link_removed', label: '关联移除' },
+  { value: 'tag_added', label: '标签变更' },
+  { value: 'created', label: '创建' },
+  { value: 'time_logged', label: '工时记录' }
+]
 
 // Move widget state
 const showMoveWidgetModal = ref(false)
@@ -862,7 +949,11 @@ function editWidget(widget: DashboardWidgetVO) {
     noteContent: config.content || '',
     sprintId: config.sprintId || undefined,
     projectId: config.projectId || undefined,
-    chartType: config.chartType || 'burndown'
+    chartType: config.chartType || 'burndown',
+    activityProjectIds: config.projectIds || [],
+    activityActions: config.actions || [],
+    activityUserIds: config.userIds || [],
+    activityLimit: config.limit ?? 10
   }
 
   // Load reports if needed for report widgets
@@ -873,6 +964,11 @@ function editWidget(widget: DashboardWidgetVO) {
   // Load sprints/projects if needed for agile widgets
   if (widget.widgetType === 'agile_chart' || widget.widgetType === 'agile_board_status') {
     loadAvailableSprintsAndProjects()
+  }
+
+  // Load projects and users for activity feed widget
+  if (widget.widgetType === 'activity_feed') {
+    loadAvailableProjectsAndUsers()
   }
 
   showWidgetConfigModal.value = true
@@ -910,6 +1006,26 @@ async function loadAvailableSprintsAndProjects() {
   }
 }
 
+async function loadAvailableProjectsAndUsers() {
+  try {
+    // Load projects
+    const projectRes = await projectApi.list({ pageSize: 50 })
+    const projects = projectRes.data?.list || []
+    availableProjects.value = projects.map((p: any) => ({ id: p.id, name: p.name }))
+  } catch {
+    availableProjects.value = []
+  }
+
+  try {
+    // Load users
+    const userRes = await userApi.list({ pageSize: 100 })
+    const users = userRes.data?.list || []
+    availableUsers.value = users.map((u: any) => ({ id: u.id, name: u.displayName || u.username }))
+  } catch {
+    availableUsers.value = []
+  }
+}
+
 async function handleWidgetConfigSave() {
   if (!editingWidget.value || !currentDashboard.value) return
   savingWidgetConfig.value = true
@@ -931,6 +1047,11 @@ async function handleWidgetConfigSave() {
       if (form.projectId) config.projectId = form.projectId
     } else if (widget.widgetType === 'agile_board_status') {
       if (form.sprintId) config.sprintId = form.sprintId
+    } else if (widget.widgetType === 'activity_feed') {
+      if (form.activityProjectIds && form.activityProjectIds.length > 0) config.projectIds = form.activityProjectIds
+      if (form.activityActions && form.activityActions.length > 0) config.actions = form.activityActions
+      if (form.activityUserIds && form.activityUserIds.length > 0) config.userIds = form.activityUserIds
+      config.limit = form.activityLimit ?? 10
     }
     // report_distribution / report: reportId is saved separately
 
@@ -1037,8 +1158,16 @@ watch(showEditModal, (val) => {
 .page-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0;
+  letter-spacing: -0.3px;
 }
 
 /* 仪表盘切换器 */

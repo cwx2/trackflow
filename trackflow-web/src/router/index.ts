@@ -72,7 +72,7 @@ const routes = [
       {
         path: 'dashboard',
         name: 'Dashboard',
-        component: () => import('@/views/dashboard/DashboardView.vue')
+        component: () => import('@/views/report/dashboard/CustomDashboardView.vue')
       },
       {
         path: 'sprints',
@@ -123,8 +123,7 @@ const routes = [
           },
           {
             path: 'dashboards',
-            name: 'CustomDashboards',
-            component: () => import('@/views/report/dashboard/CustomDashboardView.vue')
+            redirect: '/dashboard'
           },
           {
             path: ':id',

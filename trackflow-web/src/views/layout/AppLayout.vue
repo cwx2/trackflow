@@ -8,9 +8,9 @@
       </div>
 
       <nav class="sidebar-nav">
-        <router-link to="/dashboard" class="nav-item" :class="{ active: $route.name === 'Dashboard' }">
-          <span class="nav-icon">🏠</span>
-          <span class="nav-label">工作台</span>
+        <router-link to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">仪表盘</span>
         </router-link>
         <router-link to="/issues" class="nav-item" :class="{ active: $route.name === 'Issues' }">
           <span class="nav-icon">📋</span>

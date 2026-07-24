@@ -117,9 +117,27 @@
 
       <!-- 活动流微件 -->
       <template v-else-if="widget.widgetType === 'activity_feed'">
-        <div class="widget-configure-hint">
+        <div v-if="activityFeedData.length > 0" class="widget-activity-feed">
+          <div v-for="item in activityFeedData" :key="item.id" class="activity-item">
+            <div class="activity-header">
+              <span class="activity-user">{{ item.userName || '系统' }}</span>
+              <span class="activity-time">{{ formatActivityTime(item.createdAt) }}</span>
+            </div>
+            <div class="activity-body">
+              <span class="activity-action">{{ formatActivityAction(item.action, item.fieldName) }}</span>
+              <span class="activity-issue">{{ item.issueKey }}</span>
+              <span v-if="item.issueTitle" class="activity-issue-title">{{ item.issueTitle }}</span>
+            </div>
+            <div v-if="item.oldValue || item.newValue" class="activity-change">
+              <span v-if="item.oldValue" class="change-old">{{ item.oldValue }}</span>
+              <span v-if="item.oldValue && item.newValue" class="change-arrow">→</span>
+              <span v-if="item.newValue" class="change-new">{{ item.newValue }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!loading" class="widget-configure-hint">
           <icon-notification :size="32" class="hint-icon" />
-          <span class="hint-text">点击「编辑配置」设置数据源</span>
+          <span class="hint-text">暂无活动记录，点击「编辑配置」设置筛选条件</span>
         </div>
       </template>
 
@@ -188,6 +206,7 @@ import {
 import { reportApi } from '@/api/report'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { sprintApi } from '@/api/sprint'
+import { dashboardApi } from '@/api/dashboard'
 import type { ReportDataVO } from '@/api/report'
 import type { DashboardWidgetVO } from '@/api/customDashboard'
 import type { OverviewData } from '@/api/reportStatistics'
@@ -230,6 +249,14 @@ const cumulativeFlowData = ref<{ dates: string[]; series: Array<{ name: string; 
 
 // agile_board_status 数据
 const boardStatusData = ref<{ totalIssues: number; doneIssues: number; inProgressIssues: number; todoIssues: number; sprintName: string } | null>(null)
+
+// activity_feed 数据
+const activityFeedData = ref<Array<{
+  id: string; issueId: string; issueKey: string; issueTitle: string
+  userId: string; userName: string; userAvatar?: string
+  action: string; fieldName?: string; oldValue?: string; newValue?: string
+  createdAt: string
+}>>([])
 
 // ─── 微件类型映射 ─────────────────────────────────────────
 
@@ -822,6 +849,27 @@ async function loadData(force = false) {
     return
   }
 
+  // activity_feed: 加载活动流数据
+  if (widgetType === 'activity_feed') {
+    loading.value = true
+    error.value = null
+    try {
+      const params: Record<string, any> = {}
+      if (config.projectIds && config.projectIds.length > 0) params.projectIds = config.projectIds
+      if (config.actions && config.actions.length > 0) params.actions = config.actions
+      if (config.userIds && config.userIds.length > 0) params.userIds = config.userIds
+      params.limit = config.limit || 10
+      const res = await dashboardApi.activityFeed(params)
+      activityFeedData.value = res.data || []
+      dataLoaded.value = true
+    } catch (e: any) {
+      error.value = e.response?.data?.message || '加载活动数据失败'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
   // Other types: just mark as loaded (placeholder state)
   dataLoaded.value = true
 }
@@ -843,7 +891,7 @@ async function refreshData() {
 async function handleCopyLink() {
   if (!props.widget) return
   const baseUrl = window.location.origin
-  const link = `${baseUrl}/reports/dashboards?id=${props.widget.dashboardId}&widget=${props.widget.id}`
+  const link = `${baseUrl}/dashboard?id=${props.widget.dashboardId}&widget=${props.widget.id}`
   try {
     await navigator.clipboard.writeText(link)
     Message.success('链接已复制到剪贴板')
