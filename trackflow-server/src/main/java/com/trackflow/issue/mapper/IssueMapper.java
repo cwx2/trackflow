@@ -45,6 +45,15 @@ public interface IssueMapper extends BaseMapper<Issue> {
     List<ActivityRow> selectDashboardActivitiesByProjects(@Param("projectIds") List<Long> projectIds, @Param("limit") int limit);
 
     /**
+     * Widget 活动流：支持多维筛选（项目/活动类型/用户），用于 Activity Feed Widget
+     */
+    List<ActivityRow> selectWidgetActivities(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("actions") List<String> actions,
+            @Param("userIds") List<Long> userIds,
+            @Param("limit") int limit);
+
+    /**
      * 查询回收站工单列表（已删除的），绕过 MyBatis-Plus 逻辑删除过滤
      */
     Page<TrashRow> selectTrashPage(Page<?> page, @Param("projectId") Long projectId);

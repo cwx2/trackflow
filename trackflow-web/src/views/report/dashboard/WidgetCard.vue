@@ -715,6 +715,52 @@ function buildBoardStatusOption(data: { totalIssues: number; doneIssues: number;
   }
 }
 
+// ─── 活动流格式化 ──────────────────────────────────────────
+
+const activityActionLabels: Record<string, string> = {
+  created: '创建了',
+  commented: '评论了',
+  status_changed: '变更了状态',
+  field_change: '修改了',
+  update: '更新了',
+  updated: '更新了',
+  assigned: '分配了',
+  auto_assigned: '自动分配了',
+  attachment_added: '添加了附件',
+  link_added: '添加了关联',
+  link_removed: '移除了关联',
+  tag_added: '修改了标签',
+  time_logged: '记录了工时',
+  time_updated: '更新了工时',
+  time_removed: '删除了工时',
+  deleted: '删除了',
+  restored: '恢复了',
+  moved_to_project: '移动了项目'
+}
+
+function formatActivityAction(action: string, fieldName?: string): string {
+  const label = activityActionLabels[action] || action
+  if (action === 'field_change' && fieldName) {
+    return `修改了 ${fieldName}`
+  }
+  return label
+}
+
+function formatActivityTime(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin} 分钟前`
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `${diffHour} 小时前`
+  const diffDay = Math.floor(diffHour / 24)
+  if (diffDay < 7) return `${diffDay} 天前`
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
 // ─── 数据加载 ──────────────────────────────────────────
 
 async function loadData(force = false) {
@@ -883,6 +929,7 @@ async function refreshData() {
   agileChartData.value = null
   cumulativeFlowData.value = null
   boardStatusData.value = null
+  activityFeedData.value = []
   dataLoaded.value = false
   await loadData(true)
   refreshing.value = false
@@ -1178,5 +1225,92 @@ onBeforeUnmount(() => {
 
 .danger-option {
   color: var(--tf-danger) !important;
+}
+
+/* Activity Feed Widget */
+.widget-activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.activity-item {
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.activity-item:hover {
+  background: var(--tf-bg-hover);
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.activity-user {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.activity-body {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.activity-action {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+}
+
+.activity-issue {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-accent);
+  white-space: nowrap;
+}
+
+.activity-issue-title {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.activity-change {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.change-old {
+  color: var(--tf-text-tertiary);
+  text-decoration: line-through;
+}
+
+.change-arrow {
+  color: var(--tf-text-quaternary);
+}
+
+.change-new {
+  color: var(--tf-text-secondary);
+  font-weight: 500;
 }
 </style>

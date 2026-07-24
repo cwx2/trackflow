@@ -58,5 +58,10 @@ export const dashboardApi = {
   /** 最近活动流 */
   activity(limit = 20) {
     return request.get<any, R<DashboardActivityVO[]>>('/dashboard/activity', { params: { limit } })
+  },
+
+  /** Widget 活动流（支持多维筛选） */
+  activityFeed(params?: { projectIds?: string[]; actions?: string[]; userIds?: string[]; limit?: number }) {
+    return request.get<any, R<DashboardActivityVO[]>>('/dashboard/activity-feed', { params })
   }
 }

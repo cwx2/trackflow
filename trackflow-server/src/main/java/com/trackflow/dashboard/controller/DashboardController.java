@@ -62,4 +62,21 @@ public class DashboardController {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.getRecentActivity(userId, limit));
     }
+
+    /**
+     * Widget 活动流（支持多维筛选：项目/活动类型/用户）
+     * 用于 Activity Feed Widget 的数据加载
+     */
+    @GetMapping("/activity-feed")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<DashboardActivityVO>> activityFeed(
+            @RequestParam(value = "projectIds", required = false) List<Long> projectIds,
+            @RequestParam(value = "actions", required = false) List<String> actions,
+            @RequestParam(value = "userIds", required = false) List<Long> userIds,
+            @RequestParam(value = "limit", defaultValue = "10") int limit) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        // 限制最大条数为 50
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        return R.ok(dashboardService.getWidgetActivityFeed(currentUserId, projectIds, actions, userIds, safeLimit));
+    }
 }

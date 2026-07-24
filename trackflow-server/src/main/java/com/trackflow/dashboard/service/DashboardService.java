@@ -286,6 +286,51 @@ public class DashboardService {
     }
 
     /**
+     * Widget 活动流：支持多维筛选（项目/活动类型/用户）
+     * <p>
+     * 当不指定项目范围时，默认使用当前用户有权限访问的所有项目。
+     *
+     * @param currentUserId 当前用户 ID（用于权限范围兜底）
+     * @param projectIds    项目 ID 列表（null 或空表示不限项目，使用用户可见范围）
+     * @param actions       活动类型列表（null 或空表示不限）
+     * @param userIds       用户 ID 列表（null 或空表示不限）
+     * @param limit         返回条数
+     */
+    public List<DashboardActivityVO> getWidgetActivityFeed(Long currentUserId, List<Long> projectIds,
+                                                           List<String> actions, List<Long> userIds, int limit) {
+        // 如果不指定项目范围，默认取用户所有可见项目
+        List<Long> effectiveProjectIds = (projectIds != null && !projectIds.isEmpty())
+                ? projectIds
+                : projectMemberMapper.selectProjectIdsByUserId(currentUserId);
+
+        if (effectiveProjectIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<ActivityRow> rows = issueMapper.selectWidgetActivities(effectiveProjectIds, actions, userIds, limit);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+
+        return rows.stream().map(row -> {
+            DashboardActivityVO vo = new DashboardActivityVO();
+            vo.setId(String.valueOf(row.getId()));
+            vo.setIssueId(String.valueOf(row.getIssueId()));
+            vo.setIssueKey(row.getIssueKey());
+            vo.setIssueTitle(row.getIssueTitle());
+            vo.setUserId(String.valueOf(row.getUserId()));
+            vo.setUserName(row.getUserName());
+            vo.setUserAvatar(row.getUserAvatar());
+            vo.setAction(row.getAction());
+            vo.setFieldName(row.getFieldName());
+            vo.setOldValue(row.getOldValue());
+            vo.setNewValue(row.getNewValue());
+            vo.setCreatedAt(row.getCreatedAt());
+            return vo;
+        }).toList();
+    }
+
+    /**
      * 确定用户的主要角色代码。
      * 优先级：tester > developer > tech_lead > product_manager > project_admin > observer
      */

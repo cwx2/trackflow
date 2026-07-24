@@ -121,6 +121,42 @@
         LIMIT #{limit}
     </select>
 
+    <!-- Widget 活动流：支持多维筛选（项目/活动类型/用户） -->
+    <select id="selectWidgetActivities" resultType="com.trackflow.issue.mapper.result.ActivityRow">
+        SELECT
+            a.id, a.issue_id, a.user_id, a.action, a.field_name,
+            <include refid="activity_value_columns"/>,
+            a.created_at,
+            u.display_name AS user_name,
+            u.avatar_url AS user_avatar,
+            i.issue_key, i.title AS issue_title
+        FROM issue_activity a
+        INNER JOIN issue i ON i.id = a.issue_id AND i.deleted_at IS NULL
+        LEFT JOIN sys_user u ON u.id = a.user_id
+        WHERE 1=1
+          AND NOT (a.old_value IS NOT NULL AND a.new_value IS NOT NULL AND a.old_value = a.new_value)
+        <if test="projectIds != null and !projectIds.isEmpty()">
+          AND i.project_id IN
+          <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+              #{pid}
+          </foreach>
+        </if>
+        <if test="actions != null and !actions.isEmpty()">
+          AND a.action IN
+          <foreach collection="actions" item="act" open="(" separator="," close=")">
+              #{act}
+          </foreach>
+        </if>
+        <if test="userIds != null and !userIds.isEmpty()">
+          AND a.user_id IN
+          <foreach collection="userIds" item="uid" open="(" separator="," close=")">
+              #{uid}
+          </foreach>
+        </if>
+        ORDER BY a.created_at DESC
+        LIMIT #{limit}
+    </select>
+
     <!-- 回收站列表：查询已删除工单 + 删除人名称 -->
     <select id="selectTrashPage" resultType="com.trackflow.issue.mapper.result.TrashRow">
         SELECT
