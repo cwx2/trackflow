@@ -24,20 +24,86 @@
       </nav>
     </template>
 
-    <!-- 子路由出口 -->
-    <div class="report-content">
-      <router-view />
+    <!-- Main body: Sidebar + Content -->
+    <div class="report-body">
+      <!-- Sidebar (shown on list and detail pages) -->
+      <ReportSidebar
+        v-if="showSidebar"
+        :reports="sidebarReports"
+        :loading="sidebarLoading"
+        @favorite-changed="onFavoriteChanged"
+      />
+
+      <!-- 子路由出口 -->
+      <div class="report-content">
+        <router-view />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { reportApi } from '@/api/report'
+import type { ReportDefinitionVO } from '@/api/report'
+import ReportSidebar from './ReportSidebar.vue'
 
 const route = useRoute()
 
 const isDetailPage = computed(() => route.name === 'ReportDetail')
+
+/** Sidebar is shown on ReportList and ReportDetail pages */
+const showSidebar = computed(() => {
+  const name = route.name as string
+  return name === 'ReportList' || name === 'ReportDetail'
+})
+
+// ─── Sidebar data ────────────────────────────────────────
+
+const sidebarReports = ref<ReportDefinitionVO[]>([])
+const sidebarLoading = ref(false)
+
+async function loadSidebarReports() {
+  sidebarLoading.value = true
+  try {
+    const res = await reportApi.list()
+    sidebarReports.value = res.data || []
+  } catch {
+    // non-critical
+  } finally {
+    sidebarLoading.value = false
+  }
+}
+
+function onFavoriteChanged(report: ReportDefinitionVO, favorited: boolean) {
+  const found = sidebarReports.value.find(r => r.id === report.id)
+  if (found) {
+    found.favorited = favorited
+  }
+}
+
+// Load reports for sidebar when container mounts or when sidebar becomes visible
+onMounted(() => {
+  if (showSidebar.value) {
+    loadSidebarReports()
+  }
+})
+
+watch(showSidebar, (visible) => {
+  if (visible && sidebarReports.value.length === 0) {
+    loadSidebarReports()
+  }
+})
+
+// Refresh sidebar when navigating between pages (in case reports were created/deleted)
+watch(() => route.fullPath, () => {
+  if (showSidebar.value) {
+    loadSidebarReports()
+  }
+})
+
+// ─── Tabs ────────────────────────────────────────────────
 
 const tabs = [
   { key: 'overview', label: '概览', icon: '📊', to: '/reports' },
@@ -137,6 +203,14 @@ function isTabActive(key: string): boolean {
 
 .tab-icon {
   font-size: 14px;
+}
+
+/* Body: sidebar + content */
+.report-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 内容区域 */
