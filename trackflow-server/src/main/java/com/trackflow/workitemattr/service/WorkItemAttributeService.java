@@ -198,7 +198,7 @@ public class WorkItemAttributeService {
     /**
      * 创建工作项属性
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkItemAttributeVO create(CreateWorkItemAttributeDTO dto) {
         // 检查名称唯一性
         Long existCount = attributeMapper.selectCount(
@@ -241,7 +241,7 @@ public class WorkItemAttributeService {
     /**
      * 更新工作项属性（名称和值列表）
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkItemAttributeVO update(Long id, UpdateWorkItemAttributeDTO dto) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
@@ -278,7 +278,7 @@ public class WorkItemAttributeService {
      * 删除工作项属性
      * FK 已改为 RESTRICT，需先清理所有引用才能删除
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
@@ -317,7 +317,7 @@ public class WorkItemAttributeService {
      * 管理属性的项目分配（全量覆盖）
      * 新增的项目关联自动获得该属性的全部值
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkItemAttributeVO manageProjects(Long id, ManageAttributeProjectsDTO dto) {
         WorkItemAttribute attr = attributeMapper.selectById(id);
         if (attr == null) {
@@ -425,7 +425,7 @@ public class WorkItemAttributeService {
      * @param valueIds 项目中启用的值 ID 列表
      * @return 更新后的属性 VO
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public WorkItemAttributeVO manageProjectValues(Long attributeId, Long projectId, List<Long> valueIds) {
         // 校验属性存在
         WorkItemAttribute attr = attributeMapper.selectById(attributeId);
@@ -513,7 +513,7 @@ public class WorkItemAttributeService {
      * 为新建项目自动关联全部已有属性值（auto-attach）
      * 当项目新增属性关联时调用
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void autoAttachValuesToProject(Long attributeId, Long projectId) {
         List<WorkItemAttributeValue> values = valueMapper.selectList(
                 new QueryWrapper<WorkItemAttributeValue>()
@@ -539,7 +539,7 @@ public class WorkItemAttributeService {
     /**
      * 新增属性值时，自动关联到已分配该属性的所有项目
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void autoAttachNewValueToProjects(Long attributeId, Long valueId, Integer position) {
         List<WorkItemAttributeProject> projects = projectMapper.selectList(
                 new QueryWrapper<WorkItemAttributeProject>().eq("attribute_id", attributeId));
@@ -556,7 +556,7 @@ public class WorkItemAttributeService {
     /**
      * 保存工时记录的属性值
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void saveTimeEntryAttributeValues(Long timeEntryId, Map<Long, Long> attributeValueMap) {
         // 删除旧值
         entryValueMapper.delete(
@@ -679,7 +679,7 @@ public class WorkItemAttributeService {
      * @param targetValueId 目标值 ID
      * @return 转移的工时记录数量
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int transferValueReferences(Long attributeId, Long fromValueId, Long targetValueId) {
         // 校验源值存在且属于该属性
         WorkItemAttributeValue fromValue = valueMapper.selectById(fromValueId);
@@ -827,7 +827,7 @@ public class WorkItemAttributeService {
     /**
      * 删除工时记录的所有属性值关联
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteTimeEntryAttributeValues(Long timeEntryId) {
         entryValueMapper.delete(
                 new QueryWrapper<TimeEntryAttributeValue>().eq("time_entry_id", timeEntryId));
