@@ -118,6 +118,7 @@
     :visible="showMoveModal"
     :issue-key="issue?.issueKey || ''"
     :current-project-id="issue?.projectId || ''"
+    :child-count="issue?.childCount || 0"
     @update:visible="showMoveModal = $event"
     @confirm="onMoveConfirm"
   />

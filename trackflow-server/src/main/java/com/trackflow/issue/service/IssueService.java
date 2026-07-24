@@ -135,11 +135,12 @@ public class IssueService {
         if (resolvedSprintId == null) {
             Long defaultSprintId = projectService.getProjectSettingAsLong(dto.getProjectId(), "defaultSprintId");
             if (defaultSprintId != null) {
-                // 验证默认 Sprint 仍然有效（存在且未完成）
+                // 验证默认 Sprint 仍然有效（只有 PLANNED 或 ACTIVE 才接收新工单）
                 var defaultSprint = sprintMapper.selectById(defaultSprintId);
                 if (defaultSprint != null
                         && defaultSprint.getProjectId().equals(dto.getProjectId())
-                        && defaultSprint.getStatus() != com.trackflow.sprint.entity.SprintStatus.COMPLETED) {
+                        && (defaultSprint.getStatus() == com.trackflow.sprint.entity.SprintStatus.PLANNED
+                            || defaultSprint.getStatus() == com.trackflow.sprint.entity.SprintStatus.ACTIVE)) {
                     resolvedSprintId = defaultSprintId;
                 }
             }
@@ -1318,6 +1319,23 @@ public class IssueService {
 
         // 自定义字段清理：移除不适用于目标项目的字段值
         customFieldService.removeOrphanValues(issueId, issue.getIssueType(), targetProjectId);
+
+        // 子工单反向清理：清除源项目中仍引用此工单的子工单的 parent_id
+        List<Issue> orphanChildren = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getParentId, issueId)
+                        .isNull(Issue::getDeletedAt));
+        if (!orphanChildren.isEmpty()) {
+            issueMapper.clearParentId(issueId);
+            for (Issue child : orphanChildren) {
+                recordActivity(child.getId(), currentUserId, "updated", "parent",
+                        oldIssueKey, null, oldIssueKey, null);
+            }
+            // 刷新被移动工单的 childCount/childClosedCount（子工单已解除，归零）
+            ancestorRefreshService.refreshAncestorChain(issueId);
+            log.info("Issue {} moved: cleared parent_id on {} child issues in source project",
+                    issueId, orphanChildren.size());
+        }
 
         // 关联数据：更新 time_entry 的 project_id
         timeEntryMapper.update(null,

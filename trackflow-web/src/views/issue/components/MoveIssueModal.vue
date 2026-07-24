@@ -43,6 +43,9 @@
             <li>工单将获得新的编号（目标项目前缀 + 递增序号）</li>
             <li>Sprint 字段将被清空（不同项目的迭代不通用）</li>
             <li>如果负责人不是目标项目成员，负责人将被清空</li>
+            <li v-if="props.childCount && props.childCount > 0" class="notice-warning">
+              该工单有 {{ props.childCount }} 个子任务，移动后子任务的父引用将被解除
+            </li>
           </ul>
         </div>
       </div>
@@ -60,6 +63,7 @@ const props = defineProps<{
   visible: boolean
   issueKey: string
   currentProjectId: string
+  childCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -197,5 +201,10 @@ defineExpose({ resetSubmitting })
 
 .notice-list li {
   margin-bottom: 2px;
+}
+
+.notice-warning {
+  color: #d29922;
+  font-weight: 500;
 }
 </style>
