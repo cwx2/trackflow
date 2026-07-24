@@ -15,7 +15,8 @@
     <!-- Column name + sort -->
     <span class="col-label" :class="{ sortable }" @click="sortable ? $emit('sort', columnKey) : undefined">
       {{ label }}
-      <span v-if="sortDir" class="sort-arrow">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+      <span v-if="sortDir" class="sort-arrow active">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+      <span v-else-if="sortable" class="sort-arrow hint">↕</span>
     </span>
 
     <!-- Remove button -->
@@ -122,7 +123,18 @@ function onDrop(e: DragEvent) {
 .sort-arrow {
   font-size: 10px;
   margin-left: 2px;
+  transition: opacity 0.15s;
+}
+.sort-arrow.active {
   color: var(--tf-accent, #58a6ff);
+  opacity: 1;
+}
+.sort-arrow.hint {
+  color: var(--tf-text-quaternary, #4b5563);
+  opacity: 0;
+}
+.col-header:hover .sort-arrow.hint {
+  opacity: 1;
 }
 
 .col-remove {
