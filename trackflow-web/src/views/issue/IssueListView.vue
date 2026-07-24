@@ -1670,6 +1670,11 @@ function onClearQuery() {
   router.replace({ query: project ? { project } : {} })
   // Clear FilterBar chips
   filterBarRef.value?.clearAll()
+
+  // Persist user's preference to show all issues
+  localStorage.setItem('tf_last_active_query_all', 'true')
+  localStorage.removeItem('tf_last_active_query_id')
+
   refreshList()
 }
 
@@ -2626,6 +2631,10 @@ function selectQuery(q: any) {
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
+  // Persist user's query preference
+  localStorage.setItem('tf_last_active_query_id', q.id)
+  localStorage.removeItem('tf_last_active_query_all')
+
   // YouTrack style: clicking a saved query only shows the query name chip in search bar
   // Does NOT expand filter conditions — user must click the chip to see/edit conditions
   filterBarRef.value?.clearAll()
@@ -2633,10 +2642,15 @@ function selectQuery(q: any) {
   refreshList()
 }
 function selectAllProjects() {
-  if (activeProjectId.value === null && activeTagId.value === null) return // Already showing all
+  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null) return // Already showing all
   activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
+
+  // Persist user's preference to show all issues
+  localStorage.setItem('tf_last_active_query_all', 'true')
+  localStorage.removeItem('tf_last_active_query_id')
+
   refreshList()
   loadPanel()
   loadTags()
@@ -2747,6 +2761,24 @@ async function loadStatuses() {
   catch { statusCache.value = [] }
 }
 
+/**
+ * Auto-select the default saved query (first pinned query, typically "分配给我")
+ * when the user navigates to the Issues list without explicit URL params.
+ * This provides a YouTrack-like "open and see my tasks" experience.
+ */
+function autoSelectDefaultQuery() {
+  const pinnedQueries = savedQueries.value.filter((q: any) => q.pinned)
+  if (pinnedQueries.length > 0) {
+    selectQuery(pinnedQueries[0])
+  } else if (savedQueries.value.length > 0) {
+    // Fallback: select the first available query
+    selectQuery(savedQueries.value[0])
+  } else {
+    // No saved queries at all — show all issues
+    refreshList()
+  }
+}
+
 onMounted(async () => {
   await loadPanel()
   await loadProjects()
@@ -2779,6 +2811,28 @@ onMounted(async () => {
   // Handle dashboard filter params (statusId, statusCode, statusCategory, label, sprint, etc.)
   if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
     applyDashboardFilter()
+  } else if (!route.query.project && !activeProjectId.value) {
+    // Auto-select default saved query (e.g., "分配给我") when no URL params override the view
+    // Check localStorage for user's last selected query preference
+    const lastQueryId = localStorage.getItem('tf_last_active_query_id')
+    const lastQueryIsAll = localStorage.getItem('tf_last_active_query_all') === 'true'
+
+    if (lastQueryIsAll) {
+      // User explicitly chose "所有工单" last time, respect that
+      refreshList()
+    } else if (lastQueryId && savedQueries.value.length > 0) {
+      // Restore user's last selected query
+      const matched = savedQueries.value.find((q: any) => q.id === lastQueryId)
+      if (matched) {
+        selectQuery(matched)
+      } else {
+        // Last selected query no longer exists, fall back to first pinned
+        autoSelectDefaultQuery()
+      }
+    } else {
+      // First visit or no preference — auto-select the first pinned query
+      autoSelectDefaultQuery()
+    }
   } else {
     refreshList()
   }
