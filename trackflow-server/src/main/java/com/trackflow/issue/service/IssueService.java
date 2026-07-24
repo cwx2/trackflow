@@ -405,6 +405,7 @@ public class IssueService {
      * 工单列表查询（带关联数据填充）。
      * 在 listByQuery 基础上批量填充用户名/头像、状态名/颜色、Sprint名、子任务进度、自定义字段值。
      */
+    @Transactional(readOnly = true)
     public PageResult<IssueVO> listWithDetails(IssueQuery query) {
         Page<Issue> result = listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
@@ -2225,6 +2226,7 @@ public class IssueService {
     /**
      * 获取 Issue 详情（带项目成员校验）—— 避免先查 Issue 再查详情导致两次 DB 查询
      */
+    @Transactional(readOnly = true)
     public IssueDetailVO getDetailWithAccessCheck(Long id) {
         IssueDetailVO detail = getDetail(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -2235,6 +2237,7 @@ public class IssueService {
     /**
      * 获取增强版 Issue 详情 —— 单次 SQL JOIN 替代 N+1 查询
      */
+    @Transactional(readOnly = true)
     public IssueDetailVO getDetail(Long id) {
         IssueDetailRow row = issueMapper.selectDetailById(id);
         if (row == null) {
@@ -2347,6 +2350,7 @@ public class IssueService {
     /**
      * 获取评论列表 —— 单次 JOIN 查询（消除 N+1）
      */
+    @Transactional(readOnly = true)
     public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
         List<CommentRow> rows = issueMapper.selectCommentsWithUser(issueId);
 
@@ -2443,6 +2447,7 @@ public class IssueService {
      * 获取活动列表 —— 单次 JOIN 查询（消除 N+1）
      * assignee 字段的 old/new value 在 SQL 层自动解析为用户显示名
      */
+    @Transactional(readOnly = true)
     public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
         List<ActivityRow> rows = issueMapper.selectActivitiesWithUser(issueId);
         return rows.stream().map(row -> {
