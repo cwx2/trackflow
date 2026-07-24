@@ -647,6 +647,9 @@ public class SprintService {
         sprint.setStatus(SprintStatus.COMPLETED);
         sprintMapper.updateById(sprint);
 
+        // 清理默认 Sprint 设置（防止新工单被分配到已完成的 Sprint）
+        clearDefaultSprintIfMatches(sprint.getProjectId(), sprint.getId());
+
         // 记录项目活动日志
         Long completeUserId = SecurityUtils.getCurrentUserId();
         Map<String, Object> completeDetail = new LinkedHashMap<>();
@@ -693,6 +696,9 @@ public class SprintService {
 
         sprint.setStatus(SprintStatus.ARCHIVED);
         sprintMapper.updateById(sprint);
+
+        // 清理默认 Sprint 设置（防止新工单被分配到已归档的 Sprint）
+        clearDefaultSprintIfMatches(sprint.getProjectId(), sprint.getId());
 
         // 记录项目活动日志
         Long userId = SecurityUtils.getCurrentUserId();
@@ -906,6 +912,9 @@ public class SprintService {
             deleteDetail.put("move_option", dto != null ? dto.getMoveOption() : "none");
         }
         projectActivityService.log(sprint.getProjectId(), deleteUserId, "delete_sprint", null, deleteDetail);
+
+        // 清理默认 Sprint 设置（防止新工单被分配到已删除的 Sprint）
+        clearDefaultSprintIfMatches(sprint.getProjectId(), sprint.getId());
 
         sprintMapper.deleteById(id);
     }
@@ -1337,6 +1346,18 @@ public class SprintService {
             vo.setForecastDate(today.toString());
         } else {
             vo.setForecastDate(null);
+        }
+    }
+
+    /**
+     * 如果指定 Sprint 是项目的默认 Sprint，清除该设置。
+     * 在 Sprint 完成/归档/删除时调用，防止残留的 defaultSprintId 导致新工单被分配到不可用的 Sprint。
+     */
+    private void clearDefaultSprintIfMatches(Long projectId, Long sprintId) {
+        Long currentDefault = projectService.getProjectSettingAsLong(projectId, "defaultSprintId");
+        if (sprintId.equals(currentDefault)) {
+            projectService.updateProjectSetting(projectId, "defaultSprintId", null);
+            log.info("已清除项目 {} 的默认 Sprint 设置（Sprint {} 已不可用）", projectId, sprintId);
         }
     }
 }
