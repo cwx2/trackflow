@@ -19,6 +19,7 @@ import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -46,6 +47,7 @@ public class CustomFieldDisplayService {
     /**
      * 批量获取多个 Issue 的自定义字段展示值（不含颜色）
      */
+    @Transactional(readOnly = true)
     public Map<Long, Map<String, String>> getBatchDisplayValues(List<Long> issueIds) {
         return getBatchDisplayValues(issueIds, null);
     }
@@ -59,6 +61,7 @@ public class CustomFieldDisplayService {
      *
      * @param colorOutMap 可选参数，非 null 时填充颜色数据 Map<issueId, Map<"cf_{fieldId}", hex>>
      */
+    @Transactional(readOnly = true)
     public Map<Long, Map<String, String>> getBatchDisplayValues(
             List<Long> issueIds,
             Map<Long, Map<String, String>> colorOutMap) {
@@ -238,6 +241,7 @@ public class CustomFieldDisplayService {
      * @param issueIds 工单 ID 列表
      * @return Map<issueId, List<CustomFieldValueVO>>
      */
+    @Transactional(readOnly = true)
     public Map<Long, List<CustomFieldValueVO>> getBatchCustomFieldDetails(List<Long> issueIds) {
         if (issueIds == null || issueIds.isEmpty()) {
             return new HashMap<>();
@@ -415,6 +419,7 @@ public class CustomFieldDisplayService {
     /**
      * 获取 Issue 的自定义字段值（含字段名称、类型信息，用于前端展示）
      */
+    @Transactional(readOnly = true)
     public List<CustomFieldValueVO> getValuesForDisplay(Long issueId, Long projectId, String issueType,
                                                          List<CustomFieldDefinition> applicableFields) {
         List<CustomFieldValue> allValues = valueMapper.selectList(
@@ -626,7 +631,7 @@ public class CustomFieldDisplayService {
     // ========== 可见性过滤辅助方法 ==========
 
     /**
-     * 应用角色可见性过滤
+     * 应用角色可见性过滤（含私有字段权限检查）
      */
     private List<CustomFieldValue> applyVisibilityFilter(
             List<CustomFieldValue> applicableValues,
@@ -653,6 +658,21 @@ public class CustomFieldDisplayService {
             return applicableValues;
         }
 
+        // Check private field read permission per project (cache the result)
+        Map<Long, Boolean> projectPrivateReadCache = new HashMap<>();
+
+        // Collect field IDs that are private
+        Set<Long> fieldIds = applicableValues.stream()
+                .map(CustomFieldValue::getCustomFieldId)
+                .collect(Collectors.toSet());
+        Map<Long, CustomFieldDefinition> fieldDefMap = new HashMap<>();
+        if (!fieldIds.isEmpty()) {
+            List<CustomFieldDefinition> defs = definitionMapper.selectBatchIds(fieldIds);
+            for (CustomFieldDefinition def : defs) {
+                fieldDefMap.put(def.getId(), def);
+            }
+        }
+
         Map<Long, List<Long>> userRolesPerProject = new HashMap<>();
         if (currentUserId != null) {
             for (Long pid : projectIds) {
@@ -662,6 +682,20 @@ public class CustomFieldDisplayService {
 
         return applicableValues.stream()
                 .filter(v -> {
+                    // Private field check
+                    CustomFieldDefinition fieldDef = fieldDefMap.get(v.getCustomFieldId());
+                    if (fieldDef != null && Boolean.TRUE.equals(fieldDef.getIsPrivate())) {
+                        Long projectId = issueProjectMap.get(v.getIssueId());
+                        boolean canReadPrivate = projectPrivateReadCache.computeIfAbsent(
+                                projectId != null ? projectId : -1L,
+                                pid -> currentUserId != null &&
+                                        permissionService.hasPermission(currentUserId, pid > 0 ? pid : null, "issue:read_private_fields"));
+                        if (!canReadPrivate) {
+                            return false;
+                        }
+                    }
+
+                    // visibleToRoles check
                     Long projectId = issueProjectMap.get(v.getIssueId());
                     if (projectId == null) return true;
                     Map<Long, CustomFieldProject> conditions = projectConditionsMap.get(projectId);

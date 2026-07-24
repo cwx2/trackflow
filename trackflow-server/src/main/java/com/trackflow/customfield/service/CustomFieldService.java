@@ -1224,6 +1224,7 @@ public class CustomFieldService {
 
     // ========== Fields in Projects 矩阵 ==========
 
+    @Transactional(readOnly = true)
     public List<ProjectFieldsVO> getFieldsInProjects() {
         List<Project> projects = projectEntityMapper.selectList(
                 new LambdaQueryWrapper<Project>()
@@ -1423,6 +1424,7 @@ public class CustomFieldService {
 
     // ========== VO 组装方法 ==========
 
+    @Transactional(readOnly = true)
     public PageResult<CustomFieldDefinitionVO> listAdminPage(CustomFieldQuery query) {
         Page<CustomFieldDefinition> result = list(query.toPage(), query.getFieldFormat(), query.getKeyword());
         List<CustomFieldDefinitionVO> voList = converter.toVOList(result.getRecords());
@@ -1431,6 +1433,7 @@ public class CustomFieldService {
                 (int) result.getCurrent(), (int) result.getSize());
     }
 
+    @Transactional(readOnly = true)
     public CustomFieldDefinitionVO getFieldDetailVO(Long fieldId) {
         CustomFieldDefinition entity = getById(fieldId);
         CustomFieldDefinitionVO vo = converter.toVO(entity);
@@ -1462,6 +1465,7 @@ public class CustomFieldService {
         return voList;
     }
 
+    @Transactional(readOnly = true)
     public List<CustomFieldDefinitionVO> listByProjectForUser(Long projectId, String issueType) {
         List<CustomFieldDefinition> fields = listByProject(projectId, issueType);
         Map<Long, CustomFieldProject> conditionsMap = getProjectFieldConditions(projectId);
@@ -1486,6 +1490,7 @@ public class CustomFieldService {
         return voList;
     }
 
+    @Transactional(readOnly = true)
     public List<CustomFieldDefinitionVO> listProjectSettingsFieldsVO(Long projectId) {
         List<CustomFieldDefinition> fields = listProjectFields(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
@@ -1514,6 +1519,7 @@ public class CustomFieldService {
         return voList;
     }
 
+    @Transactional(readOnly = true)
     public List<CustomFieldDefinitionVO> listAvailableForProjectVO(Long projectId) {
         List<CustomFieldDefinition> fields = listAvailableFieldsForProject(projectId);
         List<CustomFieldDefinitionVO> voList = converter.toVOList(fields);
