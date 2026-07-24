@@ -38,20 +38,17 @@
       <div v-if="!hasActiveSprint && plannedSprints.length > 0" class="no-active-sprint-warning">
         <span class="warning-bar-icon">⚠️</span>
         <span class="warning-bar-text">{{ noActiveSprintMessage }}</span>
-        <!-- 有编辑权限：显示操作按钮 -->
-        <a-tooltip v-if="canEditSprint" :content="warningBarActivateTooltip">
+        <a-tooltip :content="warningBarActivateTooltip">
           <a-button
             size="mini"
             type="primary"
             class="warning-bar-action"
-            :disabled="!nextStartableSprint"
+            :disabled="!canEditSprint || !nextStartableSprint"
             @click="nextStartableSprint && activateSprint(nextStartableSprint.id)"
           >
             开始迭代
           </a-button>
         </a-tooltip>
-        <!-- 无编辑权限：显示信息提示 -->
-        <span v-else class="warning-bar-hint">{{ noPermissionHint }}</span>
       </div>
 
       <!-- Active Sprints -->
@@ -244,8 +241,8 @@
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
-          <a-tooltip v-if="canEditSprint" :content="getActivateTooltip(sprint)">
-            <a-button type="primary" size="mini" :disabled="hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
+          <a-tooltip :content="getActivateTooltip(sprint)">
+            <a-button type="primary" size="mini" :disabled="!canEditSprint || hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
           <a-button v-if="canDeleteSprint" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
         </div>
@@ -822,9 +819,12 @@ const noActiveSprintMessage = computed(() => {
 })
 
 /**
- * 警告栏中「开始迭代」按钮的 tooltip（有权限用户）
+ * 警告栏中「开始迭代」按钮的 tooltip
  */
 const warningBarActivateTooltip = computed<string | undefined>(() => {
+  if (!canEditSprint.value) {
+    return '您的角色不具有迭代管理权限，请联系项目管理员'
+  }
   if (!nextStartableSprint.value) {
     // 所有 planned sprint 都不能启动——告知原因
     const next = plannedSprints.value[0]
@@ -837,13 +837,6 @@ const warningBarActivateTooltip = computed<string | undefined>(() => {
     return '当前没有可启动的迭代'
   }
   return `启动迭代「${nextStartableSprint.value.name}」`
-})
-
-/**
- * 无权限用户看到的提示——告知谁可以启动
- */
-const noPermissionHint = computed(() => {
-  return '需要由技术负责人或项目管理员启动迭代'
 })
 
 const selectedProjectKey = computed(() => {
@@ -922,14 +915,23 @@ function isSprintNotStartable(sprint: SprintVO): boolean {
 }
 
 function getActivateTooltip(sprint: SprintVO): string | undefined {
+  if (!canEditSprint.value) return '您的角色不具有迭代管理权限，请联系项目管理员'
   if (hasActiveSprint.value) return '请先完成当前活跃迭代'
-  if (isSprintNotStartable(sprint)) return `开始日期（${formatDate(sprint.startDate)}）尚未到达`
+  // Check end date expired first (more specific)
   if (sprint.endDate) {
     const end = new Date(sprint.endDate)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     end.setHours(0, 0, 0, 0)
     if (end.getTime() < today.getTime()) return `结束日期（${formatDate(sprint.endDate)}）已过期，无法激活`
+  }
+  // Check start date not reached
+  if (sprint.startDate) {
+    const start = new Date(sprint.startDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    start.setHours(0, 0, 0, 0)
+    if (start.getTime() > today.getTime()) return `开始日期（${formatDate(sprint.startDate)}）尚未到达`
   }
   return undefined
 }
@@ -1922,12 +1924,6 @@ function syncUrlProjectParam() {
 }
 .warning-bar-action {
   flex-shrink: 0;
-}
-.warning-bar-hint {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--color-text-3);
-  font-style: italic;
 }
 
 /* ===== 已完成 Sprint 折叠区域 ===== */
