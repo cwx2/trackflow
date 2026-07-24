@@ -127,6 +127,16 @@ public class DashboardController {
         return R.ok(defaultId != null ? String.valueOf(defaultId) : null);
     }
 
+    /**
+     * 获取系统默认仪表盘 ID
+     */
+    @GetMapping("/system-default")
+    @PreAuthorize("@perm.canViewReports()")
+    public R<String> getSystemDefault() {
+        Long systemDefaultId = dashboardService.getSystemDefaultDashboardId();
+        return R.ok(systemDefaultId != null ? String.valueOf(systemDefaultId) : null);
+    }
+
     // ─── 共享管理（精细化） ────────────────────────────────
 
     /**

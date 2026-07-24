@@ -28,7 +28,8 @@
             @click.stop="handleToggleFavorite(d)"
           >★</span>
           <span class="tab-name">{{ d.name }}</span>
-          <span v-if="d.isDefault" class="tab-default-badge" title="默认仪表盘">默认</span>
+          <span v-if="d.isSystemDefault" class="tab-system-badge" title="系统默认仪表盘">系统</span>
+          <span v-else-if="d.isDefault" class="tab-default-badge" title="默认仪表盘">默认</span>
           <span v-if="d.shared" class="tab-shared" title="已共享">
             <icon-share-alt :size="12" />
           </span>
@@ -53,7 +54,8 @@
             @click.stop="handleToggleFavorite(d)"
           >☆</span>
           <span class="tab-name">{{ d.name }}</span>
-          <span v-if="d.shared" class="tab-shared" title="已共享">
+          <span v-if="d.isSystemDefault" class="tab-system-badge" title="系统默认仪表盘">系统</span>
+          <span v-if="d.shared && !d.isSystemDefault" class="tab-shared" title="已共享">
             <icon-share-alt :size="12" />
           </span>
           <span class="tab-count">{{ d.widgetCount }}</span>
@@ -86,10 +88,13 @@
         <div class="dashboard-toolbar">
           <div class="toolbar-left">
             <h2 class="dashboard-name">{{ currentDashboard.name }}</h2>
+            <span v-if="currentDashboard.isSystemDefault" class="system-default-badge">
+              系统默认
+            </span>
             <span v-if="currentDashboard.description" class="dashboard-desc">
               {{ currentDashboard.description }}
             </span>
-            <span v-if="currentDashboard.shareCount && currentDashboard.shareCount > 0" class="share-badge" @click="isOwner && (showShareModal = true)">
+            <span v-if="currentDashboard.shareCount && currentDashboard.shareCount > 0 && !currentDashboard.isSystemDefault" class="share-badge" @click="isOwner && (showShareModal = true)">
               <icon-share-alt :size="12" />
               已共享给 {{ currentDashboard.shareCount }} 个对象
             </span>
@@ -106,7 +111,7 @@
                 <template #icon><icon-star /></template>
               </a-button>
             </a-tooltip>
-            <template v-if="isOwner">
+            <template v-if="canEdit">
             <a-button size="small" @click="showAddWidgetModal = true">
               <template #icon><icon-plus /></template>
               添加微件
@@ -120,18 +125,20 @@
                   <template #icon><icon-edit /></template>
                   编辑仪表盘
                 </a-doption>
-                <a-doption @click="showShareModal = true">
-                  <template #icon><icon-share-alt /></template>
-                  共享设置
-                </a-doption>
-                <a-doption @click="toggleShared">
-                  <template #icon><icon-share-alt /></template>
-                  {{ currentDashboard.shared ? '取消全局共享' : '全局共享' }}
-                </a-doption>
-                <a-doption class="danger-option" @click="confirmDelete">
-                  <template #icon><icon-delete /></template>
-                  删除仪表盘
-                </a-doption>
+                <template v-if="!currentDashboard.isSystemDefault">
+                  <a-doption @click="showShareModal = true">
+                    <template #icon><icon-share-alt /></template>
+                    共享设置
+                  </a-doption>
+                  <a-doption @click="toggleShared">
+                    <template #icon><icon-share-alt /></template>
+                    {{ currentDashboard.shared ? '取消全局共享' : '全局共享' }}
+                  </a-doption>
+                  <a-doption class="danger-option" @click="confirmDelete">
+                    <template #icon><icon-delete /></template>
+                    删除仪表盘
+                  </a-doption>
+                </template>
               </template>
             </a-dropdown>
             </template>
@@ -145,8 +152,8 @@
             :col-num="12"
             :row-height="80"
             :margin="[16, 16]"
-            :is-draggable="isOwner"
-            :is-resizable="isOwner"
+            :is-draggable="canEdit"
+            :is-resizable="canEdit"
             @layout-updated="onLayoutUpdated"
           >
             <GridItem
@@ -161,7 +168,7 @@
             >
               <WidgetCard
                 :widget="getWidgetById(item.i)"
-                :is-owner="isOwner"
+                :is-owner="canEdit"
                 @edit="editWidget"
                 @delete="deleteWidget"
                 @move="openMoveWidget"
@@ -173,7 +180,7 @@
         <!-- 空微件状态 -->
         <div v-else class="empty-widgets">
           <div class="empty-icon">📊</div>
-          <template v-if="isOwner">
+          <template v-if="canEdit">
             <h3 class="empty-title">仪表盘还没有微件</h3>
             <p class="empty-desc">点击"添加微件"为仪表盘添加数据展示组件。</p>
             <a-button type="primary" size="small" @click="showAddWidgetModal = true">
@@ -464,6 +471,28 @@ const isOwner = computed(() => {
   return currentDashboard.value.ownerId === currentUserId.value
 })
 
+/** 当前用户是否可以编辑此仪表盘（owner 或系统管理员编辑系统默认） */
+const canEdit = computed(() => {
+  if (!currentDashboard.value) return false
+  if (currentDashboard.value.ownerId === currentUserId.value) return true
+  // 系统默认仪表盘：系统管理员可编辑
+  if (currentDashboard.value.isSystemDefault) {
+    return isSystemAdmin.value
+  }
+  return false
+})
+
+/** 当前用户是否为系统管理员 */
+const isSystemAdmin = computed(() => {
+  const user = localStorage.getItem('tf_user')
+  if (!user) return false
+  try {
+    const parsed = JSON.parse(user)
+    const roles: string[] = parsed.roles || []
+    return roles.includes('system_admin')
+  } catch { return false }
+})
+
 /** 收藏的仪表盘（后端已排序，收藏在前 + 字母序） */
 const favoriteDashboards = computed(() => dashboards.value.filter(d => d.favorited))
 
@@ -509,7 +538,7 @@ function onLayoutUpdated(layout: Array<{ i: string; x: number; y: number; w: num
 }
 
 async function saveLayout(layout: Array<{ i: string; x: number; y: number; w: number; h: number }>) {
-  if (!currentDashboard.value || !isOwner.value) return
+  if (!currentDashboard.value || !canEdit.value) return
   try {
     const items = layout.map(item => ({
       widgetId: item.i,
@@ -543,10 +572,11 @@ async function loadDashboards() {
   try {
     const res = await customDashboardApi.list()
     dashboards.value = res.data || []
-    // 自动选中：URL 参数优先 > 默认仪表盘 > 上次选中 > 第一个
+    // 自动选中：URL 参数优先 > 上次选中 > 用户默认 > 系统默认 > 第一个
     if (dashboards.value.length > 0) {
       const urlDashboardId = route.query.id as string | undefined
       const defaultDashboard = dashboards.value.find(d => d.isDefault)
+      const systemDefault = dashboards.value.find(d => d.isSystemDefault)
 
       let targetId: string
       if (urlDashboardId && dashboards.value.find(d => d.id === urlDashboardId)) {
@@ -555,6 +585,8 @@ async function loadDashboards() {
         targetId = activeDashboardId.value
       } else if (defaultDashboard) {
         targetId = defaultDashboard.id
+      } else if (systemDefault) {
+        targetId = systemDefault.id
       } else {
         targetId = dashboards.value[0].id
       }
@@ -995,6 +1027,28 @@ watch(showEditModal, (val) => {
   padding: 1px 5px;
   border-radius: 3px;
   line-height: 1.4;
+}
+
+.tab-system-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tf-success, #3fb950);
+  background: color-mix(in srgb, var(--tf-success, #3fb950) 12%, transparent);
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.system-default-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-success, #3fb950);
+  background: color-mix(in srgb, var(--tf-success, #3fb950) 10%, transparent);
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
 .tab-shared {

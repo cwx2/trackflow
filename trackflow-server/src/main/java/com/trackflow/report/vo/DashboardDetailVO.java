@@ -18,6 +18,8 @@ public class DashboardDetailVO {
     private String ownerName;
     private Boolean shared;
     private Integer layoutVersion;
+    /** 是否为系统默认仪表盘 */
+    private Boolean isSystemDefault;
     /** 精细化共享对象数量 */
     private Integer shareCount;
     private LocalDateTime createdAt;

@@ -31,6 +31,9 @@ public class Dashboard implements Serializable {
     /** Optimistic lock version for layout updates */
     private Integer layoutVersion;
 
+    /** 是否为系统默认仪表盘（全站唯一，所有用户可见，仅管理员可编辑） */
+    private Boolean isSystemDefault;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

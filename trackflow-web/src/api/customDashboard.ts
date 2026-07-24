@@ -26,6 +26,8 @@ export interface DashboardDetailVO {
   ownerName: string
   shared: boolean
   layoutVersion: number
+  /** 是否为系统默认仪表盘 */
+  isSystemDefault: boolean
   shareCount: number
   createdAt: string
   updatedAt: string
@@ -43,6 +45,8 @@ export interface DashboardListVO {
   shareCount: number
   favorited: boolean
   isDefault: boolean
+  /** 是否为系统默认仪表盘 */
+  isSystemDefault: boolean
   createdAt: string
   updatedAt: string
 }
@@ -161,6 +165,11 @@ export const customDashboardApi = {
   /** 获取当前用户的默认仪表盘 ID */
   getDefault() {
     return request.get<any, R<string | null>>('/dashboards/default')
+  },
+
+  /** 获取系统默认仪表盘 ID */
+  getSystemDefault() {
+    return request.get<any, R<string | null>>('/dashboards/system-default')
   },
 
   // ─── Widget ────────────────────────────────────────────

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.toolkit.Db;
+import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.report.converter.DashboardConverter;
@@ -53,9 +54,10 @@ public class CustomDashboardService {
     private final DashboardConverter dashboardConverter;
     private final SysUserMapper sysUserMapper;
     private final UserGroupMapper userGroupMapper;
+    private final PermissionService permissionService;
 
     /**
-     * 获取仪表盘列表（当前用户拥有的 + 全局共享的 + 精确共享给我的）
+     * 获取仪表盘列表（当前用户拥有的 + 全局共享的 + 精确共享给我的 + 系统默认仪表盘）
      * 返回按收藏优先、字母排序的列表，含收藏/默认状态
      */
     public List<DashboardListVO> list(Long userId) {
@@ -65,7 +67,9 @@ public class CustomDashboardService {
         LambdaQueryWrapper<Dashboard> wrapper = new LambdaQueryWrapper<Dashboard>()
                 .eq(Dashboard::getOwnerId, userId)
                 .or()
-                .eq(Dashboard::getShared, true);
+                .eq(Dashboard::getShared, true)
+                .or()
+                .eq(Dashboard::getIsSystemDefault, true);
 
         if (!sharedToMeIds.isEmpty()) {
             wrapper.or().in(Dashboard::getId, sharedToMeIds);
@@ -106,14 +110,20 @@ public class CustomDashboardService {
                 vo.setOwnerName(ownerNames.getOrDefault(entity.getOwnerId(), ""));
                 vo.setWidgetCount(widgetCounts.getOrDefault(entity.getId(), 0L).intValue());
                 vo.setShareCount(shareCounts.getOrDefault(entity.getId(), 0L).intValue());
+                vo.setIsSystemDefault(Boolean.TRUE.equals(entity.getIsSystemDefault()));
 
                 DashboardFavorite fav = favoriteMap.get(entity.getId());
                 vo.setFavorited(fav != null);
                 vo.setIsDefault(fav != null && Boolean.TRUE.equals(fav.getIsDefault()));
             }
 
-            // 排序：收藏在前 → 各组内按名称字母排序
+            // 排序：系统默认置顶 → 收藏在前 → 各组内按名称字母排序
             voList.sort((a, b) -> {
+                // 系统默认仪表盘始终排在最前
+                boolean aSys = Boolean.TRUE.equals(a.getIsSystemDefault());
+                boolean bSys = Boolean.TRUE.equals(b.getIsSystemDefault());
+                if (aSys != bSys) return aSys ? -1 : 1;
+
                 boolean aFav = Boolean.TRUE.equals(a.getFavorited());
                 boolean bFav = Boolean.TRUE.equals(b.getFavorited());
                 if (aFav != bFav) return aFav ? -1 : 1;
@@ -133,8 +143,9 @@ public class CustomDashboardService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
         }
 
-        // 权限检查：owner 或全局共享 或精确共享
-        if (!dashboard.getOwnerId().equals(userId)
+        // 权限检查：系统默认仪表盘所有认证用户可见 / owner / 全局共享 / 精确共享
+        if (!Boolean.TRUE.equals(dashboard.getIsSystemDefault())
+                && !dashboard.getOwnerId().equals(userId)
                 && !Boolean.TRUE.equals(dashboard.getShared())
                 && shareMapper.countAccessByUser(dashboardId, userId) == 0) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问该仪表盘");
@@ -142,6 +153,7 @@ public class CustomDashboardService {
 
         DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
         vo.setLayoutVersion(dashboard.getLayoutVersion() != null ? dashboard.getLayoutVersion() : 0);
+        vo.setIsSystemDefault(Boolean.TRUE.equals(dashboard.getIsSystemDefault()));
 
         // 填充 owner 名称
         SysUser owner = sysUserMapper.selectById(dashboard.getOwnerId());
@@ -190,6 +202,7 @@ public class CustomDashboardService {
 
     /**
      * 更新仪表盘（名称/描述/共享）
+     * 系统默认仪表盘：只有系统管理员可修改（名称/描述）
      */
     @Transactional(rollbackFor = Exception.class)
     public DashboardDetailVO update(Long dashboardId, UpdateDashboardDTO dto, Long userId) {
@@ -197,8 +210,20 @@ public class CustomDashboardService {
         if (dashboard == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
         }
-        if (!dashboard.getOwnerId().equals(userId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以修改");
+
+        // 系统默认仪表盘：只有系统管理员可修改，且不允许取消共享
+        if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())) {
+            if (!permissionService.isSystemAdmin(userId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有系统管理员可以修改系统默认仪表盘");
+            }
+            // 系统默认仪表盘始终共享，不允许取消
+            if (dto.getShared() != null && !dto.getShared()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "系统默认仪表盘不可取消共享");
+            }
+        } else {
+            if (!dashboard.getOwnerId().equals(userId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以修改");
+            }
         }
 
         if (dto.getName() != null) {
@@ -217,12 +242,16 @@ public class CustomDashboardService {
 
     /**
      * 删除仪表盘（只有 owner 可删除，级联删除 widget 和 share）
+     * 系统默认仪表盘不可删除
      */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "系统默认仪表盘不可删除");
         }
         if (!dashboard.getOwnerId().equals(userId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "只有仪表盘创建者可以删除");
@@ -450,6 +479,16 @@ public class CustomDashboardService {
         return defaultFav != null ? defaultFav.getDashboardId() : null;
     }
 
+    /**
+     * 获取系统默认仪表盘 ID
+     */
+    public Long getSystemDefaultDashboardId() {
+        Dashboard systemDefault = dashboardMapper.selectOne(
+                new LambdaQueryWrapper<Dashboard>()
+                        .eq(Dashboard::getIsSystemDefault, true));
+        return systemDefault != null ? systemDefault.getId() : null;
+    }
+
     // ─── Widget 操作 ────────────────────────────────────────
 
     /**
@@ -614,7 +653,7 @@ public class CustomDashboardService {
     // ─── 私有方法 ────────────────────────────────────────
 
     /**
-     * 校验用户是否有编辑权限（owner 或 share 权限为 edit）
+     * 校验用户是否有编辑权限（owner 或 share 权限为 edit，或系统管理员对系统默认仪表盘）
      */
     private void assertCanEdit(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
@@ -624,6 +663,11 @@ public class CustomDashboardService {
         if (dashboard.getOwnerId().equals(userId)) {
             return; // owner 始终可编辑
         }
+        // 系统默认仪表盘：系统管理员可编辑
+        if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())
+                && permissionService.isSystemAdmin(userId)) {
+            return;
+        }
         // 检查是否有 edit 权限的共享
         if (shareMapper.countEditAccessByUser(dashboardId, userId) > 0) {
             return;
@@ -632,12 +676,15 @@ public class CustomDashboardService {
     }
 
     /**
-     * 校验用户是否有查看权限（owner 或全局共享 或精确共享）
+     * 校验用户是否有查看权限（系统默认 / owner / 全局共享 / 精确共享）
      */
     private void assertCanView(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
         if (dashboard == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "仪表盘不存在");
+        }
+        if (Boolean.TRUE.equals(dashboard.getIsSystemDefault())) {
+            return; // 系统默认仪表盘对所有认证用户可见
         }
         if (dashboard.getOwnerId().equals(userId)) {
             return;

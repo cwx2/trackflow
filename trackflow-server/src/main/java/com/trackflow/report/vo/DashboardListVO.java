@@ -23,6 +23,8 @@ public class DashboardListVO {
     private Boolean favorited;
     /** 是否为当前用户的默认仪表盘 */
     private Boolean isDefault;
+    /** 是否为系统默认仪表盘 */
+    private Boolean isSystemDefault;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

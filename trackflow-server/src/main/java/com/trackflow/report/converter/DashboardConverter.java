@@ -19,6 +19,8 @@ public interface DashboardConverter extends BaseConverter {
     @Mapping(target = "ownerName", ignore = true)
     @Mapping(target = "widgetCount", ignore = true)
     @Mapping(target = "shareCount", ignore = true)
+    @Mapping(target = "favorited", ignore = true)
+    @Mapping(target = "isDefault", ignore = true)
     DashboardListVO toListVO(Dashboard entity);
 
     List<DashboardListVO> toListVOList(List<Dashboard> entities);
