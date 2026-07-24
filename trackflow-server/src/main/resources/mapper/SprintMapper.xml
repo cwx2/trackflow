@@ -12,6 +12,9 @@
         <result property="startDate" column="start_date"/>
         <result property="endDate" column="end_date"/>
         <result property="createdAt" column="created_at"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="startScopeHours" column="start_scope_hours" javaType="java.lang.Double"/>
+        <result property="startScopeIssues" column="start_scope_issues"/>
         <result property="totalIssues" column="total_issues"/>
         <result property="doneIssues" column="done_issues"/>
         <result property="inProgressIssues" column="in_progress_issues"/>
@@ -33,6 +36,9 @@
             s.start_date,
             s.end_date,
             s.created_at,
+            s.started_at,
+            s.start_scope_hours,
+            s.start_scope_issues,
             COALESCE(stats.total_issues, 0) AS total_issues,
             COALESCE(stats.done_issues, 0) AS done_issues,
             COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
@@ -89,6 +95,9 @@
             s.start_date,
             s.end_date,
             s.created_at,
+            s.started_at,
+            s.start_scope_hours,
+            s.start_scope_issues,
             COALESCE(stats.total_issues, 0) AS total_issues,
             COALESCE(stats.done_issues, 0) AS done_issues,
             COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
