@@ -392,6 +392,7 @@ public class NotificationService {
      * @param limit 一次最多处理条数
      * @return 待发邮件的通知列表
      */
+    @Transactional(readOnly = true)
     public List<Notification> findPendingMailNotifications(int limit) {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(aggregationMinutes);
         return notificationMapper.selectList(
@@ -630,6 +631,7 @@ public class NotificationService {
      * 获取用户通知列表（支持分类过滤、项目过滤和原因过滤）。
      * 排序按 COALESCE(updated_at, created_at) DESC，聚合更新的通知置顶。
      */
+    @Transactional(readOnly = true)
     public Page<Notification> list(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, String reason, Page<Notification> page) {
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Notification::getUserId, userId);
@@ -654,6 +656,7 @@ public class NotificationService {
     /**
      * 获取通知列表并填充 actor 信息（批量查询用户，避免 N+1）
      */
+    @Transactional(readOnly = true)
     public PageResult<NotificationVO> listWithActor(Long userId, Boolean unreadOnly, NotificationCategory category, Long projectId, String reason, Page<Notification> page) {
         Page<Notification> result = list(userId, unreadOnly, category, projectId, reason, page);
         List<Notification> records = result.getRecords();
@@ -714,6 +717,7 @@ public class NotificationService {
     /**
      * 获取各分类的未读计数（用于标签页 badge 展示）
      */
+    @Transactional(readOnly = true)
     public CategoryUnreadCountVO unreadCountByCategory(Long userId) {
         CategoryUnreadCountVO vo = new CategoryUnreadCountVO();
         for (NotificationCategory cat : NotificationCategory.values()) {
@@ -775,6 +779,7 @@ public class NotificationService {
     /**
      * 未读数量
      */
+    @Transactional(readOnly = true)
     public long unreadCount(Long userId) {
         return notificationMapper.selectCount(
                 new LambdaQueryWrapper<Notification>()
