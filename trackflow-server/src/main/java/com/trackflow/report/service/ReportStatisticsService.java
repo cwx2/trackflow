@@ -3,6 +3,8 @@ package com.trackflow.report.service;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
+import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.query.engine.QueryExecutor;
@@ -39,6 +41,7 @@ public class ReportStatisticsService {
     private final ReportStatisticsMapper reportStatisticsMapper;
     private final SprintService sprintService;
     private final StatusCacheHelper statusCacheHelper;
+    private final IssueStatusMapper issueStatusMapper;
     private final ProjectService projectService;
     private final WorkItemAttributeService workItemAttributeService;
     private final StringRedisTemplate redisTemplate;
@@ -225,6 +228,218 @@ public class ReportStatisticsService {
     }
 
     // ─── Internal build methods (SQL aggregation) ────────────────────────
+
+    /**
+     * 获取比率对比报表数据（双线趋势图）。
+     * 根据报表类型返回不同的指标对比数据：
+     * - FIXED_VS_REPORTED: 修复数 vs 新报告数
+     * - VERIFIED_VS_REOPENED: 验证通过数 vs 重新打开数
+     * - RESOLVED_VS_NEW: 解决数 vs (新建+重开)数
+     *
+     * @param reportType   报表类型
+     * @param projectIds   项目范围
+     * @param startDate    开始日期
+     * @param endDate      结束日期
+     * @param issueIds     Issue 筛选（可选）
+     * @return 包含日期序列和两条数据线的 ReportExecuteResultVO
+     */
+    public ReportExecuteResultVO getRateComparisonData(
+            com.trackflow.report.entity.ReportType reportType,
+            List<Long> projectIds,
+            LocalDate startDate, LocalDate endDate,
+            List<Long> issueIds) {
+
+        if (endDate == null) endDate = LocalDate.now();
+        if (startDate == null) startDate = endDate.minusDays(29);
+        if (ChronoUnit.DAYS.between(startDate, endDate) > TREND_MAX_DAYS) {
+            startDate = endDate.minusDays(TREND_MAX_DAYS);
+        }
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        // 收集各类别状态的 name 和 displayName（issue_activity 中两种格式都可能存在）
+        List<IssueStatus> allStatuses = issueStatusMapper.selectList(null);
+
+        Map<LocalDate, Long> lineAByDay;
+        Map<LocalDate, Long> lineBByDay;
+        String lineAName;
+        String lineBName;
+        String lineAColor;
+        String lineBColor;
+
+        switch (reportType) {
+            case FIXED_VS_REPORTED -> {
+                // Line A: Fixed (转换到 done 类状态)
+                List<String> doneNames = collectStatusNames(allStatuses, "done");
+                List<RateComparisonRow> fixedRows = reportStatisticsMapper.selectFixedTrend(
+                        projectIds, start, end, doneNames, issueIds);
+                lineAByDay = rowsToMap(fixedRows);
+                lineAName = "修复数";
+                lineAColor = "#3fb950";
+
+                // Line B: Reported (新创建的 Issue)
+                List<TrendRow> createdRows = reportStatisticsMapper.selectCreatedTrend(
+                        projectIds, start, end, issueIds);
+                lineBByDay = trendRowsToMap(createdRows);
+                lineBName = "报告数";
+                lineBColor = "#f85149";
+            }
+            case VERIFIED_VS_REOPENED -> {
+                // Line A: Verified (从测试状态转换到 done 状态)
+                List<String> testingNames = collectStatusNamesByCode(allStatuses, Set.of("testing", "no_test"));
+                List<String> doneNames = collectStatusNames(allStatuses, "done");
+                List<RateComparisonRow> verifiedRows = reportStatisticsMapper.selectVerifiedTrend(
+                        projectIds, start, end, testingNames, doneNames, issueIds);
+                lineAByDay = rowsToMap(verifiedRows);
+                lineAName = "验证通过数";
+                lineAColor = "#3fb950";
+
+                // Line B: Reopened (转换到 reopened 状态)
+                List<String> reopenedNames = collectStatusNamesByCode(allStatuses, Set.of("reopened"));
+                List<RateComparisonRow> reopenedRows = reportStatisticsMapper.selectReopenedTrend(
+                        projectIds, start, end, reopenedNames, issueIds);
+                lineBByDay = rowsToMap(reopenedRows);
+                lineBName = "重新打开数";
+                lineBColor = "#f85149";
+            }
+            case RESOLVED_VS_NEW -> {
+                // Line A: Resolved (resolved_at 被设置)
+                List<TrendRow> resolvedRows = reportStatisticsMapper.selectResolvedTrend(
+                        projectIds, start, end, issueIds);
+                lineAByDay = trendRowsToMap(resolvedRows);
+                lineAName = "解决数";
+                lineAColor = "#3fb950";
+
+                // Line B: New + Reopened
+                List<TrendRow> createdRows = reportStatisticsMapper.selectCreatedTrend(
+                        projectIds, start, end, issueIds);
+                Map<LocalDate, Long> createdByDay = trendRowsToMap(createdRows);
+
+                List<String> reopenedNames = collectStatusNamesByCode(allStatuses, Set.of("reopened"));
+                List<RateComparisonRow> reopenedRows = reportStatisticsMapper.selectReopenedTrend(
+                        projectIds, start, end, reopenedNames, issueIds);
+                Map<LocalDate, Long> reopenedByDay = rowsToMap(reopenedRows);
+
+                // 合并 created + reopened
+                lineBByDay = new HashMap<>(createdByDay);
+                reopenedByDay.forEach((day, cnt) -> lineBByDay.merge(day, cnt, Long::sum));
+                lineBName = "新增+重开数";
+                lineBColor = "#f85149";
+            }
+            default -> throw new BusinessException(ErrorCode.INVALID_PARAMETER,
+                    "不支持的比率对比报表类型: " + reportType.getValue());
+        }
+
+        // 构建结果
+        ReportExecuteResultVO result = new ReportExecuteResultVO();
+        result.setChartType("line");
+        result.setCategory("timeline");
+
+        List<String> dates = new ArrayList<>();
+        List<Number> lineAData = new ArrayList<>();
+        List<Number> lineBData = new ArrayList<>();
+        long totalA = 0;
+        long totalB = 0;
+
+        LocalDate current = startDate;
+        while (!current.isAfter(endDate)) {
+            dates.add(current.toString());
+            long aVal = lineAByDay.getOrDefault(current, 0L);
+            long bVal = lineBByDay.getOrDefault(current, 0L);
+            lineAData.add(aVal);
+            lineBData.add(bVal);
+            totalA += aVal;
+            totalB += bVal;
+            current = current.plusDays(1);
+        }
+
+        result.setDates(dates);
+
+        ReportExecuteResultVO.TimeSeriesData seriesA = new ReportExecuteResultVO.TimeSeriesData();
+        seriesA.setName(lineAName);
+        seriesA.setColor(lineAColor);
+        seriesA.setData(lineAData);
+        seriesA.setSeriesType("line");
+
+        ReportExecuteResultVO.TimeSeriesData seriesB = new ReportExecuteResultVO.TimeSeriesData();
+        seriesB.setName(lineBName);
+        seriesB.setColor(lineBColor);
+        seriesB.setData(lineBData);
+        seriesB.setSeriesType("line");
+
+        result.setSeries(List.of(seriesA, seriesB));
+
+        // 概览 summary
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalLineA", totalA);
+        summary.put("totalLineB", totalB);
+        if (totalB > 0) {
+            summary.put("ratio", Math.round((double) totalA / totalB * 100.0) / 100.0);
+        }
+        result.setSummary(summary);
+
+        return result;
+    }
+
+    /**
+     * 收集指定 category 下所有状态的 name 和 displayName（去重、非空）。
+     * issue_activity 表中 old_value/new_value 可能存储 name 或 displayName。
+     */
+    private List<String> collectStatusNames(List<IssueStatus> allStatuses, String category) {
+        Set<String> names = new HashSet<>();
+        for (IssueStatus status : allStatuses) {
+            if (category.equals(status.getCategory())) {
+                names.add(status.getName());
+                if (status.getDisplayName() != null && !status.getDisplayName().isBlank()) {
+                    names.add(status.getDisplayName());
+                }
+            }
+        }
+        return new ArrayList<>(names);
+    }
+
+    /**
+     * 收集指定 code 集合下所有状态的 name 和 displayName。
+     */
+    private List<String> collectStatusNamesByCode(List<IssueStatus> allStatuses, Set<String> codes) {
+        Set<String> names = new HashSet<>();
+        for (IssueStatus status : allStatuses) {
+            if (codes.contains(status.getCode())) {
+                names.add(status.getName());
+                if (status.getDisplayName() != null && !status.getDisplayName().isBlank()) {
+                    names.add(status.getDisplayName());
+                }
+            }
+        }
+        return new ArrayList<>(names);
+    }
+
+    /**
+     * 将 RateComparisonRow 列表转为 day->count 的 Map
+     */
+    private Map<LocalDate, Long> rowsToMap(List<RateComparisonRow> rows) {
+        Map<LocalDate, Long> map = new HashMap<>();
+        for (RateComparisonRow row : rows) {
+            if (row.getDay() != null) {
+                map.put(row.getDay(), row.getCnt() != null ? row.getCnt() : 0L);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * 将 TrendRow 列表转为 day->count 的 Map
+     */
+    private Map<LocalDate, Long> trendRowsToMap(List<TrendRow> rows) {
+        Map<LocalDate, Long> map = new HashMap<>();
+        for (TrendRow row : rows) {
+            if (row.getDay() != null) {
+                map.put(row.getDay(), row.getCnt() != null ? row.getCnt() : 0L);
+            }
+        }
+        return map;
+    }
 
     private StatusDistributionVO buildStatusDistribution(List<Long> projectIds, Long sprintId, List<Long> issueIds) {
         List<StatusDistributionRow> rows = reportStatisticsMapper.selectStatusDistribution(projectIds, sprintId, issueIds);

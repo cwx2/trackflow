@@ -977,4 +977,83 @@
         LIMIT 50
     </select>
 
+    <!-- ========== 比率对比报表 ========== -->
+
+    <!-- 修复趋势：统计转换到 done 类状态的事件数（按天） -->
+    <select id="selectFixedTrend" resultType="com.trackflow.report.mapper.result.RateComparisonRow">
+        SELECT CAST(a.created_at AS DATE) AS day,
+               COUNT(*) AS cnt
+        FROM issue_activity a
+        JOIN issue i ON i.id = a.issue_id
+        WHERE a.field_name = 'status'
+          AND a.action IN ('status_changed', 'update')
+          AND a.created_at >= #{startDate}
+          AND a.created_at &lt;= #{endDate}
+          AND a.new_value IN
+          <foreach collection="doneStatusNames" item="name" open="(" separator="," close=")">#{name}</foreach>
+        <if test="projectIds != null and projectIds.size() > 0">
+            AND i.project_id IN
+            <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+        </if>
+        <if test="issueIds != null and issueIds.size() > 0">
+            AND i.id IN
+            <foreach collection="issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
+        </if>
+          AND i.deleted_at IS NULL
+        GROUP BY CAST(a.created_at AS DATE)
+        ORDER BY day
+    </select>
+
+    <!-- 验证趋势：从测试中状态转换到 done 类状态的事件数（按天） -->
+    <select id="selectVerifiedTrend" resultType="com.trackflow.report.mapper.result.RateComparisonRow">
+        SELECT CAST(a.created_at AS DATE) AS day,
+               COUNT(*) AS cnt
+        FROM issue_activity a
+        JOIN issue i ON i.id = a.issue_id
+        WHERE a.field_name = 'status'
+          AND a.action IN ('status_changed', 'update')
+          AND a.created_at >= #{startDate}
+          AND a.created_at &lt;= #{endDate}
+          AND a.old_value IN
+          <foreach collection="testingStatusNames" item="name" open="(" separator="," close=")">#{name}</foreach>
+          AND a.new_value IN
+          <foreach collection="doneStatusNames" item="name" open="(" separator="," close=")">#{name}</foreach>
+        <if test="projectIds != null and projectIds.size() > 0">
+            AND i.project_id IN
+            <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+        </if>
+        <if test="issueIds != null and issueIds.size() > 0">
+            AND i.id IN
+            <foreach collection="issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
+        </if>
+          AND i.deleted_at IS NULL
+        GROUP BY CAST(a.created_at AS DATE)
+        ORDER BY day
+    </select>
+
+    <!-- 重开趋势：转换到 reopened 状态的事件数（按天） -->
+    <select id="selectReopenedTrend" resultType="com.trackflow.report.mapper.result.RateComparisonRow">
+        SELECT CAST(a.created_at AS DATE) AS day,
+               COUNT(*) AS cnt
+        FROM issue_activity a
+        JOIN issue i ON i.id = a.issue_id
+        WHERE a.field_name = 'status'
+          AND a.action IN ('status_changed', 'update')
+          AND a.created_at >= #{startDate}
+          AND a.created_at &lt;= #{endDate}
+          AND a.new_value IN
+          <foreach collection="reopenedStatusNames" item="name" open="(" separator="," close=")">#{name}</foreach>
+        <if test="projectIds != null and projectIds.size() > 0">
+            AND i.project_id IN
+            <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+        </if>
+        <if test="issueIds != null and issueIds.size() > 0">
+            AND i.id IN
+            <foreach collection="issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
+        </if>
+          AND i.deleted_at IS NULL
+        GROUP BY CAST(a.created_at AS DATE)
+        ORDER BY day
+    </select>
+
 </mapper>

@@ -23,9 +23,16 @@ public enum ReportType {
     BURNDOWN_CHART("burndown_chart", "燃尽图报表", null, "timeline"),
     CUMULATIVE_FLOW("cumulative_flow", "累积流图", null, "timeline"),
     RESOLUTION_TIME("resolution_time", "解决时间分析", null, "timeline"),
+    FIXED_VS_REPORTED("fixed_vs_reported", "修复率 vs 报告率", null, "timeline"),
+    VERIFIED_VS_REOPENED("verified_vs_reopened", "验证率 vs 重开率", null, "timeline"),
+    RESOLVED_VS_NEW("resolved_vs_new", "解决率 vs 新增率", null, "timeline"),
 
     // ─── State Transition 类（状态转换） ─────────────
-    STATE_TRANSITION("state_transition", "状态转换统计", null, "state_transition");
+    STATE_TRANSITION("state_transition", "状态转换统计", null, "state_transition"),
+
+    // ─── Time Management 类（时间管理） ──────────────
+    TIME_REPORT("time_report", "时间报表", null, "time_management"),
+    ESTIMATION_REPORT("estimation_report", "预估对比报表", null, "time_management");
 
     private final String value;
     private final String label;
@@ -79,6 +86,13 @@ public enum ReportType {
      */
     public boolean isDistribution() {
         return "distribution".equals(category);
+    }
+
+    /**
+     * 判断是否为时间管理类报表（时间报表、预估对比）
+     */
+    public boolean isTimeManagement() {
+        return "time_management".equals(category);
     }
 
     /**

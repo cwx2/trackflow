@@ -183,6 +183,41 @@ public interface ReportStatisticsMapper {
      */
     List<EstimationSummaryRow> selectEstimationSummary(@Param("projectIds") List<Long> projectIds);
 
+    // ─── 比率对比报表查询 ─────────────────────────────────────────
+
+    /**
+     * 修复趋势：按日期统计转换到"已关闭"（done 类）状态的事件数
+     * 基于 issue_activity 表中 field_name='status'，new_value 对应 done 类别的 status
+     */
+    List<RateComparisonRow> selectFixedTrend(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("doneStatusNames") List<String> doneStatusNames,
+            @Param("issueIds") List<Long> issueIds);
+
+    /**
+     * 验证趋势：按日期统计从"测试中"类状态转换到"已关闭"（done 类）状态的事件数
+     * 代表测试通过验证的工单数
+     */
+    List<RateComparisonRow> selectVerifiedTrend(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("testingStatusNames") List<String> testingStatusNames,
+            @Param("doneStatusNames") List<String> doneStatusNames,
+            @Param("issueIds") List<Long> issueIds);
+
+    /**
+     * 重开趋势：按日期统计转换到"重新打开"状态的事件数
+     */
+    List<RateComparisonRow> selectReopenedTrend(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("reopenedStatusNames") List<String> reopenedStatusNames,
+            @Param("issueIds") List<Long> issueIds);
+
     // ─── 报表执行引擎增强查询 ─────────────────────────────────────────
 
     /**
