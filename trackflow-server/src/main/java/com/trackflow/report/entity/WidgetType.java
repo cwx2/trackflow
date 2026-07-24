@@ -17,7 +17,9 @@ public enum WidgetType {
     ACTIVITY_FEED("activity_feed", "活动流"),
     REPORT("report", "报表图表"),
     SPRINT_PROGRESS("sprint_progress", "Sprint 进度"),
-    CALENDAR("calendar", "到期日历");
+    CALENDAR("calendar", "到期日历"),
+    AGILE_CHART("agile_chart", "敏捷图表"),
+    AGILE_BOARD_STATUS("agile_board_status", "看板状态");
 
     private final String value;
     private final String label;

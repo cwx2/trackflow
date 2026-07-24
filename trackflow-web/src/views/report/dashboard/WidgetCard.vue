@@ -131,6 +131,28 @@
         </div>
       </template>
 
+      <!-- 敏捷图表微件（Burndown / Cumulative Flow） -->
+      <template v-else-if="widget.widgetType === 'agile_chart'">
+        <div v-if="agileChartOption" class="widget-chart-container">
+          <v-chart :option="agileChartOption" autoresize class="widget-chart-instance" />
+        </div>
+        <div v-else-if="!loading" class="widget-configure-hint">
+          <icon-bar-chart :size="32" class="hint-icon" />
+          <span class="hint-text">点击「编辑配置」选择 Sprint 和图表类型</span>
+        </div>
+      </template>
+
+      <!-- 看板状态微件（堆叠条形图） -->
+      <template v-else-if="widget.widgetType === 'agile_board_status'">
+        <div v-if="boardStatusOption" class="widget-chart-container">
+          <v-chart :option="boardStatusOption" autoresize class="widget-chart-instance" />
+        </div>
+        <div v-else-if="!loading" class="widget-configure-hint">
+          <icon-bar-chart :size="32" class="hint-icon" />
+          <span class="hint-text">点击「编辑配置」选择 Sprint</span>
+        </div>
+      </template>
+
       <!-- 日历微件 -->
       <template v-else-if="widget.widgetType === 'calendar'">
         <div class="widget-configure-hint">
@@ -155,8 +177,8 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, BarChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
+import { PieChart, BarChart, LineChart } from 'echarts/charts'
+import { TooltipComponent, LegendComponent, GridComponent, MarkLineComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import {
   IconMore, IconEdit, IconDelete, IconRefresh, IconLink, IconSwap,
@@ -165,12 +187,14 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { reportApi } from '@/api/report'
 import { reportStatisticsApi } from '@/api/reportStatistics'
+import { sprintApi } from '@/api/sprint'
 import type { ReportDataVO } from '@/api/report'
 import type { DashboardWidgetVO } from '@/api/customDashboard'
 import type { OverviewData } from '@/api/reportStatistics'
+import type { SprintBurndownVO, SprintVO } from '@/api/types'
 
 // 注册 ECharts 组件
-use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, GridComponent])
+use([CanvasRenderer, PieChart, BarChart, LineChart, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
 
 const props = defineProps<{
   widget: DashboardWidgetVO | undefined
@@ -200,6 +224,13 @@ const reportDataResult = ref<ReportDataVO | null>(null)
 // issue_list 数据
 const issueListData = ref<Array<{ id: string; issueKey: string; title: string }>>([])
 
+// agile_chart 数据
+const agileChartData = ref<SprintBurndownVO | null>(null)
+const cumulativeFlowData = ref<{ dates: string[]; series: Array<{ name: string; color: string; data: number[] }> } | null>(null)
+
+// agile_board_status 数据
+const boardStatusData = ref<{ totalIssues: number; doneIssues: number; inProgressIssues: number; todoIssues: number; sprintName: string } | null>(null)
+
 // ─── 微件类型映射 ─────────────────────────────────────────
 
 const widgetTypeMap: Record<string, { icon: string; label: string }> = {
@@ -210,7 +241,9 @@ const widgetTypeMap: Record<string, { icon: string; label: string }> = {
   activity_feed: { icon: '🔔', label: '活动流' },
   report: { icon: '📈', label: '报表图表' },
   sprint_progress: { icon: '🏃', label: 'Sprint 进度' },
-  calendar: { icon: '📅', label: '到期日历' }
+  calendar: { icon: '📅', label: '到期日历' },
+  agile_chart: { icon: '📉', label: '敏捷图表' },
+  agile_board_status: { icon: '📊', label: '看板状态' }
 }
 
 const widgetIcon = computed(() => {
@@ -444,6 +477,217 @@ function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
   }
 }
 
+// ─── Agile Chart 逻辑 ──────────────────────────────────────
+
+const agileChartOption = computed(() => {
+  const config = parsedConfig.value
+  const chartType = config.chartType || 'burndown'
+
+  if (chartType === 'burndown' && agileChartData.value) {
+    return buildBurndownOption(agileChartData.value)
+  }
+  if (chartType === 'cumulative_flow' && cumulativeFlowData.value) {
+    return buildCumulativeFlowOption(cumulativeFlowData.value)
+  }
+  return null
+})
+
+function buildBurndownOption(data: SprintBurndownVO): Record<string, any> {
+  const todayIdx = data.todayIndex >= 0 ? data.todayIndex : undefined
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'var(--tf-bg-elevated, #22252a)',
+      borderColor: 'var(--tf-border, #30363d)',
+      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 }
+    },
+    legend: {
+      data: ['理想线', '实际线', '范围线'],
+      bottom: 0,
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      itemWidth: 16,
+      itemHeight: 3
+    },
+    grid: { left: 36, right: 12, top: 12, bottom: 32 },
+    xAxis: {
+      type: 'category',
+      data: data.dates.map(d => d.substring(5)), // MM-DD
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 9, interval: Math.max(0, Math.floor(data.dates.length / 8) - 1) }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { fontSize: 10 },
+      splitLine: { lineStyle: { type: 'dashed', opacity: 0.2 } }
+    },
+    series: [
+      {
+        name: '理想线',
+        type: 'line',
+        data: data.idealLine,
+        lineStyle: { type: 'dashed', color: '#6b7280', width: 1.5 },
+        symbol: 'none',
+        itemStyle: { color: '#6b7280' }
+      },
+      {
+        name: '实际线',
+        type: 'line',
+        data: data.actualLine,
+        lineStyle: { color: '#58a6ff', width: 2 },
+        symbol: 'circle',
+        symbolSize: 4,
+        itemStyle: { color: '#58a6ff' },
+        ...(todayIdx !== undefined ? {
+          markLine: {
+            silent: true,
+            data: [{ xAxis: todayIdx }],
+            lineStyle: { type: 'solid', color: '#f0883e', width: 1 },
+            label: { show: false }
+          }
+        } : {})
+      },
+      {
+        name: '范围线',
+        type: 'line',
+        data: data.scopeLine,
+        lineStyle: { color: '#a371f7', width: 1.5, type: 'dotted' },
+        symbol: 'none',
+        itemStyle: { color: '#a371f7' }
+      }
+    ]
+  }
+}
+
+function buildCumulativeFlowOption(data: { dates: string[]; series: Array<{ name: string; color: string; data: number[] }> }): Record<string, any> {
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      backgroundColor: 'var(--tf-bg-elevated, #22252a)',
+      borderColor: 'var(--tf-border, #30363d)',
+      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 }
+    },
+    legend: {
+      data: data.series.map(s => s.name),
+      bottom: 0,
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    grid: { left: 36, right: 12, top: 12, bottom: 32 },
+    xAxis: {
+      type: 'category',
+      data: data.dates.map(d => d.substring(5)),
+      boundaryGap: false,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 9, interval: Math.max(0, Math.floor(data.dates.length / 8) - 1) }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLine: { show: false },
+      axisLabel: { fontSize: 10 },
+      splitLine: { lineStyle: { type: 'dashed', opacity: 0.2 } }
+    },
+    series: data.series.map(s => ({
+      name: s.name,
+      type: 'line',
+      stack: 'Total',
+      areaStyle: { opacity: 0.6 },
+      lineStyle: { width: 1, color: s.color },
+      itemStyle: { color: s.color },
+      symbol: 'none',
+      data: s.data
+    }))
+  }
+}
+
+// ─── Agile Board Status 逻辑 ──────────────────────────────
+
+const boardStatusOption = computed(() => {
+  if (!boardStatusData.value) return null
+  return buildBoardStatusOption(boardStatusData.value)
+})
+
+function buildBoardStatusOption(data: { totalIssues: number; doneIssues: number; inProgressIssues: number; todoIssues: number; sprintName: string }): Record<string, any> {
+  const completionRate = data.totalIssues > 0 ? Math.round((data.doneIssues / data.totalIssues) * 100) : 0
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: 'var(--tf-bg-elevated, #22252a)',
+      borderColor: 'var(--tf-border, #30363d)',
+      textStyle: { color: 'var(--tf-text-primary, #e6edf3)', fontSize: 11 },
+      formatter: (params: any[]) => {
+        let html = `<div style="font-weight:500;margin-bottom:4px">${data.sprintName}</div>`
+        params.forEach(p => {
+          html += `<div>${p.marker} ${p.seriesName}: ${p.value}</div>`
+        })
+        html += `<div style="margin-top:4px;color:#9ca3af">完成率: ${completionRate}% (${data.doneIssues}/${data.totalIssues})</div>`
+        return html
+      }
+    },
+    legend: {
+      data: ['待处理', '进行中', '已完成'],
+      bottom: 0,
+      textStyle: { color: 'var(--tf-text-secondary, #9ca3af)', fontSize: 10 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    grid: { left: 12, right: 12, top: 24, bottom: 32 },
+    xAxis: {
+      type: 'value',
+      max: data.totalIssues || undefined,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { show: false },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'category',
+      data: [data.sprintName],
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { show: false }
+    },
+    series: [
+      {
+        name: '待处理',
+        type: 'bar',
+        stack: 'sprint',
+        data: [data.todoIssues],
+        barWidth: '60%',
+        itemStyle: { color: '#58a6ff', borderRadius: [3, 0, 0, 3] }
+      },
+      {
+        name: '进行中',
+        type: 'bar',
+        stack: 'sprint',
+        data: [data.inProgressIssues],
+        barWidth: '60%',
+        itemStyle: { color: '#f0883e' }
+      },
+      {
+        name: '已完成',
+        type: 'bar',
+        stack: 'sprint',
+        data: [data.doneIssues],
+        barWidth: '60%',
+        itemStyle: { color: '#3fb950', borderRadius: [0, 3, 3, 0] }
+      }
+    ]
+  }
+}
+
 // ─── 数据加载 ──────────────────────────────────────────
 
 async function loadData(force = false) {
@@ -517,6 +761,67 @@ async function loadData(force = false) {
     return
   }
 
+  // agile_chart: 加载燃尽图或累积流图数据
+  if (widgetType === 'agile_chart') {
+    const sprintId = config.sprintId
+    const projectId = config.projectId
+    const chartType = config.chartType || 'burndown'
+
+    if (!sprintId && !projectId) {
+      dataLoaded.value = true
+      return
+    }
+
+    loading.value = true
+    error.value = null
+    try {
+      if (chartType === 'burndown' && sprintId) {
+        const res = await sprintApi.burndown(sprintId)
+        agileChartData.value = res.data || null
+      } else if (chartType === 'cumulative_flow' && projectId) {
+        const res = await reportStatisticsApi.cumulativeFlow(projectId)
+        cumulativeFlowData.value = res.data || null
+      }
+      dataLoaded.value = true
+    } catch (e: any) {
+      error.value = e.response?.data?.message || '加载敏捷图表数据失败'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
+  // agile_board_status: 加载 Sprint 状态分布
+  if (widgetType === 'agile_board_status') {
+    const sprintId = config.sprintId
+    if (!sprintId) {
+      dataLoaded.value = true
+      return
+    }
+
+    loading.value = true
+    error.value = null
+    try {
+      const res = await sprintApi.getById(sprintId)
+      const sprint = res.data
+      if (sprint) {
+        boardStatusData.value = {
+          totalIssues: sprint.totalIssues,
+          doneIssues: sprint.doneIssues,
+          inProgressIssues: sprint.inProgressIssues,
+          todoIssues: sprint.todoIssues,
+          sprintName: sprint.name
+        }
+      }
+      dataLoaded.value = true
+    } catch (e: any) {
+      error.value = e.response?.data?.message || '加载看板状态数据失败'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
   // Other types: just mark as loaded (placeholder state)
   dataLoaded.value = true
 }
@@ -527,6 +832,9 @@ async function refreshData() {
   reportDataResult.value = null
   overviewData.value = null
   numberValue.value = null
+  agileChartData.value = null
+  cumulativeFlowData.value = null
+  boardStatusData.value = null
   dataLoaded.value = false
   await loadData(true)
   refreshing.value = false

@@ -333,6 +333,44 @@
             />
           </a-form-item>
         </template>
+
+        <!-- agile_chart 配置 -->
+        <template v-if="editingWidgetType === 'agile_chart'">
+          <a-form-item label="图表类型">
+            <a-select v-model="widgetConfigForm.chartType" placeholder="选择图表类型">
+              <a-option value="burndown">燃尽图 (Burndown)</a-option>
+              <a-option value="cumulative_flow">累积流图 (Cumulative Flow)</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item v-if="widgetConfigForm.chartType === 'burndown'" label="Sprint">
+            <a-select v-model="widgetConfigForm.sprintId" placeholder="选择 Sprint" allow-clear>
+              <a-option v-for="s in availableSprints" :key="s.id" :value="s.id">
+                {{ s.name }} ({{ s.status }})
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要显示燃尽图的 Sprint</span>
+          </a-form-item>
+          <a-form-item v-if="widgetConfigForm.chartType === 'cumulative_flow'" label="项目">
+            <a-select v-model="widgetConfigForm.projectId" placeholder="选择项目" allow-clear>
+              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要显示累积流图的项目</span>
+          </a-form-item>
+        </template>
+
+        <!-- agile_board_status 配置 -->
+        <template v-if="editingWidgetType === 'agile_board_status'">
+          <a-form-item label="Sprint">
+            <a-select v-model="widgetConfigForm.sprintId" placeholder="选择 Sprint" allow-clear>
+              <a-option v-for="s in availableSprints" :key="s.id" :value="s.id">
+                {{ s.name }} ({{ s.status }})
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要显示状态分布的 Sprint</span>
+          </a-form-item>
+        </template>
       </a-form>
     </a-modal>
 
@@ -377,22 +415,27 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { customDashboardApi } from '@/api'
 import { reportApi } from '@/api/report'
+import { sprintApi } from '@/api/sprint'
+import { projectApi } from '@/api/project'
 import type { DashboardListVO, DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
 import type { ReportDefinitionVO } from '@/api/report'
+import type { SprintVO } from '@/api/types'
 import WidgetCard from './WidgetCard.vue'
 import ShareDashboardModal from './ShareDashboardModal.vue'
 
 // ─── 微件类型定义 ─────────────────────────────────────────
 
 const widgetTypes = [
-  { type: 'note', label: '快捷笔记', icon: '📝', description: '自由编辑 Markdown 内容', defaultTitle: '笔记' },
-  { type: 'number_card', label: '数字卡片', icon: '🔢', description: '单数字大卡片（如"本月完成: 88"）', defaultTitle: '统计' },
-  { type: 'report_distribution', label: '分布图表', icon: '📊', description: '按字段分组的条形图/饼图', defaultTitle: '分布报表' },
-  { type: 'issue_list', label: 'Issue 列表', icon: '📋', description: '按条件展示工单列表', defaultTitle: 'Issue 列表' },
-  { type: 'activity_feed', label: '活动流', icon: '🔔', description: '最近的 Issue 活动（评论/状态变更）', defaultTitle: '最近活动' },
-  { type: 'report', label: '报表图表', icon: '📈', description: '关联已保存的报表定义', defaultTitle: '报表' },
-  { type: 'sprint_progress', label: 'Sprint 进度', icon: '🏃', description: 'Sprint 完成进度条', defaultTitle: 'Sprint 进度' },
-  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日期日历视图', defaultTitle: '到期日历' }
+  { type: 'note', label: '快捷笔记', icon: '📝', description: '自由编辑 Markdown 内容', defaultTitle: '笔记', group: '基础' },
+  { type: 'number_card', label: '数字卡片', icon: '🔢', description: '单数字大卡片（如"本月完成: 88"）', defaultTitle: '统计', group: '基础' },
+  { type: 'report_distribution', label: '分布图表', icon: '📊', description: '按字段分组的条形图/饼图', defaultTitle: '分布报表', group: '报表' },
+  { type: 'issue_list', label: 'Issue 列表', icon: '📋', description: '按条件展示工单列表', defaultTitle: 'Issue 列表', group: '基础' },
+  { type: 'activity_feed', label: '活动流', icon: '🔔', description: '最近的 Issue 活动（评论/状态变更）', defaultTitle: '最近活动', group: '基础' },
+  { type: 'report', label: '报表图表', icon: '📈', description: '关联已保存的报表定义', defaultTitle: '报表', group: '报表' },
+  { type: 'sprint_progress', label: 'Sprint 进度', icon: '🏃', description: 'Sprint 完成进度条', defaultTitle: 'Sprint 进度', group: '敏捷' },
+  { type: 'agile_chart', label: '敏捷图表', icon: '📉', description: '燃尽图或累积流图，跟踪 Sprint 进展趋势', defaultTitle: '敏捷图表', group: '敏捷' },
+  { type: 'agile_board_status', label: '看板状态', icon: '📊', description: 'Sprint 工单状态分布（待处理/进行中/已完成）', defaultTitle: '看板状态', group: '敏捷' },
+  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日期日历视图', defaultTitle: '到期日历', group: '基础' }
 ]
 
 // ─── 状态 ─────────────────────────────────────────────
@@ -421,6 +464,8 @@ const editingWidget = ref<DashboardWidgetVO | null>(null)
 const editingWidgetType = ref<string>('')
 const savingWidgetConfig = ref(false)
 const availableReports = ref<ReportDefinitionVO[]>([])
+const availableSprints = ref<SprintVO[]>([])
+const availableProjects = ref<Array<{ id: string; name: string }>>([])
 const widgetConfigForm = ref<{
   title: string
   refreshInterval?: number
@@ -429,6 +474,9 @@ const widgetConfigForm = ref<{
   label?: string
   reportId?: string
   noteContent?: string
+  sprintId?: string
+  projectId?: string
+  chartType?: string
 }>({
   title: '',
   refreshInterval: 600,
@@ -436,7 +484,10 @@ const widgetConfigForm = ref<{
   staticValue: undefined,
   label: '',
   reportId: undefined,
-  noteContent: ''
+  noteContent: '',
+  sprintId: undefined,
+  projectId: undefined,
+  chartType: 'burndown'
 })
 
 // Move widget state
@@ -757,14 +808,23 @@ async function addWidget(widgetType: string, defaultTitle: string) {
     let defaultConfig = '{}'
     if (widgetType === 'number_card') {
       defaultConfig = JSON.stringify({ queryType: 'open', label: '待处理' })
+    } else if (widgetType === 'agile_chart') {
+      defaultConfig = JSON.stringify({ chartType: 'burndown' })
     }
+
+    // Default size based on widget type
+    let width = 4
+    let height = 3
+    if (widgetType === 'number_card') { width = 3; height = 2 }
+    else if (widgetType === 'agile_chart') { width = 6; height = 4 }
+    else if (widgetType === 'agile_board_status') { width = 4; height = 2 }
 
     await customDashboardApi.addWidget(currentDashboard.value.id, {
       widgetType,
       title: defaultTitle,
       config: defaultConfig,
-      width: widgetType === 'number_card' ? 3 : 4,
-      height: widgetType === 'number_card' ? 2 : 3
+      width,
+      height
     })
     Message.success('微件已添加')
     showAddWidgetModal.value = false
@@ -799,12 +859,20 @@ function editWidget(widget: DashboardWidgetVO) {
     staticValue: config.value ?? undefined,
     label: config.label || '',
     reportId: widget.reportId || undefined,
-    noteContent: config.content || ''
+    noteContent: config.content || '',
+    sprintId: config.sprintId || undefined,
+    projectId: config.projectId || undefined,
+    chartType: config.chartType || 'burndown'
   }
 
   // Load reports if needed for report widgets
   if (widget.widgetType === 'report_distribution' || widget.widgetType === 'report') {
     loadAvailableReports()
+  }
+
+  // Load sprints/projects if needed for agile widgets
+  if (widget.widgetType === 'agile_chart' || widget.widgetType === 'agile_board_status') {
+    loadAvailableSprintsAndProjects()
   }
 
   showWidgetConfigModal.value = true
@@ -816,6 +884,29 @@ async function loadAvailableReports() {
     availableReports.value = res.data || []
   } catch {
     availableReports.value = []
+  }
+}
+
+async function loadAvailableSprintsAndProjects() {
+  try {
+    const projectRes = await projectApi.list({ pageSize: 50 })
+    const projects = projectRes.data?.list || []
+    availableProjects.value = projects.map((p: any) => ({ id: p.id, name: p.name }))
+
+    // Load sprints from all projects (max 10 projects)
+    const allSprints: SprintVO[] = []
+    for (const project of availableProjects.value.slice(0, 10)) {
+      try {
+        const sprintRes = await sprintApi.listByProject(project.id, { _silent403: true } as any)
+        if (sprintRes.data) {
+          allSprints.push(...sprintRes.data)
+        }
+      } catch { /* skip projects without sprint access */ }
+    }
+    availableSprints.value = allSprints
+  } catch {
+    availableSprints.value = []
+    availableProjects.value = []
   }
 }
 
@@ -834,6 +925,12 @@ async function handleWidgetConfigSave() {
       if (form.label) config.label = form.label
     } else if (widget.widgetType === 'note') {
       if (form.noteContent) config.content = form.noteContent
+    } else if (widget.widgetType === 'agile_chart') {
+      config.chartType = form.chartType || 'burndown'
+      if (form.sprintId) config.sprintId = form.sprintId
+      if (form.projectId) config.projectId = form.projectId
+    } else if (widget.widgetType === 'agile_board_status') {
+      if (form.sprintId) config.sprintId = form.sprintId
     }
     // report_distribution / report: reportId is saved separately
 
