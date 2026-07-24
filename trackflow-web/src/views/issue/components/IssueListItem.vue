@@ -340,14 +340,17 @@ function truncateDescription(desc?: string): string {
 .item-priority .priority-dot {
   width: 8px;
   height: 8px;
+  min-width: 8px;
+  min-height: 8px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--tf-text-tertiary);
 }
 
-.item-priority.priority-critical .priority-dot { background: #e53e3e; }
-.item-priority.priority-high .priority-dot { background: #ed8936; }
-.item-priority.priority-normal .priority-dot { background: #4299e1; }
-.item-priority.priority-low .priority-dot { background: #a0aec0; }
+.item-priority.priority-critical .priority-dot { background: var(--tf-danger, #e53e3e); }
+.item-priority.priority-high .priority-dot { background: var(--tf-warning, #ed8936); }
+.item-priority.priority-normal .priority-dot { background: var(--tf-accent, #4299e1); }
+.item-priority.priority-low .priority-dot { background: var(--tf-text-tertiary, #a0aec0); }
 
 /* Issue key */
 .item-key {
