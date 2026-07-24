@@ -1482,8 +1482,12 @@ public class ProjectService {
         if (userId == null || projectId == null) {
             throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
         }
-        // 系统管理员跳过校验
+        // 系统管理员：仅需校验项目存在性
         if (permissionService.isSystemAdmin(userId)) {
+            Project project = projectMapper.selectById(projectId);
+            if (project == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            }
             return;
         }
         // 检查是否为项目成员
@@ -1493,6 +1497,11 @@ public class ProjectService {
                         .eq(ProjectMember::getUserId, userId)
         );
         if (count == 0) {
+            // 区分"项目不存在"和"无权限"：提供更准确的错误信息
+            Project project = projectMapper.selectById(projectId);
+            if (project == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            }
             throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
         }
     }
@@ -1515,8 +1524,12 @@ public class ProjectService {
         if (userId == null || projectId == null) {
             throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
         }
-        // 系统管理员跳过校验
+        // 系统管理员：仅需校验项目存在性
         if (permissionService.isSystemAdmin(userId)) {
+            Project project = projectMapper.selectById(projectId);
+            if (project == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+            }
             return;
         }
         // 检查是否为项目成员
@@ -1530,11 +1543,12 @@ public class ProjectService {
         }
         // 非成员：检查项目可见性
         Project project = projectMapper.selectById(projectId);
-        if (project != null) {
-            ProjectVisibility visibility = project.getVisibility();
-            if (visibility == ProjectVisibility.INTERNAL || visibility == ProjectVisibility.PUBLIC) {
-                return; // 非成员但项目对已登录用户可见
-            }
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "项目不存在");
+        }
+        ProjectVisibility visibility = project.getVisibility();
+        if (visibility == ProjectVisibility.INTERNAL || visibility == ProjectVisibility.PUBLIC) {
+            return; // 非成员但项目对已登录用户可见
         }
         throw new BusinessException(ErrorCode.PROJECT_ACCESS_DENIED, "无权访问该项目");
     }

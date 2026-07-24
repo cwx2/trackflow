@@ -3,6 +3,7 @@ package com.trackflow.common.exception;
 import com.trackflow.common.model.R;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -176,6 +177,25 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = resolveErrorCodeFromConstraint(message);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(R.fail(errorCode));
+    }
+
+    /**
+     * 数据库外键/完整性约束违规（如引用不存在的关联资源）
+     * <p>
+     * 返回 400 Bad Request + 明确错误信息，而非 500 内部错误。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<R<Void>> handleDataIntegrityViolationException(DataIntegrityViolationException ex,
+                                                                          HttpServletRequest request) {
+        String message = ex.getMessage();
+        log.warn("Data integrity violation on {} {}: {}", request.getMethod(), request.getRequestURI(), message);
+
+        String userMessage = "请求数据不合法，关联的资源可能不存在";
+        if (message != null && message.contains("foreign key constraint")) {
+            userMessage = "关联的资源不存在，请检查参数是否正确";
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(R.fail(ErrorCode.BAD_REQUEST, userMessage));
     }
 
     /**

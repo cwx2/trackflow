@@ -95,7 +95,7 @@ public class SavedQueryController {
     public R<SavedQueryVO> create(@Valid @RequestBody CreateQueryDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (dto.getProjectId() != null) {
-            projectService.assertProjectMember(userId, dto.getProjectId());
+            projectService.assertProjectAccessible(userId, dto.getProjectId());
         }
         return R.ok(savedQueryConverter.toVO(savedQueryService.create(userId, dto)));
     }
