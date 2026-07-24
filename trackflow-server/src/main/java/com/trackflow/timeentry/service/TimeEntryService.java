@@ -352,6 +352,7 @@ public class TimeEntryService {
      * 查询用户在日期范围内的工时记录（带 issueKey）
      * 支持按项目和工作类型（activityId）筛选
      */
+    @Transactional(readOnly = true)
     public List<TimeEntryVO> listByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate,
                                                      Long projectId, Long activityId) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(
@@ -362,6 +363,7 @@ public class TimeEntryService {
     /**
      * 查询某 Issue 的所有工时记录
      */
+    @Transactional(readOnly = true)
     public List<TimeEntryVO> listByIssue(Long issueId, Long currentUserId) {
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<TimeEntry>()
                 .eq("issue_id", issueId)
@@ -419,6 +421,7 @@ public class TimeEntryService {
      * 汇总用户在日期范围内的总工时（分钟）
      * 排除 ongoing=true 的记录（仍在计时中，duration 为 NULL）
      */
+    @Transactional(readOnly = true)
     public int sumByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", userId)
@@ -432,6 +435,7 @@ public class TimeEntryService {
     /**
      * 按项目汇总工时（项目视图概览）：返回用户可见项目的工时聚合
      */
+    @Transactional(readOnly = true)
     public List<ProjectTimeSummaryVO> listByProjectForUser(Long userId, LocalDate startDate, LocalDate endDate) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(
                 userId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId());
@@ -467,6 +471,7 @@ public class TimeEntryService {
      * 查询指定项目在日期范围内的工时明细（项目视图详情）
      * ongoing 记录仅对其所有者可见，他人的 ongoing 记录不返回
      */
+    @Transactional(readOnly = true)
     public List<TimeEntryVO> listByProject(Long projectId, LocalDate startDate, LocalDate endDate, Long currentUserId) {
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(
                 projectId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId(), currentUserId);
@@ -482,6 +487,7 @@ public class TimeEntryService {
      * - canViewOthers=true: 返回所有活跃用户（支持关键字搜索）
      * - canViewOthers=false: 仅返回当前用户自身
      */
+    @Transactional(readOnly = true)
     public List<TimeEntryUserVO> listSelectableUsers(Long currentUserId, boolean canViewOthers, String keyword) {
         if (!canViewOthers) {
             // 普通用户仅返回自身
@@ -806,6 +812,7 @@ public class TimeEntryService {
      * @param entry 工时记录实体
      * @return 完整的 TimeEntryVO
      */
+    @Transactional(readOnly = true)
     public TimeEntryVO buildEntryVO(TimeEntry entry) {
         TimeEntryVO vo = timeEntryConverter.toVO(entry);
 
