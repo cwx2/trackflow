@@ -31,10 +31,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // 客户端订阅的目标前缀（服务端推送到这些 topic）
-        config.enableSimpleBroker("/topic");
+        // 客户端订阅的目标前缀：
+        // - /topic: 广播类（项目级 Issue 变更）
+        // - /queue: 用户级（通知推送，通过 /user/{userId}/queue/notifications 路由）
+        config.enableSimpleBroker("/topic", "/queue");
         // 客户端发送消息到服务端的前缀（本场景不需要客户端→服务端消息，但保留标准配置）
         config.setApplicationDestinationPrefixes("/app");
+        // 用户目的地前缀 — 支持 convertAndSendToUser() 按 principal 路由到指定用户
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override
