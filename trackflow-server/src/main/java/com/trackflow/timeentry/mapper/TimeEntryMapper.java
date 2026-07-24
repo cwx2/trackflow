@@ -30,6 +30,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
     /**
      * 查询工时条目，JOIN issue 表获取 issueKey，JOIN attribute 表获取 work type
      * 支持按项目和工作类型（activityId）筛选
+     * allowedProjectIds 不为 null 时，限制只返回这些项目中的工时
      */
     List<Map<String, Object>> selectEntriesWithIssueKey(
             @Param("userId") Long userId,
@@ -37,7 +38,8 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
             @Param("endDate") LocalDate endDate,
             @Param("projectId") Long projectId,
             @Param("activityId") Long activityId,
-            @Param("workTypeAttributeId") Long workTypeAttributeId
+            @Param("workTypeAttributeId") Long workTypeAttributeId,
+            @Param("allowedProjectIds") List<Long> allowedProjectIds
     );
 
     /**

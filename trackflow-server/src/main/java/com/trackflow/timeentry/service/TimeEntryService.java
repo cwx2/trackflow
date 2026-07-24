@@ -351,12 +351,40 @@ public class TimeEntryService {
     /**
      * 查询用户在日期范围内的工时记录（带 issueKey）
      * 支持按项目和工作类型（activityId）筛选
+     *
+     * @param userId          目标用户 ID（要查看其工时的人）
+     * @param viewerUserId    查看者 ID（当前登录用户）
+     * @param startDate       开始日期
+     * @param endDate         结束日期
+     * @param projectId       项目筛选（可选，null 表示不限）
+     * @param activityId      工作类型筛选（可选）
      */
     @Transactional(readOnly = true)
-    public List<TimeEntryVO> listByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate,
+    public List<TimeEntryVO> listByUserAndDateRange(Long userId, Long viewerUserId, LocalDate startDate, LocalDate endDate,
                                                      Long projectId, Long activityId) {
+        List<Long> allowedProjectIds = null;
+
+        // 查看他人工时时，限制为有 time:view_others 权限的项目
+        if (!userId.equals(viewerUserId)) {
+            if (projectId != null) {
+                // 指定了项目时，校验查看者对该项目有 time:view_others 权限
+                if (!permissionService.hasPermission(viewerUserId, projectId, "time:view_others")) {
+                    throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看该项目中他人的工时记录");
+                }
+                // 权限通过，使用 projectId 做单项目过滤即可
+            } else {
+                // 未指定项目时，计算查看者有权限的项目范围
+                allowedProjectIds = permissionService.getProjectIdsWithPermission(viewerUserId, "time:view_others");
+                // null 表示不限（system_admin 或全局作用域角色）
+                if (allowedProjectIds != null && allowedProjectIds.isEmpty()) {
+                    return List.of(); // 无任何项目的权限，直接返回空
+                }
+            }
+        }
+
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(
-                userId, startDate, endDate, projectId, activityId, workItemAttributeService.getWorkTypeAttributeId());
+                userId, startDate, endDate, projectId, activityId,
+                workItemAttributeService.getWorkTypeAttributeId(), allowedProjectIds);
         return rows.stream().map(this::mapRowToVO).toList();
     }
 
@@ -420,14 +448,34 @@ public class TimeEntryService {
     /**
      * 汇总用户在日期范围内的总工时（分钟）
      * 排除 ongoing=true 的记录（仍在计时中，duration 为 NULL）
+     * 带项目范围限制——查看他人汇总时只计入有权限项目的工时
+     *
+     * @param targetUserId 目标用户 ID
+     * @param viewerUserId 查看者 ID（当前登录用户）
+     * @param startDate    开始日期
+     * @param endDate      结束日期
      */
     @Transactional(readOnly = true)
-    public int sumByUserAndDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
+    public int sumByUserAndDateRange(Long targetUserId, Long viewerUserId, LocalDate startDate, LocalDate endDate) {
+        List<Long> allowedProjectIds = null;
+
+        if (!targetUserId.equals(viewerUserId)) {
+            allowedProjectIds = permissionService.getProjectIdsWithPermission(viewerUserId, "time:view_others");
+            if (allowedProjectIds != null && allowedProjectIds.isEmpty()) {
+                return 0;
+            }
+        }
+
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", userId)
+        wrapper.eq("user_id", targetUserId)
                 .eq("ongoing", false)
                 .ge("work_date", startDate)
                 .le("work_date", endDate);
+
+        if (allowedProjectIds != null) {
+            wrapper.in("project_id", allowedProjectIds);
+        }
+
         List<TimeEntry> entries = timeEntryMapper.selectList(wrapper.select("duration"));
         return entries.stream().mapToInt(e -> e.getDuration() != null ? e.getDuration() : 0).sum();
     }

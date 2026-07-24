@@ -73,6 +73,20 @@ public interface RolePermissionMapper extends BaseMapper<RolePermission> {
     List<String> selectAllProjectPermissionsByUserId(@Param("userId") Long userId);
 
     /**
+     * 查询用户通过直接项目成员角色拥有指定权限的项目 ID 列表
+     * 用于数据范围过滤（如：只返回用户有 time:view_others 权限的项目中的工时数据）
+     */
+    @Select("""
+            SELECT DISTINCT pm.project_id
+            FROM role_permission rp
+            INNER JOIN project_member pm ON pm.role_id = rp.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
+            WHERE pm.user_id = #{userId} AND rp.permission = #{permission}
+              AND sp.scope = 'project'
+            """)
+    List<Long> selectProjectIdsWithPermission(@Param("userId") Long userId, @Param("permission") String permission);
+
+    /**
      * 查询指定角色的项目级权限（用于 NonMember / Anonymous 内置角色）
      * 仅返回 scope='project' 的权限，确保项目级别不会获得全局权限
      */

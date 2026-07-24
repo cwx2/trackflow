@@ -141,7 +141,7 @@ public class TimeEntryController {
         }
 
         Long resolvedActivityId = timeEntryService.resolveActivityId(activityId, workType);
-        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, startDate, endDate, projectId, resolvedActivityId));
+        return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, currentUserId, startDate, endDate, projectId, resolvedActivityId));
     }
 
     /**
@@ -171,7 +171,7 @@ public class TimeEntryController {
         if (!targetUserId.equals(currentUserId) && !canViewOthersTime(currentUserId)) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
         }
-        return R.ok(timeEntryService.sumByUserAndDateRange(targetUserId, startDate, endDate));
+        return R.ok(timeEntryService.sumByUserAndDateRange(targetUserId, currentUserId, startDate, endDate));
     }
 
     /**

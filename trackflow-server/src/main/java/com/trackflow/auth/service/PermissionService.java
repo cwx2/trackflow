@@ -531,6 +531,35 @@ public class PermissionService {
     }
 
     /**
+     * 获取用户拥有指定权限的项目 ID 列表。
+     * 合并直接项目成员角色和组继承两条路径。
+     * system_admin 返回 null（表示"所有项目"，由调用方处理）。
+     *
+     * @param userId     用户 ID
+     * @param permission 权限代码（如 "time:view_others"）
+     * @return 项目 ID 列表；system_admin 返回 null 表示不限制
+     */
+    public List<Long> getProjectIdsWithPermission(Long userId, String permission) {
+        if (userId == null) return List.of();
+
+        // system:admin 拥有所有权限，不限项目
+        if (isSystemAdmin(userId)) return null;
+
+        // 检查通过组继承的"全局作用域项目角色"（project_id IS NULL + role_type='project'）
+        // 如果有，说明该用户在所有项目中都拥有该权限
+        if (userGroupRoleMapper.hasGlobalScopePermissionViaGroups(userId, permission)) {
+            return null;
+        }
+
+        Set<Long> projectIds = new HashSet<>();
+        // 1. 直接项目成员角色
+        projectIds.addAll(rolePermissionMapper.selectProjectIdsWithPermission(userId, permission));
+        // 2. 通过组继承的精确绑定项目
+        projectIds.addAll(userGroupRoleMapper.selectProjectIdsWithPermissionViaGroups(userId, permission));
+        return new ArrayList<>(projectIds);
+    }
+
+    /**
      * 一次性获取用户在所有项目中的去重权限集合（直接成员角色 + 组继承）。
      * 用于导航权限聚合计算，替代多次 hasPermissionInAnyProject 串行调用。
      *

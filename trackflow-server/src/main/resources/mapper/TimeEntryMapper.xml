@@ -56,6 +56,12 @@
           <if test="projectId != null">
               AND t.project_id = #{projectId}
           </if>
+          <if test="allowedProjectIds != null">
+              AND t.project_id IN
+              <foreach collection="allowedProjectIds" item="pid" open="(" separator="," close=")">
+                  #{pid}
+              </foreach>
+          </if>
           <if test="activityId != null">
               AND teav.value_id = #{activityId}
           </if>

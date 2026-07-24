@@ -127,4 +127,47 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
               AND ugr.project_id IS NOT NULL
             """)
     List<Long> selectProjectIdsByUserIdViaGroups(@Param("userId") Long userId);
+
+    /**
+     * 查询用户通过组继承拥有指定权限的项目 ID 列表
+     * 包含精确绑定项目的角色 + 全局作用域的项目角色（全局作用域时返回所有项目 ID）
+     * 用于数据范围过滤
+     */
+    @Select("""
+            SELECT DISTINCT ugr.project_id
+            FROM user_group_role ugr
+            INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+            INNER JOIN role_permission rp ON rp.role_id = ugr.role_id
+            INNER JOIN sys_role sr ON sr.id = ugr.role_id
+            INNER JOIN sys_permission sp ON sp.code = rp.permission
+            WHERE ugm.user_id = #{userId}
+              AND rp.permission = #{permission}
+              AND ugr.project_id IS NOT NULL
+              AND sr.role_type = 'project'
+              AND sp.scope = 'project'
+            """)
+    List<Long> selectProjectIdsWithPermissionViaGroups(@Param("userId") Long userId, @Param("permission") String permission);
+
+    /**
+     * 检查用户是否通过组继承了全局作用域的项目角色中的指定权限
+     * 全局作用域 = ugr.project_id IS NULL AND role_type = 'project'
+     * 如果有，说明该用户在所有项目中都拥有该权限
+     */
+    @Select("""
+            SELECT EXISTS(
+                SELECT 1
+                FROM user_group_role ugr
+                INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+                INNER JOIN role_permission rp ON rp.role_id = ugr.role_id
+                INNER JOIN sys_role sr ON sr.id = ugr.role_id
+                INNER JOIN sys_permission sp ON sp.code = rp.permission
+                WHERE ugm.user_id = #{userId}
+                  AND rp.permission = #{permission}
+                  AND ugr.project_id IS NULL
+                  AND sr.role_type = 'project'
+                  AND sp.scope = 'project'
+                LIMIT 1
+            )
+            """)
+    boolean hasGlobalScopePermissionViaGroups(@Param("userId") Long userId, @Param("permission") String permission);
 }
