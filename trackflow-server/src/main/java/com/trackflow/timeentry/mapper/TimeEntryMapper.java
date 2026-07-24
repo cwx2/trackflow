@@ -45,12 +45,14 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
     /**
      * 按项目聚合：查询用户有权访问的所有项目工时（项目视图概览）
      * ongoing 记录仅返回当前用户自己的，他人的 ongoing 记录不可见
+     * allowedProjectIds 为 null 时不做项目范围限制（system_admin），否则限定为列表中的项目
      */
     List<Map<String, Object>> selectEntriesByProjectForUser(
             @Param("userId") Long userId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
-            @Param("workTypeAttributeId") Long workTypeAttributeId
+            @Param("workTypeAttributeId") Long workTypeAttributeId,
+            @Param("allowedProjectIds") List<Long> allowedProjectIds
     );
 
     /**

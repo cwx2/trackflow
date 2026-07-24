@@ -485,8 +485,15 @@ public class TimeEntryService {
      */
     @Transactional(readOnly = true)
     public List<ProjectTimeSummaryVO> listByProjectForUser(Long userId, LocalDate startDate, LocalDate endDate) {
+        // 获取用户可访问的项目列表（包含直接成员 + 用户组成员 + 可见项目）
+        // null 表示无限制（system_admin）
+        List<Long> allowedProjectIds = projectService.getAccessibleProjectIds(userId);
+        if (allowedProjectIds != null && allowedProjectIds.isEmpty()) {
+            return List.of();
+        }
+
         List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(
-                userId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId());
+                userId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId(), allowedProjectIds);
 
         // 按 project_id 分组
         Map<String, List<Map<String, Object>>> grouped = rows.stream()
