@@ -346,8 +346,8 @@
       <div class="panel-footer">
         <a-space>
           <div class="split-button">
-            <a-button type="primary" :loading="submitting" :disabled="!canSubmit" class="split-main" @click="submitAndClose">
-              创建工单
+            <a-button type="primary" :loading="submitting" :disabled="!canSubmit" class="split-main" @click="executeDefaultAction">
+              {{ defaultActionLabel }}
             </a-button>
             <a-trigger trigger="click" position="br" :popup-visible="splitMenuVisible" @popup-visible-change="(v: boolean) => splitMenuVisible = v">
               <button type="button" class="split-arrow-trigger" :disabled="!canSubmit">
@@ -355,13 +355,24 @@
               </button>
               <template #content>
                 <div class="split-menu">
-                  <div class="split-menu-item" @click="onSplitSelect('close')">创建并关闭</div>
-                  <div class="split-menu-item" @click="onSplitSelect('continue')">创建并继续</div>
+                  <div class="split-menu-item" :class="{ active: defaultCreateMode === 'close' }" @click="onSplitSelect('close')">
+                    <icon-check v-if="defaultCreateMode === 'close'" class="split-menu-check" />
+                    创建工单
+                  </div>
+                  <div class="split-menu-item" :class="{ active: defaultCreateMode === 'continue' }" @click="onSplitSelect('continue')">
+                    <icon-check v-if="defaultCreateMode === 'continue'" class="split-menu-check" />
+                    创建并继续
+                  </div>
+                  <div class="split-menu-item" :class="{ active: defaultCreateMode === 'copy' }" @click="onSplitSelect('copy')">
+                    <icon-check v-if="defaultCreateMode === 'copy'" class="split-menu-check" />
+                    创建并复制
+                  </div>
                 </div>
               </template>
             </a-trigger>
           </div>
           <a-button @click="close">取消</a-button>
+          <a-button v-if="isDirty" type="text" status="danger" @click="discardDraft">丢弃</a-button>
         </a-space>
       </div>
     </div>
@@ -371,7 +382,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -398,6 +409,21 @@ const emit = defineEmits<{
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+
+// 创建模式记忆（localStorage 持久化）
+type CreateMode = 'close' | 'continue' | 'copy'
+const CREATE_MODE_KEY = 'trackflow:create-mode'
+const defaultCreateMode = ref<CreateMode>(
+  (localStorage.getItem(CREATE_MODE_KEY) as CreateMode) || 'close'
+)
+
+const defaultActionLabel = computed(() => {
+  switch (defaultCreateMode.value) {
+    case 'continue': return '创建并继续'
+    case 'copy': return '创建并复制'
+    default: return '创建工单'
+  }
+})
 
 // Link issue 状态
 const showLinkSection = ref(false)
@@ -848,10 +874,37 @@ function loadDraftData(draftId: string) {
   }
 }
 
-function onSplitSelect(action: string) {
+function onSplitSelect(action: CreateMode) {
   splitMenuVisible.value = false
-  if (action === 'close') submitAndClose()
-  else if (action === 'continue') submitAndNew()
+  // 记忆用户选择的模式
+  defaultCreateMode.value = action
+  localStorage.setItem(CREATE_MODE_KEY, action)
+  executeDefaultAction()
+}
+
+/** 执行当前默认创建模式对应的操作 */
+function executeDefaultAction() {
+  switch (defaultCreateMode.value) {
+    case 'close': submitAndClose(); break
+    case 'continue': submitAndContinue(); break
+    case 'copy': submitAndCopy(); break
+  }
+}
+
+/** 丢弃草稿：不保存直接关闭 */
+function discardDraft() {
+  Modal.confirm({
+    title: '丢弃草稿',
+    content: '确定要丢弃当前内容吗？此操作不可恢复。',
+    okText: '丢弃',
+    cancelText: '返回编辑',
+    okButtonProps: { status: 'danger' },
+    simple: false,
+    onOk: () => {
+      resetForm()
+      emit('update:visible', false)
+    }
+  })
 }
 
 async function submitAndClose() {
@@ -863,18 +916,40 @@ async function submitAndClose() {
   }
 }
 
-async function submitAndNew() {
+async function submitAndContinue() {
   const success = await doSubmit()
   if (success) {
-    // 保留项目，清空其他字段以便继续创建
+    emit('created')
+    // 保留项目/类型/优先级/Sprint，清空标题和描述等输入内容
     form.title = ''
     form.description = ''
     form.assigneeId = undefined
     form.dueDate = ''
     form.estimatedHours = undefined
     selectedTemplateId.value = null
+    // 重置关联工单
+    linkedIssues.value = []
+    newLinkType.value = 'relates_to'
+    newLinkTargetId.value = undefined
+    linkSearchResults.value = []
+    // 重置相似工单
+    similarIssues.value = []
     // 重置自定义字段值到默认值
     resetCustomFields()
+  }
+}
+
+async function submitAndCopy() {
+  const success = await doSubmit()
+  if (success) {
+    emit('created')
+    // 保留所有字段内容（标题、描述、项目、类型、优先级等），方便创建相似工单
+    // 只清空关联和相似工单
+    linkedIssues.value = []
+    newLinkType.value = 'relates_to'
+    newLinkTargetId.value = undefined
+    linkSearchResults.value = []
+    similarIssues.value = []
   }
 }
 
@@ -1052,8 +1127,13 @@ onMounted(() => {
   cursor: pointer;
   color: var(--color-text-1);
   transition: background-color 100ms;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .split-menu-item:hover { background: var(--color-fill-2, #f2f3f5); }
+.split-menu-item.active { color: var(--tf-accent, rgb(var(--primary-6))); font-weight: 500; }
+.split-menu-check { font-size: 12px; }
 
 /* Inline add option in select footer */
 .select-add-option {
