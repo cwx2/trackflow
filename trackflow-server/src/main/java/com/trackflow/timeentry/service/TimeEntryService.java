@@ -202,6 +202,13 @@ public class TimeEntryService {
         if (dto.getIssueId() != null && !dto.getIssueId().equals(entry.getIssueId())) {
             Issue targetIssue = getActiveIssueOrThrow(dto.getIssueId());
             projectService.assertProjectMember(userId, targetIssue.getProjectId());
+
+            // 校验目标项目启用了时间追踪（与 create/startTimer 保持一致）
+            if (!projectService.isTimeTrackingEnabled(targetIssue.getProjectId())) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "目标项目未启用时间追踪功能，无法转移工时记录");
+            }
+
             if (isOwnEntry) {
                 assertTimeLogPermission(userId, targetIssue.getProjectId());
             } else {
