@@ -21,4 +21,6 @@ public class CustomFieldUsageVO {
     private long optionCount;
     /** 被其他字段作为条件源引用的数量 */
     private long conditionRefCount;
+    /** 被其他字段作为值过滤源引用的数量 */
+    private long filterRefCount;
 }
