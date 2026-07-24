@@ -207,6 +207,47 @@ public class ReportService {
         return report;
     }
 
+    // ─── 单个报表查询 ──────────────────────────────────────
+
+    /**
+     * 获取单个报表定义（带权限校验）
+     */
+    public ReportDefinition getWithAccessCheck(Long id, Long userId) {
+        ReportDefinition report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "报表不存在: " + id);
+        }
+        if (report.getProjectId() != null) {
+            projectService.assertProjectAccessible(userId, report.getProjectId());
+        }
+        // 私有报表隔离
+        if (!Boolean.TRUE.equals(report.getShared())
+                && !userId.equals(report.getCreatedBy())
+                && reportShareMapper.countAccessByUser(id, userId) == 0
+                && !permissionService.isSystemAdmin(userId)) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权访问此私有报表");
+        }
+        return report;
+    }
+
+    /**
+     * 判断用户是否收藏了指定报表
+     */
+    public boolean isFavorited(Long reportId, Long userId) {
+        return reportFavoriteMapper.selectCount(
+                new LambdaQueryWrapper<ReportFavorite>()
+                        .eq(ReportFavorite::getUserId, userId)
+                        .eq(ReportFavorite::getReportId, reportId)) > 0;
+    }
+
+    /**
+     * 获取报表创建者的显示名称
+     */
+    public String getOwnerDisplayName(Long userId) {
+        SysUser user = sysUserMapper.selectById(userId);
+        return user != null ? user.getDisplayName() : null;
+    }
+
     // ─── 收藏管理 ────────────────────────────────────────
 
     /**
@@ -1175,6 +1216,15 @@ public class ReportService {
             }
             case CUMULATIVE_FLOW -> executeCumulativeFlowReport(result, projectIds, startDate, endDate, issueIds);
             case RESOLUTION_TIME -> executeResolutionTimeReport(result, projectIds, startDate, endDate, config, issueIds);
+            case FIXED_VS_REPORTED, VERIFIED_VS_REOPENED, RESOLVED_VS_NEW -> {
+                // 比率对比报表：委托给 ReportStatisticsService
+                ReportExecuteResultVO rateResult = reportStatisticsService.getRateComparisonData(
+                        reportType, projectIds, startDate, endDate, issueIds);
+                result.setChartType(rateResult.getChartType());
+                result.setDates(rateResult.getDates());
+                result.setSeries(rateResult.getSeries());
+                result.setSummary(rateResult.getSummary());
+            }
             default -> {
                 // Fallback to distribution for unknown timeline types
                 return executeDistributionReport(report, projectIds);

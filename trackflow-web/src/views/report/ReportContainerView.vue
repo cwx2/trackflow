@@ -1,26 +1,28 @@
 <template>
   <div class="report-container">
-    <!-- 页面头部 -->
-    <div class="report-header">
-      <div class="header-left">
-        <h1 class="page-title">报表</h1>
-        <span class="page-desc">项目数据概览与可视化分析</span>
+    <!-- 页面头部（仅在非详情页时显示） -->
+    <template v-if="!isDetailPage">
+      <div class="report-header">
+        <div class="header-left">
+          <h1 class="page-title">报表</h1>
+          <span class="page-desc">项目数据概览与可视化分析</span>
+        </div>
       </div>
-    </div>
 
-    <!-- 统一标签导航（全部使用 router-link，交互一致） -->
-    <nav class="report-nav">
-      <router-link
-        v-for="tab in tabs"
-        :key="tab.key"
-        :to="tab.to"
-        class="nav-tab"
-        :class="{ active: isTabActive(tab.key) }"
-      >
-        <span class="tab-icon">{{ tab.icon }}</span>
-        {{ tab.label }}
-      </router-link>
-    </nav>
+      <!-- 统一标签导航 -->
+      <nav class="report-nav">
+        <router-link
+          v-for="tab in tabs"
+          :key="tab.key"
+          :to="tab.to"
+          class="nav-tab"
+          :class="{ active: isTabActive(tab.key) }"
+        >
+          <span class="tab-icon">{{ tab.icon }}</span>
+          {{ tab.label }}
+        </router-link>
+      </nav>
+    </template>
 
     <!-- 子路由出口 -->
     <div class="report-content">
@@ -30,9 +32,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+
+const isDetailPage = computed(() => route.name === 'ReportDetail')
 
 const tabs = [
   { key: 'overview', label: '概览', icon: '📊', to: '/reports' },

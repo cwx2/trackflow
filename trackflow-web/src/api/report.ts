@@ -138,6 +138,11 @@ export const reportApi = {
     return request.get<any, R<ReportDefinitionVO[]>>('/reports', { params })
   },
 
+  /** 获取单个报表定义 */
+  getById(id: string) {
+    return request.get<any, R<ReportDefinitionVO>>(`/reports/${id}`)
+  },
+
   /** 获取可用的分组维度列表（内置 + 自定义字段） */
   getGroupByOptions(projectId?: string) {
     const params = projectId ? { projectId } : {}

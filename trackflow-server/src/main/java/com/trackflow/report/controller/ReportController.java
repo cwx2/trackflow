@@ -7,6 +7,7 @@ import com.trackflow.report.converter.ReportConverter;
 import com.trackflow.report.dto.CreateReportDTO;
 import com.trackflow.report.dto.ShareReportDTO;
 import com.trackflow.report.dto.UpdateReportDTO;
+import com.trackflow.report.entity.ReportDefinition;
 import com.trackflow.report.service.ReportService;
 import com.trackflow.report.vo.ReportDefinitionVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
@@ -100,6 +101,25 @@ public class ReportController {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.deleteWithAccessCheck(id, userId);
         return R.ok();
+    }
+
+    /**
+     * 获取单个报表定义详情
+     * GET /api/v1/reports/{id}
+     */
+    @GetMapping("/{id}")
+    @PreAuthorize("@perm.canViewReports()")
+    public R<ReportDefinitionVO> getById(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDefinition report = reportService.getWithAccessCheck(id, userId);
+        ReportDefinitionVO vo = reportConverter.toVO(report);
+        // 填充元数据
+        vo.setFavorited(reportService.isFavorited(id, userId));
+        vo.setShareCount(reportService.getShareCount(id));
+        if (report.getCreatedBy() != null) {
+            vo.setOwnerDisplayName(reportService.getOwnerDisplayName(report.getCreatedBy()));
+        }
+        return R.ok(vo);
     }
 
     @GetMapping("/{id}/data")

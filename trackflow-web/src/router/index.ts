@@ -125,6 +125,11 @@ const routes = [
             path: 'dashboards',
             name: 'CustomDashboards',
             component: () => import('@/views/report/dashboard/CustomDashboardView.vue')
+          },
+          {
+            path: ':id',
+            name: 'ReportDetail',
+            component: () => import('@/views/report/ReportDetailView.vue')
           }
         ]
       },

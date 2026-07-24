@@ -47,6 +47,7 @@
         <a-option value="issue_distribution">Issue 分布</a-option>
         <a-option value="timeline">时间线趋势</a-option>
         <a-option value="state_transition">状态转换</a-option>
+        <a-option value="time_management">时间管理</a-option>
         <a-option value="other">其他</a-option>
       </a-select>
     </div>
@@ -145,7 +146,11 @@
             </a-dropdown>
           </div>
         </div>
-        <h3 class="card-title">{{ report.name }}</h3>
+        <h3 class="card-title">
+          <router-link :to="{ name: 'ReportDetail', params: { id: report.id } }" class="card-title-link" @click.stop>
+            {{ report.name }}
+          </router-link>
+        </h3>
         <div class="card-meta">
           <span v-if="report.shared" class="meta-shared">🔗 已共享</span>
           <span v-else-if="report.shareCount > 0" class="meta-shared">🔗 {{ report.shareCount }} 人</span>
@@ -172,12 +177,19 @@
               {{ reportData[report.id].summary?.sprintName || '' }}
               {{ reportData[report.id].summary?.totalResolved ? `共解决 ${reportData[report.id].summary.totalResolved} 个工单` : '' }}
             </span>
+            <span class="chart-total" v-else-if="reportData[report.id].category === 'time_management'">
+              {{ reportData[report.id].summary?.totalHours ? `共 ${reportData[report.id].summary.totalHours} 小时` : '' }}
+              {{ reportData[report.id].summary?.dateRange ? `(${reportData[report.id].summary.dateRange})` : '' }}
+            </span>
             <span class="chart-total" v-else>共 {{ reportData[report.id].total }} 个工单</span>
             <span class="chart-group" v-if="reportData[report.id].category === 'timeline'">
               时间线趋势
             </span>
             <span class="chart-group" v-else-if="reportData[report.id].category === 'state_transition'">
               状态转换统计
+            </span>
+            <span class="chart-group" v-else-if="reportData[report.id].category === 'time_management'">
+              时间管理
             </span>
             <span class="chart-group" v-else-if="!reportData[report.id].secondGroupBy">
               按 {{ groupByLabel(reportData[report.id].groupBy) }} 分组
@@ -186,8 +198,8 @@
               {{ groupByLabel(reportData[report.id].groupBy) }} × {{ groupByLabel(reportData[report.id].secondGroupBy!) }}
             </span>
           </div>
-          <!-- 时间线图表（line/area） -->
-          <div v-if="reportData[report.id].category === 'timeline' || reportData[report.id].category === 'state_transition'" class="chart-container">
+          <!-- 时间线图表（line/area）— 包含 timeline、state_transition、time_management -->
+          <div v-if="reportData[report.id].category === 'timeline' || reportData[report.id].category === 'state_transition' || reportData[report.id].category === 'time_management'" class="chart-container">
             <v-chart
               :option="buildTimeSeriesChartOption(reportData[report.id])"
               autoresize
@@ -286,11 +298,14 @@
               <a-option value="burndown_chart">燃尽图</a-option>
               <a-option value="cumulative_flow">累积流图</a-option>
               <a-option value="resolution_time">解决时间分析</a-option>
+              <a-option value="fixed_vs_reported">修复率 vs 报告率</a-option>
+              <a-option value="verified_vs_reopened">验证率 vs 重开率</a-option>
+              <a-option value="resolved_vs_new">解决率 vs 新增率</a-option>
             </a-option-group>
             <a-option-group label="状态转换">
               <a-option value="state_transition">状态转换统计</a-option>
             </a-option-group>
-            <a-option-group label="其他">
+            <a-option-group label="时间管理">
               <a-option value="time_report">时间报表</a-option>
               <a-option value="estimation_report">预估对比</a-option>
             </a-option-group>
@@ -403,9 +418,12 @@ const typeCategories: Record<string, string> = {
   burndown_chart: 'timeline',
   cumulative_flow: 'timeline',
   resolution_time: 'timeline',
+  fixed_vs_reported: 'timeline',
+  verified_vs_reopened: 'timeline',
+  resolved_vs_new: 'timeline',
   state_transition: 'state_transition',
-  time_report: 'other',
-  estimation_report: 'other',
+  time_report: 'time_management',
+  estimation_report: 'time_management',
   custom: 'other'
 }
 
@@ -415,6 +433,7 @@ function typeCategoryLabel(category: string): string {
     issue_distribution: 'Issue 分布报表',
     timeline: '时间线趋势报表',
     state_transition: '状态转换报表',
+    time_management: '时间管理报表',
     other: '其他报表'
   }
   return map[category] || category
@@ -533,7 +552,7 @@ const typeToGroupByMap: Record<string, string> = {
 }
 
 /** 时间线类和状态转换类报表不需要 groupBy */
-const timelineTypes = new Set(['burndown_chart', 'cumulative_flow', 'resolution_time', 'state_transition'])
+const timelineTypes = new Set(['burndown_chart', 'cumulative_flow', 'resolution_time', 'fixed_vs_reported', 'verified_vs_reopened', 'resolved_vs_new', 'state_transition'])
 
 /** 当 type 有固定的 groupBy 映射或为时间线类型时，禁用 groupBy 选择 */
 const isGroupByLocked = computed(() => form.type in typeToGroupByMap || timelineTypes.has(form.type))
@@ -919,6 +938,9 @@ function reportTypeLabel(type: string) {
     burndown_chart: '燃尽图',
     cumulative_flow: '累积流图',
     resolution_time: '解决时间',
+    fixed_vs_reported: '修复率 vs 报告率',
+    verified_vs_reopened: '验证率 vs 重开率',
+    resolved_vs_new: '解决率 vs 新增率',
     state_transition: '状态转换',
     time_report: '时间报表',
     estimation_report: '预估对比',
@@ -1529,6 +1551,17 @@ function buildCrossChartOption(data: ReportDataVO): Record<string, any> {
   color: var(--tf-text-primary);
   margin: 0 0 8px;
   line-height: 1.3;
+}
+
+.card-title-link {
+  color: var(--tf-text-primary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.card-title-link:hover {
+  color: var(--tf-accent);
+  text-decoration: underline;
 }
 
 .card-meta {
