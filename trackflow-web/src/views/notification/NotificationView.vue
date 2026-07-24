@@ -98,12 +98,15 @@
         <div
           v-for="item in notifications"
           :key="item.id"
-          class="notification-item"
-          :class="{ unread: !item.isRead }"
-          @click="handleItemClick(item)"
+          class="notification-item-wrapper"
         >
-          <div class="item-indicator">
-            <span v-if="!item.isRead" class="unread-dot"></span>
+          <div
+            class="notification-item"
+            :class="{ unread: !item.isRead }"
+            @click="handleItemClick(item)"
+          >
+            <div class="item-indicator">
+              <span v-if="!item.isRead" class="unread-dot"></span>
           </div>
           <div class="item-icon" :class="{ 'has-avatar': item.actorAvatar }">
             <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
@@ -152,6 +155,16 @@
               </svg>
             </button>
             <button
+              v-if="canReply(item)"
+              class="item-action-btn item-reply-btn"
+              title="回复"
+              @click.stop="toggleReply(item.id)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M6.78 1.97a.75.75 0 0 1 0 1.06L3.81 6h6.44A4.75 4.75 0 0 1 15 10.75v2.5a.75.75 0 0 1-1.5 0v-2.5a3.25 3.25 0 0 0-3.25-3.25H3.81l2.97 2.97a.75.75 0 1 1-1.06 1.06L1.47 7.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"/>
+              </svg>
+            </button>
+            <button
               class="item-action-btn item-delete-btn"
               title="删除通知"
               @click.stop="handleDelete(item.id)"
@@ -161,6 +174,32 @@
               </svg>
             </button>
           </div>
+        </div>
+        <!-- 内联回复编辑器 -->
+        <div v-if="replyingItemId === item.id" class="reply-editor" @click.stop>
+          <textarea
+            v-model="replyContent"
+            class="reply-textarea"
+            placeholder="输入回复内容..."
+            rows="3"
+            :disabled="replySubmitting"
+            @keydown.meta.enter="submitReply(item)"
+            @keydown.ctrl.enter="submitReply(item)"
+          ></textarea>
+          <div class="reply-actions">
+            <span class="reply-hint">Ctrl+Enter 发送</span>
+            <div class="reply-btns">
+              <button class="reply-cancel-btn" :disabled="replySubmitting" @click="cancelReply">取消</button>
+              <button
+                class="reply-submit-btn"
+                :disabled="!replyContent.trim() || replySubmitting"
+                @click="submitReply(item)"
+              >
+                {{ replySubmitting ? '发送中...' : '发送回复' }}
+              </button>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
 
@@ -192,8 +231,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotification } from '@/composables/useNotification'
-import { projectApi } from '@/api'
+import { projectApi, issueApi } from '@/api'
 import type { NotificationVO, NotificationCategory } from '@/api/notification'
+import { Message } from '@arco-design/web-vue'
 
 const router = useRouter()
 const {
@@ -211,6 +251,7 @@ const {
   setCategory,
   setProjectFilter,
   markRead,
+  markUnread,
   markAllRead,
   deleteNotification,
   deleteAllRead,
@@ -227,6 +268,52 @@ const totalPages = computed(() => Math.ceil(totalCount.value / pageSize))
 /** 用户所属项目列表（用于过滤下拉） */
 const projects = ref<{ id: string; name: string }[]>([])
 const selectedProjectId = ref<string | undefined>(activeProjectId.value || undefined)
+
+/** 内联回复状态 */
+const replyingItemId = ref<string | null>(null)
+const replyContent = ref('')
+const replySubmitting = ref(false)
+
+/** 是否可以回复（评论/提及类通知且有关联工单） */
+function canReply(item: NotificationVO): boolean {
+  return (item.type === 'issue_commented' || item.type === 'mention') &&
+    item.resourceType === 'issue' && !!item.resourceId
+}
+
+/** 展开/收起回复编辑器 */
+function toggleReply(itemId: string) {
+  if (replyingItemId.value === itemId) {
+    replyingItemId.value = null
+    replyContent.value = ''
+  } else {
+    replyingItemId.value = itemId
+    replyContent.value = ''
+  }
+}
+
+/** 提交回复 */
+async function submitReply(item: NotificationVO) {
+  if (!replyContent.value.trim() || !item.resourceId) return
+  replySubmitting.value = true
+  try {
+    const res = await issueApi.addComment(item.resourceId, replyContent.value.trim())
+    if (res.code === 0) {
+      Message.success('回复已发送')
+      replyingItemId.value = null
+      replyContent.value = ''
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '回复失败')
+  } finally {
+    replySubmitting.value = false
+  }
+}
+
+/** 取消回复 */
+function cancelReply() {
+  replyingItemId.value = null
+  replyContent.value = ''
+}
 
 /** 加载项目列表 */
 async function loadProjects() {
@@ -347,8 +434,8 @@ function handleMarkRead(id: string) {
   markRead(id)
 }
 
-function handleMarkUnread(_id: string) {
-  // Mark as unread is not supported by API yet, placeholder for future
+function handleMarkUnread(id: string) {
+  markUnread(id)
 }
 
 function handleMarkAllRead() {
@@ -824,5 +911,102 @@ onMounted(() => {
 .pagination-info {
   font-size: 12px;
   color: var(--tf-text-tertiary);
+}
+
+/* Notification Item Wrapper */
+.notification-item-wrapper {
+  margin: 2px 0;
+}
+
+/* Reply Button */
+.item-reply-btn:hover {
+  color: var(--tf-accent);
+}
+
+/* Inline Reply Editor */
+.reply-editor {
+  margin: 0 16px 12px 52px;
+  padding: 12px;
+  background: var(--tf-bg-surface, var(--tf-bg-hover));
+  border: 1px solid var(--tf-border);
+  border-radius: 8px;
+}
+
+.reply-textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  background: var(--tf-bg-body, var(--color-bg-1));
+  color: var(--tf-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.reply-textarea:focus {
+  outline: none;
+  border-color: var(--tf-accent);
+}
+.reply-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.reply-textarea::placeholder {
+  color: var(--tf-text-tertiary);
+}
+
+.reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.reply-hint {
+  font-size: 11px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+}
+
+.reply-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reply-cancel-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--tf-border);
+  background: transparent;
+  border-radius: 6px;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.reply-cancel-btn:hover:not(:disabled) {
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-primary);
+}
+
+.reply-submit-btn {
+  padding: 5px 14px;
+  border: none;
+  background: var(--tf-accent);
+  border-radius: 6px;
+  color: var(--tf-text-on-accent, #fff);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.reply-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.reply-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

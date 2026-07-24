@@ -1,15 +1,18 @@
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useWebSocket } from '@/composables/useWebSocket'
+import type { StompSubscription } from '@stomp/stompjs'
 import { notificationApi, type NotificationVO, type NotificationCategory, type CategoryUnreadCounts, type MutedThreadVO } from '@/api/notification'
 
 /**
  * 通知中心 composable
  *
- * 管理通知状态：未读计数、通知列表、分类标签页、轮询刷新。
+ * 管理通知状态：未读计数、通知列表、分类标签页。
+ * 实时推送优先（WebSocket STOMP），轮询作为降级方案。
  * 模块级单例，多个组件共享同一状态。
  */
 
-const POLL_INTERVAL = 30 * 1000 // 30 秒轮询未读数
+const POLL_INTERVAL = 30 * 1000 // 30 秒轮询（WebSocket 断开时的降级方案）
 const CATEGORY_STORAGE_KEY = 'tf_notification_category'
 
 // 模块级状态（单例）
@@ -25,6 +28,8 @@ const activeProjectId = ref<string | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let initialized = false
+let wsSubscription: StompSubscription | null = null
+let wsConnected = false
 
 /**
  * 从 localStorage 恢复上次选择的标签页
@@ -152,6 +157,24 @@ export function useNotification() {
     }
   }
 
+  /** 标记单条未读（恢复未读状态） */
+  async function markUnread(id: string) {
+    try {
+      const res = await notificationApi.markUnread(id)
+      if (res.code === 0) {
+        const item = notifications.value.find(n => n.id === id)
+        if (item && item.isRead) {
+          item.isRead = false
+          unreadCount.value += 1
+          // 更新分类未读计数
+          incrementCategoryCount(item.type)
+        }
+      }
+    } catch {
+      // 静默失败
+    }
+  }
+
   /** 全部标记已读 */
   async function markAllRead() {
     try {
@@ -225,7 +248,7 @@ export function useNotification() {
     }
   }
 
-  /** 开始轮询 */
+  /** 开始轮询（WebSocket 断开时的降级方案） */
   function startPolling() {
     stopPolling()
     pollTimer = setInterval(() => {
@@ -245,6 +268,74 @@ export function useNotification() {
     }
   }
 
+  /**
+   * 订阅用户级通知 WebSocket 队列。
+   * 收到推送时立即更新未读计数和通知列表（无需等待轮询周期）。
+   * WebSocket 连接成功后停止 HTTP 轮询；断开后自动恢复轮询。
+   */
+  function subscribeNotifications() {
+    const { connect, getClient, status } = useWebSocket()
+    connect()
+
+    const doSubscribe = () => {
+      unsubscribeNotifications()
+      const client = getClient()
+      if (!client?.connected) return
+
+      wsSubscription = client.subscribe('/user/queue/notifications', (message) => {
+        try {
+          const event = JSON.parse(message.body)
+          if (event.event === 'NEW_NOTIFICATION') {
+            // 收到实时推送 — 立即刷新未读计数
+            fetchUnreadCount()
+            fetchCategoryUnreadCounts()
+            // 面板打开时追加新通知到列表
+            if (panelVisible.value) {
+              fetchNotifications()
+            }
+          }
+        } catch (e) {
+          console.warn('[Notification] Failed to parse WebSocket message:', e)
+        }
+      })
+
+      // WebSocket 连接成功 — 停止轮询
+      wsConnected = true
+      stopPolling()
+      console.debug('[Notification] WebSocket subscribed, polling stopped')
+    }
+
+    // 监听连接状态变化
+    watch(status, (newStatus) => {
+      if (newStatus === 'connected') {
+        doSubscribe()
+      } else if (newStatus === 'disconnected' || newStatus === 'error') {
+        // WebSocket 断开 — 恢复轮询作为降级方案
+        if (wsConnected) {
+          wsConnected = false
+          startPolling()
+          console.debug('[Notification] WebSocket disconnected, polling resumed')
+        }
+      }
+    })
+
+    // 如果已经连接，立即订阅
+    if (status.value === 'connected') {
+      doSubscribe()
+    } else {
+      // 尚未连接 — 先启动轮询兜底
+      startPolling()
+    }
+  }
+
+  /** 取消 WebSocket 通知订阅 */
+  function unsubscribeNotifications() {
+    if (wsSubscription) {
+      wsSubscription.unsubscribe()
+      wsSubscription = null
+    }
+  }
+
   /** 初始化（AppLayout onMounted 调用一次） */
   function init() {
     if (initialized) return
@@ -252,15 +343,17 @@ export function useNotification() {
 
     if (authStore.isAuthenticated) {
       fetchUnreadCount()
-      startPolling()
+      subscribeNotifications()
     }
 
     watch(() => authStore.isAuthenticated, (authenticated) => {
       if (authenticated) {
         fetchUnreadCount()
-        startPolling()
+        subscribeNotifications()
       } else {
+        unsubscribeNotifications()
         stopPolling()
+        wsConnected = false
         unreadCount.value = 0
         categoryUnreadCounts.value = { all: 0, mention: 0, subscription: 0, system: 0 }
         notifications.value = []
@@ -327,6 +420,22 @@ export function useNotification() {
     }
   }
 
+  /**
+   * 根据通知类型递增对应分类的未读计数
+   */
+  function incrementCategoryCount(type: string) {
+    const counts = categoryUnreadCounts.value
+    counts.all += 1
+
+    if (type === 'mention') {
+      counts.mention += 1
+    } else if (['issue_assigned', 'issue_auto_assigned', 'issue_commented', 'issue_status_changed', 'due_date_alert', 'overdue_alert'].includes(type)) {
+      counts.subscription += 1
+    } else {
+      counts.system += 1
+    }
+  }
+
   return {
     // State
     unreadCount,
@@ -348,6 +457,7 @@ export function useNotification() {
     setCategory,
     setProjectFilter,
     markRead,
+    markUnread,
     markAllRead,
     deleteNotification,
     deleteAllRead,

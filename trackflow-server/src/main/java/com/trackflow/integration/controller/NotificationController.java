@@ -63,6 +63,16 @@ public class NotificationController {
         return R.ok();
     }
 
+    /**
+     * 标记单条通知为未读（恢复未读状态，用于用户暂时看到但需要稍后处理的通知）
+     */
+    @PutMapping("/{id}/unread")
+    public R<Void> markUnread(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        notificationService.markUnread(id, userId);
+        return R.ok();
+    }
+
     @PutMapping("/read-all")
     public R<Void> markAllRead() {
         Long userId = SecurityUtils.getCurrentUserId();

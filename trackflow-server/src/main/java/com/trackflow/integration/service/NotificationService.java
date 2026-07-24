@@ -20,6 +20,7 @@ import com.trackflow.system.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,7 @@ public class NotificationService {
     private final NotificationPreferenceService preferenceService;
     private final SystemSettingService systemSettingService;
     private final NotificationUrlBuilder urlBuilder;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * 通知聚合时间窗口（分钟）。同一用户+同一类型+同一资源在此窗口内的多次通知将被合并。
@@ -150,6 +152,9 @@ public class NotificationService {
                 markMailSent(userId, typeValue, resourceType, resourceId);
             }
         }
+
+        // WebSocket 实时推送：通知用户有新通知（轻量事件，仅含必要信息）
+        pushNotificationToUser(userId, title, typeValue, resourceType, resourceId);
     }
 
     /**
@@ -299,6 +304,11 @@ public class NotificationService {
                 // 仅标记实际发送成功的用户——失败的由 NotificationMailScheduler 60秒后重试
                 markMailSentBatch(sentIds, typeValue, resourceType, resourceId);
             }
+        }
+
+        // WebSocket 实时推送：通知所有接收者有新通知
+        for (Long userId : filteredUserIds) {
+            pushNotificationToUser(userId, title, typeValue, resourceType, resourceId);
         }
     }
 
@@ -724,6 +734,19 @@ public class NotificationService {
     }
 
     /**
+     * 标记未读（恢复未读状态，带所有权校验）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void markUnread(Long id, Long userId) {
+        Notification n = notificationMapper.selectById(id);
+        if (n == null || !n.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "通知不存在");
+        }
+        n.setIsRead(false);
+        notificationMapper.updateById(n);
+    }
+
+    /**
      * 全部标记已读
      */
     @Transactional(rollbackFor = Exception.class)
@@ -810,5 +833,35 @@ public class NotificationService {
     private boolean isInAppEnabled() {
         String value = systemSettingService.getSettingValue("notification.in_app_enabled", "true");
         return Boolean.parseBoolean(value);
+    }
+
+    /**
+     * 通过 WebSocket 推送轻量通知事件到指定用户。
+     * <p>
+     * 推送目的地：/user/{userId}/queue/notifications
+     * 推送内容：仅含未读数增量提示和最新通知摘要，前端收到后刷新 badge 和列表。
+     * <p>
+     * 推送失败不影响业务（用户可能不在线或 WebSocket 未连接），仅记录 debug 日志。
+     */
+    private void pushNotificationToUser(Long userId, String title, String type, String resourceType, Long resourceId) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("event", "NEW_NOTIFICATION");
+            payload.put("title", title);
+            payload.put("type", type);
+            payload.put("resourceType", resourceType);
+            payload.put("resourceId", resourceId != null ? resourceId.toString() : null);
+            payload.put("timestamp", LocalDateTime.now().toString());
+
+            messagingTemplate.convertAndSendToUser(
+                    userId.toString(),
+                    "/queue/notifications",
+                    payload
+            );
+            log.debug("[Notification] WebSocket 推送: userId={}, type={}", userId, type);
+        } catch (Exception e) {
+            // WebSocket 推送失败不影响业务——用户可能不在线，轮询仍可兜底
+            log.debug("[Notification] WebSocket 推送失败（用户可能离线）: userId={}, error={}", userId, e.getMessage());
+        }
     }
 }

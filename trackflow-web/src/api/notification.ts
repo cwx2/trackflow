@@ -113,6 +113,11 @@ export const notificationApi = {
     return request.put<any, R<void>>(`/notifications/${id}/read`)
   },
 
+  /** 标记单条未读（恢复未读状态） */
+  markUnread(id: string) {
+    return request.put<any, R<void>>(`/notifications/${id}/unread`)
+  },
+
   /** 全部标记已读 */
   markAllRead() {
     return request.put<any, R<void>>('/notifications/read-all')
