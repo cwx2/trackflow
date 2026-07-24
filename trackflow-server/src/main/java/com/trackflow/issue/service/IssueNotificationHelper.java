@@ -664,17 +664,18 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
 
     /**
      * 工时记录通知：通知负责人、报告人和关注者。
+     * 使用独立的 ISSUE_SPENT_TIME 偏好检查（对标 YouTrack Spent time 订阅事件）。
      */
     @Async("notificationExecutor")
     public void notifyTimeLogged(Issue issue, int durationMinutes, Long operatorId) {
         try {
             boolean excludeSelf = !preferenceService.isNotifyOwnChanges(operatorId, issue.getProjectId());
             Long excludeUserId = excludeSelf ? operatorId : null;
-            Map<Long, NotificationReason> recipientReasons = collectStatusChangeRecipientsWithReason(issue, excludeUserId);
+            Map<Long, NotificationReason> recipientReasons = collectRecipientsForEvent(issue, excludeUserId, "onSpentTime");
             if (recipientReasons.isEmpty()) return;
 
             Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
-                    recipientReasons, NotificationEventType.ISSUE_UPDATED, issue.getProjectId());
+                    recipientReasons, NotificationEventType.ISSUE_SPENT_TIME, issue.getProjectId());
             if (enabledUserIds.isEmpty()) return;
 
             String operatorName = getUserDisplayName(operatorId);
@@ -684,7 +685,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                     operatorName, issue.getIssueKey(), issue.getTitle(), durationStr);
 
             batchNotifyByReason(enabledUserIds, recipientReasons, operatorId, title, content,
-                    NotificationType.issue_updated, "issue", issue.getId(), issue.getProjectId());
+                    NotificationType.issue_spent_time, "issue", issue.getId(), issue.getProjectId());
 
             log.debug("[IssueNotification] 已发送工时记录通知: issue={}, duration={}min, recipients={}",
                     issue.getIssueKey(), durationMinutes, enabledUserIds.size());
@@ -695,7 +696,45 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                     null, operatorId,
                     String.format("%s 记录了工时", issue.getIssueKey()),
                     String.format("工单 [%s] %s 记录了工时", issue.getIssueKey(), issue.getTitle()),
-                    NotificationType.issue_updated.name(), null,
+                    NotificationType.issue_spent_time.name(), null,
+                    "issue", issue.getId(), issue.getProjectId()));
+        }
+    }
+
+    /**
+     * 工单被投票通知：通知报告人、负责人和关注者。
+     * 使用独立的 ISSUE_VOTED 偏好检查（对标 YouTrack Votes 订阅事件）。
+     */
+    @Async("notificationExecutor")
+    public void notifyVoted(Issue issue, Long voterId, int voteCount) {
+        try {
+            boolean excludeSelf = !preferenceService.isNotifyOwnChanges(voterId, issue.getProjectId());
+            Long excludeUserId = excludeSelf ? voterId : null;
+            Map<Long, NotificationReason> recipientReasons = collectRecipientsForEvent(issue, excludeUserId, "onVoted");
+            if (recipientReasons.isEmpty()) return;
+
+            Set<Long> enabledUserIds = filterRecipientsWithWatcherSupport(
+                    recipientReasons, NotificationEventType.ISSUE_VOTED, issue.getProjectId());
+            if (enabledUserIds.isEmpty()) return;
+
+            String voterName = getUserDisplayName(voterId);
+            String title = String.format("%s 收到了投票", issue.getIssueKey());
+            String content = String.format("%s 对工单 [%s] %s 进行了投票（当前 %d 票）",
+                    voterName, issue.getIssueKey(), issue.getTitle(), voteCount);
+
+            batchNotifyByReason(enabledUserIds, recipientReasons, voterId, title, content,
+                    NotificationType.issue_voted, "issue", issue.getId(), issue.getProjectId());
+
+            log.debug("[IssueNotification] 已发送投票通知: issue={}, voter={}, voteCount={}, recipients={}",
+                    issue.getIssueKey(), voterId, voteCount, enabledUserIds.size());
+        } catch (Exception e) {
+            log.error("[IssueNotification] 发送投票通知失败: issue={}, error={}",
+                    issue.getIssueKey(), e.getMessage(), e);
+            outboxWriter.saveForRetry("notifyVoted", e, outboxWriter.buildNotifyParams(
+                    null, voterId,
+                    String.format("%s 收到了投票", issue.getIssueKey()),
+                    String.format("工单 [%s] %s 收到了投票", issue.getIssueKey(), issue.getTitle()),
+                    NotificationType.issue_voted.name(), null,
                     "issue", issue.getId(), issue.getProjectId()));
         }
     }
@@ -968,6 +1007,88 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         }
 
         // 排除当前操作者
+        recipients.remove(excludeUserId);
+        return recipients;
+    }
+
+    /**
+     * 通用事件接收人收集方法（适用于 onVoted / onSpentTime 等新事件类型）：
+     * - 项目订阅 → subscription（最低优先级）
+     * - Saved Search 订阅 → subscription
+     * - Builtin 订阅 → subscription
+     * - Watcher → watched
+     * - 标签订阅 → subscription
+     * - 报告人 → reporter
+     * - 负责人 → assigned
+     * 去重，排除操作者自己。
+     *
+     * @param issue        当前工单
+     * @param excludeUserId 要排除的用户ID（通常是操作者）
+     * @param eventKey     订阅事件键（如 "onVoted"、"onSpentTime"）
+     * @return 接收人及其 reason 映射
+     */
+    private Map<Long, NotificationReason> collectRecipientsForEvent(Issue issue, Long excludeUserId, String eventKey) {
+        Map<Long, NotificationReason> recipients = new LinkedHashMap<>();
+
+        // 项目订阅者优先级最低
+        try {
+            Set<Long> projectSubscribers = subscriptionService.findSubscribersByProject(issue.getProjectId(), eventKey);
+            for (Long id : projectSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] 项目订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Saved Search 订阅匹配
+        try {
+            Set<Long> savedQuerySubscribers = collectSavedQuerySubscribers(issue, eventKey);
+            for (Long id : savedQuerySubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] Saved Search 订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Builtin 订阅匹配
+        try {
+            Set<Long> builtinSubscribers = collectBuiltinSubscribers(issue, eventKey);
+            for (Long id : builtinSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] Builtin 订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // Watcher 优先级高于订阅
+        List<Long> watcherIds = watcherMapper.selectWatcherUserIds(issue.getId());
+        if (watcherIds != null) {
+            for (Long id : watcherIds) {
+                recipients.put(id, NotificationReason.watched);
+            }
+        }
+
+        // 标签订阅者
+        try {
+            List<Long> tagIds = getIssueTagIds(issue.getId());
+            Set<Long> tagSubscribers = subscriptionService.findSubscribersByTags(tagIds, eventKey);
+            for (Long id : tagSubscribers) {
+                recipients.put(id, NotificationReason.subscription);
+            }
+        } catch (Exception e) {
+            log.trace("[IssueNotification] 标签订阅匹配跳过: {}", e.getMessage());
+        }
+
+        // 报告人
+        if (issue.getReporterId() != null) {
+            recipients.put(issue.getReporterId(), NotificationReason.reporter);
+        }
+
+        // 负责人优先级最高
+        if (issue.getAssigneeId() != null) {
+            recipients.put(issue.getAssigneeId(), NotificationReason.assigned);
+        }
+
         recipients.remove(excludeUserId);
         return recipients;
     }

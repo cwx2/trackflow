@@ -75,6 +75,20 @@
               </div>
               <a-switch v-model="form.onWatchedUpdated" size="small" @change="handleSave" />
             </div>
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">工单收到投票</span>
+                <span class="event-desc">你参与的工单有人投票时通知</span>
+              </div>
+              <a-switch v-model="form.onIssueVoted" size="small" @change="handleSave" />
+            </div>
+            <div class="event-item">
+              <div class="event-info">
+                <span class="event-label">工时记录变更</span>
+                <span class="event-desc">你参与的工单有人记录或修改工时时通知</span>
+              </div>
+              <a-switch v-model="form.onIssueSpentTime" size="small" @change="handleSave" />
+            </div>
           </div>
         </div>
 
@@ -236,6 +250,14 @@
                 <div class="email-event-item">
                   <span class="email-event-label">关注的工单有更新</span>
                   <a-switch v-model="form.emailOnWatchedUpdated" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">工单收到投票</span>
+                  <a-switch v-model="form.emailOnIssueVoted" size="small" @change="handleSave" />
+                </div>
+                <div class="email-event-item">
+                  <span class="email-event-label">工时记录变更</span>
+                  <a-switch v-model="form.emailOnIssueSpentTime" size="small" @change="handleSave" />
                 </div>
               </div>
             </div>

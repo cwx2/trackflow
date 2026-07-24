@@ -14,4 +14,6 @@ public class SubscriptionEventsVO {
     private Boolean onCommented = true;
     private Boolean onTagAdded = true;
     private Boolean onTagRemoved = true;
+    private Boolean onVoted = true;
+    private Boolean onSpentTime = true;
 }

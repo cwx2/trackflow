@@ -58,6 +58,12 @@ public class NotificationPreferenceVO {
     // 关注（Watched）通知开关
     private Boolean onWatchedUpdated;
 
+    // Vote + Spent Time 事件开关
+    private Boolean onIssueVoted;
+    private Boolean emailOnIssueVoted;
+    private Boolean onIssueSpentTime;
+    private Boolean emailOnIssueSpentTime;
+
     // 自动关注行为配置
     private Boolean autoWatchOnCreate;
     private Boolean autoWatchOnComment;

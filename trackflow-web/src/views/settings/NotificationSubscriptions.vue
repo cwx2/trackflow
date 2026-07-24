@@ -108,6 +108,8 @@
             <a-checkbox v-model="addForm.events.onUpdated">工单有更新</a-checkbox>
             <a-checkbox v-model="addForm.events.onResolved">工单被解决</a-checkbox>
             <a-checkbox v-model="addForm.events.onCommented">新增评论</a-checkbox>
+            <a-checkbox v-model="addForm.events.onVoted">收到投票</a-checkbox>
+            <a-checkbox v-model="addForm.events.onSpentTime">工时变更</a-checkbox>
             <a-checkbox v-model="addForm.events.onTagAdded">标签被添加</a-checkbox>
             <a-checkbox v-model="addForm.events.onTagRemoved">标签被移除</a-checkbox>
           </div>
@@ -143,7 +145,9 @@ const addForm = reactive({
     onResolved: true,
     onCommented: true,
     onTagAdded: true,
-    onTagRemoved: true
+    onTagRemoved: true,
+    onVoted: true,
+    onSpentTime: true
   }
 })
 
@@ -152,6 +156,8 @@ const eventKeys: Array<{ key: keyof SubscriptionEventsVO; label: string; short: 
   { key: 'onUpdated', label: '工单有更新', short: '更新' },
   { key: 'onResolved', label: '工单被解决', short: '解决' },
   { key: 'onCommented', label: '新增评论', short: '评论' },
+  { key: 'onVoted', label: '收到投票', short: '投票' },
+  { key: 'onSpentTime', label: '工时变更', short: '工时' },
   { key: 'onTagAdded', label: '标签被添加', short: '+标签' },
   { key: 'onTagRemoved', label: '标签被移除', short: '-标签' }
 ]

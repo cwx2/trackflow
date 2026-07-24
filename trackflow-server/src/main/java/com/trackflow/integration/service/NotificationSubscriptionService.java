@@ -351,6 +351,8 @@ public class NotificationSubscriptionService {
             vo.setOnCommented(getBooleanOrDefault(node, "onCommented", true));
             vo.setOnTagAdded(getBooleanOrDefault(node, "onTagAdded", true));
             vo.setOnTagRemoved(getBooleanOrDefault(node, "onTagRemoved", true));
+            vo.setOnVoted(getBooleanOrDefault(node, "onVoted", true));
+            vo.setOnSpentTime(getBooleanOrDefault(node, "onSpentTime", true));
         } catch (JacksonException e) {
             log.warn("[Subscription] 解析事件配置失败: {}", eventsJson, e);
         }
@@ -370,14 +372,16 @@ public class NotificationSubscriptionService {
         map.put("onCommented", dto.getOnCommented() != null ? dto.getOnCommented() : true);
         map.put("onTagAdded", dto.getOnTagAdded() != null ? dto.getOnTagAdded() : true);
         map.put("onTagRemoved", dto.getOnTagRemoved() != null ? dto.getOnTagRemoved() : true);
+        map.put("onVoted", dto.getOnVoted() != null ? dto.getOnVoted() : true);
+        map.put("onSpentTime", dto.getOnSpentTime() != null ? dto.getOnSpentTime() : true);
         try {
             return objectMapper.writeValueAsString(map);
         } catch (JacksonException e) {
-            return "{\"onCreated\":true,\"onUpdated\":true,\"onResolved\":true,\"onCommented\":true,\"onTagAdded\":true,\"onTagRemoved\":true}";
+            return "{\"onCreated\":true,\"onUpdated\":true,\"onResolved\":true,\"onCommented\":true,\"onTagAdded\":true,\"onTagRemoved\":true,\"onVoted\":true,\"onSpentTime\":true}";
         }
     }
 
     private String buildDefaultEventsJson() {
-        return "{\"onCreated\":true,\"onUpdated\":true,\"onResolved\":true,\"onCommented\":true,\"onTagAdded\":true,\"onTagRemoved\":true}";
+        return "{\"onCreated\":true,\"onUpdated\":true,\"onResolved\":true,\"onCommented\":true,\"onTagAdded\":true,\"onTagRemoved\":true,\"onVoted\":true,\"onSpentTime\":true}";
     }
 }

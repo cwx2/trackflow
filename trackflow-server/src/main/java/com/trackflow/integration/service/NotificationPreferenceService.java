@@ -413,6 +413,20 @@ public class NotificationPreferenceService {
             pref.setOnWatchedUpdated(dto.getOnWatchedUpdated());
         }
 
+        // Vote + Spent Time 事件开关
+        if (dto.getOnIssueVoted() != null) {
+            pref.setOnIssueVoted(dto.getOnIssueVoted());
+        }
+        if (dto.getEmailOnIssueVoted() != null) {
+            pref.setEmailOnIssueVoted(dto.getEmailOnIssueVoted());
+        }
+        if (dto.getOnIssueSpentTime() != null) {
+            pref.setOnIssueSpentTime(dto.getOnIssueSpentTime());
+        }
+        if (dto.getEmailOnIssueSpentTime() != null) {
+            pref.setEmailOnIssueSpentTime(dto.getEmailOnIssueSpentTime());
+        }
+
         // 自动关注行为配置
         if (dto.getAutoWatchOnCreate() != null) {
             pref.setAutoWatchOnCreate(dto.getAutoWatchOnCreate());

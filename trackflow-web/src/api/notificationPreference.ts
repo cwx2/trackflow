@@ -38,6 +38,11 @@ export interface NotificationPreferenceVO {
   quietHoursEnd: string | null
   // Watched 通知开关
   onWatchedUpdated: boolean
+  // Vote + Spent Time 事件开关
+  onIssueVoted: boolean
+  emailOnIssueVoted: boolean
+  onIssueSpentTime: boolean
+  emailOnIssueSpentTime: boolean
   // 自动关注行为配置
   autoWatchOnCreate: boolean
   autoWatchOnComment: boolean
@@ -79,6 +84,11 @@ export interface UpdateNotificationPreferenceDTO {
   quietHoursEnd?: string | null
   // Watched 通知开关
   onWatchedUpdated?: boolean
+  // Vote + Spent Time 事件开关
+  onIssueVoted?: boolean
+  emailOnIssueVoted?: boolean
+  onIssueSpentTime?: boolean
+  emailOnIssueSpentTime?: boolean
   // 自动关注行为配置
   autoWatchOnCreate?: boolean
   autoWatchOnComment?: boolean

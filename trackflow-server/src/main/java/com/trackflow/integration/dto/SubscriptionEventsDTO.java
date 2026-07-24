@@ -14,4 +14,6 @@ public class SubscriptionEventsDTO {
     private Boolean onCommented;
     private Boolean onTagAdded;
     private Boolean onTagRemoved;
+    private Boolean onVoted;
+    private Boolean onSpentTime;
 }

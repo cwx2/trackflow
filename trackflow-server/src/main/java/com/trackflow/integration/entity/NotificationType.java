@@ -26,6 +26,10 @@ public enum NotificationType {
     issue_moved("工单移动"),
     /** 工单字段变更（priority/dueDate/description/sprint/parent/tags） */
     issue_updated("工单更新"),
+    /** 工单被投票 */
+    issue_voted("工单投票"),
+    /** 工单记录了工时 */
+    issue_spent_time("工时记录"),
 
     // ===== Project 相关 =====
     /** 被添加到项目 */

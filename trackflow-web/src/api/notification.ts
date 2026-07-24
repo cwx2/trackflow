@@ -10,6 +10,8 @@ export type NotificationType =
   | 'issue_commented'
   | 'issue_status_changed'
   | 'issue_updated'
+  | 'issue_voted'
+  | 'issue_spent_time'
   | 'mention'
   | 'issue_moved'
   | 'member_added'

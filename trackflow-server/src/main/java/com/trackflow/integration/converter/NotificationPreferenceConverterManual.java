@@ -79,6 +79,12 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
         // Watched 通知开关
         vo.setOnWatchedUpdated(entity.getOnWatchedUpdated());
 
+        // Vote + Spent Time 事件开关
+        vo.setOnIssueVoted(entity.getOnIssueVoted());
+        vo.setEmailOnIssueVoted(entity.getEmailOnIssueVoted());
+        vo.setOnIssueSpentTime(entity.getOnIssueSpentTime());
+        vo.setEmailOnIssueSpentTime(entity.getEmailOnIssueSpentTime());
+
         // 自动关注行为配置
         vo.setAutoWatchOnCreate(entity.getAutoWatchOnCreate());
         vo.setAutoWatchOnComment(entity.getAutoWatchOnComment());

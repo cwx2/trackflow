@@ -122,4 +122,10 @@ public class IssueNotificationEventListener {
         if (NotificationContext.isSilent()) return;
         notificationHelper.notifyRestored(event.issue(), event.operatorId());
     }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleVoted(IssueNotificationEvent.Voted event) {
+        if (NotificationContext.isSilent()) return;
+        notificationHelper.notifyVoted(event.issue(), event.voterId(), event.voteCount());
+    }
 }

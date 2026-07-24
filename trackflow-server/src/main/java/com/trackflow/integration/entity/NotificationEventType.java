@@ -38,7 +38,13 @@ public enum NotificationEventType {
 
     // ===== Watcher 相关 =====
     /** 用户关注的工单有更新 */
-    WATCHED(NotificationPreference::getOnWatchedUpdated, NotificationPreference::getEmailOnWatchedUpdated);
+    WATCHED(NotificationPreference::getOnWatchedUpdated, NotificationPreference::getEmailOnWatchedUpdated),
+
+    // ===== Vote + Spent Time 相关（对标 YouTrack 订阅事件列表） =====
+    /** 工单被投票 */
+    ISSUE_VOTED(NotificationPreference::getOnIssueVoted, NotificationPreference::getEmailOnIssueVoted),
+    /** 工单有工时记录变更 */
+    ISSUE_SPENT_TIME(NotificationPreference::getOnIssueSpentTime, NotificationPreference::getEmailOnIssueSpentTime);
 
     private final Function<NotificationPreference, Boolean> extractor;
     private final Function<NotificationPreference, Boolean> emailExtractor;

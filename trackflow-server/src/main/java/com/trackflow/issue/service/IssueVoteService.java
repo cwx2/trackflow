@@ -1,6 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -12,6 +13,7 @@ import com.trackflow.issue.vo.IssueVoteStatusVO;
 import com.trackflow.issue.vo.IssueVoterVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,7 @@ public class IssueVoteService {
     private final IssueVoteMapper voteMapper;
     private final IssueMapper issueMapper;
     private final IssueWatcherService watcherService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 投票 - 对工单进行投票
@@ -85,6 +88,11 @@ public class IssueVoteService {
         }
 
         log.info("用户 {} 对工单 {} 进行了投票", userId, issueId);
+
+        // 发布投票通知事件
+        int voteCount = voteMapper.countByIssueId(issueId);
+        eventPublisher.publishEvent(new IssueNotificationEvent.Voted(issue, userId, voteCount));
+
         return buildStatusVO(issueId, userId);
     }
 

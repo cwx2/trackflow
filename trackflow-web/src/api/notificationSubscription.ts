@@ -10,6 +10,8 @@ export interface SubscriptionEventsVO {
   onCommented: boolean
   onTagAdded: boolean
   onTagRemoved: boolean
+  onVoted: boolean
+  onSpentTime: boolean
 }
 
 export interface NotificationSubscriptionVO {

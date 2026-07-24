@@ -107,6 +107,15 @@ public sealed interface IssueNotificationEvent extends NotificationEvent {
     record TimeLogged(Issue issue, int durationMinutes, Long operatorId) implements IssueNotificationEvent {}
 
     /**
+     * 工单投票通知事件。
+     *
+     * @param issue      被投票的工单
+     * @param voterId    投票的用户 ID
+     * @param voteCount  投票后的总票数
+     */
+    record Voted(Issue issue, Long voterId, int voteCount) implements IssueNotificationEvent {}
+
+    /**
      * 工单恢复通知事件（从回收站还原）。
      *
      * @param issue      恢复后的工单

@@ -69,6 +69,16 @@ public class NotificationPreference implements Serializable {
     /** 我关注的工单有更新时通知我 */
     private Boolean onWatchedUpdated;
 
+    // Vote + Spent Time 事件开关（对标 YouTrack 订阅事件列表）
+    /** 工单被投票时通知我（站内） */
+    private Boolean onIssueVoted;
+    /** 工单被投票时通知我（邮件） */
+    private Boolean emailOnIssueVoted;
+    /** 工单有工时记录变更时通知我（站内） */
+    private Boolean onIssueSpentTime;
+    /** 工单有工时记录变更时通知我（邮件） */
+    private Boolean emailOnIssueSpentTime;
+
     // 自动关注行为配置
     /** 创建工单时自动关注 */
     private Boolean autoWatchOnCreate;
