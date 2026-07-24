@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.notification.AbstractNotificationHelper;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationReason;
-import com.trackflow.integration.entity.NotificationSubscription;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationOutboxWriter;
 import com.trackflow.integration.service.NotificationPreferenceService;
@@ -19,8 +18,6 @@ import com.trackflow.issue.mapper.IssueTagRelationMapper;
 import com.trackflow.issue.mapper.IssueWatcherMapper;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.query.engine.QueryExecutor;
-import com.trackflow.query.entity.SavedQuery;
-import com.trackflow.query.mapper.SavedQueryMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -57,7 +54,6 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     private final IssueWatcherMapper watcherMapper;
     private final IssueTagRelationMapper tagRelationMapper;
     private final QueryExecutor queryExecutor;
-    private final SavedQueryMapper savedQueryMapper;
 
     public IssueNotificationHelper(NotificationService notificationService,
                                    NotificationPreferenceService preferenceService,
@@ -69,8 +65,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
                                    IssueWatcherMapper watcherMapper,
                                    IssueTagRelationMapper tagRelationMapper,
                                    SysUserMapper sysUserMapper,
-                                   QueryExecutor queryExecutor,
-                                   SavedQueryMapper savedQueryMapper) {
+                                   QueryExecutor queryExecutor) {
         super(sysUserMapper, null); // IssueNotificationHelper 不需要 ProjectMemberMapper
         this.notificationService = notificationService;
         this.preferenceService = preferenceService;
@@ -82,7 +77,6 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
         this.watcherMapper = watcherMapper;
         this.tagRelationMapper = tagRelationMapper;
         this.queryExecutor = queryExecutor;
-        this.savedQueryMapper = savedQueryMapper;
     }
 
     // ==================== 公共通知方法 ====================
@@ -1101,10 +1095,12 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     /**
      * 收集 Saved Search 订阅匹配的用户。
      * <p>
-     * 匹配逻辑：
-     * 1. 查出所有启用了指定事件的 saved_query 类型订阅
-     * 2. 按 savedQueryId 分组，对每个 savedQuery 评估工单是否匹配其 filters
-     * 3. 匹配成功则将该 savedQuery 的所有订阅者加入结果集
+     * 优化逻辑（避免 O(M) 次独立 SQL）：
+     * 1. 一次 JOIN 查询获取所有启用了指定事件的 saved_query 订阅及其 filters
+     * 2. 按 filters 字符串去重——相同过滤条件只执行一次匹配查询
+     * 3. 对去重后的 K 组 filters 调用 matchesIssue（K ≤ M，通常远小于订阅总数）
+     * <p>
+     * DB 查询次数：1 次 JOIN + K 次 matchesIssue（K = 不同 filters 数量）
      *
      * @param issue    当前变更的工单
      * @param eventKey 事件键
@@ -1112,46 +1108,41 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      */
     @SuppressWarnings("unchecked")
     private Set<Long> collectSavedQuerySubscribers(Issue issue, String eventKey) {
-        List<NotificationSubscription> savedQuerySubs = subscriptionService.getSavedQuerySubscriptionsForEvent(eventKey);
-        if (savedQuerySubs.isEmpty()) {
+        // 一次 JOIN 查询获取所有订阅及其 filters（替代原来的 M 次 selectById）
+        var rows = subscriptionService.getSavedQuerySubsWithFilters(eventKey);
+        if (rows.isEmpty()) {
             return Collections.emptySet();
         }
 
-        // 按 savedQueryId 分组
-        Map<Long, List<Long>> queryIdToUserIds = new LinkedHashMap<>();
-        for (NotificationSubscription sub : savedQuerySubs) {
-            if (sub.getSourceId() != null) {
-                queryIdToUserIds.computeIfAbsent(sub.getSourceId(), k -> new ArrayList<>()).add(sub.getUserId());
-            }
+        // 按 filters 字符串分组：相同 filters 的订阅共享一次匹配结果
+        // key = filters 字符串, value = 订阅该 filters 的用户 ID 列表
+        Map<String, List<Long>> filtersToUserIds = new LinkedHashMap<>();
+        for (var row : rows) {
+            filtersToUserIds.computeIfAbsent(row.getFilters(), k -> new ArrayList<>()).add(row.getUserId());
         }
 
         Set<Long> result = new HashSet<>();
 
-        for (Map.Entry<Long, List<Long>> entry : queryIdToUserIds.entrySet()) {
-            Long savedQueryId = entry.getKey();
+        // 对去重后的每组 filters 只执行一次 matchesIssue
+        for (Map.Entry<String, List<Long>> entry : filtersToUserIds.entrySet()) {
+            String filtersJson = entry.getKey();
             try {
-                SavedQuery savedQuery = savedQueryMapper.selectById(savedQueryId);
-                if (savedQuery == null || savedQuery.getFilters() == null || savedQuery.getFilters().isBlank()) {
-                    continue;
-                }
-
-                // 解析 filters JSON
                 List<Map<String, Object>> filters;
                 try {
                     var objectMapper = new tools.jackson.databind.ObjectMapper();
-                    filters = objectMapper.readValue(savedQuery.getFilters(),
+                    filters = objectMapper.readValue(filtersJson,
                             objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
                 } catch (Exception parseEx) {
-                    log.trace("[IssueNotification] 解析 SavedQuery filters 失败: queryId={}", savedQueryId);
+                    log.trace("[IssueNotification] 解析 SavedQuery filters 失败: filters={}", filtersJson);
                     continue;
                 }
 
-                // 使用 QueryExecutor 判断工单是否匹配
+                // 使用 QueryExecutor 判断工单是否匹配（每组 filters 只查一次）
                 if (queryExecutor.matchesIssue(issue.getId(), filters)) {
                     result.addAll(entry.getValue());
                 }
             } catch (Exception e) {
-                log.trace("[IssueNotification] Saved Search 匹配评估异常: queryId={}, error={}", savedQueryId, e.getMessage());
+                log.trace("[IssueNotification] Saved Search 匹配评估异常: filters={}, error={}", filtersJson, e.getMessage());
             }
         }
 

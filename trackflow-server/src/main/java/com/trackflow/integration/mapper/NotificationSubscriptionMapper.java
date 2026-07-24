@@ -1,6 +1,7 @@
 package com.trackflow.integration.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.trackflow.integration.dto.SavedQuerySubscriptionRow;
 import com.trackflow.integration.entity.NotificationSubscription;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -55,4 +56,19 @@ public interface NotificationSubscriptionMapper extends BaseMapper<NotificationS
             "WHERE source_type = 'saved_query' " +
             "AND (events->>#{eventKey})::boolean = true")
     List<NotificationSubscription> selectSavedQuerySubscriptionsByEvent(@Param("eventKey") String eventKey);
+
+    /**
+     * 一次 JOIN 查询获取所有启用了指定事件的 saved_query 订阅及其关联的 filters。
+     * 用于 collectSavedQuerySubscribers() 批量优化——避免 O(M) 次独立查询。
+     *
+     * @param eventKey 事件键（如 "onCreated"、"onUpdated"、"onCommented"）
+     * @return 包含 userId、sourceId、filters 的结果行列表
+     */
+    @Select("SELECT ns.user_id, ns.source_id, sq.filters " +
+            "FROM notification_subscription ns " +
+            "JOIN saved_query sq ON ns.source_id = sq.id " +
+            "WHERE ns.source_type = 'saved_query' " +
+            "AND (ns.events->>#{eventKey})::boolean = true " +
+            "AND sq.filters IS NOT NULL AND sq.filters != ''")
+    List<SavedQuerySubscriptionRow> selectSavedQuerySubsWithFilters(@Param("eventKey") String eventKey);
 }

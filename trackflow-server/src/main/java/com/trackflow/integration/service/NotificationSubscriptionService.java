@@ -272,6 +272,18 @@ public class NotificationSubscriptionService {
         return subs != null ? subs : Collections.emptyList();
     }
 
+    /**
+     * 一次 JOIN 查询获取所有启用了指定事件的 Saved Query 订阅及其 filters。
+     * 用于 collectSavedQuerySubscribers() 批量优化——避免 O(M) 次独立 SQL。
+     *
+     * @param eventKey 事件键
+     * @return 包含 userId、sourceId、filters 的结果行列表
+     */
+    public List<com.trackflow.integration.dto.SavedQuerySubscriptionRow> getSavedQuerySubsWithFilters(String eventKey) {
+        var rows = subscriptionMapper.selectSavedQuerySubsWithFilters(eventKey);
+        return rows != null ? rows : Collections.emptyList();
+    }
+
     // ==================== 私有方法 ====================
 
     private NotificationSubscriptionVO toVO(NotificationSubscription sub) {
