@@ -64,4 +64,19 @@ public interface ProjectMemberMapper extends BaseMapper<ProjectMember> {
      * 并 JOIN sys_user 直接返回 displayName，避免二次查询。
      */
     List<TopMemberRow> selectTopMembersByProjects(@Param("projectIds") List<Long> projectIds, @Param("topN") int topN);
+
+    /**
+     * 查询项目中已不再是成员、但仍有工单被分配的历史 assignee 用户 ID 列表。
+     * 用于 Assignee 下拉保留历史有效性（参照 YouTrack 行为：移除成员不自动清除 Assignee 候选）。
+     */
+    @Select("""
+            SELECT DISTINCT i.assignee_id FROM issue i
+            WHERE i.project_id = #{projectId}
+              AND i.assignee_id IS NOT NULL
+              AND i.deleted_at IS NULL
+              AND i.assignee_id NOT IN (
+                  SELECT DISTINCT pm.user_id FROM project_member pm WHERE pm.project_id = #{projectId}
+              )
+            """)
+    List<Long> selectFormerAssigneeUserIds(@Param("projectId") Long projectId);
 }

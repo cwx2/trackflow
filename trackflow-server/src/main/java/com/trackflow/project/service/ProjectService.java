@@ -988,40 +988,59 @@ public class ProjectService {
      * 获取项目中可被分配工单的成员列表。
      * 仅返回拥有 issue:edit 权限的成员（排除观察者、测试人员等不具备编辑能力的角色）。
      * 系统管理员即使不是项目成员也可被分配（拥有全部权限）。
+     *
+     * 同时返回"已离开项目但仍有工单被分配"的历史用户（标记为 formerMember），
+     * 参照 YouTrack 行为：移除成员不自动清除 Assignee 候选值，保留历史有效性。
      */
     public List<ProjectMemberVO> listAssignableMembersVO(Long projectId) {
         // 查询项目中拥有 issue:edit 权限的成员 user_id
         List<Long> assignableUserIds = memberMapper.selectUserIdsWithPermission(projectId, "issue:edit");
-        if (assignableUserIds.isEmpty()) return List.of();
+
+        // 查询已离开项目但仍有工单被分配的历史 assignee
+        List<Long> formerAssigneeIds = memberMapper.selectFormerAssigneeUserIds(projectId);
+
+        // 合并活跃成员和历史 assignee 用户 ID（去重）
+        Set<Long> allUserIds = new java.util.LinkedHashSet<>(assignableUserIds);
+        allUserIds.addAll(formerAssigneeIds);
+
+        if (allUserIds.isEmpty()) return List.of();
 
         // 获取用户信息
-        var users = userMapper.selectBatchIds(assignableUserIds);
+        var users = userMapper.selectBatchIds(new java.util.ArrayList<>(allUserIds));
         Map<Long, SysUser> userMap = users.stream()
                 .filter(u -> !"disabled".equals(u.getStatus()))
                 .collect(java.util.stream.Collectors.toMap(SysUser::getId, u -> u));
 
         if (userMap.isEmpty()) return List.of();
 
-        // 获取这些用户的成员记录（用于填充角色信息）
+        // 获取活跃成员的成员记录（用于填充角色信息）
         List<ProjectMember> members = memberMapper.selectList(
                 new LambdaQueryWrapper<ProjectMember>()
                         .eq(ProjectMember::getProjectId, projectId)
-                        .in(ProjectMember::getUserId, userMap.keySet())
+                        .in(ProjectMember::getUserId, assignableUserIds.isEmpty() ? List.of(0L) : assignableUserIds)
         );
 
         // 获取角色名称
         List<Long> roleIds = members.stream().map(ProjectMember::getRoleId).distinct().toList();
-        var roles = roleMapper.selectBatchIds(roleIds);
-        Map<Long, String> roleNameMap = roles.stream()
-                .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+        Map<Long, String> roleNameMap = java.util.Collections.emptyMap();
+        if (!roleIds.isEmpty()) {
+            var roles = roleMapper.selectBatchIds(roleIds);
+            roleNameMap = roles.stream()
+                    .collect(java.util.stream.Collectors.toMap(SysRole::getId, SysRole::getName));
+        }
 
-        // 按 userId 聚合
+        // 按 userId 聚合活跃成员
         Map<Long, List<ProjectMember>> membersByUser = members.stream()
                 .collect(java.util.stream.Collectors.groupingBy(ProjectMember::getUserId));
 
-        return membersByUser.entrySet().stream()
+        // 构建结果列表
+        List<ProjectMemberVO> result = new java.util.ArrayList<>();
+
+        // 1. 添加活跃成员
+        Map<Long, String> finalRoleNameMap = roleNameMap;
+        membersByUser.entrySet().stream()
                 .filter(entry -> userMap.containsKey(entry.getKey()))
-                .map(entry -> {
+                .forEach(entry -> {
                     Long userId = entry.getKey();
                     List<ProjectMember> userMembers = entry.getValue();
                     ProjectMember first = userMembers.get(0);
@@ -1036,7 +1055,7 @@ public class ProjectService {
                             .toList();
                     vo.setRoleIds(allRoleIds);
                     List<String> allRoleNames = userMembers.stream()
-                            .map(m -> roleNameMap.getOrDefault(m.getRoleId(), ""))
+                            .map(m -> finalRoleNameMap.getOrDefault(m.getRoleId(), ""))
                             .filter(name -> !name.isEmpty())
                             .toList();
                     vo.setRoleNames(allRoleNames);
@@ -1051,20 +1070,46 @@ public class ProjectService {
                         vo.setDisplayName(user.getDisplayName());
                         vo.setEmail(user.getEmail());
                     }
-                    return vo;
-                }).toList();
+                    vo.setFormerMember(false);
+                    result.add(vo);
+                });
+
+        // 2. 添加已离开项目的历史 assignee（标记 formerMember = true）
+        for (Long formerUserId : formerAssigneeIds) {
+            // 跳过已经在活跃成员列表中的用户
+            if (membersByUser.containsKey(formerUserId)) continue;
+
+            var user = userMap.get(formerUserId);
+            if (user == null) continue;
+
+            ProjectMemberVO vo = new ProjectMemberVO();
+            vo.setProjectId(projectId.toString());
+            vo.setUserId(formerUserId.toString());
+            vo.setUsername(user.getUsername());
+            vo.setDisplayName(user.getDisplayName());
+            vo.setEmail(user.getEmail());
+            vo.setRoleIds(List.of());
+            vo.setRoleNames(List.of());
+            vo.setFormerMember(true);
+            result.add(vo);
+        }
+
+        return result;
     }
 
     /**
-     * 检查指定用户在项目中是否可被分配工单（拥有 issue:edit 权限）。
+     * 检查指定用户在项目中是否可被分配工单（拥有 issue:edit 权限或为历史有效 assignee）。
      */
     public boolean isAssignableMember(Long userId, Long projectId) {
         if (userId == null || projectId == null) return false;
         // 系统管理员始终可被分配
         if (permissionService.isSystemAdmin(userId)) return true;
-        // 检查是否在可分配成员列表中
+        // 检查是否在当前可分配成员列表中
         List<Long> assignableUserIds = memberMapper.selectUserIdsWithPermission(projectId, "issue:edit");
-        return assignableUserIds.contains(userId);
+        if (assignableUserIds.contains(userId)) return true;
+        // 检查是否为已离开项目但仍有工单被分配的历史 assignee
+        List<Long> formerAssigneeIds = memberMapper.selectFormerAssigneeUserIds(projectId);
+        return formerAssigneeIds.contains(userId);
     }
 
     /**

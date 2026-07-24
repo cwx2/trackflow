@@ -121,6 +121,8 @@ export interface ProjectMemberVO {
   displayName: string
   email?: string
   joinedAt: string
+  /** 是否为已离开项目的历史成员（仍有工单分配，保留在 Assignee 候选列表中） */
+  formerMember?: boolean
 }
 
 /** 通过用户组获得项目访问权的组信息 */

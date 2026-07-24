@@ -20,4 +20,6 @@ public class ProjectMemberVO {
     private String displayName;
     private String email;
     private LocalDateTime joinedAt;
+    /** 是否为已离开项目的历史成员（仍有工单分配，保留在 Assignee 候选列表中） */
+    private boolean formerMember;
 }
