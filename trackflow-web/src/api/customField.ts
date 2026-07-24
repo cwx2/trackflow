@@ -85,6 +85,25 @@ export const customFieldApi = {
     return request.put<any, R<void>>('/admin/custom-fields/reorder', { ids })
   },
 
+  /** 批量更新字段属性（isForAll / isHiddenInList） */
+  batchUpdate(data: { ids: string[]; field: string; value: boolean }) {
+    return request.put<any, R<void>>('/admin/custom-fields/batch-update', data)
+  },
+
+  /** 批量删除自定义字段 */
+  batchDelete(ids: string[]) {
+    return request.delete<any, R<void>>('/admin/custom-fields/batch-delete', {
+      params: { ids: ids.join(',') }
+    })
+  },
+
+  /** 启用/禁用字段的 Auto-attach 功能（自动附加到新项目） */
+  setAutoAttach(id: string, enabled: boolean) {
+    return request.put<any, R<void>>(`/admin/custom-fields/${id}/auto-attach`, null, {
+      params: { enabled }
+    })
+  },
+
   /** 排序枚举字段的选项值 */
   reorderOptions(fieldId: string, optionIds: string[]) {
     return request.put<any, R<void>>(`/admin/custom-fields/${fieldId}/options/reorder`, { optionIds })
@@ -172,6 +191,16 @@ export const customFieldApi = {
     defaultValue: string | null
   }) {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/override`, data)
+  },
+
+  // ========== 值过滤规则（Filter values based on）==========
+
+  /** 设置字段的值过滤规则（项目级） */
+  setFieldFilterRules(projectId: string, fieldId: string, data: {
+    filterFieldId: string | null
+    rules: Array<{ whenValue: string; showOnly: string[] }> | null
+  }) {
+    return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/filter-rules`, data)
   },
 
   // ========== 内联添加选项值 ==========

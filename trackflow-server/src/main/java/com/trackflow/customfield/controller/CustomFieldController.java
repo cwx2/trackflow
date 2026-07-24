@@ -7,6 +7,7 @@ import com.trackflow.customfield.dto.CustomFieldQuery;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
 import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
 import com.trackflow.customfield.dto.SetFieldConditionDTO;
+import com.trackflow.customfield.dto.SetFieldFilterRulesDTO;
 import com.trackflow.customfield.dto.SetFieldProjectOverrideDTO;
 import com.trackflow.customfield.dto.SetFieldVisibilityDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
@@ -95,6 +96,19 @@ public class CustomFieldController {
                                   @Valid @RequestBody com.trackflow.customfield.dto.ReorderOptionsDTO dto) {
         customFieldService.reorderOptions(id, dto.getOptionIds());
         return R.ok();
+    }
+
+    /**
+     * 设置枚举字段选项的排序模式。
+     * 切换到自动排序模式后，所有选项按指定规则重新排列 position。
+     * 支持的模式: manual / name_asc / name_desc / name_ci_asc / name_ci_desc
+     */
+    @PutMapping("/admin/custom-fields/{id}/sort-mode")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<CustomFieldDefinitionVO> setSortMode(@PathVariable("id") Long id,
+                                                   @Valid @RequestBody com.trackflow.customfield.dto.SetSortModeDTO dto) {
+        customFieldService.setSortMode(id, dto.getSortMode());
+        return R.ok(customFieldService.getFieldDetailVO(id));
     }
 
     /**
@@ -306,6 +320,24 @@ public class CustomFieldController {
             @PathVariable("fieldId") Long fieldId,
             @Valid @RequestBody SetFieldProjectOverrideDTO dto) {
         customFieldService.setFieldProjectOverride(projectId, fieldId, dto.getIsRequired(), dto.getDefaultValue());
+        return R.ok();
+    }
+
+    // ========== 值过滤规则配置端点（Filter values based on）==========
+
+    /**
+     * 设置字段的值过滤规则（项目级）。
+     * <p>
+     * 配置后，当用户编辑工单并修改源字段的值时，本字段的下拉选项将根据规则过滤。
+     * 如果已选值不在新的允许列表中，系统将自动清除并记录活动。
+     */
+    @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/filter-rules")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Void> setFieldFilterRules(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody SetFieldFilterRulesDTO dto) {
+        customFieldService.setFieldFilterRules(projectId, fieldId, dto.getFilterFieldId(), dto.getRules());
         return R.ok();
     }
 }

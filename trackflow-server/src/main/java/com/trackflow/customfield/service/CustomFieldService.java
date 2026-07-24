@@ -298,6 +298,10 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldProject>()
                         .eq(CustomFieldProject::getConditionFieldId, id)));
 
+        usage.setFilterRefCount(projectMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getFilterFieldId, id)));
+
         return usage;
     }
 
@@ -311,19 +315,28 @@ public class CustomFieldService {
                 new LambdaQueryWrapper<CustomFieldProject>()
                         .eq(CustomFieldProject::getConditionFieldId, id));
 
+        long filterRefCount = projectMapper.selectCount(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getFilterFieldId, id));
+
         if (!confirm) {
             long valueCount = valueMapper.selectCount(
                     new LambdaQueryWrapper<CustomFieldValue>()
                             .eq(CustomFieldValue::getCustomFieldId, id));
-            if (valueCount > 0 || conditionRefCount > 0) {
+            if (valueCount > 0 || conditionRefCount > 0 || filterRefCount > 0) {
                 StringBuilder message = new StringBuilder();
                 if (valueCount > 0) {
                     message.append("此字段被 ").append(valueCount).append(" 条工单值记录引用");
                 }
                 if (conditionRefCount > 0) {
                     if (!message.isEmpty()) message.append("，");
-                    message.append("且被 ").append(conditionRefCount)
+                    message.append("被 ").append(conditionRefCount)
                            .append(" 条字段配置作为条件源引用（删除后相关条件规则将失效，被隐藏的字段将变为始终显示）");
+                }
+                if (filterRefCount > 0) {
+                    if (!message.isEmpty()) message.append("，");
+                    message.append("被 ").append(filterRefCount)
+                           .append(" 条字段配置作为值过滤源引用（删除后相关字段将恢复为显示所有选项）");
                 }
                 message.append("，请使用 confirm=true 确认删除");
                 throw new BusinessException(ErrorCode.BAD_REQUEST, message.toString());
@@ -338,6 +351,16 @@ public class CustomFieldService {
                             .set(CustomFieldProject::getConditionFieldId, null)
                             .set(CustomFieldProject::getConditionValues, null));
             log.info("Cleared condition references for deleted field {}: {} mappings affected", id, conditionRefCount);
+        }
+
+        // 清理值过滤源字段引用（与条件字段引用清理对称）
+        if (filterRefCount > 0) {
+            projectMapper.update(null,
+                    new LambdaUpdateWrapper<CustomFieldProject>()
+                            .eq(CustomFieldProject::getFilterFieldId, id)
+                            .set(CustomFieldProject::getFilterFieldId, null)
+                            .set(CustomFieldProject::getFilterRules, null));
+            log.info("Cleared filter references for deleted field {}: {} mappings affected", id, filterRefCount);
         }
 
         // 级联删除关联数据（参考 YouTrack/OpenProject：删除字段时清理所有相关值、选项及关联记录）
@@ -399,6 +422,13 @@ public class CustomFieldService {
                         .in(CustomFieldProject::getConditionFieldId, ids)
                         .set(CustomFieldProject::getConditionFieldId, null)
                         .set(CustomFieldProject::getConditionValues, null));
+
+        // 清理值过滤源字段引用（与条件字段引用清理对称）
+        projectMapper.update(null,
+                new LambdaUpdateWrapper<CustomFieldProject>()
+                        .in(CustomFieldProject::getFilterFieldId, ids)
+                        .set(CustomFieldProject::getFilterFieldId, null)
+                        .set(CustomFieldProject::getFilterRules, null));
 
         // 级联删除关联数据（参考 YouTrack/OpenProject：删除字段时清理所有相关值、选项及关联记录）
         for (Long id : ids) {
@@ -1031,6 +1061,165 @@ public class CustomFieldService {
 
         log.info("Updated field project override: project={}, field={}, isRequired={}, defaultValue={}",
                 projectId, fieldId, isRequired, defaultValue);
+    }
+
+    // ========== 值过滤规则配置（Filter values based on）==========
+
+    /**
+     * 设置字段的值过滤规则（项目级）。
+     * <p>
+     * 值过滤与条件显示是两个独立机制：
+     * - 条件显示（conditionFieldId）：控制字段本身是否出现
+     * - 值依赖过滤（filterFieldId）：字段出现，但下拉选项被缩小
+     *
+     * @param projectId     项目ID
+     * @param fieldId       目标字段ID（枚举类型）
+     * @param filterFieldId 源字段ID（枚举单值类型），null表示清除
+     * @param rules         过滤规则列表
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void setFieldFilterRules(Long projectId, Long fieldId, Long filterFieldId,
+                                     List<com.trackflow.customfield.dto.SetFieldFilterRulesDTO.FilterRuleItem> rules) {
+        CustomFieldDefinition targetField = definitionMapper.selectById(fieldId);
+        if (targetField == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在");
+        }
+
+        // 目标字段必须是枚举类型
+        if (!"list".equals(targetField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "值过滤只适用于列表(枚举)类型字段");
+        }
+
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+
+        if (mapping == null) {
+            if (!Boolean.TRUE.equals(targetField.getIsForAll())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "该字段未附加到本项目");
+            }
+            mapping = new CustomFieldProject();
+            mapping.setCustomFieldId(fieldId);
+            mapping.setProjectId(projectId);
+            mapping.setPosition(0);
+        }
+
+        // 清除过滤规则
+        if (filterFieldId == null) {
+            mapping.setFilterFieldId(null);
+            mapping.setFilterRules(null);
+            if (mapping.getId() != null) {
+                projectMapper.updateById(mapping);
+            }
+            log.info("Cleared field filter rules: project={}, field={}", projectId, fieldId);
+            return;
+        }
+
+        // 校验源字段
+        CustomFieldDefinition sourceField = definitionMapper.selectById(filterFieldId);
+        if (sourceField == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在");
+        }
+        if (!"list".equals(sourceField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段必须是列表(枚举)类型");
+        }
+        if (Boolean.TRUE.equals(sourceField.getIsMulti())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段必须是单值选择（不支持多值字段作为过滤源）");
+        }
+        if (filterFieldId.equals(fieldId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "字段不能以自身作为过滤源");
+        }
+
+        // 检查循环依赖：源字段的过滤源不能指向目标字段
+        CustomFieldProject sourceMapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, filterFieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        if (sourceMapping != null && sourceMapping.getFilterFieldId() != null) {
+            if (sourceMapping.getFilterFieldId().equals(fieldId)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持循环值过滤依赖");
+            }
+        }
+
+        // 校验源字段在项目中
+        List<CustomFieldDefinition> projectFields = listByProject(projectId, null);
+        boolean sourceFieldInProject = projectFields.stream()
+                .anyMatch(f -> f.getId().equals(filterFieldId));
+        if (!sourceFieldInProject) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段未在本项目中启用");
+        }
+
+        // 校验规则
+        if (rules == null || rules.isEmpty()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "必须至少指定一条过滤规则");
+        }
+
+        // 获取源字段有效选项
+        List<CustomFieldOption> sourceOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, filterFieldId));
+        Set<String> validSourceOptionIds = sourceOptions.stream()
+                .map(o -> String.valueOf(o.getId()))
+                .collect(Collectors.toSet());
+
+        // 获取目标字段有效选项
+        List<CustomFieldOption> targetOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, fieldId));
+        Set<String> validTargetOptionIds = targetOptions.stream()
+                .map(o -> String.valueOf(o.getId()))
+                .collect(Collectors.toSet());
+
+        // 校验每条规则的合法性
+        for (var rule : rules) {
+            if (rule.getWhenValue() == null || rule.getWhenValue().isBlank()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "规则的 whenValue 不能为空");
+            }
+            if (!validSourceOptionIds.contains(rule.getWhenValue())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "无效的源选项值: " + rule.getWhenValue());
+            }
+            if (rule.getShowOnly() == null || rule.getShowOnly().isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "规则的 showOnly 不能为空");
+            }
+            for (String targetOptId : rule.getShowOnly()) {
+                if (!validTargetOptionIds.contains(targetOptId)) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "无效的目标选项值: " + targetOptId);
+                }
+            }
+        }
+
+        // 序列化规则为 JSON
+        String filterRulesJson = toFilterRulesJson(rules);
+
+        mapping.setFilterFieldId(filterFieldId);
+        mapping.setFilterRules(filterRulesJson);
+        if (mapping.getId() != null) {
+            projectMapper.updateById(mapping);
+        } else {
+            projectMapper.insert(mapping);
+        }
+
+        log.info("Updated field filter rules: project={}, field={}, sourceField={}, rulesCount={}",
+                projectId, fieldId, filterFieldId, rules.size());
+    }
+
+    /**
+     * 将过滤规则列表序列化为 JSON 字符串
+     */
+    private String toFilterRulesJson(List<com.trackflow.customfield.dto.SetFieldFilterRulesDTO.FilterRuleItem> rules) {
+        try {
+            List<Map<String, Object>> rulesList = new ArrayList<>();
+            for (var rule : rules) {
+                Map<String, Object> ruleMap = new LinkedHashMap<>();
+                ruleMap.put("whenValue", rule.getWhenValue());
+                ruleMap.put("showOnly", rule.getShowOnly());
+                rulesList.add(ruleMap);
+            }
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(rulesList);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "序列化过滤规则失败");
+        }
     }
 
     // ========== Fields in Projects 矩阵 ==========
