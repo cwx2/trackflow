@@ -234,6 +234,16 @@ export interface ActiveSprintInfo {
 }
 
 // ========== Issue ==========
+/** 相似工单 VO — 创建工单时用于重复检测的轻量结构 */
+export interface SimilarIssueVO {
+  id: string
+  issueKey: string
+  title: string
+  statusName?: string
+  statusColor?: string
+  assigneeName?: string
+}
+
 export interface IssueVO {
   id: string
   projectId: string
@@ -976,6 +986,26 @@ export interface BoardGeneralConfigVO {
   currentUserCanView: boolean
   /** 当前用户是否有看板编辑权限 */
   currentUserCanEdit: boolean
+}
+
+// ========== 看板列表（Board Selector） ==========
+
+/** 看板列表项（Board Selector 用） */
+export interface BoardListItemVO {
+  /** 项目 ID（作为看板标识） */
+  projectId: string
+  /** 看板名称（来自 board_general_config.name 或项目名） */
+  name: string
+  /** 项目 Key */
+  projectKey: string
+  /** 项目名称 */
+  projectName: string
+  /** 所有者显示名 */
+  ownerName: string
+  /** 所有者 ID */
+  ownerId: string
+  /** 是否已收藏 */
+  favorite: boolean
 }
 
 // ========== Sprint 完成预览 ==========

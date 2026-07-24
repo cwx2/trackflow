@@ -60,6 +60,18 @@ export const issueApi = {
     return request.put<any, R<IssueDetailVO>>(`/issues/${issueId}/custom-fields/${fieldId}`, body)
   },
 
+  /** 查找相似工单（创建工单时防重复）— 复用 list 接口 */
+  findSimilar(params: { keyword: string; projectId?: string; limit?: number }) {
+    return request.get<any, R<PageResult<IssueVO>>>('/issues', {
+      params: {
+        keyword: params.keyword,
+        projectId: params.projectId,
+        pageSize: params.limit || 5,
+        page: 1
+      }
+    })
+  },
+
   /** 删除 Issue */
   delete(id: string) {
     return request.delete<any, R<void>>(`/issues/${id}`)

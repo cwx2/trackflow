@@ -114,6 +114,33 @@
               </div>
             </div>
           </div>
+
+          <!-- 相似工单区域 -->
+          <div v-if="similarIssues.length > 0 || similarLoading" class="similar-issues-area">
+            <div class="similar-issues-header">
+              <icon-search />
+              <span class="similar-issues-title">相似工单</span>
+              <a-spin v-if="similarLoading" :size="12" style="margin-left: 4px" />
+              <span v-else class="similar-issues-count">{{ similarIssues.length }}</span>
+            </div>
+            <div class="similar-issues-list">
+              <div
+                v-for="item in similarIssues"
+                :key="item.id"
+                class="similar-issue-item"
+                @click="openSimilarIssue(item)"
+              >
+                <span class="similar-issue-key">{{ item.issueKey }}</span>
+                <span class="similar-issue-title">{{ item.title }}</span>
+                <span
+                  v-if="item.statusName"
+                  class="similar-issue-status"
+                  :style="{ backgroundColor: item.statusColor ? item.statusColor + '20' : undefined, color: item.statusColor || undefined }"
+                >{{ item.statusName }}</span>
+                <span v-if="item.assigneeName" class="similar-issue-assignee">{{ item.assigneeName }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 右侧：属性面板 -->
@@ -344,7 +371,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -352,7 +379,7 @@ import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
-import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule } from '@/api/types'
+import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{
   visible: boolean
@@ -439,6 +466,44 @@ function removeLink(idx: number) {
   linkedIssues.value.splice(idx, 1)
 }
 
+// ========== 相似工单搜索 ==========
+const similarIssues = ref<SimilarIssue[]>([])
+const similarLoading = ref(false)
+let similarSearchTimer: any = null
+
+function searchSimilarIssues(title: string) {
+  if (similarSearchTimer) clearTimeout(similarSearchTimer)
+
+  if (!title || title.trim().length < 3) {
+    similarIssues.value = []
+    similarLoading.value = false
+    return
+  }
+
+  similarLoading.value = true
+  similarSearchTimer = setTimeout(async () => {
+    try {
+      const res = await issueApi.findSimilar({
+        keyword: title.trim(),
+        projectId: form.projectId || undefined,
+        limit: 5
+      })
+      // Response is PageResult<IssueVO>, extract list
+      const list = res.data?.list || []
+      similarIssues.value = list
+    } catch {
+      similarIssues.value = []
+    } finally {
+      similarLoading.value = false
+    }
+  }, 300)
+}
+
+function openSimilarIssue(issue: SimilarIssue) {
+  // Open in new tab
+  window.open(`/issues/${issue.issueKey}`, '_blank')
+}
+
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
 const sprints = ref<any[]>([])
@@ -456,6 +521,11 @@ const form = reactive({
   sprintId: undefined as string | undefined,
   dueDate: '',
   estimatedHours: undefined as number | undefined
+})
+
+// Watch title changes to trigger similar issue search
+watch(() => form.title, (newTitle) => {
+  searchSimilarIssues(newTitle)
 })
 
 // 自定义字段集成
@@ -744,6 +814,9 @@ function resetForm() {
   newLinkTargetId.value = undefined
   showLinkSection.value = false
   linkSearchResults.value = []
+  // 重置相似工单
+  similarIssues.value = []
+  similarLoading.value = false
 }
 
 /** 从 localStorage 加载草稿数据填充表单 */
@@ -1081,6 +1154,81 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Similar issues area */
+.similar-issues-area {
+  margin-top: 12px;
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+  border-radius: 6px;
+  overflow: hidden;
+}
+.similar-issues-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--color-text-2);
+  background: var(--color-fill-1, var(--tf-bg-surface));
+  border-bottom: 1px solid var(--color-border-2, var(--tf-border-light));
+}
+.similar-issues-title { font-weight: 500; }
+.similar-issues-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-3);
+  background: var(--color-fill-2);
+  border-radius: 10px;
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 18px;
+}
+.similar-issues-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+.similar-issue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 120ms;
+  border-bottom: 1px solid var(--color-border-1, var(--tf-border-subtle));
+}
+.similar-issue-item:last-child { border-bottom: none; }
+.similar-issue-item:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
+.similar-issue-key {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-accent, rgb(var(--primary-6)));
+  flex-shrink: 0;
+}
+.similar-issue-title {
+  font-size: 12px;
+  color: var(--color-text-1);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.similar-issue-status {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.similar-issue-assignee {
+  font-size: 11px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
 

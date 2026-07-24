@@ -15,6 +15,7 @@ import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
+import com.trackflow.issue.service.IssueLinkTypeService;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.WorkflowService;
@@ -39,6 +40,7 @@ public class IssueController {
     private final IssueConverter issueConverter;
     private final WorkflowService workflowService;
     private final IssueLinkService linkService;
+    private final IssueLinkTypeService linkTypeService;
     private final IssueTagService tagService;
     private final CustomFieldService customFieldService;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
@@ -451,6 +453,11 @@ public class IssueController {
     }
 
     // ========== 关联 ==========
+
+    @GetMapping("/link-types")
+    public R<List<IssueLinkTypeVO>> listLinkTypes() {
+        return R.ok(linkTypeService.listAllVO());
+    }
 
     @GetMapping("/{id}/links")
     public R<List<IssueLinkVO>> listLinks(@PathVariable("id") Long id) {
