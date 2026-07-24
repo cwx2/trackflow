@@ -1056,4 +1056,98 @@
         ORDER BY day
     </select>
 
+    <!-- ========== Average Issue Age 报表 ========== -->
+
+    <!--
+        计算工单在指定状态中的停留时间趋势。
+        逻辑：
+        1. 找出所有进入跟踪状态的事件（new_value IN trackedStatuses）
+        2. 找出离开跟踪状态的事件（old_value IN trackedStatuses）
+        3. 对每个"进入-离开"配对计算停留时长
+        4. 对于仍在跟踪状态中的工单，使用 now() 作为结束时间
+        5. 按时间粒度（day/week/month）聚合平均停留时长
+        6. 同时统计每个时间段的"流出"数量和"仍停留"数量
+    -->
+    <select id="selectIssueAgeTrend" resultType="com.trackflow.report.mapper.result.IssueAgeTrendRow">
+        WITH
+        -- 所有进入跟踪状态的事件
+        enter_events AS (
+            SELECT a.issue_id, a.created_at AS entered_at,
+                   ROW_NUMBER() OVER (PARTITION BY a.issue_id ORDER BY a.created_at) AS rn
+            FROM issue_activity a
+            JOIN issue i ON i.id = a.issue_id
+            WHERE a.field_name = 'status'
+              AND a.new_value IN
+              <foreach collection="trackedStatuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+            <if test="projectIds != null and projectIds.size() > 0">
+                AND i.project_id IN
+                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+            </if>
+            <if test="issueIds != null and issueIds.size() > 0">
+                AND i.id IN
+                <foreach collection="issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
+            </if>
+              AND i.deleted_at IS NULL
+        ),
+        -- 所有离开跟踪状态的事件
+        exit_events AS (
+            SELECT a.issue_id, a.created_at AS exited_at,
+                   ROW_NUMBER() OVER (PARTITION BY a.issue_id ORDER BY a.created_at) AS rn
+            FROM issue_activity a
+            JOIN issue i ON i.id = a.issue_id
+            WHERE a.field_name = 'status'
+              AND a.old_value IN
+              <foreach collection="trackedStatuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+            <if test="projectIds != null and projectIds.size() > 0">
+                AND i.project_id IN
+                <foreach collection="projectIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+            </if>
+            <if test="issueIds != null and issueIds.size() > 0">
+                AND i.id IN
+                <foreach collection="issueIds" item="iid" open="(" separator="," close=")">#{iid}</foreach>
+            </if>
+              AND i.deleted_at IS NULL
+        ),
+        -- 配对：每个进入事件匹配最近的离开事件
+        paired AS (
+            SELECT
+                e.issue_id,
+                e.entered_at,
+                x.exited_at,
+                COALESCE(x.exited_at, NOW()) AS effective_exit,
+                EXTRACT(EPOCH FROM (COALESCE(x.exited_at, NOW()) - e.entered_at)) / 3600.0 AS age_hours,
+                CASE WHEN x.exited_at IS NOT NULL THEN TRUE ELSE FALSE END AS has_exited
+            FROM enter_events e
+            LEFT JOIN exit_events x ON x.issue_id = e.issue_id AND x.rn = e.rn
+        ),
+        -- 按时间粒度分组
+        bucketed AS (
+            SELECT
+                <choose>
+                    <when test="granularity == 'week'">
+                        TO_CHAR(DATE_TRUNC('week', COALESCE(exited_at, effective_exit)), 'YYYY-MM-DD') AS period
+                    </when>
+                    <when test="granularity == 'month'">
+                        TO_CHAR(DATE_TRUNC('month', COALESCE(exited_at, effective_exit)), 'YYYY-MM') AS period
+                    </when>
+                    <otherwise>
+                        CAST(CAST(COALESCE(exited_at, effective_exit) AS DATE) AS VARCHAR) AS period
+                    </otherwise>
+                </choose>,
+                age_hours,
+                has_exited
+            FROM paired
+            WHERE COALESCE(exited_at, effective_exit) >= #{startDate}
+              AND COALESCE(exited_at, effective_exit) &lt;= #{endDate}
+        )
+        SELECT
+            period,
+            AVG(age_hours) AS avg_age_hours,
+            COUNT(*) FILTER (WHERE has_exited = TRUE) AS outflow_count,
+            COUNT(*) FILTER (WHERE has_exited = FALSE) AS staying_count
+        FROM bucketed
+        GROUP BY period
+        ORDER BY period
+    </select>
+
 </mapper>

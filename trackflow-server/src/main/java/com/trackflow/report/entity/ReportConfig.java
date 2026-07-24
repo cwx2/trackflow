@@ -37,6 +37,24 @@ public class ReportConfig {
      */
     private Integer refreshInterval;
 
+    /**
+     * 要追踪的状态名称列表（Average Issue Age 报表专用）。
+     * 计算工单在这些状态中的平均停留时间。
+     */
+    private List<String> trackedStatuses;
+
+    /**
+     * 滑动窗口大小（天数），用于计算 Moving Average（Average Issue Age 报表专用）。
+     * 默认 7 天。
+     */
+    private Integer movingPeriod;
+
+    /**
+     * 时间粒度：day / week / month（Average Issue Age 报表专用）。
+     * 默认 day。
+     */
+    private String granularity;
+
     @Data
     public static class ReportFilters {
         private List<String> statuses;
@@ -155,6 +173,21 @@ public class ReportConfig {
         Object refreshObj = map.get("refreshInterval");
         if (refreshObj instanceof Number num) {
             config.setRefreshInterval(num.intValue());
+        }
+
+        // 解析 trackedStatuses（Average Issue Age 专用）
+        config.setTrackedStatuses(toStringList(map.get("trackedStatuses")));
+
+        // 解析 movingPeriod（Average Issue Age 专用）
+        Object movingPeriodObj = map.get("movingPeriod");
+        if (movingPeriodObj instanceof Number num) {
+            config.setMovingPeriod(num.intValue());
+        }
+
+        // 解析 granularity（Average Issue Age 专用）
+        Object granularityObj = map.get("granularity");
+        if (granularityObj instanceof String s && !s.isBlank()) {
+            config.setGranularity(s);
         }
 
         return config;

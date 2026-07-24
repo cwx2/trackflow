@@ -178,6 +178,7 @@ const typeCategories: Record<string, string> = {
   burndown_chart: 'timeline',
   cumulative_flow: 'timeline',
   resolution_time: 'timeline',
+  average_issue_age: 'timeline',
   fixed_vs_reported: 'timeline',
   verified_vs_reopened: 'timeline',
   resolved_vs_new: 'timeline',

@@ -23,6 +23,7 @@ public enum ReportType {
     BURNDOWN_CHART("burndown_chart", "燃尽图报表", null, "timeline"),
     CUMULATIVE_FLOW("cumulative_flow", "累积流图", null, "timeline"),
     RESOLUTION_TIME("resolution_time", "解决时间分析", null, "timeline"),
+    AVERAGE_ISSUE_AGE("average_issue_age", "平均工单年龄", null, "timeline"),
     FIXED_VS_REPORTED("fixed_vs_reported", "修复率 vs 报告率", null, "timeline"),
     VERIFIED_VS_REOPENED("verified_vs_reopened", "验证率 vs 重开率", null, "timeline"),
     RESOLVED_VS_NEW("resolved_vs_new", "解决率 vs 新增率", null, "timeline"),

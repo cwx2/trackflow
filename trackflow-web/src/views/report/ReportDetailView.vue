@@ -253,6 +253,7 @@
               <a-option value="burndown_chart">燃尽图</a-option>
               <a-option value="cumulative_flow">累积流图</a-option>
               <a-option value="resolution_time">解决时间分析</a-option>
+              <a-option value="average_issue_age">平均工单年龄</a-option>
             </a-option-group>
             <a-option-group label="状态转换">
               <a-option value="state_transition">状态转换统计</a-option>
@@ -577,6 +578,7 @@ function reportTypeLabel(type: string) {
     burndown_chart: '燃尽图',
     cumulative_flow: '累积流图',
     resolution_time: '解决时间',
+    average_issue_age: '平均工单年龄',
     state_transition: '状态转换',
     time_report: '时间报表',
     estimation_report: '预估对比',

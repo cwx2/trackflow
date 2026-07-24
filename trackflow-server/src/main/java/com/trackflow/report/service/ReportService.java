@@ -28,6 +28,7 @@ import com.trackflow.report.mapper.ReportShareMapper;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.entity.ReportFavorite;
 import com.trackflow.report.mapper.result.*;
+import com.trackflow.report.vo.AverageIssueAgeVO;
 import com.trackflow.report.vo.BurndownVO;
 import com.trackflow.report.vo.CumulativeFlowVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
@@ -1216,6 +1217,7 @@ public class ReportService {
             }
             case CUMULATIVE_FLOW -> executeCumulativeFlowReport(result, projectIds, startDate, endDate, issueIds);
             case RESOLUTION_TIME -> executeResolutionTimeReport(result, projectIds, startDate, endDate, config, issueIds);
+            case AVERAGE_ISSUE_AGE -> executeAverageIssueAgeReport(result, projectIds, startDate, endDate, config, issueIds);
             case FIXED_VS_REPORTED, VERIFIED_VS_REOPENED, RESOLVED_VS_NEW -> {
                 // 比率对比报表：委托给 ReportStatisticsService
                 ReportExecuteResultVO rateResult = reportStatisticsService.getRateComparisonData(
@@ -1367,6 +1369,85 @@ public class ReportService {
         }
         result.setSummary(summary);
         result.setTotal(totalResolved);
+    }
+
+    /**
+     * 执行平均工单年龄报表（Average Issue Age）
+     * 追踪工单在指定状态中的平均停留时间趋势
+     */
+    private void executeAverageIssueAgeReport(ReportExecuteResultVO result, List<Long> projectIds,
+                                               java.time.LocalDate startDate, java.time.LocalDate endDate,
+                                               ReportConfig config, List<Long> issueIds) {
+        result.setChartType("line");
+
+        List<String> trackedStatuses = config.getTrackedStatuses();
+        String granularity = config.getGranularity();
+        Integer movingPeriod = config.getMovingPeriod();
+
+        AverageIssueAgeVO ageData = reportStatisticsService.getAverageIssueAgeData(
+                projectIds, startDate, endDate, trackedStatuses, granularity, movingPeriod, issueIds);
+
+        result.setDates(ageData.getDates());
+
+        List<ReportExecuteResultVO.TimeSeriesData> series = new ArrayList<>();
+
+        // 当日平均停留时间
+        ReportExecuteResultVO.TimeSeriesData avgSeries = new ReportExecuteResultVO.TimeSeriesData();
+        avgSeries.setName("平均停留时间(h)");
+        avgSeries.setColor("#58a6ff");
+        avgSeries.setData(ageData.getAvgAgeHours() != null
+                ? ageData.getAvgAgeHours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        avgSeries.setSeriesType("line");
+        series.add(avgSeries);
+
+        // 滑动平均
+        ReportExecuteResultVO.TimeSeriesData movingAvgSeries = new ReportExecuteResultVO.TimeSeriesData();
+        movingAvgSeries.setName("滑动平均(h)");
+        movingAvgSeries.setColor("#3fb950");
+        movingAvgSeries.setData(ageData.getMovingAvgHours() != null
+                ? ageData.getMovingAvgHours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        movingAvgSeries.setSeriesType("line");
+        series.add(movingAvgSeries);
+
+        // 滑动最小
+        ReportExecuteResultVO.TimeSeriesData movingMinSeries = new ReportExecuteResultVO.TimeSeriesData();
+        movingMinSeries.setName("滑动最小(h)");
+        movingMinSeries.setColor("#6b7280");
+        movingMinSeries.setData(ageData.getMovingMinHours() != null
+                ? ageData.getMovingMinHours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        movingMinSeries.setSeriesType("line");
+        series.add(movingMinSeries);
+
+        // 滑动最大
+        ReportExecuteResultVO.TimeSeriesData movingMaxSeries = new ReportExecuteResultVO.TimeSeriesData();
+        movingMaxSeries.setName("滑动最大(h)");
+        movingMaxSeries.setColor("#d29922");
+        movingMaxSeries.setData(ageData.getMovingMaxHours() != null
+                ? ageData.getMovingMaxHours().stream().map(v -> (Number) v).collect(Collectors.toList())
+                : List.of());
+        movingMaxSeries.setSeriesType("line");
+        series.add(movingMaxSeries);
+
+        result.setSeries(series);
+
+        // 概览信息
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("trackedStatuses", ageData.getTrackedStatuses());
+        summary.put("granularity", granularity != null ? granularity : "day");
+        summary.put("movingPeriod", movingPeriod != null ? movingPeriod : 7);
+        // 流入/流出统计
+        long totalOutflow = ageData.getOutflowCount() != null
+                ? ageData.getOutflowCount().stream().mapToLong(Long::longValue).sum() : 0L;
+        long totalStaying = ageData.getStayingCount() != null && !ageData.getStayingCount().isEmpty()
+                ? ageData.getStayingCount().get(ageData.getStayingCount().size() - 1) : 0L;
+        summary.put("totalOutflow", totalOutflow);
+        summary.put("currentStaying", totalStaying);
+        summary.put("outflowByDate", ageData.getOutflowCount());
+        summary.put("stayingByDate", ageData.getStayingCount());
+        result.setSummary(summary);
     }
 
     /**

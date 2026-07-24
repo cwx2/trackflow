@@ -197,6 +197,133 @@ public class ReportStatisticsService {
         return buildResolutionTime(projectIds, startDate, endDate, groupBy, issueIds);
     }
 
+    // ─── Average Issue Age ───────────────────────────────────────────────
+
+    /**
+     * 获取平均工单年龄（状态停留时间）趋势数据
+     *
+     * @param projectIds      项目范围
+     * @param startDate       开始日期
+     * @param endDate         结束日期
+     * @param trackedStatuses 要追踪的状态名称列表
+     * @param granularity     时间粒度：day/week/month
+     * @param movingPeriod    滑动窗口大小（天数）
+     * @param issueIds        Issue 筛选范围（可选）
+     */
+    public AverageIssueAgeVO getAverageIssueAgeData(List<Long> projectIds, LocalDate startDate, LocalDate endDate,
+                                                     List<String> trackedStatuses, String granularity,
+                                                     Integer movingPeriod, List<Long> issueIds) {
+        if (endDate == null) endDate = LocalDate.now();
+        if (startDate == null) startDate = endDate.minusDays(29);
+        if (trackedStatuses == null || trackedStatuses.isEmpty()) {
+            // 默认追踪所有非关闭状态
+            trackedStatuses = List.of("Open", "In Progress", "Code Review", "Testing");
+        }
+        if (granularity == null || granularity.isBlank()) granularity = "day";
+        if (movingPeriod == null || movingPeriod < 1) movingPeriod = 7;
+
+        // 防止超大日期范围
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate);
+        if (daysBetween > TREND_MAX_DAYS) {
+            startDate = endDate.minusDays(TREND_MAX_DAYS);
+        }
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<IssueAgeTrendRow> rows = reportStatisticsMapper.selectIssueAgeTrend(
+                projectIds, start, end, trackedStatuses, granularity, issueIds);
+
+        // 构建结果
+        List<String> dates = new ArrayList<>();
+        List<Double> avgAgeHours = new ArrayList<>();
+        List<Long> outflowCount = new ArrayList<>();
+        List<Long> stayingCount = new ArrayList<>();
+
+        for (IssueAgeTrendRow row : rows) {
+            dates.add(row.getPeriod());
+            avgAgeHours.add(row.getAvgAgeHours());
+            outflowCount.add(row.getOutflowCount() != null ? row.getOutflowCount() : 0L);
+            stayingCount.add(row.getStayingCount() != null ? row.getStayingCount() : 0L);
+        }
+
+        // 计算 Moving Average / Min / Max
+        List<Double> movingAvgHours = computeMovingAverage(avgAgeHours, movingPeriod);
+        List<Double> movingMinHours = computeMovingMin(avgAgeHours, movingPeriod);
+        List<Double> movingMaxHours = computeMovingMax(avgAgeHours, movingPeriod);
+
+        AverageIssueAgeVO vo = new AverageIssueAgeVO();
+        vo.setDates(dates);
+        vo.setAvgAgeHours(avgAgeHours);
+        vo.setMovingAvgHours(movingAvgHours);
+        vo.setMovingMinHours(movingMinHours);
+        vo.setMovingMaxHours(movingMaxHours);
+        vo.setOutflowCount(outflowCount);
+        vo.setStayingCount(stayingCount);
+        vo.setTrackedStatuses(trackedStatuses);
+        return vo;
+    }
+
+    /**
+     * 计算滑动平均值
+     */
+    private List<Double> computeMovingAverage(List<Double> values, int window) {
+        List<Double> result = new ArrayList<>(values.size());
+        for (int i = 0; i < values.size(); i++) {
+            int start = Math.max(0, i - window + 1);
+            double sum = 0;
+            int count = 0;
+            for (int j = start; j <= i; j++) {
+                if (values.get(j) != null) {
+                    sum += values.get(j);
+                    count++;
+                }
+            }
+            result.add(count > 0 ? sum / count : null);
+        }
+        return result;
+    }
+
+    /**
+     * 计算滑动最小值
+     */
+    private List<Double> computeMovingMin(List<Double> values, int window) {
+        List<Double> result = new ArrayList<>(values.size());
+        for (int i = 0; i < values.size(); i++) {
+            int start = Math.max(0, i - window + 1);
+            Double min = null;
+            for (int j = start; j <= i; j++) {
+                if (values.get(j) != null) {
+                    if (min == null || values.get(j) < min) {
+                        min = values.get(j);
+                    }
+                }
+            }
+            result.add(min);
+        }
+        return result;
+    }
+
+    /**
+     * 计算滑动最大值
+     */
+    private List<Double> computeMovingMax(List<Double> values, int window) {
+        List<Double> result = new ArrayList<>(values.size());
+        for (int i = 0; i < values.size(); i++) {
+            int start = Math.max(0, i - window + 1);
+            Double max = null;
+            for (int j = start; j <= i; j++) {
+                if (values.get(j) != null) {
+                    if (max == null || values.get(j) > max) {
+                        max = values.get(j);
+                    }
+                }
+            }
+            result.add(max);
+        }
+        return result;
+    }
+
     /**
      * 获取状态转换统计数据
      * 基于 issue_activity 表中的状态变更事件进行聚合

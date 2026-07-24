@@ -298,6 +298,7 @@
               <a-option value="burndown_chart">燃尽图</a-option>
               <a-option value="cumulative_flow">累积流图</a-option>
               <a-option value="resolution_time">解决时间分析</a-option>
+              <a-option value="average_issue_age">平均工单年龄</a-option>
               <a-option value="fixed_vs_reported">修复率 vs 报告率</a-option>
               <a-option value="verified_vs_reopened">验证率 vs 重开率</a-option>
               <a-option value="resolved_vs_new">解决率 vs 新增率</a-option>
@@ -348,6 +349,37 @@
           />
           <span class="form-hint">使用与工单列表相同的筛选语法，留空则统计所有工单</span>
         </a-form-item>
+        <!-- Average Issue Age 专用配置 -->
+        <template v-if="form.type === 'average_issue_age'">
+          <a-form-item label="追踪的状态" required>
+            <a-select v-model="form.trackedStatuses" placeholder="选择要追踪停留时间的状态" multiple allow-clear>
+              <a-option value="Open">Open</a-option>
+              <a-option value="In Progress">In Progress</a-option>
+              <a-option value="Code Review">Code Review</a-option>
+              <a-option value="Testing">Testing</a-option>
+              <a-option value="Done (Local Env)">Done (Local Env)</a-option>
+              <a-option value="No Test">No Test</a-option>
+              <a-option value="Pending Code Review">Pending Code Review</a-option>
+              <a-option value="Pending Publish">Pending Publish</a-option>
+              <a-option value="Reopened">Reopened</a-option>
+              <a-option value="Todo">Todo</a-option>
+              <a-option value="Pending Cancel">Pending Cancel</a-option>
+              <a-option value="Pending Extension">Pending Extension</a-option>
+            </a-select>
+            <span class="form-hint">计算工单在所选状态中的平均停留时间</span>
+          </a-form-item>
+          <a-form-item label="时间粒度">
+            <a-select v-model="form.granularity" placeholder="选择时间粒度">
+              <a-option value="day">按天</a-option>
+              <a-option value="week">按周</a-option>
+              <a-option value="month">按月</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item label="滑动窗口（天）">
+            <a-input-number v-model="form.movingPeriod" :min="1" :max="90" :step="1" placeholder="7" />
+            <span class="form-hint">Moving Average 计算窗口大小，默认 7 天</span>
+          </a-form-item>
+        </template>
         <a-form-item label="共享">
           <a-switch v-model="form.shared" />
           <span class="form-hint">共享后项目其他成员也可查看此报表</span>
@@ -418,6 +450,7 @@ const typeCategories: Record<string, string> = {
   burndown_chart: 'timeline',
   cumulative_flow: 'timeline',
   resolution_time: 'timeline',
+  average_issue_age: 'timeline',
   fixed_vs_reported: 'timeline',
   verified_vs_reopened: 'timeline',
   resolved_vs_new: 'timeline',
@@ -478,7 +511,10 @@ const form = reactive({
   secondGroupBy: '' as string,
   shared: false,
   refreshInterval: 0,
-  issueFilter: ''
+  issueFilter: '',
+  trackedStatuses: [] as string[],
+  granularity: 'day',
+  movingPeriod: 7
 })
 
 /** 是否有创建报表权限（system:admin 或 nav:report_create） */
@@ -552,7 +588,7 @@ const typeToGroupByMap: Record<string, string> = {
 }
 
 /** 时间线类和状态转换类报表不需要 groupBy */
-const timelineTypes = new Set(['burndown_chart', 'cumulative_flow', 'resolution_time', 'fixed_vs_reported', 'verified_vs_reopened', 'resolved_vs_new', 'state_transition'])
+const timelineTypes = new Set(['burndown_chart', 'cumulative_flow', 'resolution_time', 'average_issue_age', 'fixed_vs_reported', 'verified_vs_reopened', 'resolved_vs_new', 'state_transition'])
 
 /** 当 type 有固定的 groupBy 映射或为时间线类型时，禁用 groupBy 选择 */
 const isGroupByLocked = computed(() => form.type in typeToGroupByMap || timelineTypes.has(form.type))
@@ -770,6 +806,18 @@ async function handleSubmit() {
         configObj.issueFilter = parsedFilter
       }
     }
+    // Average Issue Age 专用配置
+    if (form.type === 'average_issue_age') {
+      if (form.trackedStatuses.length > 0) {
+        configObj.trackedStatuses = form.trackedStatuses
+      }
+      if (form.granularity) {
+        configObj.granularity = form.granularity
+      }
+      if (form.movingPeriod && form.movingPeriod > 0) {
+        configObj.movingPeriod = form.movingPeriod
+      }
+    }
     const config = JSON.stringify(configObj)
 
     if (editingReport.value) {
@@ -829,11 +877,18 @@ function startEdit(report: ReportDefinitionVO) {
     form.secondGroupBy = config.secondGroupBy || ''
     form.refreshInterval = config.refreshInterval || 0
     form.issueFilter = config.issueFilter ? issueFilterJsonToText(config.issueFilter) : ''
+    // Average Issue Age 专用字段
+    form.trackedStatuses = config.trackedStatuses || []
+    form.granularity = config.granularity || 'day'
+    form.movingPeriod = config.movingPeriod || 7
   } catch {
     form.groupBy = 'status'
     form.secondGroupBy = ''
     form.refreshInterval = 0
     form.issueFilter = ''
+    form.trackedStatuses = []
+    form.granularity = 'day'
+    form.movingPeriod = 7
   }
 
   showFormModal.value = true
@@ -925,6 +980,9 @@ function resetForm() {
   form.shared = false
   form.refreshInterval = 0
   form.issueFilter = ''
+  form.trackedStatuses = []
+  form.granularity = 'day'
+  form.movingPeriod = 7
 }
 
 function reportTypeLabel(type: string) {
@@ -938,6 +996,7 @@ function reportTypeLabel(type: string) {
     burndown_chart: '燃尽图',
     cumulative_flow: '累积流图',
     resolution_time: '解决时间',
+    average_issue_age: '平均工单年龄',
     fixed_vs_reported: '修复率 vs 报告率',
     verified_vs_reopened: '验证率 vs 重开率',
     resolved_vs_new: '解决率 vs 新增率',

@@ -221,6 +221,19 @@ public interface ReportStatisticsMapper {
     // ─── 报表执行引擎增强查询 ─────────────────────────────────────────
 
     /**
+     * Average Issue Age：计算指定状态中的工单停留时间趋势
+     * 基于 issue_activity 表中 field_name='status' 的事件，计算进入和离开跟踪状态的时间差
+     * 返回行：(period, avg_age_hours, outflow_count, staying_count)
+     */
+    List<IssueAgeTrendRow> selectIssueAgeTrend(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("trackedStatuses") List<String> trackedStatuses,
+            @Param("granularity") String granularity,
+            @Param("issueIds") List<Long> issueIds);
+
+    /**
      * 通用单维度分组查询（带筛选 + 时间范围）
      * groupBy 维度在 SQL 中动态选择
      */
