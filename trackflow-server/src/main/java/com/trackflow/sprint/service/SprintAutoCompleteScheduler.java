@@ -1,12 +1,9 @@
 package com.trackflow.sprint.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import com.trackflow.common.event.SprintNotificationEvent;
 import com.trackflow.issue.entity.Issue;
-import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.sprint.entity.Sprint;
@@ -25,7 +22,6 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Sprint 到期自动完成调度器。
@@ -33,7 +29,8 @@ import java.util.stream.Collectors;
  * 对标 YouTrack 行为：Sprint 到达结束日期后自动完成，无需用户操作。
  * "A sprint automatically completes on the end date configuration at 23:59:59 server time."
  * <p>
- * 未完成工单自动移入 Backlog（sprint_id = null）。
+ * 自动完成时不移除未关闭工单——工单保留在已完成 Sprint 中，直到用户创建新 Sprint 时主动选择迁移。
+ * 这与手动完成（SprintService.complete()）不同，后者要求用户选择未完成工单的处理方式。
  *
  * @author TrackFlow
  * @since 1.0
@@ -94,11 +91,16 @@ public class SprintAutoCompleteScheduler {
     }
 
     /**
-     * 自动完成单个 Sprint：
-     * 1. 将未完成工单移入 Backlog
+     * 自动完成单个 Sprint（对标 YouTrack 行为）：
+     * <p>
+     * 与手动完成不同，自动完成时不移走未关闭工单。工单保留在该 Sprint 中，
+     * 直到用户创建新 Sprint 时主动选择"迁移未完成工单"。
+     * <p>
+     * 流程：
+     * 1. 统计未完成工单数量（用于通知和日志）
      * 2. 更新 Sprint 状态为 COMPLETED
      * 3. 记录项目活动日志
-     * 4. 发布通知事件
+     * 4. 发布通知事件（含未完成工单数）
      */
     @Transactional(rollbackFor = Exception.class)
     public void autoCompleteSingleSprint(Sprint sprint) {
@@ -108,42 +110,17 @@ public class SprintAutoCompleteScheduler {
         log.info("[SprintAutoComplete] 自动完成 Sprint: id={}, name={}, endDate={}",
                 sprintId, sprint.getName(), sprint.getEndDate());
 
-        // 查找未关闭工单
+        // 统计未关闭工单数量（仅用于通知和日志，不移除工单）
         List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(sprintId);
+        int unresolvedCount = openIssueIds.size();
         LocalDateTime now = LocalDateTime.now();
 
-        // 未完成工单移入 Backlog（sprint_id = null）
-        if (!openIssueIds.isEmpty()) {
-            issueMapper.update(null,
-                    new LambdaUpdateWrapper<Issue>()
-                            .in(Issue::getId, openIssueIds)
-                            .set(Issue::getSprintId, null)
-                            .set(Issue::getUpdatedBy, null)
-                            .set(Issue::getUpdatedAt, now)
-            );
-
-            // 批量记录活动日志：sprint 字段变更
-            String oldSprintIdStr = String.valueOf(sprintId);
-            String oldSprintName = sprint.getName();
-            List<IssueActivity> activities = openIssueIds.stream().map(issueId -> {
-                IssueActivity activity = new IssueActivity();
-                activity.setIssueId(issueId);
-                activity.setUserId(null); // 系统自动操作，无用户
-                activity.setAction("updated");
-                activity.setFieldName("sprint");
-                activity.setOldValue(oldSprintIdStr);
-                activity.setNewValue(null);
-                activity.setOldDisplayValue(oldSprintName);
-                activity.setNewDisplayValue(null);
-                activity.setCreatedAt(now);
-                return activity;
-            }).toList();
-            Db.saveBatch(activities);
-
-            log.info("[SprintAutoComplete] 已将 {} 个未完成工单移入 Backlog", openIssueIds.size());
+        if (unresolvedCount > 0) {
+            log.info("[SprintAutoComplete] Sprint '{}' 仍有 {} 个未完成工单，保留在该迭代中",
+                    sprint.getName(), unresolvedCount);
         }
 
-        // 完成 Sprint
+        // 完成 Sprint（不移除未关闭工单，对标 YouTrack 行为）
         sprint.setStatus(SprintStatus.COMPLETED);
         sprint.setUpdatedAt(now);
         sprint.setUpdatedBy(null); // 系统自动操作
@@ -155,20 +132,20 @@ public class SprintAutoCompleteScheduler {
         detail.put("sprint_name", sprint.getName());
         detail.put("auto_completed", true);
         detail.put("end_date", sprint.getEndDate().toString());
-        if (!openIssueIds.isEmpty()) {
-            detail.put("unresolved_issues_count", openIssueIds.size());
-            detail.put("move_option", "backlog");
+        if (unresolvedCount > 0) {
+            detail.put("unresolved_issues_count", unresolvedCount);
+            detail.put("move_option", "retained"); // 未完成工单保留在 Sprint 中
         }
         projectActivityService.log(projectId, null, "auto_complete_sprint", null, detail);
 
         // 通知项目成员 Sprint 已自动完成
+        // 计算已完成工单数 = 总工单数 - 未关闭工单数
         long totalIssuesInSprint = issueMapper.selectCount(
                 new LambdaQueryWrapper<Issue>()
                         .eq(Issue::getSprintId, sprintId)
                         .isNull(Issue::getDeletedAt)
         );
-        // 注意：此时未完成工单已移出，totalIssuesInSprint 只包含已关闭工单
-        int completedIssues = (int) totalIssuesInSprint;
+        int completedIssues = (int) (totalIssuesInSprint - unresolvedCount);
         eventPublisher.publishEvent(new SprintNotificationEvent.Completed(sprint, Math.max(completedIssues, 0), null));
 
         // 失效 Dashboard 缓存

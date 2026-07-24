@@ -324,21 +324,34 @@ public class SprintService {
      * 将项目当前活跃 Sprint 中的未完成工单批量移入新 Sprint，并记录活动日志。
      */
     private void moveUnresolvedIssuesToNewSprint(Long projectId, Sprint newSprint, Long currentUserId) {
-        // 查找当前活跃 Sprint
-        Sprint activeSprint = sprintMapper.selectOne(
+        // 查找源 Sprint：优先查找活跃 Sprint，若无则查找最近完成的 Sprint
+        // 对标 YouTrack 行为：Sprint 自动完成后工单保留在该 Sprint 中，
+        // 创建新 Sprint 时用户可选择"迁移未完成工单"
+        Sprint sourceSprint = sprintMapper.selectOne(
                 new LambdaQueryWrapper<Sprint>()
                         .eq(Sprint::getProjectId, projectId)
                         .eq(Sprint::getStatus, SprintStatus.ACTIVE)
         );
-        if (activeSprint == null) {
-            log.warn("项目 {} 没有活跃 Sprint，跳过移入未完成工单", projectId);
+        if (sourceSprint == null) {
+            // 无活跃 Sprint，尝试查找最近完成的 Sprint（自动完成后工单仍在其中）
+            sourceSprint = sprintMapper.selectOne(
+                    new LambdaQueryWrapper<Sprint>()
+                            .eq(Sprint::getProjectId, projectId)
+                            .eq(Sprint::getStatus, SprintStatus.COMPLETED)
+                            .ne(Sprint::getId, newSprint.getId())
+                            .orderByDesc(Sprint::getUpdatedAt)
+                            .last("LIMIT 1")
+            );
+        }
+        if (sourceSprint == null) {
+            log.warn("项目 {} 没有活跃或已完成的 Sprint，跳过移入未完成工单", projectId);
             return;
         }
 
-        // 查找活跃 Sprint 中未关闭的工单
-        List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(activeSprint.getId());
+        // 查找源 Sprint 中未关闭的工单
+        List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(sourceSprint.getId());
         if (openIssueIds.isEmpty()) {
-            log.info("活跃 Sprint {} 中无未完成工单，跳过", activeSprint.getName());
+            log.info("Sprint '{}' 中无未完成工单，跳过", sourceSprint.getName());
             return;
         }
 
@@ -353,9 +366,9 @@ public class SprintService {
         );
 
         // 批量记录活动日志
-        String oldId = String.valueOf(activeSprint.getId());
+        String oldId = String.valueOf(sourceSprint.getId());
         String newId = String.valueOf(newSprint.getId());
-        String oldName = activeSprint.getName();
+        String oldName = sourceSprint.getName();
         String newName = newSprint.getName();
         List<IssueActivity> activities = openIssueIds.stream().map(issueId -> {
             IssueActivity activity = new IssueActivity();
@@ -373,7 +386,7 @@ public class SprintService {
         Db.saveBatch(activities);
 
         log.info("已将 {} 个未完成工单从 Sprint '{}' 移入新 Sprint '{}'",
-                openIssueIds.size(), activeSprint.getName(), newSprint.getName());
+                openIssueIds.size(), sourceSprint.getName(), newSprint.getName());
     }
 
     /**
@@ -386,8 +399,12 @@ public class SprintService {
 
     /**
      * 获取创建 Sprint 的预览信息：
-     * - 是否存在活跃 Sprint 及其未完成工单数
+     * - 是否存在活跃 Sprint 或最近完成的 Sprint 及其未完成工单数
      * - 是否已设置默认 Sprint
+     * <p>
+     * 对标 YouTrack 行为：自动完成的 Sprint 中未关闭工单仍保留在该 Sprint 中，
+     * 因此创建新 Sprint 时需要展示这些信息供用户决策是否迁移。
+     * <p>
      * 使用 readOnly 事务确保预览数据在同一个快照中获取。
      */
     @Transactional(readOnly = true)
@@ -395,16 +412,27 @@ public class SprintService {
         CreationPreviewVO vo = new CreationPreviewVO();
 
         // 查找活跃 Sprint
-        Sprint activeSprint = sprintMapper.selectOne(
+        Sprint sourceSprint = sprintMapper.selectOne(
                 new LambdaQueryWrapper<Sprint>()
                         .eq(Sprint::getProjectId, projectId)
                         .eq(Sprint::getStatus, SprintStatus.ACTIVE)
         );
 
-        if (activeSprint != null) {
-            vo.setActiveSprintId(String.valueOf(activeSprint.getId()));
-            vo.setActiveSprintName(activeSprint.getName());
-            List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(activeSprint.getId());
+        // 如果无活跃 Sprint，尝试查找最近完成的 Sprint（其中可能有未关闭工单）
+        if (sourceSprint == null) {
+            sourceSprint = sprintMapper.selectOne(
+                    new LambdaQueryWrapper<Sprint>()
+                            .eq(Sprint::getProjectId, projectId)
+                            .eq(Sprint::getStatus, SprintStatus.COMPLETED)
+                            .orderByDesc(Sprint::getUpdatedAt)
+                            .last("LIMIT 1")
+            );
+        }
+
+        if (sourceSprint != null) {
+            vo.setActiveSprintId(String.valueOf(sourceSprint.getId()));
+            vo.setActiveSprintName(sourceSprint.getName());
+            List<Long> openIssueIds = sprintMapper.selectOpenIssueIds(sourceSprint.getId());
             vo.setUnresolvedIssueCount(openIssueIds.size());
         }
 
