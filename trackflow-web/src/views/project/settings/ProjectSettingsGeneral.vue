@@ -31,13 +31,11 @@
           </a-form-item>
 
           <a-form-item label="项目描述">
-            <a-textarea
+            <RichEditor
               v-model="form.description"
               placeholder="简要描述项目用途和目标"
-              :auto-size="{ minRows: 3, maxRows: 6 }"
-              :disabled="!canEdit || isArchived"
-              :max-length="500"
-              show-word-limit
+              mode="inline"
+              :class="{ 'editor-disabled': !canEdit || isArchived }"
             />
           </a-form-item>
 
@@ -216,6 +214,7 @@ import type { OrgVO } from '@/api/organization'
 import { useAuthStore } from '@/stores/auth'
 import { invalidateProjectPermissions } from '@/composables/usePermission'
 import type { ProjectDetailVO, ProjectMemberVO } from '@/api/types'
+import RichEditor from '@/views/issue/components/RichEditor.vue'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -536,6 +535,17 @@ async function submitDelete() {
   font-size: 13px;
   font-weight: 500;
   color: var(--tf-text-secondary);
+}
+
+/* Rich editor in form */
+.settings-form :deep(.rich-editor) {
+  width: 100%;
+}
+
+/* Disabled state for editor */
+.editor-disabled {
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 .field-hint {
