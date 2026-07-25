@@ -2504,6 +2504,7 @@ public class IssueService {
             vo.setFieldName(row.getFieldName());
             vo.setOldValue(row.getOldValue());
             vo.setNewValue(row.getNewValue());
+            vo.setDetail(row.getDetail());
             vo.setCreatedAt(row.getCreatedAt());
             return vo;
         }).toList();

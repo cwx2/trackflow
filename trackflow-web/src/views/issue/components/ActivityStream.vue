@@ -48,6 +48,12 @@
             <span v-if="item.type === 'comment' && item.visibleToGroupNames && item.visibleToGroupNames.length > 0" class="visibility-badge" :title="'仅 ' + item.visibleToGroupNames.join(', ') + ' 可见'">
               🔒 {{ item.visibleToGroupNames.join(', ') }}
             </span>
+            <!-- 自动化规则来源标签（仅对变更类活动显示） -->
+            <span
+              v-if="item.type === 'change' && item.detail && (item.detail.source === 'action_rule' || item.detail.source === 'automation')"
+              class="automation-badge"
+              :title="item.detail.ruleName ? '自动规则：' + item.detail.ruleName : '由自动化规则触发'"
+            >⚡ {{ item.detail.ruleName || '自动规则' }}</span>
             <!-- Comment actions -->
             <div v-if="item.type === 'comment' && canModifyComment(item) && hoveredId === item.id && editingCommentId !== item.commentId" class="comment-actions">
               <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
@@ -101,6 +107,8 @@
               </template>
               <template v-else-if="item.field">
                 修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
+                <span v-if="item.detail && item.detail.reason === 'member_removed'" class="auto-reason">（成员已从项目移除）</span>
+                <span v-else-if="item.detail && item.detail.reason === 'manual_override'" class="auto-reason">（手动设置）</span>
               </template>
               <template v-else>{{ localizeAction(item.action) }}</template>
             </div>
@@ -150,6 +158,11 @@ export interface ActivityItem {
   from?: string
   to?: string
   ts: number
+  /**
+   * 操作元数据（已解析的对象），存储变更来源信息。
+   * 示例：{ source: 'action_rule' } | { source: 'automation', ruleName: '...' } | { reason: 'member_removed' }
+   */
+  detail?: Record<string, any>
 }
 
 const props = defineProps<{
@@ -331,6 +344,24 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
   font-size: 10px;
   color: var(--tf-text-muted);
   font-style: italic;
+}
+
+.automation-badge {
+  font-size: 10px;
+  color: var(--tf-warning, #d29922);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(210, 153, 34, 0.12);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.auto-reason {
+  font-size: 11px;
+  color: var(--tf-text-muted);
+  font-style: italic;
+  margin-left: 4px;
 }
 
 .visibility-badge {

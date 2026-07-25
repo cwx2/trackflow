@@ -875,7 +875,16 @@ const activityItems = computed<ActivityItem[]>(() => {
   }
   for (const a of activities.value) {
     if (a.action === 'commented') continue
-    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
+    // 解析 detail 字段（JSON 字符串 → 对象），解析失败时置为 undefined
+    let detail: Record<string, any> | undefined
+    if (a.detail) {
+      try {
+        detail = JSON.parse(a.detail)
+      } catch {
+        detail = undefined
+      }
+    }
+    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, detail, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
   }
   return items
 })

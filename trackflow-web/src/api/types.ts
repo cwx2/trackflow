@@ -412,6 +412,11 @@ export interface IssueActivityVO {
   fieldName?: string
   oldValue?: string
   newValue?: string
+  /**
+   * 操作元数据（JSON 字符串），存储变更来源等信息。
+   * 示例：{"source":"action_rule"} | {"source":"automation","ruleName":"..."} | {"reason":"member_removed"}
+   */
+  detail?: string
   createdAt: string
 }
 
