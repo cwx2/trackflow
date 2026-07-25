@@ -30,6 +30,18 @@ public class BoardCardConfig implements Serializable {
     /** 颜色方案：none / priority / type / project */
     private String colorScheme;
 
+    /**
+     * 当前估算字段 ID（引用 custom_field_definition），卡片上显示可编辑的估算值。
+     * 对应 YouTrack Board Settings Cards Tab 的 "Current estimation field"。
+     */
+    private Long currentEstimationFieldId;
+
+    /**
+     * 原始估算字段 ID（引用 custom_field_definition），Sprint 开始时记录的不可变快照值。
+     * 对应 YouTrack Board Settings Cards Tab 的 "Original estimation field"。
+     */
+    private Long originalEstimationFieldId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

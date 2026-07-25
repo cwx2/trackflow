@@ -209,8 +209,13 @@
         <CardSettingsPanel
           :visible-fields="editableCardFields"
           :color-scheme="editableColorScheme"
+          :project-id="projectId"
+          :current-estimation-field-id="editableCurrentEstimationFieldId"
+          :original-estimation-field-id="editableOriginalEstimationFieldId"
           @update:visible-fields="editableCardFields = $event"
           @update:color-scheme="editableColorScheme = $event"
+          @update:current-estimation-field-id="editableCurrentEstimationFieldId = $event"
+          @update:original-estimation-field-id="editableOriginalEstimationFieldId = $event"
         />
       </a-tab-pane>
 
@@ -224,11 +229,13 @@
           :merge-groups="editableMergeGroups"
           :columns="editableColumns"
           :project-id="projectId"
+          :swimlane-issue-type="editableSwimlaneIssueType"
           @update:group-by-field="editableSwimlaneGroupBy = $event"
           @update:selected-values="editableSwimlaneSelectedValues = $event"
           @update:show-uncategorized="editableSwimlaneShowUncategorized = $event"
           @update:uncategorized-position="editableSwimlaneUncategorizedPosition = $event"
           @update:merge-groups="editableMergeGroups = $event"
+          @update:swimlane-issue-type="editableSwimlaneIssueType = $event"
         />
       </a-tab-pane>
 
@@ -315,6 +322,8 @@ const editableColumns = ref<EditableColumn[]>([])
 // 卡片设置状态
 const editableCardFields = ref<string[]>(['assignee', 'priority', 'type'])
 const editableColorScheme = ref('none')
+const editableCurrentEstimationFieldId = ref<string | null>(null)
+const editableOriginalEstimationFieldId = ref<string | null>(null)
 
 // 基本设置状态
 const editableBoardName = ref('')
@@ -351,6 +360,7 @@ const editableSwimlaneGroupBy = ref('none')
 const editableSwimlaneSelectedValues = ref<string[] | null>(null)
 const editableSwimlaneShowUncategorized = ref(true)
 const editableSwimlaneUncategorizedPosition = ref<'top' | 'bottom'>('bottom')
+const editableSwimlaneIssueType = ref<string | null>(null)
 const editableMergeGroups = ref<MergeGroupLocal[]>([])
 
 // 图表设置状态
@@ -427,11 +437,15 @@ watch(() => props.visible, async (newVisible) => {
       if (res.data) {
         editableCardFields.value = res.data.visibleFields || ['assignee', 'priority', 'type']
         editableColorScheme.value = res.data.colorScheme || 'none'
+        editableCurrentEstimationFieldId.value = res.data.currentEstimationFieldId ?? null
+        editableOriginalEstimationFieldId.value = res.data.originalEstimationFieldId ?? null
       }
     } catch {
       // 使用默认值
       editableCardFields.value = ['assignee', 'priority', 'type']
       editableColorScheme.value = 'none'
+      editableCurrentEstimationFieldId.value = null
+      editableOriginalEstimationFieldId.value = null
     }
 
     // 加载泳道配置
@@ -442,12 +456,14 @@ watch(() => props.visible, async (newVisible) => {
         editableSwimlaneSelectedValues.value = res.data.selectedValues || null
         editableSwimlaneShowUncategorized.value = res.data.showUncategorized !== false
         editableSwimlaneUncategorizedPosition.value = res.data.uncategorizedPosition || 'bottom'
+        editableSwimlaneIssueType.value = res.data.swimlaneIssueType ?? null
       }
     } catch {
       editableSwimlaneGroupBy.value = 'none'
       editableSwimlaneSelectedValues.value = null
       editableSwimlaneShowUncategorized.value = true
       editableSwimlaneUncategorizedPosition.value = 'bottom'
+      editableSwimlaneIssueType.value = null
     }
 
     // 加载图表配置
@@ -760,6 +776,8 @@ async function reloadAllConfigs() {
     if (cardRes.data) {
       editableCardFields.value = cardRes.data.visibleFields || ['assignee', 'priority', 'type']
       editableColorScheme.value = cardRes.data.colorScheme || 'none'
+      editableCurrentEstimationFieldId.value = cardRes.data.currentEstimationFieldId ?? null
+      editableOriginalEstimationFieldId.value = cardRes.data.originalEstimationFieldId ?? null
     }
 
     // 更新泳道配置
@@ -768,6 +786,7 @@ async function reloadAllConfigs() {
       editableSwimlaneSelectedValues.value = swimRes.data.selectedValues || null
       editableSwimlaneShowUncategorized.value = swimRes.data.showUncategorized !== false
       editableSwimlaneUncategorizedPosition.value = swimRes.data.uncategorizedPosition || 'bottom'
+      editableSwimlaneIssueType.value = swimRes.data.swimlaneIssueType ?? null
     }
 
     // 更新列合并配置
@@ -865,13 +884,16 @@ async function handleSave() {
       columns: { columns },
       cardConfig: {
         visibleFields: editableCardFields.value,
-        colorScheme: editableColorScheme.value
+        colorScheme: editableColorScheme.value,
+        currentEstimationFieldId: editableCurrentEstimationFieldId.value,
+        originalEstimationFieldId: editableOriginalEstimationFieldId.value
       },
       swimlaneConfig: {
         groupByField: editableSwimlaneGroupBy.value,
         selectedValues: editableSwimlaneSelectedValues.value,
         showUncategorized: editableSwimlaneShowUncategorized.value,
-        uncategorizedPosition: editableSwimlaneUncategorizedPosition.value
+        uncategorizedPosition: editableSwimlaneUncategorizedPosition.value,
+        swimlaneIssueType: editableSwimlaneIssueType.value
       },
       columnMerges: {
         mergeGroups: validMergeGroups.map(g => ({

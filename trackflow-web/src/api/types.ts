@@ -905,6 +905,12 @@ export interface BoardCardVO {
   resolvedAt?: string
   childCount?: number
   childClosedCount?: number
+  /** 父工单 ID（用于 Issues 类型泳道分组） */
+  parentId?: string
+  /** 父工单 issue key */
+  parentIssueKey?: string
+  /** 父工单标题 */
+  parentTitle?: string
   customFieldDetails?: CustomFieldValueVO[]
 }
 
@@ -934,12 +940,24 @@ export interface BoardCardConfigVO {
   visibleFields: string[]
   /** 颜色方案：none / priority / type / project */
   colorScheme: string
+  /**
+   * 当前估算字段 ID（String，避免 JS Long 精度丢失）。
+   * 对应 YouTrack Board Settings Cards Tab 的 "Current estimation field"。
+   * null 表示未配置。
+   */
+  currentEstimationFieldId?: string | null
+  /**
+   * 原始估算字段 ID（String，避免 JS Long 精度丢失）。
+   * 对应 YouTrack Board Settings Cards Tab 的 "Original estimation field"。
+   * null 表示未配置。
+   */
+  originalEstimationFieldId?: string | null
 }
 
 // ========== 看板泳道配置 ==========
 
 export interface BoardSwimlaneConfigVO {
-  /** 泳道分组字段：none / assignee / priority / type / sprint / tag */
+  /** 泳道分组字段：none / assignee / priority / type / sprint / tag / parent */
   groupByField: string
   /** 选中的泳道值列表，null 或空表示全选（向后兼容） */
   selectedValues?: string[] | null
@@ -947,6 +965,11 @@ export interface BoardSwimlaneConfigVO {
   showUncategorized?: boolean
   /** 未分类泳道位置：top / bottom（默认 bottom） */
   uncategorizedPosition?: 'top' | 'bottom'
+  /**
+   * Issues 模式下作为泳道行的工单类型（如 "Epic"、"Feature"）。
+   * 仅当 groupByField = "parent" 时有效。
+   */
+  swimlaneIssueType?: string | null
 }
 
 // ========== 看板图表配置 ==========

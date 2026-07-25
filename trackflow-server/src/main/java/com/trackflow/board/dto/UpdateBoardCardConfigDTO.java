@@ -24,4 +24,16 @@ public class UpdateBoardCardConfigDTO {
     @NotNull(message = "颜色方案不能为空")
     @Pattern(regexp = "^(none|priority|type|project)$", message = "颜色方案只能是 none/priority/type/project")
     private String colorScheme;
+
+    /**
+     * 当前估算字段 ID（引用 custom_field_definition），null 表示不配置。
+     * 对应 YouTrack Board Settings Cards Tab 的 "Current estimation field"。
+     */
+    private Long currentEstimationFieldId;
+
+    /**
+     * 原始估算字段 ID（引用 custom_field_definition），null 表示不配置。
+     * 对应 YouTrack Board Settings Cards Tab 的 "Original estimation field"。
+     */
+    private Long originalEstimationFieldId;
 }

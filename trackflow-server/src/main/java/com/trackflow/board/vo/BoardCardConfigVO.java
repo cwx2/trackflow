@@ -15,4 +15,18 @@ public class BoardCardConfigVO {
 
     /** 颜色方案：none / priority / type / project */
     private String colorScheme;
+
+    /**
+     * 当前估算字段 ID（String，避免 JS Long 精度丢失）。
+     * 对应 YouTrack Board Settings Cards Tab 的 "Current estimation field"。
+     * null 表示未配置。
+     */
+    private String currentEstimationFieldId;
+
+    /**
+     * 原始估算字段 ID（String，避免 JS Long 精度丢失）。
+     * 对应 YouTrack Board Settings Cards Tab 的 "Original estimation field"。
+     * null 表示未配置。
+     */
+    private String originalEstimationFieldId;
 }

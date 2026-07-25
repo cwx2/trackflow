@@ -65,7 +65,7 @@ export const boardApi = {
   },
 
   /** 保存项目看板卡片配置 */
-  saveCardConfig(projectId: string, data: { visibleFields: string[]; colorScheme: string }) {
+  saveCardConfig(projectId: string, data: { visibleFields: string[]; colorScheme: string; currentEstimationFieldId?: string | null; originalEstimationFieldId?: string | null }) {
     return request.put<any, R<void>>('/boards/card-config', data, {
       params: { projectId }
     })
@@ -79,7 +79,7 @@ export const boardApi = {
   },
 
   /** 保存项目看板泳道配置 */
-  saveSwimlaneConfig(projectId: string, data: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }) {
+  saveSwimlaneConfig(projectId: string, data: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom'; swimlaneIssueType?: string | null }) {
     return request.put<any, R<void>>('/boards/swimlane-config', data, {
       params: { projectId }
     })
@@ -142,7 +142,7 @@ export const boardApi = {
   saveBoardSettings(projectId: string, data: {
     configVersion: number | null
     columns: { columns: Array<{ statusId: number; visible: boolean; sortOrder: number; collapsed?: boolean; wipMin?: number | null; wipMax?: number | null }> }
-    cardConfig: { visibleFields: string[]; colorScheme: string }
+    cardConfig: { visibleFields: string[]; colorScheme: string; currentEstimationFieldId?: string | null; originalEstimationFieldId?: string | null }
     swimlaneConfig: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }
     columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
     generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; columnField?: string }

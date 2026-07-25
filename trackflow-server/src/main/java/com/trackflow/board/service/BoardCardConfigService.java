@@ -49,9 +49,15 @@ public class BoardCardConfigService {
         if (config != null) {
             vo.setVisibleFields(parseVisibleFields(config.getVisibleFields()));
             vo.setColorScheme(config.getColorScheme());
+            vo.setCurrentEstimationFieldId(config.getCurrentEstimationFieldId() != null
+                    ? String.valueOf(config.getCurrentEstimationFieldId()) : null);
+            vo.setOriginalEstimationFieldId(config.getOriginalEstimationFieldId() != null
+                    ? String.valueOf(config.getOriginalEstimationFieldId()) : null);
         } else {
             vo.setVisibleFields(DEFAULT_VISIBLE_FIELDS);
             vo.setColorScheme(DEFAULT_COLOR_SCHEME);
+            vo.setCurrentEstimationFieldId(null);
+            vo.setOriginalEstimationFieldId(null);
         }
         return vo;
     }
@@ -80,6 +86,8 @@ public class BoardCardConfigService {
         if (existing != null) {
             existing.setVisibleFields(fieldsJson);
             existing.setColorScheme(dto.getColorScheme());
+            existing.setCurrentEstimationFieldId(dto.getCurrentEstimationFieldId());
+            existing.setOriginalEstimationFieldId(dto.getOriginalEstimationFieldId());
             existing.setUpdatedAt(now);
             boardCardConfigMapper.updateById(existing);
         } else {
@@ -87,6 +95,8 @@ public class BoardCardConfigService {
             config.setProjectId(projectId);
             config.setVisibleFields(fieldsJson);
             config.setColorScheme(dto.getColorScheme());
+            config.setCurrentEstimationFieldId(dto.getCurrentEstimationFieldId());
+            config.setOriginalEstimationFieldId(dto.getOriginalEstimationFieldId());
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardCardConfigMapper.insert(config);
