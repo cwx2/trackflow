@@ -39,4 +39,15 @@ public interface SprintMapper extends BaseMapper<Sprint> {
      * 返回 Map 列表，每项包含 user_id、display_name 及各状态统计数。
      */
     List<java.util.Map<String, Object>> selectAssigneeDistribution(@Param("sprintId") Long sprintId);
+
+    /**
+     * 查询 Sprint 工单每日记录工时（work_items 燃尽图模式）。
+     * 按 work_date 分组汇总 time_entry.duration（分钟）。
+     * 仅统计当前仍在 Sprint 中的工单（sprint_id = sprintId AND deleted_at IS NULL）。
+     *
+     * @param sprintId Sprint ID
+     * @return 每日记录工时列表（work_date + total_minutes）
+     */
+    List<com.trackflow.issue.mapper.result.DailyLoggedMinutesRow> selectSprintDailyLoggedMinutes(
+            @Param("sprintId") Long sprintId);
 }

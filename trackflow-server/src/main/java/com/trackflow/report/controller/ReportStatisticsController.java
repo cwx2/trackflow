@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 报表统计数据 API — 提供仪表盘图表所需的统计数据
@@ -117,15 +118,21 @@ public class ReportStatisticsController {
 
     /**
      * 获取 Sprint 燃尽图数据
+     * calculation 可选：issue_count（工单数）/ estimation（估时工时）/ work_items（记录工时）
      */
     @GetMapping("/burndown")
     @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<BurndownVO> burndown(
             @RequestParam("projectId") Long projectId,
-            @RequestParam("sprintId") Long sprintId) {
+            @RequestParam("sprintId") Long sprintId,
+            @RequestParam(value = "calculation", defaultValue = "issue_count") String calculation) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectAccessible(userId, projectId);
-        return R.ok(statisticsService.getBurndown(projectId, sprintId));
+        // 白名单校验，防止非法 calculation 值
+        if (!Set.of("issue_count", "estimation", "work_items").contains(calculation)) {
+            calculation = "issue_count";
+        }
+        return R.ok(statisticsService.getBurndown(projectId, sprintId, calculation));
     }
 
     /**

@@ -10,4 +10,6 @@ public class BurndownVO {
     private List<Long> actual;
     private String sprintName;
     private int totalIssues;
+    /** 计算模式: "issue_count" / "estimation" / "work_items" */
+    private String mode;
 }

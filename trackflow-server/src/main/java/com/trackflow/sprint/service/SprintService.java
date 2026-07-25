@@ -989,6 +989,9 @@ public class SprintService {
         if ("estimation".equals(mode)) {
             // 估时模式：基于 estimated_hours 计算燃尽
             calculateEstimationBurndown(vo, sprint, sprintStart, sprintEnd, today, totalDays);
+        } else if ("work_items".equals(mode)) {
+            // 工时记录模式：基于 time_entry.duration 计算燃尽
+            calculateWorkItemsBurndown(vo, sprint, sprintStart, sprintEnd, today, totalDays);
         } else {
             // 工单数模式：原有逻辑
             BurndownRawData rawData = loadBurndownRawData(sprintId);
@@ -1478,6 +1481,113 @@ public class SprintService {
                 .filter(entry -> entry.getKey().isBefore(sprintStart))
                 .mapToDouble(Map.Entry::getValue)
                 .sum();
+    }
+
+    /**
+     * work_items 模式燃尽图：基于 time_entry.duration（分钟）计算燃尽。
+     * <p>
+     * Y 轴含义：Sprint 范围内工单的待完成工时（分钟）= 当前所有工单的 estimated_hours 总和 - 已记录工时累计。
+     * 由于记录工时不依赖工单关闭状态，实际线 = 总估时 - 累计已记录工时（到当天为止）。
+     * <p>
+     * 理想线：从 Sprint 激活时的总估时（分钟）线性递减到 0。
+     * 若无估时数据，则 Y 轴改为累计记录分钟数（到 Sprint 结束时的总记录量），用"已记录量"反推"剩余"。
+     */
+    private void calculateWorkItemsBurndown(BurndownVO vo, Sprint sprint,
+                                            LocalDate sprintStart, LocalDate sprintEnd,
+                                            LocalDate today, long totalDays) {
+        Long sprintId = sprint.getId();
+
+        // 1. 查询所有 Sprint 工单的总估时（分钟），作为理想线起点
+        BurndownRawData rawData = loadBurndownRawData(sprintId);
+        double totalEstimatedMinutes = rawData.currentIssues().stream()
+                .filter(i -> i.estimatedHours() != null)
+                .mapToDouble(i -> i.estimatedHours().doubleValue() * 60.0)
+                .sum();
+
+        // 2. 查询 Sprint 工单每日记录工时（time_entry 按 work_date 汇总）
+        List<com.trackflow.issue.mapper.result.DailyLoggedMinutesRow> loggedRows =
+                sprintMapper.selectSprintDailyLoggedMinutes(sprintId);
+
+        // 按日期构建 Map：日期 -> 当天记录分钟数
+        Map<LocalDate, Integer> loggedByDay = new LinkedHashMap<>();
+        int totalLoggedMinutes = 0;
+        for (com.trackflow.issue.mapper.result.DailyLoggedMinutesRow row : loggedRows) {
+            if (row.getWorkDate() != null) {
+                int minutes = row.getTotalMinutes() != null ? row.getTotalMinutes() : 0;
+                loggedByDay.put(row.getWorkDate(), minutes);
+                totalLoggedMinutes += minutes;
+            }
+        }
+
+        // 3. 当无估时数据时，以总记录工时作为理想线起点（反向燃尽：剩余记录 = 0 时代表"完成"）
+        boolean hasEstimation = totalEstimatedMinutes > 0;
+        double startMinutes = hasEstimation ? totalEstimatedMinutes : (double) totalLoggedMinutes;
+        if (startMinutes == 0) {
+            // 既无估时也无工时记录，返回空
+            buildEmptyBurndown(vo);
+            return;
+        }
+
+        // 4. 计算每日指标
+        double idealDecrement = startMinutes / totalDays;
+        List<String> dates = new ArrayList<>();
+        List<Double> idealLine = new ArrayList<>();
+        List<Integer> actualLine = new ArrayList<>();
+        List<Integer> scopeLine = new ArrayList<>();
+
+        double idealRemaining = startMinutes;
+        double cumulativeLogged = 0.0;
+        int todayIndex = -1;
+        LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
+        LocalDate current = sprintStart;
+        int dayIndex = 0;
+
+        while (!current.isAfter(sprintEnd)) {
+            dates.add(current.toString());
+            idealLine.add(Math.max(0.0, Math.round(idealRemaining * 10.0) / 10.0));
+            idealRemaining -= idealDecrement;
+
+            if (!current.isAfter(endForActual)) {
+                // 累计当天记录工时（分钟）
+                cumulativeLogged += loggedByDay.getOrDefault(current, 0);
+                // 实际剩余 = 总估时 - 累计记录工时（不低于 0）
+                double remaining = Math.max(0.0, startMinutes - cumulativeLogged);
+                actualLine.add((int) Math.round(remaining));
+                scopeLine.add((int) Math.round(startMinutes));  // scope 线恒定（无 scope change）
+            }
+
+            if (current.isEqual(today)) {
+                todayIndex = dayIndex;
+            }
+            current = current.plusDays(1);
+            dayIndex++;
+        }
+
+        vo.setDates(dates);
+        vo.setIdealLine(idealLine);
+        vo.setActualLine(actualLine);
+        vo.setScopeLine(scopeLine);
+        vo.setTodayIndex(todayIndex);
+        vo.setTotalIssues(rawData.currentIssues().size());
+        vo.setStartScopeIssues(sprint.getStartScopeIssues() != null
+                ? sprint.getStartScopeIssues()
+                : rawData.currentIssues().size());
+        vo.setStartScopeHours(startMinutes / 60.0);
+
+        // 计算速率和预测（基于记录工时）
+        int daysElapsed = todayIndex >= 0 ? todayIndex + 1 : (int) totalDays;
+        double minuteVelocity = daysElapsed > 0 ? cumulativeLogged / daysElapsed : 0.0;
+        vo.setVelocity(Math.round(minuteVelocity / 60.0 * 100.0) / 100.0); // h/day
+
+        double remainingMinutes = Math.max(0.0, startMinutes - cumulativeLogged);
+        if (minuteVelocity > 0 && remainingMinutes > 0) {
+            long daysNeeded = (long) Math.ceil(remainingMinutes / minuteVelocity);
+            vo.setForecastDate(today.plusDays(daysNeeded).toString());
+        } else if (remainingMinutes <= 0) {
+            vo.setForecastDate(today.toString());
+        } else {
+            vo.setForecastDate(null);
+        }
     }
 
     /**

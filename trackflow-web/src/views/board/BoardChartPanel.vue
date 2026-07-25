@@ -10,7 +10,11 @@
           <template v-if="chartType === 'burndown' && burndownMeta">
             <span class="meta-item" v-if="burndownMeta.velocity > 0">
               <span class="meta-label">日均速率</span>
-              <span class="meta-value">{{ burndownMeta.velocity.toFixed(1) }} 工单/天</span>
+              <span class="meta-value">
+                {{ burndownMeta.velocity.toFixed(1) }}
+                <template v-if="burndownMeta.mode === 'issue_count'">工单/天</template>
+                <template v-else>h/天</template>
+              </span>
             </span>
             <span class="meta-item">
               <span class="meta-label">总工单</span>
@@ -95,12 +99,12 @@ const burndownMeta = computed(() => {
   const data = chartData.value as BurndownData
   // Calculate velocity from actual data
   const actual = data.actual || []
-  if (actual.length < 2) return { velocity: 0, totalIssues: data.totalIssues || 0 }
+  if (actual.length < 2) return { velocity: 0, totalIssues: data.totalIssues || 0, mode: data.mode || 'issue_count' }
   const start = actual[0]
   const end = actual[actual.length - 1]
   const days = actual.length - 1
   const velocity = days > 0 ? (start - end) / days : 0
-  return { velocity, totalIssues: data.totalIssues || 0 }
+  return { velocity, totalIssues: data.totalIssues || 0, mode: data.mode || 'issue_count' }
 })
 
 const chartEmpty = computed(() => {
@@ -144,6 +148,11 @@ function buildBurndownOption(data: BurndownData) {
   const idealColor = isDark ? '#6b7280' : '#9ca3af'
   const actualColor = isDark ? '#58a6ff' : '#0969da'
 
+  // Y-axis unit based on calculation mode
+  const mode = data.mode || 'issue_count'
+  const yUnit = mode === 'issue_count' ? '工单' : 'min'
+  const yAxisName = mode === 'issue_count' ? '' : '(分钟)'
+
   // Find today index (actual line may end before the full dates range)
   const today = new Date().toISOString().slice(0, 10)
   const todayIndex = dates.indexOf(today)
@@ -162,9 +171,10 @@ function buildBurndownOption(data: BurndownData) {
         let html = `<div style="font-weight:500;margin-bottom:4px">${fullDate}</div>`
         for (const p of params) {
           if (p.value !== undefined && p.value !== null) {
+            const valStr = typeof p.value === 'number' ? p.value.toFixed(1) : p.value
             html += `<div style="display:flex;align-items:center;gap:6px;">
               <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
-              <span>${p.seriesName}：<b>${typeof p.value === 'number' ? p.value.toFixed(1) : p.value}</b></span>
+              <span>${p.seriesName}：<b>${valStr}</b>${mode !== 'issue_count' ? ' min' : ''}</span>
             </div>`
           }
         }
@@ -179,7 +189,7 @@ function buildBurndownOption(data: BurndownData) {
       itemWidth: 14,
       itemHeight: 3
     },
-    grid: { left: 36, right: 12, top: 28, bottom: 24 },
+    grid: { left: yAxisName ? 52 : 36, right: 12, top: 28, bottom: 24 },
     xAxis: {
       type: 'category',
       data: shortDates,
@@ -194,7 +204,9 @@ function buildBurndownOption(data: BurndownData) {
     },
     yAxis: {
       type: 'value',
-      minInterval: 1,
+      name: yAxisName,
+      nameTextStyle: { color: textColor, fontSize: 10 },
+      minInterval: mode === 'issue_count' ? 1 : undefined,
       axisLine: { show: false },
       axisLabel: { color: textColor, fontSize: 10 },
       splitLine: { lineStyle: { color: axisColor, type: 'dashed' } }
@@ -340,7 +352,11 @@ async function loadChartData() {
   chartError.value = null
   try {
     if (props.chartType === 'burndown') {
-      const res = await reportStatisticsApi.burndown(props.projectId, props.sprintId!)
+      const res = await reportStatisticsApi.burndown(
+        props.projectId,
+        props.sprintId!,
+        (props.burndownCalculation as 'issue_count' | 'estimation' | 'work_items' | undefined) || 'issue_count'
+      )
       chartData.value = res.data
     } else {
       // Cumulative flow: default last 30 days
@@ -358,7 +374,7 @@ async function loadChartData() {
 
 // Watch for prop changes to reload
 watch(
-  () => [props.visible, props.projectId, props.sprintId, props.chartType],
+  () => [props.visible, props.projectId, props.sprintId, props.chartType, props.burndownCalculation],
   ([visible]) => {
     if (visible && props.projectId) {
       loadChartData()

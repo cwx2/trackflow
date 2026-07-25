@@ -185,4 +185,19 @@
         ORDER BY COUNT(*) DESC
     </select>
 
+    <!-- work_items 模式燃尽图：按天汇总 Sprint 工单的记录工时（分钟）-->
+    <!-- 仅统计当前仍在 Sprint 中的工单（sprint_id = sprintId AND deleted_at IS NULL） -->
+    <select id="selectSprintDailyLoggedMinutes"
+            resultType="com.trackflow.issue.mapper.result.DailyLoggedMinutesRow">
+        SELECT te.work_date AS workDate,
+               SUM(te.duration) AS totalMinutes
+        FROM time_entry te
+        INNER JOIN issue i ON i.id = te.issue_id
+                          AND i.sprint_id = #{sprintId}
+                          AND i.deleted_at IS NULL
+        WHERE te.duration IS NOT NULL
+        GROUP BY te.work_date
+        ORDER BY te.work_date
+    </select>
+
 </mapper>

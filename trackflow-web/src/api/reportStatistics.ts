@@ -74,6 +74,8 @@ export interface BurndownData {
   actual: number[]
   sprintName: string
   totalIssues: number
+  /** 计算模式: "issue_count" / "estimation" / "work_items" */
+  mode?: string
 }
 
 export interface ProjectComparisonItem {
@@ -282,9 +284,9 @@ export const reportStatisticsApi = {
   },
 
   /** Sprint 燃尽图 */
-  burndown(projectId: string, sprintId: string) {
+  burndown(projectId: string, sprintId: string, calculation?: 'issue_count' | 'estimation' | 'work_items') {
     return request.get<any, R<BurndownData>>('/reports/statistics/burndown', {
-      params: { projectId, sprintId }
+      params: { projectId, sprintId, calculation }
     })
   },
 

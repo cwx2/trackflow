@@ -149,7 +149,11 @@ public class ReportStatisticsService {
     }
 
     public BurndownVO getBurndown(Long projectId, Long sprintId) {
-        return buildBurndown(projectId, sprintId);
+        return buildBurndown(projectId, sprintId, "issue_count");
+    }
+
+    public BurndownVO getBurndown(Long projectId, Long sprintId, String calculation) {
+        return buildBurndown(projectId, sprintId, calculation);
     }
 
     public CumulativeFlowVO getCumulativeFlow(Long projectId, LocalDate startDate, LocalDate endDate) {
@@ -768,8 +772,12 @@ public class ReportStatisticsService {
     }
 
     private BurndownVO buildBurndown(Long projectId, Long sprintId) {
+        return buildBurndown(projectId, sprintId, "issue_count");
+    }
+
+    private BurndownVO buildBurndown(Long projectId, Long sprintId, String calculation) {
         // 委托给 SprintService 的 scope-aware 算法（已优化）
-        com.trackflow.sprint.vo.BurndownVO sprintBurndown = sprintService.getBurndownData(sprintId);
+        com.trackflow.sprint.vo.BurndownVO sprintBurndown = sprintService.getBurndownData(sprintId, calculation);
 
         BurndownVO vo = new BurndownVO();
         vo.setDates(sprintBurndown.getDates());
@@ -779,6 +787,7 @@ public class ReportStatisticsService {
                 .collect(Collectors.toList()));
         vo.setSprintName(sprintBurndown.getSprintName());
         vo.setTotalIssues(sprintBurndown.getTotalIssues());
+        vo.setMode(calculation);
         return vo;
     }
 
