@@ -25,4 +25,9 @@ public class IssueStatusVO {
      * 阻塞方的 issueKey 列表（如 ["DE4-1001", "DE4-1003"]）
      */
     private List<String> blockedBy;
+
+    /**
+     * 此转换是否要求必须填写评论/理由（来自 workflow_transition.require_comment 配置）
+     */
+    private Boolean requireComment;
 }

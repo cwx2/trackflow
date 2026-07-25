@@ -57,6 +57,14 @@ public class IssueDetailRow {
     // JOIN sys_user (reporter)
     private String reporterName;
 
+    // JOIN sys_user (creator)
+    private Long createdById;
+    private String createdByName;
+
+    // JOIN sys_user (updater)
+    private Long updatedById;
+    private String updatedByName;
+
     // JOIN sprint
     private String sprintName;
 

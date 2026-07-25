@@ -2,6 +2,8 @@ package com.trackflow.quickaction.vo;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 快捷动作执行结果 VO
  */
@@ -28,6 +30,9 @@ public class QuickActionExecutionResultVO {
     /** 执行日志 ID */
     private String logId;
 
+    /** 规则执行的动作摘要（rule 类型使用） */
+    private List<String> executedActions;
+
     public static QuickActionExecutionResultVO success(String commentId, boolean mailSent, String logId) {
         QuickActionExecutionResultVO vo = new QuickActionExecutionResultVO();
         vo.setSuccess(true);
@@ -43,6 +48,14 @@ public class QuickActionExecutionResultVO {
         QuickActionExecutionResultVO vo = success(commentId, mailSent, logId);
         vo.setStatusBefore(statusBefore);
         vo.setStatusAfter(statusAfter);
+        return vo;
+    }
+
+    public static QuickActionExecutionResultVO ruleExecuted(String logId, List<String> executedActions) {
+        QuickActionExecutionResultVO vo = new QuickActionExecutionResultVO();
+        vo.setSuccess(true);
+        vo.setLogId(logId);
+        vo.setExecutedActions(executedActions);
         return vo;
     }
 }

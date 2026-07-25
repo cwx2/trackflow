@@ -199,6 +199,7 @@ export interface StatusInfo {
   color: string
   blocked?: boolean
   blockedBy?: string[]
+  requireComment?: boolean
 }
 
 const props = defineProps<{

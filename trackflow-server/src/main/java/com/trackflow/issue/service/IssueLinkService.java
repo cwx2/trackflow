@@ -40,15 +40,7 @@ public class IssueLinkService {
     private final ProjectService projectService;
     private final StatusCacheHelper statusCacheHelper;
     private final ApplicationEventPublisher eventPublisher;
-
-    /** 需要检测循环依赖的有向关联类型 */
-    private static final Set<String> DIRECTED_LINK_TYPES = Set.of("blocks", "parent_of");
-
-    /** 所有合法的关联类型 */
-    private static final Set<String> VALID_LINK_TYPES = Set.of(
-            "blocks", "blocked_by", "duplicates", "duplicated_by",
-            "parent_of", "child_of", "relates_to"
-    );
+    private final IssueLinkTypeService linkTypeService;
 
     /**
      * 获取 Issue 的所有关联（包括作为 source 和 target 的）。
@@ -113,10 +105,10 @@ public class IssueLinkService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void createIssueLink(Long issueId, CreateIssueLinkDTO dto) {
-        // 校验 linkType 是否为合法枚举值（防御性编程，防绕过 DTO 校验）
-        if (!VALID_LINK_TYPES.contains(dto.getLinkType())) {
+        // 校验 linkType 是否为合法类型（从数据库动态加载验证）
+        if (!linkTypeService.isValidLinkType(dto.getLinkType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "非法的关联类型: " + dto.getLinkType() + "，允许的类型: " + VALID_LINK_TYPES);
+                    "非法的关联类型: " + dto.getLinkType());
         }
 
         // 归档项目不允许创建关联
@@ -259,48 +251,22 @@ public class IssueLinkService {
 
     /**
      * 检查反向关系是否已存在。
-     * 防止 A blocks B 的同时 B blocks A 形成互相阻塞。
-     * 对称关系（relates_to）不做此检查。
+     * 在新模型中，issue_link 表只存储正向类型（outward 方向），
+     * 所以只需检查 target→source 的同类型是否已存在。
      */
     private void validateNoReverseRelation(Long sourceId, Long targetId, String linkType) {
-        String reverseType = getReverseLinkType(linkType);
-
-        // 对称关联（如 relates_to）的 reverse 就是自身，需要检查反方向同类型
-        // 有向关联（如 blocks/blocked_by）需要检查反方向的反义类型
-        if (linkType.equals(reverseType)) {
-            // 对称关联：检查反方向是否已存在同类型
-            Long reverseExists = linkMapper.selectCount(
-                    new LambdaQueryWrapper<IssueLink>()
-                            .eq(IssueLink::getSourceIssueId, targetId)
-                            .eq(IssueLink::getTargetIssueId, sourceId)
-                            .eq(IssueLink::getLinkType, linkType)
-            );
-            if (reverseExists > 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "反向关联已存在");
-            }
-        } else {
-            // 有向关联：检查 target→source 的反义类型是否已存在
-            // 例如 A blocks B 时，检查 B blocks A 是否存在
-            Long reverseExists = linkMapper.selectCount(
-                    new LambdaQueryWrapper<IssueLink>()
-                            .eq(IssueLink::getSourceIssueId, targetId)
-                            .eq(IssueLink::getTargetIssueId, sourceId)
-                            .eq(IssueLink::getLinkType, linkType)
-            );
-            if (reverseExists > 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "反向关联已存在，不能互相阻塞");
-            }
-
-            // 同时检查语义等价的反向记录
-            // 例如 A blocks B 时，也检查是否存在 B→A 的 blocked_by 记录
-            Long semanticReverseExists = linkMapper.selectCount(
-                    new LambdaQueryWrapper<IssueLink>()
-                            .eq(IssueLink::getSourceIssueId, targetId)
-                            .eq(IssueLink::getTargetIssueId, sourceId)
-                            .eq(IssueLink::getLinkType, reverseType)
-            );
-            if (semanticReverseExists > 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "等价的反向关联已存在");
+        // 检查反方向是否已存在同类型
+        Long reverseExists = linkMapper.selectCount(
+                new LambdaQueryWrapper<IssueLink>()
+                        .eq(IssueLink::getSourceIssueId, targetId)
+                        .eq(IssueLink::getTargetIssueId, sourceId)
+                        .eq(IssueLink::getLinkType, linkType)
+        );
+        if (reverseExists > 0) {
+            if (linkTypeService.isUndirected(linkType)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "关联已存在（对称关联）");
+            } else {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "反向关联已存在，不能互相关联");
             }
         }
     }
@@ -311,7 +277,7 @@ public class IssueLinkService {
      * 从 targetId 出发沿同类型链遍历，如果能到达 sourceId 则说明形成循环。
      */
     private void validateNoCircularDependency(Long sourceId, Long targetId, String linkType) {
-        if (!DIRECTED_LINK_TYPES.contains(linkType)) {
+        if (!linkTypeService.isDirected(linkType)) {
             return;
         }
 
@@ -370,20 +336,10 @@ public class IssueLinkService {
     }
 
     /**
-     * 获取反向关联类型
+     * 获取反向关联类型展示名（从 issue_link_type 表动态查询）
      */
     String getReverseLinkType(String linkType) {
-        return switch (linkType) {
-            case "parent_of" -> "child_of";
-            case "child_of" -> "parent_of";
-            case "blocks" -> "blocked_by";
-            case "blocked_by" -> "blocks";
-            case "duplicates" -> "duplicated_by";
-            case "duplicated_by" -> "duplicates";
-            case "relates_to" -> "relates_to"; // 对称关联
-            default -> throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "未知的关联类型: " + linkType);
-        };
+        return linkTypeService.getInwardName(linkType);
     }
 
     /**

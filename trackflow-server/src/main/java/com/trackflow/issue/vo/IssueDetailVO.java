@@ -45,6 +45,12 @@ public class IssueDetailVO {
     private LocalDateTime updatedAt;
     private Integer version;
 
+    // 创建者/更新者信息
+    private String createdById;
+    private String createdByName;
+    private String updatedById;
+    private String updatedByName;
+
     /** 子任务列表（仅当本工单有子任务时非空） */
     private List<ChildIssueVO> children;
     /** 子任务进度汇总（仅当有子任务时非空） */

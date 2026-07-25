@@ -5,6 +5,7 @@
       :visible="true"
       @update:visible="onClose"
       @created="onCreated"
+      @cancel-with-data="onCancelWithData"
     />
   </div>
 </template>
@@ -12,11 +13,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, onBeforeRouteLeave } from 'vue-router'
-import { Modal } from '@arco-design/web-vue'
+import { Modal, Message } from '@arco-design/web-vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
+import { useDrafts } from './composables/useDrafts'
 
 const router = useRouter()
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
+const { saveDraft } = useDrafts()
 
 function onClose() {
   router.back()
@@ -26,21 +29,29 @@ function onCreated() {
   router.back()
 }
 
+function onCancelWithData(formData: any) {
+  if (formData && (formData.title?.trim() || formData.description?.trim())) {
+    saveDraft(formData)
+    Message.info('已保存为草稿')
+  }
+}
+
 // Vue Router 路由守卫：离开页面时检查脏数据
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
   if (panel && panel.isDirty) {
     Modal.confirm({
-      title: '有未保存的更改',
-      content: '当前表单中有未保存的内容，确定要离开吗？',
-      okText: '放弃更改',
-      cancelText: '继续编辑',
+      title: '保存为草稿？',
+      content: '当前表单中有未保存的内容。是否保存为草稿？',
+      okText: '保存草稿',
+      cancelText: '放弃更改',
       simple: false,
       onOk: () => {
+        // The panel's close handler will emit cancel-with-data
         next()
       },
       onCancel: () => {
-        next(false)
+        next()
       }
     })
   } else {
