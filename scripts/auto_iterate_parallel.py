@@ -33,6 +33,7 @@ import os
 import random
 import shutil
 import threading
+import json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
@@ -56,6 +57,8 @@ MIN_DEVELOP_QUEUE = 6       # develop 低于此数时触发生产
 TIMEOUT_SECONDS = 2400      # 单次 kiro-cli 超时（40分钟）
 MAX_RETRIES = 3
 COOLDOWN_SECONDS = 5
+MAX_TEST_RETRIES = 3        # 测试最多重试轮数
+MAX_REVIEW_RETRIES = 2      # 审核最多重试轮数
 
 # 模型配置（None = 使用 kiro-cli 默认模型）
 # 可选值：claude-sonnet-4.6 / claude-opus-4.5 / claude-sonnet-4.5 / auto
@@ -70,6 +73,8 @@ SKILLS = {
     "tech-requirement": {"path": ".kiro/skills/tech-requirement/SKILL.md"},
     "review-requirement": {"path": ".kiro/skills/review-requirement/SKILL.md"},
     "fix-requirement": {"path": ".kiro/skills/fix-requirement/SKILL.md"},
+    "e2e-test": {"path": ".kiro/skills/e2e-test/SKILL.md"},
+    "code-review": {"path": ".kiro/skills/code-review/SKILL.md"},
 }
 
 # 生产者配置池
@@ -218,6 +223,110 @@ def run_kiro(prompt: str, label: str) -> tuple[bool, str]:
         return False, str(e)
 
 
+def get_latest_session_id() -> str | None:
+    """获取当前目录最新的 session ID（fix-requirement 类型）"""
+    try:
+        result = subprocess.run(
+            [KIRO_CLI, "chat", "--list-sessions", "--format", "json"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15
+        )
+        # 合并 stdout 和 stderr（kiro-cli 可能输出到 stderr）
+        raw = result.stdout + result.stderr
+        # 找到 JSON 数组起始位置
+        start = raw.find("[")
+        if start == -1:
+            return None
+        sessions = json.loads(raw[start:])
+        if not sessions:
+            return None
+        # 返回最新的（updatedAt 最大）
+        sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
+        return sessions[0].get("sessionId")
+    except Exception as e:
+        log.warning(f"[session] 获取 session_id 失败: {e}")
+        return None
+
+
+def run_kiro_resume(session_id: str, prompt: str, label: str) -> tuple[bool, str]:
+    """恢复指定会话并发送消息"""
+    cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools",
+           "--resume-id", session_id]
+    if KIRO_MODEL:
+        cmd += ["--model", KIRO_MODEL]
+    cmd.append(prompt)
+
+    start = time.time()
+    output_lines = []
+    env = os.environ.copy()
+    env.update({"GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true",
+                 "EDITOR": "true", "VISUAL": "true", "CI": "true",
+                 "NPM_CONFIG_YES": "true", "DEBIAN_FRONTEND": "noninteractive"})
+    try:
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, cwd=str(WORKSPACE), encoding="utf-8", errors="replace", env=env,
+        )
+        for line in process.stdout:
+            line_stripped = line.rstrip("\n")
+            print(f"  [{label}] {line_stripped}")
+            output_lines.append(line_stripped)
+        process.wait(timeout=TIMEOUT_SECONDS)
+        elapsed = time.time() - start
+        success = process.returncode == 0
+        log.info(f"[{label}] resume {'完成' if success else '失败'} ({elapsed:.0f}s)")
+        return success, "\n".join(output_lines)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        log.error(f"[{label}] resume 超时")
+        return False, "TIMEOUT"
+    except Exception as e:
+        log.error(f"[{label}] resume 异常: {e}")
+        return False, str(e)
+
+
+def parse_test_result(output: str) -> tuple[bool, str]:
+    """
+    解析测试输出，判断是否全部通过。
+    返回 (all_passed, summary)
+    通过标准：输出中存在 ✅ 且不存在 ❌ FAIL
+    """
+    has_pass = "✅" in output or "PASS" in output
+    has_fail = "❌" in output and ("FAIL" in output or "失败" in output)
+    if has_fail:
+        # 提取失败摘要（最后 30 行）
+        lines = output.strip().split("\n")
+        summary = "\n".join(lines[-30:])
+        return False, summary
+    if has_pass:
+        lines = output.strip().split("\n")
+        summary = "\n".join(lines[-10:])
+        return True, summary
+    # 没有明确标记，认为失败
+    lines = output.strip().split("\n")
+    return False, "\n".join(lines[-20:])
+
+
+def parse_review_result(output: str) -> tuple[bool, str]:
+    """
+    解析 code review 输出，判断是否可以合并。
+    返回 (can_merge, summary)
+    通过标准：出现 🟢 或 "可以合并"，且无 MUST 问题
+    """
+    can_merge = "🟢" in output or "可以合并" in output
+    has_must = "MUST" in output and "❌" in output
+    lines = output.strip().split("\n")
+    summary = "\n".join(lines[-40:])
+    if has_must:
+        return False, summary
+    if can_merge:
+        return True, summary
+    # 模糊情况：有 🟡 修改后合并也算过（SHOULD 级不阻塞）
+    if "🟡" in output or "修改后合并" in output:
+        return True, summary
+    return False, summary
+
+
 # ============ 阶段一：并行生产 ============
 
 
@@ -299,35 +408,167 @@ def claim_requirement(worker_id: str) -> Path | None:
 
 
 def consume_one(worker_id: str) -> str | None:
-    """单个 worker 领取并处理一个需求，返回文件名（成功）或 None（无可领取）"""
+    """
+    单个 worker 领取并处理一个需求，完整流程：
+      1. 修需求（新会话）
+      2. 拿到 session_id
+      3. 测试（独立会话）→ 失败则 resume 原会话反馈 → 循环最多 MAX_TEST_RETRIES 次
+      4. 审核（独立会话）→ 有 MUST 则 resume 原会话反馈 → 循环最多 MAX_REVIEW_RETRIES 次
+      5. 成功 → 移到 implement
+    """
     req_file = claim_requirement(worker_id)
     if req_file is None:
         return None
 
     skill_info = SKILLS["fix-requirement"]
     actual_path = f"requirements/working/{worker_id}/{req_file.name}"
+    title = extract_title(req_file)
+    label = worker_id
 
-    prompt = (
+    log.info(f"[{label}] 消费: {req_file.name} ({title})")
+
+    # ── 步骤 1：修需求（新会话）──
+    fix_prompt = (
         f"[使用 skill: fix-requirement] "
         f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
         f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
     )
-
-    title = extract_title(req_file)
-    log.info(f"[{worker_id}] 消费: {req_file.name} ({title})")
-    success, _ = run_kiro(prompt, worker_id)
-
-    if success:
-        if req_file.exists():
-            shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
-        log.info(f"[{worker_id}] ✅ {req_file.name}")
-        return req_file.name
-    else:
-        # 失败放回 develop（让下次重试或被跳过）
+    success, fix_output = run_kiro(fix_prompt, label)
+    if not success:
         if req_file.exists():
             shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
-        log.warning(f"[{worker_id}] ❌ {req_file.name} 失败，放回 develop/")
+        log.warning(f"[{label}] ❌ {req_file.name} 修需求失败，放回 develop/")
         return None
+
+    # ── 步骤 2：拿 session_id（修需求结束后立刻查）──
+    time.sleep(2)  # 给 kiro-cli 一点时间写入 session
+    session_id = get_latest_session_id()
+    if session_id:
+        log.info(f"[{label}] 绑定 session: {session_id[:8]}...")
+    else:
+        log.warning(f"[{label}] 未获取到 session_id，后续反馈将开新会话")
+
+    # ── 步骤 3：测试闭环 ──
+    test_skill = SKILLS["e2e-test"]
+    prev_test_summary = ""
+    test_passed = False
+
+    for test_round in range(1, MAX_TEST_RETRIES + 1):
+        log.info(f"[{label}] 测试第 {test_round} 轮...")
+
+        if test_round == 1:
+            test_prompt = (
+                f"[使用 skill: e2e-test] "
+                f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"测试需求 {req_file.stem}，验证其验收标准。需求文件位于 {actual_path}"
+            )
+        else:
+            test_prompt = (
+                f"[使用 skill: e2e-test] "
+                f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"重测需求 {req_file.stem}（第 {test_round} 轮）。\n\n"
+                f"上轮失败摘要：\n{prev_test_summary}\n\n"
+                f"请仅验证上轮失败的用例，并回归已通过的用例。"
+            )
+
+        _, test_output = run_kiro(test_prompt, f"{label}-test{test_round}")
+        test_passed, test_summary = parse_test_result(test_output)
+
+        if test_passed:
+            log.info(f"[{label}] ✅ 测试通过（第 {test_round} 轮）")
+            break
+
+        log.warning(f"[{label}] ❌ 测试失败（第 {test_round} 轮），反馈给修需求会话...")
+        prev_test_summary = test_summary
+
+        if test_round < MAX_TEST_RETRIES:
+            # resume 原会话，把测试失败结果反馈给它
+            feedback_prompt = (
+                f"端到端测试失败（第 {test_round} 轮），请根据以下失败信息修复代码：\n\n"
+                f"```\n{test_summary}\n```\n\n"
+                f"修复后，测试子代理会重新验证。请完成修复并确认已 git commit。"
+            )
+            if session_id:
+                run_kiro_resume(session_id, feedback_prompt, f"{label}-fix{test_round}")
+            else:
+                # 无 session_id 降级为新会话
+                fallback_prompt = (
+                    f"[使用 skill: fix-requirement] "
+                    f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+                    f"继续处理需求 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n"
+                    f"```\n{test_summary}\n```"
+                )
+                run_kiro(fallback_prompt, f"{label}-fix{test_round}")
+
+    if not test_passed:
+        log.warning(f"[{label}] ⚠️ 测试经 {MAX_TEST_RETRIES} 轮仍未通过，继续审核（记录问题）")
+
+    # ── 步骤 4：代码审核闭环 ──
+    review_skill = SKILLS["code-review"]
+    prev_review_summary = ""
+    review_passed = False
+
+    for review_round in range(1, MAX_REVIEW_RETRIES + 1):
+        log.info(f"[{label}] 审核第 {review_round} 轮...")
+
+        if review_round == 1:
+            review_prompt = (
+                f"[使用 skill: code-review] "
+                f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"审核需求 {req_file.stem} 的本次代码变更（git diff HEAD~1 或 staged 文件）。"
+            )
+        else:
+            review_prompt = (
+                f"[使用 skill: code-review] "
+                f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"二次审核需求 {req_file.stem}（第 {review_round} 轮）。\n\n"
+                f"上轮 MUST 问题：\n{prev_review_summary}\n\n"
+                f"请验证 MUST 问题是否已修复，无需重新做完整审核。"
+            )
+
+        _, review_output = run_kiro(review_prompt, f"{label}-review{review_round}")
+        review_passed, review_summary = parse_review_result(review_output)
+
+        if review_passed:
+            log.info(f"[{label}] ✅ 审核通过（第 {review_round} 轮）")
+            break
+
+        log.warning(f"[{label}] ❌ 审核有 MUST 问题（第 {review_round} 轮），反馈给修需求会话...")
+        prev_review_summary = review_summary
+
+        if review_round < MAX_REVIEW_RETRIES:
+            feedback_prompt = (
+                f"代码审核发现 MUST 级问题（第 {review_round} 轮），请修复以下问题后重新 commit：\n\n"
+                f"```\n{review_summary}\n```\n\n"
+                f"修复完成后审核子代理会重新验证。"
+            )
+            if session_id:
+                run_kiro_resume(session_id, feedback_prompt, f"{label}-fixr{review_round}")
+            else:
+                fallback_prompt = (
+                    f"[使用 skill: fix-requirement] "
+                    f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+                    f"继续处理需求 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n"
+                    f"```\n{review_summary}\n```"
+                )
+                run_kiro(fallback_prompt, f"{label}-fixr{review_round}")
+
+    # ── 步骤 5：归档 ──
+    overall_success = test_passed and review_passed
+    if req_file.exists():
+        shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
+
+    if overall_success:
+        log.info(f"[{label}] ✅ {req_file.name} 全流程完成")
+    else:
+        status = []
+        if not test_passed:
+            status.append(f"测试未全通({MAX_TEST_RETRIES}轮)")
+        if not review_passed:
+            status.append(f"审核未全通({MAX_REVIEW_RETRIES}轮)")
+        log.warning(f"[{label}] ⚠️ {req_file.name} 已归档但存在问题: {', '.join(status)}")
+
+    return req_file.name
 
 
 def run_consume_phase(num_workers: int) -> int:

@@ -13,6 +13,8 @@ tools
 trackflow-server/target/
 trackflow-server/.idea/
 trackflow-server/*.iml
+trackflow-server/tmp_compile/
+temp_compile_out.txt
 
 # === Node / Vue ===
 trackflow-web/node_modules/
