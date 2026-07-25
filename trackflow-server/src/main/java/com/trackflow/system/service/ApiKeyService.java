@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,11 @@ public class ApiKeyService {
     private static final int PREFIX_LENGTH = 8;
     private static final int SECRET_LENGTH = 32;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    /**
+     * prefix 碰撞时最大重试次数（UNIQUE 约束兜底，应用层防御）
+     */
+    private static final int MAX_PREFIX_RETRY = 3;
 
     /**
      * 每用户最大 API Key 数量
@@ -72,32 +78,48 @@ public class ApiKeyService {
             validatePermissions(permissions, userId);
         }
 
-        // 生成 key
-        String prefix = generateRandomString(PREFIX_LENGTH);
-        String secret = generateRandomString(SECRET_LENGTH);
-        String plainKey = KEY_PREFIX + prefix + secret;
-        String keyHash = BCrypt.hashpw(plainKey, BCrypt.gensalt());
+        // 生成 key（带重试：极小概率 prefix 碰撞时重新生成，最多 MAX_PREFIX_RETRY 次）
+        String plainKey = null;
+        ApiKey apiKey = null;
 
-        // 保存
-        ApiKey apiKey = new ApiKey();
-        apiKey.setUserId(userId);
-        apiKey.setName(name);
-        apiKey.setKeyHash(keyHash);
-        apiKey.setPrefix(KEY_PREFIX + prefix);
-        apiKey.setCreatedAt(LocalDateTime.now());
-        apiKey.setExpiresAt(expiresAt);
-
+        String permissionsJson;
         if (permissions != null && !permissions.isEmpty()) {
             try {
-                apiKey.setPermissions(objectMapper.writeValueAsString(permissions));
+                permissionsJson = objectMapper.writeValueAsString(permissions);
             } catch (JsonProcessingException e) {
-                apiKey.setPermissions("[]");
+                permissionsJson = "[]";
             }
         } else {
-            apiKey.setPermissions("[]");
+            permissionsJson = "[]";
         }
 
-        apiKeyMapper.insert(apiKey);
+        for (int attempt = 1; attempt <= MAX_PREFIX_RETRY; attempt++) {
+            String prefix = generateRandomString(PREFIX_LENGTH);
+            String secret = generateRandomString(SECRET_LENGTH);
+            plainKey = KEY_PREFIX + prefix + secret;
+            String keyHash = BCrypt.hashpw(plainKey, BCrypt.gensalt());
+
+            apiKey = new ApiKey();
+            apiKey.setUserId(userId);
+            apiKey.setName(name);
+            apiKey.setKeyHash(keyHash);
+            apiKey.setPrefix(KEY_PREFIX + prefix);
+            apiKey.setCreatedAt(LocalDateTime.now());
+            apiKey.setExpiresAt(expiresAt);
+            apiKey.setPermissions(permissionsJson);
+
+            try {
+                apiKeyMapper.insert(apiKey);
+                break; // 插入成功，退出重试循环
+            } catch (DuplicateKeyException e) {
+                if (attempt == MAX_PREFIX_RETRY) {
+                    log.error("API Key prefix 生成碰撞，已重试 {} 次仍失败，userId={}", MAX_PREFIX_RETRY, userId);
+                    throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                            "API Key 生成失败，请重试");
+                }
+                log.warn("API Key prefix 碰撞（第 {} 次），重新生成，userId={}", attempt, userId);
+            }
+        }
 
         // 审计日志
         Map<String, Object> auditDetails = new HashMap<>();
