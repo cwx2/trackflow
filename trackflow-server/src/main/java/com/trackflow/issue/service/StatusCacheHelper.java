@@ -14,10 +14,18 @@ import java.util.stream.Collectors;
 /**
  * Issue 状态缓存助手。
  * <p>
- * issue_status 表为种子数据，极少变更（仅管理员新增/编辑状态时）。
+ * issue_status 表为种子数据，极少变更（仅通过 Flyway 迁移修改）。
  * 提供关闭状态 ID 集合的本地缓存，避免每次查询都访问 DB。
  * <p>
- * 失效策略：手动调用 invalidate() 或自动过期（30秒 TTL，适配开发时热修改状态的场景）。
+ * 失效策略：
+ * <ol>
+ *   <li>手动调用 {@link #invalidate()}（推荐：在修改 issue_status 表后主动调用）</li>
+ *   <li>自动过期（5 秒 TTL，减少多实例部署时的不一致窗口期）</li>
+ * </ol>
+ * <p>
+ * 多实例部署说明：{@link #invalidate()} 只清除当前节点缓存。
+ * 管理员修改 issue_status 后，可通过 {@code POST /api/v1/admin/refresh-status-cache}
+ * 在每个节点分别刷新，或待 TTL 自然过期（最长 5 秒）。
  */
 @Slf4j
 @Component
@@ -32,8 +40,8 @@ public class StatusCacheHelper {
     private final AtomicReference<Set<Long>> openIdsCache = new AtomicReference<>();
     /** 上次加载时间 */
     private volatile long lastLoadTime = 0;
-    /** 缓存 TTL（30 秒，兼顾开发便利和性能） */
-    private static final long CACHE_TTL_MS = 30_000;
+    /** 缓存 TTL（5 秒，减少多实例部署时的不一致窗口期） */
+    private static final long CACHE_TTL_MS = 5_000;
 
     /**
      * 获取所有关闭状态（is_closed = true）的 ID 集合。

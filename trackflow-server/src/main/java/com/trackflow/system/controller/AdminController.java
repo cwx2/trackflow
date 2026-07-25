@@ -1,6 +1,7 @@
 package com.trackflow.system.controller;
 
 import com.trackflow.common.model.R;
+import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.timeentry.service.TimeEntryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +21,7 @@ import java.util.Map;
 public class AdminController {
 
     private final TimeEntryService timeEntryService;
+    private final StatusCacheHelper statusCacheHelper;
 
     /**
      * 全量校准所有 issue 的 spent_hours 字段
@@ -33,6 +35,24 @@ public class AdminController {
         return R.ok(Map.of(
                 "affectedRows", affectedRows,
                 "message", "spent_hours 全量校准完成"
+        ));
+    }
+
+    /**
+     * 手动刷新工单状态缓存（StatusCacheHelper）
+     * <p>
+     * 适用场景：通过 Flyway 迁移脚本手动修改了 issue_status 表（如更新 is_closed 标志）后，
+     * 需要所有实例立即感知最新状态定义，可调用此接口强制清除本实例的本地缓存。
+     * <p>
+     * 注意：单实例部署下，此接口会清除当前节点缓存；
+     * 多实例部署下，需在每个节点分别调用（或配合 Redis Pub/Sub 升级为全局通知）。
+     */
+    @PostMapping("/refresh-status-cache")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<Map<String, Object>> refreshStatusCache() {
+        statusCacheHelper.invalidate();
+        return R.ok(Map.of(
+                "message", "工单状态缓存已清除，下次查询将从数据库重新加载"
         ));
     }
 }
