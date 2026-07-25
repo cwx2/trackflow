@@ -36,11 +36,13 @@ public class BoardSwimlaneConfigService {
             vo.setSelectedValues(config.getSelectedValues());
             vo.setShowUncategorized(config.getShowUncategorized());
             vo.setUncategorizedPosition(config.getUncategorizedPosition());
+            vo.setSwimlaneIssueType(config.getSwimlaneIssueType());
         } else {
             vo.setGroupByField(DEFAULT_GROUP_BY);
             vo.setSelectedValues(null);
             vo.setShowUncategorized(true);
             vo.setUncategorizedPosition(DEFAULT_UNCATEGORIZED_POSITION);
+            vo.setSwimlaneIssueType(null);
         }
         return vo;
     }
@@ -62,6 +64,7 @@ public class BoardSwimlaneConfigService {
             existing.setSelectedValues(dto.getSelectedValues());
             existing.setShowUncategorized(dto.getShowUncategorized() != null ? dto.getShowUncategorized() : true);
             existing.setUncategorizedPosition(dto.getUncategorizedPosition() != null ? dto.getUncategorizedPosition() : DEFAULT_UNCATEGORIZED_POSITION);
+            existing.setSwimlaneIssueType(dto.getSwimlaneIssueType());
             existing.setUpdatedAt(now);
             swimlaneConfigMapper.updateById(existing);
         } else {
@@ -71,6 +74,7 @@ public class BoardSwimlaneConfigService {
             config.setSelectedValues(dto.getSelectedValues());
             config.setShowUncategorized(dto.getShowUncategorized() != null ? dto.getShowUncategorized() : true);
             config.setUncategorizedPosition(dto.getUncategorizedPosition() != null ? dto.getUncategorizedPosition() : DEFAULT_UNCATEGORIZED_POSITION);
+            config.setSwimlaneIssueType(dto.getSwimlaneIssueType());
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             swimlaneConfigMapper.insert(config);

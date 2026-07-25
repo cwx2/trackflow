@@ -46,7 +46,35 @@
             <span class="radio-desc">按工单标签分组（具有多标签的工单显示在第一个匹配泳道中）</span>
           </div>
         </a-radio>
+        <a-radio value="parent">
+          <div class="radio-option">
+            <span class="radio-label">按父工单（Issues 模式）</span>
+            <span class="radio-desc">选择一种高层级 Issue 类型作为泳道行，该类型的工单成为泳道标题，其子工单排列在泳道内</span>
+          </div>
+        </a-radio>
       </a-radio-group>
+    </div>
+
+    <!-- Issues 模式：选择作为泳道行的 Issue 类型 -->
+    <div v-if="groupByField === 'parent'" class="settings-section">
+      <div class="section-title">泳道 Issue 类型</div>
+      <div class="section-desc">
+        选择哪种类型的工单作为泳道行标题。只有被选中类型的工单才会成为泳道行；
+        其子工单（parent_id 指向该工单的工单）显示在对应泳道内。
+      </div>
+      <a-select
+        :model-value="swimlaneIssueType"
+        placeholder="选择 Issue 类型（如 Epic、Feature）"
+        allow-clear
+        @change="onSwimlaneIssueTypeChange"
+      >
+        <a-option v-for="t in PARENT_ISSUE_TYPES" :key="t.value" :value="t.value">
+          {{ t.label }}
+        </a-option>
+      </a-select>
+      <div v-if="!swimlaneIssueType" class="section-desc" style="color: rgb(var(--warning-6))">
+        ⚠️ 请选择一种 Issue 类型，否则泳道将无法正确分组
+      </div>
     </div>
 
     <!-- 泳道值选择器（当选择了非 none 的分组字段时显示） -->
@@ -225,6 +253,7 @@ const props = defineProps<{
   mergeGroups: MergeGroupLocal[]
   columns: BoardColumnVO[]
   projectId: string
+  swimlaneIssueType?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -233,6 +262,7 @@ const emit = defineEmits<{
   'update:showUncategorized': [value: boolean]
   'update:uncategorizedPosition': [value: 'top' | 'bottom']
   'update:mergeGroups': [value: MergeGroupLocal[]]
+  'update:swimlaneIssueType': [value: string | null]
 }>()
 
 // ===== 可选值数据源 =====
@@ -249,6 +279,14 @@ const PRIORITIES = ['Critical', 'High', 'Normal', 'Low']
 const PRIORITY_LABELS: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
 const TYPES = ['Bug', 'Task', 'Feature', 'Story', 'Epic']
 const TYPE_LABELS: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Epic: '史诗', Story: '故事' }
+
+/** Issues 模式下可作为泳道行的 Issue 类型（层级较高的类型） */
+const PARENT_ISSUE_TYPES = [
+  { value: 'Epic', label: '史诗 (Epic)' },
+  { value: 'Feature', label: '需求 (Feature)' },
+  { value: 'Story', label: '用户故事 (Story)' },
+  { value: 'Task', label: '任务 (Task)' },
+]
 
 /** 当分组字段变化时，加载该字段的可选值 */
 async function loadAvailableValues() {
@@ -332,6 +370,14 @@ function onGroupByChange(val: string | number | boolean) {
   emit('update:selectedValues', null)
   emit('update:showUncategorized', true)
   emit('update:uncategorizedPosition', 'bottom')
+  // 切换离开 parent 模式时清空 swimlaneIssueType
+  if (val !== 'parent') {
+    emit('update:swimlaneIssueType', null)
+  }
+}
+
+function onSwimlaneIssueTypeChange(val: string | null) {
+  emit('update:swimlaneIssueType', val || null)
 }
 
 function toggleValue(key: string) {

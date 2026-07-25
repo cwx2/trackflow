@@ -44,6 +44,13 @@ public class BoardCardVO {
     /** 已关闭的直接子工单数 */
     private Integer childClosedCount;
 
+    /** 父工单 ID（用于 Issues 类型泳道分组） */
+    private String parentId;
+    /** 父工单 issue key */
+    private String parentIssueKey;
+    /** 父工单标题 */
+    private String parentTitle;
+
     /**
      * 自定义字段结构化详情（仅包含卡片配置中 visibleFields 指定的自定义字段）
      */

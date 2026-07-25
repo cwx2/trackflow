@@ -74,6 +74,7 @@
           <a-option value="type">按类型</a-option>
           <a-option value="sprint">按迭代</a-option>
           <a-option value="tag">按标签</a-option>
+          <a-option value="parent">按父工单</a-option>
         </a-select>
       </div>
       <div class="toolbar-right">
@@ -1147,7 +1148,7 @@ function getSprintName(sprintId: string): string {
 }
 
 // ===== Swimlane 类型（提前声明供 URL 状态恢复使用） =====
-type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag'
+type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag' | 'parent'
 const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
 
 const selectedProject = computed({
@@ -1289,7 +1290,7 @@ function restoreFromUrl(): boolean {
     selectedSprint.value = querySprint
   }
 
-  if (queryGroup && ['none', 'assignee', 'priority', 'type', 'sprint', 'tag'].includes(queryGroup)) {
+  if (queryGroup && ['none', 'assignee', 'priority', 'type', 'sprint', 'tag', 'parent'].includes(queryGroup)) {
     swimlaneGroupBy.value = queryGroup as SwimlaneGroupBy
     localStorage.setItem(SWIMLANE_STORAGE_KEY, queryGroup)
   }
@@ -1408,6 +1409,8 @@ const swimlaneSelectedValues = ref<string[] | null>(null)
 const swimlaneShowUncategorized = ref<boolean>(true)
 /** 未分类泳道位置 */
 const swimlaneUncategorizedPosition = ref<'top' | 'bottom'>('bottom')
+/** Issues 模式下作为泳道行的 Issue 类型 */
+const swimlaneIssueType = ref<string | null>(null)
 
 function onSwimlaneChange() {
   localStorage.setItem(SWIMLANE_STORAGE_KEY, swimlaneGroupBy.value)
@@ -1417,6 +1420,10 @@ function onSwimlaneChange() {
   swimlaneSelectedValues.value = null
   swimlaneShowUncategorized.value = true
   swimlaneUncategorizedPosition.value = 'bottom'
+  // 切换离开 parent 模式时清空 swimlaneIssueType
+  if (swimlaneGroupBy.value !== 'parent') {
+    swimlaneIssueType.value = null
+  }
   // 同步到 URL
   syncUrlState()
   // 持久化到服务端（静默保存，不阻塞 UI）
@@ -1425,7 +1432,8 @@ function onSwimlaneChange() {
       groupByField: swimlaneGroupBy.value,
       selectedValues: null,
       showUncategorized: true,
-      uncategorizedPosition: 'bottom'
+      uncategorizedPosition: 'bottom',
+      swimlaneIssueType: swimlaneGroupBy.value === 'parent' ? swimlaneIssueType.value : null
     }).catch(() => { /* 静默失败 */ })
   }
 }
@@ -1470,6 +1478,9 @@ const swimlanes = computed<SwimlaneRow[]>(() => {
       break
     case 'tag':
       rows = groupByTag(allIssues)
+      break
+    case 'parent':
+      rows = groupByParent(allIssues)
       break
     default:
       return []
@@ -1652,6 +1663,79 @@ function groupByTag(allIssues: BoardIssue[]): SwimlaneRow[] {
 
   if (noTag.length > 0) {
     rows.push({ key: '__no_tag__', label: '无标签', issues: noTag })
+  }
+
+  return rows
+}
+
+/**
+ * Issues 模式（YouTrack Swimlanes Issues 类型）：
+ * 以 swimlaneIssueType 指定类型的工单作为泳道行标题，
+ * 其子工单（parentId 指向该工单）排列在对应泳道中。
+ * 没有父工单（或父工单类型不匹配）的工单归入"未分类"泳道。
+ */
+function groupByParent(allIssues: BoardIssue[]): SwimlaneRow[] {
+  const targetType = swimlaneIssueType.value
+
+  // 收集所有作为父工单的卡片（类型匹配且本身在看板上）
+  // 及子工单映射：parentId → [子工单列表]
+  const parentMap = new Map<string, BoardIssue>()
+  const childrenMap = new Map<string, BoardIssue[]>()
+  const uncategorized: BoardIssue[] = []
+
+  // 第一遍：识别父工单（目标类型的工单）
+  for (const issue of allIssues) {
+    const issueType = issue.issueType
+    if (targetType && issueType === targetType) {
+      parentMap.set(issue.id, issue)
+    }
+  }
+
+  // 第二遍：将子工单归入父工单或未分类
+  for (const issue of allIssues) {
+    // 跳过父工单本身（它们成为泳道行，不作为子工单出现）
+    if (parentMap.has(issue.id)) continue
+
+    const parentId = (issue as any).parentId as string | undefined
+    if (parentId && parentMap.has(parentId)) {
+      if (!childrenMap.has(parentId)) childrenMap.set(parentId, [])
+      childrenMap.get(parentId)!.push(issue)
+    } else {
+      // 无父工单或父工单不在看板上（类型不匹配）→ 未分类
+      uncategorized.push(issue)
+    }
+  }
+
+  // 构建泳道行
+  const rows: SwimlaneRow[] = []
+  for (const [parentId, parentIssue] of parentMap.entries()) {
+    const children = childrenMap.get(parentId) || []
+    rows.push({
+      key: parentId,
+      label: `${parentIssue.issueKey} ${parentIssue.title}`,
+      issues: children
+    })
+  }
+
+  // 按父工单 key 排序（字母数字）
+  rows.sort((a, b) => {
+    const keyA = parentMap.get(a.key)?.issueKey || a.key
+    const keyB = parentMap.get(b.key)?.issueKey || b.key
+    return keyA.localeCompare(keyB)
+  })
+
+  // 未分类泳道（未匹配父工单的工单），按 showUncategorized 配置决定是否显示
+  if (swimlaneShowUncategorized.value && uncategorized.length > 0) {
+    const uncategorizedRow: SwimlaneRow = {
+      key: '__uncategorized__',
+      label: '未分类',
+      issues: uncategorized
+    }
+    if (swimlaneUncategorizedPosition.value === 'top') {
+      rows.unshift(uncategorizedRow)
+    } else {
+      rows.push(uncategorizedRow)
+    }
   }
 
   return rows
@@ -2701,6 +2785,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
         case 'type': currentLaneKey = issue.issueType; break
         case 'sprint': currentLaneKey = issue.sprintId || '__no_sprint__'; break
         case 'tag': currentLaneKey = null; break
+        case 'parent': currentLaneKey = (issue as any).parentId || '__uncategorized__'; break
       }
       if (currentLaneKey !== targetLaneKey) {
         // Cross-swimlane, same column → update swimlane field only
@@ -2970,6 +3055,9 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     case 'tag':
       // Tag swimlane uses tag id as key; complex to handle — skip for now
       return false
+    case 'parent':
+      currentLaneKey = (issue as any).parentId || '__uncategorized__'
+      break
   }
 
   // If the issue is already in the target swimlane, nothing to do
@@ -2997,6 +3085,14 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
         updateData.sprintId = null
       } else {
         updateData.sprintId = targetLaneKey
+      }
+      break
+    case 'parent':
+      // Moving to a parent swimlane sets the parentId; moving to uncategorized clears it
+      if (targetLaneKey === '__uncategorized__') {
+        updateData.parentId = null
+      } else {
+        updateData.parentId = targetLaneKey
       }
       break
     default:
@@ -3031,6 +3127,10 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     rollbackData.sprintId = issue.sprintId
     issue.sprintId = updateData.sprintId || undefined
   }
+  if ('parentId' in updateData) {
+    rollbackData.parentId = (issue as any).parentId
+    ;(issue as any).parentId = updateData.parentId || undefined
+  }
 
   try {
     const updateRes = await issueApi.update(issue.id, updateData)
@@ -3047,7 +3147,8 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     const fieldLabel = swimlaneGroupBy.value === 'assignee' ? '负责人'
       : swimlaneGroupBy.value === 'priority' ? '优先级'
       : swimlaneGroupBy.value === 'type' ? '类型'
-      : swimlaneGroupBy.value === 'sprint' ? '迭代' : ''
+      : swimlaneGroupBy.value === 'sprint' ? '迭代'
+      : swimlaneGroupBy.value === 'parent' ? '父工单' : ''
     if (fieldLabel) {
       Message.success(`${issue.issueKey} ${fieldLabel}已更新`)
     }
@@ -3066,6 +3167,9 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     }
     if ('sprintId' in rollbackData) {
       issue.sprintId = rollbackData.sprintId
+    }
+    if ('parentId' in rollbackData) {
+      ;(issue as any).parentId = rollbackData.parentId
     }
     const errMsg = e.response?.data?.message || '字段更新失败'
     Message.error(`${issue.issueKey} 跨泳道更新失败：${errMsg}`)
@@ -3516,6 +3620,7 @@ async function loadSwimlaneConfig() {
     swimlaneSelectedValues.value = null
     swimlaneShowUncategorized.value = true
     swimlaneUncategorizedPosition.value = 'bottom'
+    swimlaneIssueType.value = null
     return
   }
   try {
@@ -3528,6 +3633,7 @@ async function loadSwimlaneConfig() {
       swimlaneSelectedValues.value = res.data.selectedValues || null
       swimlaneShowUncategorized.value = res.data.showUncategorized !== false
       swimlaneUncategorizedPosition.value = res.data.uncategorizedPosition || 'bottom'
+      swimlaneIssueType.value = res.data.swimlaneIssueType ?? null
     }
   } catch {
     // 保持当前 localStorage 中的值
@@ -4148,9 +4254,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
     swimlaneGroupBy.value = 'none'
     localStorage.setItem(SWIMLANE_STORAGE_KEY, 'none')
     stateChanged = true
-  }
-
-  // 恢复负责人筛选
+  }  // 恢复负责人筛选
   if (queryAssignee !== assigneeFilter.value) {
     assigneeFilter.value = queryAssignee || undefined
     if (queryAssignee) {

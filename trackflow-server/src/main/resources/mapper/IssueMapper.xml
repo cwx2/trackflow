@@ -303,6 +303,9 @@
             i.status_id, i.priority, i.assignee_id, i.sprint_id,
             i.due_date, i.estimated_hours, i.child_count, i.child_closed_count,
             i.created_at, i.resolved_at,
+            i.parent_id,
+            pi.issue_key AS parent_issue_key,
+            pi.title AS parent_title,
             s.name AS status_name, s.color AS status_color,
             u.display_name AS assignee_name, u.avatar_url AS assignee_avatar_url,
             sp.name AS sprint_name
@@ -310,6 +313,7 @@
         LEFT JOIN issue_status s ON s.id = i.status_id
         LEFT JOIN sys_user u ON u.id = i.assignee_id
         LEFT JOIN sprint sp ON sp.id = i.sprint_id
+        LEFT JOIN issue pi ON pi.id = i.parent_id AND pi.deleted_at IS NULL
         <if test="manualOrderContextType != null and manualOrderContextId != null">
             LEFT JOIN issue_manual_order mo
                 ON mo.issue_id = i.id

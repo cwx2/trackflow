@@ -31,4 +31,10 @@ public class BoardCardRow {
     private Integer childClosedCount;
     private LocalDateTime createdAt;
     private LocalDateTime resolvedAt;
+    /** 父工单 ID（用于 Issues 类型泳道分组） */
+    private Long parentId;
+    /** 父工单 issue key */
+    private String parentIssueKey;
+    /** 父工单标题 */
+    private String parentTitle;
 }

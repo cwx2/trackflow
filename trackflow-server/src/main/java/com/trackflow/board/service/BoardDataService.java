@@ -266,6 +266,10 @@ public class BoardDataService {
             card.setChildClosedCount(row.getChildClosedCount());
             card.setCreatedAt(row.getCreatedAt());
             card.setResolvedAt(row.getResolvedAt());
+            // 父工单信息（用于 Issues 类型泳道分组）
+            card.setParentId(row.getParentId() != null ? String.valueOf(row.getParentId()) : null);
+            card.setParentIssueKey(row.getParentIssueKey());
+            card.setParentTitle(row.getParentTitle());
             cards.add(card);
         }
         return cards;
