@@ -141,6 +141,24 @@
     @cancel="showTimeDialog = false"
   >
     <a-form :model="timeForm" layout="vertical">
+      <!-- Author field: 仅管理员/具备 time:log_for_others 权限的用户可见且可修改 -->
+      <a-form-item v-if="timeFormCanLogForOthers" label="记录人">
+        <a-select
+          v-model="timeFormAuthorId"
+          placeholder="选择记录人（默认为自己）"
+          allow-search
+          allow-clear
+          style="width: 100%"
+        >
+          <a-option v-for="member in timeFormProjectMembers" :key="member.userId" :value="member.userId">
+            <span class="time-author-option">
+              <span class="time-author-avatar">{{ (member.displayName || member.username || '?').charAt(0) }}</span>
+              <span class="time-author-name">{{ member.displayName || member.username }}</span>
+              <span v-if="member.userId === currentUserId" class="time-author-self">（我）</span>
+            </span>
+          </a-option>
+        </a-select>
+      </a-form-item>
       <a-form-item label="日期" required>
         <a-date-picker v-model="timeForm.workDate" style="width: 100%" />
       </a-form-item>
@@ -219,6 +237,13 @@ const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
 const showTimeDialog = ref(false)
 const timeSaving = ref(false)
+
+/** 工时记录弹窗：是否有权为他人记录工时 */
+const timeFormCanLogForOthers = ref(false)
+/** 工时记录弹窗：选择的记录人 ID（空=默认为自己） */
+const timeFormAuthorId = ref<string>('')
+/** 工时记录弹窗：项目成员列表（用于 Author 选择器） */
+const timeFormProjectMembers = ref<{ userId: string; username?: string; displayName: string }[]>([])
 
 const timeForm = ref({
   workDate: new Date().toISOString().slice(0, 10),
@@ -1108,9 +1133,11 @@ function openTimeDialog() {
     description: ''
   }
   timeFormAttrValues.value = {}
+  timeFormAuthorId.value = ''
   // Load attributes for this issue's project
   if (issue.value?.projectId) {
     loadIssueProjectAttributes(issue.value.projectId)
+    loadTimeFormPermissions(issue.value.projectId)
   }
   showTimeDialog.value = true
 }
@@ -1149,6 +1176,31 @@ async function loadIssueProjectAttributes(projectId: string) {
   } catch { /* silent */ }
 }
 
+/**
+ * 加载工时弹窗所需的权限 + 项目成员列表
+ * 若当前用户具备 time:log_for_others 权限，则展示 Author 字段并加载成员列表
+ */
+async function loadTimeFormPermissions(projectId: string) {
+  try {
+    const res = await timeEntryApi.canLogForOthers()
+    timeFormCanLogForOthers.value = res.code === 0 ? (res.data ?? false) : false
+  } catch {
+    timeFormCanLogForOthers.value = false
+  }
+  if (timeFormCanLogForOthers.value) {
+    try {
+      const res = await projectApi.listAssignableMembers(projectId)
+      if (res.code === 0 && res.data) {
+        timeFormProjectMembers.value = res.data.map((m: ProjectMemberVO) => ({
+          userId: m.userId,
+          username: m.username || m.displayName,
+          displayName: m.displayName || m.username || ''
+        }))
+      }
+    } catch { /* silent */ }
+  }
+}
+
 async function submitTimeEntry() {
   if (!timeForm.value.durationText) {
     Message.warning('请输入时长')
@@ -1165,6 +1217,11 @@ async function submitTimeEntry() {
     ? Object.fromEntries(Object.entries(timeFormAttrValues.value).filter(([, v]) => v))
     : undefined
 
+  // 确定 forUserId：仅在 Author 字段可见且选择了他人时传入
+  const forUserId = (timeFormCanLogForOthers.value && timeFormAuthorId.value && timeFormAuthorId.value !== currentUserId.value)
+    ? timeFormAuthorId.value
+    : undefined
+
   timeSaving.value = true
   try {
     await timeEntryApi.create({
@@ -1172,6 +1229,7 @@ async function submitTimeEntry() {
       workDate: timeForm.value.workDate,
       duration,
       description: timeForm.value.description || undefined,
+      forUserId,
       attributeValues: attrVals
     })
     Message.success('工时已记录')
@@ -1334,6 +1392,10 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 <style scoped>
 .attr-value-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.time-author-option { display: flex; align-items: center; gap: 6px; }
+.time-author-avatar { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--tf-accent); color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.time-author-name { flex: 1; font-size: 13px; }
+.time-author-self { font-size: 11px; color: var(--tf-text-tertiary); }
 .issue-detail-page {
   height: 100%;
   display: flex;
