@@ -31,9 +31,13 @@ public interface ProjectConverter extends BaseConverter {
     @Mapping(target = "visibility", expression = "java(projectVisibilityToString(entity.getVisibility()))")
     @Mapping(target = "myRoleName", ignore = true)
     @Mapping(target = "myRoleCode", ignore = true)
+    @Mapping(target = "myRoleNames", ignore = true)
+    @Mapping(target = "myRoleCodes", ignore = true)
     @Mapping(target = "memberCount", ignore = true)
     @Mapping(target = "topMembers", ignore = true)
+    @Mapping(target = "favorited", ignore = true)
     @Mapping(target = "leadName", ignore = true)
+    @Mapping(target = "leadStatus", ignore = true)
     com.trackflow.project.vo.ProjectDetailVO toDetailVO(Project entity);
 
     List<ProjectVO> toVOList(List<Project> entities);
