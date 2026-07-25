@@ -318,27 +318,57 @@ def parse_fix_result(output: str) -> tuple[bool, bool, str]:
 def parse_test_result(output: str) -> tuple[bool, str]:
     """
     解析 e2e-test 的输出。
-    返回 (all_passed, summary)
-    优先识别机器标记 TEST_RESULT: PASS/FAIL，降级时用内容关键词。
+    返回 (all_passed, failure_summary)
+
+    优先识别结构化标记：
+    - TEST_RESULT: PASS/FAIL（最后一行）
+    - TEST_FAILURES_BEGIN...TEST_FAILURES_END（失败摘要块）
+
+    降级时用内容关键词兼容旧格式。
     """
     lines = output.strip().split("\n")
-    # 优先检查最后几行的机器标记
-    for line in reversed(lines[-5:]):
-        line = line.strip()
-        if line == "TEST_RESULT: PASS":
-            return True, "\n".join(lines[-10:])
-        if line == "TEST_RESULT: FAIL":
-            return False, "\n".join(lines[-30:])
 
-    # 降级：关键词检测（保留兼容性）
+    # 1. 检查 TEST_RESULT 标记（最后 5 行内）
+    result_line = None
+    for line in reversed(lines[-5:]):
+        stripped = line.strip()
+        if stripped in ("TEST_RESULT: PASS", "TEST_RESULT: FAIL"):
+            result_line = stripped
+            break
+
+    # 2. 提取 TEST_FAILURES_BEGIN...END 块
+    failures_summary = ""
+    in_block = False
+    failure_lines = []
+    for line in lines:
+        if line.strip() == "TEST_FAILURES_BEGIN":
+            in_block = True
+            continue
+        if line.strip() == "TEST_FAILURES_END":
+            in_block = False
+            continue
+        if in_block:
+            failure_lines.append(line.strip())
+    if failure_lines:
+        failures_summary = "\n".join(failure_lines)
+
+    # 3. 根据标记返回
+    if result_line == "TEST_RESULT: PASS":
+        return True, ""
+    if result_line == "TEST_RESULT: FAIL":
+        summary = failures_summary if failures_summary else "\n".join(lines[-30:])
+        return False, summary
+
+    # 4. 降级：关键词检测（兼容旧格式/无标记）
     in_test_report = "测试报告" in output or "TrackFlow 测试报告" in output or "## 测试结果" in output
     has_fail = ("❌" in output and "FAIL" in output) or ("❌" in output and "失败" in output and in_test_report)
     has_pass = ("✅" in output and "PASS" in output) or (in_test_report and "✅" in output and not has_fail)
 
     if has_fail:
-        return False, "\n".join(lines[-30:])
+        summary = failures_summary if failures_summary else "\n".join(lines[-30:])
+        return False, summary
     if has_pass:
-        return True, "\n".join(lines[-10:])
+        return True, ""
     return False, "\n".join(lines[-20:])
 
 
@@ -536,8 +566,8 @@ def consume_one(worker_id: str) -> str | None:
         if test_round < MAX_TEST_RETRIES:
             # resume 原会话，把测试失败结果反馈给它
             feedback_prompt = (
-                f"端到端测试失败（第 {test_round} 轮），请根据以下失败信息修复代码：\n\n"
-                f"```\n{test_summary}\n```\n\n"
+                f"端到端测试失败（第 {test_round} 轮），以下用例未通过，请根据失败信息修复代码：\n\n"
+                f"{test_summary}\n\n"
                 f"修复完成后请输出 FIX_DONE。"
             )
             if session_id:
