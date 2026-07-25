@@ -163,6 +163,72 @@ public interface ReportStatisticsMapper {
             @Param("startDate") String startDate,
             @Param("endDate") String endDate);
 
+    // ─── 时间报表多维视图查询 ─────────────────────────────────────────
+
+    /**
+     * Per Issue 视图：按工单分组汇总工时（分页）
+     * 返回行：(issue_id, issue_key, title, project_name, status_name, total_minutes, entry_count)
+     */
+    List<TimeIssueGroupRow> selectTimeByIssue(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    /**
+     * Per Issue 视图：统计工单分组总数
+     */
+    long countTimeByIssue(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * Per Work Item 视图：工时记录明细（分页）
+     * 返回行：(entry_id, work_date, user_name, issue_key, issue_title, project_name, work_type, minutes, description)
+     */
+    List<TimeWorkItemRow> selectTimeWorkItems(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("workTypeAttributeId") Long workTypeAttributeId,
+            @Param("limit") int limit,
+            @Param("offset") int offset);
+
+    /**
+     * Per Work Item 视图：统计工时记录总数
+     */
+    long countTimeWorkItems(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
+    /**
+     * 指定工单的工时记录明细（用于 Per Issue 视图展开）
+     */
+    List<TimeWorkItemRow> selectTimeWorkItemsByIssue(
+            @Param("issueId") Long issueId,
+            @Param("workTypeAttributeId") Long workTypeAttributeId);
+
+    /**
+     * 指定用户的工时记录明细（用于 Per User 视图展开）
+     */
+    List<TimeWorkItemRow> selectTimeWorkItemsByUser(
+            @Param("userId") Long userId,
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("workTypeAttributeId") Long workTypeAttributeId);
+
+    /**
+     * Per User 视图：统计用户分组总数
+     */
+    long countTimeByUser(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
+
     /**
      * 预估对比报表：查询有预估工时的工单的 estimated_hours vs spent_hours（分页）
      * 返回行：(issue_id, issue_key, title, project_name, assignee_name, estimated_hours, spent_hours)

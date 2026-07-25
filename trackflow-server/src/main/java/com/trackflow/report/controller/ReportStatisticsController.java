@@ -158,6 +158,31 @@ public class ReportStatisticsController {
     }
 
     /**
+     * 获取时间报表多维视图（Per Issue / Per User / Per Work Item）
+     * viewType: issue（按工单）/ user（按用户）/ work_item（工时明细）
+     * 支持分页：page（默认1）, pageSize（默认50，最大200）
+     */
+    @GetMapping("/time-report/grouped")
+    @PreAuthorize("@perm.canViewReports()")
+    public R<TimeReportGroupedVO> timeReportGrouped(
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "viewType", defaultValue = "issue") String viewType,
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "50") Integer pageSize) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (projectId != null) {
+            projectService.assertProjectAccessible(userId, projectId);
+        }
+        // 约束 pageSize 范围
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 1;
+        if (pageSize > 200) pageSize = 200;
+        return R.ok(statisticsService.getTimeReportGrouped(projectId, startDate, endDate, viewType, page, pageSize, userId));
+    }
+
+    /**
      * 获取时间报表（Time Report）
      * 按人员/项目/工作类型汇总工时，含趋势和交叉维度
      * projectId 可选：不传时返回用户有权限的全部项目聚合数据

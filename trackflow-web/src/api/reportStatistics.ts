@@ -175,6 +175,56 @@ export interface EstimationReportData {
   byProject: EstimationProjectItem[]
 }
 
+// ─── 时间报表多维视图类型 ──────────────────────────────────────
+
+export interface TimeReportWorkItemDetail {
+  entryId: string
+  workDate: string
+  userName: string
+  issueKey: string
+  issueTitle: string
+  projectName: string
+  workType: string
+  minutes: number
+  description: string
+}
+
+export interface TimeReportIssueGroupItem {
+  issueId: string
+  issueKey: string
+  title: string
+  projectName: string
+  statusName: string
+  totalMinutes: number
+  entryCount: number
+  entries?: TimeReportWorkItemDetail[]
+}
+
+export interface TimeReportProjectSummaryItem {
+  projectName: string
+  minutes: number
+}
+
+export interface TimeReportUserGroupItem {
+  userId: string
+  userName: string
+  totalMinutes: number
+  entryCount?: number
+  byProject: TimeReportProjectSummaryItem[]
+  entries?: TimeReportWorkItemDetail[]
+}
+
+export interface TimeReportGroupedData {
+  viewType: string
+  totalMinutes: number
+  totalCount: number
+  page: number
+  pageSize: number
+  issueGroups?: TimeReportIssueGroupItem[]
+  userGroups?: TimeReportUserGroupItem[]
+  workItems?: TimeReportWorkItemDetail[]
+}
+
 export interface DashboardData {
   statusDistribution: StatusDistributionData
   priorityDistribution: PriorityDistributionData
@@ -262,5 +312,17 @@ export const reportStatisticsApi = {
     return request.get<any, R<EstimationReportData>>('/reports/statistics/estimation-report', {
       params: { projectId, page: page || 1, pageSize: pageSize || 50 }
     })
+  },
+
+  /** 时间报表多维视图（Per Issue / Per User / Per Work Item） */
+  timeReportGrouped(params: {
+    projectId?: string
+    startDate?: string
+    endDate?: string
+    viewType?: 'issue' | 'user' | 'work_item'
+    page?: number
+    pageSize?: number
+  }) {
+    return request.get<any, R<TimeReportGroupedData>>('/reports/statistics/time-report/grouped', { params })
   }
 }

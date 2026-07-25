@@ -422,6 +422,187 @@
         ORDER BY cnt DESC
     </select>
 
+    <!-- ═══════════ 时间报表多维视图查询 ═══════════ -->
+
+    <!-- Per Issue 视图：按工单分组汇总工时（分页） -->
+    <select id="selectTimeByIssue" resultType="com.trackflow.report.mapper.result.TimeIssueGroupRow">
+        SELECT
+            i.id        AS issue_id,
+            i.issue_key,
+            i.title,
+            p.name      AS project_name,
+            s.name      AS status_name,
+            COALESCE(SUM(t.duration), 0) AS total_minutes,
+            COUNT(t.id) AS entry_count
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = t.project_id
+        LEFT JOIN issue_status s ON s.id = i.status_id
+        WHERE t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          AND i.deleted_at IS NULL
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
+        GROUP BY i.id, i.issue_key, i.title, p.name, s.name
+        ORDER BY total_minutes DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- Per Issue 视图：统计工单分组总数 -->
+    <select id="countTimeByIssue" resultType="long">
+        SELECT COUNT(DISTINCT t.issue_id)
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        WHERE t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          AND i.deleted_at IS NULL
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
+    </select>
+
+    <!-- Per Work Item 视图：工时记录明细（分页） -->
+    <select id="selectTimeWorkItems" resultType="com.trackflow.report.mapper.result.TimeWorkItemRow">
+        SELECT
+            t.id        AS entry_id,
+            t.work_date::text AS work_date,
+            u.display_name AS user_name,
+            i.issue_key,
+            i.title     AS issue_title,
+            p.name      AS project_name,
+            COALESCE(wiav.name, '未分类') AS work_type,
+            COALESCE(t.duration, 0) AS minutes,
+            t.description
+        FROM time_entry t
+        JOIN sys_user u ON u.id = t.user_id
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = t.project_id
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
+        LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
+        WHERE t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          AND i.deleted_at IS NULL
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
+        ORDER BY t.work_date DESC, t.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- Per Work Item 视图：统计工时记录总数 -->
+    <select id="countTimeWorkItems" resultType="long">
+        SELECT COUNT(t.id)
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        WHERE t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          AND i.deleted_at IS NULL
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
+    </select>
+
+    <!-- 指定工单的工时记录明细（用于 Per Issue 视图展开） -->
+    <select id="selectTimeWorkItemsByIssue" resultType="com.trackflow.report.mapper.result.TimeWorkItemRow">
+        SELECT
+            t.id        AS entry_id,
+            t.work_date::text AS work_date,
+            u.display_name AS user_name,
+            i.issue_key,
+            i.title     AS issue_title,
+            p.name      AS project_name,
+            COALESCE(wiav.name, '未分类') AS work_type,
+            COALESCE(t.duration, 0) AS minutes,
+            t.description
+        FROM time_entry t
+        JOIN sys_user u ON u.id = t.user_id
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = t.project_id
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
+        LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
+        WHERE t.issue_id = #{issueId}
+          AND i.deleted_at IS NULL
+        ORDER BY t.work_date DESC, t.id DESC
+    </select>
+
+    <!-- 指定用户的工时记录明细（用于 Per User 视图展开） -->
+    <select id="selectTimeWorkItemsByUser" resultType="com.trackflow.report.mapper.result.TimeWorkItemRow">
+        SELECT
+            t.id        AS entry_id,
+            t.work_date::text AS work_date,
+            u.display_name AS user_name,
+            i.issue_key,
+            i.title     AS issue_title,
+            p.name      AS project_name,
+            COALESCE(wiav.name, '未分类') AS work_type,
+            COALESCE(t.duration, 0) AS minutes,
+            t.description
+        FROM time_entry t
+        JOIN sys_user u ON u.id = t.user_id
+        JOIN issue i ON i.id = t.issue_id
+        JOIN project p ON p.id = t.project_id
+        LEFT JOIN time_entry_attribute_value teav ON teav.time_entry_id = t.id AND teav.attribute_id = #{workTypeAttributeId}
+        LEFT JOIN work_item_attribute_value wiav ON wiav.id = teav.value_id
+        WHERE t.user_id = #{userId}
+          AND t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          AND i.deleted_at IS NULL
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
+        ORDER BY t.work_date DESC, t.id DESC
+    </select>
+
+    <!-- Per User 视图：统计用户分组总数 -->
+    <select id="countTimeByUser" resultType="long">
+        SELECT COUNT(DISTINCT t.user_id)
+        FROM time_entry t
+        JOIN issue i ON i.id = t.issue_id
+        WHERE t.work_date >= #{startDate}::date
+          AND t.work_date &lt;= #{endDate}::date
+          AND i.deleted_at IS NULL
+          <choose>
+              <when test="projectIds != null and projectIds.size() > 0">
+                  AND t.project_id IN
+                  <foreach item="pid" collection="projectIds" open="(" separator="," close=")">#{pid}</foreach>
+              </when>
+              <when test="projectIds != null and projectIds.size() == 0">
+                  AND 1=0
+              </when>
+          </choose>
+    </select>
+
     <!-- ═══════════ 时间报表聚合查询 ═══════════ -->
 
     <!-- 按人员分组汇总工时 -->

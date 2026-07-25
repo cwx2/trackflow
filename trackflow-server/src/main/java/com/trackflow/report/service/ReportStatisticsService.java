@@ -1048,6 +1048,120 @@ public class ReportStatisticsService {
     // ─── 时间报表 ──────────────────────────────────────────────────────
 
     /**
+     * 获取时间报表多维视图数据（Per Issue / Per User / Per Work Item）
+     *
+     * @param projectId 项目 ID（可选，null 表示全部项目）
+     * @param startDate 开始日期
+     * @param endDate   结束日期
+     * @param viewType  视图类型：issue / user / work_item
+     * @param page      页码（从 1 开始）
+     * @param pageSize  每页大小
+     * @param userId    当前用户 ID
+     */
+    public TimeReportGroupedVO getTimeReportGrouped(
+            Long projectId, LocalDate startDate, LocalDate endDate,
+            String viewType, int page, int pageSize, Long userId) {
+
+        List<Long> projectIds = resolveProjectIds(projectId, userId);
+
+        if (endDate == null) endDate = LocalDate.now();
+        if (startDate == null) startDate = endDate.minusDays(29);
+
+        String startStr = startDate.toString();
+        String endStr = endDate.toString();
+        int offset = (page - 1) * pageSize;
+
+        TimeReportGroupedVO vo = new TimeReportGroupedVO();
+        vo.setViewType(viewType);
+        vo.setPage(page);
+        vo.setPageSize(pageSize);
+
+        switch (viewType) {
+            case "issue" -> {
+                long total = reportStatisticsMapper.countTimeByIssue(projectIds, startStr, endStr);
+                List<TimeIssueGroupRow> rows =
+                        reportStatisticsMapper.selectTimeByIssue(projectIds, startStr, endStr, pageSize, offset);
+
+                int totalMinutes = rows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+                vo.setTotalMinutes(totalMinutes);
+                vo.setTotalCount(total);
+                vo.setIssueGroups(rows.stream().map(r -> {
+                    TimeReportGroupedVO.IssueGroupItem item = new TimeReportGroupedVO.IssueGroupItem();
+                    item.setIssueId(r.getIssueId() != null ? String.valueOf(r.getIssueId()) : null);
+                    item.setIssueKey(r.getIssueKey());
+                    item.setTitle(r.getTitle());
+                    item.setProjectName(r.getProjectName());
+                    item.setStatusName(r.getStatusName());
+                    item.setTotalMinutes(r.getTotalMinutes() != null ? r.getTotalMinutes() : 0);
+                    item.setEntryCount(r.getEntryCount() != null ? r.getEntryCount() : 0);
+                    return item;
+                }).collect(Collectors.toList()));
+            }
+            case "user" -> {
+                long total = reportStatisticsMapper.countTimeByUser(projectIds, startStr, endStr);
+                List<TimeByUserRow> rows =
+                        reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
+
+                int totalMinutes = rows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+                vo.setTotalMinutes(totalMinutes);
+                vo.setTotalCount(total);
+
+                // 分页截取
+                List<TimeByUserRow> pageRows =
+                        rows.stream().skip(offset).limit(pageSize).collect(Collectors.toList());
+
+                // 获取每个用户的项目分布（使用交叉数据）
+                List<TimeCrossProjectUserRow> crossRows =
+                        reportStatisticsMapper.selectTimeCrossProjectUser(projectIds, startStr, endStr);
+                Map<String, List<TimeReportGroupedVO.ProjectSummaryItem>> userProjectMap = new HashMap<>();
+                for (TimeCrossProjectUserRow crossRow : crossRows) {
+                    TimeReportGroupedVO.ProjectSummaryItem pItem = new TimeReportGroupedVO.ProjectSummaryItem();
+                    pItem.setProjectName(crossRow.getProjectName());
+                    pItem.setMinutes(crossRow.getTotalMinutes() != null ? crossRow.getTotalMinutes() : 0);
+                    userProjectMap.computeIfAbsent(crossRow.getUserName(), k -> new ArrayList<>()).add(pItem);
+                }
+
+                vo.setUserGroups(pageRows.stream().map(r -> {
+                    TimeReportGroupedVO.UserGroupItem item = new TimeReportGroupedVO.UserGroupItem();
+                    item.setUserId(r.getUserId() != null ? String.valueOf(r.getUserId()) : null);
+                    item.setUserName(r.getUserName());
+                    item.setTotalMinutes(r.getTotalMinutes() != null ? r.getTotalMinutes() : 0);
+                    item.setByProject(userProjectMap.getOrDefault(r.getUserName(), List.of()));
+                    return item;
+                }).collect(Collectors.toList()));
+            }
+            case "work_item" -> {
+                Long workTypeAttrId = workItemAttributeService.getWorkTypeAttributeId();
+                long total = reportStatisticsMapper.countTimeWorkItems(projectIds, startStr, endStr);
+                List<TimeWorkItemRow> rows =
+                        reportStatisticsMapper.selectTimeWorkItems(projectIds, startStr, endStr, workTypeAttrId, pageSize, offset);
+
+                int totalMinutes = rows.stream().mapToInt(r -> r.getMinutes() != null ? r.getMinutes() : 0).sum();
+                vo.setTotalMinutes(totalMinutes);
+                vo.setTotalCount(total);
+                vo.setWorkItems(rows.stream().map(r -> {
+                    TimeReportGroupedVO.WorkItemDetail detail = new TimeReportGroupedVO.WorkItemDetail();
+                    detail.setEntryId(r.getEntryId() != null ? String.valueOf(r.getEntryId()) : null);
+                    detail.setWorkDate(r.getWorkDate());
+                    detail.setUserName(r.getUserName());
+                    detail.setIssueKey(r.getIssueKey());
+                    detail.setIssueTitle(r.getIssueTitle());
+                    detail.setProjectName(r.getProjectName());
+                    detail.setWorkType(r.getWorkType());
+                    detail.setMinutes(r.getMinutes() != null ? r.getMinutes() : 0);
+                    detail.setDescription(r.getDescription());
+                    return detail;
+                }).collect(Collectors.toList()));
+            }
+            default -> throw new BusinessException(
+                    ErrorCode.INVALID_PARAMETER,
+                    "不支持的视图类型: " + viewType + "，允许值: issue, user, work_item");
+        }
+
+        return vo;
+    }
+
+    /**
      * 获取时间报表数据：按人员/项目/工作类型汇总工时，含趋势和交叉维度
      */
     public TimeReportVO getTimeReport(Long projectId, LocalDate startDate, LocalDate endDate, Long userId) {
