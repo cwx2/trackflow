@@ -700,7 +700,7 @@ public class UserService {
         export.setUserInfo(buildUserBasicInfo(user));
 
         // 2. 全局角色
-        export.setGlobalRoles(buildGlobalRoles(userId));
+        export.setGlobalRoles(buildExportGlobalRoles(userId));
 
         // 3. 项目成员关系
         export.setProjectMemberships(buildProjectMemberships(userId));
@@ -742,7 +742,7 @@ public class UserService {
         return info;
     }
 
-    private List<String> buildGlobalRoles(Long userId) {
+    private List<String> buildExportGlobalRoles(Long userId) {
         List<Long> roleIds = getUserGlobalRoleIds(userId);
         if (roleIds.isEmpty()) {
             return List.of();
@@ -770,7 +770,7 @@ public class UserService {
         return members.stream().map(member -> {
             UserDataExportVO.ProjectMembership pm = new UserDataExportVO.ProjectMembership();
             pm.setProjectId(String.valueOf(member.getProjectId()));
-            pm.setJoinedAt(member.getCreatedAt());
+            pm.setJoinedAt(member.getJoinedAt());
 
             Project project = projectMap.get(member.getProjectId());
             if (project != null) {

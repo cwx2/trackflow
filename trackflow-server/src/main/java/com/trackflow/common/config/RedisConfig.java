@@ -3,7 +3,7 @@ package com.trackflow.common.config;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -24,7 +24,7 @@ import java.time.Duration;
 public class RedisConfig {
 
     @Bean
-    public LettuceConnectionFactory redisConnectionFactory(RedisProperties redisProperties) {
+    public LettuceConnectionFactory redisConnectionFactory(DataRedisProperties redisProperties) {
         RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration();
         serverConfig.setHostName(redisProperties.getHost());
         serverConfig.setPort(redisProperties.getPort());

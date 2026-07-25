@@ -27,3 +27,4 @@ public interface NotificationPreferenceConverter extends BaseConverter {
     List<NotificationPreferenceVO> toVOList(List<NotificationPreference> entities);
 }
 
+
