@@ -72,10 +72,24 @@
                     <icon-check v-if="record.isForAll" style="color: var(--tf-accent)" />
                   </template>
                 </a-table-column>
-                <a-table-column title="适用项目" :width="120">
+                <a-table-column title="使用项目" :width="140">
                   <template #cell="{ record }">
-                    <span v-if="record.isForAll" class="text-muted">所有项目</span>
-                    <span v-else class="text-muted">{{ (record.projectIds || []).length }} 个项目</span>
+                    <a-tooltip v-if="record.isForAll" :content="`全局字段，适用于系统全部 ${projectList.length} 个项目`">
+                      <span class="project-usage-tag project-usage-global">
+                        <icon-apps size="12" />
+                        全部 {{ projectList.length }} 个
+                      </span>
+                    </a-tooltip>
+                    <a-tooltip
+                      v-else-if="(record.projectIds || []).length > 0"
+                      :content="getProjectNamesText(record.projectIds)"
+                    >
+                      <span class="project-usage-tag project-usage-specific">
+                        <icon-folder size="12" />
+                        {{ (record.projectIds || []).length }} 个项目
+                      </span>
+                    </a-tooltip>
+                    <span v-else class="text-muted text-xs">未使用</span>
                   </template>
                 </a-table-column>
                 <a-table-column title="适用类型" :width="140">
@@ -132,6 +146,17 @@
               <div v-if="!selectedField.isForAll" class="detail-row">
                 <span class="detail-label">适用项目</span>
                 <span class="detail-value">{{ (selectedField.projectIds || []).length }} 个</span>
+              </div>
+              <div v-if="!selectedField.isForAll && (selectedField.projectIds || []).length > 0" class="detail-projects">
+                <span
+                  v-for="pid in selectedField.projectIds"
+                  :key="pid"
+                  class="detail-project-tag"
+                >{{ getProjectName(pid) }}</span>
+              </div>
+              <div v-if="selectedField.isForAll" class="detail-row">
+                <span class="detail-label">适用项目</span>
+                <span class="detail-value">全部 {{ projectList.length }} 个（全局）</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">适用类型</span>
@@ -439,7 +464,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
@@ -560,6 +585,18 @@ const fieldTypeOptions = [
 
 function formatTypeLabel(format: string) {
   return fieldTypeOptions.find(t => t.value === format)?.label || format
+}
+
+/** 根据项目 ID 获取项目名称 */
+function getProjectName(projectId: string): string {
+  const proj = projectList.value.find(p => p.id === projectId)
+  return proj ? proj.name : projectId
+}
+
+/** 生成 tooltip 文本：逗号分隔的项目名列表 */
+function getProjectNamesText(projectIds?: string[]): string {
+  if (!projectIds || projectIds.length === 0) return ''
+  return projectIds.map(id => getProjectName(id)).join('、')
 }
 
 async function loadList() {
@@ -1229,6 +1266,49 @@ onMounted(() => {
 .text-muted {
   color: var(--tf-text-tertiary);
   font-size: 12px;
+}
+
+.text-xs {
+  font-size: 11px;
+}
+
+/* 使用项目 tag 样式 */
+.project-usage-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: default;
+}
+
+.project-usage-global {
+  background: color-mix(in srgb, var(--tf-accent) 12%, transparent);
+  color: var(--tf-accent);
+}
+
+.project-usage-specific {
+  background: color-mix(in srgb, var(--tf-success) 12%, transparent);
+  color: var(--tf-success);
+}
+
+/* 侧边栏项目标签列表 */
+.detail-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 0;
+}
+
+.detail-project-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-secondary);
+  border: 1px solid var(--tf-border);
 }
 
 .form-help {
