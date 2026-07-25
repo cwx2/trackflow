@@ -212,10 +212,12 @@
           :project-id="projectId"
           :current-estimation-field-id="editableCurrentEstimationFieldId"
           :original-estimation-field-id="editableOriginalEstimationFieldId"
+          :field-display-modes="editableFieldDisplayModes"
           @update:visible-fields="editableCardFields = $event"
           @update:color-scheme="editableColorScheme = $event"
           @update:current-estimation-field-id="editableCurrentEstimationFieldId = $event"
           @update:original-estimation-field-id="editableOriginalEstimationFieldId = $event"
+          @update:field-display-modes="editableFieldDisplayModes = $event"
         />
       </a-tab-pane>
 
@@ -324,6 +326,7 @@ const editableCardFields = ref<string[]>(['assignee', 'priority', 'type'])
 const editableColorScheme = ref('none')
 const editableCurrentEstimationFieldId = ref<string | null>(null)
 const editableOriginalEstimationFieldId = ref<string | null>(null)
+const editableFieldDisplayModes = ref<Record<string, 'full_name' | 'initial'> | null>(null)
 
 // 基本设置状态
 const editableBoardName = ref('')
@@ -439,6 +442,7 @@ watch(() => props.visible, async (newVisible) => {
         editableColorScheme.value = res.data.colorScheme || 'none'
         editableCurrentEstimationFieldId.value = res.data.currentEstimationFieldId ?? null
         editableOriginalEstimationFieldId.value = res.data.originalEstimationFieldId ?? null
+        editableFieldDisplayModes.value = res.data.fieldDisplayModes ?? null
       }
     } catch {
       // 使用默认值
@@ -446,6 +450,7 @@ watch(() => props.visible, async (newVisible) => {
       editableColorScheme.value = 'none'
       editableCurrentEstimationFieldId.value = null
       editableOriginalEstimationFieldId.value = null
+      editableFieldDisplayModes.value = null
     }
 
     // 加载泳道配置
@@ -778,6 +783,7 @@ async function reloadAllConfigs() {
       editableColorScheme.value = cardRes.data.colorScheme || 'none'
       editableCurrentEstimationFieldId.value = cardRes.data.currentEstimationFieldId ?? null
       editableOriginalEstimationFieldId.value = cardRes.data.originalEstimationFieldId ?? null
+      editableFieldDisplayModes.value = cardRes.data.fieldDisplayModes ?? null
     }
 
     // 更新泳道配置
@@ -886,7 +892,8 @@ async function handleSave() {
         visibleFields: editableCardFields.value,
         colorScheme: editableColorScheme.value,
         currentEstimationFieldId: editableCurrentEstimationFieldId.value,
-        originalEstimationFieldId: editableOriginalEstimationFieldId.value
+        originalEstimationFieldId: editableOriginalEstimationFieldId.value,
+        fieldDisplayModes: editableFieldDisplayModes.value
       },
       swimlaneConfig: {
         groupByField: editableSwimlaneGroupBy.value,

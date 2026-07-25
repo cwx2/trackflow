@@ -36,4 +36,12 @@ public class UpdateBoardCardConfigDTO {
      * 对应 YouTrack Board Settings Cards Tab 的 "Original estimation field"。
      */
     private Long originalEstimationFieldId;
+
+    /**
+     * 每个字段的显示格式，key 为字段名，value 为 "full_name" 或 "initial"。
+     * 示例：{"assignee":"initial","priority":"full_name"}
+     * null 或缺失键表示该字段使用默认的 full_name 模式。
+     * 对应 YouTrack Cards Tab 字段 Display menu。
+     */
+    private java.util.Map<String, String> fieldDisplayModes;
 }

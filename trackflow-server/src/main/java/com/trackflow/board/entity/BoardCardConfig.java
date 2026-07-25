@@ -42,6 +42,15 @@ public class BoardCardConfig implements Serializable {
      */
     private Long originalEstimationFieldId;
 
+    /**
+     * 每个字段的显示格式，JSONB 对象，key 为字段名，value 为 "full_name" 或 "initial"。
+     * 示例：{"assignee":"initial","priority":"full_name"}
+     * 未配置的字段默认使用 full_name 模式。
+     * 对应 YouTrack Board Settings Cards Tab 的字段 Display menu（Full name / Initial）。
+     */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String fieldDisplayModes;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

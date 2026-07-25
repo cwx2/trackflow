@@ -433,16 +433,24 @@
                   <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
                 </div>
                 <div class="card-footer">
-                  <span v-if="isCardFieldVisible('type')" class="card-type">{{ typeLabel(issue.issueType) }}</span>
+                  <span v-if="isCardFieldVisible('type')" class="card-type">
+                    <template v-if="getCardFieldDisplayMode('type') === 'initial'">{{ typeInitial(issue.issueType) }}</template>
+                    <template v-else>{{ typeLabel(issue.issueType) }}</template>
+                  </span>
                   <span v-else class="card-type-spacer"></span>
                   <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
-                    <img
-                      v-if="issue.assigneeAvatarUrl"
-                      :src="issue.assigneeAvatarUrl"
-                      :alt="issue.assigneeName"
-                      class="avatar-img"
-                    />
-                    <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                    <template v-if="getCardFieldDisplayMode('assignee') === 'full_name'">
+                      <span class="assignee-full-name">{{ issue.assigneeName }}</span>
+                    </template>
+                    <template v-else>
+                      <img
+                        v-if="issue.assigneeAvatarUrl"
+                        :src="issue.assigneeAvatarUrl"
+                        :alt="issue.assigneeName"
+                        class="avatar-img"
+                      />
+                      <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -682,16 +690,24 @@
                         <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
                       </div>
                       <div class="card-footer">
-                        <span v-if="isCardFieldVisible('type')" class="card-type">{{ typeLabel(issue.issueType) }}</span>
+                        <span v-if="isCardFieldVisible('type')" class="card-type">
+                          <template v-if="getCardFieldDisplayMode('type') === 'initial'">{{ typeInitial(issue.issueType) }}</template>
+                          <template v-else>{{ typeLabel(issue.issueType) }}</template>
+                        </span>
                         <span v-else class="card-type-spacer"></span>
                         <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
-                          <img
-                            v-if="issue.assigneeAvatarUrl"
-                            :src="issue.assigneeAvatarUrl"
-                            :alt="issue.assigneeName"
-                            class="avatar-img"
-                          />
-                          <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                          <template v-if="getCardFieldDisplayMode('assignee') === 'full_name'">
+                            <span class="assignee-full-name">{{ issue.assigneeName }}</span>
+                          </template>
+                          <template v-else>
+                            <img
+                              v-if="issue.assigneeAvatarUrl"
+                              :src="issue.assigneeAvatarUrl"
+                              :alt="issue.assigneeName"
+                              class="avatar-img"
+                            />
+                            <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
+                          </template>
                         </div>
                       </div>
                     </div>
@@ -1100,6 +1116,12 @@ function getVisibleCustomFields(issue: BoardIssue): Record<string, string> {
 /** 判断卡片上是否应展示某个字段（基于 cardConfig） */
 function isCardFieldVisible(field: string): boolean {
   return cardConfig.value.visibleFields.includes(field)
+}
+
+/** 获取字段在卡片上的显示模式（full_name 或 initial） */
+function getCardFieldDisplayMode(field: string): 'full_name' | 'initial' {
+  const modes = cardConfig.value.fieldDisplayModes
+  return (modes && modes[field]) || 'full_name'
 }
 
 /** 预定义项目颜色调色板（用于"按项目着色"方案） */
@@ -2627,6 +2649,15 @@ function priorityIcon(priority: string): string {
 
 function typeLabel(type: string): string {
   return localizeIssueType(type)
+}
+
+/**
+ * 返回工单类型的首字母缩写（用于 Initial 显示模式）。
+ */
+function typeInitial(type: string): string {
+  if (!type) return '?'
+  const label = localizeIssueType(type)
+  return label.charAt(0).toUpperCase()
 }
 
 function openIssue(issue: BoardIssue) {
@@ -4972,6 +5003,16 @@ onUnmounted(() => {
   color: var(--color-white);
   background: rgb(var(--primary-6));
   border-radius: 50%;
+}
+
+/* Full name 模式：显示负责人姓名文字 */
+.assignee-full-name {
+  font-size: 11px;
+  color: var(--color-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70px;
 }
 
 /* ===== Custom Fields on card ===== */

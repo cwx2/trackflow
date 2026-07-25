@@ -29,4 +29,12 @@ public class BoardCardConfigVO {
      * null 表示未配置。
      */
     private String originalEstimationFieldId;
+
+    /**
+     * 每个字段的显示格式，key 为字段名，value 为 "full_name" 或 "initial"。
+     * 示例：{"assignee":"initial","priority":"full_name"}
+     * 对应 YouTrack Cards Tab 字段的 Display menu（Full name / Initial）。
+     * null 或不含某字段表示该字段使用默认的 full_name 模式。
+     */
+    private java.util.Map<String, String> fieldDisplayModes;
 }

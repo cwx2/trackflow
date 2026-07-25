@@ -952,6 +952,13 @@ export interface BoardCardConfigVO {
    * null 表示未配置。
    */
   originalEstimationFieldId?: string | null
+  /**
+   * 每个字段的显示格式，key 为字段名，value 为 "full_name" 或 "initial"。
+   * 示例：{"assignee":"initial","priority":"full_name"}
+   * 对应 YouTrack Cards Tab 字段的 Display menu（Full name / Initial）。
+   * null 或缺失 key 表示该字段使用默认的 full_name 模式。
+   */
+  fieldDisplayModes?: Record<string, 'full_name' | 'initial'> | null
 }
 
 // ========== 看板泳道配置 ==========

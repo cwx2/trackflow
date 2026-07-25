@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -25,6 +26,9 @@ public class BoardCardConfigService {
     private static final Set<String> ALLOWED_FIELDS = Set.of(
             "assignee", "priority", "type", "tags", "dueDate", "sprint", "estimatedHours"
     );
+
+    /** 允许的字段显示模式值 */
+    private static final Set<String> ALLOWED_DISPLAY_MODES = Set.of("full_name", "initial");
 
     /** 默认显示的字段 */
     private static final List<String> DEFAULT_VISIBLE_FIELDS = List.of("assignee", "priority", "type");
@@ -53,11 +57,13 @@ public class BoardCardConfigService {
                     ? String.valueOf(config.getCurrentEstimationFieldId()) : null);
             vo.setOriginalEstimationFieldId(config.getOriginalEstimationFieldId() != null
                     ? String.valueOf(config.getOriginalEstimationFieldId()) : null);
+            vo.setFieldDisplayModes(parseFieldDisplayModes(config.getFieldDisplayModes()));
         } else {
             vo.setVisibleFields(DEFAULT_VISIBLE_FIELDS);
             vo.setColorScheme(DEFAULT_COLOR_SCHEME);
             vo.setCurrentEstimationFieldId(null);
             vo.setOriginalEstimationFieldId(null);
+            vo.setFieldDisplayModes(null);
         }
         return vo;
     }
@@ -75,6 +81,20 @@ public class BoardCardConfigService {
             }
         }
 
+        // 校验字段显示模式合法性
+        if (dto.getFieldDisplayModes() != null) {
+            for (Map.Entry<String, String> entry : dto.getFieldDisplayModes().entrySet()) {
+                if (!ALLOWED_FIELDS.contains(entry.getKey())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "无效的字段名: " + entry.getKey());
+                }
+                if (!ALLOWED_DISPLAY_MODES.contains(entry.getValue())) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "无效的显示模式: " + entry.getValue() + "，允许值: full_name / initial");
+                }
+            }
+        }
+
         BoardCardConfig existing = boardCardConfigMapper.selectOne(
                 new LambdaQueryWrapper<BoardCardConfig>()
                         .eq(BoardCardConfig::getProjectId, projectId)
@@ -82,12 +102,14 @@ public class BoardCardConfigService {
 
         LocalDateTime now = LocalDateTime.now();
         String fieldsJson = serializeVisibleFields(dto.getVisibleFields());
+        String displayModesJson = serializeFieldDisplayModes(dto.getFieldDisplayModes());
 
         if (existing != null) {
             existing.setVisibleFields(fieldsJson);
             existing.setColorScheme(dto.getColorScheme());
             existing.setCurrentEstimationFieldId(dto.getCurrentEstimationFieldId());
             existing.setOriginalEstimationFieldId(dto.getOriginalEstimationFieldId());
+            existing.setFieldDisplayModes(displayModesJson);
             existing.setUpdatedAt(now);
             boardCardConfigMapper.updateById(existing);
         } else {
@@ -97,6 +119,7 @@ public class BoardCardConfigService {
             config.setColorScheme(dto.getColorScheme());
             config.setCurrentEstimationFieldId(dto.getCurrentEstimationFieldId());
             config.setOriginalEstimationFieldId(dto.getOriginalEstimationFieldId());
+            config.setFieldDisplayModes(displayModesJson);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardCardConfigMapper.insert(config);
@@ -121,6 +144,28 @@ public class BoardCardConfigService {
             return objectMapper.writeValueAsString(fields);
         } catch (Exception e) {
             return "[\"assignee\",\"priority\",\"type\"]";
+        }
+    }
+
+    private Map<String, String> parseFieldDisplayModes(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String serializeFieldDisplayModes(Map<String, String> modes) {
+        if (modes == null || modes.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(modes);
+        } catch (Exception e) {
+            return null;
         }
     }
 }

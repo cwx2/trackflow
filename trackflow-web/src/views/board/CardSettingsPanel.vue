@@ -393,6 +393,27 @@ const previewColorClass = computed(() => {
 .field-label {
   font-size: 13px;
   color: var(--color-text-1);
+  flex: 1;
+}
+
+/* ===== 字段显示模式切换 ===== */
+.field-display-mode {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.field-display-mode :deep(.arco-radio-group-button .arco-radio-button) {
+  padding: 0 7px;
+  height: 22px;
+  line-height: 22px;
+  font-size: 11px;
+}
+
+.field-display-mode-placeholder {
+  width: 128px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* ===== 估算字段配置 ===== */
@@ -591,6 +612,11 @@ const previewColorClass = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.preview-assignee-name {
+  font-size: 11px;
+  color: var(--color-text-2);
 }
 </style>
 
