@@ -945,7 +945,7 @@ import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi, projectApi } from '@/api'
-import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO } from '@/api/types'
+import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO, R, TransitStatusResultVO } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
@@ -3166,38 +3166,131 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
 
   const targetStatus = statuses.value.find(s => s.id === targetStatusId)
 
-  try {
-    // Update sprint first, then change status
-    await issueApi.update(issue.id, { sprintId: targetSprintId })
-    // Transition status if different from current
-    let newVersion = issue.version
-    if (issue.statusId !== targetStatusId) {
-      const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
-      const extracted = extractVersion(res.data)
-      if (extracted != null) {
-        newVersion = extracted
-      } else {
-        // update + transitStatus = version +2 (each updateById increments version)
-        newVersion = (issue.version || 0) + 2
-      }
-      showActionFeedback(res.data)
-    } else {
-      // Only sprint update, version +1
-      newVersion = (issue.version || 0) + 1
+  /**
+   * 回滚：撤销已执行的 Sprint 分配，并展示错误信息（errorMessage 为 null 时静默回滚）
+   */
+  async function rollbackSprintAssignment(errorMessage: string | null) {
+    try {
+      await issueApi.update(issue.id, { sprintId: null })
+    } catch {
+      // best-effort rollback，忽略错误
     }
+    if (errorMessage) {
+      Message.error(`${issue.issueKey} 状态变更被拒绝：${errorMessage}`)
+    }
+  }
+
+  /**
+   * 成功路径：将工单从 Backlog 移入看板并更新本地状态
+   */
+  function finalizeBacklogDrop(res: R<TransitStatusResultVO>) {
+    const extracted = extractVersion(res.data)
+    const newVersion = extracted != null ? extracted : (issue.version || 0) + 2
+    showActionFeedback(res.data)
 
     // Remove from backlog panel
     backlogPanelRef.value?.removeIssue(issue.id)
 
-    // Add to board issues list
+    // Add to board issues list with updated status/sprint/version
     const updatedIssue: BoardIssue = {
       ...issue,
       statusId: targetStatusId,
       sprintId: targetSprintId,
+      version: newVersion,
     }
     issues.value.push(updatedIssue)
 
     Message.success(`${issue.issueKey} 已添加到看板「${localizeStatusName(targetStatus?.name)}」`)
+  }
+
+  try {
+    // Step 1: Assign sprint (always succeeds first)
+    await issueApi.update(issue.id, { sprintId: targetSprintId })
+
+    // Step 2: Transition status (if different from current)
+    if (issue.statusId !== targetStatusId) {
+      const res = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version)
+
+      // ★ Handle WIP limit exceeded — same UX as column-to-column drag
+      if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+        Modal.warning({
+          title: 'WIP 限制',
+          content: res.message,
+          okText: '继续移入',
+          cancelText: '取消',
+          hideCancel: false,
+          onOk: async () => {
+            try {
+              const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, undefined, true)
+              if (forceRes.code === 0) {
+                finalizeBacklogDrop(forceRes)
+              } else {
+                await rollbackSprintAssignment(forceRes.message || '状态变更失败')
+              }
+            } catch (e2: any) {
+              await rollbackSprintAssignment(e2.response?.data?.message || '状态变更失败')
+            }
+          },
+          onCancel: async () => {
+            // User cancelled — rollback the sprint assignment (no error message needed)
+            await rollbackSprintAssignment(null)
+          },
+        })
+        return
+      }
+
+      // ★ Handle close confirmation required — prompt user to force close
+      if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
+        Modal.warning({
+          title: '确认关闭',
+          content: res.message,
+          okText: '强制关闭',
+          cancelText: '取消',
+          hideCancel: false,
+          onOk: async () => {
+            try {
+              const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, true)
+              if (forceRes.code === 0) {
+                finalizeBacklogDrop(forceRes)
+              } else {
+                await rollbackSprintAssignment(forceRes.message || '状态变更失败')
+              }
+            } catch (e2: any) {
+              await rollbackSprintAssignment(e2.response?.data?.message || '状态变更失败')
+            }
+          },
+          onCancel: async () => {
+            await rollbackSprintAssignment(null)
+          },
+        })
+        return
+      }
+
+      // ★ Any other non-success code: rollback sprint assignment
+      if (res.code !== 0) {
+        await rollbackSprintAssignment(res.message || '状态变更失败')
+        return
+      }
+
+      // Success path
+      finalizeBacklogDrop(res)
+    } else {
+      // Status unchanged, only sprint was updated — version +1
+      const newVersion = (issue.version || 0) + 1
+
+      // Remove from backlog panel
+      backlogPanelRef.value?.removeIssue(issue.id)
+
+      // Add to board issues list
+      const updatedIssue: BoardIssue = {
+        ...issue,
+        sprintId: targetSprintId,
+        version: newVersion,
+      }
+      issues.value.push(updatedIssue)
+
+      Message.success(`${issue.issueKey} 已添加到看板「${localizeStatusName(targetStatus?.name)}」`)
+    }
   } catch (e: any) {
     const errMsg = e.response?.data?.message || '操作失败'
     Message.error(`${issue.issueKey} 移入看板失败：${errMsg}`)
