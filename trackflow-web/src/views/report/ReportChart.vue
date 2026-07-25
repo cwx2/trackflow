@@ -212,7 +212,9 @@ function groupByLabel(groupBy: string): string {
     assignee: '负责人',
     priority: '优先级',
     type: '工单类型',
-    project: '项目'
+    project: '项目',
+    work_type: '工作类型',
+    issue: '工单'
   }
   return map[groupBy] || groupBy
 }

@@ -506,6 +506,14 @@ const timelineTypes = new Set(['burndown_chart', 'cumulative_flow', 'resolution_
 /** 当 type 有固定的 groupBy 映射或为时间线类型时，禁用 groupBy 选择 */
 const isGroupByLocked = computed(() => form.type in typeToGroupByMap || timelineTypes.has(form.type))
 
+/** time_report 专用分组维度（与 YouTrack Time Report Group By 对齐） */
+const timeReportDimensions = [
+  { value: 'assignee', label: '按负责人', category: 'builtin' },
+  { value: 'project', label: '按项目', category: 'builtin' },
+  { value: 'work_type', label: '按工作类型', category: 'builtin' },
+  { value: 'issue', label: '按工单', category: 'builtin' }
+]
+
 /** 可选的分组维度列表（从 API 动态加载） */
 const allDimensions = ref<{ value: string; label: string; category?: string }[]>([
   { value: 'status', label: '状态', category: 'builtin' },
@@ -515,19 +523,27 @@ const allDimensions = ref<{ value: string; label: string; category?: string }[]>
   { value: 'project', label: '项目', category: 'builtin' }
 ])
 const builtinDimensions = computed(() => {
+  // time_report 类型使用专用维度列表
+  if (form.type === 'time_report') {
+    return timeReportDimensions.filter(d => d.category === 'builtin' || !d.category)
+  }
   return allDimensions.value.filter(d => d.category === 'builtin' || !d.category)
 })
 const customFieldDimensions = computed(() => {
+  // time_report 不支持自定义字段分组
+  if (form.type === 'time_report') return []
   return allDimensions.value.filter(d => d.category === 'custom_field')
 })
 const availableSecondDimensions = computed(() => {
   return allDimensions.value.filter(d => d.value !== form.groupBy)
 })
 
-// type 变化时自动锁定 groupBy
+// type 变化时自动锁定 groupBy，time_report 默认分组为 assignee
 watch(() => form.type, (newType) => {
   if (newType in typeToGroupByMap) {
     form.groupBy = typeToGroupByMap[newType]
+  } else if (newType === 'time_report') {
+    form.groupBy = 'assignee'
   }
 })
 

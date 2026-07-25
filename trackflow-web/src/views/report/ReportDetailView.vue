@@ -192,11 +192,19 @@
         </a-form-item>
         <a-form-item label="分组依据">
           <a-select v-model="editForm.groupBy" placeholder="选择分组">
-            <a-option value="status">状态</a-option>
-            <a-option value="assignee">负责人</a-option>
-            <a-option value="priority">优先级</a-option>
-            <a-option value="type">工单类型</a-option>
-            <a-option value="project">项目</a-option>
+            <template v-if="editForm.type === 'time_report'">
+              <a-option value="assignee">按负责人</a-option>
+              <a-option value="project">按项目</a-option>
+              <a-option value="work_type">按工作类型</a-option>
+              <a-option value="issue">按工单</a-option>
+            </template>
+            <template v-else>
+              <a-option value="status">状态</a-option>
+              <a-option value="assignee">负责人</a-option>
+              <a-option value="priority">优先级</a-option>
+              <a-option value="type">工单类型</a-option>
+              <a-option value="project">项目</a-option>
+            </template>
           </a-select>
         </a-form-item>
         <a-form-item label="共享">

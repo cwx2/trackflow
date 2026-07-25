@@ -86,6 +86,7 @@ public class ReportService {
     private final ReportStatisticsService reportStatisticsService;
     private final QueryExecutor queryExecutor;
     private final ReportConverter reportConverter;
+    private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
@@ -1566,7 +1567,15 @@ public class ReportService {
     }
 
     /**
-     * 执行时间报表：按人员/项目/工作类型汇总工时，生成趋势数据
+     * 执行时间报表：根据 config.groupBy 决定主聚合维度
+     * <p>
+     * 支持的分组维度：
+     * <ul>
+     *   <li>{@code null} / {@code "assignee"} — 按负责人（默认）</li>
+     *   <li>{@code "project"} — 按项目</li>
+     *   <li>{@code "work_type"} — 按工作类型</li>
+     *   <li>{@code "issue"} — 按工单</li>
+     * </ul>
      */
     private void executeTimeReport(ReportExecuteResultVO result, ReportConfig config, List<Long> projectIds) {
         result.setChartType("bar_horizontal");
@@ -1579,21 +1588,60 @@ public class ReportService {
         String startStr = startDate.toString();
         String endStr = endDate.toString();
 
-        // 按人员分组数据（作为主维度）
-        List<TimeByUserRow> byUserRows = reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
-        int totalMinutes = byUserRows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
-
+        // 根据 config.groupBy 决定主分组维度（对标 YouTrack Time Report Group By 设置）
+        // time_report 仅支持：assignee/project/work_type/issue，其他值回退到 assignee
+        String groupBy = config.getGroupBy();
+        if (!("project".equals(groupBy) || "work_type".equals(groupBy) || "issue".equals(groupBy))) {
+            // null / "assignee" / 其他通用维度（如 "status"）都使用按负责人分组
+            groupBy = "assignee";
+        }
         List<String> labels = new ArrayList<>();
         List<Long> data = new ArrayList<>();
-        for (TimeByUserRow row : byUserRows) {
-            labels.add(row.getUserName());
-            data.add((long) (row.getTotalMinutes() != null ? row.getTotalMinutes() : 0));
+        int totalMinutes;
+
+        if ("project".equals(groupBy)) {
+            // 按项目分组
+            List<TimeByProjectRow> rows = reportStatisticsMapper.selectTimeByProject(projectIds, startStr, endStr);
+            totalMinutes = rows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+            for (TimeByProjectRow row : rows) {
+                labels.add(row.getProjectName());
+                data.add((long) (row.getTotalMinutes() != null ? row.getTotalMinutes() : 0));
+            }
+        } else if ("work_type".equals(groupBy)) {
+            // 按工作类型分组
+            Long workTypeAttrId = workItemAttributeService.getWorkTypeAttributeId();
+            List<TimeByWorkTypeRow> rows = reportStatisticsMapper.selectTimeByWorkType(projectIds, startStr, endStr, workTypeAttrId);
+            totalMinutes = rows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+            for (TimeByWorkTypeRow row : rows) {
+                String label = row.getWorkType() != null ? row.getWorkType() : "未分类";
+                labels.add(label);
+                data.add((long) (row.getTotalMinutes() != null ? row.getTotalMinutes() : 0));
+            }
+        } else if ("issue".equals(groupBy)) {
+            // 按工单分组（取前 50 条，避免数据量过大）
+            int limit = 50;
+            List<TimeIssueGroupRow> rows = reportStatisticsMapper.selectTimeByIssue(projectIds, startStr, endStr, limit, 0);
+            totalMinutes = rows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+            for (TimeIssueGroupRow row : rows) {
+                String label = row.getIssueKey() + " " + (row.getTitle() != null ? row.getTitle() : "");
+                labels.add(label.trim());
+                data.add((long) (row.getTotalMinutes() != null ? row.getTotalMinutes() : 0));
+            }
+        } else {
+            // 默认：按负责人分组（groupBy = null / "assignee"）
+            List<TimeByUserRow> rows = reportStatisticsMapper.selectTimeByUser(projectIds, startStr, endStr);
+            totalMinutes = rows.stream().mapToInt(r -> r.getTotalMinutes() != null ? r.getTotalMinutes() : 0).sum();
+            for (TimeByUserRow row : rows) {
+                labels.add(row.getUserName());
+                data.add((long) (row.getTotalMinutes() != null ? row.getTotalMinutes() : 0));
+            }
         }
+
         result.setLabels(labels);
         result.setData(data);
         result.setTotal(totalMinutes);
 
-        // 每日工时趋势（作为时间序列）
+        // 每日工时趋势（作为时间序列，不受 groupBy 影响）
         List<TimeTrendRow> trendRows = reportStatisticsMapper.selectTimeTrend(projectIds, startStr, endStr);
         Map<String, Integer> trendByDay = new HashMap<>();
         for (TimeTrendRow row : trendRows) {
@@ -1617,10 +1665,17 @@ public class ReportService {
         result.setSeries(List.of(trendSeries));
 
         // summary 信息
+        String groupByLabel = switch (groupBy != null ? groupBy : "assignee") {
+            case "project" -> "按项目";
+            case "work_type" -> "按工作类型";
+            case "issue" -> "按工单";
+            default -> "按负责人";
+        };
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("totalMinutes", totalMinutes);
         summary.put("totalHours", Math.round(totalMinutes / 60.0 * 100.0) / 100.0);
-        summary.put("userCount", byUserRows.size());
+        summary.put("groupBy", groupByLabel);
+        summary.put("itemCount", labels.size());
         summary.put("dateRange", startStr + " ~ " + endStr);
         result.setSummary(summary);
     }
