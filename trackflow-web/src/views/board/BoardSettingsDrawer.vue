@@ -249,14 +249,14 @@
           :issue-filter-mode="editableIssueFilterMode"
           :issue-filter-query="editableIssueFilterQuery"
           :estimation-field-id="editableEstimationFieldId"
-          :original-estimation-field-id="editableOriginalEstimationFieldId"
+          :original-estimation-field-id="editableChartOriginalEstimationFieldId"
           :project-id="props.projectId"
           @update:chart-type="editableChartType = $event"
           @update:burndown-calculation="editableBurndownCalculation = $event"
           @update:issue-filter-mode="editableIssueFilterMode = $event"
           @update:issue-filter-query="editableIssueFilterQuery = $event"
           @update:estimation-field-id="editableEstimationFieldId = $event"
-          @update:original-estimation-field-id="editableOriginalEstimationFieldId = $event"
+          @update:original-estimation-field-id="editableChartOriginalEstimationFieldId = $event"
         />
       </a-tab-pane>
     </a-tabs>
@@ -372,7 +372,7 @@ const editableBurndownCalculation = ref('issue_count')
 const editableIssueFilterMode = ref('all_cards')
 const editableIssueFilterQuery = ref<string | null>(null)
 const editableEstimationFieldId = ref<string | null>(null)
-const editableOriginalEstimationFieldId = ref<string | null>(null)
+const editableChartOriginalEstimationFieldId = ref<string | null>(null)
 // 乐观锁版本号（从 getGeneralConfig 响应中获取）
 const configVersion = ref<number>(0)
 
@@ -480,7 +480,7 @@ watch(() => props.visible, async (newVisible) => {
         editableIssueFilterMode.value = res.data.issueFilterMode || 'all_cards'
         editableIssueFilterQuery.value = res.data.issueFilterQuery ?? null
         editableEstimationFieldId.value = res.data.estimationFieldId ?? null
-        editableOriginalEstimationFieldId.value = res.data.originalEstimationFieldId ?? null
+        editableChartOriginalEstimationFieldId.value = res.data.originalEstimationFieldId ?? null
       }
     } catch {
       editableChartType.value = 'burndown'
@@ -488,7 +488,7 @@ watch(() => props.visible, async (newVisible) => {
       editableIssueFilterMode.value = 'all_cards'
       editableIssueFilterQuery.value = null
       editableEstimationFieldId.value = null
-      editableOriginalEstimationFieldId.value = null
+      editableChartOriginalEstimationFieldId.value = null
     }
 
     // 加载列合并配置
@@ -824,7 +824,7 @@ async function reloadAllConfigs() {
       editableIssueFilterMode.value = chartRes.data.issueFilterMode || 'all_cards'
       editableIssueFilterQuery.value = chartRes.data.issueFilterQuery ?? null
       editableEstimationFieldId.value = chartRes.data.estimationFieldId ?? null
-      editableOriginalEstimationFieldId.value = chartRes.data.originalEstimationFieldId ?? null
+      editableChartOriginalEstimationFieldId.value = chartRes.data.originalEstimationFieldId ?? null
     }
   } catch {
     Message.error('重新加载配置失败，请手动刷新页面')
@@ -924,7 +924,7 @@ async function handleSave() {
         issueFilterMode: editableIssueFilterMode.value,
         issueFilterQuery: editableIssueFilterQuery.value,
         estimationFieldId: editableEstimationFieldId.value ? Number(editableEstimationFieldId.value) : null,
-        originalEstimationFieldId: editableOriginalEstimationFieldId.value ? Number(editableOriginalEstimationFieldId.value) : null
+        originalEstimationFieldId: editableChartOriginalEstimationFieldId.value ? Number(editableChartOriginalEstimationFieldId.value) : null
       },
       // 优先级列 WIP 配置（columnField=priority 时保存）
       priorityColumnWip: editableColumnField.value === 'priority'
