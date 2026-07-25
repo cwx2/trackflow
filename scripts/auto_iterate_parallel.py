@@ -20,7 +20,6 @@ TrackFlow 并行迭代脚本（永不停止）
   python scripts/auto_iterate_parallel.py                # 2 worker 并行，永不停止
   python scripts/auto_iterate_parallel.py --workers 3    # 3 worker 并行
   python scripts/auto_iterate_parallel.py --skip-produce # 只消费不生产
-  python scripts/auto_iterate_parallel.py --workers 3 --max-rounds 5
   python scripts/auto_iterate_parallel.py --workers 2 --skip-produce  # 只消费不生产
 """
 
@@ -223,8 +222,12 @@ def run_kiro(prompt: str, label: str) -> tuple[bool, str]:
         return False, str(e)
 
 
-def get_latest_session_id() -> str | None:
-    """获取当前目录最新的 session ID（fix-requirement 类型）"""
+def get_latest_session_id(req_stem: str | None = None) -> str | None:
+    """
+    获取最新的 session ID。
+    req_stem: 需求文件的 stem（如 'requirement-123'），用于精确匹配本需求的会话。
+    多 worker 并发时通过 req_stem 避免拿到别的 worker 的 session。
+    """
     try:
         result = subprocess.run(
             [KIRO_CLI, "chat", "--list-sessions", "--format", "json"],
@@ -240,8 +243,15 @@ def get_latest_session_id() -> str | None:
         sessions = json.loads(raw[start:])
         if not sessions:
             return None
-        # 返回最新的（updatedAt 最大）
+        # 按时间倒序
         sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
+        # 如果传入了需求标识，优先匹配标题包含该需求名的 session
+        if req_stem:
+            for s in sessions:
+                title = s.get("title", "")
+                if req_stem in title:
+                    return s.get("sessionId")
+        # 找不到精确匹配，退回最新一条
         return sessions[0].get("sessionId")
     except Exception as e:
         log.warning(f"[session] 获取 session_id 失败: {e}")
@@ -289,21 +299,23 @@ def parse_test_result(output: str) -> tuple[bool, str]:
     """
     解析测试输出，判断是否全部通过。
     返回 (all_passed, summary)
-    通过标准：输出中存在 ✅ 且不存在 ❌ FAIL
+
+    通过标准：
+    - 出现测试报告的 ✅ PASS 标记，且不存在 ❌ FAIL
+    - 用更具体的测试报告关键词避免误判修需求过程中的 ❌/✅
     """
-    has_pass = "✅" in output or "PASS" in output
-    has_fail = "❌" in output and ("FAIL" in output or "失败" in output)
-    if has_fail:
-        # 提取失败摘要（最后 30 行）
-        lines = output.strip().split("\n")
-        summary = "\n".join(lines[-30:])
-        return False, summary
-    if has_pass:
-        lines = output.strip().split("\n")
-        summary = "\n".join(lines[-10:])
-        return True, summary
-    # 没有明确标记，认为失败
+    # 用测试报告特有的模式判断，避免被 fix-requirement 过程中的符号干扰
+    # e2e-test SKILL 输出的报告格式固定含 "PASS" / "FAIL" / "测试报告"
+    in_test_report = "测试报告" in output or "TrackFlow 测试报告" in output or "## 测试结果" in output
+    has_fail = ("❌" in output and "FAIL" in output) or ("❌" in output and "失败" in output and in_test_report)
+    has_pass = ("✅" in output and "PASS" in output) or (in_test_report and "✅" in output and not has_fail)
+
     lines = output.strip().split("\n")
+    if has_fail:
+        return False, "\n".join(lines[-30:])
+    if has_pass:
+        return True, "\n".join(lines[-10:])
+    # 没有明确的测试报告标记，认为失败（测试可能根本没跑起来）
     return False, "\n".join(lines[-20:])
 
 
@@ -442,7 +454,7 @@ def consume_one(worker_id: str) -> str | None:
 
     # ── 步骤 2：拿 session_id（修需求结束后立刻查）──
     time.sleep(2)  # 给 kiro-cli 一点时间写入 session
-    session_id = get_latest_session_id()
+    session_id = get_latest_session_id(req_file.stem)
     if session_id:
         log.info(f"[{label}] 绑定 session: {session_id[:8]}...")
     else:
@@ -574,24 +586,43 @@ def consume_one(worker_id: str) -> str | None:
 def run_consume_phase(num_workers: int) -> int:
     """
     并行消费阶段：多个 worker 同时处理需求，直到 develop/ 空。
-    失败的需求会被跳过（移到队尾），不会卡住流程。
+    失败的需求（kiro-cli 进程本身崩溃）会被放回 develop/，重试 MAX_RETRIES 次后移到 rejected/。
     """
     total_done = 0
     retry_counts: dict[str, int] = {}  # filename -> 连续失败次数
+    prev_in_develop: set[str] = set()  # 上一批次在 develop/ 的文件名快照
 
     while True:
         available = list_available(DEVELOP_DIR)
         if not available:
             break
 
+        current_names = {f.name for f in available}
+
+        # 对比快照：上轮就在 develop/ 且本轮还在 → 没被消费，说明本轮有 worker 失败放回
+        for name in current_names:
+            if name in prev_in_develop:
+                retry_counts[name] = retry_counts.get(name, 0) + 1
+            else:
+                # 新出现的文件（刚生产或从 working 放回）从 0 开始
+                retry_counts.setdefault(name, 0)
+
+        # 清理不在 develop/ 的过期计数
+        for name in list(retry_counts.keys()):
+            if name not in current_names:
+                del retry_counts[name]
+
         # 检查队首文件是否已多次失败，是则跳过
         first = available[0]
-        retries = retry_counts.get(first.name, 0)
-        if retries >= MAX_RETRIES:
-            log.warning(f"[消费] {first.name} 已失败 {retries} 次，移到 rejected/")
+        if retry_counts.get(first.name, 0) >= MAX_RETRIES:
+            log.warning(f"[消费] {first.name} 已失败 {retry_counts[first.name]} 次，移到 rejected/")
             shutil.move(str(first), str(REJECTED_DIR / first.name))
             del retry_counts[first.name]
+            prev_in_develop.discard(first.name)
             continue
+
+        # 记录本批次前的快照（消费后不在 develop/ 就是成功消费了）
+        prev_in_develop = current_names
 
         # 启动 min(workers, available) 个并发任务
         batch_size = min(num_workers, len(available))
@@ -607,24 +638,9 @@ def run_consume_phase(num_workers: int) -> int:
                     result = f.result()
                     if result:
                         total_done += 1
-                        # 成功的重置重试计数
                         retry_counts.pop(result, None)
                 except Exception:
                     pass
-
-        # 统计本批失败的文件（回到 develop/ 的）
-        current_available = {f.name for f in list_available(DEVELOP_DIR)}
-        for name in current_available:
-            if name in retry_counts:
-                # 已知的，说明又失败了一次
-                pass
-            # 检查是否是刚放回来的（之前不在 develop 但现在在）
-        # 简单策略：每轮对 develop/ 里的文件如果和上轮一样，计数+1
-        for f in list_available(DEVELOP_DIR):
-            if f.name in retry_counts:
-                retry_counts[f.name] += 1
-            else:
-                retry_counts[f.name] = 0
 
         time.sleep(COOLDOWN_SECONDS)
 
