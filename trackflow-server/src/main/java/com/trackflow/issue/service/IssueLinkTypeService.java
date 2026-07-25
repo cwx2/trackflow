@@ -1,14 +1,15 @@
 package com.trackflow.issue.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.IssueLinkType;
+import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueLinkTypeMapper;
 import com.trackflow.issue.vo.IssueLinkTypeVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,9 @@ import java.util.stream.Collectors;
 /**
  * 工单关联类型服务 - 管理链接类型的 CRUD 和缓存
  * 参考 YouTrack Administration > Link Types 管理功能
+ *
+ * @author TrackFlow
+ * @since 1.0
  */
 @Slf4j
 @Service
@@ -26,6 +30,7 @@ import java.util.stream.Collectors;
 public class IssueLinkTypeService {
 
     private final IssueLinkTypeMapper linkTypeMapper;
+    private final IssueLinkMapper issueLinkMapper;
 
     /** 缓存：name -> IssueLinkType */
     private volatile Map<String, IssueLinkType> cache = null;
@@ -63,22 +68,28 @@ public class IssueLinkTypeService {
      * 在新模型中，issue_link 只存储正向类型（outward 方向），
      * 反向展示由 inward_name 提供。
      * 此方法返回当查询反向关联时应使用的展示名。
+     *
+     * <p>容错处理：若关联类型已被删除（孤立记录），降级返回类型名本身而非抛出异常。</p>
      */
     public String getInwardName(String linkTypeName) {
         IssueLinkType type = getByName(linkTypeName);
         if (type == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "未知的关联类型: " + linkTypeName);
+            log.warn("未知的关联类型: {}，降级返回类型名本身", linkTypeName);
+            return linkTypeName;
         }
         return type.getInwardName();
     }
 
     /**
      * 获取正向展示名
+     *
+     * <p>容错处理：若关联类型已被删除（孤立记录），降级返回类型名本身而非抛出异常。</p>
      */
     public String getOutwardName(String linkTypeName) {
         IssueLinkType type = getByName(linkTypeName);
         if (type == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "未知的关联类型: " + linkTypeName);
+            log.warn("未知的关联类型: {}，降级返回类型名本身", linkTypeName);
+            return linkTypeName;
         }
         return type.getOutwardName();
     }
@@ -153,8 +164,26 @@ public class IssueLinkTypeService {
     }
 
     /**
-     * 删除链接类型（管理员操作，系统类型不可删除）
+     * 统计指定关联类型被使用的数量（用于删除前预检）
+     *
+     * @param id 关联类型 ID
+     * @return 使用该类型的 issue_link 记录数量
      */
+    public long countUsageByTypeId(Long id) {
+        IssueLinkType entity = linkTypeMapper.selectById(id);
+        if (entity == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关联类型不存在: " + id);
+        }
+        return issueLinkMapper.countByLinkType(entity.getName());
+    }
+
+    /**
+     * 删除链接类型（管理员操作，系统类型不可删除）
+     *
+     * <p>对标 YouTrack 行为：删除关联类型时，自动级联删除所有使用该类型的 issue_link 记录。
+     * 参考：https://www.jetbrains.com/help/youtrack/cloud/link-types.html</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
     public void deleteLinkType(Long id) {
         IssueLinkType entity = linkTypeMapper.selectById(id);
         if (entity == null) {
@@ -162,6 +191,12 @@ public class IssueLinkTypeService {
         }
         if (entity.getIsSystem()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "系统内置类型不可删除");
+        }
+
+        // 对标 YouTrack：删除关联类型时级联删除所有使用该类型的 issue_link 记录
+        long deletedLinks = issueLinkMapper.deleteByLinkType(entity.getName());
+        if (deletedLinks > 0) {
+            log.info("删除关联类型 {} 时级联删除 {} 条关联记录", entity.getName(), deletedLinks);
         }
 
         linkTypeMapper.deleteById(id);

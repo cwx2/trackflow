@@ -235,6 +235,12 @@ const routes = [
         meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
       },
       {
+        path: 'admin/link-types',
+        name: 'LinkTypeManagement',
+        component: () => import('@/views/admin/LinkTypeManagement.vue'),
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notification/NotificationView.vue')

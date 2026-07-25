@@ -36,6 +36,15 @@ public class IssueLinkTypeController {
     }
 
     /**
+     * 获取指定关联类型的使用数量（用于删除前影响预检）
+     */
+    @GetMapping("/{id}/usage-count")
+    @PreAuthorize("@perm.checkGlobal('system:manage_settings')")
+    public R<Long> getUsageCount(@PathVariable("id") Long id) {
+        return R.ok(linkTypeService.countUsageByTypeId(id));
+    }
+
+    /**
      * 创建链接类型
      */
     @PostMapping
@@ -58,7 +67,7 @@ public class IssueLinkTypeController {
     }
 
     /**
-     * 删除链接类型
+     * 删除链接类型（级联删除使用该类型的 issue_link 记录）
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.checkGlobal('system:manage_settings')")

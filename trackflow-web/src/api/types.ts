@@ -445,6 +445,15 @@ export interface IssueLinkVO {
   issueStatus?: IssueStatusVO
 }
 
+export interface IssueLinkTypeVO {
+  id: string
+  name: string
+  outwardName: string
+  inwardName: string
+  direction: string
+  isSystem: boolean
+}
+
 // ========== Sprint ==========
 export interface SprintVO {
   id: string

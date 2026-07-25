@@ -175,6 +175,13 @@ const menuItems: AdminMenuItem[] = [
     title: '第三方集成',
     description: '管理外部系统适配器的启用/禁用、配置和事件日志',
     permission: 'system:manage_roles'
+  },
+  {
+    path: '/admin/link-types',
+    icon: '🔗',
+    title: '关联类型',
+    description: '管理工单关联类型，定义正向/反向显示名称和方向规则',
+    permission: 'system:manage_settings'
   }
 ]
 
