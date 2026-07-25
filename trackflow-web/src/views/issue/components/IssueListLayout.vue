@@ -214,7 +214,8 @@ const sortOptions = [
   { value: 'priority', label: '优先级' },
   { value: 'title', label: '标题' },
   { value: 'assigneeName', label: '负责人' },
-  { value: 'issueKey', label: '编号' }
+  { value: 'issueKey', label: '编号' },
+  { value: 'vote_count', label: '投票数' }
 ]
 
 const sortField = computed(() => props.sortState.field)

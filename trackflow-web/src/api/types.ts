@@ -292,6 +292,8 @@ export interface IssueVO {
    * 自定义字段颜色值，key 格式 "cf_{fieldId}"，value 为 HEX 颜色（仅有颜色的 list 类型字段）
    */
   customFieldColors?: Record<string, string>
+  /** 投票数（来自 issue.vote_count 冗余字段） */
+  voteCount?: number
 }
 
 export interface IssueDetailVO extends IssueVO {

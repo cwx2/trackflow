@@ -1602,6 +1602,7 @@ public class CustomFieldService {
         columns.add(buildStandardColumn("updatedAt", "更新时间", true, true));
         columns.add(buildStandardColumn("dueDate", "截止日期", true, true));
         columns.add(buildStandardColumn("childProgress", "子任务进度", false, true));
+        columns.add(buildStandardColumn("voteCount", "投票数", true, true));
         return columns;
     }
 

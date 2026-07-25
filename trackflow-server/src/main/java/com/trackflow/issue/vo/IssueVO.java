@@ -46,6 +46,9 @@ public class IssueVO {
     /** 已关闭的直接子工单数 */
     private Integer childClosedCount;
 
+    /** 投票数冗余字段（来自 issue.vote_count） */
+    private Integer voteCount;
+
     /**
      * 自定义字段结构化详情，每个字段独立表达 value/values、displayValue/displayValues、color/colors。
      * 前端应优先使用此字段渲染多值标签。

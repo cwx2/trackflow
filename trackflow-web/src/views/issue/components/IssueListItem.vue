@@ -57,6 +57,12 @@
       {{ issue.childClosedCount || 0 }}/{{ issue.childCount }}
     </span>
 
+    <!-- Vote count badge (only shown when voteCount > 0) -->
+    <span v-if="issue.voteCount && issue.voteCount > 0" class="item-meta-badge item-vote-badge" :title="`${issue.voteCount} 票`">
+      <icon-thumb-up :size="12" />
+      {{ issue.voteCount }}
+    </span>
+
     <!-- Time progress indicator (YouTrack Estimation Progress) -->
     <TimeProgressIndicator
       v-if="effectiveEstimated > 0"
@@ -134,7 +140,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { IconRight, IconDown, IconLayers, IconDragDotVertical } from '@arco-design/web-vue/es/icon'
+import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp } from '@arco-design/web-vue/es/icon'
 import type { IssueVO, CustomFieldValueVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'

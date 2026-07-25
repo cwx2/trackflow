@@ -51,6 +51,9 @@ public class IssueDetailVO {
     private String updatedById;
     private String updatedByName;
 
+    /** 投票数冗余字段（来自 issue.vote_count） */
+    private Integer voteCount;
+
     /** 子任务列表（仅当本工单有子任务时非空） */
     private List<ChildIssueVO> children;
     /** 子任务进度汇总（仅当有子任务时非空） */

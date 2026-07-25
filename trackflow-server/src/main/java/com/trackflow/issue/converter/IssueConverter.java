@@ -32,6 +32,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "spentHours", source = "spentHours")
     @Mapping(target = "derivedSpentHours", source = "derivedSpentHours")
     @Mapping(target = "derivedEstimatedHours", source = "derivedEstimatedHours")
+    @Mapping(target = "voteCount", source = "voteCount")
     IssueVO toVO(Issue entity);
 
     List<IssueVO> toVOList(List<Issue> entities);
@@ -51,6 +52,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "parentKey", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "tags", ignore = true)
+    @Mapping(target = "voteCount", source = "voteCount")
     IssueDetailVO toDetailVO(Issue entity);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
