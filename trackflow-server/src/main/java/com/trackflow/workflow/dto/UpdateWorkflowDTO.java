@@ -40,5 +40,7 @@ public class UpdateWorkflowDTO {
         @NotNull
         private Long to;
         private Boolean allowed;
+        /** 是否要求此转换必须附带评论/理由 */
+        private Boolean requireComment;
     }
 }

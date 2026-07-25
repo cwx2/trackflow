@@ -30,6 +30,9 @@ public class TransitionAction implements Serializable {
     /** 转换后状态 ID */
     private Long newStatusId;
 
+    /** 触发类型：transition(精确路径) / on_enter(进入状态) / on_exit(离开状态) */
+    private String triggerType;
+
     /** 动作类型：auto_assign (可扩展) */
     private String actionType;
 

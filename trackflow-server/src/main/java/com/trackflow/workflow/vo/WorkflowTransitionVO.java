@@ -12,4 +12,5 @@ public class WorkflowTransitionVO {
     private String newStatusId;
     private Boolean author;
     private Boolean assignee;
+    private Boolean requireComment;
 }

@@ -30,7 +30,15 @@ public class ActionResolver {
     private final TransitionActionMapper actionMapper;
 
     /**
-     * 解析最终的动作执行列表。
+     * 解析最终的动作执行列表（三阶段匹配）。
+     * <p>
+     * 按照 YouTrack 状态机模型，匹配顺序：
+     * <ol>
+     *   <li>精确路径匹配：trigger_type='transition', old_status_id=A, new_status_id=B</li>
+     *   <li>onEnter 匹配：trigger_type='on_enter', old_status_id IS NULL, new_status_id=B</li>
+     *   <li>onExit 匹配：trigger_type='on_exit', old_status_id=A, new_status_id IS NULL</li>
+     * </ol>
+     * 三阶段的结果合并后按 sort_order 排序返回。
      *
      * @param projectId   项目 ID
      * @param issueType   Issue 类型（如 Bug, Task, Feature）
@@ -40,15 +48,53 @@ public class ActionResolver {
      */
     public List<TransitionAction> resolve(Long projectId, String issueType,
                                           Long oldStatusId, Long newStatusId) {
-        // 查询所有匹配的启用动作（包含 project+type, project+wildcard, global+type, global+wildcard）
-        List<TransitionAction> allActions = actionMapper.selectByTransitionPath(
-                projectId, issueType, oldStatusId, newStatusId);
+        List<TransitionAction> result = new java.util.ArrayList<>();
 
-        if (allActions == null || allActions.isEmpty()) {
-            return Collections.emptyList();
+        // 阶段1：精确路径匹配 (trigger_type='transition')
+        List<TransitionAction> transitionActions = actionMapper.selectByTransitionPath(
+                projectId, issueType, oldStatusId, newStatusId);
+        if (transitionActions != null && !transitionActions.isEmpty()) {
+            List<TransitionAction> filtered = filterByPriority(transitionActions, projectId, issueType);
+            if (!filtered.isEmpty()) {
+                log.debug("ActionResolver: matched transition path actions, {} actions", filtered.size());
+                result.addAll(filtered);
+            }
         }
 
-        return filterByPriority(allActions, projectId, issueType);
+        // 阶段2：onEnter 匹配 (trigger_type='on_enter', 进入 newStatusId 时触发)
+        List<TransitionAction> onEnterActions = actionMapper.selectByOnEnter(
+                projectId, issueType, newStatusId);
+        if (onEnterActions != null && !onEnterActions.isEmpty()) {
+            List<TransitionAction> filtered = filterByPriority(onEnterActions, projectId, issueType);
+            if (!filtered.isEmpty()) {
+                log.debug("ActionResolver: matched onEnter actions for status {}, {} actions",
+                        newStatusId, filtered.size());
+                result.addAll(filtered);
+            }
+        }
+
+        // 阶段3：onExit 匹配 (trigger_type='on_exit', 离开 oldStatusId 时触发)
+        List<TransitionAction> onExitActions = actionMapper.selectByOnExit(
+                projectId, issueType, oldStatusId);
+        if (onExitActions != null && !onExitActions.isEmpty()) {
+            List<TransitionAction> filtered = filterByPriority(onExitActions, projectId, issueType);
+            if (!filtered.isEmpty()) {
+                log.debug("ActionResolver: matched onExit actions for status {}, {} actions",
+                        oldStatusId, filtered.size());
+                result.addAll(filtered);
+            }
+        }
+
+        // 按 sort_order 排序合并结果
+        if (!result.isEmpty()) {
+            result.sort((a, b) -> {
+                int orderA = a.getSortOrder() != null ? a.getSortOrder() : 0;
+                int orderB = b.getSortOrder() != null ? b.getSortOrder() : 0;
+                return Integer.compare(orderA, orderB);
+            });
+        }
+
+        return result;
     }
 
     /**

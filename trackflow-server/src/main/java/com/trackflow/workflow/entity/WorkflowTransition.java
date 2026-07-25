@@ -37,4 +37,7 @@ public class WorkflowTransition implements Serializable {
 
     /** 所属工作流定义 ID（迁移过渡期可空） */
     private Long workflowDefinitionId;
+
+    /** 是否要求此转换必须附带评论/理由 */
+    private Boolean requireComment;
 }

@@ -20,7 +20,11 @@ public class CreateTransitionActionDTO {
     @NotBlank
     private String issueType;
 
-    /** 转换前状态 ID，null 表示"创建时触发" */
+    /** 触发类型：transition(精确路径) / on_enter(进入状态) / on_exit(离开状态) */
+    @NotBlank
+    private String triggerType;
+
+    /** 转换前状态 ID，null 表示"创建时触发"（transition类型）或"进入状态触发"（on_enter类型） */
     private Long oldStatusId;
 
     /** 转换后状态 ID */

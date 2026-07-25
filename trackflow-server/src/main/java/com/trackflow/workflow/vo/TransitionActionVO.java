@@ -14,6 +14,7 @@ public class TransitionActionVO {
     private String id;
     private String projectId;
     private String issueType;
+    private String triggerType;
     private String oldStatusId;
     private String newStatusId;
     private String oldStatusName;

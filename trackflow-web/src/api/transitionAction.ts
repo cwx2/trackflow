@@ -5,6 +5,7 @@ export interface TransitionActionVO {
   id: string
   projectId: string
   issueType: string
+  triggerType: string
   oldStatusId: string
   newStatusId: string
   oldStatusName?: string
@@ -29,8 +30,9 @@ export interface TransitionActionVO {
 export interface CreateTransitionActionDTO {
   projectId: number
   issueType: string
-  oldStatusId: number
-  newStatusId: number
+  triggerType: string
+  oldStatusId?: number | null
+  newStatusId?: number | null
   actionType: string
   actionConfig: Record<string, any>
   sortOrder?: number

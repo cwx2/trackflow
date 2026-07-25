@@ -40,6 +40,11 @@ public class TransitionActionService {
      */
     private static final Set<String> VALID_ACTION_TYPES = Set.of("auto_assign");
 
+    /**
+     * 支持的触发类型白名单。
+     */
+    private static final Set<String> VALID_TRIGGER_TYPES = Set.of("transition", "on_enter", "on_exit");
+
     private final TransitionActionMapper transitionActionMapper;
     private final ActionConfigValidator actionConfigValidator;
     private final IssueStatusMapper issueStatusMapper;
@@ -83,6 +88,9 @@ public class TransitionActionService {
         // 校验 actionType 合法性
         validateActionType(dto.getActionType());
 
+        // 校验 triggerType 合法性
+        validateTriggerType(dto.getTriggerType());
+
         // 校验 actionConfig 结构
         List<String> errors = actionConfigValidator.validate(dto.getActionConfig());
         if (!errors.isEmpty()) {
@@ -99,11 +107,14 @@ public class TransitionActionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", entityErrors));
         }
 
-        // 校验状态 ID 存在（oldStatusId 为 null 时表示"创建时触发"，无需校验）
+        // 校验 triggerType 与 oldStatusId/newStatusId 的一致性
+        validateTriggerTypeStatusIds(dto.getTriggerType(), dto.getOldStatusId(), dto.getNewStatusId());
+
+        // 校验状态 ID 存在（oldStatusId 为 null 时表示"创建时触发"或"onEnter"，无需校验）
         if (dto.getOldStatusId() != null && issueStatusMapper.selectById(dto.getOldStatusId()) == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "oldStatusId 对应的状态不存在");
         }
-        if (issueStatusMapper.selectById(dto.getNewStatusId()) == null) {
+        if (dto.getNewStatusId() != null && issueStatusMapper.selectById(dto.getNewStatusId()) == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "newStatusId 对应的状态不存在");
         }
 
@@ -114,7 +125,8 @@ public class TransitionActionService {
         TransitionAction action = new TransitionAction();
         action.setProjectId(effectiveProjectId);
         action.setIssueType(dto.getIssueType());
-        action.setOldStatusId(dto.getOldStatusId()); // null = on-create trigger
+        action.setTriggerType(dto.getTriggerType());
+        action.setOldStatusId(dto.getOldStatusId());
         action.setNewStatusId(dto.getNewStatusId());
         action.setActionType(dto.getActionType());
         action.setActionConfig(serializeConfig(dto.getActionConfig()));
@@ -270,6 +282,56 @@ public class TransitionActionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     String.format("不支持的动作类型: %s，当前支持: %s",
                             actionType, String.join(", ", VALID_ACTION_TYPES)));
+        }
+    }
+
+    /**
+     * 校验 triggerType 是否属于支持的白名单。
+     */
+    private void validateTriggerType(String triggerType) {
+        if (!VALID_TRIGGER_TYPES.contains(triggerType)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    String.format("不支持的触发类型: %s，当前支持: %s",
+                            triggerType, String.join(", ", VALID_TRIGGER_TYPES)));
+        }
+    }
+
+    /**
+     * 校验 triggerType 与 oldStatusId/newStatusId 的一致性。
+     * - on_enter：oldStatusId 必须为 null，newStatusId 不能为 null
+     * - on_exit：oldStatusId 不能为 null，newStatusId 必须为 null
+     * - transition：newStatusId 不能为 null
+     */
+    private void validateTriggerTypeStatusIds(String triggerType, Long oldStatusId, Long newStatusId) {
+        switch (triggerType) {
+            case "on_enter":
+                if (oldStatusId != null) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "on_enter 类型的动作 oldStatusId 必须为空（表示任何源状态进入时都触发）");
+                }
+                if (newStatusId == null) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "on_enter 类型的动作必须指定 newStatusId（目标状态）");
+                }
+                break;
+            case "on_exit":
+                if (oldStatusId == null) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "on_exit 类型的动作必须指定 oldStatusId（源状态）");
+                }
+                if (newStatusId != null) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "on_exit 类型的动作 newStatusId 必须为空（表示离开该状态去往任何目标时都触发）");
+                }
+                break;
+            case "transition":
+                if (newStatusId == null) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                            "transition 类型的动作必须指定 newStatusId（目标状态）");
+                }
+                break;
+            default:
+                break;
         }
     }
 
