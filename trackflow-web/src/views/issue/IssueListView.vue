@@ -711,6 +711,17 @@
           <span v-else class="time-ago">&mdash;</span>
         </template>
 
+        <!-- Time tracking columns -->
+        <template #estimatedHours="{ record }">
+          <span class="time-ago">{{ formatHoursCell(record.estimatedHours) }}</span>
+        </template>
+        <template #spentHours="{ record }">
+          <span class="time-ago" :class="getSpentHoursClass(record)">{{ formatHoursCell(record.spentHours) }}</span>
+        </template>
+        <template #remaining="{ record }">
+          <span class="time-ago" :class="getRemainingClass(record)">{{ formatRemainingCell(record) }}</span>
+        </template>
+
         <!-- Custom field columns (cf_ prefix) -->
         <template #customFieldCell="{ record, column }">
           <template v-if="getCustomFieldDetail(record, column.dataIndex)">
@@ -1890,7 +1901,10 @@ const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
   issueType: 80,
   reporter: 110,
   createdAt: 110,
-  dueDate: 100
+  dueDate: 100,
+  estimatedHours: 100,
+  spentHours: 100,
+  remaining: 100
 }
 
 const columnWidths = reactive<Record<string, number>>(loadColumnWidths())
@@ -2398,6 +2412,53 @@ function formatTime(dt: string) {
   if (days < 30) return `${days}\u5929\u524D`
   return d.toLocaleDateString('zh-CN')
 }
+/**
+ * 将小时数（BigDecimal/number）格式化为 "Xh Ym" 格式
+ * 例如：2.5 → "2h 30m"，0.75 → "45m"，0 → "—"
+ */
+function formatHoursCell(hours: number | null | undefined): string {
+  if (hours == null || hours <= 0) return '\u2014'
+  const totalMins = Math.round(hours * 60)
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+/**
+ * 计算剩余工时 = estimatedHours - spentHours，并格式化
+ */
+function formatRemainingCell(record: any): string {
+  const estimated = record.estimatedHours ?? 0
+  if (estimated <= 0) return '\u2014'
+  const spent = record.spentHours ?? 0
+  const remaining = estimated - spent
+  if (remaining <= 0) return '0h'
+  const totalMins = Math.round(remaining * 60)
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+/** 已用工时超出预估时高亮红色 */
+function getSpentHoursClass(record: any): string {
+  const estimated = record.estimatedHours ?? 0
+  const spent = record.spentHours ?? 0
+  if (estimated > 0 && spent > estimated) return 'time-over-budget'
+  return ''
+}
+
+/** 剩余工时为负（超出）时高亮红色 */
+function getRemainingClass(record: any): string {
+  const estimated = record.estimatedHours ?? 0
+  const spent = record.spentHours ?? 0
+  if (estimated > 0 && spent > estimated) return 'time-over-budget'
+  return ''
+}
+
 const QUICK_CREATE_PROJECT_KEY = 'trackflow:quick-create-project'
 
 function resolveQuickCreateProject(): string | undefined {
@@ -3262,6 +3323,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .priority-normal { background: var(--tf-accent); }
 .priority-low { background: var(--tf-text-tertiary); }
 .time-ago { font-size: 11px; color: var(--tf-text-tertiary); }
+.time-over-budget { color: var(--tf-danger, #f85149); font-weight: 500; }
 .due-date-cell { font-size: 11px; color: var(--tf-text-tertiary); }
 .due-date-cell.due-overdue { color: var(--tf-danger); font-weight: 500; }
 .due-date-cell.due-due-soon { color: var(--tf-warning); font-weight: 500; }

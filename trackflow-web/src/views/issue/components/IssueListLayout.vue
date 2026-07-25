@@ -215,7 +215,10 @@ const sortOptions = [
   { value: 'title', label: '标题' },
   { value: 'assigneeName', label: '负责人' },
   { value: 'issueKey', label: '编号' },
-  { value: 'vote_count', label: '投票数' }
+  { value: 'vote_count', label: '投票数' },
+  { value: 'estimatedHours', label: '预估工时' },
+  { value: 'spentHours', label: '已用工时' },
+  { value: 'remaining', label: '剩余工时' }
 ]
 
 const sortField = computed(() => props.sortState.field)

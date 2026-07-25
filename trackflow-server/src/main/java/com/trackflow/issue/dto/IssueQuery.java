@@ -64,7 +64,8 @@ public class IssueQuery extends PageQuery {
                 "id", "issue_key", "title", "status_id", "priority",
                 "assignee_id", "reporter_id", "created_at", "updated_at",
                 "due_date", "sprint_id", "issue_type", "project_id",
-                "vote_count"
+                "vote_count",
+                "estimated_hours", "spent_hours", "remaining"
         );
     }
 }

@@ -1603,6 +1603,9 @@ public class CustomFieldService {
         columns.add(buildStandardColumn("dueDate", "截止日期", true, true));
         columns.add(buildStandardColumn("childProgress", "子任务进度", false, true));
         columns.add(buildStandardColumn("voteCount", "投票数", true, true));
+        columns.add(buildStandardColumn("estimatedHours", "预估工时", true, true));
+        columns.add(buildStandardColumn("spentHours", "已用工时", true, true));
+        columns.add(buildStandardColumn("remaining", "剩余工时", true, true));
         return columns;
     }
 

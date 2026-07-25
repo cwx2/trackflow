@@ -376,22 +376,31 @@ public class IssueService {
         // 处理排序：自定义字段排序通过子查询实现，内置字段通过 toPage() 处理
         String sort = query.getSort();
         boolean hasCustomFieldSort = false;
+        boolean hasRemainingSort = false;
         if (sort != null && !sort.isBlank()) {
             // 解析排序方向（-fieldName 降序，fieldName 升序）
             boolean desc = sort.startsWith("-");
             String sortField = desc ? sort.substring(1) : sort;
             if (customFieldSortHelper.isCustomFieldSortKey(sortField)) {
                 hasCustomFieldSort = customFieldSortHelper.applyCustomFieldSort(wrapper, sortField, !desc);
+            } else if ("remaining".equals(sortField)) {
+                // remaining 是派生字段（estimated_hours - COALESCE(spent_hours, 0)），不对应实际列，需特殊处理
+                hasRemainingSort = true;
+                if (desc) {
+                    wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) DESC NULLS LAST");
+                } else {
+                    wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) ASC NULLS LAST");
+                }
             }
         }
 
         // 默认排序兜底（当无有效自定义字段排序且 toPage() 也无有效排序时生效）
-        if (!hasCustomFieldSort) {
+        if (!hasCustomFieldSort && !hasRemainingSort) {
             wrapper.orderByDesc("updated_at");
         }
 
-        // 对于自定义字段排序，清空 sort 参数避免 toPage() 产生冲突的 ORDER BY
-        if (hasCustomFieldSort) {
+        // 对于自定义字段排序或 remaining 排序，清空 sort 参数避免 toPage() 产生冲突的 ORDER BY
+        if (hasCustomFieldSort || hasRemainingSort) {
             String originalSort = query.getSort();
             query.setSort(null);
             Page<Issue> result = issueMapper.selectPage(query.toPage(), wrapper);
