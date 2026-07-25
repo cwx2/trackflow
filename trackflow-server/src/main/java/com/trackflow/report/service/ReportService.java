@@ -31,10 +31,12 @@ import com.trackflow.report.mapper.result.*;
 import com.trackflow.report.vo.AverageIssueAgeVO;
 import com.trackflow.report.vo.BurndownVO;
 import com.trackflow.report.vo.CumulativeFlowVO;
+import com.trackflow.report.vo.ReportDefinitionVO;
 import com.trackflow.report.vo.ReportExecuteResultVO;
 import com.trackflow.report.vo.ReportGroupByOptionVO;
 import com.trackflow.report.vo.ReportShareVO;
 import com.trackflow.report.vo.ResolutionTimeVO;
+import com.trackflow.report.converter.ReportConverter;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.sprint.mapper.SprintMapper;
@@ -59,6 +61,7 @@ import java.util.stream.Collectors;
 
 /**
  * 报表服务 - 处理报表的创建、执行、缓存、导出、分享等业务逻辑
+ * 包含报表定义管理、元数据查询、VO 填充与排序等核心功能。
  *
  * @author TrackFlow
  * @since 1.0
@@ -82,7 +85,7 @@ public class ReportService {
     private final CustomFieldService customFieldService;
     private final ReportStatisticsService reportStatisticsService;
     private final QueryExecutor queryExecutor;
-    private final com.trackflow.report.converter.ReportConverter reportConverter;
+    private final ReportConverter reportConverter;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
@@ -148,10 +151,10 @@ public class ReportService {
      * @param userId    当前用户ID
      * @return 已填充元数据并排序的 VO 列表
      */
-    public List<com.trackflow.report.vo.ReportDefinitionVO> listReportsVO(Long projectId, Long userId) {
+    public List<ReportDefinitionVO> listReportsVO(Long projectId, Long userId) {
         ReportListMetadata metadata = listWithMetadata(projectId, userId);
-        List<com.trackflow.report.vo.ReportDefinitionVO> voList = reportConverter.toVOList(metadata.reports());
-        for (com.trackflow.report.vo.ReportDefinitionVO vo : voList) {
+        List<ReportDefinitionVO> voList = reportConverter.toVOList(metadata.reports());
+        for (ReportDefinitionVO vo : voList) {
             Long reportId = Long.parseLong(vo.getId());
             vo.setShareCount(metadata.shareCountMap().getOrDefault(reportId, 0));
             vo.setFavorited(metadata.favoriteIds().contains(reportId));
