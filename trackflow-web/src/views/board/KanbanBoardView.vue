@@ -25,6 +25,28 @@
           v-model="selectedProject"
           @update:model-value="onProjectChange"
         />
+        <!-- Header Filter 输入框（YouTrack 风格：紧邻看板名称选择器） -->
+        <div class="header-filter-wrapper">
+          <a-input
+            v-model="keyword"
+            placeholder="Filter"
+            size="small"
+            style="width: 200px"
+            allow-clear
+            :disabled="!selectedProject"
+            @input="onSearchInput"
+            @press-enter="loadIssuesWithLoading"
+            @clear="onSearchClear"
+          >
+            <template #prefix>
+              <icon-search />
+            </template>
+          </a-input>
+          <transition name="fade">
+            <span v-if="isSearchActive" class="filter-active-badge">筛选中</span>
+          </transition>
+        </div>
+        <a-divider direction="vertical" style="margin: 0 4px" />
         <a-select
           v-model="selectedSprint"
           placeholder="所有迭代"
@@ -145,27 +167,6 @@
           </a-select>
         </div>
         <a-divider direction="vertical" style="margin: 0 4px" />
-        <div class="search-wrapper">
-          <a-input
-            v-model="keyword"
-            placeholder="搜索工单（编号/标题/负责人）"
-            size="small"
-            style="width: 240px"
-            allow-clear
-            @input="onSearchInput"
-            @press-enter="loadIssuesWithLoading"
-            @clear="onSearchClear"
-          >
-            <template #prefix>
-              <icon-search />
-            </template>
-          </a-input>
-          <transition name="fade">
-            <span v-if="isSearchActive || assigneeFilter" class="search-active-badge">
-              筛选中
-            </span>
-          </transition>
-        </div>
         <!-- Board Behavior 过滤指示器 -->
         <div v-if="isBehaviorFilterActive && selectedProject" class="behavior-filter-chips">
           <span v-if="boardFilterMode === 'active_sprint'" class="behavior-chip">
@@ -306,6 +307,7 @@
           :visible="showBacklog"
           :project-id="selectedProject || ''"
           :board-status-ids="boardStatusIdsForBacklog"
+          :filter-keyword="keyword"
           @close="showBacklog = false"
           @open-issue="openIssue"
           @drag-start="onBacklogDragStart"
@@ -375,6 +377,20 @@
               <span v-if="getEffectiveColumnWipWarning(col)" class="wip-warning" :class="getEffectiveColumnWipWarning(col)">
                 {{ getEffectiveColumnWipWarning(col) === 'wip-over' ? '⚠' : '▽' }}
               </span>
+              <!-- 在工单列表中打开（hover 时显示，YouTrack 对标功能） -->
+              <a
+                class="column-open-in-list"
+                :href="buildOpenInListUrl(col)"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="`在工单列表中打开「${col.name}」`"
+                :aria-label="`在工单列表中打开「${col.name}」`"
+                @click.stop
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"/>
+                </svg>
+              </a>
             </div>
             <div class="column-body">
               <div
@@ -589,6 +605,21 @@
               <span v-if="!collapsedColumns.has(col.id) && getEffectiveColumnWipWarning(col)" class="wip-warning" :class="getEffectiveColumnWipWarning(col)">
                 {{ getEffectiveColumnWipWarning(col) === 'wip-over' ? '⚠' : '▽' }}
               </span>
+              <!-- 在工单列表中打开（hover 时显示，YouTrack 对标功能） -->
+              <a
+                v-if="!collapsedColumns.has(col.id)"
+                class="column-open-in-list"
+                :href="buildOpenInListUrl(col)"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="`在工单列表中打开「${col.name}」`"
+                :aria-label="`在工单列表中打开「${col.name}」`"
+                @click.stop
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"/>
+                </svg>
+              </a>
             </div>
           </div>
         </div>
@@ -1076,6 +1107,28 @@ const orphanIssues = computed(() => {
 
 /** 未匹配列的工单数量 */
 const orphanIssueCount = computed(() => orphanIssues.value.length)
+
+/** 构建「在工单列表中打开」的 URL（含项目和状态过滤参数）
+ * 支持普通列（单状态）和合并列（多状态，逗号分隔）。
+ * 使用 router.resolve 保证路径与当前前端路由配置一致。
+ */
+function buildOpenInListUrl(col: EffectiveColumn): string {
+  const query: Record<string, string> = {}
+  // 添加项目过滤
+  if (currentProjectKey.value) {
+    query.project = currentProjectKey.value
+  }
+  // 添加状态过滤：普通列用 statusId，合并列用逗号分隔的多个 statusId
+  if (boardColumnField.value === 'status') {
+    // 状态模式：用 statusId 参数（IssueListView 支持逗号分隔多值）
+    query.statusId = col.statusIds.join(',')
+  } else if (boardColumnField.value === 'priority') {
+    // 优先级模式：col.id 实际是优先级值（Critical/High/Normal/Low）
+    query.priority = col.id
+  }
+  const resolved = router.resolve({ name: 'Issues', query })
+  return resolved.href
+}
 
 /** 获取负责人姓名首字母/缩写 */
 function getInitials(name: string): string {
@@ -4425,13 +4478,13 @@ onUnmounted(() => {
   background: rgba(var(--primary-6), 0.15);
 }
 
-.search-wrapper {
+.header-filter-wrapper {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.search-active-badge {
+.filter-active-badge {
   font-size: 11px;
   color: rgb(var(--primary-6));
   background: rgba(var(--primary-6), 0.1);
@@ -5406,7 +5459,47 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 
-/* ===== 撤销按钮（Notification footer 中） ===== */
+/* ===== 列头「在工单列表中打开」按钮 ===== */
+.column-header {
+  position: relative;
+}
+
+.column-open-in-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--color-text-3);
+  text-decoration: none;
+  flex-shrink: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s, background 0.15s, color 0.15s;
+  margin-left: auto;
+}
+
+.column-open-in-list:hover {
+  color: rgb(var(--primary-6));
+  background: var(--color-fill-3);
+}
+
+/* 列头 hover 或聚焦时显示按钮 */
+.column-header:hover .column-open-in-list,
+.swimlane-col-header:hover .column-open-in-list,
+.column-header:focus-within .column-open-in-list,
+.swimlane-col-header:focus-within .column-open-in-list {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Swimlane 列头中的按钮需特殊调整（列头是 flex 居中对齐） */
+.swimlane-col-header .column-open-in-list {
+  margin-left: 4px;
+}
+
+
 :global(.undo-btn) {
   display: inline-flex;
   align-items: center;

@@ -119,6 +119,8 @@ const props = defineProps<{
   projectId: string
   /** Comma-separated status IDs currently shown on the board (to exclude from Backlog) */
   boardStatusIds: string
+  /** External filter keyword from the board header Filter input (synced from parent) */
+  filterKeyword?: string
 }>()
 
 const emit = defineEmits<{
@@ -159,6 +161,19 @@ watch(
   { immediate: true }
 )
 
+// Watch external filterKeyword changes to reload backlog
+let filterKeywordDebounceTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => props.filterKeyword,
+  () => {
+    if (!props.visible || !props.projectId) return
+    if (filterKeywordDebounceTimer) clearTimeout(filterKeywordDebounceTimer)
+    filterKeywordDebounceTimer = setTimeout(() => {
+      loadBacklog()
+    }, 350)
+  }
+)
+
 async function loadBacklog() {
   if (!props.projectId) return
   loading.value = true
@@ -167,6 +182,9 @@ async function loadBacklog() {
     let page = 1
     let allIssues: IssueVO[] = []
 
+    // Merge internal search keyword with external filter keyword (prefer external if set)
+    const effectiveKeyword = props.filterKeyword?.trim() || searchKeyword.value || undefined
+
     // Backlog = issues whose status does NOT match any visible board column
     // This ensures no overlap between board and Backlog
     while (true) {
@@ -174,7 +192,7 @@ async function loadBacklog() {
         projectId: props.projectId,
         hideResolved: 'true',
         statusIdNot: props.boardStatusIds || undefined,
-        keyword: searchKeyword.value || undefined,
+        keyword: effectiveKeyword,
         page,
         pageSize: PAGE_SIZE
       })
