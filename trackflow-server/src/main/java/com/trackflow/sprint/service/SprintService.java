@@ -12,6 +12,7 @@ import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.result.BurndownRow;
 import com.trackflow.issue.mapper.result.IssueCreatedAtRow;
+import com.trackflow.issue.mapper.result.IssueEstimatedHoursRow;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
 import com.trackflow.sprint.dto.DeleteSprintDTO;
@@ -1026,23 +1027,38 @@ public class SprintService {
     /**
      * 燃尽图原始数据聚合结构。
      */
-    private record BurndownIssueData(Long id, LocalDateTime createdAt, LocalDateTime resolvedAt) {}
+    private record BurndownIssueData(Long id, LocalDateTime createdAt, LocalDateTime resolvedAt, BigDecimal estimatedHours) {}
 
     private record BurndownRawData(
             List<BurndownIssueData> currentIssues,
             Set<Long> currentIssueIds,
             Map<Long, LocalDateTime> movedInMap,
             List<IssueActivity> movedOutActivities,
-            Map<Long, LocalDateTime> movedOutCreatedAtMap
+            Map<Long, LocalDateTime> movedOutCreatedAtMap,
+            Map<Long, BigDecimal> issueEstimatedHoursMap
     ) {}
 
     /**
-     * 加载燃尽图计算所需的全部原始数据（Sprint 工单投影 + 活动记录）。
+     * 加载燃尽图计算所需的全部原始数据（Sprint 工单投影 + 活动记录 + 估时数据）。
      */
     private BurndownRawData loadBurndownRawData(Long sprintId) {
         List<BurndownRow> projections = issueMapper.selectBurndownProjection(sprintId);
+        List<Long> currentIssueIdList = projections.stream().map(BurndownRow::getId).toList();
+
+        // 批量查询当前工单的估时（消除 N+1）
+        Map<Long, BigDecimal> currentEstimatedHoursMap = new HashMap<>();
+        if (!currentIssueIdList.isEmpty()) {
+            List<IssueEstimatedHoursRow> hoursRows = issueMapper.selectEstimatedHoursByIds(currentIssueIdList);
+            for (IssueEstimatedHoursRow row : hoursRows) {
+                currentEstimatedHoursMap.put(row.getId(), row.getEstimatedHours());
+            }
+        }
+
         List<BurndownIssueData> currentIssues = projections.stream()
-                .map(row -> new BurndownIssueData(row.getId(), row.getCreatedAt(), row.getResolvedAt()))
+                .map(row -> new BurndownIssueData(
+                        row.getId(), row.getCreatedAt(), row.getResolvedAt(),
+                        currentEstimatedHoursMap.get(row.getId())
+                ))
                 .toList();
 
         Set<Long> currentIssueIds = currentIssues.stream()
@@ -1063,8 +1079,23 @@ public class SprintService {
         Map<Long, LocalDateTime> movedOutCreatedAtMap = loadMovedOutCreatedAtMap(
                 movedOutActivities, currentIssueIds, movedInMap);
 
+        // 批量查询已移出工单的估时（用于估时模式 scope 追踪）
+        // 已移出工单不在 currentIssueIds 中，需要单独查询其估时
+        Map<Long, BigDecimal> issueEstimatedHoursMap = new HashMap<>(currentEstimatedHoursMap);
+        List<Long> movedOutOnlyIds = movedOutActivities.stream()
+                .map(IssueActivity::getIssueId)
+                .filter(id -> !currentIssueIds.contains(id))
+                .distinct()
+                .toList();
+        if (!movedOutOnlyIds.isEmpty()) {
+            List<IssueEstimatedHoursRow> movedOutHoursRows = issueMapper.selectEstimatedHoursByIds(movedOutOnlyIds);
+            for (IssueEstimatedHoursRow row : movedOutHoursRows) {
+                issueEstimatedHoursMap.put(row.getId(), row.getEstimatedHours());
+            }
+        }
+
         return new BurndownRawData(currentIssues, currentIssueIds, movedInMap,
-                movedOutActivities, movedOutCreatedAtMap);
+                movedOutActivities, movedOutCreatedAtMap, issueEstimatedHoursMap);
     }
 
     /**
@@ -1103,6 +1134,88 @@ public class SprintService {
             Map<LocalDate, Long> resolvedByDay,
             long startScope
     ) {}
+
+    /**
+     * 估时模式的 Scope 变化时间线聚合结构（以工时 double 为单位）。
+     */
+    private record EstimationScopeTimeline(
+            Map<LocalDate, Double> hoursAddedByDay,
+            Map<LocalDate, Double> hoursRemovedByDay,
+            Map<LocalDate, Double> resolvedHoursByDay,
+            double startScopeHours
+    ) {}
+
+    /**
+     * 构建每日估时 scope 变化时间线（追踪工单加入/移出 Sprint 带来的工时变化）。
+     * <p>
+     * 对标 YouTrack "Remaining effort" 线：Scope 线在工单加入时上升，移出时下降。
+     * 与 issue_count 模式的 buildScopeChangeTimeline() 逻辑对称，但统计单位为工时而非工单数。
+     */
+    private EstimationScopeTimeline buildEstimationScopeTimeline(BurndownRawData rawData,
+                                                                  LocalDate sprintStart) {
+        Map<LocalDate, Double> hoursAddedByDay = new LinkedHashMap<>();
+        Map<LocalDate, Double> hoursRemovedByDay = new LinkedHashMap<>();
+
+        // 辅助方法：安全获取工单工时（为 null 时返回 0.0）
+        // 当前 Sprint 中工单的加入时间及对应工时
+        for (BurndownIssueData issue : rawData.currentIssues) {
+            LocalDateTime movedInAt = rawData.movedInMap.get(issue.id());
+            LocalDate enteredDate = (movedInAt != null)
+                    ? movedInAt.toLocalDate()
+                    : issue.createdAt().toLocalDate();
+            double hours = issue.estimatedHours() != null ? issue.estimatedHours().doubleValue() : 0.0;
+            hoursAddedByDay.merge(enteredDate, hours, Double::sum);
+        }
+
+        // 已移出 Sprint 的工单：记录移出时间及工时（从 issueEstimatedHoursMap 获取）
+        for (IssueActivity movedOut : rawData.movedOutActivities) {
+            Long issueId = movedOut.getIssueId();
+            BigDecimal estimatedBd = rawData.issueEstimatedHoursMap.get(issueId);
+            double hours = estimatedBd != null ? estimatedBd.doubleValue() : 0.0;
+
+            hoursRemovedByDay.merge(movedOut.getCreatedAt().toLocalDate(), hours, Double::sum);
+
+            // 若该工单当前不在 Sprint 中，还需补记其加入时间对应的工时
+            if (!rawData.currentIssueIds.contains(issueId)) {
+                LocalDateTime correspondingMovedIn = rawData.movedInMap.get(issueId);
+                LocalDate addedDate;
+                if (correspondingMovedIn != null) {
+                    addedDate = correspondingMovedIn.toLocalDate();
+                } else {
+                    LocalDateTime createdAt = rawData.movedOutCreatedAtMap.get(issueId);
+                    addedDate = createdAt != null ? createdAt.toLocalDate() : null;
+                }
+                if (addedDate != null) {
+                    hoursAddedByDay.merge(addedDate, hours, Double::sum);
+                }
+            }
+        }
+
+        // 按解决日期分组统计已完成工时
+        Map<LocalDate, Double> resolvedHoursByDay = rawData.currentIssues.stream()
+                .filter(issue -> issue.resolvedAt() != null && issue.estimatedHours() != null)
+                .collect(Collectors.groupingBy(
+                        issue -> issue.resolvedAt().toLocalDate(),
+                        Collectors.summingDouble(issue -> issue.estimatedHours().doubleValue())
+                ));
+
+        // 计算 Sprint 开始时的 scope（工时）
+        double startScopeHours = 0.0;
+        for (Map.Entry<LocalDate, Double> entry : hoursAddedByDay.entrySet()) {
+            if (!entry.getKey().isAfter(sprintStart)) {
+                startScopeHours += entry.getValue();
+            }
+        }
+        for (Map.Entry<LocalDate, Double> entry : hoursRemovedByDay.entrySet()) {
+            if (!entry.getKey().isAfter(sprintStart)) {
+                startScopeHours -= entry.getValue();
+            }
+        }
+        startScopeHours = Math.max(0.0, startScopeHours);
+
+        return new EstimationScopeTimeline(hoursAddedByDay, hoursRemovedByDay,
+                resolvedHoursByDay, startScopeHours);
+    }
 
     /**
      * 构建每日 scope 变化时间线（工单加入/移出/解决的每日统计）。
@@ -1277,46 +1390,20 @@ public class SprintService {
                                              LocalDate today, long totalDays) {
         Long sprintId = sprint.getId();
 
-        // 使用快照值作为理想线起点，如果无快照则实时计算
+        // 加载原始数据（含活动记录、工时 Map）
+        BurndownRawData rawData = loadBurndownRawData(sprintId);
+
+        // 构建估时 scope 变化时间线
+        EstimationScopeTimeline timeline = buildEstimationScopeTimeline(rawData, sprintStart);
+
+        // 理想线起点优先使用快照值（Sprint 激活时的工时总量），以保证理想线固定不变
         double startHours;
         if (sprint.getStartScopeHours() != null && sprint.getStartScopeHours().compareTo(BigDecimal.ZERO) > 0) {
             startHours = sprint.getStartScopeHours().doubleValue();
         } else {
-            // 回退：实时统计当前 Sprint 所有工单的 estimated_hours
-            List<Issue> allIssues = issueMapper.selectList(
-                    new LambdaQueryWrapper<Issue>()
-                            .eq(Issue::getSprintId, sprintId)
-                            .isNull(Issue::getDeletedAt)
-            );
-            startHours = allIssues.stream()
-                    .map(Issue::getEstimatedHours)
-                    .filter(h -> h != null)
-                    .mapToDouble(BigDecimal::doubleValue)
-                    .sum();
+            // 回退：使用动态时间线计算的 Sprint 开始时工时
+            startHours = timeline.startScopeHours();
         }
-
-        // 加载当前 Sprint 所有工单（含估时和完成时间）
-        List<Issue> currentIssues = issueMapper.selectList(
-                new LambdaQueryWrapper<Issue>()
-                        .eq(Issue::getSprintId, sprintId)
-                        .isNull(Issue::getDeletedAt)
-                        .select(Issue::getId, Issue::getEstimatedHours, Issue::getResolvedAt, Issue::getCreatedAt)
-        );
-
-        // 当前总工时
-        double currentTotalHours = currentIssues.stream()
-                .map(Issue::getEstimatedHours)
-                .filter(h -> h != null)
-                .mapToDouble(BigDecimal::doubleValue)
-                .sum();
-
-        // 按解决日期分组统计工时
-        Map<LocalDate, Double> resolvedHoursByDay = currentIssues.stream()
-                .filter(issue -> issue.getResolvedAt() != null && issue.getEstimatedHours() != null)
-                .collect(Collectors.groupingBy(
-                        issue -> issue.getResolvedAt().toLocalDate(),
-                        Collectors.summingDouble(issue -> issue.getEstimatedHours().doubleValue())
-                ));
 
         // 计算每日指标
         double idealDecrement = startHours > 0 ? startHours / totalDays : 0.0;
@@ -1326,7 +1413,8 @@ public class SprintService {
         List<Integer> scopeLine = new ArrayList<>();
 
         double idealRemaining = startHours;
-        double resolvedHours = 0;
+        double scope = timeline.startScopeHours();
+        double resolvedHours = calculateResolvedHoursBeforeStart(timeline.resolvedHoursByDay(), sprintStart);
         int todayIndex = -1;
         LocalDate endForActual = today.isBefore(sprintEnd) ? today : sprintEnd;
         LocalDate current = sprintStart;
@@ -1338,11 +1426,15 @@ public class SprintService {
             idealRemaining -= idealDecrement;
 
             if (!current.isAfter(endForActual)) {
-                resolvedHours += resolvedHoursByDay.getOrDefault(current, 0.0);
-                // scopeLine 为当前总工时（简化：使用固定的当前快照，未做每日追踪）
-                scopeLine.add((int) Math.round(currentTotalHours));
-                // actualLine 为剩余工时 = 当前总工时 - 已完成工时
-                actualLine.add((int) Math.round(Math.max(0, currentTotalHours - resolvedHours)));
+                // 动态更新当日 scope：当天加入的工时 - 当天移出的工时（首日 scope 已在 timeline 中初始化）
+                if (current.isAfter(sprintStart)) {
+                    scope += timeline.hoursAddedByDay().getOrDefault(current, 0.0);
+                    scope -= timeline.hoursRemovedByDay().getOrDefault(current, 0.0);
+                    scope = Math.max(0.0, scope);
+                }
+                resolvedHours += timeline.resolvedHoursByDay().getOrDefault(current, 0.0);
+                scopeLine.add((int) Math.round(scope));
+                actualLine.add((int) Math.round(Math.max(0, scope - resolvedHours)));
             }
 
             if (current.isEqual(today)) {
@@ -1357,8 +1449,10 @@ public class SprintService {
         vo.setActualLine(actualLine);
         vo.setScopeLine(scopeLine);
         vo.setTodayIndex(todayIndex);
-        vo.setTotalIssues(currentIssues.size());
-        vo.setStartScopeIssues(sprint.getStartScopeIssues() != null ? sprint.getStartScopeIssues() : currentIssues.size());
+        vo.setTotalIssues(rawData.currentIssues().size());
+        vo.setStartScopeIssues(sprint.getStartScopeIssues() != null
+                ? sprint.getStartScopeIssues()
+                : rawData.currentIssues().size());
         vo.setStartScopeHours(startHours);
 
         // 计算速率和预测（基于工时）
@@ -1366,7 +1460,9 @@ public class SprintService {
         double hoursVelocity = daysElapsed > 0 ? resolvedHours / daysElapsed : 0.0;
         vo.setVelocity(Math.round(hoursVelocity * 100.0) / 100.0);
 
-        double remainingHours = currentTotalHours - resolvedHours;
+        // 最新 scope 和实际剩余用于预测
+        double latestScope = scopeLine.isEmpty() ? scope : scopeLine.get(scopeLine.size() - 1);
+        double remainingHours = Math.max(0.0, latestScope - resolvedHours);
         if (hoursVelocity > 0 && remainingHours > 0) {
             long daysNeeded = (long) Math.ceil(remainingHours / hoursVelocity);
             vo.setForecastDate(today.plusDays(daysNeeded).toString());
@@ -1375,6 +1471,17 @@ public class SprintService {
         } else {
             vo.setForecastDate(null);
         }
+    }
+
+    /**
+     * 统计 Sprint 开始前已完成的工时总量。
+     */
+    private double calculateResolvedHoursBeforeStart(Map<LocalDate, Double> resolvedHoursByDay,
+                                                      LocalDate sprintStart) {
+        return resolvedHoursByDay.entrySet().stream()
+                .filter(entry -> entry.getKey().isBefore(sprintStart))
+                .mapToDouble(Map.Entry::getValue)
+                .sum();
     }
 
     /**

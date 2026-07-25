@@ -122,6 +122,12 @@ public interface IssueMapper extends BaseMapper<Issue> {
     List<IssueCreatedAtRow> selectCreatedAtByIds(@Param("issueIds") List<Long> issueIds);
 
     /**
+     * 批量查询工单的 estimated_hours（消除 N+1）。
+     * 用于估时模式燃尽图的 scope 动态追踪。
+     */
+    List<IssueEstimatedHoursRow> selectEstimatedHoursByIds(@Param("issueIds") List<Long> issueIds);
+
+    /**
      * 看板卡片精简查询：单次 JOIN 查出卡片渲染所需的全部字段（status_name, assignee_name, sprint_name）。
      * 替代循环分页 + 逐页 fillXxxInfo 的重量级方式。
      * <p>

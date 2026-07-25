@@ -295,6 +295,16 @@
         </foreach>
     </select>
 
+    <!-- 批量查询工单 estimated_hours（估时模式燃尽图，消除 N+1） -->
+    <select id="selectEstimatedHoursByIds" resultType="com.trackflow.issue.mapper.result.IssueEstimatedHoursRow">
+        SELECT id, estimated_hours
+        FROM issue
+        WHERE id IN
+        <foreach collection="issueIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
     <!-- 看板卡片精简查询：单次 JOIN 查出所有卡片渲染字段，避免循环分页 + 逐页富化 -->
     <!-- REQ-274: 看板卡片查询支持手动排序感知的截断策略 -->
     <select id="selectBoardCards" resultType="com.trackflow.issue.mapper.result.BoardCardRow">
