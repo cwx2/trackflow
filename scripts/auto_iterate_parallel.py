@@ -72,6 +72,7 @@ SKILLS = {
     "tech-requirement": {"path": ".kiro/skills/tech-requirement/SKILL.md"},
     "review-requirement": {"path": ".kiro/skills/review-requirement/SKILL.md"},
     "fix-requirement": {"path": ".kiro/skills/fix-requirement/SKILL.md"},
+    "fix-requirement-auto": {"path": ".kiro/skills/fix-requirement-auto/SKILL.md"},
     "e2e-test": {"path": ".kiro/skills/e2e-test/SKILL.md"},
     "code-review": {"path": ".kiro/skills/code-review/SKILL.md"},
 }
@@ -295,45 +296,75 @@ def run_kiro_resume(session_id: str, prompt: str, label: str) -> tuple[bool, str
         return False, str(e)
 
 
+def parse_fix_result(output: str) -> tuple[bool, bool, str]:
+    """
+    解析 fix-requirement-auto 的输出。
+    返回 (done, blocked, detail)
+    - done=True: 输出了 FIX_DONE
+    - blocked=True: 输出了 FIX_BLOCKED
+    """
+    lines = output.strip().split("\n")
+    for line in reversed(lines):
+        line = line.strip()
+        if line == "FIX_DONE":
+            return True, False, ""
+        if line.startswith("FIX_BLOCKED:"):
+            reason = line[len("FIX_BLOCKED:"):].strip()
+            return False, True, reason
+    # 没有明确标记——进程返回 0 但没有标记，当作完成
+    return False, False, "\n".join(lines[-10:])
+
+
 def parse_test_result(output: str) -> tuple[bool, str]:
     """
-    解析测试输出，判断是否全部通过。
+    解析 e2e-test 的输出。
     返回 (all_passed, summary)
-
-    通过标准：
-    - 出现测试报告的 ✅ PASS 标记，且不存在 ❌ FAIL
-    - 用更具体的测试报告关键词避免误判修需求过程中的 ❌/✅
+    优先识别机器标记 TEST_RESULT: PASS/FAIL，降级时用内容关键词。
     """
-    # 用测试报告特有的模式判断，避免被 fix-requirement 过程中的符号干扰
-    # e2e-test SKILL 输出的报告格式固定含 "PASS" / "FAIL" / "测试报告"
+    lines = output.strip().split("\n")
+    # 优先检查最后几行的机器标记
+    for line in reversed(lines[-5:]):
+        line = line.strip()
+        if line == "TEST_RESULT: PASS":
+            return True, "\n".join(lines[-10:])
+        if line == "TEST_RESULT: FAIL":
+            return False, "\n".join(lines[-30:])
+
+    # 降级：关键词检测（保留兼容性）
     in_test_report = "测试报告" in output or "TrackFlow 测试报告" in output or "## 测试结果" in output
     has_fail = ("❌" in output and "FAIL" in output) or ("❌" in output and "失败" in output and in_test_report)
     has_pass = ("✅" in output and "PASS" in output) or (in_test_report and "✅" in output and not has_fail)
 
-    lines = output.strip().split("\n")
     if has_fail:
         return False, "\n".join(lines[-30:])
     if has_pass:
         return True, "\n".join(lines[-10:])
-    # 没有明确的测试报告标记，认为失败（测试可能根本没跑起来）
     return False, "\n".join(lines[-20:])
 
 
 def parse_review_result(output: str) -> tuple[bool, str]:
     """
-    解析 code review 输出，判断是否可以合并。
+    解析 code-review 的输出。
     返回 (can_merge, summary)
-    通过标准：出现 🟢 或 "可以合并"，且无 MUST 问题
+    优先识别机器标记 REVIEW_RESULT: PASS/FAIL，降级时用内容关键词。
     """
+    lines = output.strip().split("\n")
+    # 优先检查最后几行的机器标记
+    for line in reversed(lines[-5:]):
+        line = line.strip()
+        if line == "REVIEW_RESULT: PASS":
+            return True, "\n".join(lines[-10:])
+        if line == "REVIEW_RESULT: FAIL":
+            return False, "\n".join(lines[-40:])
+
+    # 降级：关键词检测
     can_merge = "🟢" in output or "可以合并" in output
     has_must = "MUST" in output and "❌" in output
-    lines = output.strip().split("\n")
     summary = "\n".join(lines[-40:])
     if has_must:
         return False, summary
     if can_merge:
         return True, summary
-    # 模糊情况：有 🟡 修改后合并也算过（SHOULD 级不阻塞）
     if "🟡" in output or "修改后合并" in output:
         return True, summary
     return False, summary
@@ -432,7 +463,7 @@ def consume_one(worker_id: str) -> str | None:
     if req_file is None:
         return None
 
-    skill_info = SKILLS["fix-requirement"]
+    skill_info = SKILLS["fix-requirement-auto"]
     actual_path = f"requirements/working/{worker_id}/{req_file.name}"
     title = extract_title(req_file)
     label = worker_id
@@ -441,11 +472,20 @@ def consume_one(worker_id: str) -> str | None:
 
     # ── 步骤 1：修需求（新会话）──
     fix_prompt = (
-        f"[使用 skill: fix-requirement] "
+        f"[使用 skill: fix-requirement-auto] "
         f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
         f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
     )
     success, fix_output = run_kiro(fix_prompt, label)
+
+    # 检查 FIX_BLOCKED（需求不合理）
+    _, blocked, block_reason = parse_fix_result(fix_output)
+    if blocked:
+        log.warning(f"[{label}] ⛔ {req_file.name} 被拦截: {block_reason}")
+        if req_file.exists():
+            shutil.move(str(req_file), str(REJECTED_DIR / req_file.name))
+        return req_file.name  # 归档但标记为拦截，不重试
+
     if not success:
         if req_file.exists():
             shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
@@ -498,19 +538,19 @@ def consume_one(worker_id: str) -> str | None:
             feedback_prompt = (
                 f"端到端测试失败（第 {test_round} 轮），请根据以下失败信息修复代码：\n\n"
                 f"```\n{test_summary}\n```\n\n"
-                f"修复后，测试子代理会重新验证。请完成修复并确认已 git commit。"
+                f"修复完成后请输出 FIX_DONE。"
             )
             if session_id:
-                run_kiro_resume(session_id, feedback_prompt, f"{label}-fix{test_round}")
+                _, fb_out = run_kiro_resume(session_id, feedback_prompt, f"{label}-fix{test_round}")
             else:
                 # 无 session_id 降级为新会话
                 fallback_prompt = (
-                    f"[使用 skill: fix-requirement] "
+                    f"[使用 skill: fix-requirement-auto] "
                     f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
                     f"继续处理需求 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n"
                     f"```\n{test_summary}\n```"
                 )
-                run_kiro(fallback_prompt, f"{label}-fix{test_round}")
+                _, fb_out = run_kiro(fallback_prompt, f"{label}-fix{test_round}")
 
     if not test_passed:
         log.warning(f"[{label}] ⚠️ 测试经 {MAX_TEST_RETRIES} 轮仍未通过，继续审核（记录问题）")
@@ -552,13 +592,13 @@ def consume_one(worker_id: str) -> str | None:
             feedback_prompt = (
                 f"代码审核发现 MUST 级问题（第 {review_round} 轮），请修复以下问题后重新 commit：\n\n"
                 f"```\n{review_summary}\n```\n\n"
-                f"修复完成后审核子代理会重新验证。"
+                f"修复完成后请输出 FIX_DONE。"
             )
             if session_id:
                 run_kiro_resume(session_id, feedback_prompt, f"{label}-fixr{review_round}")
             else:
                 fallback_prompt = (
-                    f"[使用 skill: fix-requirement] "
+                    f"[使用 skill: fix-requirement-auto] "
                     f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
                     f"继续处理需求 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n"
                     f"```\n{review_summary}\n```"
