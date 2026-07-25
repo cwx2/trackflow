@@ -1816,6 +1816,7 @@ public class ProjectService {
     /**
      * 获取项目概览统计数据
      */
+    @Transactional(readOnly = true)
     public ProjectStatisticsVO getProjectStatistics(Long projectId) {
         var vo = new ProjectStatisticsVO();
 
