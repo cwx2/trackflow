@@ -4,6 +4,7 @@ import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.entity.NotificationEventType;
 import com.trackflow.integration.entity.NotificationPreference;
+import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
@@ -162,10 +163,10 @@ public class NotificationMailScheduler {
                     int totalChanges = emailAllowed.stream()
                             .mapToInt(n -> n.getAggregationCount() != null ? n.getAggregationCount() : 1)
                             .sum();
-                    htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges, resourceFullUrl);
+                    htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges, resourceFullUrl, latest.getReason());
                 } else {
                     // 单条通知 → 普通邮件
-                    htmlContent = buildNotificationEmailContent(latest.getTitle(), latest.getContent(), resourceFullUrl);
+                    htmlContent = buildNotificationEmailContent(latest.getTitle(), latest.getContent(), resourceFullUrl, latest.getReason());
                 }
 
                 emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
@@ -190,8 +191,9 @@ public class NotificationMailScheduler {
     /**
      * 构建普通通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildNotificationEmailContent(String title, String content, String resourceUrl) {
+    private String buildNotificationEmailContent(String title, String content, String resourceUrl, String reason) {
         String actionButton = buildActionButton(resourceUrl);
+        String reasonText = buildReasonText(reason);
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 12px 0;">%s</h3>
@@ -199,17 +201,18 @@ public class NotificationMailScheduler {
                   %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
-                    此邮件由 TrackFlow 项目管理系统自动发送。您可以在个人通知偏好中关闭邮件通知。
+                    %s您可以在个人通知偏好中关闭邮件通知。
                   </p>
                 </div>
-                """, escapeHtml(title), escapeHtml(content), actionButton);
+                """, escapeHtml(title), escapeHtml(content), actionButton, reasonText);
     }
 
     /**
      * 构建聚合/汇总通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildAggregatedEmailContent(String title, String content, int totalChanges, String resourceUrl) {
+    private String buildAggregatedEmailContent(String title, String content, int totalChanges, String resourceUrl, String reason) {
         String actionButton = buildActionButton(resourceUrl);
+        String reasonText = buildReasonText(reason);
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 8px 0;">%s</h3>
@@ -218,11 +221,10 @@ public class NotificationMailScheduler {
                   %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
-                    此邮件由 TrackFlow 项目管理系统自动发送。聚合窗口内的多次变更已合并为此封邮件。
-                    您可以在个人通知偏好中关闭邮件通知。
+                    %s聚合窗口内的多次变更已合并为此封邮件。您可以在个人通知偏好中关闭邮件通知。
                   </p>
                 </div>
-                """, escapeHtml(title), totalChanges, escapeHtml(content), actionButton);
+                """, escapeHtml(title), totalChanges, escapeHtml(content), actionButton, reasonText);
     }
 
     /**
@@ -237,6 +239,26 @@ public class NotificationMailScheduler {
                     <a href="%s" style="display: inline-block; padding: 10px 20px; background-color: #0969da; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500;">在 TrackFlow 中查看</a>
                   </p>
                 """, resourceUrl);
+    }
+
+    /**
+     * 根据通知原因构建用户友好的通知原因说明文字（用于邮件 footer）。
+     * <p>
+     * 参考 YouTrack 邮件底部的"You receive this email because..."说明。
+     *
+     * @param reason Notification.reason 字段值（NotificationReason 枚举名，如 "assigned"）
+     * @return 通知原因说明 HTML 文本片段，末尾带换行；若无法解析则返回通用说明
+     */
+    private String buildReasonText(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "你收到此邮件，因为你关注了相关工单或项目。<br/>";
+        }
+        try {
+            NotificationReason notificationReason = NotificationReason.valueOf(reason);
+            return "你收到此邮件，因为" + notificationReason.getDisplayLabel() + "。<br/>";
+        } catch (IllegalArgumentException e) {
+            return "你收到此邮件，因为你关注了相关工单或项目。<br/>";
+        }
     }
 
     private String escapeHtml(String text) {
