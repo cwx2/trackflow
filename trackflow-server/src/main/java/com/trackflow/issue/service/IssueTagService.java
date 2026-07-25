@@ -6,6 +6,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.CreateTagDTO;
+import com.trackflow.issue.dto.TagFavoriteCountRow;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueTag;
 import com.trackflow.issue.entity.IssueTagRelation;
@@ -14,6 +15,7 @@ import com.trackflow.issue.mapper.IssueTagMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.UserTagFavoriteMapper;
+import com.trackflow.issue.vo.TagFavoriteManagementVO;
 import com.trackflow.issue.vo.TagPanelItemVO;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -171,18 +172,18 @@ public class IssueTagService {
      * 获取用户收藏的标签列表（含匹配工单数量）
      */
     public List<TagPanelItemVO> getFavoriteTagsPanel(Long userId, Long projectId) {
-        List<Map<String, Object>> rows;
+        List<TagFavoriteCountRow> rows;
         if (projectId != null) {
             rows = tagFavoriteMapper.selectFavoriteTagsWithCountByProject(userId, projectId);
         } else {
             rows = tagFavoriteMapper.selectFavoriteTagsWithCount(userId);
         }
         return rows.stream().map(row -> TagPanelItemVO.builder()
-                .id(String.valueOf(row.get("tag_id")))
-                .name((String) row.get("name"))
-                .color((String) row.get("color"))
-                .projectId(row.get("project_id") != null ? String.valueOf(row.get("project_id")) : null)
-                .count(((Number) row.get("issue_count")).longValue())
+                .id(String.valueOf(row.getTagId()))
+                .name(row.getName())
+                .color(row.getColor())
+                .projectId(row.getProjectId() != null ? String.valueOf(row.getProjectId()) : null)
+                .count(row.getIssueCount() != null ? row.getIssueCount() : 0L)
                 .build()
         ).toList();
     }
@@ -266,7 +267,7 @@ public class IssueTagService {
      * 获取所有可收藏的标签（用于管理收藏面板）
      * 返回用户可访问项目下的所有标签，标记是否已收藏
      */
-    public List<Map<String, Object>> listAllTagsForFavoriteManagement(Long userId, List<Long> accessibleProjectIds) {
+    public List<TagFavoriteManagementVO> listAllTagsForFavoriteManagement(Long userId, List<Long> accessibleProjectIds) {
         if (accessibleProjectIds == null || accessibleProjectIds.isEmpty()) {
             return List.of();
         }
@@ -285,14 +286,13 @@ public class IssueTagService {
         );
         var favTagIds = favorites.stream().map(UserTagFavorite::getTagId).collect(java.util.stream.Collectors.toSet());
 
-        return allTags.stream().map(tag -> {
-            Map<String, Object> item = new java.util.LinkedHashMap<>();
-            item.put("id", String.valueOf(tag.getId()));
-            item.put("name", tag.getName());
-            item.put("color", tag.getColor());
-            item.put("projectId", String.valueOf(tag.getProjectId()));
-            item.put("favorited", favTagIds.contains(tag.getId()));
-            return item;
-        }).toList();
+        return allTags.stream().map(tag -> TagFavoriteManagementVO.builder()
+                .id(String.valueOf(tag.getId()))
+                .name(tag.getName())
+                .color(tag.getColor())
+                .projectId(String.valueOf(tag.getProjectId()))
+                .favorited(favTagIds.contains(tag.getId()))
+                .build()
+        ).toList();
     }
 }

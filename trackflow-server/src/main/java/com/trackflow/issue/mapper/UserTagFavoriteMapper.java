@@ -1,13 +1,13 @@
 package com.trackflow.issue.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.trackflow.issue.dto.TagFavoriteCountRow;
 import com.trackflow.issue.entity.UserTagFavorite;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface UserTagFavoriteMapper extends BaseMapper<UserTagFavorite> {
@@ -30,7 +30,7 @@ public interface UserTagFavoriteMapper extends BaseMapper<UserTagFavorite> {
         WHERE f.user_id = #{userId}
         ORDER BY f.sort_order ASC, f.created_at ASC
     """)
-    List<Map<String, Object>> selectFavoriteTagsWithCount(@Param("userId") Long userId);
+    List<TagFavoriteCountRow> selectFavoriteTagsWithCount(@Param("userId") Long userId);
 
     /**
      * 获取用户收藏标签及每个标签的工单匹配数量（限定项目范围）
@@ -51,5 +51,5 @@ public interface UserTagFavoriteMapper extends BaseMapper<UserTagFavorite> {
           AND t.project_id = #{projectId}
         ORDER BY f.sort_order ASC, f.created_at ASC
     """)
-    List<Map<String, Object>> selectFavoriteTagsWithCountByProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
+    List<TagFavoriteCountRow> selectFavoriteTagsWithCountByProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
 }

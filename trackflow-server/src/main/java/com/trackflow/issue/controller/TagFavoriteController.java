@@ -4,6 +4,7 @@ import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.dto.ReorderTagFavoritesDTO;
 import com.trackflow.issue.service.IssueTagService;
+import com.trackflow.issue.vo.TagFavoriteManagementVO;
 import com.trackflow.issue.vo.TagPanelItemVO;
 import com.trackflow.project.service.ProjectService;
 import jakarta.validation.Valid;
@@ -12,7 +13,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 标签收藏控制器 — 支持侧边栏 Tags 分区
@@ -75,7 +75,7 @@ public class TagFavoriteController {
      * 返回用户可访问项目下的所有标签，标记是否已收藏
      */
     @GetMapping("/available")
-    public R<List<Map<String, Object>>> listAvailable(
+    public R<List<TagFavoriteManagementVO>> listAvailable(
             @RequestParam(value = "projectId", required = false) Long projectId) {
         Long userId = SecurityUtils.getCurrentUserId();
         List<Long> accessibleProjectIds;
