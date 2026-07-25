@@ -363,6 +363,8 @@ public class NotificationMailScheduler {
             case "project_archived", "project_restored", "project_deleted" -> NotificationEventType.PROJECT_LIFECYCLE;
             case "due_date_alert" -> NotificationEventType.DUE_DATE_APPROACHING;
             case "overdue_alert" -> NotificationEventType.OVERDUE;
+            case "issue_voted" -> NotificationEventType.ISSUE_VOTED;
+            case "issue_spent_time" -> NotificationEventType.ISSUE_SPENT_TIME;
             default -> null; // 新增的通知类型未映射时，默认允许发邮件
         };
     }
