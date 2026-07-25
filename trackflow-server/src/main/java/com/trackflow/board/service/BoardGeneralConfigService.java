@@ -63,7 +63,12 @@ public class BoardGeneralConfigService {
      * 获取项目的看板基本设置。
      * 如果没有配置记录，返回默认配置（不写入数据库）。
      * 同时计算当前用户的 canView / canEdit 权限。
+     * <p>
+     * 性能说明：board_general_config 表仅查询 1 次，查到的对象直接传给
+     * {@link BoardAccessService#computePermissions} 以避免重复 SELECT，
+     * 用户角色查询也在一次权限计算中完成。
      */
+    @Transactional(readOnly = true)
     public BoardGeneralConfigVO getGeneralConfig(Long projectId) {
         BoardGeneralConfig config = boardGeneralConfigMapper.selectOne(
                 new LambdaQueryWrapper<BoardGeneralConfig>()
@@ -89,9 +94,10 @@ public class BoardGeneralConfigService {
             vo.setColumnField("status");
         }
 
-        // 计算当前用户的看板权限
-        vo.setCurrentUserCanView(boardAccessService.hasViewAccess(projectId));
-        vo.setCurrentUserCanEdit(boardAccessService.hasEditAccess(projectId));
+        // 一次性计算当前用户的看板权限（复用已查到的 config，避免 board_general_config 表被重复查询）
+        BoardAccessService.BoardPermissions permissions = boardAccessService.computePermissions(projectId, config);
+        vo.setCurrentUserCanView(permissions.canView());
+        vo.setCurrentUserCanEdit(permissions.canEdit());
 
         // 附加看板配置版本号（用于乐观锁）
         vo.setConfigVersion(boardConfigVersionService.getCurrentVersion(projectId));
