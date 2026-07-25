@@ -391,6 +391,7 @@
                     'kanban-card--selected': selectedIds.has(issue.id)
                   }
                 ]"
+                :style="getCardProjectColorStyle(issue)"
                 role="button"
                 tabindex="0"
                 :draggable="isCardDraggable(issue)"
@@ -639,6 +640,7 @@
                           'kanban-card--selected': selectedIds.has(issue.id)
                         }
                       ]"
+                      :style="getCardProjectColorStyle(issue)"
                       role="button"
                       tabindex="0"
                       :draggable="isCardDraggable(issue)"
@@ -1100,6 +1102,35 @@ function isCardFieldVisible(field: string): boolean {
   return cardConfig.value.visibleFields.includes(field)
 }
 
+/** 预定义项目颜色调色板（用于"按项目着色"方案） */
+const PROJECT_COLOR_PALETTE = [
+  '#0ea5e9', // 天蓝
+  '#10b981', // 翠绿
+  '#f59e0b', // 琥珀
+  '#8b5cf6', // 紫色
+  '#ef4444', // 红色
+  '#f97316', // 橙色
+  '#14b8a6', // 青色
+  '#ec4899', // 粉色
+  '#6366f1', // 靛蓝
+  '#84cc16', // 黄绿
+]
+
+/**
+ * 根据 projectId 哈希选取调色板中的颜色，确保同一项目始终显示同一颜色。
+ * 使用简单字符串哈希（djb2 变体）取模颜色数量。
+ */
+function getProjectColor(projectId: string): string {
+  if (!projectId) return PROJECT_COLOR_PALETTE[0]
+  let hash = 5381
+  for (let i = 0; i < projectId.length; i++) {
+    hash = ((hash << 5) + hash) + projectId.charCodeAt(i)
+    hash = hash & hash // 转为 32 位整数
+  }
+  const index = Math.abs(hash) % PROJECT_COLOR_PALETTE.length
+  return PROJECT_COLOR_PALETTE[index]
+}
+
 /** 获取卡片的颜色方案 CSS class */
 function getCardColorClass(issue: BoardIssue): string {
   const scheme = cardConfig.value.colorScheme
@@ -1112,7 +1143,20 @@ function getCardColorClass(issue: BoardIssue): string {
     const t = (issue.issueType || 'task').toLowerCase()
     return `kanban-card--color-type-${t}`
   }
+  if (scheme === 'project') {
+    return `kanban-card--color-project`
+  }
   return ''
+}
+
+/**
+ * 获取卡片"按项目着色"时的内联样式（动态颜色，无法用静态 CSS class 实现）。
+ * 仅当 colorScheme === 'project' 时返回有效样式，其他情况返回空对象。
+ */
+function getCardProjectColorStyle(issue: BoardIssue): Record<string, string> {
+  if (cardConfig.value.colorScheme !== 'project') return {}
+  const color = getProjectColor(issue.projectId || '')
+  return { borderLeftColor: color }
 }
 
 /** 获取卡片截止日期的状态 class */
@@ -5500,6 +5544,11 @@ onUnmounted(() => {
 }
 .kanban-card--color-type-epic {
   border-left: 3px solid #f59e0b;
+}
+
+/* Project color scheme: width set by class, actual color via inline style */
+.kanban-card--color-project {
+  border-left: 3px solid transparent;
 }
 
 /* ===== Card meta fields row ===== */

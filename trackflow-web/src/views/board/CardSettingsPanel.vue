@@ -7,9 +7,9 @@
     <!-- 卡片字段选择 -->
     <div class="section">
       <div class="section-title">显示字段</div>
-      <div class="section-desc">选择看板卡片上要展示的信息字段</div>
+      <div class="section-desc">选择看板卡片上要展示的信息字段，并为每个字段选择显示格式</div>
       <div class="field-list">
-        <label
+        <div
           v-for="field in availableFields"
           :key="field.key"
           class="field-item"
@@ -21,7 +21,23 @@
           />
           <span class="field-icon">{{ field.icon }}</span>
           <span class="field-label">{{ field.label }}</span>
-        </label>
+          <!-- Display mode toggle (Full name / Initial) — 仅字段已勾选时可操作 -->
+          <div
+            v-if="selectedFields.has(field.key)"
+            class="field-display-mode"
+          >
+            <a-radio-group
+              :model-value="getFieldDisplayMode(field.key)"
+              size="mini"
+              type="button"
+              @change="(val: string) => setFieldDisplayMode(field.key, val as 'full_name' | 'initial')"
+            >
+              <a-radio value="full_name" title="显示完整名称">Full name</a-radio>
+              <a-radio value="initial" title="仅显示首字母缩写">Initial</a-radio>
+            </a-radio-group>
+          </div>
+          <div v-else class="field-display-mode-placeholder"></div>
+        </div>
       </div>
     </div>
 
@@ -101,6 +117,12 @@
             <span class="scheme-desc">卡片不添加额外颜色</span>
           </div>
         </a-radio>
+        <a-radio value="project">
+          <div class="scheme-option">
+            <span class="scheme-name">按项目着色</span>
+            <span class="scheme-desc">多项目看板中，每个项目用不同颜色标识，快速区分卡片来源</span>
+          </div>
+        </a-radio>
         <a-radio value="priority">
           <div class="scheme-option">
             <span class="scheme-name">按优先级着色</span>
@@ -135,7 +157,8 @@
         </div>
         <div class="preview-footer">
           <span v-if="selectedFields.has('assignee')" class="preview-assignee">
-            <span class="preview-avatar">张</span>
+            <span v-if="getFieldDisplayMode('assignee') === 'initial'" class="preview-avatar">张</span>
+            <span v-else class="preview-assignee-name">张三</span>
           </span>
         </div>
       </div>
@@ -160,6 +183,7 @@ const props = defineProps<{
   projectId: string
   currentEstimationFieldId?: string | null
   originalEstimationFieldId?: string | null
+  fieldDisplayModes?: Record<string, 'full_name' | 'initial'> | null
 }>()
 
 const emit = defineEmits<{
@@ -167,6 +191,7 @@ const emit = defineEmits<{
   'update:colorScheme': [scheme: string]
   'update:currentEstimationFieldId': [id: string | null]
   'update:originalEstimationFieldId': [id: string | null]
+  'update:fieldDisplayModes': [modes: Record<string, 'full_name' | 'initial'> | null]
 }>()
 
 const availableFields: FieldOption[] = [
@@ -183,6 +208,9 @@ const selectedFields = ref<Set<string>>(new Set(props.visibleFields))
 const selectedColorScheme = ref(props.colorScheme)
 const selectedCurrentEstimationFieldId = ref<string | undefined | null>(props.currentEstimationFieldId)
 const selectedOriginalEstimationFieldId = ref<string | undefined | null>(props.originalEstimationFieldId)
+const selectedFieldDisplayModes = ref<Record<string, 'full_name' | 'initial'>>(
+  props.fieldDisplayModes ? { ...props.fieldDisplayModes } : {}
+)
 
 // 项目自定义字段列表（数值类型）
 const projectFields = ref<CustomFieldDefinitionVO[]>([])
@@ -235,6 +263,10 @@ watch(() => props.originalEstimationFieldId, (val) => {
   selectedOriginalEstimationFieldId.value = val
 })
 
+watch(() => props.fieldDisplayModes, (val) => {
+  selectedFieldDisplayModes.value = val ? { ...val } : {}
+})
+
 // Emit changes
 watch(selectedColorScheme, (scheme) => {
   emit('update:colorScheme', scheme)
@@ -253,6 +285,24 @@ function toggleField(key: string, checked: boolean) {
   emit('update:visibleFields', Array.from(newSet))
 }
 
+/** 获取字段的显示模式，未配置时默认 full_name */
+function getFieldDisplayMode(fieldKey: string): 'full_name' | 'initial' {
+  return selectedFieldDisplayModes.value[fieldKey] ?? 'full_name'
+}
+
+/** 设置字段的显示模式并触发更新 */
+function setFieldDisplayMode(fieldKey: string, mode: 'full_name' | 'initial') {
+  const newModes = { ...selectedFieldDisplayModes.value }
+  if (mode === 'full_name') {
+    // full_name 是默认值，可以直接删除 key 以节省存储
+    delete newModes[fieldKey]
+  } else {
+    newModes[fieldKey] = mode
+  }
+  selectedFieldDisplayModes.value = newModes
+  emit('update:fieldDisplayModes', Object.keys(newModes).length > 0 ? newModes : null)
+}
+
 function onCurrentEstimationFieldChange(val: string | null | undefined) {
   emit('update:currentEstimationFieldId', val ?? null)
 }
@@ -264,6 +314,7 @@ function onOriginalEstimationFieldChange(val: string | null | undefined) {
 const previewColorClass = computed(() => {
   if (selectedColorScheme.value === 'priority') return 'card-preview--priority'
   if (selectedColorScheme.value === 'type') return 'card-preview--type'
+  if (selectedColorScheme.value === 'project') return 'card-preview--project'
   return ''
 })
 </script>
@@ -463,6 +514,10 @@ const previewColorClass = computed(() => {
 
 .card-preview--type {
   border-left: 3px solid #6366f1;
+
+.card-preview--project {
+  border-left: 3px solid #0ea5e9;
+}
 }
 
 .preview-header {
@@ -672,6 +727,10 @@ const previewColorClass = computed(() => {
   border-left: 3px solid #6366f1;
 }
 
+
+.card-preview--project {
+  border-left: 3px solid #0ea5e9;
+}
 .preview-header {
   display: flex;
   align-items: center;
