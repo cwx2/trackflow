@@ -170,4 +170,28 @@ public interface UserGroupRoleMapper extends BaseMapper<UserGroupRole> {
             )
             """)
     boolean hasGlobalScopePermissionViaGroups(@Param("userId") Long userId, @Param("permission") String permission);
+
+    /**
+     * 查询用户通过用户组在指定项目中获得的角色代码列表（去重）。
+     * <p>
+     * 匹配两种情况：
+     * 1. ugr.project_id = 指定项目（精确绑定到该项目的用户组角色）
+     * 2. ugr.project_id IS NULL 且 role_type = 'project'（全局作用域，对所有项目生效）
+     * <p>
+     * 用于看板权限判断——与 projectMemberMapper.selectRoleCodesByUserAndProject() 的结果合并，
+     * 以覆盖通过用户组获权的成员。
+     */
+    @Select("""
+            SELECT DISTINCT sr.code
+            FROM user_group_role ugr
+            INNER JOIN user_group_member ugm ON ugm.group_id = ugr.group_id
+            INNER JOIN sys_role sr ON sr.id = ugr.role_id
+            WHERE ugm.user_id = #{userId}
+              AND sr.role_type = 'project'
+              AND (
+                ugr.project_id = #{projectId}
+                OR ugr.project_id IS NULL
+              )
+            """)
+    List<String> selectRoleCodesByUserAndProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
 }

@@ -37,6 +37,9 @@
 
     <!-- 导航到通知设置 -->
     <div class="settings-footer">
+      <router-link to="/settings/security" class="footer-link">
+        账号安全（API Key） →
+      </router-link>
       <router-link to="/settings/notifications" class="footer-link">
         通知设置 →
       </router-link>
@@ -146,6 +149,9 @@ function onThemeChange(val: string) {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--tf-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .footer-link {

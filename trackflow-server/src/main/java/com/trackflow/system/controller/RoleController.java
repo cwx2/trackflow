@@ -7,8 +7,11 @@ import com.trackflow.common.util.PageHelper;
 import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.dto.CloneRoleDTO;
 import com.trackflow.system.dto.CreateRoleDTO;
+import com.trackflow.system.dto.MergeRolesDTO;
 import com.trackflow.system.dto.UpdateRoleDTO;
 import com.trackflow.system.entity.SysRole;
+import com.trackflow.system.entity.PermissionImplication;
+import com.trackflow.system.service.PermissionImplicationService;
 import com.trackflow.system.service.RoleService;
 import com.trackflow.system.vo.PermissionGroupVO;
 import com.trackflow.system.vo.RoleUsersVO;
@@ -33,6 +36,7 @@ public class RoleController {
 
     private final RoleService roleService;
     private final RoleConverter roleConverter;
+    private final PermissionImplicationService permissionImplicationService;
 
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
@@ -44,6 +48,23 @@ public class RoleController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<RoleVO> clone(@PathVariable("id") Long id, @Valid @RequestBody CloneRoleDTO dto) {
         return R.ok(roleConverter.toVO(roleService.clone(id, dto.getName(), dto.getCode())));
+    }
+
+    /**
+     * 合并角色 — 将多个源角色合并到一个目标角色。
+     * <p>
+     * 参考 YouTrack Merge Roles 功能：
+     * - 目标角色继承所有源角色的权限（并集）
+     * - 所有源角色的用户/组分配被迁移到目标角色
+     * - 源角色被删除
+     * - 内置角色（builtin=true）不可作为源角色被合并删除
+     * </p>
+     */
+    @PostMapping("/merge")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<RoleVO> merge(@Valid @RequestBody MergeRolesDTO dto) {
+        return R.ok(roleConverter.toVO(
+                roleService.mergeRoles(dto.getSourceRoleIds(), dto.getTargetRoleId())));
     }
 
     @GetMapping
@@ -139,5 +160,14 @@ public class RoleController {
     @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
     public R<List<PermissionGroupVO>> getPermissionDefinitions() {
         return R.ok(roleService.getAllPermissionGroups());
+    }
+
+    /**
+     * 获取所有权限隐含关系（用于前端权限分配 UI 自动勾选/取消）
+     */
+    @GetMapping("/permission-implications")
+    @PreAuthorize("@perm.checkGlobal('system:manage_roles')")
+    public R<List<PermissionImplication>> getPermissionImplications() {
+        return R.ok(permissionImplicationService.getAllImplications());
     }
 }

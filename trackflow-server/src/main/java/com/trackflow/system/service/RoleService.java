@@ -220,6 +220,143 @@ public class RoleService {
     }
 
     /**
+     * 合并角色：将源角色的权限与用户分配合并到目标角色，然后删除源角色。
+     * <p>
+     * 业务流程（参考 YouTrack Merge Roles）：
+     * 1. 目标角色继承所有源角色的权限（并集）
+     * 2. 所有源角色的用户/组分配被迁移到目标角色
+     * 3. 源角色被删除
+     * 4. 失效所有受影响用户的权限缓存
+     * </p>
+     *
+     * @param sourceRoleIds 源角色 ID 列表（将被合并删除）
+     * @param targetRoleId  目标角色 ID（保留）
+     * @return 合并后的目标角色
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SysRole mergeRoles(List<Long> sourceRoleIds, Long targetRoleId) {
+        // 1. 校验：目标角色不能在源角色列表中
+        if (sourceRoleIds.contains(targetRoleId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "目标角色不能同时是源角色");
+        }
+
+        // 2. 查询目标角色
+        SysRole targetRole = getById(targetRoleId);
+
+        // 3. 查询所有源角色，并验证
+        List<SysRole> sourceRoles = new ArrayList<>();
+        for (Long sourceId : sourceRoleIds) {
+            SysRole sourceRole = getById(sourceId);
+            // 内置角色不能作为源角色被合并删除
+            if (Boolean.TRUE.equals(sourceRole.getBuiltin())) {
+                throw new BusinessException(ErrorCode.BUILTIN_ROLE_PROTECTED,
+                        "内置角色 '" + sourceRole.getName() + "' 不能作为源角色被合并删除");
+            }
+            sourceRoles.add(sourceRole);
+        }
+
+        // 4. 提权保护：计算合并后的最终权限集，检查操作者是否持有所有权限
+        Set<String> targetPermissions = new HashSet<>(getPermissions(targetRoleId));
+        Set<String> allSourcePermissions = new HashSet<>();
+        for (Long sourceId : sourceRoleIds) {
+            allSourcePermissions.addAll(getPermissions(sourceId));
+        }
+        // 合并后的完整权限集 = 目标权限 ∪ 所有源权限
+        Set<String> mergedPermissions = new HashSet<>(targetPermissions);
+        mergedPermissions.addAll(allSourcePermissions);
+
+        // 检查操作者是否有权授予所有最终权限
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        checkPrivilegeEscalation(currentUserId,
+                new ArrayList<>(targetPermissions),
+                new ArrayList<>(mergedPermissions));
+
+        // 5. 合并权限（并集）：将源角色中有但目标角色中没有的权限添加到目标角色
+        Set<String> newPermissions = new HashSet<>(allSourcePermissions);
+        newPermissions.removeAll(targetPermissions); // 只保留目标角色缺少的
+        for (String permission : newPermissions) {
+            RolePermission rp = new RolePermission();
+            rp.setRoleId(targetRoleId);
+            rp.setPermission(permission);
+            rolePermissionMapper.insert(rp);
+        }
+
+        // 6. 迁移 project_member 的 role_id
+        Set<Long> affectedUserIds = new HashSet<>();
+        for (Long sourceId : sourceRoleIds) {
+            // 获取受影响的用户
+            List<ProjectMember> members = projectMemberMapper.selectList(
+                    new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getRoleId, sourceId)
+            );
+            for (ProjectMember member : members) {
+                affectedUserIds.add(member.getUserId());
+                // 检查是否已存在相同 user+project+targetRole 的记录（避免重复）
+                Long existCount = projectMemberMapper.selectCount(
+                        new LambdaQueryWrapper<ProjectMember>()
+                                .eq(ProjectMember::getUserId, member.getUserId())
+                                .eq(ProjectMember::getProjectId, member.getProjectId())
+                                .eq(ProjectMember::getRoleId, targetRoleId)
+                );
+                if (existCount == 0) {
+                    // 更新为目标角色
+                    member.setRoleId(targetRoleId);
+                    projectMemberMapper.updateById(member);
+                } else {
+                    // 已存在则直接删除源记录
+                    projectMemberMapper.deleteById(member.getId());
+                }
+            }
+        }
+
+        // 7. 迁移 user_role（全局角色分配）
+        for (Long sourceId : sourceRoleIds) {
+            List<UserRole> userRoles = userRoleMapper.selectList(
+                    new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, sourceId)
+            );
+            for (UserRole userRole : userRoles) {
+                affectedUserIds.add(userRole.getUserId());
+                Long existCount = userRoleMapper.selectCount(
+                        new LambdaQueryWrapper<UserRole>()
+                                .eq(UserRole::getUserId, userRole.getUserId())
+                                .eq(UserRole::getRoleId, targetRoleId)
+                );
+                if (existCount == 0) {
+                    userRole.setRoleId(targetRoleId);
+                    userRoleMapper.updateById(userRole);
+                } else {
+                    userRoleMapper.deleteById(userRole.getId());
+                }
+            }
+        }
+
+        // 8. 删除源角色及其权限记录
+        for (Long sourceId : sourceRoleIds) {
+            rolePermissionMapper.delete(
+                    new LambdaQueryWrapper<RolePermission>().eq(RolePermission::getRoleId, sourceId)
+            );
+            roleMapper.deleteById(sourceId);
+        }
+
+        // 9. 失效所有受影响用户的权限缓存
+        for (Long userId : affectedUserIds) {
+            permissionService.invalidateUserPermissionCache(userId);
+        }
+
+        // 10. 审计日志
+        List<String> sourceNames = sourceRoles.stream()
+                .map(SysRole::getName)
+                .collect(Collectors.toList());
+        systemAuditService.log("merge_roles", "role", targetRoleId,
+                Map.of("targetName", targetRole.getName(),
+                        "sourceNames", String.join(", ", sourceNames),
+                        "sourceRoleIds", sourceRoleIds.toString(),
+                        "mergedPermissionCount", newPermissions.size(),
+                        "migratedUserCount", affectedUserIds.size()));
+
+        return getById(targetRoleId);
+    }
+
+    /**
      * 替换角色的所有权限。
      * <p>
      * 权限提权保护（参考 YouTrack）：

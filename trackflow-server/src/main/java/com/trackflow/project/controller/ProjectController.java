@@ -29,6 +29,7 @@ import com.trackflow.project.vo.ProjectCopySummaryVO;
 import com.trackflow.project.vo.ProjectDeletePreCheckVO;
 import com.trackflow.project.vo.ProjectDetailVO;
 import com.trackflow.project.vo.ProjectMemberVO;
+import com.trackflow.project.vo.ProjectMembersViewVO;
 import com.trackflow.project.vo.ProjectModulesVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
 import com.trackflow.project.vo.ProjectTrashSettingsVO;
@@ -219,6 +220,40 @@ public class ProjectController {
         AssignedIssueCountVO vo = new AssignedIssueCountVO();
         vo.setCount(count);
         return R.ok(vo);
+    }
+
+    // ========== 项目组成员管理（对标 YouTrack People 页面） ==========
+
+    /**
+     * 获取项目成员完整视图（含直接成员 + 用户组成员）
+     */
+    @GetMapping("/{id}/members-view")
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<ProjectMembersViewVO> listMembersView(@PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
+        return R.ok(projectService.listMembersFullView(projectId));
+    }
+
+    /**
+     * 添加用户组到项目团队
+     */
+    @PostMapping("/{id}/group-members")
+    @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
+    public R<Void> addGroupMember(@PathVariable("id") String id, @Valid @RequestBody AddGroupMemberDTO dto) {
+        Long projectId = projectService.resolveProjectId(id);
+        projectService.addGroupMember(projectId, dto);
+        return R.ok();
+    }
+
+    /**
+     * 从项目团队中移除用户组
+     */
+    @DeleteMapping("/{id}/group-members/{groupId}")
+    @PreAuthorize("@perm.checkProject(#id, 'project:manage_members')")
+    public R<Void> removeGroupMember(@PathVariable("id") String id, @PathVariable("groupId") Long groupId) {
+        Long projectId = projectService.resolveProjectId(id);
+        projectService.removeGroupMember(projectId, groupId);
+        return R.ok();
     }
 
     // ========== 项目活动日志 ==========

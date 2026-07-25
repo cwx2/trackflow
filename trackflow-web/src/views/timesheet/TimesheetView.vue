@@ -857,13 +857,22 @@ function closeDialog() {
 }
 
 async function saveEntry() {
-  if (!form.value.issueId || !form.value.workDate || !form.value.durationText) {
-    Message.warning('请填写工单、日期和时长')
-    return
+  // 根据 dateMode 分支校验日期字段
+  if (dateMode.value === 'single') {
+    if (!form.value.issueId || !form.value.workDate || !form.value.durationText) {
+      Message.warning('请填写工单、日期和时长')
+      return
+    }
+  } else {
+    // 日期范围模式
+    if (!form.value.issueId || !form.value.dateRange || !form.value.dateRange[0] || !form.value.dateRange[1] || !form.value.durationText) {
+      Message.warning('请填写工单、日期范围和时长')
+      return
+    }
   }
 
-  const duration = parseDuration(form.value.durationText)
-  if (!duration || duration <= 0) {
+  const totalDuration = parseDuration(form.value.durationText)
+  if (!totalDuration || totalDuration <= 0) {
     Message.warning('时长格式无效，请使用如 2h30m, 1h, 45m')
     return
   }
@@ -872,31 +881,62 @@ async function saveEntry() {
 
   saving.value = true
   try {
-    if (editingEntry.value) {
-      await timeEntryApi.update(editingEntry.value.id, {
-        issueId: form.value.issueId,
-        workDate: form.value.workDate,
-        duration,
-        startTime,
-        description: form.value.description || undefined,
-        attributeValues: Object.keys(formAttributeValues.value).length > 0
-          ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
-          : undefined
-      })
-      Message.success('工时已更新')
+    if (dateMode.value === 'single') {
+      // 单一日期模式 - 使用现有逻辑
+      if (editingEntry.value) {
+        await timeEntryApi.update(editingEntry.value.id, {
+          issueId: form.value.issueId,
+          workDate: form.value.workDate,
+          duration: totalDuration,
+          startTime,
+          description: form.value.description || undefined,
+          attributeValues: Object.keys(formAttributeValues.value).length > 0
+            ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
+            : undefined
+        })
+        Message.success('工时已更新')
+      } else {
+        await timeEntryApi.create({
+          issueId: form.value.issueId,
+          workDate: form.value.workDate,
+          duration: totalDuration,
+          startTime,
+          description: form.value.description || undefined,
+          forUserId: form.value.forUserId || undefined,
+          attributeValues: Object.keys(formAttributeValues.value).length > 0
+            ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
+            : undefined
+        })
+        Message.success('工时已添加')
+      }
     } else {
-      await timeEntryApi.create({
-        issueId: form.value.issueId,
-        workDate: form.value.workDate,
-        duration,
-        startTime,
-        description: form.value.description || undefined,
-        forUserId: form.value.forUserId || undefined,
-        attributeValues: Object.keys(formAttributeValues.value).length > 0
-          ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
-          : undefined
-      })
-      Message.success('工时已添加')
+      // 日期范围模式 - 按工作日拆分创建独立记录
+      const workingDays = getWorkingDaysInRange(form.value.dateRange![0], form.value.dateRange![1])
+      if (workingDays.length === 0) {
+        Message.warning('所选日期范围内没有工作日')
+        return
+      }
+      // 将总时长按工作日数平均分配（取整到分钟）
+      const durationPerDay = Math.round(totalDuration / workingDays.length)
+      if (durationPerDay <= 0) {
+        Message.warning('每日分配时长过小，请增加总时长或缩小日期范围')
+        return
+      }
+      // 为每个工作日创建一条工时记录
+      for (const day of workingDays) {
+        await timeEntryApi.create({
+          issueId: form.value.issueId,
+          workDate: day,
+          duration: durationPerDay,
+          startTime,
+          description: form.value.description || undefined,
+          forUserId: form.value.forUserId || undefined,
+          attributeValues: Object.keys(formAttributeValues.value).length > 0
+            ? Object.fromEntries(Object.entries(formAttributeValues.value).filter(([, v]) => v))
+            : undefined
+        })
+      }
+      Message.success(`已为 ${workingDays.length} 个工作日分别创建工时记录`)
     }
     closeDialog()
     reloadCurrentTab()
@@ -905,6 +945,27 @@ async function saveEntry() {
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * 获取日期范围内的工作日列表（排除周六和周日）
+ */
+function getWorkingDaysInRange(startDateStr: string, endDateStr: string): string[] {
+  const workingDays: string[] = []
+  const start = new Date(startDateStr)
+  const end = new Date(endDateStr)
+  const current = new Date(start)
+
+  while (current <= end) {
+    const dayOfWeek = current.getDay()
+    // 排除周六(6)和周日(0)
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      workingDays.push(formatDateKey(current))
+    }
+    current.setDate(current.getDate() + 1)
+  }
+
+  return workingDays
 }
 
 async function deleteEntry() {

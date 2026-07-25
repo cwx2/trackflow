@@ -54,7 +54,11 @@
               <icon-code class="meta-icon" />
               {{ project.key }}
             </span>
-            <span v-if="project.myRoleName" class="meta-item role-badge">
+            <span v-if="project.myRoleNames && project.myRoleNames.length > 0" class="meta-item role-badge">
+              <icon-user class="meta-icon" />
+              {{ project.myRoleNames.join(' / ') }}
+            </span>
+            <span v-else-if="project.myRoleName" class="meta-item role-badge">
               <icon-user class="meta-icon" />
               {{ project.myRoleName }}
             </span>

@@ -82,6 +82,7 @@ public class ReportService {
     private final CustomFieldService customFieldService;
     private final ReportStatisticsService reportStatisticsService;
     private final QueryExecutor queryExecutor;
+    private final com.trackflow.report.converter.ReportConverter reportConverter;
 
     /**
      * 报表列表（带项目成员过滤 + 私有报表隔离 + 精细化共享）
@@ -137,6 +138,35 @@ public class ReportService {
         Set<Long> favoriteIds = getUserFavoriteReportIds(userId);
         Map<Long, String> ownerNameMap = getOwnerNameMap(reports);
         return new ReportListMetadata(reports, shareCountMap, favoriteIds, ownerNameMap);
+    }
+
+    /**
+     * 获取报表列表 VO（含元数据填充和排序），供 Controller 直接调用
+     * 收藏优先 + 字母序；每个 VO 包含 shareCount、favorited、ownerDisplayName
+     *
+     * @param projectId 项目ID（可选）
+     * @param userId    当前用户ID
+     * @return 已填充元数据并排序的 VO 列表
+     */
+    public List<com.trackflow.report.vo.ReportDefinitionVO> listReportsVO(Long projectId, Long userId) {
+        ReportListMetadata metadata = listWithMetadata(projectId, userId);
+        List<com.trackflow.report.vo.ReportDefinitionVO> voList = reportConverter.toVOList(metadata.reports());
+        for (com.trackflow.report.vo.ReportDefinitionVO vo : voList) {
+            Long reportId = Long.parseLong(vo.getId());
+            vo.setShareCount(metadata.shareCountMap().getOrDefault(reportId, 0));
+            vo.setFavorited(metadata.favoriteIds().contains(reportId));
+            if (vo.getCreatedBy() != null) {
+                Long ownerId = Long.parseLong(vo.getCreatedBy());
+                vo.setOwnerDisplayName(metadata.ownerNameMap().getOrDefault(ownerId, null));
+            }
+        }
+        voList.sort((a, b) -> {
+            boolean aFav = Boolean.TRUE.equals(a.getFavorited());
+            boolean bFav = Boolean.TRUE.equals(b.getFavorited());
+            if (aFav != bFav) return aFav ? -1 : 1;
+            return (a.getName() != null ? a.getName() : "").compareTo(b.getName() != null ? b.getName() : "");
+        });
+        return voList;
     }
 
     /**

@@ -57,6 +57,10 @@ TIMEOUT_SECONDS = 2400      # 单次 kiro-cli 超时（40分钟）
 MAX_RETRIES = 3
 COOLDOWN_SECONDS = 5
 
+# 模型配置（None = 使用 kiro-cli 默认模型）
+# 可选值：claude-sonnet-4.6 / claude-opus-4.5 / claude-sonnet-4.5 / auto
+KIRO_MODEL = "claude-sonnet-4.6"
+
 # 领取锁
 _claim_lock = threading.Lock()
 
@@ -172,7 +176,10 @@ def extract_title(filepath: Path) -> str:
 
 
 def run_kiro(prompt: str, label: str) -> tuple[bool, str]:
-    cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools", prompt]
+    cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools"]
+    if KIRO_MODEL:
+        cmd += ["--model", KIRO_MODEL]
+    cmd.append(prompt)
     start = time.time()
     output_lines = []
 
@@ -465,6 +472,7 @@ def main():
 
     log.info("=" * 60)
     log.info(f"TrackFlow 并行迭代 | workers={args.workers} | 模式={'仅消费' if args.skip_produce else '完整循环'}")
+    log.info(f"模型: {KIRO_MODEL or 'kiro-cli 默认'}")
     log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
              f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
     log.info("永不停止，Ctrl+C 手动终止")
