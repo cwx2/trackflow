@@ -33,6 +33,9 @@ public class UpdateCustomFieldDTO {
     /** 是否为私有字段 */
     private Boolean isPrivate;
 
+    /** 是否自动附加到新创建的项目 */
+    private Boolean isAutoAttach;
+
     /** list 类型的选项（全量替换） */
     private List<OptionItem> options;
 

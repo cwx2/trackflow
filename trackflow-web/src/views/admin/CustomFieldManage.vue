@@ -14,12 +14,40 @@
         <!-- 字段列表 + 详情侧边栏 -->
         <div class="cf-body">
           <div class="cf-table" :class="{ 'has-detail': !!selectedField }">
+            <!-- 批量操作工具栏 -->
+            <div v-if="selectedKeys.length > 0" class="batch-toolbar">
+              <span class="batch-count">已选 {{ selectedKeys.length }} 项</span>
+              <a-button size="mini" type="outline" @click="batchToggleAutoAttach(true)">
+                <template #icon><icon-check /></template>
+                启用 Auto-attach
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchToggleAutoAttach(false)">
+                禁用 Auto-attach
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchToggleHidden(true)">
+                <template #icon><icon-eye-invisible /></template>
+                隐藏于列表
+              </a-button>
+              <a-button size="mini" type="outline" @click="batchToggleHidden(false)">
+                <template #icon><icon-eye /></template>
+                显示于列表
+              </a-button>
+              <a-button size="mini" type="outline" status="danger" @click="batchDeleteConfirm">
+                <template #icon><icon-delete /></template>
+                批量删除
+              </a-button>
+              <a-button size="mini" type="text" @click="selectedKeys = []">
+                取消选择
+              </a-button>
+            </div>
             <a-table
               :data="fieldList"
               :loading="loading"
               :pagination="pagination"
               row-key="id"
               size="small"
+              :row-selection="rowSelection"
+              v-model:selected-keys="selectedKeys"
               @page-change="onPageChange"
               @row-click="onRowClick"
             >
@@ -411,7 +439,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
@@ -427,6 +455,13 @@ const loading = ref(false)
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
 const projectList = ref<any[]>([])
 const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
+
+// ========== 批量操作 ==========
+const selectedKeys = ref<string[]>([])
+const rowSelection = reactive({
+  type: 'checkbox' as const,
+  showCheckedAll: true
+})
 
 /** 项目列表转换为 CheckboxGroupEnhanced 的选项格式 */
 const projectCheckboxOptions = computed<CheckboxOption[]>(() =>
@@ -968,6 +1003,63 @@ async function handleDelete(id: string) {
   }
 }
 
+// ========== 批量操作方法 ==========
+
+async function batchToggleAutoAttach(enabled: boolean) {
+  if (selectedKeys.value.length === 0) return
+  try {
+    await customFieldApi.batchUpdate({
+      ids: selectedKeys.value,
+      field: 'isForAll',
+      value: enabled
+    })
+    Message.success(`已${enabled ? '启用' : '禁用'} ${selectedKeys.value.length} 个字段的 Auto-attach`)
+    selectedKeys.value = []
+    loadList()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '批量操作失败')
+  }
+}
+
+async function batchToggleHidden(hidden: boolean) {
+  if (selectedKeys.value.length === 0) return
+  try {
+    await customFieldApi.batchUpdate({
+      ids: selectedKeys.value,
+      field: 'isHiddenInList',
+      value: hidden
+    })
+    Message.success(`已${hidden ? '隐藏' : '显示'} ${selectedKeys.value.length} 个字段`)
+    selectedKeys.value = []
+    loadList()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '批量操作失败')
+  }
+}
+
+function batchDeleteConfirm() {
+  if (selectedKeys.value.length === 0) return
+  Modal.warning({
+    title: '确认批量删除',
+    content: `确定要删除选中的 ${selectedKeys.value.length} 个自定义字段？此操作不可撤销，关联的工单字段值将被永久清除。`,
+    okText: `删除 ${selectedKeys.value.length} 个字段`,
+    cancelText: '取消',
+    hideCancel: false,
+    onOk: handleBatchDelete
+  })
+}
+
+async function handleBatchDelete() {
+  try {
+    await customFieldApi.batchDelete(selectedKeys.value)
+    Message.success(`已删除 ${selectedKeys.value.length} 个字段`)
+    selectedKeys.value = []
+    loadList()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '批量删除失败')
+  }
+}
+
 onMounted(() => {
   loadList()
   loadProjects()
@@ -1014,6 +1106,24 @@ onMounted(() => {
 }
 .cf-table.has-detail {
   flex: 1;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--tf-bg-elevated);
+  border-bottom: 1px solid var(--tf-border);
+  border-radius: 6px 6px 0 0;
+  flex-wrap: wrap;
+}
+
+.batch-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tf-accent);
+  margin-right: 4px;
 }
 
 .clickable-name {

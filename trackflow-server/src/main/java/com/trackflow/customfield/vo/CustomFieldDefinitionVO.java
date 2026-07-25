@@ -24,6 +24,10 @@ public class CustomFieldDefinitionVO {
     private String aliases;
     /** 是否为私有字段（仅拥有对应权限的用户可查看/编辑） */
     private Boolean isPrivate;
+    /** 是否自动附加到新创建的项目（YouTrack Auto-attach 行为） */
+    private Boolean isAutoAttach;
+    /** 选项排序模式: manual / name_asc / name_desc / name_ci_asc / name_ci_desc */
+    private String sortMode;
     private List<CustomFieldOptionVO> options;
     private List<String> projectIds;
     private List<String> issueTypes;
@@ -87,4 +91,22 @@ public class CustomFieldDefinitionVO {
      * 计算后的有效默认值（考虑项目覆盖后的实际值）。
      */
     private String effectiveDefaultValue;
+
+    // ===== 值依赖过滤（项目级别） =====
+
+    /**
+     * 值过滤依赖的源字段 ID。
+     * null 表示无值过滤（展示所有非归档选项）。
+     * 与条件显示（conditionFieldId）是两个独立机制：
+     * - 条件显示：控制字段本身是否出现
+     * - 值依赖过滤：字段出现，但下拉选项被缩小
+     */
+    private String filterFieldId;
+
+    /**
+     * 过滤规则。
+     * 当源字段值为 whenValue 时，本字段只展示 showOnly 列表中的选项。
+     * 格式: [{"whenValue":"optionId1","showOnly":["optionId3","optionId4"]}, ...]
+     */
+    private String filterRules;
 }

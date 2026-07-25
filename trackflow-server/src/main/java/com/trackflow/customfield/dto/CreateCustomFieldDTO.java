@@ -36,6 +36,9 @@ public class CreateCustomFieldDTO {
     /** 是否为私有字段 */
     private Boolean isPrivate = false;
 
+    /** 是否自动附加到新创建的项目 */
+    private Boolean isAutoAttach = false;
+
     /** list 类型的选项值列表 */
     private List<OptionItem> options;
 

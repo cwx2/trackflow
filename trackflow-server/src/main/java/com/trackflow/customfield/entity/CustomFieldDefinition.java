@@ -48,4 +48,10 @@ public class CustomFieldDefinition extends BaseEntity {
 
     /** 是否为私有字段（仅拥有对应权限的用户可查看/编辑） */
     private Boolean isPrivate;
+
+    /** 是否自动附加到新创建的项目（YouTrack Auto-attach 行为） */
+    private Boolean isAutoAttach;
+
+    /** 选项排序模式: manual / name_asc / name_desc / name_ci_asc / name_ci_desc */
+    private String sortMode;
 }
