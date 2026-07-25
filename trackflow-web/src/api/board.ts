@@ -28,6 +28,16 @@ export const boardApi = {
   },
 
   /**
+   * 获取项目看板状态列配置（始终返回状态模式列，不受 columnField 影响）。
+   * 用于看板设置面板，无论当前是否为优先级模式都返回状态列。
+   */
+  getStatusColumns(projectId: string) {
+    return request.get<any, R<BoardColumnVO[]>>('/boards/columns/status', {
+      params: { projectId }
+    })
+  },
+
+  /**
    * 显式初始化项目看板列配置（幂等）。
    * 仅在用户首次打开看板设置面板时调用。
    * 如果项目已有配置则直接返回现有配置。
@@ -135,8 +145,9 @@ export const boardApi = {
     cardConfig: { visibleFields: string[]; colorScheme: string }
     swimlaneConfig: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }
     columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
-    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null }
+    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; columnField?: string }
     chartConfig?: { chartType: string; burndownCalculation: string; issueFilterMode: string; issueFilterQuery?: string | null; estimationFieldId?: number | null; originalEstimationFieldId?: number | null }
+    priorityColumnWip?: Array<{ fieldValue: string; wipMin?: number | null; wipMax?: number | null }> | null
   }) {
     return request.put<any, R<void>>('/boards/settings', data, {
       params: { projectId }

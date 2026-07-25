@@ -395,7 +395,9 @@ public class BoardColumnService {
             Map<Long, java.math.BigDecimal> estimationMap,
             Set<Long> workflowStatusIds) {
 
+        // 过滤出状态模式列配置（排除 statusId=null 的优先级模式 WIP 配置）
         Map<Long, BoardColumnConfig> configMap = configs.stream()
+                .filter(c -> c.getStatusId() != null)
                 .collect(Collectors.toMap(BoardColumnConfig::getStatusId, c -> c));
 
         List<BoardColumnVO> result = new ArrayList<>();
@@ -494,6 +496,18 @@ public class BoardColumnService {
             }
         }
 
+        // 加载优先级模式的 WIP 配置（statusId=NULL 标识 priority 模式列）
+        List<BoardColumnConfig> wipConfigs = boardColumnConfigMapper.selectList(
+                new LambdaQueryWrapper<BoardColumnConfig>()
+                        .eq(BoardColumnConfig::getProjectId, projectId)
+                        .isNull(BoardColumnConfig::getStatusId));
+        Map<String, BoardColumnConfig> wipConfigMap = new HashMap<>();
+        for (BoardColumnConfig cfg : wipConfigs) {
+            if (cfg.getFieldValue() != null) {
+                wipConfigMap.put(cfg.getFieldValue(), cfg);
+            }
+        }
+
         List<BoardColumnVO> result = new ArrayList<>();
         for (int i = 0; i < priorities.length; i++) {
             BoardColumnVO vo = new BoardColumnVO();
@@ -508,10 +522,67 @@ public class BoardColumnService {
             vo.setCollapsed(false);
             vo.setHasHiddenIssues(false);
             vo.setIssueCount(countMap.getOrDefault(priorities[i], 0));
+            // 加载 WIP 配置
+            BoardColumnConfig wipCfg = wipConfigMap.get(priorities[i]);
+            if (wipCfg != null) {
+                vo.setWipMin(wipCfg.getWipMin());
+                vo.setWipMax(wipCfg.getWipMax());
+            }
             vo.setInWorkflow(true);
             result.add(vo);
         }
         return result;
+    }
+
+    /**
+     * 保存优先级模式看板列的 WIP 配置。
+     * <p>
+     * 使用 statusId=0 作为 priority 模式列的特殊标识，fieldValue 存储优先级值（Critical/High/Normal/Low）。
+     *
+     * @param projectId   项目 ID
+     * @param wipSettings 优先级 -> WIP 配置映射（key: priority value, value: [wipMin, wipMax]）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void savePriorityColumnWip(Long projectId, List<PriorityWipItem> wipSettings) {
+        // 删除旧的 priority 模式 WIP 配置（statusId=NULL）
+        boardColumnConfigMapper.delete(
+                new LambdaQueryWrapper<BoardColumnConfig>()
+                        .eq(BoardColumnConfig::getProjectId, projectId)
+                        .isNull(BoardColumnConfig::getStatusId));
+
+        // 批量构建新配置（仅保存有 WIP 设置的）
+        LocalDateTime now = LocalDateTime.now();
+        List<BoardColumnConfig> configs = new ArrayList<>();
+        for (PriorityWipItem item : wipSettings) {
+            if (item.getWipMin() == null && item.getWipMax() == null) continue;
+            BoardColumnConfig config = new BoardColumnConfig();
+            config.setProjectId(projectId);
+            config.setStatusId(null); // null 标识 priority 模式列
+            config.setFieldValue(item.getFieldValue());
+            config.setVisible(true);
+            config.setSortOrder(0);
+            config.setCollapsed(false);
+            config.setWipMin(item.getWipMin());
+            config.setWipMax(item.getWipMax());
+            config.setCreatedAt(now);
+            config.setUpdatedAt(now);
+            configs.add(config);
+        }
+
+        if (!configs.isEmpty()) {
+            Db.saveBatch(configs);
+        }
+
+        // 清理缓存
+        invalidateCache(projectId);
+    }
+
+    /** 优先级模式 WIP 配置项 */
+    @lombok.Data
+    public static class PriorityWipItem {
+        private String fieldValue;
+        private Integer wipMin;
+        private Integer wipMax;
     }
 
     // ========== Cache methods ==========

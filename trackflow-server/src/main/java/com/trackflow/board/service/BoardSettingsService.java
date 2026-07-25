@@ -48,5 +48,18 @@ public class BoardSettingsService {
         if (dto.getChartConfig() != null) {
             boardChartConfigService.saveChartConfig(projectId, dto.getChartConfig());
         }
+
+        // 优先级列 WIP 配置（可选，columnField=priority 时使用）
+        // 传 null 或空列表均会清除已有配置
+        java.util.List<BoardColumnService.PriorityWipItem> priorityWipItems = dto.getPriorityColumnWip() != null
+                ? dto.getPriorityColumnWip().stream().map(item -> {
+                    BoardColumnService.PriorityWipItem wi = new BoardColumnService.PriorityWipItem();
+                    wi.setFieldValue(item.getFieldValue());
+                    wi.setWipMin(item.getWipMin());
+                    wi.setWipMax(item.getWipMax());
+                    return wi;
+                }).toList()
+                : java.util.List.of();
+        boardColumnService.savePriorityColumnWip(projectId, priorityWipItems);
     }
 }

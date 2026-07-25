@@ -148,6 +148,59 @@
               <li>留空表示不设置限制</li>
             </ul>
           </div>
+
+          <!-- 优先级模式 WIP 配置（仅 columnField=priority 时显示） -->
+          <div v-if="editableColumnField === 'priority'" class="priority-wip-section">
+            <div class="priority-wip-title">优先级列 WIP 限制</div>
+            <div class="settings-hint" style="margin-bottom: 8px">
+              <p>当看板按优先级分列时，可为每个优先级列配置 WIP 限制。</p>
+            </div>
+            <div class="column-list">
+              <div class="column-list-header">
+                <span class="col-h-drag" style="width: 8px"></span>
+                <span class="col-h-name" style="flex: 1">优先级列</span>
+                <span class="col-h-count">工单数</span>
+                <span class="col-h-wip">WIP 限制</span>
+              </div>
+              <div
+                v-for="pWip in editablePriorityWip"
+                :key="pWip.fieldValue"
+                class="column-item"
+              >
+                <span class="col-drag-handle" style="visibility: hidden">⠿</span>
+                <div class="col-name-cell" style="flex: 1">
+                  <span class="column-color" :style="{ backgroundColor: getPriorityColor(pWip.fieldValue) }"></span>
+                  <span class="column-name">{{ localizePriority(pWip.fieldValue) }}</span>
+                </div>
+                <div class="col-count-cell">
+                  <span class="issue-count-badge">{{ getPriorityIssueCount(pWip.fieldValue) }}</span>
+                </div>
+                <div class="col-wip-cell">
+                  <a-input-number
+                    v-model="pWip.wipMin"
+                    placeholder="Min"
+                    size="mini"
+                    :min="0"
+                    :max="999"
+                    :style="{ width: '64px' }"
+                    hide-button
+                    allow-clear
+                  />
+                  <span class="wip-separator">–</span>
+                  <a-input-number
+                    v-model="pWip.wipMax"
+                    placeholder="Max"
+                    size="mini"
+                    :min="0"
+                    :max="999"
+                    :style="{ width: '64px' }"
+                    hide-button
+                    allow-clear
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </a-tab-pane>
 
@@ -206,7 +259,7 @@ import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { boardApi } from '@/api'
 import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
 import GeneralSettingsPanel from './GeneralSettingsPanel.vue'
@@ -231,6 +284,12 @@ interface MergeGroupLocal {
   mergeGroupId: string
   mergeTitle: string
   statusIds: string[]
+}
+
+interface PriorityWipLocal {
+  fieldValue: string
+  wipMin: number | null | undefined
+  wipMax: number | null | undefined
 }
 
 const props = defineProps<{
@@ -266,6 +325,27 @@ const editableFilterQuery = ref<string | null>(null)
 const editableDoneRetentionDays = ref<number | null>(null)
 const editableColumnField = ref('status')
 
+// 优先级列 WIP 配置（columnField=priority 时使用）
+const PRIORITY_COLORS: Record<string, string> = {
+  Critical: '#ef4444',
+  High: '#f59e0b',
+  Normal: '#3b82f6',
+  Low: '#9ca3af'
+}
+const PRIORITY_VALUES = ['Critical', 'High', 'Normal', 'Low']
+const editablePriorityWip = ref<PriorityWipLocal[]>(
+  PRIORITY_VALUES.map(v => ({ fieldValue: v, wipMin: undefined, wipMax: undefined }))
+)
+
+function getPriorityColor(fieldValue: string): string {
+  return PRIORITY_COLORS[fieldValue] || '#9ca3af'
+}
+
+function getPriorityIssueCount(fieldValue: string): number {
+  const col = props.columns.find(c => c.fieldValue === fieldValue)
+  return col?.issueCount ?? 0
+}
+
 // 泳道设置状态
 const editableSwimlaneGroupBy = ref('none')
 const editableSwimlaneSelectedValues = ref<string[] | null>(null)
@@ -291,15 +371,36 @@ const dropPosition = ref<'above' | 'below' | null>(null)
 // 当 drawer 打开时加载配置
 watch(() => props.visible, async (newVisible) => {
   if (newVisible && props.projectId) {
-    // 加载列配置
-    if (props.columns.length > 0) {
-      editableColumns.value = props.columns.map(c => ({
+    // 加载列配置（始终加载状态列用于列设置，不论 columnField 如何）
+    // 当 columnField=priority 时 props.columns 是优先级列，需要单独获取状态列
+    const statusColumns = props.columns.filter(c => c.statusId != null)
+    if (statusColumns.length > 0) {
+      editableColumns.value = statusColumns.map(c => ({
         ...c,
         wipMin: c.wipMin ?? undefined,
         wipMax: c.wipMax ?? undefined,
         issueCount: c.issueCount ?? 0,
         inWorkflow: c.inWorkflow ?? false
       }))
+    } else if (props.columns.length > 0 && props.columns.every(c => c.statusId == null)) {
+      // 全部是优先级列（priority mode），需要独立获取状态列
+      initializing.value = true
+      try {
+        // 获取状态列（不受 columnField 影响）
+        const statusColRes = await boardApi.getStatusColumns(props.projectId)
+        const statusColData = statusColRes.data || []
+        editableColumns.value = statusColData.map(c => ({
+          ...c,
+          wipMin: c.wipMin ?? undefined,
+          wipMax: c.wipMax ?? undefined,
+          issueCount: c.issueCount ?? 0,
+          inWorkflow: c.inWorkflow ?? false
+        }))
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '加载看板列配置失败')
+      } finally {
+        initializing.value = false
+      }
     } else {
       initializing.value = true
       try {
@@ -409,19 +510,42 @@ watch(() => props.visible, async (newVisible) => {
       editableColumnField.value = 'status'
       configVersion.value = 0
     }
+
+    // 加载优先级列 WIP 配置（从 columns prop 中的 priority 模式列获取，或从后端重新获取）
+    // 优先级模式列在 props.columns 中 statusId 为 null，fieldValue 为 Critical/High/Normal/Low
+    editablePriorityWip.value = PRIORITY_VALUES.map(v => {
+      const col = props.columns.find(c => c.fieldValue === v && c.statusId == null)
+      return {
+        fieldValue: v,
+        wipMin: col?.wipMin ?? undefined,
+        wipMax: col?.wipMax ?? undefined
+      }
+    })
   }
 })
 
 // 当 columns prop 变化且 drawer 打开时也更新
 watch(() => props.columns, () => {
   if (props.visible && props.columns.length > 0) {
-    editableColumns.value = props.columns.map(c => ({
-      ...c,
-      wipMin: c.wipMin ?? undefined,
-      wipMax: c.wipMax ?? undefined,
-      issueCount: c.issueCount ?? 0,
-      inWorkflow: c.inWorkflow ?? false
-    }))
+    const statusColumns = props.columns.filter(c => c.statusId != null)
+    if (statusColumns.length > 0) {
+      editableColumns.value = statusColumns.map(c => ({
+        ...c,
+        wipMin: c.wipMin ?? undefined,
+        wipMax: c.wipMax ?? undefined,
+        issueCount: c.issueCount ?? 0,
+        inWorkflow: c.inWorkflow ?? false
+      }))
+    }
+    // Also refresh priority WIP from props.columns
+    editablePriorityWip.value = PRIORITY_VALUES.map(v => {
+      const col = props.columns.find(c => c.fieldValue === v && c.statusId == null)
+      return {
+        fieldValue: v,
+        wipMin: col?.wipMin ?? undefined,
+        wipMax: col?.wipMax ?? undefined
+      }
+    })
   }
 })
 
@@ -598,7 +722,8 @@ function resetDragState() {
 async function reloadAllConfigs() {
   try {
     const [colRes, cardRes, swimRes, mergeRes, generalRes, chartRes] = await Promise.all([
-      boardApi.getColumns(props.projectId),
+      // getStatusColumns 始终返回状态列（不受 columnField 影响），用于列设置面板
+      boardApi.getStatusColumns(props.projectId),
       boardApi.getCardConfig(props.projectId),
       boardApi.getSwimlaneConfig(props.projectId),
       boardApi.getColumnMerges(props.projectId),
@@ -608,13 +733,27 @@ async function reloadAllConfigs() {
 
     // 更新列配置
     if (colRes.data) {
-      editableColumns.value = colRes.data.map(c => ({
-        ...c,
-        wipMin: c.wipMin ?? undefined,
-        wipMax: c.wipMax ?? undefined,
-        issueCount: c.issueCount ?? 0,
-        inWorkflow: c.inWorkflow ?? false
-      }))
+      const colData = colRes.data
+      // 过滤出状态列（statusId 非 null），用于列设置面板
+      const statusColData = colData.filter(c => c.statusId != null)
+      if (statusColData.length > 0) {
+        editableColumns.value = statusColData.map(c => ({
+          ...c,
+          wipMin: c.wipMin ?? undefined,
+          wipMax: c.wipMax ?? undefined,
+          issueCount: c.issueCount ?? 0,
+          inWorkflow: c.inWorkflow ?? false
+        }))
+      }
+      // 更新优先级列 WIP（从返回数据中 statusId 为 null 的列获取）
+      editablePriorityWip.value = PRIORITY_VALUES.map(v => {
+        const col = colData.find(c => c.fieldValue === v && c.statusId == null)
+        return {
+          fieldValue: v,
+          wipMin: col?.wipMin ?? undefined,
+          wipMax: col?.wipMax ?? undefined
+        }
+      })
     }
 
     // 更新卡片配置
@@ -686,6 +825,15 @@ async function handleSave() {
       }
     }
 
+    // 优先级列 WIP 校验
+    for (const pWip of editablePriorityWip.value) {
+      if (pWip.wipMin != null && pWip.wipMax != null && pWip.wipMin > pWip.wipMax) {
+        Message.warning(`优先级「${localizePriority(pWip.fieldValue)}」的 Min WIP 不能大于 Max WIP`)
+        saving.value = false
+        return
+      }
+    }
+
     const columns: BoardColumnItem[] = editableColumns.value.map((c, idx) => ({
       statusId: Number(c.statusId),
       visible: c.visible,
@@ -748,7 +896,15 @@ async function handleSave() {
         issueFilterQuery: editableIssueFilterQuery.value,
         estimationFieldId: editableEstimationFieldId.value ? Number(editableEstimationFieldId.value) : null,
         originalEstimationFieldId: editableOriginalEstimationFieldId.value ? Number(editableOriginalEstimationFieldId.value) : null
-      }
+      },
+      // 优先级列 WIP 配置（columnField=priority 时保存）
+      priorityColumnWip: editableColumnField.value === 'priority'
+        ? editablePriorityWip.value.map(p => ({
+            fieldValue: p.fieldValue,
+            wipMin: p.wipMin != null ? p.wipMin : null,
+            wipMax: p.wipMax != null ? p.wipMax : null
+          }))
+        : null
     })
 
     Message.success('看板设置已保存')
@@ -1092,5 +1248,19 @@ async function handleSave() {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ===== 优先级列 WIP 配置 ===== */
+.priority-wip-section {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-2);
+}
+
+.priority-wip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-2);
+  margin-bottom: 8px;
 }
 </style>

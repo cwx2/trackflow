@@ -838,7 +838,8 @@ export interface TransitStatusResultVO {
 
 // ========== 看板 ==========
 export interface BoardColumnVO {
-  statusId: string
+  /** 状态 ID。status模式为状态ID字符串，priority模式为 null */
+  statusId: string | null
   /** 通用列标识值（status模式=statusId, priority模式=Critical/High/Normal/Low） */
   fieldValue: string
   statusName: string

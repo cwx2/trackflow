@@ -4,6 +4,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 看板设置批量保存 DTO。
  * <p>
@@ -44,4 +46,22 @@ public class SaveBoardSettingsDTO {
     /** 图表配置（可选，为 null 时不更新） */
     @Valid
     private UpdateBoardChartConfigDTO chartConfig;
+
+    /**
+     * 优先级模式列的 WIP 配置（可选，仅 columnField=priority 时有意义）。
+     * 为 null 或空列表时清除所有优先级 WIP 配置。
+     */
+    @Valid
+    private List<PriorityWipItem> priorityColumnWip;
+
+    /** 优先级列 WIP 配置项 */
+    @Data
+    public static class PriorityWipItem {
+        /** 优先级值（Critical/High/Normal/Low） */
+        private String fieldValue;
+        /** WIP 最小值，null 表示不限制 */
+        private Integer wipMin;
+        /** WIP 最大值，null 表示不限制 */
+        private Integer wipMax;
+    }
 }

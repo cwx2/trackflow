@@ -122,6 +122,17 @@ public class BoardController {
     }
 
     /**
+     * 获取项目看板状态列配置（始终返回状态模式列，不受 columnField 影响）。
+     * 用于看板设置面板中的列配置 UI，无论当前是否为优先级模式。
+     */
+    @GetMapping("/columns/status")
+    @PreAuthorize("@perm.checkBoardEdit(#projectId)")
+    public R<List<BoardColumnVO>> getStatusColumns(@RequestParam("projectId") Long projectId) {
+        List<BoardColumnVO> columns = boardColumnService.getColumns(projectId);
+        return R.ok(columns);
+    }
+
+    /**
      * 保存项目看板列配置
      * 需要看板编辑权限
      */

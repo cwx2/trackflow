@@ -39,4 +39,10 @@ public class UpdateIssueDTO {
      * 为 null 时兼容旧客户端（跳过版本校验）。
      */
     private Integer version;
+
+    /**
+     * 强制跳过 WIP 上限检查（用户在前端确认弹窗后再次提交时设为 true）。
+     * 仅在更新 priority 字段且看板为优先级模式时生效。
+     */
+    private Boolean forceWip;
 }

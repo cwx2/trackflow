@@ -654,6 +654,33 @@ public class IssueService {
     }
 
     /**
+     * WIP 限制校验（优先级模式）：检查将工单移入目标优先级列是否超出 WIP 上限。
+     * 使用 statusId=0 + fieldValue 组合查询 board_column_config。
+     *
+     * @param projectId       项目 ID
+     * @param targetFieldValue 目标优先级值（Critical/High/Normal/Low）
+     * @return 超限警告信息；null 表示不超限或目标列无 WIP 配置
+     */
+    public String checkWipLimitByFieldValue(Long projectId, String targetFieldValue) {
+        com.trackflow.board.entity.BoardColumnConfig columnConfig = boardColumnConfigMapper.selectOne(
+                new LambdaQueryWrapper<com.trackflow.board.entity.BoardColumnConfig>()
+                        .eq(com.trackflow.board.entity.BoardColumnConfig::getProjectId, projectId)
+                        .isNull(com.trackflow.board.entity.BoardColumnConfig::getStatusId)
+                        .eq(com.trackflow.board.entity.BoardColumnConfig::getFieldValue, targetFieldValue));
+        if (columnConfig == null || columnConfig.getWipMax() == null) return null;
+
+        long currentCount = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getProjectId, projectId)
+                        .eq(Issue::getPriority, targetFieldValue));
+        if (currentCount >= columnConfig.getWipMax()) {
+            return String.format("目标优先级列「%s」已达到 WIP 上限（%d/%d），确定要继续移入吗？",
+                    targetFieldValue, currentCount, columnConfig.getWipMax());
+        }
+        return null;
+    }
+
+    /**
      * 批量状态转换的 WIP 限制预检查。
      * 按项目分组统计：移入后是否会超出目标列 WIP 上限。
      *
@@ -1028,6 +1055,13 @@ public class IssueService {
         }
         if (dto.getPriority() != null) {
             String oldPriority = issue.getPriority();
+            // WIP 限制校验（优先级模式看板）：仅在优先级实际变更且未强制跳过时检查
+            if (!dto.getPriority().equals(oldPriority) && !Boolean.TRUE.equals(dto.getForceWip())) {
+                String wipWarning = checkWipLimitByFieldValue(issue.getProjectId(), dto.getPriority());
+                if (wipWarning != null) {
+                    throw new BusinessException(ErrorCode.WIP_LIMIT_EXCEEDED, wipWarning);
+                }
+            }
             recordActivity(id, currentUserId, "updated", "priority", oldPriority, dto.getPriority());
             issue.setPriority(dto.getPriority());
             // 收集优先级变更（仅当实际变更时）
