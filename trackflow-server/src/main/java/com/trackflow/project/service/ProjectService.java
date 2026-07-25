@@ -13,6 +13,9 @@ import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueAttachmentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.workflow.entity.WorkflowDefinition;
+import com.trackflow.workflow.mapper.WorkflowDefinitionMapper;
+import com.trackflow.workflow.mapper.ProjectWorkflowMapper;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
 import com.trackflow.timeentry.entity.TimeEntry;
@@ -86,6 +89,8 @@ public class ProjectService {
     private final IssueAttachmentMapper issueAttachmentMapper;
     private final SprintMapper sprintMapper;
     private final TimeEntryMapper timeEntryMapper;
+    private final WorkflowDefinitionMapper workflowDefinitionMapper;
+    private final ProjectWorkflowMapper projectWorkflowMapper;
     private final ProjectActivityService projectActivityService;
     private final ProjectInitializationService projectInitializationService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
@@ -1807,6 +1812,22 @@ public class ProjectService {
         ).stream().map(Issue::getId).toList();
         if (!projectIssueIds.isEmpty()) {
             mutedThreadService.deleteByResources("issue", projectIssueIds);
+        }
+
+        // 4.6 清理项目专属 WorkflowDefinition（非系统默认工作流，project_workflow 无 FK → workflow_definition，不会被 CASCADE 删除）
+        List<Long> defIds = projectWorkflowMapper.selectDefinitionIdsByProjectId(projectId);
+        if (!defIds.isEmpty()) {
+            // 只删除非系统默认工作流（项目初始化时为该项目单独创建的工作流定义）
+            List<Long> defIdsToDelete = defIds.stream()
+                    .filter(defId -> {
+                        WorkflowDefinition def = workflowDefinitionMapper.selectById(defId);
+                        return def != null && !Boolean.TRUE.equals(def.getIsDefault());
+                    })
+                    .toList();
+            if (!defIdsToDelete.isEmpty()) {
+                workflowDefinitionMapper.deleteBatchIds(defIdsToDelete);
+                log.info("Deleted {} workflow definitions for project {}", defIdsToDelete.size(), projectId);
+            }
         }
 
         // 5. 物理删除项目（FK CASCADE 自动删除所有关联数据）
