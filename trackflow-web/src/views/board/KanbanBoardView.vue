@@ -627,10 +627,20 @@
         <!-- Swimlane 各行 -->
         <div class="swimlane-body">
           <div
-            v-for="lane in swimlanes"
+            v-for="lane in orderedSwimlanes"
             :key="lane.key"
             class="swimlane-row"
-            :class="{ 'swimlane-row--collapsed': collapsedSwimlanes.has(lane.key) }"
+            :class="{
+              'swimlane-row--collapsed': collapsedSwimlanes.has(lane.key),
+              'swimlane-row--drag-over': swimlaneDragOverKey === lane.key,
+              'swimlane-row--dragging': swimlaneDraggingKey === lane.key
+            }"
+            :draggable="!isDragging"
+            @dragstart="onSwimlaneRowDragStart($event, lane.key)"
+            @dragend="onSwimlaneRowDragEnd"
+            @dragover="onSwimlaneRowDragOver($event, lane.key)"
+            @dragleave="onSwimlaneRowDragLeave"
+            @drop="onSwimlaneRowDrop($event, lane.key)"
           >
             <!-- 泳道行标题 -->
             <div
@@ -640,6 +650,16 @@
               @click="toggleSwimlane(lane.key)"
               @keydown.enter="toggleSwimlane(lane.key)"
             >
+              <!-- 拖拽把手（YouTrack 风格：左侧 ≡ 图标） -->
+              <span
+                class="swimlane-drag-handle"
+                title="拖拽以调整泳道顺序"
+                aria-label="拖拽把手"
+                @mousedown.stop
+                @click.stop
+              >
+                ≡
+              </span>
               <span class="swimlane-toggle-icon">
                 {{ collapsedSwimlanes.has(lane.key) ? '▶' : '▼' }}
               </span>
@@ -1543,6 +1563,10 @@ function onSwimlaneChange() {
   if (swimlaneGroupBy.value !== 'parent') {
     swimlaneIssueType.value = null
   }
+  // 清除该维度的自定义顺序（切换维度时重置排序）
+  clearSwimlaneOrder()
+  // 重新加载新维度的泳道排序
+  loadSwimlaneOrder()
   // 同步到 URL
   syncUrlState()
   // 持久化到服务端（静默保存，不阻塞 UI）
@@ -1564,6 +1588,124 @@ function toggleSwimlane(key: string) {
     collapsedSwimlanes.value.add(key)
   }
   localStorage.setItem(COLLAPSED_SWIMLANES_KEY, JSON.stringify([...collapsedSwimlanes.value]))
+}
+
+// ===== 泳道行拖拽排序 =====
+const SWIMLANE_ORDER_KEY_PREFIX = 'tf_kanban_swimlane_order'
+
+function getSwimlaneOrderKey(): string {
+  return selectedProject.value
+    ? `${SWIMLANE_ORDER_KEY_PREFIX}_${selectedProject.value}_${swimlaneGroupBy.value}`
+    : `${SWIMLANE_ORDER_KEY_PREFIX}_${swimlaneGroupBy.value}`
+}
+
+/** 用户自定义泳道顺序（泳道 key 列表，null 表示使用默认顺序） */
+const swimlaneCustomOrder = ref<string[] | null>(null)
+
+/** 加载当前项目+分组维度的泳道排序 */
+function loadSwimlaneOrder() {
+  const key = getSwimlaneOrderKey()
+  const stored = localStorage.getItem(key)
+  swimlaneCustomOrder.value = stored ? JSON.parse(stored) : null
+}
+
+/** 保存泳道排序 */
+function saveSwimlaneOrder(order: string[]) {
+  const key = getSwimlaneOrderKey()
+  localStorage.setItem(key, JSON.stringify(order))
+  swimlaneCustomOrder.value = order
+}
+
+/** 清除泳道排序（切换分组时重置） */
+function clearSwimlaneOrder() {
+  if (selectedProject.value) {
+    const key = getSwimlaneOrderKey()
+    localStorage.removeItem(key)
+  }
+  swimlaneCustomOrder.value = null
+}
+
+/**
+ * 按用户自定义顺序排列的泳道列表。
+ * - 若无自定义顺序，使用 swimlanes 计算顺序（默认）
+ * - 若有自定义顺序，按 key 排列，新增未知 key 追加到末尾
+ */
+const orderedSwimlanes = computed<SwimlaneRow[]>(() => {
+  const base = swimlanes.value
+  if (!swimlaneCustomOrder.value || swimlaneCustomOrder.value.length === 0) return base
+
+  const orderMap = new Map<string, number>()
+  swimlaneCustomOrder.value.forEach((key, idx) => orderMap.set(key, idx))
+
+  const sorted = [...base].sort((a, b) => {
+    const idxA = orderMap.has(a.key) ? orderMap.get(a.key)! : base.length
+    const idxB = orderMap.has(b.key) ? orderMap.get(b.key)! : base.length
+    return idxA - idxB
+  })
+
+  return sorted
+})
+
+/** 正在拖拽的泳道行 key */
+const swimlaneDraggingKey = ref<string | null>(null)
+/** 拖拽悬停的目标泳道行 key */
+const swimlaneDragOverKey = ref<string | null>(null)
+
+function onSwimlaneRowDragStart(event: DragEvent, laneKey: string) {
+  // 不与卡片拖拽冲突：仅在无卡片拖拽时允许泳道行拖拽
+  if (isDragging.value) {
+    event.preventDefault()
+    return
+  }
+  swimlaneDraggingKey.value = laneKey
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', `swimlane:${laneKey}`)
+  }
+}
+
+function onSwimlaneRowDragEnd() {
+  swimlaneDraggingKey.value = null
+  swimlaneDragOverKey.value = null
+}
+
+function onSwimlaneRowDragOver(event: DragEvent, laneKey: string) {
+  if (!swimlaneDraggingKey.value) return
+  event.preventDefault()
+  swimlaneDragOverKey.value = laneKey
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onSwimlaneRowDragLeave(event: DragEvent) {
+  const relatedTarget = event.relatedTarget as HTMLElement | null
+  const currentTarget = event.currentTarget as HTMLElement
+  if (relatedTarget && currentTarget.contains(relatedTarget)) return
+  swimlaneDragOverKey.value = null
+}
+
+function onSwimlaneRowDrop(event: DragEvent, targetKey: string) {
+  event.preventDefault()
+  const fromKey = swimlaneDraggingKey.value
+  swimlaneDraggingKey.value = null
+  swimlaneDragOverKey.value = null
+
+  if (!fromKey || fromKey === targetKey) return
+
+  // Build new order by moving fromKey to targetKey's position
+  const currentOrder = orderedSwimlanes.value.map(l => l.key)
+  const fromIdx = currentOrder.indexOf(fromKey)
+  const toIdx = currentOrder.indexOf(targetKey)
+  if (fromIdx < 0 || toIdx < 0) return
+
+  const newOrder = [...currentOrder]
+  newOrder.splice(fromIdx, 1)
+  // Determine drop side (above or below target)
+  const insertIdx = fromIdx < toIdx ? toIdx : toIdx
+  newOrder.splice(insertIdx, 0, fromKey)
+
+  saveSwimlaneOrder(newOrder)
 }
 
 // Swimlane 数据结构
@@ -2109,6 +2251,8 @@ function onProjectChange() {
   userExplicitlySelectedAll = false  // Reset: allow auto-select for new project
   guidanceDismissed.value = false  // Reset guidance for new project
   resetBoardManualOrder()  // Reset manual order when switching projects
+  // 切换项目时清除泳道自定义排序（不同项目的泳道数据不同）
+  swimlaneCustomOrder.value = null
   // 切换项目时：保留 'me' 筛选，但清除指定用户 ID（因为不同项目的成员不同）
   if (assigneeFilter.value && assigneeFilter.value !== 'me') {
     assigneeFilter.value = undefined
@@ -3896,6 +4040,8 @@ async function loadBoard() {
   loading.value = true
   try {
     await Promise.all([loadSprints(), loadBoardColumns(), loadCardConfig(), loadSwimlaneConfig(), loadColumnMerges(), loadTransitionableStatuses(), loadBoardBehavior(), loadProjectMembers(), loadChartConfig()])
+    // 加载泳道自定义排序（需在 loadSwimlaneConfig 之后，确保 swimlaneGroupBy 已恢复）
+    loadSwimlaneOrder()
     await loadIssues()
     // Load manual order for board card sorting
     if (selectedProject.value) {
@@ -5963,5 +6109,55 @@ onUnmounted(() => {
 .slide-right-leave-to {
   transform: translateX(100%);
   opacity: 0;
+}
+
+/* ===== 泳道行拖拽排序 ===== */
+
+/* 拖拽把手 */
+.swimlane-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  color: var(--color-text-4);
+  cursor: grab;
+  user-select: none;
+  border-radius: 3px;
+  flex-shrink: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s, color 0.15s, background 0.15s;
+}
+
+/* 鼠标悬停在泳道行标题时显示拖拽把手 */
+.swimlane-row-header:hover .swimlane-drag-handle {
+  opacity: 1;
+  visibility: visible;
+}
+
+.swimlane-drag-handle:hover {
+  color: var(--color-text-2);
+  background: var(--color-fill-3);
+}
+
+.swimlane-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 正在被拖拽的泳道行 */
+.swimlane-row--dragging {
+  opacity: 0.4;
+}
+
+.swimlane-row--dragging .swimlane-row-header {
+  cursor: grabbing;
+}
+
+/* 拖拽目标（悬停在其上方的泳道行）：显示插入线 */
+.swimlane-row--drag-over {
+  border-top: 2px solid rgb(var(--primary-6));
+  margin-top: -2px;
 }
 </style>
