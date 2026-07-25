@@ -116,19 +116,23 @@ public class TimeEntryService {
             workItemAttributeService.saveTimeEntryAttributeValues(entry.getId(), attrValueMap);
         }
 
-        // 记录活动：花费了 X 时间
+        // 记录活动：花费了 X 时间（结构化 JSON detail，供前端多列展示）
         String durationStr = formatDuration(dto.getDuration());
         String workTypeName = resolveWorkTypeName(dto.getAttributeValues());
-        String detail = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
+        // new_value 保留为可读字符串（向下兼容）
+        String newValueStr = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
         if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
-            detail += " | " + dto.getDescription();
+            newValueStr += " | " + dto.getDescription();
         }
-        // 如果是代录，活动日志中标注
         if (!targetUserId.equals(currentUserId)) {
             String loggerName = getUserDisplayName(currentUserId);
-            detail += " (由 " + loggerName + " 代录)";
+            newValueStr += " (由 " + loggerName + " 代录)";
         }
-        recordActivity(dto.getIssueId(), targetUserId, "time_logged", "spent_time", null, detail);
+        // 构建结构化 detail JSON
+        String timeEntryDetail = buildTimeEntryDetail(entry.getId(), workDate, dto.getDuration(),
+                workTypeName, dto.getDescription());
+        recordActivityWithDetail(dto.getIssueId(), targetUserId, "time_logged", "spent_time",
+                null, newValueStr, timeEntryDetail);
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(dto.getIssueId());
@@ -255,11 +259,13 @@ public class TimeEntryService {
                 : oldAttrValues;
 
         // 记录活动日志（仅在工单未删除时记录）
-        recordTimeUpdateActivity(userId, oldIssueId, entry.getIssueId(),
+        // 获取更新后的工作类型名称（用于 detail JSON）
+        String updatedWorkTypeName = resolveWorkTypeNameFromEntry(entry.getId());
+        recordTimeUpdateActivity(entry.getId(), userId, oldIssueId, entry.getIssueId(),
                 oldDuration, entry.getDuration(),
                 oldWorkDate, entry.getWorkDate(),
                 oldDescription, entry.getDescription(),
-                oldAttrValues, newAttrValues);
+                oldAttrValues, newAttrValues, updatedWorkTypeName);
 
         // 同步更新 issue.spent_hours（仅在工单未删除时）
         refreshIssueSpentHoursSafe(entry.getIssueId());
@@ -321,7 +327,12 @@ public class TimeEntryService {
         // ongoing 记录被删除时（丢弃计时器），不记录活动日志（因为没有实际工时被记录）
         if (!Boolean.TRUE.equals(entry.getOngoing())) {
             String durationStr = formatDuration(entry.getDuration());
-            recordActivitySafe(issueId, userId, "time_removed", "spent_time", durationStr, null);
+            // 获取工作类型名称（删除前的最后状态）
+            String workTypeName = resolveWorkTypeNameFromEntry(entry.getId());
+            String timeEntryDetail = buildTimeEntryDetail(entry.getId(), entry.getWorkDate(),
+                    entry.getDuration(), workTypeName, entry.getDescription());
+            recordActivitySafeWithDetail(issueId, userId, "time_removed", "spent_time",
+                    durationStr, null, timeEntryDetail);
         }
 
         // 删除属性值关联
@@ -678,17 +689,6 @@ public class TimeEntryService {
     }
 
     /**
-     * 安全版本：仅在 issue 未被软删除时记录活动日志。
-     * 工单已删除时无法写入活动记录（外键约束或逻辑无意义）。
-     */
-    private void recordActivitySafe(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
-        Issue issue = issueMapper.selectById(issueId);
-        if (issue != null) {
-            recordActivity(issueId, userId, action, fieldName, oldValue, newValue);
-        }
-    }
-
-    /**
      * 启动计时器。
      * 创建一条 ongoing=true 的 time_entry 记录，duration 为 NULL。
      * 系统根据 created_at 实时计算已用时间。
@@ -826,12 +826,16 @@ public class TimeEntryService {
         if (dto != null && dto.getAttributeValues() != null) {
             workTypeName = resolveWorkTypeName(dto.getAttributeValues());
         }
-        String detail = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
+        String newValueStr = workTypeName != null ? durationStr + " | " + workTypeName : durationStr;
         if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
-            detail += " | " + entry.getDescription();
+            newValueStr += " | " + entry.getDescription();
         }
-        detail += " (计时器)";
-        recordActivity(entry.getIssueId(), currentUserId, "time_logged", "spent_time", null, detail);
+        newValueStr += " (计时器)";
+        // 构建结构化 detail JSON
+        String timeEntryDetail = buildTimeEntryDetail(entry.getId(), entry.getWorkDate(), finalDuration,
+                workTypeName, entry.getDescription());
+        recordActivityWithDetail(entry.getIssueId(), currentUserId, "time_logged", "spent_time",
+                null, newValueStr, timeEntryDetail);
 
         // 同步更新 issue.spent_hours
         refreshIssueSpentHours(entry.getIssueId());
@@ -1046,19 +1050,21 @@ public class TimeEntryService {
      * - 工时跨工单转移：旧工单记录 time_removed，新工单记录 time_logged
      * - 普通字段修改（时长、日期、描述）：记录 time_updated
      */
-    private void recordTimeUpdateActivity(Long userId, Long oldIssueId, Long newIssueId,
+    private void recordTimeUpdateActivity(Long entryId, Long userId, Long oldIssueId, Long newIssueId,
                                           int oldDuration, int newDuration,
                                           LocalDate oldWorkDate, LocalDate newWorkDate,
                                           String oldDescription, String newDescription,
                                           Map<String, Map<String, String>> oldAttrValues,
-                                          Map<String, Map<String, String>> newAttrValues) {
+                                          Map<String, Map<String, String>> newAttrValues,
+                                          String newWorkTypeName) {
         boolean issueChanged = !oldIssueId.equals(newIssueId);
 
         if (issueChanged) {
             // 工时转移：旧工单记录"工时被移走"，新工单记录"工时被移入"
-            String detail = formatDuration(newDuration);
-            recordActivitySafe(oldIssueId, userId, "time_removed", "spent_time", detail, null);
-            recordActivitySafe(newIssueId, userId, "time_logged", "spent_time", null, detail);
+            String durationStr = formatDuration(newDuration);
+            String detail = buildTimeEntryDetail(entryId, newWorkDate, newDuration, newWorkTypeName, newDescription);
+            recordActivitySafeWithDetail(oldIssueId, userId, "time_removed", "spent_time", durationStr, null, detail);
+            recordActivitySafeWithDetail(newIssueId, userId, "time_logged", "spent_time", null, durationStr, detail);
             return;
         }
 
@@ -1080,9 +1086,11 @@ public class TimeEntryService {
         changes.addAll(buildAttributeChangeDescriptions(oldAttrValues, newAttrValues));
 
         if (!changes.isEmpty()) {
-            String oldDetail = formatDuration(oldDuration);
-            String newDetail = String.join("; ", changes);
-            recordActivitySafe(oldIssueId, userId, "time_updated", "spent_time", oldDetail, newDetail);
+            String oldValueStr = formatDuration(oldDuration);
+            String newValueStr = String.join("; ", changes);
+            String detail = buildTimeEntryDetail(entryId, newWorkDate, newDuration, newWorkTypeName, newDescription);
+            recordActivitySafeWithDetail(oldIssueId, userId, "time_updated", "spent_time",
+                    oldValueStr, newValueStr, detail);
         }
     }
 
@@ -1130,6 +1138,11 @@ public class TimeEntryService {
     }
 
     private void recordActivity(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
+        recordActivityWithDetail(issueId, userId, action, fieldName, oldValue, newValue, null);
+    }
+
+    private void recordActivityWithDetail(Long issueId, Long userId, String action, String fieldName,
+                                          String oldValue, String newValue, String detail) {
         IssueActivity activity = new IssueActivity();
         activity.setIssueId(issueId);
         activity.setUserId(userId);
@@ -1137,8 +1150,80 @@ public class TimeEntryService {
         activity.setFieldName(fieldName);
         activity.setOldValue(oldValue);
         activity.setNewValue(newValue);
+        activity.setDetail(detail);
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
+    }
+
+    /**
+     * 安全版本：仅在 issue 未被软删除时记录活动日志（无 detail）。
+     */
+    private void recordActivitySafe(Long issueId, Long userId, String action, String fieldName, String oldValue, String newValue) {
+        recordActivitySafeWithDetail(issueId, userId, action, fieldName, oldValue, newValue, null);
+    }
+
+    /**
+     * 安全版本：仅在 issue 未被软删除时记录活动日志（含 detail）。
+     * 工单已删除时无法写入活动记录（外键约束或逻辑无意义）。
+     */
+    private void recordActivitySafeWithDetail(Long issueId, Long userId, String action, String fieldName,
+                                              String oldValue, String newValue, String detail) {
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            recordActivityWithDetail(issueId, userId, action, fieldName, oldValue, newValue, detail);
+        }
+    }
+
+    /**
+     * 构建工时条目的结构化 detail JSON 字符串，供前端多列渲染使用。
+     * 格式：{"type":"time_entry","entryId":123,"workDate":"2026-07-20","duration":150,"workType":"Development","description":"..."}
+     */
+    private String buildTimeEntryDetail(Long entryId, LocalDate workDate, int duration,
+                                        String workType, String description) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"time_entry\"");
+        if (entryId != null) {
+            sb.append(",\"entryId\":").append(entryId);
+        }
+        if (workDate != null) {
+            sb.append(",\"workDate\":\"").append(workDate).append("\"");
+        }
+        sb.append(",\"duration\":").append(duration);
+        if (workType != null && !workType.isBlank()) {
+            sb.append(",\"workType\":\"").append(escapeJson(workType)).append("\"");
+        }
+        if (description != null && !description.isBlank()) {
+            sb.append(",\"description\":\"").append(escapeJson(description)).append("\"");
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    /**
+     * 从已保存的工时记录的属性值中解析工作类型名称。
+     * 用于删除、更新场景——此时 DTO 的 attributeValues 已不可用。
+     */
+    private String resolveWorkTypeNameFromEntry(Long entryId) {
+        try {
+            Map<String, Map<String, String>> attrValues = workItemAttributeService.getTimeEntryAttributeValues(entryId);
+            if (attrValues.isEmpty()) return null;
+            // 取第一个属性的 valueName 作为工作类型
+            return attrValues.values().stream()
+                    .map(v -> v.get("valueName"))
+                    .filter(name -> name != null && !name.isBlank())
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * JSON 字符串转义（仅处理双引号、反斜杠和换行符）。
+     */
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
 
     private String formatDuration(int minutes) {

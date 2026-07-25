@@ -82,13 +82,50 @@
                 <span class="system-event-badge">⚡</span> 规则「<span class="val-new">{{ item.to }}</span>」自动执行
               </template>
               <template v-else-if="item.action === 'time_logged'">
-                <span class="time-badge">⏱</span> 记录了工时: <span class="val-new">{{ item.to }}</span>
+                <span class="time-badge">⏱</span>
+                <template v-if="item.detail && item.detail.type === 'time_entry'">
+                  记录了工时
+                  <span class="time-entry-table">
+                    <span class="te-cell te-duration">{{ formatDurationMin(item.detail.duration) }}</span>
+                    <span v-if="item.detail.workDate" class="te-cell te-date">{{ formatWorkDate(item.detail.workDate) }}</span>
+                    <span v-if="item.detail.workType" class="te-cell te-type">{{ item.detail.workType }}</span>
+                    <span v-if="item.detail.description" class="te-cell te-desc">{{ item.detail.description }}</span>
+                  </span>
+                </template>
+                <template v-else>
+                  记录了工时: <span class="val-new">{{ item.to }}</span>
+                </template>
               </template>
               <template v-else-if="item.action === 'time_removed'">
-                <span class="time-badge">⏱</span> 删除了工时: <span class="val-old">{{ item.from }}</span>
+                <span class="time-badge">⏱</span>
+                <template v-if="item.detail && item.detail.type === 'time_entry'">
+                  删除了工时
+                  <span class="time-entry-table">
+                    <span class="te-cell te-duration te-old">{{ formatDurationMin(item.detail.duration) }}</span>
+                    <span v-if="item.detail.workDate" class="te-cell te-date te-old">{{ formatWorkDate(item.detail.workDate) }}</span>
+                    <span v-if="item.detail.workType" class="te-cell te-type te-old">{{ item.detail.workType }}</span>
+                    <span v-if="item.detail.description" class="te-cell te-desc te-old">{{ item.detail.description }}</span>
+                  </span>
+                </template>
+                <template v-else>
+                  删除了工时: <span class="val-old">{{ item.from }}</span>
+                </template>
               </template>
               <template v-else-if="item.action === 'time_updated'">
-                <span class="time-badge">⏱</span> 修改了工时: <span class="val-new">{{ item.to }}</span>
+                <span class="time-badge">⏱</span>
+                <template v-if="item.detail && item.detail.type === 'time_entry'">
+                  修改了工时
+                  <span class="time-entry-table">
+                    <span class="te-cell te-duration">{{ formatDurationMin(item.detail.duration) }}</span>
+                    <span v-if="item.detail.workDate" class="te-cell te-date">{{ formatWorkDate(item.detail.workDate) }}</span>
+                    <span v-if="item.detail.workType" class="te-cell te-type">{{ item.detail.workType }}</span>
+                    <span v-if="item.detail.description" class="te-cell te-desc">{{ item.detail.description }}</span>
+                  </span>
+                  <span class="te-changes">{{ item.to }}</span>
+                </template>
+                <template v-else>
+                  修改了工时: <span class="val-new">{{ item.to }}</span>
+                </template>
               </template>
               <template v-else-if="item.action === 'attachment_added'">
                 添加了附件: <span class="val-new">{{ item.to }}</span>
@@ -276,6 +313,27 @@ function avatarBg(name: string) {
   return c[(name || '').charCodeAt(0) % c.length]
 }
 
+/** 将分钟数格式化为 "Xh Ym" 或 "Xm" */
+function formatDurationMin(minutes?: number): string {
+  if (minutes == null || isNaN(minutes)) return ''
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+/** 将 ISO 日期字符串（"2026-07-20"）格式化为可读形式（"Jul 20, 2026"） */
+function formatWorkDate(dateStr?: string): string {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr + 'T00:00:00')
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  } catch {
+    return dateStr
+  }
+}
+
 onBeforeUnmount(() => { editEditor.value?.destroy() })
 </script>
 
@@ -442,6 +500,41 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .val-new { color: var(--tf-accent); font-weight: 500; }
 .time-badge { font-size: 13px; }
 .system-event-badge { font-size: 13px; }
+
+/* Structured time entry display (YouTrack style) */
+.time-entry-table {
+  display: inline-flex;
+  gap: 0;
+  align-items: center;
+  margin-left: 6px;
+  border: 1px solid var(--tf-border);
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.te-cell {
+  padding: 2px 8px;
+  font-size: 12px;
+  border-right: 1px solid var(--tf-border);
+  color: var(--tf-text-secondary);
+  background: var(--tf-bg-elevated);
+  white-space: nowrap;
+}
+.te-cell:last-child { border-right: none; }
+.te-duration { font-weight: 600; color: var(--tf-accent); min-width: 36px; text-align: center; }
+.te-date { color: var(--tf-text-tertiary); }
+.te-type { color: var(--tf-text-secondary); }
+.te-desc { color: var(--tf-text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+/* Removed/deleted time entry cells */
+.te-old { text-decoration: line-through; opacity: 0.6; }
+.te-old.te-duration { color: var(--tf-text-muted); }
+/* Changes description for time_updated */
+.te-changes {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--tf-text-muted);
+  font-style: italic;
+}
 
 .empty { color: var(--tf-text-muted); font-size: 12px; text-align: center; padding: 24px 0; }
 </style>
