@@ -53,10 +53,10 @@ const route = useRoute()
 
 const isDetailPage = computed(() => route.name === 'ReportDetail')
 
-/** Sidebar is shown on ReportList and ReportDetail pages */
+/** Sidebar is shown on all report sub-pages for consistent navigation experience */
 const showSidebar = computed(() => {
   const name = route.name as string
-  return name === 'ReportList' || name === 'ReportDetail'
+  return ['ReportList', 'ReportDetail', 'ReportOverview', 'TimeReport', 'EstimationReport'].includes(name)
 })
 
 // ─── Sidebar data ────────────────────────────────────────
