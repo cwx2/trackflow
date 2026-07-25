@@ -46,6 +46,9 @@ public class BoardGeneralConfig implements Serializable {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer doneRetentionDays;
 
+    /** 看板列标识字段：status=按状态分列(默认), priority=按优先级分列 */
+    private String columnField;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

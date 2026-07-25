@@ -21,25 +21,10 @@
             </a-doption>
           </template>
         </a-dropdown>
-        <a-select
+        <BoardSelector
           v-model="selectedProject"
-          placeholder="选择项目"
-          style="width: 200px"
-          size="small"
-          allow-search
-          :loading="projectLoadState === 'loading'"
-          @change="onProjectChange"
-        >
-          <template v-if="projectLoadState === 'error'" #empty>
-            <div class="select-error-state">
-              <span>加载失败</span>
-              <a-link @click.stop="loadProjects">重试</a-link>
-            </div>
-          </template>
-          <a-option v-for="p in projects" :key="p.id" :value="p.id">
-            {{ p.key }} - {{ p.name }}
-          </a-option>
-        </a-select>
+          @update:model-value="onProjectChange"
+        />
         <a-select
           v-model="selectedSprint"
           placeholder="所有迭代"
@@ -976,6 +961,7 @@ import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { getDueDateInfo } from '@/utils/dueDate'
 import BoardSettingsDrawer from './BoardSettingsDrawer.vue'
+import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'

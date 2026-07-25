@@ -49,6 +49,72 @@
       </a-radio-group>
     </div>
 
+    <!-- 泳道值选择器（当选择了非 none 的分组字段时显示） -->
+    <div v-if="groupByField !== 'none'" class="settings-section">
+      <div class="section-title">泳道值选择</div>
+      <div class="section-desc">
+        选择要显示为泳道行的具体值。未选中值的工单将归入"未分类"泳道。
+        不选择任何值或全选时，显示所有泳道。
+      </div>
+
+      <div class="value-selector">
+        <div class="value-selector-actions">
+          <a-button size="mini" type="text" @click="selectAll">全选</a-button>
+          <a-button size="mini" type="text" @click="deselectAll">取消全选</a-button>
+          <span v-if="!isAllSelected" class="selected-count">
+            已选 {{ selectedValues?.length || 0 }} / {{ availableValues.length }}
+          </span>
+          <span v-else class="selected-count">全部显示</span>
+        </div>
+
+        <a-spin :loading="loadingValues" class="value-list-container">
+          <div class="value-list">
+            <div
+              v-for="opt in availableValues"
+              :key="opt.key"
+              class="value-item"
+              :class="{ 'value-item--selected': isAllSelected || selectedSet.has(opt.key) }"
+              @click="toggleValue(opt.key)"
+            >
+              <a-checkbox
+                :model-value="isAllSelected || selectedSet.has(opt.key)"
+                @click.stop
+                @change="toggleValue(opt.key)"
+              />
+              <span class="value-item-label">{{ opt.label }}</span>
+            </div>
+            <div v-if="!loadingValues && availableValues.length === 0" class="value-list-empty">
+              暂无可选值
+            </div>
+          </div>
+        </a-spin>
+      </div>
+
+      <!-- 未分类泳道控制 -->
+      <div class="uncategorized-settings">
+        <div class="uncategorized-toggle">
+          <a-checkbox
+            :model-value="showUncategorized"
+            @change="onShowUncategorizedChange"
+          >
+            显示未分类泳道
+          </a-checkbox>
+          <span class="uncategorized-desc">将不匹配任何选中值的工单归入此泳道</span>
+        </div>
+        <div v-if="showUncategorized" class="uncategorized-position">
+          <span class="position-label">位置：</span>
+          <a-radio-group
+            :model-value="uncategorizedPosition"
+            size="small"
+            @change="onUncategorizedPositionChange"
+          >
+            <a-radio value="top">顶部</a-radio>
+            <a-radio value="bottom">底部</a-radio>
+          </a-radio-group>
+        </div>
+      </div>
+    </div>
+
     <!-- 列合并配置 -->
     <div class="settings-section">
       <div class="section-title">列合并</div>
@@ -140,9 +206,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { BoardColumnVO, BoardColumnMergeGroupVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
+import { projectApi, sprintApi, tagApi } from '@/api'
 
 interface MergeGroupLocal {
   mergeGroupId: string
@@ -152,17 +219,151 @@ interface MergeGroupLocal {
 
 const props = defineProps<{
   groupByField: string
+  selectedValues: string[] | null
+  showUncategorized: boolean
+  uncategorizedPosition: 'top' | 'bottom'
   mergeGroups: MergeGroupLocal[]
   columns: BoardColumnVO[]
+  projectId: string
 }>()
 
 const emit = defineEmits<{
   'update:groupByField': [value: string]
+  'update:selectedValues': [value: string[] | null]
+  'update:showUncategorized': [value: boolean]
+  'update:uncategorizedPosition': [value: 'top' | 'bottom']
   'update:mergeGroups': [value: MergeGroupLocal[]]
 }>()
 
+// ===== 可选值数据源 =====
+interface ValueOption {
+  key: string
+  label: string
+}
+
+const availableValues = ref<ValueOption[]>([])
+const loadingValues = ref(false)
+
+// 预定义的优先级和类型列表
+const PRIORITIES = ['Critical', 'High', 'Normal', 'Low']
+const PRIORITY_LABELS: Record<string, string> = { Critical: '紧急', High: '高', Normal: '普通', Low: '低' }
+const TYPES = ['Bug', 'Task', 'Feature', 'Story', 'Epic']
+const TYPE_LABELS: Record<string, string> = { Task: '任务', Bug: '缺陷', Feature: '需求', Epic: '史诗', Story: '故事' }
+
+/** 当分组字段变化时，加载该字段的可选值 */
+async function loadAvailableValues() {
+  const field = props.groupByField
+  if (field === 'none') {
+    availableValues.value = []
+    return
+  }
+
+  loadingValues.value = true
+  try {
+    switch (field) {
+      case 'assignee': {
+        const res = await projectApi.listMembers(props.projectId)
+        if (res.data) {
+          availableValues.value = res.data.map((m: any) => ({
+            key: m.userId,
+            label: m.displayName || m.username
+          }))
+        }
+        break
+      }
+      case 'priority': {
+        availableValues.value = PRIORITIES.map(p => ({
+          key: p,
+          label: PRIORITY_LABELS[p] || p
+        }))
+        break
+      }
+      case 'type': {
+        availableValues.value = TYPES.map(t => ({
+          key: t,
+          label: TYPE_LABELS[t] || t
+        }))
+        break
+      }
+      case 'sprint': {
+        const res = await sprintApi.list(props.projectId)
+        if (res.data) {
+          availableValues.value = (res.data as any[]).map((s: any) => ({
+            key: s.id,
+            label: s.name
+          }))
+        }
+        break
+      }
+      case 'tag': {
+        const res = await tagApi.listProjectTags(props.projectId)
+        if (res.data) {
+          availableValues.value = (res.data as any[]).map((t: any) => ({
+            key: t.id,
+            label: t.name
+          }))
+        }
+        break
+      }
+      default:
+        availableValues.value = []
+    }
+  } catch {
+    availableValues.value = []
+  } finally {
+    loadingValues.value = false
+  }
+}
+
+// 当分组字段变化时重新加载可选值
+watch(() => props.groupByField, () => {
+  loadAvailableValues()
+}, { immediate: true })
+
+/** 已选中的值集合（用于 UI 展示） */
+const selectedSet = computed(() => new Set(props.selectedValues || []))
+
+/** 是否全选（null 或空数组时为全选） */
+const isAllSelected = computed(() => !props.selectedValues || props.selectedValues.length === 0)
+
 function onGroupByChange(val: string | number | boolean) {
   emit('update:groupByField', val as string)
+  // 切换分组维度时重置选中值
+  emit('update:selectedValues', null)
+  emit('update:showUncategorized', true)
+  emit('update:uncategorizedPosition', 'bottom')
+}
+
+function toggleValue(key: string) {
+  const current = props.selectedValues ? [...props.selectedValues] : []
+  const idx = current.indexOf(key)
+  if (idx >= 0) {
+    current.splice(idx, 1)
+  } else {
+    current.push(key)
+  }
+  // 如果全部选中，设为 null（全选模式）
+  if (current.length === availableValues.value.length) {
+    emit('update:selectedValues', null)
+  } else {
+    emit('update:selectedValues', current.length > 0 ? current : null)
+  }
+}
+
+function selectAll() {
+  emit('update:selectedValues', null)
+}
+
+function deselectAll() {
+  emit('update:selectedValues', [])
+}
+
+function onShowUncategorizedChange(val: boolean | (string | number | boolean)[]) {
+  emit('update:showUncategorized', val as boolean)
+}
+
+function onUncategorizedPositionChange(val: string | number | boolean) {
+  emit('update:uncategorizedPosition', val as 'top' | 'bottom')
 }
 
 function emitMergeChange() {
@@ -364,6 +565,105 @@ function generateId(): string {
 
 .add-merge-group {
   margin-top: 4px;
+}
+
+/* ===== 泳道值选择器 ===== */
+.value-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.value-selector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selected-count {
+  font-size: 11px;
+  color: var(--color-text-3);
+  margin-left: auto;
+}
+
+.value-list-container {
+  width: 100%;
+}
+
+.value-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.value-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.value-item:hover {
+  background: var(--color-fill-1);
+}
+
+.value-item--selected {
+  background: var(--color-fill-2);
+}
+
+.value-item-label {
+  font-size: 13px;
+  color: var(--color-text-1);
+}
+
+.value-list-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+
+/* ===== 未分类泳道设置 ===== */
+.uncategorized-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--color-fill-1);
+  border-radius: 6px;
+}
+
+.uncategorized-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.uncategorized-desc {
+  font-size: 11px;
+  color: var(--color-text-3);
+  margin-left: 24px;
+}
+
+.uncategorized-position {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 24px;
+}
+
+.position-label {
+  font-size: 12px;
+  color: var(--color-text-2);
 }
 
 /* ===== 帮助说明 ===== */

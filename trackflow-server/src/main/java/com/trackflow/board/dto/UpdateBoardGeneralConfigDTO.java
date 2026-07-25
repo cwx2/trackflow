@@ -42,4 +42,8 @@ public class UpdateBoardGeneralConfigDTO {
     /** 已完成工单保留天数（null 表示不限制） */
     @Min(value = 1, message = "保留天数必须大于 0")
     private Integer doneRetentionDays;
+
+    /** 看板列标识字段：status | priority（默认 status） */
+    @Pattern(regexp = "^(status|priority)$", message = "列标识字段只允许: status, priority")
+    private String columnField;
 }

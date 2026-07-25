@@ -14,6 +14,7 @@ import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
 import com.trackflow.board.service.BoardConfigVersionService;
 import com.trackflow.board.service.BoardDataService;
+import com.trackflow.board.service.BoardFavoriteService;
 import com.trackflow.board.service.BoardGeneralConfigService;
 import com.trackflow.board.service.BoardSettingsService;
 import com.trackflow.board.service.BoardSwimlaneConfigService;
@@ -23,6 +24,7 @@ import com.trackflow.board.vo.BoardColumnMergeGroupVO;
 import com.trackflow.board.vo.BoardColumnVO;
 import com.trackflow.board.vo.BoardDataVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
+import com.trackflow.board.vo.BoardListItemVO;
 import com.trackflow.board.vo.BoardSwimlaneConfigVO;
 import com.trackflow.common.model.R;
 import jakarta.validation.Valid;
@@ -49,6 +51,7 @@ public class BoardController {
     private final BoardConfigVersionService boardConfigVersionService;
     private final BoardSettingsService boardSettingsService;
     private final BoardDataService boardDataService;
+    private final BoardFavoriteService boardFavoriteService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
@@ -277,6 +280,41 @@ public class BoardController {
             @RequestParam("projectId") Long projectId,
             @Valid @RequestBody SaveBoardSettingsDTO dto) {
         boardSettingsService.saveAllSettings(projectId, dto);
+        return R.ok();
+    }
+
+    // ========== 看板列表 & 收藏 ==========
+
+    /**
+     * 获取当前用户可访问的所有看板列表。
+     * 用于 Board Selector 下拉面板。
+     * 收藏的看板排在列表顶部。
+     */
+    @GetMapping("/list")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<BoardListItemVO>> listBoards() {
+        List<BoardListItemVO> boards = boardFavoriteService.listBoards();
+        return R.ok(boards);
+    }
+
+    /**
+     * 收藏看板（项目）。
+     * 幂等操作，重复收藏不会报错。
+     */
+    @PostMapping("/favorite")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> addFavorite(@RequestParam("projectId") Long projectId) {
+        boardFavoriteService.addFavorite(projectId);
+        return R.ok();
+    }
+
+    /**
+     * 取消收藏看板（项目）。
+     */
+    @DeleteMapping("/favorite")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> removeFavorite(@RequestParam("projectId") Long projectId) {
+        boardFavoriteService.removeFavorite(projectId);
         return R.ok();
     }
 

@@ -8,14 +8,14 @@ import com.trackflow.common.exception.BusinessException;
 import static com.trackflow.common.exception.ErrorCode.ACCESS_DENIED;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.system.mapper.UserGroupRoleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * 看板访问控制服务。
@@ -46,6 +46,7 @@ public class BoardAccessService {
 
     private final BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final UserGroupRoleMapper userGroupRoleMapper;
     private final PermissionService permissionService;
     private final ObjectMapper objectMapper;
 
@@ -116,11 +117,24 @@ public class BoardAccessService {
     }
 
     /**
-     * 获取用户在指定项目中的角色代码列表（单次 JOIN 查询）。
+     * 获取用户在指定项目中的角色代码列表（直接成员 + 用户组成员，合并去重）。
+     * <p>
+     * 路径 1：project_member → sys_role（直接成员角色）
+     * 路径 2：user_group_member → user_group_role → sys_role（通过用户组获得的角色）
      */
     private List<String> getUserProjectRoleCodes(Long userId, Long projectId) {
-        List<String> roleCodes = projectMemberMapper.selectRoleCodesByUserAndProject(userId, projectId);
-        return roleCodes != null ? roleCodes : Collections.emptyList();
+        // 路径 1：直接成员角色
+        List<String> directRoles = projectMemberMapper.selectRoleCodesByUserAndProject(userId, projectId);
+
+        // 路径 2：通过用户组获得的角色
+        List<String> groupRoles = userGroupRoleMapper.selectRoleCodesByUserAndProject(userId, projectId);
+
+        // 合并去重
+        Set<String> allRoles = new HashSet<>();
+        if (directRoles != null) allRoles.addAll(directRoles);
+        if (groupRoles != null) allRoles.addAll(groupRoles);
+
+        return allRoles.isEmpty() ? Collections.emptyList() : new ArrayList<>(allRoles);
     }
 
     /**

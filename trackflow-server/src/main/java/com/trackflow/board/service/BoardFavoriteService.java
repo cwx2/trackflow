@@ -175,16 +175,23 @@ public class BoardFavoriteService {
     /**
      * 判断用户是否有指定项目的看板查看权限。
      * 内联版本，避免对每个项目都做独立 DB 查询。
+     * 同时覆盖直接成员角色和通过用户组获得的角色。
      */
     private boolean hasViewAccessForProject(Long userId, Long projectId,
                                             Map<Long, BoardGeneralConfig> configMap) {
-        // 获取用户在该项目中的角色
-        List<String> userRoleCodes = projectMemberMapper.selectRoleCodesByUserAndProject(userId, projectId);
-        if (userRoleCodes == null || userRoleCodes.isEmpty()) {
-            // 可能通过用户组有权限，但没有直接角色——按默认规则放行
-            // （用户组成员也算项目成员，但 projectMemberMapper 只查直接成员）
-            // 通过用户组关联的用户，在 can_view_roles 检查中使用默认角色列表放行
-            return true;
+        // 获取直接成员角色
+        List<String> directRoleCodes = projectMemberMapper.selectRoleCodesByUserAndProject(userId, projectId);
+
+        // 获取通过用户组获得的角色
+        List<String> groupRoleCodes = userGroupRoleMapper.selectRoleCodesByUserAndProject(userId, projectId);
+
+        // 合并去重
+        Set<String> userRoleCodes = new HashSet<>();
+        if (directRoleCodes != null) userRoleCodes.addAll(directRoleCodes);
+        if (groupRoleCodes != null) userRoleCodes.addAll(groupRoleCodes);
+
+        if (userRoleCodes.isEmpty()) {
+            return false;
         }
 
         // project_admin 始终放行

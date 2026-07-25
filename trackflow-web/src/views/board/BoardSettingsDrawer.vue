@@ -25,6 +25,7 @@
           :filter-mode="editableFilterMode"
           :filter-query="editableFilterQuery"
           :done-retention-days="editableDoneRetentionDays"
+          :column-field="editableColumnField"
           :has-active-sprint="hasActiveSprint"
           @update:name="editableBoardName = $event"
           @update:can-view-roles="editableCanViewRoles = $event"
@@ -32,6 +33,7 @@
           @update:filter-mode="editableFilterMode = $event"
           @update:filter-query="editableFilterQuery = $event"
           @update:done-retention-days="editableDoneRetentionDays = $event"
+          @update:column-field="editableColumnField = $event"
         />
       </a-tab-pane>
 
@@ -163,9 +165,16 @@
       <a-tab-pane key="swimlanes" title="泳道">
         <SwimlaneSettingsPanel
           :group-by-field="editableSwimlaneGroupBy"
+          :selected-values="editableSwimlaneSelectedValues"
+          :show-uncategorized="editableSwimlaneShowUncategorized"
+          :uncategorized-position="editableSwimlaneUncategorizedPosition"
           :merge-groups="editableMergeGroups"
           :columns="editableColumns"
+          :project-id="projectId"
           @update:group-by-field="editableSwimlaneGroupBy = $event"
+          @update:selected-values="editableSwimlaneSelectedValues = $event"
+          @update:show-uncategorized="editableSwimlaneShowUncategorized = $event"
+          @update:uncategorized-position="editableSwimlaneUncategorizedPosition = $event"
           @update:merge-groups="editableMergeGroups = $event"
         />
       </a-tab-pane>
@@ -255,9 +264,13 @@ const editableCanEditRoles = ref<string[]>(['project_admin', 'tech_lead'])
 const editableFilterMode = ref('all')
 const editableFilterQuery = ref<string | null>(null)
 const editableDoneRetentionDays = ref<number | null>(null)
+const editableColumnField = ref('status')
 
 // 泳道设置状态
 const editableSwimlaneGroupBy = ref('none')
+const editableSwimlaneSelectedValues = ref<string[] | null>(null)
+const editableSwimlaneShowUncategorized = ref(true)
+const editableSwimlaneUncategorizedPosition = ref<'top' | 'bottom'>('bottom')
 const editableMergeGroups = ref<MergeGroupLocal[]>([])
 
 // 图表设置状态
@@ -325,9 +338,15 @@ watch(() => props.visible, async (newVisible) => {
       const res = await boardApi.getSwimlaneConfig(props.projectId)
       if (res.data) {
         editableSwimlaneGroupBy.value = res.data.groupByField || 'none'
+        editableSwimlaneSelectedValues.value = res.data.selectedValues || null
+        editableSwimlaneShowUncategorized.value = res.data.showUncategorized !== false
+        editableSwimlaneUncategorizedPosition.value = res.data.uncategorizedPosition || 'bottom'
       }
     } catch {
       editableSwimlaneGroupBy.value = 'none'
+      editableSwimlaneSelectedValues.value = null
+      editableSwimlaneShowUncategorized.value = true
+      editableSwimlaneUncategorizedPosition.value = 'bottom'
     }
 
     // 加载图表配置
@@ -376,6 +395,7 @@ watch(() => props.visible, async (newVisible) => {
         editableFilterMode.value = res.data.filterMode || 'all'
         editableFilterQuery.value = res.data.filterQuery ?? null
         editableDoneRetentionDays.value = res.data.doneRetentionDays ?? null
+        editableColumnField.value = res.data.columnField || 'status'
         // 保存版本号用于乐观锁
         configVersion.value = res.data.configVersion ?? 0
       }
@@ -386,6 +406,7 @@ watch(() => props.visible, async (newVisible) => {
       editableFilterMode.value = 'all'
       editableFilterQuery.value = null
       editableDoneRetentionDays.value = null
+      editableColumnField.value = 'status'
       configVersion.value = 0
     }
   }
@@ -605,6 +626,9 @@ async function reloadAllConfigs() {
     // 更新泳道配置
     if (swimRes.data) {
       editableSwimlaneGroupBy.value = swimRes.data.groupByField || 'none'
+      editableSwimlaneSelectedValues.value = swimRes.data.selectedValues || null
+      editableSwimlaneShowUncategorized.value = swimRes.data.showUncategorized !== false
+      editableSwimlaneUncategorizedPosition.value = swimRes.data.uncategorizedPosition || 'bottom'
     }
 
     // 更新列合并配置
@@ -696,7 +720,10 @@ async function handleSave() {
         colorScheme: editableColorScheme.value
       },
       swimlaneConfig: {
-        groupByField: editableSwimlaneGroupBy.value
+        groupByField: editableSwimlaneGroupBy.value,
+        selectedValues: editableSwimlaneSelectedValues.value,
+        showUncategorized: editableSwimlaneShowUncategorized.value,
+        uncategorizedPosition: editableSwimlaneUncategorizedPosition.value
       },
       columnMerges: {
         mergeGroups: validMergeGroups.map(g => ({
@@ -711,7 +738,8 @@ async function handleSave() {
         canEditRoles: editableCanEditRoles.value,
         filterMode: editableFilterMode.value,
         filterQuery: editableFilterQuery.value,
-        doneRetentionDays: editableDoneRetentionDays.value
+        doneRetentionDays: editableDoneRetentionDays.value,
+        columnField: editableColumnField.value
       },
       chartConfig: {
         chartType: editableChartType.value,

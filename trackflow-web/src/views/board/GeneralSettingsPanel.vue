@@ -142,6 +142,24 @@
       </div>
     </div>
 
+    <!-- 列标识字段 -->
+    <div class="section">
+      <div class="section-title">列标识字段</div>
+      <div class="section-desc">选择看板列使用哪个字段来标识。修改后看板将按新字段的值分列。</div>
+      <a-select
+        :model-value="editableColumnField"
+        placeholder="选择列标识字段"
+        style="width: 220px"
+        @change="onColumnFieldChange"
+      >
+        <a-option value="status">状态（Status）</a-option>
+        <a-option value="priority">优先级（Priority）</a-option>
+      </a-select>
+      <div v-if="editableColumnField === 'priority'" class="column-field-hint">
+        <span>⚠️ 优先级模式下拖拽卡片将变更优先级，而非触发状态转换。</span>
+      </div>
+    </div>
+
     <!-- 查看权限 -->
     <div class="section">
       <div class="section-title">谁可以查看看板</div>
@@ -219,6 +237,7 @@ const props = defineProps<{
   filterMode: string
   filterQuery: string | null
   doneRetentionDays: number | null
+  columnField: string
   hasActiveSprint: boolean
 }>()
 
@@ -229,6 +248,7 @@ const emit = defineEmits<{
   'update:filterMode': [value: string]
   'update:filterQuery': [value: string | null]
   'update:doneRetentionDays': [value: number | null]
+  'update:columnField': [value: string]
 }>()
 
 const availableRoles: RoleOption[] = [
@@ -286,6 +306,12 @@ const viewRolesSet = ref<Set<string>>(new Set(props.canViewRoles))
 const editRolesSet = ref<Set<string>>(new Set(props.canEditRoles))
 const editableFilterMode = ref(props.filterMode || 'all')
 const editableDoneRetentionDays = ref<number | undefined>(props.doneRetentionDays ?? undefined)
+const editableColumnField = ref(props.columnField || 'status')
+
+function onColumnFieldChange(value: string) {
+  editableColumnField.value = value
+  emit('update:columnField', value)
+}
 
 // ===== 查询过滤条件行 =====
 const filterRows = ref<FilterRow[]>([])
@@ -687,5 +713,12 @@ function toggleEditRole(code: string, checked: boolean) {
 .role-desc {
   font-size: 12px;
   color: var(--color-text-3);
+}
+
+.column-field-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgb(var(--warning-6));
+  line-height: 1.5;
 }
 </style>

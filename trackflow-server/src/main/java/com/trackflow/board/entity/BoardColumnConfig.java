@@ -20,6 +20,8 @@ public class BoardColumnConfig implements Serializable {
     private Long id;
     private Long projectId;
     private Long statusId;
+    /** 通用列标识值。status模式=status_id字符串, priority模式=priority枚举值 */
+    private String fieldValue;
     private Boolean visible;
     private Integer sortOrder;
     private Boolean collapsed;

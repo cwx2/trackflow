@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO, BoardDataVO } from './types'
+import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO, BoardDataVO, BoardListItemVO } from './types'
 
 /**
  * 看板模块 API
@@ -137,6 +137,27 @@ export const boardApi = {
     chartConfig?: { chartType: string; burndownCalculation: string; issueFilterMode: string; issueFilterQuery?: string | null; estimationFieldId?: number | null; originalEstimationFieldId?: number | null }
   }) {
     return request.put<any, R<void>>('/boards/settings', data, {
+      params: { projectId }
+    })
+  },
+
+  // ========== 看板列表 & 收藏（Board Selector） ==========
+
+  /** 获取看板列表（Board Selector 用） */
+  listBoards() {
+    return request.get<any, R<BoardListItemVO[]>>('/boards/list')
+  },
+
+  /** 收藏看板 */
+  addFavorite(projectId: string) {
+    return request.post<any, R<void>>('/boards/favorite', null, {
+      params: { projectId }
+    })
+  },
+
+  /** 取消收藏看板 */
+  removeFavorite(projectId: string) {
+    return request.delete<any, R<void>>('/boards/favorite', {
       params: { projectId }
     })
   }

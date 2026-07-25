@@ -255,11 +255,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { issueApi, projectApi } from '@/api'
 import type { IssueDetailVO, IssueCommentVO, IssueStatusVO } from '@/api/types'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import TimeProgressIndicator from '@/views/issue/components/TimeProgressIndicator.vue'
 import { localizeStatusName, localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
@@ -334,13 +334,52 @@ async function selectStatus(target: IssueStatusVO) {
   if (!props.issueId || !detail.value) return
   editingStatus.value = false
 
+  if (target.requireComment) {
+    // Show comment modal for transitions that require a reason
+    let commentText = ''
+    Modal.confirm({
+      title: '状态变更 — 请填写理由',
+      content: () => h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
+        h('div', { style: 'display:flex;align-items:center;gap:6px' }, [
+          h('span', { style: 'color:var(--color-text-3);font-size:13px' }, '目标状态：'),
+          h('span', { style: `background:${target.color};color:#fff;padding:2px 8px;border-radius:3px;font-size:12px` }, localizeStatusName(target.name))
+        ]),
+        h('textarea', {
+          placeholder: '请说明退回/变更的原因（必填）',
+          style: 'width:100%;min-height:80px;margin-top:8px;padding:8px;border:1px solid var(--color-border-2);border-radius:4px;resize:vertical;font-size:13px;background:var(--color-bg-2);color:var(--color-text-1)',
+          onInput: (e: Event) => { commentText = (e.target as HTMLTextAreaElement).value }
+        })
+      ]),
+      okText: '确认变更',
+      cancelText: '取消',
+      width: 480,
+      onBeforeOk: () => {
+        if (!commentText.trim()) {
+          Message.warning('请填写变更理由')
+          return false
+        }
+        return true
+      },
+      onOk: async () => {
+        await doTransitStatus(target, commentText.trim())
+      }
+    })
+    return
+  }
+
+  await doTransitStatus(target, undefined)
+}
+
+async function doTransitStatus(target: IssueStatusVO, comment: string | undefined) {
+  if (!props.issueId || !detail.value) return
+
   const oldStatusId = detail.value.statusId
   // Optimistic update
   detail.value.status = { ...detail.value.status!, id: target.id, name: target.name, color: target.color }
   detail.value.statusId = target.id
 
   try {
-    await issueApi.transitStatus(props.issueId, target.id, undefined, detail.value.version)
+    await issueApi.transitStatus(props.issueId, target.id, comment, detail.value.version)
     // Bump local version
     detail.value.version = (detail.value.version || 0) + 1
     Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)

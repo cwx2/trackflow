@@ -2,6 +2,8 @@ package com.trackflow.board.vo;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 /**
  * 看板列配置 VO —— 返回给前端的列配置信息
  */
@@ -10,6 +12,9 @@ public class BoardColumnVO {
 
     /** 状态 ID */
     private String statusId;
+
+    /** 通用列标识值（status模式=statusId, priority模式=Critical/High/Normal/Low） */
+    private String fieldValue;
 
     /** 状态名称 */
     private String statusName;
@@ -46,6 +51,9 @@ public class BoardColumnVO {
 
     /** 该项目中处于此状态的工单数量 */
     private Integer issueCount;
+
+    /** 该列所有工单的预估工时总和（estimated_hours 聚合） */
+    private BigDecimal totalEstimation;
 
     /** 该状态是否出现在项目的工作流转换路径中（即是工作流图中的节点） */
     private Boolean inWorkflow;
