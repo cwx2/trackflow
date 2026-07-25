@@ -12,6 +12,7 @@ import com.trackflow.timeentry.dto.StopTimerDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.service.TimeEntryService;
+import com.trackflow.timeentry.vo.GroupTimeSummaryVO;
 import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryVO;
 import com.trackflow.timeentry.vo.TimeEntryUserVO;
@@ -172,6 +173,24 @@ public class TimeEntryController {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
         }
         return R.ok(timeEntryService.sumByUserAndDateRange(targetUserId, currentUserId, startDate, endDate));
+    }
+
+    /**
+     * 按工作组汇总工时（工作群组视图）
+     * 查询指定用户组（或所有组）的成员工时，按成员分组展示
+     *
+     * @param groupId   用户组 ID（可选，不传则返回所有组的概览）
+     * @param startDate 开始日期
+     * @param endDate   结束日期
+     */
+    @GetMapping("/by-group")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<GroupTimeSummaryVO>> listByGroup(
+            @RequestParam(value = "groupId", required = false) Long groupId,
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return R.ok(timeEntryService.listByGroup(groupId, currentUserId, startDate, endDate));
     }
 
     /**

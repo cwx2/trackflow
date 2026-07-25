@@ -12,6 +12,8 @@ import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
+import com.trackflow.system.mapper.UserGroupMapper;
+import com.trackflow.system.mapper.UserGroupMemberMapper;
 import com.trackflow.timeentry.converter.TimeEntryConverter;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.StartTimerDTO;
@@ -19,6 +21,7 @@ import com.trackflow.timeentry.dto.StopTimerDTO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
+import com.trackflow.timeentry.vo.GroupTimeSummaryVO;
 import com.trackflow.timeentry.vo.ProjectTimeSummaryVO;
 import com.trackflow.timeentry.vo.TimeEntryAttributeValueVO;
 import com.trackflow.timeentry.vo.TimeEntryUserVO;
@@ -52,6 +55,8 @@ public class TimeEntryService {
     private final IssueActivityMapper activityMapper;
     private final IssueMapper issueMapper;
     private final SysUserMapper sysUserMapper;
+    private final UserGroupMapper groupMapper;
+    private final UserGroupMemberMapper groupMemberMapper;
     private final com.trackflow.issue.service.AncestorRefreshService ancestorRefreshService;
     private final com.trackflow.workitemattr.service.WorkItemAttributeService workItemAttributeService;
     private final com.trackflow.project.service.ProjectService projectService;
@@ -407,10 +412,112 @@ public class TimeEntryService {
     }
 
     /**
-     * 查询某 Issue 的所有工时记录
+     * 按工作组汇总工时（工作群组视图）
+     * 查询指定用户组内所有成员在日期范围内的工时，按成员分组展示
+     *
+     * @param groupId       用户组 ID（null 表示查询所有用户组的汇总概览）
+     * @param currentUserId 当前登录用户 ID（用于 ongoing 可见性控制和权限检查）
+     * @param startDate     开始日期
+     * @param endDate       结束日期
      */
     @Transactional(readOnly = true)
-    public List<TimeEntryVO> listByIssue(Long issueId, Long currentUserId) {
+    public List<GroupTimeSummaryVO> listByGroup(Long groupId, Long currentUserId, LocalDate startDate, LocalDate endDate) {
+        // 获取所有用户组列表（若指定了 groupId，只查该组）
+        List<com.trackflow.system.entity.UserGroup> groups;
+        if (groupId != null) {
+            com.trackflow.system.entity.UserGroup group = groupMapper.selectById(groupId);
+            if (group == null) {
+                return List.of();
+            }
+            groups = List.of(group);
+        } else {
+            groups = groupMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.system.entity.UserGroup>()
+                            .orderByAsc(com.trackflow.system.entity.UserGroup::getName)
+            );
+        }
+
+        if (groups.isEmpty()) {
+            return List.of();
+        }
+
+        Long workTypeAttrId = workItemAttributeService.getWorkTypeAttributeId();
+
+        List<GroupTimeSummaryVO> result = new ArrayList<>();
+        for (com.trackflow.system.entity.UserGroup group : groups) {
+            // 获取该组的成员 ID 列表
+            List<Long> memberUserIds = groupMemberMapper.selectUserIdsByGroupId(group.getId());
+
+            GroupTimeSummaryVO groupVO = new GroupTimeSummaryVO();
+            groupVO.setGroupId(String.valueOf(group.getId()));
+            groupVO.setGroupName(group.getName());
+            groupVO.setGroupDescription(group.getDescription());
+            groupVO.setMemberCount(memberUserIds.size());
+
+            if (memberUserIds.isEmpty()) {
+                groupVO.setTotalDuration(0);
+                groupVO.setMembers(List.of());
+                result.add(groupVO);
+                continue;
+            }
+
+            // 批量查询该组所有成员的工时
+            List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByGroupMembers(
+                    memberUserIds, startDate, endDate, workTypeAttrId, currentUserId);
+
+            // 按用户分组
+            Map<String, List<Map<String, Object>>> byUser = rows.stream()
+                    .collect(Collectors.groupingBy(
+                            row -> String.valueOf(row.get("user_id")),
+                            LinkedHashMap::new,
+                            Collectors.toList()
+                    ));
+
+            // 确保每个成员都有对应条目（即使无工时）
+            List<GroupTimeSummaryVO.MemberTimeSummaryVO> memberVOs = new ArrayList<>();
+            for (Long memberId : memberUserIds) {
+                String memberIdStr = String.valueOf(memberId);
+                List<Map<String, Object>> memberRows = byUser.getOrDefault(memberIdStr, List.of());
+
+                GroupTimeSummaryVO.MemberTimeSummaryVO memberVO = new GroupTimeSummaryVO.MemberTimeSummaryVO();
+                memberVO.setUserId(memberIdStr);
+
+                if (!memberRows.isEmpty()) {
+                    Map<String, Object> first = memberRows.get(0);
+                    memberVO.setUsername((String) first.get("user_username"));
+                    memberVO.setDisplayName((String) first.get("user_name"));
+                    memberVO.setAvatarUrl((String) first.get("user_avatar_url"));
+                    List<TimeEntryVO> entryVOs = memberRows.stream().map(row -> {
+                        TimeEntryVO vo = mapRowToVO(row);
+                        vo.setUserName((String) row.get("user_name"));
+                        return vo;
+                    }).toList();
+                    memberVO.setEntries(entryVOs);
+                    memberVO.setTotalDuration(entryVOs.stream().mapToInt(e -> e.getDuration() != null ? e.getDuration() : 0).sum());
+                } else {
+                    // 无工时的成员：从数据库加载用户信息
+                    SysUser user = sysUserMapper.selectById(memberId);
+                    if (user != null) {
+                        memberVO.setUsername(user.getUsername());
+                        memberVO.setDisplayName(user.getDisplayName());
+                        memberVO.setAvatarUrl(user.getAvatarUrl());
+                    }
+                    memberVO.setEntries(List.of());
+                    memberVO.setTotalDuration(0);
+                }
+                memberVOs.add(memberVO);
+            }
+
+            // 按工时倒序排列（工时多的成员排前面）
+            memberVOs.sort((a, b) -> Integer.compare(b.getTotalDuration(), a.getTotalDuration()));
+
+            groupVO.setMembers(memberVOs);
+            groupVO.setTotalDuration(memberVOs.stream().mapToInt(GroupTimeSummaryVO.MemberTimeSummaryVO::getTotalDuration).sum());
+            result.add(groupVO);
+        }
+
+        return result;
+    }
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<TimeEntry>()
                 .eq("issue_id", issueId)
                 .and(w -> w.eq("ongoing", false).or().eq("user_id", currentUserId))

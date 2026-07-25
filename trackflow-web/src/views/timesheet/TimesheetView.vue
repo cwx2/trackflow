@@ -208,14 +208,83 @@
 
     <!-- ===================== 工作群组视图 ===================== -->
     <template v-else-if="activeTab === 'workgroups'">
-      <div class="workgroup-empty">
+      <!-- Date range & navigation -->
+      <div class="timesheet-datebar">
+        <div class="date-info">
+          <span class="date-range">{{ dateRangeLabel }}</span>
+          <span class="total-time">所有工作组总工时: {{ formatDuration(groupViewTotal) }}</span>
+        </div>
+        <div class="date-nav">
+          <button class="nav-btn" @click="navigate(-1)">←</button>
+          <button class="nav-btn today-btn" @click="goToday">今天</button>
+          <button class="nav-btn" @click="navigate(1)">→</button>
+          <div class="view-toggle">
+            <button class="toggle-btn" :class="{ active: viewMode === 'week' }" @click="switchView('week')">周</button>
+            <button class="toggle-btn" :class="{ active: viewMode === 'month' }" @click="switchView('month')">月</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 无数据空状态 -->
+      <div v-if="groupSummaries.length === 0 && !loading" class="workgroup-empty">
         <div class="empty-state">
           <div class="empty-icon">👥</div>
-          <div class="empty-title">工作群组功能暂未上线</div>
-          <div class="empty-desc">工作群组允许您将团队成员分组，按群组查看聚合工时。该功能正在开发中，敬请期待。</div>
-          <div class="empty-hint">
-            <span class="hint-icon">💡</span>
-            <span>您可以使用"项目"视图按项目维度查看团队工时汇总</span>
+          <div class="empty-title">暂无工作组数据</div>
+          <div class="empty-desc">当前系统中没有工作组，或工作组内尚无成员。<br>管理员可在「系统管理 → 用户组」中创建工作组并分配成员。</div>
+        </div>
+      </div>
+
+      <!-- 工作组列表（展开/折叠） -->
+      <div v-else class="group-overview">
+        <div v-for="group in groupSummaries" :key="group.groupId" class="group-block">
+          <!-- 工作组标题行（可点击展开） -->
+          <div
+            class="group-header"
+            :class="{ expanded: expandedGroups.has(group.groupId) }"
+            @click="toggleGroupExpand(group.groupId)"
+          >
+            <div class="group-header-left">
+              <span class="group-expand-icon">{{ expandedGroups.has(group.groupId) ? '▼' : '▶' }}</span>
+              <span class="group-icon">👥</span>
+              <span class="group-name">{{ group.groupName }}</span>
+              <span class="group-member-count">{{ group.memberCount }} 人</span>
+            </div>
+            <div class="group-header-right">
+              <span class="group-total-dur">{{ formatDuration(group.totalDuration) }}</span>
+            </div>
+          </div>
+
+          <!-- 展开后的成员列表 -->
+          <div v-if="expandedGroups.has(group.groupId)" class="group-members">
+            <div
+              v-for="member in group.members"
+              :key="member.userId"
+              class="member-row"
+            >
+              <div class="member-info">
+                <span class="member-avatar">{{ (member.displayName || member.username || '?').charAt(0) }}</span>
+                <span class="member-name">{{ member.displayName || member.username }}</span>
+              </div>
+              <div class="member-bar-area">
+                <div class="member-entries" v-if="member.entries && member.entries.length > 0">
+                  <span
+                    v-for="entry in member.entries"
+                    :key="entry.id"
+                    class="member-entry-chip"
+                    :title="`${entry.issueKey || entry.issueId} ${entry.workDate} ${formatDuration(entry.duration || 0)}${entry.description ? ' - ' + entry.description : ''}`"
+                    @click="openEditDialog(entry)"
+                  >
+                    {{ entry.issueKey || '?' }} {{ formatDuration(entry.duration || 0) }}
+                  </span>
+                </div>
+                <span v-else class="member-no-entries">无工时记录</span>
+              </div>
+              <div class="member-total">
+                <span :class="member.totalDuration > 0 ? 'member-total-dur' : 'member-total-zero'">
+                  {{ formatDuration(member.totalDuration) }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -358,7 +427,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoute, useRouter } from 'vue-router'
 import { timeEntryApi, issueApi, projectApi } from '@/api'
-import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, WorkItemAttributeVO } from '@/api/timeEntry'
+import type { TimeEntryVO, ProjectTimeSummaryVO, TimeEntryUserVO, WorkItemAttributeVO, GroupTimeSummaryVO } from '@/api/timeEntry'
 import { workItemAttributeApi } from '@/api/timeEntry'
 import { useTimeTrackingSettings } from '@/composables/useTimeTrackingSettings'
 import WeekGrid from './WeekGrid.vue'
@@ -395,6 +464,10 @@ const dialogSelectableUsers = ref<TimeEntryUserVO[]>([])
 const projectSummaries = ref<ProjectTimeSummaryVO[]>([])
 const selectedProjectId = ref<string | undefined>(undefined)
 const projectEntries = ref<TimeEntryVO[]>([])
+
+// Work Groups view state
+const groupSummaries = ref<GroupTimeSummaryVO[]>([])
+const expandedGroups = ref<Set<string>>(new Set())
 
 // Filter state (people view)
 const filterProjectId = ref<string | undefined>(undefined)
@@ -497,6 +570,10 @@ const projectViewTotal = computed(() => {
   return projectSummaries.value.reduce((sum, p) => sum + p.totalDuration, 0)
 })
 
+const groupViewTotal = computed(() => {
+  return groupSummaries.value.reduce((sum, g) => sum + g.totalDuration, 0)
+})
+
 // Tab switching
 function switchTab(tab: 'people' | 'projects' | 'workgroups') {
   activeTab.value = tab
@@ -506,8 +583,9 @@ function switchTab(tab: 'people' | 'projects' | 'workgroups') {
     loadEntries()
   } else if (tab === 'projects') {
     loadProjectSummaries()
+  } else if (tab === 'workgroups') {
+    loadGroupSummaries()
   }
-  // workgroups: no data to load
 }
 
 // Data loading - People view
@@ -534,6 +612,39 @@ async function loadEntries() {
     Message.error({ content: '加载工时数据失败', duration: 3000 })
   } finally {
     loading.value = false
+  }
+}
+
+// Data loading - Work Groups view
+async function loadGroupSummaries() {
+  loading.value = true
+  try {
+    const { startDate, endDate } = getDateRange()
+    const res = await timeEntryApi.listByGroup({ startDate, endDate })
+    if (res.code === 0 && res.data) {
+      groupSummaries.value = res.data
+      // 自动展开第一个有工时的组
+      if (expandedGroups.value.size === 0 && res.data.length > 0) {
+        const firstWithTime = res.data.find(g => g.totalDuration > 0)
+        if (firstWithTime) {
+          expandedGroups.value.add(firstWithTime.groupId)
+        } else if (res.data.length > 0) {
+          expandedGroups.value.add(res.data[0].groupId)
+        }
+      }
+    }
+  } catch {
+    Message.error({ content: '加载工作组工时数据失败', duration: 3000 })
+  } finally {
+    loading.value = false
+  }
+}
+
+function toggleGroupExpand(groupId: string) {
+  if (expandedGroups.value.has(groupId)) {
+    expandedGroups.value.delete(groupId)
+  } else {
+    expandedGroups.value.add(groupId)
   }
 }
 
@@ -775,6 +886,8 @@ function reloadCurrentTab() {
     } else {
       loadProjectSummaries()
     }
+  } else if (activeTab.value === 'workgroups') {
+    loadGroupSummaries()
   }
 }
 
@@ -1106,6 +1219,8 @@ onMounted(async () => {
     loadProjectSummaries()
   } else if (activeTab.value === 'people') {
     loadEntries()
+  } else if (activeTab.value === 'workgroups') {
+    loadGroupSummaries()
   }
   // Preload some issues for the add dialog
   searchIssues('')
@@ -1180,6 +1295,34 @@ onMounted(async () => {
 
 /* Workgroup empty state */
 .workgroup-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+
+/* Work Groups view */
+.group-overview { flex: 1; overflow-y: auto; padding: 0 24px 24px; display: flex; flex-direction: column; gap: 8px; }
+.group-block { border: 1px solid var(--tf-border-light); border-radius: var(--tf-radius-md); overflow: hidden; }
+.group-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--tf-bg-elevated); cursor: pointer; transition: background 0.15s; user-select: none; }
+.group-header:hover { background: var(--tf-bg-hover); }
+.group-header.expanded { border-bottom: 1px solid var(--tf-border-light); }
+.group-header-left { display: flex; align-items: center; gap: 8px; }
+.group-expand-icon { font-size: 10px; color: var(--tf-text-tertiary); width: 12px; }
+.group-icon { font-size: 14px; }
+.group-name { font-size: 14px; font-weight: 600; color: var(--tf-text-primary); }
+.group-member-count { font-size: 11px; color: var(--tf-text-tertiary); background: var(--tf-bg-surface); padding: 1px 6px; border-radius: 10px; }
+.group-header-right { display: flex; align-items: center; }
+.group-total-dur { font-size: 14px; font-weight: 600; color: var(--tf-accent); }
+.group-members { display: flex; flex-direction: column; }
+.member-row { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--tf-border-light); }
+.member-row:last-child { border-bottom: none; }
+.member-info { display: flex; align-items: center; gap: 8px; min-width: 140px; max-width: 140px; }
+.member-avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--tf-accent), #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 600; flex-shrink: 0; }
+.member-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-bar-area { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; min-height: 24px; align-items: center; }
+.member-entries { display: flex; flex-wrap: wrap; gap: 4px; }
+.member-entry-chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--tf-accent-bg); color: var(--tf-accent); cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+.member-entry-chip:hover { opacity: 0.8; }
+.member-no-entries { font-size: 12px; color: var(--tf-text-tertiary); font-style: italic; }
+.member-total { min-width: 48px; text-align: right; }
+.member-total-dur { font-size: 13px; font-weight: 600; color: var(--tf-text-primary); }
+.member-total-zero { font-size: 13px; color: var(--tf-text-tertiary); }
 
 /* Empty state */
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; }

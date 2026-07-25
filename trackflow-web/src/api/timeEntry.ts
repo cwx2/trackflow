@@ -50,6 +50,24 @@ export interface ProjectTimeSummaryVO {
   entries: TimeEntryVO[]
 }
 
+export interface GroupMemberTimeSummaryVO {
+  userId: string
+  username: string
+  displayName: string
+  avatarUrl?: string
+  totalDuration: number  // minutes
+  entries: TimeEntryVO[]
+}
+
+export interface GroupTimeSummaryVO {
+  groupId: string
+  groupName: string
+  groupDescription?: string
+  totalDuration: number  // minutes
+  memberCount: number
+  members: GroupMemberTimeSummaryVO[]
+}
+
 export interface TimeEntryUserVO {
   id: string
   username: string
@@ -117,6 +135,11 @@ export const timeEntryApi = {
   /** 汇总工时（分钟） */
   summary(params: { userId?: string; startDate: string; endDate: string }) {
     return request.get<any, R<number>>('/time-entries/summary', { params })
+  },
+
+  /** 按工作组汇总工时（工作群组视图） */
+  listByGroup(params: { startDate: string; endDate: string; groupId?: string }) {
+    return request.get<any, R<GroupTimeSummaryVO[]>>('/time-entries/by-group', { params })
   },
 
   /** 按项目汇总工时（项目视图概览） */

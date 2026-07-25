@@ -86,4 +86,22 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      * 查询项目中所有活跃的计时器（ongoing=true）
      */
     List<TimeEntry> selectActiveTimersByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 查询指定用户组内所有成员在日期范围内的工时记录
+     * ongoing 记录仅对其所有者可见（需传入 currentUserId）
+     *
+     * @param userIds           用户组内的成员 ID 列表
+     * @param startDate         开始日期
+     * @param endDate           结束日期
+     * @param workTypeAttributeId Work type 属性 ID
+     * @param currentUserId     当前登录用户 ID（用于 ongoing 可见性过滤）
+     */
+    List<Map<String, Object>> selectEntriesByGroupMembers(
+            @Param("userIds") List<Long> userIds,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate,
+            @Param("workTypeAttributeId") Long workTypeAttributeId,
+            @Param("currentUserId") Long currentUserId
+    );
 }
