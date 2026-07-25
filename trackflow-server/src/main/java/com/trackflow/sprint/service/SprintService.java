@@ -954,7 +954,7 @@ public class SprintService {
      */
     @Transactional(readOnly = true)
     public BurndownVO getBurndownData(Long sprintId) {
-        return getBurndownData(sprintId, "issue_count");
+        return getBurndownData(sprintId, "issue_count", null);
     }
 
     /**
@@ -965,6 +965,18 @@ public class SprintService {
      */
     @Transactional(readOnly = true)
     public BurndownVO getBurndownData(Long sprintId, String mode) {
+        return getBurndownData(sprintId, mode, null);
+    }
+
+    /**
+     * 获取 Sprint 燃尽图数据（支持自定义估算字段）。
+     *
+     * @param sprintId            Sprint ID
+     * @param mode                计算模式: "issue_count" / "estimation" / "work_items"
+     * @param estimationFieldId   estimation 模式下使用的自定义字段 ID（null 时 fallback 到 issue.estimated_hours）
+     */
+    @Transactional(readOnly = true)
+    public BurndownVO getBurndownData(Long sprintId, String mode, Long estimationFieldId) {
         Sprint sprint = getById(sprintId);
 
         BurndownVO vo = new BurndownVO();
@@ -987,8 +999,8 @@ public class SprintService {
         long totalDays = Math.max(1, sprintStart.until(sprintEnd).getDays());
 
         if ("estimation".equals(mode)) {
-            // 估时模式：基于 estimated_hours 计算燃尽
-            calculateEstimationBurndown(vo, sprint, sprintStart, sprintEnd, today, totalDays);
+            // 估时模式：当 estimationFieldId 有值时从自定义字段读取，否则 fallback 到 issue.estimated_hours
+            calculateEstimationBurndown(vo, sprint, sprintStart, sprintEnd, today, totalDays, estimationFieldId);
         } else if ("work_items".equals(mode)) {
             // 工时记录模式：基于 time_entry.duration 计算燃尽
             calculateWorkItemsBurndown(vo, sprint, sprintStart, sprintEnd, today, totalDays);
@@ -1378,22 +1390,32 @@ public class SprintService {
     }
 
     /**
-     * 估时模式燃尽图：基于 estimated_hours 计算理想线/实际线/范围线。
+     * 估时模式燃尽图：基于 estimated_hours 或指定自定义字段计算理想线/实际线/范围线。
      * <p>
      * 理想线从 startScopeHours（快照）线性递减到 0。
-     * 实际线为每天结束时未完成工单的 estimated_hours 总和。
-     * 范围线为每天的所有工单（含已完成）的 estimated_hours 总和。
+     * 实际线为每天结束时未完成工单的估算值总和。
+     * 范围线为每天的所有工单（含已完成）的估算值总和。
+     * <p>
+     * REQ-486：当 estimationFieldId 不为 null 时，从 custom_field_value 表读取对应字段值；
+     * 否则 fallback 到 issue.estimated_hours 内置字段。
      */
     private void calculateEstimationBurndown(BurndownVO vo, Sprint sprint,
                                              LocalDate sprintStart, LocalDate sprintEnd,
-                                             LocalDate today, long totalDays) {
+                                             LocalDate today, long totalDays,
+                                             Long estimationFieldId) {
         Long sprintId = sprint.getId();
 
         // 加载原始数据（含活动记录、工时 Map）
         BurndownRawData rawData = loadBurndownRawData(sprintId);
 
+        // REQ-486：如果指定了自定义字段 ID，则用自定义字段值覆盖 estimated_hours
+        BurndownRawData effectiveData = rawData;
+        if (estimationFieldId != null) {
+            effectiveData = overrideEstimatedHoursWithCustomField(rawData, estimationFieldId);
+        }
+
         // 构建估时 scope 变化时间线
-        EstimationScopeTimeline timeline = buildEstimationScopeTimeline(rawData, sprintStart);
+        EstimationScopeTimeline timeline = buildEstimationScopeTimeline(effectiveData, sprintStart);
 
         // 理想线起点优先使用快照值（Sprint 激活时的工时总量），以保证理想线固定不变
         double startHours;
@@ -1448,10 +1470,10 @@ public class SprintService {
         vo.setActualLine(actualLine);
         vo.setScopeLine(scopeLine);
         vo.setTodayIndex(todayIndex);
-        vo.setTotalIssues(rawData.currentIssues().size());
+        vo.setTotalIssues(effectiveData.currentIssues().size());
         vo.setStartScopeIssues(sprint.getStartScopeIssues() != null
                 ? sprint.getStartScopeIssues()
-                : rawData.currentIssues().size());
+                : effectiveData.currentIssues().size());
         vo.setStartScopeHours(startHours);
 
         // 计算速率和预测（基于工时）
@@ -1481,6 +1503,64 @@ public class SprintService {
                 .filter(entry -> entry.getKey().isBefore(sprintStart))
                 .mapToDouble(Map.Entry::getValue)
                 .sum();
+    }
+
+    /**
+     * REQ-486：用指定自定义字段的值替换 BurndownRawData 中的 estimated_hours 数据。
+     * <p>
+     * 查询 custom_field_value WHERE custom_field_id = estimationFieldId AND issue_id IN (allIds)，
+     * 将结果构建新的 issueEstimatedHoursMap 和 currentIssues 列表（以 custom field 值替代 estimated_hours）。
+     * 未填写该字段的工单按 0 处理（不影响 scope 计算，但不会被计入已完成工时）。
+     * <p>
+     * 注意：resolved_at 字段不变，仍用于判断工单是否已完成；
+     * 变化的只是每个工单对应的"权重"（即 estimatedHours 值）。
+     *
+     * @param rawData           原始燃尽图数据
+     * @param estimationFieldId 自定义字段 ID（integer/float 类型）
+     * @return 用自定义字段值覆盖后的新 BurndownRawData
+     */
+    private BurndownRawData overrideEstimatedHoursWithCustomField(BurndownRawData rawData,
+                                                                   Long estimationFieldId) {
+        // 收集所有工单 ID（当前 + 已移出）
+        List<Long> allIssueIds = new ArrayList<>(rawData.currentIssueIds());
+        rawData.movedOutActivities().forEach(a -> {
+            if (!rawData.currentIssueIds().contains(a.getIssueId())) {
+                allIssueIds.add(a.getIssueId());
+            }
+        });
+
+        // 从数据库查询自定义字段值
+        Map<Long, BigDecimal> customFieldMap = new HashMap<>();
+        if (!allIssueIds.isEmpty()) {
+            List<IssueEstimatedHoursRow> rows = issueMapper.selectCustomFieldValuesByIds(allIssueIds, estimationFieldId);
+            for (IssueEstimatedHoursRow row : rows) {
+                if (row.getEstimatedHours() != null) {
+                    customFieldMap.put(row.getId(), row.getEstimatedHours());
+                }
+            }
+        }
+
+        // 重建 currentIssues（替换 estimatedHours 为自定义字段值）
+        List<BurndownIssueData> newCurrentIssues = rawData.currentIssues().stream()
+                .map(issue -> new BurndownIssueData(
+                        issue.id(),
+                        issue.createdAt(),
+                        issue.resolvedAt(),
+                        customFieldMap.getOrDefault(issue.id(), BigDecimal.ZERO)
+                ))
+                .toList();
+
+        // 重建 issueEstimatedHoursMap（替换为自定义字段值）
+        Map<Long, BigDecimal> newEstimatedHoursMap = new HashMap<>(customFieldMap);
+
+        return new BurndownRawData(
+                newCurrentIssues,
+                rawData.currentIssueIds(),
+                rawData.movedInMap(),
+                rawData.movedOutActivities(),
+                rawData.movedOutCreatedAtMap(),
+                newEstimatedHoursMap
+        );
     }
 
     /**

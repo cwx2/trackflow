@@ -80,6 +80,7 @@ const props = defineProps<{
   sprintId?: string
   chartType: string // 'burndown' | 'cumulative_flow'
   burndownCalculation?: string // 'issue_count' | 'estimation' | 'work_items'
+  estimationFieldId?: string | null // REQ-486: custom estimation field ID for estimation mode
 }>()
 
 const emit = defineEmits<{
@@ -352,10 +353,14 @@ async function loadChartData() {
   chartError.value = null
   try {
     if (props.chartType === 'burndown') {
+      const calculation = (props.burndownCalculation as 'issue_count' | 'estimation' | 'work_items' | undefined) || 'issue_count'
+      // REQ-486: pass estimationFieldId when calculation=estimation
+      const fieldId = calculation === 'estimation' ? props.estimationFieldId : undefined
       const res = await reportStatisticsApi.burndown(
         props.projectId,
         props.sprintId!,
-        (props.burndownCalculation as 'issue_count' | 'estimation' | 'work_items' | undefined) || 'issue_count'
+        calculation,
+        fieldId
       )
       chartData.value = res.data
     } else {
@@ -374,7 +379,7 @@ async function loadChartData() {
 
 // Watch for prop changes to reload
 watch(
-  () => [props.visible, props.projectId, props.sprintId, props.chartType, props.burndownCalculation],
+  () => [props.visible, props.projectId, props.sprintId, props.chartType, props.burndownCalculation, props.estimationFieldId],
   ([visible]) => {
     if (visible && props.projectId) {
       loadChartData()

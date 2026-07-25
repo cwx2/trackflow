@@ -149,11 +149,19 @@ public class ReportStatisticsService {
     }
 
     public BurndownVO getBurndown(Long projectId, Long sprintId) {
-        return buildBurndown(projectId, sprintId, "issue_count");
+        return buildBurndown(projectId, sprintId, "issue_count", null);
     }
 
     public BurndownVO getBurndown(Long projectId, Long sprintId, String calculation) {
-        return buildBurndown(projectId, sprintId, calculation);
+        return buildBurndown(projectId, sprintId, calculation, null);
+    }
+
+    /**
+     * REQ-486：支持指定 estimationFieldId 的燃尽图计算。
+     * 当 calculation=estimation 且 estimationFieldId 不为 null 时，从自定义字段读取估算值。
+     */
+    public BurndownVO getBurndown(Long projectId, Long sprintId, String calculation, Long estimationFieldId) {
+        return buildBurndown(projectId, sprintId, calculation, estimationFieldId);
     }
 
     public CumulativeFlowVO getCumulativeFlow(Long projectId, LocalDate startDate, LocalDate endDate) {
@@ -772,12 +780,19 @@ public class ReportStatisticsService {
     }
 
     private BurndownVO buildBurndown(Long projectId, Long sprintId) {
-        return buildBurndown(projectId, sprintId, "issue_count");
+        return buildBurndown(projectId, sprintId, "issue_count", null);
     }
 
     private BurndownVO buildBurndown(Long projectId, Long sprintId, String calculation) {
+        return buildBurndown(projectId, sprintId, calculation, null);
+    }
+
+    /**
+     * REQ-486：燃尽图核心计算，支持自定义 estimationFieldId。
+     */
+    private BurndownVO buildBurndown(Long projectId, Long sprintId, String calculation, Long estimationFieldId) {
         // 委托给 SprintService 的 scope-aware 算法（已优化）
-        com.trackflow.sprint.vo.BurndownVO sprintBurndown = sprintService.getBurndownData(sprintId, calculation);
+        com.trackflow.sprint.vo.BurndownVO sprintBurndown = sprintService.getBurndownData(sprintId, calculation, estimationFieldId);
 
         BurndownVO vo = new BurndownVO();
         vo.setDates(sprintBurndown.getDates());

@@ -245,6 +245,7 @@
       :sprint-id="selectedSprint"
       :chart-type="boardChartType"
       :burndown-calculation="boardBurndownCalculation"
+      :estimation-field-id="cardConfig.currentEstimationFieldId"
       @close="showChart = false"
     />
 

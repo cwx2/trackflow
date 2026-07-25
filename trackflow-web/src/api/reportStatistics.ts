@@ -284,9 +284,9 @@ export const reportStatisticsApi = {
   },
 
   /** Sprint 燃尽图 */
-  burndown(projectId: string, sprintId: string, calculation?: 'issue_count' | 'estimation' | 'work_items') {
+  burndown(projectId: string, sprintId: string, calculation?: 'issue_count' | 'estimation' | 'work_items', estimationFieldId?: string | null) {
     return request.get<any, R<BurndownData>>('/reports/statistics/burndown', {
-      params: { projectId, sprintId, calculation }
+      params: { projectId, sprintId, calculation, estimationFieldId: estimationFieldId || undefined }
     })
   },
 

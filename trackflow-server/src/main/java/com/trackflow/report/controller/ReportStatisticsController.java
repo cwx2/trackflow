@@ -119,20 +119,24 @@ public class ReportStatisticsController {
     /**
      * 获取 Sprint 燃尽图数据
      * calculation 可选：issue_count（工单数）/ estimation（估时工时）/ work_items（记录工时）
+     * estimationFieldId 可选：当 calculation=estimation 时，指定用于计算估算值的自定义字段 ID
+     *   - 有值时从 custom_field_value 表读取该字段的值
+     *   - 无值时 fallback 到 issue.estimated_hours 内置字段
      */
     @GetMapping("/burndown")
     @PreAuthorize("@perm.check(#projectId, 'report:view')")
     public R<BurndownVO> burndown(
             @RequestParam("projectId") Long projectId,
             @RequestParam("sprintId") Long sprintId,
-            @RequestParam(value = "calculation", defaultValue = "issue_count") String calculation) {
+            @RequestParam(value = "calculation", defaultValue = "issue_count") String calculation,
+            @RequestParam(value = "estimationFieldId", required = false) Long estimationFieldId) {
         Long userId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectAccessible(userId, projectId);
         // 白名单校验，防止非法 calculation 值
         if (!Set.of("issue_count", "estimation", "work_items").contains(calculation)) {
             calculation = "issue_count";
         }
-        return R.ok(statisticsService.getBurndown(projectId, sprintId, calculation));
+        return R.ok(statisticsService.getBurndown(projectId, sprintId, calculation, estimationFieldId));
     }
 
     /**

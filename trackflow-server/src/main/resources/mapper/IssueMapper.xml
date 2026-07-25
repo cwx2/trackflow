@@ -305,6 +305,24 @@
         </foreach>
     </select>
 
+    <!-- REQ-486：按自定义字段 ID 批量查询工单的字段值（estimation 模式燃尽图使用指定字段）。
+         custom_field_value.value 统一存为 TEXT，此处用 CAST 转为 numeric 以支持浮点/整数字段。
+         转换失败（非数值文本）时 CAST 会返回 NULL，等同于未填写，在应用层忽略。
+         结果集映射到 IssueEstimatedHoursRow，reuse estimated_hours 字段名以复用现有逻辑。 -->
+    <select id="selectCustomFieldValuesByIds" resultType="com.trackflow.issue.mapper.result.IssueEstimatedHoursRow">
+        SELECT
+            cfv.issue_id AS id,
+            CAST(cfv.value AS numeric) AS estimated_hours
+        FROM custom_field_value cfv
+        WHERE cfv.custom_field_id = #{fieldId}
+          AND cfv.issue_id IN
+          <foreach collection="issueIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+          AND cfv.value IS NOT NULL
+          AND cfv.value ~ '^-?[0-9]+(\.[0-9]+)?$'
+    </select>
+
     <!-- 看板卡片精简查询：单次 JOIN 查出所有卡片渲染字段，避免循环分页 + 逐页富化 -->
     <!-- REQ-274: 看板卡片查询支持手动排序感知的截断策略 -->
     <select id="selectBoardCards" resultType="com.trackflow.issue.mapper.result.BoardCardRow">

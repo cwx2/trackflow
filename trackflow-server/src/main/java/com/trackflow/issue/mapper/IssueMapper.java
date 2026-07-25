@@ -128,6 +128,15 @@ public interface IssueMapper extends BaseMapper<Issue> {
     List<IssueEstimatedHoursRow> selectEstimatedHoursByIds(@Param("issueIds") List<Long> issueIds);
 
     /**
+     * 批量查询指定 Issue 的自定义字段值（用于 estimation 燃尽图）。
+     * 从 custom_field_value 表查询 field_def_id = fieldId 的记录，value 为 TEXT 存储的数值。
+     * 返回结果中 issueId 即为工单 ID，estimatedHours 为解析后的浮点数（NULL 则跳过）。
+     */
+    List<IssueEstimatedHoursRow> selectCustomFieldValuesByIds(
+            @Param("issueIds") List<Long> issueIds,
+            @Param("fieldId") Long fieldId);
+
+    /**
      * 看板卡片精简查询：单次 JOIN 查出卡片渲染所需的全部字段（status_name, assignee_name, sprint_name）。
      * 替代循环分页 + 逐页 fillXxxInfo 的重量级方式。
      * <p>
