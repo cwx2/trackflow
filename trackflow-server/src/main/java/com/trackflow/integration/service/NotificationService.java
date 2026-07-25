@@ -22,11 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -46,7 +43,6 @@ public class NotificationService {
     private final NotificationPreferenceService preferenceService;
     private final SystemSettingService systemSettingService;
     private final NotificationUrlBuilder urlBuilder;
-    private final SimpMessagingTemplate messagingTemplate;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
@@ -850,54 +846,5 @@ public class NotificationService {
     private boolean isInAppEnabled() {
         String value = systemSettingService.getSettingValue("notification.in_app_enabled", "true");
         return Boolean.parseBoolean(value);
-    }
-
-    /**
-     * 注册事务提交后的 WebSocket 推送回调。
-     * <p>
-     * 为什么不在事务内直接推送：前端收到推送后会调用 fetchUnreadCount API，
-     * 如果事务还没提交，新通知不可见，导致前端拿到的 count 和实际不符。
-     */
-    private void pushAfterCommit(Long userId, String title, String type, String resourceType, Long resourceId) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    pushNotificationToUser(userId, title, type, resourceType, resourceId);
-                }
-            });
-        } else {
-            // 无活跃事务（兼容非事务上下文调用）
-            pushNotificationToUser(userId, title, type, resourceType, resourceId);
-        }
-    }
-
-    /**
-     * 通过 WebSocket 推送轻量通知事件到指定用户。
-     * <p>
-     * 推送目的地：/topic/users/{userId}/notifications
-     * 推送内容：仅含未读数增量提示和最新通知摘要，前端收到后刷新 badge 和列表。
-     * <p>
-     * 推送失败不影响业务（用户可能不在线或 WebSocket 未连接），仅记录 debug 日志。
-     */
-    private void pushNotificationToUser(Long userId, String title, String type, String resourceType, Long resourceId) {
-        try {
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("event", "NEW_NOTIFICATION");
-            payload.put("title", title);
-            payload.put("type", type);
-            payload.put("resourceType", resourceType);
-            payload.put("resourceId", resourceId != null ? resourceId.toString() : null);
-            payload.put("timestamp", LocalDateTime.now().toString());
-
-            messagingTemplate.convertAndSend(
-                    "/topic/users/" + userId + "/notifications",
-                    (Object) payload
-            );
-            log.debug("[Notification] WebSocket 推送: userId={}, type={}", userId, type);
-        } catch (Exception e) {
-            // WebSocket 推送失败不影响业务——用户可能不在线，轮询仍可兜底
-            log.debug("[Notification] WebSocket 推送失败（用户可能离线）: userId={}, error={}", userId, e.getMessage());
-        }
     }
 }
