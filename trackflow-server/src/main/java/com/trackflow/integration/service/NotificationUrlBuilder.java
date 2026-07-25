@@ -36,6 +36,13 @@ public class NotificationUrlBuilder {
     private String baseUrl;
 
     /**
+     * 后端 API 基础 URL（用于邮件中的 token 回调链接）。
+     * 开发环境默认 http://localhost:8090
+     */
+    @Value("${trackflow.server-url:http://localhost:8090}")
+    private String serverUrl;
+
+    /**
      * 构建前端路由相对路径。
      *
      * @param resourceType 资源类型（issue/project/sprint）
@@ -114,5 +121,23 @@ public class NotificationUrlBuilder {
         }
         // 无 projectId 时仅跳到 sprint 列表
         return "/sprints";
+    }
+
+    /**
+     * 构建后端 API 的完整 URL（serverUrl + 相对路径）。
+     * <p>
+     * 用于邮件中的 token 回调链接（如静音 token 端点），
+     * 与 buildFullUrl() 区别在于使用的是后端地址而非前端地址。
+     *
+     * @param apiPath 后端 API 路径（如 "/api/v1/notifications/mute-via-email?token=xxx"）
+     * @return 完整 URL，如 "http://localhost:8090/api/v1/notifications/mute-via-email?token=xxx"
+     */
+    public String buildBackendUrl(String apiPath) {
+        if (apiPath == null || apiPath.isBlank()) {
+            return null;
+        }
+        String base = serverUrl.endsWith("/") ? serverUrl.substring(0, serverUrl.length() - 1) : serverUrl;
+        String path = apiPath.startsWith("/") ? apiPath : "/" + apiPath;
+        return base + path;
     }
 }

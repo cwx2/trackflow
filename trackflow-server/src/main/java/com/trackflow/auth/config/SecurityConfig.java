@@ -83,7 +83,9 @@ public class SecurityConfig {
                     "/actuator/health",
                     "/favicon.ico",
                     "/api/v1/auth/backchannel-logout",
-                    "/ws/**"
+                    "/ws/**",
+                    // 邮件静音 token 端点：通过 token 机制保证安全，无需 JWT 认证
+                    "/api/v1/notifications/mute-via-email"
                 ).permitAll()
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().denyAll()

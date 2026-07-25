@@ -41,6 +41,7 @@ public class NotificationMailScheduler {
     private final SysUserMapper sysUserMapper;
     private final NotificationUrlBuilder urlBuilder;
     private final DistributedLockService distributedLockService;
+    private final EmailMuteTokenService emailMuteTokenService;
 
     /**
      * 每批最多处理的通知数量（避免长时间占用线程）
@@ -155,6 +156,19 @@ public class NotificationMailScheduler {
                     resourceFullUrl = urlBuilder.buildFullUrl(latest.getResourceType(), latest.getResourceId(), latest.getProjectId());
                 }
 
+                // 为 issue 类型通知生成邮件静音 token（允许用户一键静音，无需登录）
+                String muteTokenUrl = null;
+                if ("issue".equals(latest.getResourceType()) && latest.getResourceId() != null) {
+                    try {
+                        String muteToken = emailMuteTokenService.generateToken(
+                                key.userId(), latest.getResourceType(), latest.getResourceId());
+                        muteTokenUrl = urlBuilder.buildBackendUrl("/api/v1/notifications/mute-via-email?token=" + muteToken);
+                    } catch (Exception ex) {
+                        log.warn("[NotificationMail] 生成静音 token 失败，跳过: userId={}, resourceId={}, error={}",
+                                key.userId(), latest.getResourceId(), ex.getMessage());
+                    }
+                }
+
                 String subject = "[TrackFlow] " + latest.getTitle();
                 String htmlContent;
 
@@ -163,10 +177,10 @@ public class NotificationMailScheduler {
                     int totalChanges = emailAllowed.stream()
                             .mapToInt(n -> n.getAggregationCount() != null ? n.getAggregationCount() : 1)
                             .sum();
-                    htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges, resourceFullUrl, latest.getReason());
+                    htmlContent = buildAggregatedEmailContent(latest.getTitle(), latest.getContent(), totalChanges, resourceFullUrl, latest.getReason(), muteTokenUrl);
                 } else {
                     // 单条通知 → 普通邮件
-                    htmlContent = buildNotificationEmailContent(latest.getTitle(), latest.getContent(), resourceFullUrl, latest.getReason());
+                    htmlContent = buildNotificationEmailContent(latest.getTitle(), latest.getContent(), resourceFullUrl, latest.getReason(), muteTokenUrl);
                 }
 
                 emailSendService.sendNotificationEmail(user.getEmail(), subject, htmlContent);
@@ -191,9 +205,10 @@ public class NotificationMailScheduler {
     /**
      * 构建普通通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildNotificationEmailContent(String title, String content, String resourceUrl, String reason) {
+    private String buildNotificationEmailContent(String title, String content, String resourceUrl, String reason, String muteTokenUrl) {
         String actionButton = buildActionButton(resourceUrl);
         String reasonText = buildReasonText(reason);
+        String footerLinks = buildFooterLinks(muteTokenUrl, urlBuilder.buildFullUrl("/settings/notifications"));
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 12px 0;">%s</h3>
@@ -201,18 +216,19 @@ public class NotificationMailScheduler {
                   %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
-                    %s您可以在个人通知偏好中关闭邮件通知。
+                    %s此邮件由 TrackFlow 项目管理系统自动发送。%s
                   </p>
                 </div>
-                """, escapeHtml(title), escapeHtml(content), actionButton, reasonText);
+                """, escapeHtml(title), escapeHtml(content), actionButton, reasonText, footerLinks);
     }
 
     /**
      * 构建聚合/汇总通知邮件 HTML 内容（含资源直链按钮）
      */
-    private String buildAggregatedEmailContent(String title, String content, int totalChanges, String resourceUrl, String reason) {
+    private String buildAggregatedEmailContent(String title, String content, int totalChanges, String resourceUrl, String reason, String muteTokenUrl) {
         String actionButton = buildActionButton(resourceUrl);
         String reasonText = buildReasonText(reason);
+        String footerLinks = buildFooterLinks(muteTokenUrl, urlBuilder.buildFullUrl("/settings/notifications"));
         return String.format("""
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
                   <h3 style="color: #1f2328; margin: 0 0 8px 0;">%s</h3>
@@ -221,10 +237,10 @@ public class NotificationMailScheduler {
                   %s\
                   <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
                   <p style="color: #8b949e; font-size: 12px;">
-                    %s聚合窗口内的多次变更已合并为此封邮件。您可以在个人通知偏好中关闭邮件通知。
+                    %s聚合窗口内的多次变更已合并为此封邮件。此邮件由 TrackFlow 项目管理系统自动发送。%s
                   </p>
                 </div>
-                """, escapeHtml(title), totalChanges, escapeHtml(content), actionButton, reasonText);
+                """, escapeHtml(title), totalChanges, escapeHtml(content), actionButton, reasonText, footerLinks);
     }
 
     /**
@@ -239,6 +255,37 @@ public class NotificationMailScheduler {
                     <a href="%s" style="display: inline-block; padding: 10px 20px; background-color: #0969da; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500;">在 TrackFlow 中查看</a>
                   </p>
                 """, resourceUrl);
+    }
+
+    /**
+     * 构建邮件底部链接区域 HTML。
+     * <p>
+     * 参考 YouTrack 邮件底部设计：
+     * - 提供"静音此工单"链接（无需登录，仅对 issue 类型）
+     * - 提供"管理通知设置"链接（引导用户到通知设置页）
+     *
+     * @param muteTokenUrl     Token 化的静音链接（如果为 null 则不显示"静音此工单"）
+     * @param settingsUrl      通知设置页完整 URL
+     * @return 底部链接 HTML 片段
+     */
+    private String buildFooterLinks(String muteTokenUrl, String settingsUrl) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<br/>管理通知：");
+
+        if (muteTokenUrl != null && !muteTokenUrl.isBlank()) {
+            sb.append(String.format(
+                    "<a href=\"%s\" style=\"color: #0969da; text-decoration: none;\">静音此工单</a>",
+                    muteTokenUrl));
+            sb.append(" · ");
+        }
+
+        if (settingsUrl != null && !settingsUrl.isBlank()) {
+            sb.append(String.format(
+                    "<a href=\"%s\" style=\"color: #0969da; text-decoration: none;\">通知设置</a>",
+                    settingsUrl));
+        }
+
+        return sb.toString();
     }
 
     /**
