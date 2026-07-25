@@ -35,12 +35,40 @@
         <!-- 字段列表 -->
         <div class="field-list">
         <div
-          v-for="field in fieldList"
+          v-for="(field, index) in fieldList"
           :key="field.id"
           class="field-item"
-          :class="{ 'is-global': field.isForAll, 'is-selected': selectedField?.id === field.id }"
+          :class="{
+            'is-global': field.isForAll,
+            'is-selected': selectedField?.id === field.id,
+            'is-dragging': dragIndex === index,
+            'is-drag-over': dragOverIndex === index
+          }"
+          :draggable="canManage && !isArchived"
           @click="selectField(field)"
+          @dragstart="onDragStart($event, index)"
+          @dragover.prevent="onDragOver($event, index)"
+          @dragleave="onDragLeave"
+          @drop.prevent="onDrop($event, index)"
+          @dragend="onDragEnd"
         >
+          <!-- 拖拽把手（管理员可见，全局字段不可拖拽） -->
+          <div
+            v-if="canManage && !isArchived"
+            class="drag-handle"
+            :title="field.isForAll ? '全局字段不可拖拽排序' : '拖拽调整顺序'"
+            :style="{ cursor: field.isForAll ? 'not-allowed' : 'grab', opacity: field.isForAll ? 0.3 : 1 }"
+            @click.stop
+          >
+            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+              <circle cx="3" cy="3" r="1.5"/>
+              <circle cx="9" cy="3" r="1.5"/>
+              <circle cx="3" cy="8" r="1.5"/>
+              <circle cx="9" cy="8" r="1.5"/>
+              <circle cx="3" cy="13" r="1.5"/>
+              <circle cx="9" cy="13" r="1.5"/>
+            </svg>
+          </div>
           <div class="field-main">
             <div class="field-info">
               <span class="field-name">{{ field.name }}</span>
@@ -460,6 +488,11 @@ const props = defineProps<{
 const loading = ref(true)
 const fieldList = ref<CustomFieldDefinitionVO[]>([])
 
+// Drag-and-drop reorder state
+const dragIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+const reordering = ref(false)
+
 // Add dialog
 const showAddDialog = ref(false)
 const availableLoading = ref(false)
@@ -557,6 +590,67 @@ const isConditionDirty = computed(() => {
   if (origValues.length !== currentValues.length) return true
   return !origValues.every(v => currentValues.includes(v))
 })
+
+// ===== Drag-and-drop reorder =====
+
+function onDragStart(event: DragEvent, index: number) {
+  const field = fieldList.value[index]
+  // 全局字段不允许拖拽
+  if (field.isForAll) {
+    event.preventDefault()
+    return
+  }
+  dragIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onDragOver(event: DragEvent, index: number) {
+  if (dragIndex.value === null || dragIndex.value === index) return
+  dragOverIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onDragLeave() {
+  dragOverIndex.value = null
+}
+
+async function onDrop(event: DragEvent, targetIndex: number) {
+  if (dragIndex.value === null || dragIndex.value === targetIndex) {
+    onDragEnd()
+    return
+  }
+  const fromIndex = dragIndex.value
+  // 重排本地数组
+  const newList = [...fieldList.value]
+  const [moved] = newList.splice(fromIndex, 1)
+  newList.splice(targetIndex, 0, moved)
+  fieldList.value = newList
+
+  // 提交给后端
+  reordering.value = true
+  try {
+    const fieldIds = newList.map(f => f.id)
+    await customFieldApi.reorderProjectFields(props.project.id, fieldIds)
+    Message.success('字段顺序已保存')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存顺序失败')
+    // 回滚失败时重新加载
+    await loadFields()
+  } finally {
+    reordering.value = false
+  }
+  onDragEnd()
+}
+
+function onDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
 
 function selectField(field: CustomFieldDefinitionVO) {
   selectedField.value = field
@@ -994,6 +1088,28 @@ onMounted(() => {
   background: var(--tf-bg-active, var(--tf-bg-hover));
   border-left: 3px solid var(--tf-accent);
   padding-left: 13px;
+}
+
+.field-item.is-dragging {
+  opacity: 0.5;
+  background: var(--tf-bg-hover);
+}
+
+.field-item.is-drag-over {
+  border-top: 2px solid var(--tf-accent);
+}
+
+/* 拖拽把手 */
+.drag-handle {
+  flex-shrink: 0;
+  margin-right: 10px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  line-height: 1;
+  user-select: none;
+}
+
+.field-item:hover .drag-handle {
+  color: var(--tf-text-secondary);
 }
 
 .field-item + .field-item {
