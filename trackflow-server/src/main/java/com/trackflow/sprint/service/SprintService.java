@@ -455,12 +455,8 @@ public class SprintService {
         Sprint sprint = getById(id);
         projectService.assertProjectActive(sprint.getProjectId());
 
-        boolean isCompleted = sprint.getStatus() == SprintStatus.COMPLETED;
-
-        // 已完成 Sprint 只允许修改 name 和 goal（用于归档标注），不允许修改日期
-        if (isCompleted && (dto.getStartDate() != null || dto.getEndDate() != null)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "已完成的迭代不允许修改日期");
-        }
+        // YouTrack 标准：Sprint 属性（名称、目标、日期）可以随时自由编辑，无状态限制
+        // 参考：https://www.jetbrains.com/help/youtrack/server/manage-sprints.html#edit-sprint-properties
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
         List<Map<String, Object>> changes = new ArrayList<>();
