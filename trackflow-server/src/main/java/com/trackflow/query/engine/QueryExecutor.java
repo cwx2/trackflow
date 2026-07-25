@@ -351,16 +351,17 @@ public class QueryExecutor {
                 .apply("to_tsvector('simple', COALESCE(title,'') || ' ' || COALESCE(description,'')) @@ plainto_tsquery('simple', {0})", keyword)
                 .or()
                 // title 子串匹配：利用 idx_issue_title_trgm trigram GIN 索引
-                .apply("title ILIKE {0}", likePattern)
+                // ESCAPE '\\' 确保 escapeLikePattern 转义的 \% 和 \_ 被 PostgreSQL 正确识别
+                .apply("title ILIKE {0} ESCAPE '\\\\'", likePattern)
                 .or()
                 // description 子串匹配：利用 idx_issue_description_trgm trigram GIN 索引
-                .apply("description ILIKE {0}", likePattern)
+                .apply("description ILIKE {0} ESCAPE '\\\\'", likePattern)
                 .or()
                 // issue_key 匹配
-                .apply("issue_key ILIKE {0}", likePattern)
+                .apply("issue_key ILIKE {0} ESCAPE '\\\\'", likePattern)
                 .or()
                 // assignee 名称匹配
-                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} OR username ILIKE {0})", likePattern)
+                .apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name ILIKE {0} ESCAPE '\\\\' OR username ILIKE {0} ESCAPE '\\\\')", likePattern)
         );
     }
 
