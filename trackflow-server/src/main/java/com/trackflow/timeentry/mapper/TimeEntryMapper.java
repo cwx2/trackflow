@@ -1,13 +1,13 @@
 package com.trackflow.timeentry.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.trackflow.timeentry.dto.TimeEntryQueryDO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
@@ -32,7 +32,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      * 支持按项目和工作类型（activityId）筛选
      * allowedProjectIds 不为 null 时，限制只返回这些项目中的工时
      */
-    List<Map<String, Object>> selectEntriesWithIssueKey(
+    List<TimeEntryQueryDO> selectEntriesWithIssueKey(
             @Param("userId") Long userId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
@@ -47,7 +47,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      * ongoing 记录仅返回当前用户自己的，他人的 ongoing 记录不可见
      * allowedProjectIds 为 null 时不做项目范围限制（system_admin），否则限定为列表中的项目
      */
-    List<Map<String, Object>> selectEntriesByProjectForUser(
+    List<TimeEntryQueryDO> selectEntriesByProjectForUser(
             @Param("userId") Long userId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
@@ -59,7 +59,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      * 查询指定项目在日期范围内的所有工时（项目视图明细）
      * ongoing 记录仅返回当前用户自己的，他人的 ongoing 记录不可见
      */
-    List<Map<String, Object>> selectEntriesByProject(
+    List<TimeEntryQueryDO> selectEntriesByProject(
             @Param("projectId") Long projectId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
@@ -97,7 +97,7 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
      * @param workTypeAttributeId Work type 属性 ID
      * @param currentUserId     当前登录用户 ID（用于 ongoing 可见性过滤）
      */
-    List<Map<String, Object>> selectEntriesByGroupMembers(
+    List<TimeEntryQueryDO> selectEntriesByGroupMembers(
             @Param("userIds") List<Long> userIds,
             @Param("startDate") java.time.LocalDate startDate,
             @Param("endDate") java.time.LocalDate endDate,

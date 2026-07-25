@@ -2,6 +2,51 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.trackflow.timeentry.mapper.TimeEntryMapper">
 
+    <!-- ResultMap：将多表 JOIN 查询结果映射到 TimeEntryQueryDO -->
+    <!-- 基础 resultMap，包含 time_entry 主表 + issue + work_type 字段 -->
+    <resultMap id="TimeEntryQueryDOBase" type="com.trackflow.timeentry.dto.TimeEntryQueryDO">
+        <id     property="id"            column="id"           javaType="Long"/>
+        <result property="issueId"       column="issue_id"     javaType="Long"/>
+        <result property="projectId"     column="project_id"   javaType="Long"/>
+        <result property="userId"        column="user_id"      javaType="Long"/>
+        <result property="loggedBy"      column="logged_by"    javaType="Long"/>
+        <result property="workDate"      column="work_date"/>
+        <result property="duration"      column="duration"/>
+        <result property="startTime"     column="start_time"/>
+        <result property="description"   column="description"/>
+        <result property="ongoing"       column="ongoing"/>
+        <result property="createdAt"     column="created_at"/>
+        <result property="updatedAt"     column="updated_at"/>
+        <result property="issueKey"      column="issue_key"/>
+        <result property="issueTitle"    column="issue_title"/>
+        <result property="issueDeleted"  column="issue_deleted"/>
+        <result property="loggedByName"  column="logged_by_name"/>
+        <result property="workType"      column="work_type"/>
+        <result property="workTypeId"    column="work_type_id" javaType="Long"/>
+        <result property="workTypeColor" column="work_type_color"/>
+    </resultMap>
+
+    <!-- 扩展 resultMap：增加 project 字段（selectEntriesByProjectForUser） -->
+    <resultMap id="TimeEntryQueryDOWithProject" extends="TimeEntryQueryDOBase"
+               type="com.trackflow.timeentry.dto.TimeEntryQueryDO">
+        <result property="projectName"   column="project_name"/>
+        <result property="projectKey"    column="project_key"/>
+    </resultMap>
+
+    <!-- 扩展 resultMap：增加 user 字段（selectEntriesByProject） -->
+    <resultMap id="TimeEntryQueryDOWithUser" extends="TimeEntryQueryDOBase"
+               type="com.trackflow.timeentry.dto.TimeEntryQueryDO">
+        <result property="userName"      column="user_name"/>
+    </resultMap>
+
+    <!-- 扩展 resultMap：增加完整 user 字段（selectEntriesByGroupMembers） -->
+    <resultMap id="TimeEntryQueryDOWithFullUser" extends="TimeEntryQueryDOBase"
+               type="com.trackflow.timeentry.dto.TimeEntryQueryDO">
+        <result property="userName"       column="user_name"/>
+        <result property="userUsername"   column="user_username"/>
+        <result property="userAvatarUrl"  column="user_avatar_url"/>
+    </resultMap>
+
     <!-- 汇总指定 Issue 的工时总分钟数（排除正在计时的记录） -->
     <select id="sumDurationByIssueId" resultType="java.lang.Integer">
         SELECT COALESCE(SUM(duration), 0)
@@ -34,7 +79,7 @@
     </update>
 
     <!-- 查询工时条目，LEFT JOIN issue 以支持已删除工单的工时展示 -->
-    <select id="selectEntriesWithIssueKey" resultType="map">
+    <select id="selectEntriesWithIssueKey" resultMap="TimeEntryQueryDOBase">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
             t.start_time, t.description, t.ongoing,
@@ -71,7 +116,7 @@
     <!-- 按项目聚合工时：使用 time_entry.project_id 直接关联，不依赖 issue 存在性 -->
     <!-- ongoing 可见性：仅返回已完成记录 + 当前用户自己的 ongoing 记录 -->
     <!-- allowedProjectIds 为 null 时不做项目范围限制（system_admin），否则限定为列表中的项目 -->
-    <select id="selectEntriesByProjectForUser" resultType="map">
+    <select id="selectEntriesByProjectForUser" resultMap="TimeEntryQueryDOWithProject">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
             t.start_time, t.description, t.ongoing,
@@ -103,7 +148,7 @@
 
     <!-- 按项目查询工时：使用 time_entry.project_id 直接关联 -->
     <!-- ongoing 可见性：仅返回已完成记录 + 当前用户自己的 ongoing 记录 -->
-    <select id="selectEntriesByProject" resultType="map">
+    <select id="selectEntriesByProject" resultMap="TimeEntryQueryDOWithUser">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
             t.start_time, t.description, t.ongoing,
@@ -161,7 +206,7 @@
 
     <!-- 查询用户组成员在日期范围内的所有工时记录 -->
     <!-- ongoing 可见性：仅返回已完成记录 + 当前用户自己的 ongoing 记录 -->
-    <select id="selectEntriesByGroupMembers" resultType="map">
+    <select id="selectEntriesByGroupMembers" resultMap="TimeEntryQueryDOWithFullUser">
         SELECT
             t.id, t.issue_id, t.project_id, t.user_id, t.logged_by, t.work_date, t.duration,
             t.start_time, t.description, t.ongoing,

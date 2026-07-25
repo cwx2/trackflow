@@ -18,6 +18,7 @@ import com.trackflow.timeentry.converter.TimeEntryConverter;
 import com.trackflow.timeentry.dto.CreateTimeEntryDTO;
 import com.trackflow.timeentry.dto.StartTimerDTO;
 import com.trackflow.timeentry.dto.StopTimerDTO;
+import com.trackflow.timeentry.dto.TimeEntryQueryDO;
 import com.trackflow.timeentry.dto.UpdateTimeEntryDTO;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
@@ -405,10 +406,10 @@ public class TimeEntryService {
             }
         }
 
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesWithIssueKey(
+        List<TimeEntryQueryDO> rows = timeEntryMapper.selectEntriesWithIssueKey(
                 userId, startDate, endDate, projectId, activityId,
                 workItemAttributeService.getWorkTypeAttributeId(), allowedProjectIds);
-        return rows.stream().map(this::mapRowToVO).toList();
+        return rows.stream().map(timeEntryConverter::queryDOtoVO).toList();
     }
 
     /**
@@ -462,13 +463,13 @@ public class TimeEntryService {
             }
 
             // 批量查询该组所有成员的工时
-            List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByGroupMembers(
+            List<TimeEntryQueryDO> rows = timeEntryMapper.selectEntriesByGroupMembers(
                     memberUserIds, startDate, endDate, workTypeAttrId, currentUserId);
 
             // 按用户分组
-            Map<String, List<Map<String, Object>>> byUser = rows.stream()
+            Map<String, List<TimeEntryQueryDO>> byUser = rows.stream()
                     .collect(Collectors.groupingBy(
-                            row -> String.valueOf(row.get("user_id")),
+                            row -> String.valueOf(row.getUserId()),
                             LinkedHashMap::new,
                             Collectors.toList()
                     ));
@@ -477,19 +478,19 @@ public class TimeEntryService {
             List<GroupTimeSummaryVO.MemberTimeSummaryVO> memberVOs = new ArrayList<>();
             for (Long memberId : memberUserIds) {
                 String memberIdStr = String.valueOf(memberId);
-                List<Map<String, Object>> memberRows = byUser.getOrDefault(memberIdStr, List.of());
+                List<TimeEntryQueryDO> memberRows = byUser.getOrDefault(memberIdStr, List.of());
 
                 GroupTimeSummaryVO.MemberTimeSummaryVO memberVO = new GroupTimeSummaryVO.MemberTimeSummaryVO();
                 memberVO.setUserId(memberIdStr);
 
                 if (!memberRows.isEmpty()) {
-                    Map<String, Object> first = memberRows.get(0);
-                    memberVO.setUsername((String) first.get("user_username"));
-                    memberVO.setDisplayName((String) first.get("user_name"));
-                    memberVO.setAvatarUrl((String) first.get("user_avatar_url"));
+                    TimeEntryQueryDO first = memberRows.get(0);
+                    memberVO.setUsername(first.getUserUsername());
+                    memberVO.setDisplayName(first.getUserName());
+                    memberVO.setAvatarUrl(first.getUserAvatarUrl());
                     List<TimeEntryVO> entryVOs = memberRows.stream().map(row -> {
-                        TimeEntryVO vo = mapRowToVO(row);
-                        vo.setUserName((String) row.get("user_name"));
+                        TimeEntryVO vo = timeEntryConverter.queryDOtoVO(row);
+                        vo.setUserName(row.getUserName());
                         return vo;
                     }).toList();
                     memberVO.setEntries(entryVOs);
@@ -518,6 +519,16 @@ public class TimeEntryService {
 
         return result;
     }
+
+    /**
+     * 查询某 Issue 的工时记录列表（按工作日期降序）
+     * ongoing 记录仅对其所有者（currentUserId）可见
+     *
+     * @param issueId       工单 ID
+     * @param currentUserId 当前登录用户 ID（用于 ongoing 可见性控制）
+     */
+    @Transactional(readOnly = true)
+    public List<TimeEntryVO> listByIssue(Long issueId, Long currentUserId) {
         QueryWrapper<TimeEntry> wrapper = new QueryWrapper<TimeEntry>()
                 .eq("issue_id", issueId)
                 .and(w -> w.eq("ongoing", false).or().eq("user_id", currentUserId))
@@ -617,28 +628,28 @@ public class TimeEntryService {
             return List.of();
         }
 
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProjectForUser(
+        List<TimeEntryQueryDO> rows = timeEntryMapper.selectEntriesByProjectForUser(
                 userId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId(), allowedProjectIds);
 
         // 按 project_id 分组
-        Map<String, List<Map<String, Object>>> grouped = rows.stream()
+        Map<String, List<TimeEntryQueryDO>> grouped = rows.stream()
                 .collect(Collectors.groupingBy(
-                        row -> String.valueOf(row.get("project_id")),
+                        row -> String.valueOf(row.getProjectId()),
                         LinkedHashMap::new,
                         Collectors.toList()
                 ));
 
         List<ProjectTimeSummaryVO> result = new ArrayList<>();
-        for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
-            List<Map<String, Object>> projectRows = entry.getValue();
-            Map<String, Object> first = projectRows.get(0);
+        for (Map.Entry<String, List<TimeEntryQueryDO>> entry : grouped.entrySet()) {
+            List<TimeEntryQueryDO> projectRows = entry.getValue();
+            TimeEntryQueryDO first = projectRows.get(0);
 
             ProjectTimeSummaryVO vo = new ProjectTimeSummaryVO();
-            vo.setProjectId(String.valueOf(first.get("project_id")));
-            vo.setProjectName((String) first.get("project_name"));
-            vo.setProjectKey((String) first.get("project_key"));
+            vo.setProjectId(String.valueOf(first.getProjectId()));
+            vo.setProjectName(first.getProjectName());
+            vo.setProjectKey(first.getProjectKey());
 
-            List<TimeEntryVO> entries = projectRows.stream().map(this::mapRowToVO).toList();
+            List<TimeEntryVO> entries = projectRows.stream().map(timeEntryConverter::queryDOtoVO).toList();
             vo.setEntries(entries);
             vo.setTotalDuration(entries.stream().mapToInt(e -> e.getDuration() != null ? e.getDuration() : 0).sum());
 
@@ -653,11 +664,11 @@ public class TimeEntryService {
      */
     @Transactional(readOnly = true)
     public List<TimeEntryVO> listByProject(Long projectId, LocalDate startDate, LocalDate endDate, Long currentUserId) {
-        List<Map<String, Object>> rows = timeEntryMapper.selectEntriesByProject(
+        List<TimeEntryQueryDO> rows = timeEntryMapper.selectEntriesByProject(
                 projectId, startDate, endDate, workItemAttributeService.getWorkTypeAttributeId(), currentUserId);
         return rows.stream().map(row -> {
-            TimeEntryVO vo = mapRowToVO(row);
-            vo.setUserName((String) row.get("user_name"));
+            TimeEntryVO vo = timeEntryConverter.queryDOtoVO(row);
+            vo.setUserName(row.getUserName());
             return vo;
         }).toList();
     }
@@ -1095,61 +1106,6 @@ public class TimeEntryService {
     @Transactional(rollbackFor = Exception.class)
     public int recalculateAllSpentHours() {
         return timeEntryMapper.recalculateAllSpentHours();
-    }
-
-    private TimeEntryVO mapRowToVO(Map<String, Object> row) {
-        TimeEntryVO vo = new TimeEntryVO();
-        vo.setId(String.valueOf(row.get("id")));
-        vo.setIssueId(String.valueOf(row.get("issue_id")));
-        vo.setIssueKey((String) row.get("issue_key"));
-        vo.setIssueTitle((String) row.get("issue_title"));
-        if (row.get("project_id") != null) vo.setProjectId(String.valueOf(row.get("project_id")));
-        vo.setUserId(String.valueOf(row.get("user_id")));
-        if (row.get("work_date") != null) vo.setWorkDate(row.get("work_date").toString());
-        if (row.get("duration") != null) vo.setDuration((Integer) row.get("duration"));
-        if (row.get("start_time") != null) vo.setStartTime((Integer) row.get("start_time"));
-        vo.setDescription((String) row.get("description"));
-        if (row.get("created_at") != null) vo.setCreatedAt(row.get("created_at").toString());
-        if (row.get("updated_at") != null) vo.setUpdatedAt(row.get("updated_at").toString());
-
-        // ongoing field
-        Object ongoingObj = row.get("ongoing");
-        if (ongoingObj instanceof Boolean b) {
-            vo.setOngoing(b);
-            if (b && row.get("created_at") != null) {
-                vo.setStartedAt(row.get("created_at").toString());
-            }
-        } else if (ongoingObj != null) {
-            boolean isOngoing = Boolean.parseBoolean(ongoingObj.toString());
-            vo.setOngoing(isOngoing);
-            if (isOngoing && row.get("created_at") != null) {
-                vo.setStartedAt(row.get("created_at").toString());
-            }
-        }
-
-        // logged_by info
-        if (row.get("logged_by") != null) {
-            vo.setLoggedBy(String.valueOf(row.get("logged_by")));
-            // logged_by_name is only populated when logged_by != user_id (via LEFT JOIN condition)
-            if (row.get("logged_by_name") != null) {
-                vo.setLoggedByName((String) row.get("logged_by_name"));
-            }
-        }
-
-        // Issue deleted flag
-        Object issueDeletedObj = row.get("issue_deleted");
-        if (issueDeletedObj instanceof Boolean b) {
-            vo.setIssueDeleted(b);
-        } else if (issueDeletedObj != null) {
-            vo.setIssueDeleted(Boolean.parseBoolean(issueDeletedObj.toString()));
-        }
-
-        // Work type from JOIN
-        vo.setWorkType((String) row.get("work_type"));
-        if (row.get("work_type_id") != null) vo.setWorkTypeId(String.valueOf(row.get("work_type_id")));
-        vo.setWorkTypeColor((String) row.get("work_type_color"));
-
-        return vo;
     }
 
     /**
