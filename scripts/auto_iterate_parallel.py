@@ -223,7 +223,17 @@ def run_kiro(prompt: str, label: str) -> tuple[bool, str]:
         return False, str(e)
 
 
-def get_latest_session_id(req_stem: str | None = None) -> str | None:
+def get_current_commit() -> str:
+    """获取当前 HEAD commit hash（7位短 hash）"""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", timeout=10
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception:
+        return ""
     """
     获取最新的 session ID。
     req_stem: 需求文件的 stem（如 'requirement-123'），用于精确匹配本需求的会话。
@@ -501,6 +511,9 @@ def consume_one(worker_id: str) -> str | None:
     log.info(f"[{label}] 消费: {req_file.name} ({title})")
 
     # ── 步骤 1：修需求（新会话）──
+    # 记录修需求前的 commit hash，用于后续 diff 精确范围
+    commit_before = get_current_commit()
+
     fix_prompt = (
         f"[使用 skill: fix-requirement-auto] "
         f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
@@ -521,6 +534,11 @@ def consume_one(worker_id: str) -> str | None:
             shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
         log.warning(f"[{label}] ❌ {req_file.name} 修需求失败，放回 develop/")
         return None
+
+    # 记录修需求后的 commit hash（用于 diff 范围）
+    commit_after = get_current_commit()
+    diff_range = f"{commit_before}..HEAD" if commit_before and commit_before != commit_after else "HEAD~1"
+    log.info(f"[{label}] 代码变更范围: {diff_range}")
 
     # ── 步骤 2：拿 session_id（修需求结束后立刻查）──
     time.sleep(2)  # 给 kiro-cli 一点时间写入 session
@@ -581,6 +599,13 @@ def consume_one(worker_id: str) -> str | None:
                     f"```\n{test_summary}\n```"
                 )
                 _, fb_out = run_kiro(fallback_prompt, f"{label}-fix{test_round}")
+            # 判断修复是否完成（FIX_DONE），未完成则提前退出测试循环
+            fix_done, fix_blocked2, _ = parse_fix_result(fb_out)
+            if fix_blocked2:
+                log.warning(f"[{label}] 修复被拦截，停止测试循环")
+                break
+            if not fix_done:
+                log.warning(f"[{label}] 修复未输出 FIX_DONE，可能未完成，继续测试验证")
 
     if not test_passed:
         log.warning(f"[{label}] ⚠️ 测试经 {MAX_TEST_RETRIES} 轮仍未通过，继续审核（记录问题）")
@@ -597,7 +622,9 @@ def consume_one(worker_id: str) -> str | None:
             review_prompt = (
                 f"[使用 skill: code-review] "
                 f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
-                f"审核需求 {req_file.stem} 的本次代码变更（git diff HEAD~1 或 staged 文件）。"
+                f"审核需求 {req_file.stem} 的本次代码变更。\n"
+                f"变更范围：git diff {diff_range}\n"
+                f"请审核这个范围内的所有改动（可能包含多个 commit）。"
             )
         else:
             review_prompt = (
@@ -625,7 +652,7 @@ def consume_one(worker_id: str) -> str | None:
                 f"修复完成后请输出 FIX_DONE。"
             )
             if session_id:
-                run_kiro_resume(session_id, feedback_prompt, f"{label}-fixr{review_round}")
+                _, rv_out = run_kiro_resume(session_id, feedback_prompt, f"{label}-fixr{review_round}")
             else:
                 fallback_prompt = (
                     f"[使用 skill: fix-requirement-auto] "
@@ -633,7 +660,10 @@ def consume_one(worker_id: str) -> str | None:
                     f"继续处理需求 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n"
                     f"```\n{review_summary}\n```"
                 )
-                run_kiro(fallback_prompt, f"{label}-fixr{review_round}")
+                _, rv_out = run_kiro(fallback_prompt, f"{label}-fixr{review_round}")
+            fix_done2, _, _ = parse_fix_result(rv_out)
+            if not fix_done2:
+                log.warning(f"[{label}] 审核反馈修复未输出 FIX_DONE，继续二次审核验证")
 
     # ── 步骤 5：归档 ──
     overall_success = test_passed and review_passed
@@ -781,7 +811,11 @@ def main_loop(num_workers: int, skip_produce: bool):
             total_consumed += consumed
             log.info(f"[消费] 本轮完成 {consumed} 个，累计 {total_consumed} 个")
         else:
-            log.info("[消费] develop/ 为空，等待后继续...")
+            if skip_produce:
+                log.info("[消费] develop/ 为空，等待中（--skip-produce 模式，不会自动补货）")
+                time.sleep(30)  # skip-produce 模式下等待更长，避免日志刷屏
+            else:
+                log.info("[消费] develop/ 为空，等待后继续...")
 
         time.sleep(COOLDOWN_SECONDS)
 
