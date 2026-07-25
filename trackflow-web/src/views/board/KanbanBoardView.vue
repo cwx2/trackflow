@@ -3446,6 +3446,20 @@ async function loadIssues() {
   // 收集已折叠列的状态 ID（折叠列不需要返回具体工单）
   const collapsedIds = [...collapsedColumns.value].join(',')
 
+  // REQ-386: 泳道服务端过滤
+  // 仅当：(1) 泳道分组已配置（非 none）(2) 有选中值 (3) showUncategorized=false 时才做服务端过滤
+  // showUncategorized=true 时不传（服务端需返回全量数据，前端要构建"未分类"泳道）
+  let swimlaneFieldParam: string | undefined
+  let swimlaneValuesParam: string | undefined
+  if (
+    swimlaneGroupBy.value !== 'none' &&
+    swimlaneSelectedValues.value && swimlaneSelectedValues.value.length > 0 &&
+    swimlaneShowUncategorized.value === false
+  ) {
+    swimlaneFieldParam = swimlaneGroupBy.value
+    swimlaneValuesParam = swimlaneSelectedValues.value.join(',')
+  }
+
   try {
     const res = await boardApi.getBoardData({
       projectId: selectedProject.value,
@@ -3453,7 +3467,9 @@ async function loadIssues() {
       assigneeId: effectiveAssigneeId.value || undefined,
       keyword: keyword.value || undefined,
       excludeDoneBefore,
-      collapsedStatusIds: collapsedIds || undefined
+      collapsedStatusIds: collapsedIds || undefined,
+      swimlaneField: swimlaneFieldParam,
+      swimlaneValues: swimlaneValuesParam
     })
 
     const boardData = res.data

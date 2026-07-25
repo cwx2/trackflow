@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 
 /**
  * 看板聚合数据查询参数
@@ -30,6 +31,21 @@ public class BoardDataQuery {
 
     /** 每列最大工单数（默认 200，0=不限制） */
     private Integer columnLimit;
+
+    /**
+     * 泳道分组字段（可选）。
+     * 当前端配置了泳道值过滤时传入，用于服务端 SQL 追加泳道维度 WHERE 条件。
+     * 支持：assignee / priority / type / sprint
+     * 为 null 或 'none' 时不做泳道过滤。
+     */
+    private String swimlaneField;
+
+    /**
+     * 泳道选中值列表（可选）。
+     * 与 swimlaneField 配合使用，表示只返回这些泳道对应的工单。
+     * 仅当 showUncategorized=false 时传入（showUncategorized=true 时不传，返回全量工单供前端构建 Uncategorized 泳道）。
+     */
+    private List<String> swimlaneValues;
 
     /**
      * 将 excludeDoneBefore 字符串解析为 LocalDate。

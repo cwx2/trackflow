@@ -14,6 +14,8 @@ export const boardApi = {
     excludeDoneBefore?: string
     columnLimit?: number
     collapsedStatusIds?: string
+    swimlaneField?: string
+    swimlaneValues?: string
   }) {
     return request.get<any, R<BoardDataVO>>('/boards/data', { params })
   },

@@ -145,6 +145,14 @@ public class BoardDataService {
         LocalDateTime excludeDoneBefore = query.getExcludeDoneBeforeAsDate() != null
                 ? query.getExcludeDoneBeforeAsDate().atStartOfDay() : null;
 
+        // REQ-386: 解析泳道服务端过滤参数
+        String swimlaneField = query.getSwimlaneField();
+        List<String> swimlaneValues = query.getSwimlaneValues();
+        // 泳道过滤仅在字段非空且有选中值时生效
+        boolean hasSwimlaneFilter = swimlaneField != null && !swimlaneField.isBlank()
+                && !"none".equals(swimlaneField)
+                && swimlaneValues != null && !swimlaneValues.isEmpty();
+
         // REQ-274: 检查项目是否有手动排序，有则在 SQL 层面按手动排序截断
         boolean projectHasManualOrder = hasManualOrder(projectId);
         String manualOrderContextType = projectHasManualOrder ? "project" : null;
@@ -153,7 +161,9 @@ public class BoardDataService {
         List<BoardCardRow> cardRows = issueMapper.selectBoardCards(
                 projectId, statusIds, priorities, sprintId, assigneeId, keyword,
                 excludeDoneBefore, BOARD_MAX_ISSUES,
-                manualOrderContextType, manualOrderContextId
+                manualOrderContextType, manualOrderContextId,
+                hasSwimlaneFilter ? swimlaneField : null,
+                hasSwimlaneFilter ? swimlaneValues : null
         );
 
         // 4.1 如果 filterMode='query'，获取匹配的 issue IDs 做交集

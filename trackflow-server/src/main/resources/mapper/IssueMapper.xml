@@ -348,6 +348,31 @@
                 OR i.resolved_at >= #{excludeDoneBefore}
             )
           </if>
+          <!-- REQ-386: 泳道服务端过滤 — 仅在 showUncategorized=false 且有选中泳道值时触发 -->
+          <if test="swimlaneField == 'assignee' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.assignee_id IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                CAST(#{v} AS BIGINT)
+            </foreach>
+          </if>
+          <if test="swimlaneField == 'priority' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.priority IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                #{v}
+            </foreach>
+          </if>
+          <if test="swimlaneField == 'type' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.issue_type IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                #{v}
+            </foreach>
+          </if>
+          <if test="swimlaneField == 'sprint' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.sprint_id IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                CAST(#{v} AS BIGINT)
+            </foreach>
+          </if>
         <choose>
             <when test="manualOrderContextType != null and manualOrderContextId != null">
                 ORDER BY COALESCE(mo.position, 2147483647) ASC, i.created_at DESC

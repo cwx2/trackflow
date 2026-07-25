@@ -138,6 +138,8 @@ public interface IssueMapper extends BaseMapper<Issue> {
      * @param limit             最大返回数量（安全上限）
      * @param manualOrderContextType 手动排序上下文类型（可选，如 'project'）
      * @param manualOrderContextId   手动排序上下文 ID（可选，如 projectId）
+     * @param swimlaneField     泳道分组字段（可选，REQ-386：服务端泳道过滤）
+     * @param swimlaneValues    泳道选中值列表（可选，REQ-386：服务端泳道过滤）
      */
     List<BoardCardRow> selectBoardCards(
             @Param("projectId") Long projectId,
@@ -149,7 +151,9 @@ public interface IssueMapper extends BaseMapper<Issue> {
             @Param("excludeDoneBefore") java.time.LocalDateTime excludeDoneBefore,
             @Param("limit") int limit,
             @Param("manualOrderContextType") String manualOrderContextType,
-            @Param("manualOrderContextId") Long manualOrderContextId
+            @Param("manualOrderContextId") Long manualOrderContextId,
+            @Param("swimlaneField") String swimlaneField,
+            @Param("swimlaneValues") List<String> swimlaneValues
     );
 
     /**

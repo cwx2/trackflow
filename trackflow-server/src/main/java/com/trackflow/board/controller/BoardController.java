@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -90,8 +91,17 @@ public class BoardController {
     public R<BoardDataVO> getBoardData(
             @Valid BoardDataQuery query,
             @RequestParam("projectId") Long projectId,
-            @RequestParam(value = "collapsedStatusIds", required = false) String collapsedStatusIds) {
+            @RequestParam(value = "collapsedStatusIds", required = false) String collapsedStatusIds,
+            @RequestParam(value = "swimlaneValues", required = false) String swimlaneValues) {
         Set<Long> collapsed = parseCollapsedStatusIds(collapsedStatusIds);
+        // REQ-386: 泳道服务端过滤 — 解析逗号分隔的泳道值列表
+        if (swimlaneValues != null && !swimlaneValues.isBlank()) {
+            List<String> valueList = Arrays.stream(swimlaneValues.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+            query.setSwimlaneValues(valueList);
+        }
         BoardDataVO data = boardDataService.aggregateBoardData(query, collapsed);
         return R.ok(data);
     }
