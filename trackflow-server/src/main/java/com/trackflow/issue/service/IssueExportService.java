@@ -1,12 +1,12 @@
 package com.trackflow.issue.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
-import com.trackflow.common.util.SqlUtils;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.dto.IssueExportDTO;
+import com.trackflow.issue.dto.IssueQuery;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -51,6 +51,7 @@ public class IssueExportService {
     private final SprintMapper sprintMapper;
     private final ProjectService projectService;
     private final CustomFieldService customFieldService;
+    private final IssueService issueService;
 
     /**
      * 导出结果
@@ -60,6 +61,7 @@ public class IssueExportService {
     /**
      * 执行导出
      */
+    @Transactional(readOnly = true)
     public ExportResult export(IssueExportDTO dto) {
         String format = dto.getFormat().toLowerCase();
         if (!"xlsx".equals(format) && !"csv".equals(format)) {
@@ -92,6 +94,10 @@ public class IssueExportService {
 
     /**
      * 查询待导出的工单
+     *
+     * <p>模式 A：指定了 issueIds（选中导出），直接批量查询后做访问权限过滤。
+     * <p>模式 B：按筛选条件查询，将 {@link IssueExportDTO} 转换为 {@link IssueQuery}，
+     * 复用 {@link IssueService#listByQuery} 中的统一筛选引擎，确保导出结果与列表一致。
      */
     private List<Issue> queryIssues(IssueExportDTO dto) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -110,151 +116,14 @@ public class IssueExportService {
             return issues;
         }
 
-        // 模式 B: 按筛选条件查询（复用 IssueService 的筛选逻辑）
-        QueryWrapper<Issue> wrapper = new QueryWrapper<>();
-        wrapper.isNull("deleted_at");
+        // 模式 B: 按筛选条件查询——复用 IssueService.listByQuery() 统一筛选引擎
+        IssueQuery query = dto.toIssueQuery();
+        // 设置足够大的页大小以获取所有匹配数据（多查 1 条用于超限检测）
+        query.setPage(1);
+        query.setPageSize(MAX_EXPORT_LIMIT + 1);
 
-        if (dto.getProjectId() != null) {
-            projectService.assertProjectAccessible(currentUserId, dto.getProjectId());
-            wrapper.eq("project_id", dto.getProjectId());
-        } else {
-            List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(currentUserId);
-            if (accessibleProjectIds != null) {
-                if (accessibleProjectIds.isEmpty()) {
-                    return List.of();
-                }
-                wrapper.in("project_id", accessibleProjectIds);
-            }
-        }
-
-        applyFilter(wrapper, "status_id", dto.getStatusId(), true);
-        applyFilter(wrapper, "priority", dto.getPriority(), false);
-        applyFilter(wrapper, "assignee_id", dto.getAssigneeId(), true);
-        if (dto.getReporterId() != null) wrapper.eq("reporter_id", dto.getReporterId());
-        applyFilter(wrapper, "sprint_id", dto.getSprintId(), true);
-        applyFilter(wrapper, "issue_type", dto.getIssueType(), false);
-
-        // Negative filters
-        applyNegativeFilter(wrapper, "status_id", dto.getStatusIdNot(), true);
-        applyNegativeFilter(wrapper, "priority", dto.getPriorityNot(), false);
-        applyNegativeFilter(wrapper, "assignee_id", dto.getAssigneeIdNot(), true);
-        applyNegativeFilter(wrapper, "sprint_id", dto.getSprintIdNot(), true);
-        applyNegativeFilter(wrapper, "issue_type", dto.getIssueTypeNot(), false);
-
-        // Tag filter
-        if (dto.getTagId() != null && !dto.getTagId().isBlank()) {
-            String tagIdValue = dto.getTagId().trim();
-            if (tagIdValue.contains(",")) {
-                List<Long> tagIds = Arrays.stream(tagIdValue.split(","))
-                        .map(String::trim).filter(s -> !s.isEmpty())
-                        .map(Long::parseLong).toList();
-                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id IN ("
-                        + tagIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "))");
-            } else {
-                wrapper.apply("EXISTS (SELECT 1 FROM issue_tag_relation itr WHERE itr.issue_id = issue.id AND itr.tag_id = {0})",
-                        Long.parseLong(tagIdValue));
-            }
-        }
-
-        // Parent/child filters
-        if (dto.getParentId() != null) {
-            wrapper.eq("parent_id", dto.getParentId());
-        }
-        if ("true".equals(dto.getHasParent())) {
-            wrapper.isNotNull("parent_id");
-        } else if ("false".equals(dto.getHasParent())) {
-            wrapper.isNull("parent_id");
-        }
-
-        // Date range filters
-        if (dto.getCreatedAfter() != null && !dto.getCreatedAfter().isBlank()) {
-            wrapper.ge("created_at", LocalDate.parse(dto.getCreatedAfter()).atStartOfDay());
-        }
-        if (dto.getCreatedBefore() != null && !dto.getCreatedBefore().isBlank()) {
-            wrapper.le("created_at", LocalDate.parse(dto.getCreatedBefore()).atTime(23, 59, 59));
-        }
-        if (dto.getUpdatedAfter() != null && !dto.getUpdatedAfter().isBlank()) {
-            wrapper.ge("updated_at", LocalDate.parse(dto.getUpdatedAfter()).atStartOfDay());
-        }
-        if (dto.getUpdatedBefore() != null && !dto.getUpdatedBefore().isBlank()) {
-            wrapper.le("updated_at", LocalDate.parse(dto.getUpdatedBefore()).atTime(23, 59, 59));
-        }
-
-        // hideResolved
-        if ("true".equals(dto.getHideResolved())) {
-            Set<Long> closedStatusIds = issueStatusMapper.selectList(null).stream()
-                    .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
-                    .map(IssueStatus::getId).collect(Collectors.toSet());
-            if (!closedStatusIds.isEmpty()) {
-                wrapper.notIn("status_id", closedStatusIds);
-            }
-        }
-
-        // Special filters
-        boolean needClosedExclusion = "true".equals(dto.getOverdue())
-                || "true".equals(dto.getDueSoon())
-                || "true".equals(dto.getReportedByMe());
-        if (needClosedExclusion) {
-            Set<Long> closedIds = issueStatusMapper.selectList(null).stream()
-                    .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
-                    .map(IssueStatus::getId).collect(Collectors.toSet());
-            if (!closedIds.isEmpty()) {
-                wrapper.notIn("status_id", closedIds);
-            }
-        }
-        if ("true".equals(dto.getOverdue()) || "true".equals(dto.getDueSoon())) {
-            wrapper.isNotNull("due_date");
-            if ("true".equals(dto.getOverdue())) wrapper.lt("due_date", LocalDate.now());
-            if ("true".equals(dto.getDueSoon())) wrapper.le("due_date", LocalDate.now().plusDays(7));
-        }
-        if ("true".equals(dto.getReportedByMe())) {
-            wrapper.eq("reporter_id", currentUserId);
-        }
-
-        if (dto.getKeyword() != null && !dto.getKeyword().isBlank()) {
-            String escaped = SqlUtils.escapeLikePattern(dto.getKeyword());
-            String likePattern = "%" + escaped + "%";
-            wrapper.and(w -> w
-                    .apply("title LIKE {0} ESCAPE '\\'", likePattern)
-                    .or().apply("description LIKE {0} ESCAPE '\\'", likePattern)
-                    .or().apply("issue_key LIKE {0} ESCAPE '\\'", likePattern)
-                    .or().apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name LIKE {0} ESCAPE '\\' OR username LIKE {0} ESCAPE '\\')", likePattern)
-            );
-        }
-
-        wrapper.orderByDesc("updated_at");
-        // 限制最多查 MAX_EXPORT_LIMIT + 1 条，用于检测是否超限
-        wrapper.last("LIMIT " + (MAX_EXPORT_LIMIT + 1));
-
-        return issueMapper.selectList(wrapper);
-    }
-
-    private void applyFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
-        if (value == null || value.isBlank()) return;
-        if ("none".equalsIgnoreCase(value.trim())) {
-            wrapper.isNull(column);
-            return;
-        }
-        if (value.contains(",")) {
-            List<?> values = isNumeric
-                    ? Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
-                    : Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-            wrapper.in(column, values);
-        } else {
-            if (isNumeric) {
-                wrapper.eq(column, Long.parseLong(value.trim()));
-            } else {
-                wrapper.eq(column, value.trim());
-            }
-        }
-    }
-
-    private void applyNegativeFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
-        if (value == null || value.isBlank()) return;
-        List<?> values = isNumeric
-                ? Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
-                : Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-        wrapper.notIn(column, values);
+        Page<Issue> page = issueService.listByQuery(query);
+        return new ArrayList<>(page.getRecords());
     }
 
     // ========== 导出上下文 ==========

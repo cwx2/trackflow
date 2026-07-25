@@ -42,6 +42,7 @@ public class IssueTagService {
     /**
      * 获取项目下所有标签
      */
+    @Transactional(readOnly = true)
     public List<IssueTag> listProjectTags(Long projectId) {
         return tagMapper.selectList(
                 new LambdaQueryWrapper<IssueTag>()
@@ -81,6 +82,7 @@ public class IssueTagService {
     /**
      * 获取 Issue 的标签列表
      */
+    @Transactional(readOnly = true)
     public List<IssueTag> listIssueTags(Long issueId) {
         List<IssueTagRelation> relations = tagRelationMapper.selectList(
                 new LambdaQueryWrapper<IssueTagRelation>()
@@ -171,6 +173,7 @@ public class IssueTagService {
     /**
      * 获取用户收藏的标签列表（含匹配工单数量）
      */
+    @Transactional(readOnly = true)
     public List<TagPanelItemVO> getFavoriteTagsPanel(Long userId, Long projectId) {
         List<TagFavoriteCountRow> rows;
         if (projectId != null) {
@@ -267,6 +270,7 @@ public class IssueTagService {
      * 获取所有可收藏的标签（用于管理收藏面板）
      * 返回用户可访问项目下的所有标签，标记是否已收藏
      */
+    @Transactional(readOnly = true)
     public List<TagFavoriteManagementVO> listAllTagsForFavoriteManagement(Long userId, List<Long> accessibleProjectIds) {
         if (accessibleProjectIds == null || accessibleProjectIds.isEmpty()) {
             return List.of();

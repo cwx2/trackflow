@@ -46,6 +46,7 @@ public class IssueLinkService {
      * 获取 Issue 的所有关联（包括作为 source 和 target 的）。
      * 使用批量查询避免 N+1 性能问题。
      */
+    @Transactional(readOnly = true)
     public List<IssueLinkVO> listIssueLinks(Long issueId) {
         // 查询作为 source 的链接
         List<IssueLink> asSource = linkMapper.selectList(
@@ -219,6 +220,7 @@ public class IssueLinkService {
      *
      * @return 未解决阻塞方的 issueKey 列表（空列表表示无阻塞）
      */
+    @Transactional(readOnly = true)
     public List<String> getUnresolvedBlockerKeys(Long issueId) {
         // 查询所有"X blocks issueId"的链接
         List<IssueLink> blockingLinks = linkMapper.selectList(
