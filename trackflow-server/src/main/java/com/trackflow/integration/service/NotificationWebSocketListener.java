@@ -41,7 +41,7 @@ public class NotificationWebSocketListener {
 
             messagingTemplate.convertAndSend(
                     "/topic/users/" + event.userId() + "/notifications",
-                    payload
+                    (Object) payload
             );
             log.debug("[Notification] WebSocket 推送: userId={}, type={}", event.userId(), event.type());
         } catch (Exception e) {

@@ -339,7 +339,7 @@ public class RoleService {
 
         // 9. 失效所有受影响用户的权限缓存
         for (Long userId : affectedUserIds) {
-            permissionService.invalidateUserPermissionCache(userId);
+            permissionService.invalidateCache(userId);
         }
 
         // 10. 审计日志

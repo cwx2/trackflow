@@ -892,7 +892,7 @@ public class NotificationService {
 
             messagingTemplate.convertAndSend(
                     "/topic/users/" + userId + "/notifications",
-                    payload
+                    (Object) payload
             );
             log.debug("[Notification] WebSocket 推送: userId={}, type={}", userId, type);
         } catch (Exception e) {

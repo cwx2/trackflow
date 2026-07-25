@@ -141,7 +141,7 @@ public class ProjectService {
         project.setOrgId(dto.getOrgId());
         project.setStatus(ProjectStatus.ACTIVE);
         project.setVisibility(ProjectVisibility.PRIVATE);
-        project.setIssueSequence(dto.getStartingNumber() != null ? dto.getStartingNumber().longValue() : 0L);
+        project.setIssueSequence(dto.getStartingNumber() != null ? dto.getStartingNumber().intValue() : 0);
         projectMapper.insert(project);
 
         // 自动添加创建者为项目管理员
