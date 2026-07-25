@@ -84,7 +84,7 @@
             v-for="status in activeStatuses"
             :key="status.id"
             class="progress-bar"
-            :class="{ 'progress-bar--collapsed': collapsedColumns.has(status.id) }"
+            :class="{ 'progress-bar--collapsed': isColumnCollapsed(effectiveColumns.find(c => c.statusIds.includes(status.id))?.id || status.id) }"
             :style="{ height: getProgressBarHeight(status.id), backgroundColor: status.color || 'var(--color-fill-4)' }"
             :title="`${localizeStatusName(status.name)}：${getColumnIssues(status.id).length} 个工单`"
             @click="scrollToColumn(status.id)"
@@ -339,45 +339,45 @@
         v-if="selectedProject && visibleStatuses.length > 0 && !showNoSearchResults && !showSprintModeNoActiveState && swimlaneGroupBy === 'none'"
         class="board-container"
       >
-        <template v-for="status in visibleStatuses" :key="status.id">
+        <template v-for="col in effectiveColumns" :key="col.id">
           <!-- 展开状态的列（有工单/手动展开空列/非手动折叠） -->
           <div
-            v-if="!isColumnCollapsed(status.id)"
+            v-if="!isColumnCollapsed(col.id)"
             class="board-column"
-            :data-column-id="status.id"
+            :data-column-id="col.id"
             :class="{
-              'board-column--expanded-empty': getColumnIssues(status.id).length === 0,
-              'board-column--drop-target': dragOverColumnId === status.id && !dragOverSwimlaneKey,
-              'board-column--drop-forbidden': dragOverColumnId === status.id && !dragOverSwimlaneKey && !isDropAllowed(status.id)
+              'board-column--expanded-empty': getEffectiveColumnIssues(col).length === 0,
+              'board-column--drop-target': col.statusIds.includes(dragOverColumnId || '') && !dragOverSwimlaneKey,
+              'board-column--drop-forbidden': col.statusIds.includes(dragOverColumnId || '') && !dragOverSwimlaneKey && !isEffectiveColumnDropAllowed(col)
             }"
-            @dragover="onDragOver($event, status.id)"
+            @dragover="onDragOver($event, getDropTargetStatusId(col))"
             @dragleave="onDragLeave($event)"
-            @drop="onDrop($event, status.id)"
+            @drop="onDrop($event, getDropTargetStatusId(col))"
           >
             <div
               class="column-header column-header--clickable"
-              :style="{ borderTopColor: status.color }"
+              :style="{ borderTopColor: col.color }"
               role="button"
               tabindex="0"
-              :aria-label="`折叠 ${localizeStatusName(status.name)} 列`"
+              :aria-label="`折叠 ${col.name} 列`"
               title="点击折叠此列"
-              @click="toggleColumnCollapse(status.id)"
-              @keydown.enter="toggleColumnCollapse(status.id)"
+              @click="toggleColumnCollapse(col.id)"
+              @keydown.enter="toggleColumnCollapse(col.id)"
             >
-              <span class="column-title">{{ localizeStatusName(status.name) }}</span>
+              <span class="column-title">{{ col.name }}</span>
               <span
                 class="column-count"
-                :class="getWipClass(status.id)"
-                :title="getWipTooltip(status.id)"
-              >{{ getColumnIssues(status.id).length }}<template v-if="getWipMax(status.id) !== null">/{{ getWipMax(status.id) }}</template></span>
-              <span v-if="getColumnEstimation(status.id)" class="column-estimation" :title="'预估工时总计: ' + getColumnEstimation(status.id) + 'h'">⏱ {{ getColumnEstimation(status.id) }}h</span>
-              <span v-if="getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
-                {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
+                :class="getEffectiveColumnWipClass(col)"
+                :title="col.isMerged ? undefined : getWipTooltip(col.id)"
+              >{{ getEffectiveColumnIssues(col).length }}<template v-if="getEffectiveColumnWipMax(col) !== null">/{{ getEffectiveColumnWipMax(col) }}</template></span>
+              <span v-if="getEffectiveColumnEstimation(col)" class="column-estimation" :title="'预估工时总计: ' + getEffectiveColumnEstimation(col) + 'h'">⏱ {{ getEffectiveColumnEstimation(col) }}h</span>
+              <span v-if="getEffectiveColumnWipWarning(col)" class="wip-warning" :class="getEffectiveColumnWipWarning(col)">
+                {{ getEffectiveColumnWipWarning(col) === 'wip-over' ? '⚠' : '▽' }}
               </span>
             </div>
             <div class="column-body">
               <div
-                v-for="issue in getColumnIssues(status.id)"
+                v-for="issue in getEffectiveColumnIssues(col)"
                 :key="issue.id"
                 class="kanban-card"
                 :class="[
@@ -445,40 +445,40 @@
                 </div>
               </div>
               <div
-                v-if="getColumnIssues(status.id).length === 0"
+                v-if="getEffectiveColumnIssues(col).length === 0"
                 class="column-empty-state"
-                :class="{ 'column-empty-state--drop-hint': isDragging && isDropAllowed(status.id) }"
+                :class="{ 'column-empty-state--drop-hint': isDragging && isEffectiveColumnDropAllowed(col) }"
               >
-                <template v-if="isDragging && isDropAllowed(status.id)">
+                <template v-if="isDragging && isEffectiveColumnDropAllowed(col)">
                   <div class="column-empty-icon">📥</div>
                   <div class="column-empty-text">释放以移动到此状态</div>
                 </template>
-                <template v-else-if="isDragging && !isDropAllowed(status.id)">
+                <template v-else-if="isDragging && !isEffectiveColumnDropAllowed(col)">
                   <div class="column-empty-icon">🚫</div>
                   <div class="column-empty-text">不允许转换到此状态</div>
                 </template>
                 <template v-else>
                   <div class="column-empty-icon">📭</div>
                   <div class="column-empty-text">该状态下暂无工单</div>
-                  <div class="column-empty-hint">{{ isClosedStatus(status) ? '拖拽工单到此列' : '拖拽工单到此列或创建新工单' }}</div>
+                  <div class="column-empty-hint">{{ isEffectiveColumnClosed(col) ? '拖拽工单到此列' : '拖拽工单到此列或创建新工单' }}</div>
                 </template>
               </div>
-              <!-- 内联快速创建卡片 -->
+              <!-- 内联快速创建卡片（合并列：使用第一个 statusId 创建） -->
               <div
-                v-if="canCreateIssue && !isDragging && !isClosedStatus(status)"
+                v-if="canCreateIssue && !isDragging && !isEffectiveColumnClosed(col)"
                 class="add-card-area"
               >
                 <div
-                  v-if="addingCardColumnId === status.id && !addingCardSwimlaneKey"
+                  v-if="addingCardColumnId === getDropTargetStatusId(col) && !addingCardSwimlaneKey"
                   class="add-card-form"
                 >
                   <input
-                    :ref="(el) => setAddCardInputRef(el, status.id, '')"
+                    :ref="(el) => setAddCardInputRef(el, getDropTargetStatusId(col), '')"
                     v-model="addCardTitle"
                     class="add-card-input"
                     placeholder="输入工单标题，回车创建"
                     :disabled="addCardSubmitting"
-                    @keydown.enter.prevent="submitAddCard(status.id)"
+                    @keydown.enter.prevent="submitAddCard(getDropTargetStatusId(col))"
                     @keydown.escape="cancelAddCard"
                     @blur="onAddCardBlur"
                   />
@@ -497,7 +497,7 @@
                       type="primary"
                       :loading="addCardSubmitting"
                       @mousedown.prevent
-                      @click="submitAddCard(status.id)"
+                      @click="submitAddCard(getDropTargetStatusId(col))"
                     >创建</a-button>
                     <a-button
                       size="mini"
@@ -509,7 +509,7 @@
                 <button
                   v-else
                   class="add-card-btn"
-                  @click="startAddCard(status.id)"
+                  @click="startAddCard(getDropTargetStatusId(col))"
                 >
                   <span class="add-card-icon">+</span>
                   <span class="add-card-text">添加卡片</span>
@@ -522,24 +522,24 @@
           <div
             v-else
             class="board-column-collapsed"
-            :data-column-id="status.id"
+            :data-column-id="col.id"
             :class="{
-              'board-column-collapsed--drop-target': dragOverColumnId === status.id && isDropAllowed(status.id),
-              'board-column-collapsed--drop-forbidden': dragOverColumnId === status.id && !isDropAllowed(status.id)
+              'board-column-collapsed--drop-target': col.statusIds.includes(dragOverColumnId || '') && isEffectiveColumnDropAllowed(col),
+              'board-column-collapsed--drop-forbidden': col.statusIds.includes(dragOverColumnId || '') && !isEffectiveColumnDropAllowed(col)
             }"
             role="button"
             tabindex="0"
-            :aria-label="`${localizeStatusName(status.name)}，${getColumnIssues(status.id).length} 个工单，点击展开`"
-            :title="`${localizeStatusName(status.name)} (${getColumnIssues(status.id).length} 工单) - ${isDragging ? '释放以移动' : '点击展开'}`"
-            @click="!isDragging && toggleColumnCollapse(status.id)"
-            @keydown.enter="toggleColumnCollapse(status.id)"
-            @dragover="onDragOver($event, status.id)"
+            :aria-label="`${col.name}，${getEffectiveColumnIssues(col).length} 个工单，点击展开`"
+            :title="`${col.name} (${getEffectiveColumnIssues(col).length} 工单) - ${isDragging ? '释放以移动' : '点击展开'}`"
+            @click="!isDragging && toggleColumnCollapse(col.id)"
+            @keydown.enter="toggleColumnCollapse(col.id)"
+            @dragover="onDragOver($event, getDropTargetStatusId(col))"
             @dragleave="onDragLeave($event)"
-            @drop="onDrop($event, status.id)"
+            @drop="onDrop($event, getDropTargetStatusId(col))"
           >
-            <div class="collapsed-indicator" :style="{ backgroundColor: status.color || 'var(--color-border)' }"></div>
-            <span class="collapsed-name">{{ localizeStatusName(status.name) }}</span>
-            <span class="collapsed-count">{{ getColumnIssues(status.id).length }}</span>
+            <div class="collapsed-indicator" :style="{ backgroundColor: col.color || 'var(--color-border)' }"></div>
+            <span class="collapsed-name">{{ col.name }}</span>
+            <span class="collapsed-count">{{ getEffectiveColumnIssues(col).length }}</span>
           </div>
         </template>
       </div>
@@ -554,30 +554,30 @@
           <div class="swimlane-label-cell"></div>
           <div class="swimlane-columns-header">
             <div
-              v-for="status in visibleStatuses"
-              :key="status.id"
+              v-for="col in effectiveColumns"
+              :key="col.id"
               class="swimlane-col-header"
-              :class="{ 'swimlane-col-header--collapsed': collapsedColumns.has(status.id) }"
-              :style="{ borderTopColor: status.color }"
+              :class="{ 'swimlane-col-header--collapsed': collapsedColumns.has(col.id) }"
+              :style="{ borderTopColor: col.color }"
               role="button"
               tabindex="0"
-              :title="collapsedColumns.has(status.id) ? '点击展开此列' : '点击折叠此列'"
-              @click="toggleColumnCollapse(status.id)"
-              @keydown.enter="toggleColumnCollapse(status.id)"
+              :title="collapsedColumns.has(col.id) ? '点击展开此列' : '点击折叠此列'"
+              @click="toggleColumnCollapse(col.id)"
+              @keydown.enter="toggleColumnCollapse(col.id)"
             >
-              <span class="column-title">{{ localizeStatusName(status.name) }}</span>
+              <span class="column-title">{{ col.name }}</span>
               <span
-                v-if="!collapsedColumns.has(status.id)"
+                v-if="!collapsedColumns.has(col.id)"
                 class="column-count"
-                :class="getWipClass(status.id)"
-                :title="getWipTooltip(status.id)"
-              >{{ getColumnIssues(status.id).length }}<template v-if="getWipMax(status.id) !== null">/{{ getWipMax(status.id) }}</template></span>
+                :class="getEffectiveColumnWipClass(col)"
+                :title="col.isMerged ? undefined : getWipTooltip(col.id)"
+              >{{ getEffectiveColumnIssues(col).length }}<template v-if="getEffectiveColumnWipMax(col) !== null">/{{ getEffectiveColumnWipMax(col) }}</template></span>
               <span
                 v-else
                 class="column-count"
-              >{{ getColumnIssues(status.id).length }}</span>
-              <span v-if="!collapsedColumns.has(status.id) && getWipWarning(status.id)" class="wip-warning" :class="getWipWarning(status.id)">
-                {{ getWipWarning(status.id) === 'wip-over' ? '⚠' : '▽' }}
+              >{{ getEffectiveColumnIssues(col).length }}</span>
+              <span v-if="!collapsedColumns.has(col.id) && getEffectiveColumnWipWarning(col)" class="wip-warning" :class="getEffectiveColumnWipWarning(col)">
+                {{ getEffectiveColumnWipWarning(col) === 'wip-over' ? '⚠' : '▽' }}
               </span>
             </div>
           </div>
@@ -611,21 +611,21 @@
               <div class="swimlane-label-cell"></div>
               <div class="swimlane-columns">
                 <div
-                  v-for="status in visibleStatuses"
-                  :key="status.id"
+                  v-for="col in effectiveColumns"
+                  :key="col.id"
                   class="swimlane-cell"
                   :class="{
-                    'swimlane-cell--collapsed': collapsedColumns.has(status.id),
-                    'swimlane-cell--drop-target': dragOverColumnId === status.id && dragOverSwimlaneKey === lane.key,
-                    'swimlane-cell--drop-forbidden': dragOverColumnId === status.id && dragOverSwimlaneKey === lane.key && !isDropAllowed(status.id)
+                    'swimlane-cell--collapsed': collapsedColumns.has(col.id),
+                    'swimlane-cell--drop-target': col.statusIds.includes(dragOverColumnId || '') && dragOverSwimlaneKey === lane.key,
+                    'swimlane-cell--drop-forbidden': col.statusIds.includes(dragOverColumnId || '') && dragOverSwimlaneKey === lane.key && !isEffectiveColumnDropAllowed(col)
                   }"
-                  @dragover="onDragOverSwimlane($event, status.id, lane.key)"
+                  @dragover="onDragOverSwimlane($event, getDropTargetStatusId(col), lane.key)"
                   @dragleave="onDragLeaveSwimlane($event)"
-                  @drop="onDrop($event, status.id)"
+                  @drop="onDrop($event, getDropTargetStatusId(col))"
                 >
-                  <template v-if="!collapsedColumns.has(status.id)">
+                  <template v-if="!collapsedColumns.has(col.id)">
                     <div
-                      v-for="issue in getSwimlaneColumnIssues(lane.key, status.id)"
+                      v-for="issue in getSwimlaneEffectiveColumnIssues(lane.key, col)"
                       :key="issue.id"
                       class="kanban-card"
                       :class="[
@@ -694,27 +694,27 @@
                     </div>
                     <!-- 空单元格 drop hint -->
                     <div
-                      v-if="getSwimlaneColumnIssues(lane.key, status.id).length === 0 && isDragging && isDropAllowed(status.id)"
+                      v-if="getSwimlaneEffectiveColumnIssues(lane.key, col).length === 0 && isDragging && isEffectiveColumnDropAllowed(col)"
                       class="swimlane-cell-empty-hint"
                     >
                       📥
                     </div>
-                    <!-- Swimlane 内联快速创建卡片 -->
+                    <!-- Swimlane 内联快速创建卡片（合并列：使用第一个 statusId 创建） -->
                     <div
-                      v-if="canCreateIssue && !isDragging && !isClosedStatus(status)"
+                      v-if="canCreateIssue && !isDragging && !isEffectiveColumnClosed(col)"
                       class="add-card-area add-card-area--swimlane"
                     >
                       <div
-                        v-if="addingCardColumnId === status.id && addingCardSwimlaneKey === lane.key"
+                        v-if="addingCardColumnId === getDropTargetStatusId(col) && addingCardSwimlaneKey === lane.key"
                         class="add-card-form"
                       >
                         <input
-                          :ref="(el) => setAddCardInputRef(el, status.id, lane.key)"
+                          :ref="(el) => setAddCardInputRef(el, getDropTargetStatusId(col), lane.key)"
                           v-model="addCardTitle"
                           class="add-card-input"
                           placeholder="输入标题，回车创建"
                           :disabled="addCardSubmitting"
-                          @keydown.enter.prevent="submitAddCard(status.id, lane.key)"
+                          @keydown.enter.prevent="submitAddCard(getDropTargetStatusId(col), lane.key)"
                           @keydown.escape="cancelAddCard"
                           @blur="onAddCardBlur"
                         />
@@ -733,7 +733,7 @@
                             type="primary"
                             :loading="addCardSubmitting"
                             @mousedown.prevent
-                            @click="submitAddCard(status.id, lane.key)"
+                            @click="submitAddCard(getDropTargetStatusId(col), lane.key)"
                           >创建</a-button>
                           <a-button
                             size="mini"
@@ -745,7 +745,7 @@
                       <button
                         v-else
                         class="add-card-btn add-card-btn--compact"
-                        @click="startAddCard(status.id, lane.key)"
+                        @click="startAddCard(getDropTargetStatusId(col), lane.key)"
                       >
                         <span class="add-card-icon">+</span>
                       </button>
@@ -2180,27 +2180,129 @@ function saveCollapsedColumnsState() {
   }
 }
 
-/** 判断列是否处于折叠状态（手动折叠或空列自动折叠） */
-function isColumnCollapsed(statusId: string): boolean {
+/** 判断列是否处于折叠状态（手动折叠或空列自动折叠）
+ * columnId: 对于普通列为 statusId，对于合并列为 mergeGroupId
+ */
+function isColumnCollapsed(columnId: string): boolean {
   // 手动折叠优先级最高
-  if (collapsedColumns.value.has(statusId)) return true
+  if (collapsedColumns.value.has(columnId)) return true
   // 空列且未手动展开 → 自动折叠
-  if (getColumnIssues(statusId).length === 0 && !expandedEmptyColumns.value.has(statusId)) return true
+  const col = effectiveColumns.value.find(c => c.id === columnId)
+  if (col) {
+    if (getEffectiveColumnIssues(col).length === 0 && !expandedEmptyColumns.value.has(columnId)) return true
+  } else {
+    // fallback: 单状态列
+    if (getColumnIssues(columnId).length === 0 && !expandedEmptyColumns.value.has(columnId)) return true
+  }
   return false
 }
 
-/** 切换列的折叠/展开状态 */
-function toggleColumnCollapse(statusId: string) {
-  if (collapsedColumns.value.has(statusId)) {
+/** 切换列的折叠/展开状态
+ * columnId: 对于普通列为 statusId，对于合并列为 mergeGroupId
+ */
+function toggleColumnCollapse(columnId: string) {
+  if (collapsedColumns.value.has(columnId)) {
     // 展开
-    collapsedColumns.value.delete(statusId)
-    expandedEmptyColumns.value.add(statusId) // 确保空列也被展开
+    collapsedColumns.value.delete(columnId)
+    expandedEmptyColumns.value.add(columnId) // 确保空列也被展开
   } else {
     // 折叠
-    collapsedColumns.value.add(statusId)
-    expandedEmptyColumns.value.delete(statusId)
+    collapsedColumns.value.add(columnId)
+    expandedEmptyColumns.value.delete(columnId)
   }
   saveCollapsedColumnsState()
+}
+
+/**
+ * 获取有效列（合并列或普通列）对应的拖拽放置目标 statusId。
+ * 对于合并列，使用组内第一个状态；对于普通列直接返回自身 ID。
+ */
+function getDropTargetStatusId(col: EffectiveColumn): string {
+  return col.statusIds[0] ?? col.id
+}
+
+/**
+ * 判断有效列是否为已关闭列（合并列：所有子状态均为终态才算终态）
+ */
+function isEffectiveColumnClosed(col: EffectiveColumn): boolean {
+  if (!col.isMerged) {
+    return col.category === 'done' || col.category === 'cancelled'
+  }
+  // 合并列：全部子状态都是终态才算终态
+  return col.statusIds.every(sid => {
+    const config = allColumnConfigs.value.find(c => c.statusId === sid)
+    if (config) return config.statusCategory === 'done' || config.statusCategory === 'cancelled'
+    return false
+  })
+}
+
+/**
+ * 获取有效列的预估工时（合并列：所有子状态之和）
+ */
+function getEffectiveColumnEstimation(col: EffectiveColumn): string {
+  let total = 0
+  for (const sid of col.statusIds) {
+    const config = getColumnConfig(sid)
+    if (config && config.totalEstimation) {
+      total += Number(config.totalEstimation)
+    }
+  }
+  if (total <= 0) return ''
+  return total % 1 === 0 ? String(total) : total.toFixed(1)
+}
+
+/**
+ * 获取有效列的 WIP Max（合并列：各子状态 WIP Max 之和；任一无限制则整列无限制）
+ */
+function getEffectiveColumnWipMax(col: EffectiveColumn): number | null {
+  if (!col.isMerged) return getWipMax(col.id)
+  let total = 0
+  for (const sid of col.statusIds) {
+    const max = getWipMax(sid)
+    if (max === null) return null // 无限制
+    total += max
+  }
+  return total || null
+}
+
+/**
+ * 获取有效列的 WIP 警告状态（合并列：使用合并后的工单数和 WIP 限制计算）
+ */
+function getEffectiveColumnWipWarning(col: EffectiveColumn): 'wip-over' | 'wip-under' | null {
+  if (!col.isMerged) return getWipWarning(col.id)
+  const count = getEffectiveColumnIssues(col).length
+  // 合并列：检查各子状态 WIP 限制之和
+  let totalWipMin = 0
+  let totalWipMax = 0
+  let hasWipMax = false
+  let hasWipMin = false
+  for (const sid of col.statusIds) {
+    const config = getColumnConfig(sid)
+    if (config?.wipMax != null) { totalWipMax += config.wipMax; hasWipMax = true }
+    if (config?.wipMin != null) { totalWipMin += config.wipMin; hasWipMin = true }
+  }
+  if (hasWipMax && count > totalWipMax) return 'wip-over'
+  if (hasWipMin && count < totalWipMin) return 'wip-under'
+  return null
+}
+
+/**
+ * 获取有效列的 WIP CSS class
+ */
+function getEffectiveColumnWipClass(col: EffectiveColumn): string {
+  if (!col.isMerged) return getWipClass(col.id)
+  const warning = getEffectiveColumnWipWarning(col)
+  if (warning === 'wip-over') return 'wip-over'
+  if (warning === 'wip-under') return 'wip-under'
+  return ''
+}
+
+/**
+ * 判断有效列的拖拽是否允许放置
+ * 合并列：只要任一子状态允许放置即可
+ */
+function isEffectiveColumnDropAllowed(col: EffectiveColumn): boolean {
+  return col.statusIds.some(sid => isDropAllowed(sid))
 }
 
 // ===== Progress Indicator（各列卡片数 mini bar chart） =====
@@ -2224,17 +2326,24 @@ function getClosedProgressBarHeight(): string {
   return `${height}px`
 }
 
-/** 滚动到指定列 */
+/** 滚动到指定列（支持普通列和合并列）
+ * statusId: 可以是普通状态 ID 或合并列 ID（mergeGroupId）
+ */
 function scrollToColumn(statusId: string) {
+  // 查找包含此 statusId 的有效列（可能是合并列）
+  const col = effectiveColumns.value.find(c => c.statusIds.includes(statusId)) ||
+              effectiveColumns.value.find(c => c.id === statusId)
+  const targetId = col ? col.id : statusId
+
   // 如果列被折叠，先展开
-  if (collapsedColumns.value.has(statusId)) {
-    toggleColumnCollapse(statusId)
+  if (collapsedColumns.value.has(targetId)) {
+    toggleColumnCollapse(targetId)
   }
   // 在下一帧滚动到目标列
   setTimeout(() => {
     const container = document.querySelector('.board-container') || document.querySelector('.swimlane-container')
     if (!container) return
-    const columnEl = container.querySelector(`[data-column-id="${statusId}"]`)
+    const columnEl = container.querySelector(`[data-column-id="${targetId}"]`)
     if (columnEl) {
       columnEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
     }
@@ -2289,6 +2398,11 @@ function getColumnIssues(statusId: string): BoardIssue[] {
 // ===== WIP 限制辅助函数 =====
 
 function getColumnConfig(statusId: string): BoardColumnVO | undefined {
+  if (boardColumnField.value === 'priority') {
+    // 优先级模式：statusId 参数实际是 priority 值（Critical/High/Normal/Low）
+    // 需按 fieldValue 查找，且这些列的 statusId 为 null
+    return allColumnConfigs.value.find(c => c.fieldValue === statusId && c.statusId == null)
+  }
   return allColumnConfigs.value.find(c => c.statusId === statusId)
 }
 
@@ -2611,6 +2725,39 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       onDragEnd()
       return
     }
+
+    // WIP 限制检查（本地）
+    const targetColConfig = getColumnConfig(targetPriority)
+    if (targetColConfig?.wipMax != null) {
+      const currentCount = getColumnIssues(targetPriority).length
+      if (currentCount >= targetColConfig.wipMax) {
+        // WIP 超限：弹出确认框（与状态模式一致的交互）
+        draggingIssue.value = null
+        allowedTargetStatuses.value.clear()
+        Modal.warning({
+          title: 'WIP 限制',
+          content: `目标优先级列「${localizePriority(targetPriority)}」已达到 WIP 上限（${currentCount}/${targetColConfig.wipMax}），确定要继续移入吗？`,
+          okText: '继续移入',
+          cancelText: '取消',
+          hideCancel: false,
+          onOk: async () => {
+            // 用户确认后执行（带 forceWip=true）
+            issue.priority = targetPriority
+            try {
+              await issueApi.update(issue.id, { priority: targetPriority, forceWip: true })
+              issue.version = (issue.version || 0) + 1
+              Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+              await handleCrossSwimlaneUpdate(issue, targetLaneKey)
+            } catch (e: any) {
+              issue.priority = oldPriority
+              Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
+            }
+          }
+        })
+        return
+      }
+    }
+
     // Optimistic update
     issue.priority = targetPriority
     draggingIssue.value = null
@@ -2622,8 +2769,32 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       // ★ Cross-swimlane field update in priority mode
       await handleCrossSwimlaneUpdate(issue, targetLaneKey)
     } catch (e: any) {
-      issue.priority = oldPriority
-      Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
+      if (e.response?.data?.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+        // 后端防御性 WIP 校验触发（前端遗漏的情况）
+        issue.priority = oldPriority
+        Modal.warning({
+          title: 'WIP 限制',
+          content: e.response.data.message,
+          okText: '继续移入',
+          cancelText: '取消',
+          hideCancel: false,
+          onOk: async () => {
+            issue.priority = targetPriority
+            try {
+              await issueApi.update(issue.id, { priority: targetPriority, forceWip: true })
+              issue.version = (issue.version || 0) + 1
+              Message.success(`${issue.issueKey} 优先级已变更为「${localizePriority(targetPriority)}」`)
+              await handleCrossSwimlaneUpdate(issue, targetLaneKey)
+            } catch (e2: any) {
+              issue.priority = oldPriority
+              Message.error(`优先级变更失败：${e2.response?.data?.message || '未知错误'}`)
+            }
+          }
+        })
+      } else {
+        issue.priority = oldPriority
+        Message.error(`优先级变更失败：${e.response?.data?.message || '未知错误'}`)
+      }
     }
     return
   }
@@ -3444,7 +3615,23 @@ async function loadIssues() {
   // 如果 boardDoneRetentionDays 已配置（非 null），服务端会自动应用，前端不传
 
   // 收集已折叠列的状态 ID（折叠列不需要返回具体工单）
-  const collapsedIds = [...collapsedColumns.value].join(',')
+  // REQ-388 修复：合并列（mergeGroupId）需展开为其包含的所有 statusIds，
+  // 否则服务端 parseCollapsedStatusIds() 对非数字字符串执行 Long.parseLong() 时
+  // 会抛出 NumberFormatException 并静默忽略，导致合并列折叠优化完全失效。
+  const collapsedStatusIdSet = new Set<string>()
+  for (const colId of collapsedColumns.value) {
+    // 检查是否是合并列 ID（非纯数字 = mergeGroupId）
+    const mergedCol = effectiveColumns.value.find(c => c.isMerged && c.id === colId)
+    if (mergedCol) {
+      // 展开为合并组包含的所有 statusId
+      for (const sid of mergedCol.statusIds) {
+        collapsedStatusIdSet.add(sid)
+      }
+    } else {
+      collapsedStatusIdSet.add(colId)
+    }
+  }
+  const collapsedIds = [...collapsedStatusIdSet].join(',')
 
   // REQ-386: 泳道服务端过滤
   // 仅当：(1) 泳道分组已配置（非 none）(2) 有选中值 (3) showUncategorized=false 时才做服务端过滤
