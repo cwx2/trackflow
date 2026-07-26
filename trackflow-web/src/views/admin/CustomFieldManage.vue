@@ -1117,7 +1117,7 @@ async function batchToggleAutoAttach(enabled: boolean) {
   try {
     await customFieldApi.batchUpdate({
       ids: selectedKeys.value,
-      field: 'isForAll',
+      field: 'isAutoAttach',
       value: enabled
     })
     Message.success(`已${enabled ? '启用' : '禁用'} ${selectedKeys.value.length} 个字段的 Auto-attach`)
