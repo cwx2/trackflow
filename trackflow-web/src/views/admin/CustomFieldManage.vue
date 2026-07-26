@@ -14,34 +14,43 @@
         <!-- 字段列表 + 详情侧边栏 -->
         <div class="cf-body">
           <div class="cf-table" :class="{ 'has-detail': !!selectedField }">
-            <!-- 批量操作工具栏 -->
-            <div v-if="selectedKeys.length > 0" class="batch-toolbar">
-              <span class="batch-count">已选 {{ selectedKeys.length }} 项</span>
-              <a-button size="mini" type="outline" @click="batchToggleAutoAttach(true)">
-                <template #icon><icon-check /></template>
-                启用 Auto-attach
-              </a-button>
-              <a-button size="mini" type="outline" @click="batchToggleAutoAttach(false)">
-                禁用 Auto-attach
-              </a-button>
-              <a-button size="mini" type="outline" @click="batchToggleHidden(true)">
-                <template #icon><icon-eye-invisible /></template>
-                隐藏于列表
-              </a-button>
-              <a-button size="mini" type="outline" @click="batchToggleHidden(false)">
-                <template #icon><icon-eye /></template>
-                显示于列表
-              </a-button>
-              <a-button size="mini" type="outline" status="danger" @click="batchDeleteConfirm">
-                <template #icon><icon-delete /></template>
-                批量删除
-              </a-button>
-              <a-button size="mini" type="text" @click="selectedKeys = []">
-                取消选择
-              </a-button>
+            <!-- 搜索框 + 批量操作工具栏 -->
+            <div class="cf-toolbar">
+              <a-input-search
+                v-model="searchKeyword"
+                placeholder="搜索字段名称..."
+                size="small"
+                allow-clear
+                style="width: 220px"
+              />
+              <div v-if="selectedKeys.length > 0" class="batch-toolbar">
+                <span class="batch-count">已选 {{ selectedKeys.length }} 项</span>
+                <a-button size="mini" type="outline" @click="batchToggleAutoAttach(true)">
+                  <template #icon><icon-check /></template>
+                  启用 Auto-attach
+                </a-button>
+                <a-button size="mini" type="outline" @click="batchToggleAutoAttach(false)">
+                  禁用 Auto-attach
+                </a-button>
+                <a-button size="mini" type="outline" @click="batchToggleHidden(true)">
+                  <template #icon><icon-eye-invisible /></template>
+                  隐藏于列表
+                </a-button>
+                <a-button size="mini" type="outline" @click="batchToggleHidden(false)">
+                  <template #icon><icon-eye /></template>
+                  显示于列表
+                </a-button>
+                <a-button size="mini" type="outline" status="danger" @click="batchDeleteConfirm">
+                  <template #icon><icon-delete /></template>
+                  批量删除
+                </a-button>
+                <a-button size="mini" type="text" @click="selectedKeys = []">
+                  取消选择
+                </a-button>
+              </div>
             </div>
             <a-table
-              :data="fieldList"
+              :data="filteredFieldList"
               :loading="loading"
               :pagination="pagination"
               row-key="id"
@@ -60,6 +69,31 @@
                 <a-table-column title="类型" data-index="fieldFormat" :width="100">
                   <template #cell="{ record }">
                     <a-tag size="small">{{ formatTypeLabel(record.fieldFormat) }}</a-tag>
+                  </template>
+                </a-table-column>
+                <a-table-column title="默认值" :width="120">
+                  <template #cell="{ record }">
+                    <span v-if="record.defaultValue" class="default-value-cell">{{ record.defaultValue }}</span>
+                    <span v-else class="text-muted">—</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="选项值" :width="220">
+                  <template #cell="{ record }">
+                    <template v-if="record.fieldFormat === 'list' && record.options && record.options.length > 0">
+                      <div class="options-inline">
+                        <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
+                          <span
+                            class="option-inline-tag"
+                            :style="opt.color ? { background: opt.color + '26', color: opt.color, borderColor: opt.color + '66' } : {}"
+                          >{{ opt.value }}</span>
+                        </template>
+                        <span
+                          v-if="record.options.filter(o => !o.isArchived).length > MAX_INLINE_OPTIONS"
+                          class="option-more-tag"
+                        >+{{ record.options.filter(o => !o.isArchived).length - MAX_INLINE_OPTIONS }}</span>
+                      </div>
+                    </template>
+                    <span v-else class="text-muted">—</span>
                   </template>
                 </a-table-column>
                 <a-table-column title="必填" data-index="isRequired" :width="60" align="center">
@@ -481,7 +515,18 @@ const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
 const projectList = ref<any[]>([])
 const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
 
-// ========== 批量操作 ==========
+/** 搜索关键词 */
+const searchKeyword = ref('')
+
+/** 枚举字段内联展示最大选项数 */
+const MAX_INLINE_OPTIONS = 5
+
+/** 前端过滤后的字段列表 */
+const filteredFieldList = computed(() => {
+  if (!searchKeyword.value.trim()) return fieldList.value
+  const kw = searchKeyword.value.trim().toLowerCase()
+  return fieldList.value.filter(f => f.name.toLowerCase().includes(kw))
+})
 const selectedKeys = ref<string[]>([])
 const rowSelection = reactive({
   type: 'checkbox' as const,
@@ -1145,14 +1190,19 @@ onMounted(() => {
   flex: 1;
 }
 
+.cf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--tf-border);
+  flex-wrap: wrap;
+}
+
 .batch-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: var(--tf-bg-elevated);
-  border-bottom: 1px solid var(--tf-border);
-  border-radius: 6px 6px 0 0;
   flex-wrap: wrap;
 }
 
@@ -1169,6 +1219,48 @@ onMounted(() => {
 }
 .clickable-name:hover {
   text-decoration: underline;
+}
+
+/* 默认值单元格 */
+.default-value-cell {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  background: var(--tf-bg-elevated);
+  border-radius: 3px;
+  padding: 1px 5px;
+  border: 1px solid var(--tf-border);
+}
+
+/* 枚举选项内联展示 */
+.options-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+.option-inline-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid var(--tf-border);
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-secondary);
+  white-space: nowrap;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option-more-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px dashed var(--tf-border);
+  color: var(--tf-text-tertiary);
+  white-space: nowrap;
 }
 
 /* Detail sidebar */
