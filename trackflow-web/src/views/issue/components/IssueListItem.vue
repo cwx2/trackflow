@@ -4,6 +4,7 @@
     :class="{
       active,
       selected,
+      focused,
       'density-S': density === 'S',
       'density-M': density === 'M',
       'density-L': density === 'L'
@@ -12,6 +13,7 @@
     :data-id="issue.id"
     @click="$emit('click')"
     @dblclick="$emit('dblclick')"
+    @contextmenu.prevent="$emit('contextmenu', $event)"
   >
     <!-- Drag handle -->
     <span v-if="showDragHandle" class="drag-handle" @mousedown.stop title="拖拽排序">
@@ -158,11 +160,13 @@ const props = withDefaults(defineProps<{
   expanded: boolean
   active: boolean
   selected: boolean
+  focused?: boolean
   showCheckbox?: boolean
   showDragHandle?: boolean
 }>(), {
   showCheckbox: true,
-  showDragHandle: false
+  showDragHandle: false,
+  focused: false
 })
 
 defineEmits<{
@@ -170,6 +174,7 @@ defineEmits<{
   (e: 'dblclick'): void
   (e: 'toggle-expand'): void
   (e: 'select'): void
+  (e: 'contextmenu', event: MouseEvent): void
 }>()
 
 // Limit custom fields shown (max 4)
@@ -246,6 +251,13 @@ function truncateDescription(desc?: string): string {
 
 .issue-list-item.selected {
   background: var(--tf-bg-active, var(--color-primary-light-1));
+}
+
+/* Keyboard focus (J/K navigation) — distinct from active/selected */
+.issue-list-item.focused {
+  outline: 2px solid var(--tf-accent, #58a6ff);
+  outline-offset: -2px;
+  background: var(--tf-bg-hover, var(--color-fill-1));
 }
 
 /* Density sizes */

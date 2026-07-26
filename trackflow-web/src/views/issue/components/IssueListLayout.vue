@@ -54,12 +54,14 @@
             :has-children="false"
             :expanded="false"
             :active="activeIssueId === issue.id"
+            :focused="focusedIssueId === issue.id"
             :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
             :show-drag-handle="draggable"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
+            @contextmenu="emit('item-contextmenu', { issue, event: $event })"
           />
         </div>
 
@@ -81,12 +83,14 @@
             :has-children="false"
             :expanded="false"
             :active="activeIssueId === issue.id"
+            :focused="focusedIssueId === issue.id"
             :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
             :show-drag-handle="draggable"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
+            @contextmenu="emit('item-contextmenu', { issue, event: $event })"
           />
         </div>
       </template>
@@ -104,6 +108,7 @@
               :has-children="(node.issue.childCount || 0) > 0"
               :expanded="expandedIds.has(node.issue.id)"
               :active="activeIssueId === node.issue.id"
+              :focused="focusedIssueId === node.issue.id"
               :selected="selectedIds.has(node.issue.id)"
               :show-checkbox="showCheckbox"
               :show-drag-handle="draggable"
@@ -111,6 +116,7 @@
               @dblclick="$emit('item-dblclick', node.issue)"
               @toggle-expand="toggleExpand(node.issue)"
               @select="toggleSelect(node.issue)"
+              @contextmenu="emit('item-contextmenu', { issue: node.issue, event: $event })"
             />
           </template>
         </template>
@@ -127,12 +133,14 @@
             :has-children="false"
             :expanded="false"
             :active="activeIssueId === issue.id"
+            :focused="focusedIssueId === issue.id"
             :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
             :show-drag-handle="draggable"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
+            @contextmenu="emit('item-contextmenu', { issue, event: $event })"
           />
         </div>
       </template>
@@ -160,6 +168,7 @@ const props = withDefaults(defineProps<{
   loading: boolean
   sortState: SortState
   activeIssueId?: string | null
+  focusedIssueId?: string | null
   selectedIds: Set<string>
   showCheckbox?: boolean
   draggable?: boolean
@@ -170,12 +179,14 @@ const props = withDefaults(defineProps<{
   showCheckbox: true,
   draggable: false,
   isManualSorted: false,
-  isOwnerOrder: false
+  isOwnerOrder: false,
+  focusedIssueId: null
 })
 
 const emit = defineEmits<{
   (e: 'item-click', issue: IssueWithDesc): void
   (e: 'item-dblclick', issue: IssueWithDesc): void
+  (e: 'item-contextmenu', payload: { issue: IssueWithDesc, event: MouseEvent }): void
   (e: 'sort-change', field: string): void
   (e: 'select', issue: IssueWithDesc): void
   (e: 'order-change', issueIds: string[]): void

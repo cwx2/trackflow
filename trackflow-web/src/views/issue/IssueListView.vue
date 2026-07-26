@@ -613,6 +613,7 @@
         <icon-loading v-if="loading" class="realtime-update-icon" />
       </div>
 
+      <div v-if="isTableLayout" class="issue-table-wrapper" @contextmenu.prevent="onTableContextMenu">
       <a-table
         v-if="isTableLayout"
         class="issue-table"
@@ -809,6 +810,7 @@
           </div>
         </template>
       </a-table>
+      </div>
 
       <!-- Issue list layout (List layout mode) -->
       <IssueListLayout
@@ -819,6 +821,7 @@
         :loading="loading"
         :sort-state="sortState"
         :active-issue-id="previewIssueId"
+        :focused-issue-id="focusedIssueId"
         :selected-ids="selectedIds"
         :show-checkbox="canBatchOps"
         :draggable="isDraggable"
@@ -827,6 +830,7 @@
         :sorted-issue-ids="sortedIssueIds"
         @item-click="onListItemClick"
         @item-dblclick="onListItemDblClick"
+        @item-contextmenu="onListItemContextMenu"
         @sort-change="onListSortChange"
         @select="onListItemSelect"
         @order-change="onManualOrderChange"
@@ -858,13 +862,101 @@
       @update:visible="showCommandDialog = $event"
       @executed="onCommandExecuted"
     />
+
+    <!-- Keyboard Shortcuts Help Panel (?) -->
+    <KeyboardShortcutsHelp
+      v-model:visible="showShortcutsHelp"
+    />
+
+    <!-- Issue Row Context Menu (Right-click) -->
+    <div
+      v-if="contextMenu.visible"
+      class="issue-context-menu"
+      :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+      @click.stop
+    >
+      <!-- Copy issue key -->
+      <div class="ctx-menu-item" @click="ctxCopyIssueKey">
+        <icon-copy class="ctx-menu-icon" />
+        <span>复制工单 ID</span>
+        <span class="ctx-menu-hint">{{ contextMenu.issue?.issueKey }}</span>
+      </div>
+      <!-- Copy link -->
+      <div class="ctx-menu-item" @click="ctxCopyLink">
+        <icon-link class="ctx-menu-icon" />
+        <span>复制工单链接</span>
+      </div>
+      <!-- Open in new tab -->
+      <div class="ctx-menu-item" @click="ctxOpenNewTab">
+        <icon-expand class="ctx-menu-icon" />
+        <span>在新标签页打开</span>
+      </div>
+
+      <!-- Separator -->
+      <div class="ctx-menu-separator"></div>
+
+      <!-- Status transitions (only for editable issues) -->
+      <template v-if="contextMenu.issue && canEditIssue(contextMenu.issue)">
+        <div v-if="ctxTransitionsLoading" class="ctx-menu-item ctx-menu-loading">
+          <a-spin :size="14" />
+          <span>加载状态...</span>
+        </div>
+        <template v-else-if="ctxTransitions.length > 0">
+          <div class="ctx-menu-label">变更状态</div>
+          <div
+            v-for="st in ctxTransitions"
+            :key="st.id"
+            class="ctx-menu-item"
+            @click="ctxSetStatus(st)"
+          >
+            <span class="ctx-status-dot" :style="{ background: st.color }"></span>
+            <span>{{ localizeStatusName(st.name) }}</span>
+          </div>
+          <div class="ctx-menu-separator"></div>
+        </template>
+
+        <!-- Move to Sprint -->
+        <div class="ctx-menu-item ctx-menu-has-sub" @mouseenter="ctxLoadSprints" @click="ctxMoveSprint">
+          <icon-calendar class="ctx-menu-icon" />
+          <span>移至 Sprint</span>
+          <icon-right class="ctx-menu-arrow" />
+          <!-- Sprint sub-menu -->
+          <div v-if="ctxSprintSubVisible" class="ctx-menu-submenu">
+            <div v-if="ctxSprintsLoading" class="ctx-menu-item ctx-menu-loading">
+              <a-spin :size="14" />
+              <span>加载 Sprint...</span>
+            </div>
+            <template v-else>
+              <div class="ctx-menu-item" @click.stop="ctxSelectSprint(null)">
+                <span>无 Sprint</span>
+              </div>
+              <template v-for="group in ctxSprintGroups" :key="group.label">
+                <div class="ctx-menu-group-label">{{ group.label }}</div>
+                <div
+                  v-for="s in group.items"
+                  :key="s.id"
+                  class="ctx-menu-item"
+                  @click.stop="ctxSelectSprint(s)"
+                >
+                  <span>{{ s.name }}</span>
+                </div>
+              </template>
+              <div v-if="ctxSprintGroups.length === 0" class="ctx-menu-empty">无可用 Sprint</div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Context menu backdrop -->
+    <div v-if="contextMenu.visible" class="ctx-menu-backdrop" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
-import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { projectApi, issueApi, queryApi, sprintApi, tagApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
@@ -885,6 +977,7 @@ import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import FilterBar from './components/FilterBar.vue'
 import QueryInput from './components/QueryInput.vue'
 import ApplyCommandDialog from './components/ApplyCommandDialog.vue'
+import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
 import ViewSettingsMenu from './components/ViewSettingsMenu.vue'
 import IssueListLayout from './components/IssueListLayout.vue'
 
@@ -899,7 +992,7 @@ const {
 
 const {
   selectedIds, selectedCount, selectedIssues,
-  toggle, clearSelection
+  toggle, toggleAll, clearSelection
 } = useSelection(issues)
 
 const { isCellEditing, executeEdit } = useInlineEdit(issues)
@@ -1881,6 +1974,35 @@ function onCreatePanelCreated() {
 // Apply Command dialog
 const showCommandDialog = ref(false)
 
+// Keyboard shortcuts help panel
+const showShortcutsHelp = ref(false)
+
+// ===== Keyboard focused index (J/K navigation in list) =====
+/** Index of the keyboard-focused row in the current issues list (-1 = no focus) */
+const focusedIndex = ref<number>(-1)
+
+/** ID of the keyboard-focused issue (derived from focusedIndex) */
+const focusedIssueId = computed<string | null>(() => {
+  if (focusedIndex.value >= 0 && focusedIndex.value < issues.value.length) {
+    return issues.value[focusedIndex.value].id
+  }
+  return null
+})
+
+/** Scroll the focused row into view if needed */
+function scrollFocusedIntoView() {
+  if (focusedIndex.value < 0) return
+  const issue = issues.value[focusedIndex.value]
+  if (!issue) return
+  // List layout: IssueListItem has data-id attribute
+  // Table layout: Arco table renders <tr data-row-key="id">
+  const el = (
+    document.querySelector(`[data-id="${issue.id}"]`) ||
+    document.querySelector(`[data-row-key="${issue.id}"]`)
+  ) as HTMLElement | null
+  el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+}
+
 // ===== Preview mode (YouTrack-style Sidebar / Off) =====
 const PREVIEW_MODE_KEY = 'trackflow:preview-mode'
 type PreviewMode = 'sidebar' | 'off'
@@ -1939,26 +2061,126 @@ function handleKeyboardNav(e: KeyboardEvent) {
     return
   }
 
-  // Only handle when preview mode is sidebar and preview is visible
-  if (previewMode.value !== 'sidebar' || !previewVisible.value) return
-  // Don't intercept when focus is in an input
+  // Don't intercept when focus is in an input field (typing)
   const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
-  if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+  const isEditing = tag === 'input' || tag === 'textarea' || tag === 'select'
+  // Also skip if target is a contenteditable element (Tiptap editor)
+  const isContentEditable = (e.target as HTMLElement)?.isContentEditable
 
-  if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    navigateIssue(1)
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    navigateIssue(-1)
-  } else if (e.key === 'Escape') {
-    e.preventDefault()
-    closePreview()
-  } else if (e.key === 'Enter') {
-    e.preventDefault()
-    if (previewIssueId.value) {
-      onPreviewGoDetail(previewIssueId.value)
+  // ===== Preview mode sidebar: ArrowUp/Down navigate preview =====
+  if (previewMode.value === 'sidebar' && previewVisible.value && !isEditing && !isContentEditable) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      navigateIssue(1)
+      return
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      navigateIssue(-1)
+      return
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (previewIssueId.value) {
+        onPreviewGoDetail(previewIssueId.value)
+      }
+      return
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      closePreview()
+      return
     }
+  }
+
+  // ===== Global shortcuts (not in input) =====
+  if (isEditing || isContentEditable) return
+
+  // Escape: close any open panel/modal
+  if (e.key === 'Escape') {
+    if (showShortcutsHelp.value) {
+      showShortcutsHelp.value = false
+    } else if (previewVisible.value) {
+      closePreview()
+    } else if (showCommandDialog.value) {
+      showCommandDialog.value = false
+    } else if (focusedIndex.value >= 0) {
+      focusedIndex.value = -1
+    }
+    return
+  }
+
+  // ? — toggle shortcuts help panel
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+    e.preventDefault()
+    showShortcutsHelp.value = !showShortcutsHelp.value
+    return
+  }
+
+  // Don't trigger list shortcuts when any modal/dialog is open
+  if (showCommandDialog.value || showCreatePanel.value || showShortcutsHelp.value) return
+
+  // N — create new issue
+  if (e.key === 'n' || e.key === 'N') {
+    if (canCreateIssueGlobal) {
+      e.preventDefault()
+      showCreatePanel.value = true
+    }
+    return
+  }
+
+  // J / ArrowDown — move focus down
+  if (e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown') {
+    e.preventDefault()
+    if (issues.value.length === 0) return
+    if (focusedIndex.value < issues.value.length - 1) {
+      focusedIndex.value++
+    } else {
+      focusedIndex.value = 0 // wrap to top
+    }
+    scrollFocusedIntoView()
+    return
+  }
+
+  // K / ArrowUp — move focus up
+  if (e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    if (issues.value.length === 0) return
+    if (focusedIndex.value > 0) {
+      focusedIndex.value--
+    } else {
+      focusedIndex.value = issues.value.length - 1 // wrap to bottom
+    }
+    scrollFocusedIntoView()
+    return
+  }
+
+  // Enter — open focused issue
+  if (e.key === 'Enter' && focusedIndex.value >= 0) {
+    e.preventDefault()
+    const issue = issues.value[focusedIndex.value]
+    if (issue) {
+      if (previewMode.value === 'sidebar') {
+        openPreview(issue, focusedIndex.value)
+      } else {
+        router.push(`/issues/${issue.issueKey}`)
+      }
+    }
+    return
+  }
+
+  // Space — select/deselect focused issue
+  if (e.key === ' ' && focusedIndex.value >= 0 && canBatchOps.value) {
+    e.preventDefault()
+    const issue = issues.value[focusedIndex.value]
+    if (issue) {
+      toggle(issue.id)
+    }
+    return
+  }
+
+  // Ctrl+A — select all
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A') && canBatchOps.value) {
+    e.preventDefault()
+    toggleAll()
+    return
   }
 }
 
@@ -2112,6 +2334,167 @@ function onListItemSelect(issue: IssueVO) {
   toggle(issue.id)
 }
 
+// ============================================================
+// Context Menu (Right-click)
+// ============================================================
+const contextMenu = reactive<{
+  visible: boolean
+  x: number
+  y: number
+  issue: IssueVO | null
+}>({
+  visible: false,
+  x: 0,
+  y: 0,
+  issue: null
+})
+
+const ctxTransitions = ref<IssueStatusVO[]>([])
+const ctxTransitionsLoading = ref(false)
+const ctxSprintsLoading = ref(false)
+const ctxSprintSubVisible = ref(false)
+const ctxSprintGroupsData = ref<{ label: string, items: SprintVO[] }[]>([])
+const ctxSprintGroups = computed(() => ctxSprintGroupsData.value)
+
+function openContextMenu(issue: IssueVO, event: MouseEvent) {
+  contextMenu.issue = issue
+  contextMenu.visible = true
+  // Calculate position to keep menu inside viewport
+  const menuWidth = 220
+  const menuHeight = 300
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  contextMenu.x = event.clientX + menuWidth > vw ? event.clientX - menuWidth : event.clientX
+  contextMenu.y = event.clientY + menuHeight > vh ? event.clientY - menuHeight : event.clientY
+  ctxTransitions.value = []
+  ctxTransitionsLoading.value = false
+  ctxSprintSubVisible.value = false
+  // Preload transitions
+  loadCtxTransitions(issue)
+}
+
+function closeContextMenu() {
+  contextMenu.visible = false
+  contextMenu.issue = null
+  ctxSprintSubVisible.value = false
+}
+
+async function loadCtxTransitions(issue: IssueVO) {
+  ctxTransitionsLoading.value = true
+  try {
+    const res = await issueApi.getAvailableTransitions(issue.id)
+    if (res.code === 0) {
+      ctxTransitions.value = (res.data || []).filter((t: IssueStatusVO) => t.id !== issue.statusId)
+    }
+  } catch { /* ignore */ } finally {
+    ctxTransitionsLoading.value = false
+  }
+}
+
+// List layout context menu handler
+function onListItemContextMenu({ issue, event }: { issue: IssueVO, event: MouseEvent }) {
+  openContextMenu(issue, event)
+}
+
+// Table context menu handler — identify row from DOM
+function onTableContextMenu(event: MouseEvent) {
+  // Walk up the DOM tree to find the table row element
+  let target = event.target as HTMLElement | null
+  while (target && !target.classList.contains('arco-table-tr')) {
+    target = target.parentElement
+  }
+  if (!target) return
+  // Get issue id from data attribute (arco sets row-key as data-row-key)
+  const rowKey = target.getAttribute('data-row-key') || target.getAttribute('data-key')
+  if (!rowKey) return
+  const issue = issues.value.find(i => i.id === rowKey)
+  if (!issue) return
+  openContextMenu(issue, event)
+}
+
+function ctxCopyIssueKey() {
+  if (!contextMenu.issue) return
+  navigator.clipboard.writeText(contextMenu.issue.issueKey || '')
+  Message.success(`已复制工单 ID: ${contextMenu.issue.issueKey}`)
+  closeContextMenu()
+}
+
+function ctxCopyLink() {
+  if (!contextMenu.issue) return
+  const url = `${window.location.origin}/issues/${contextMenu.issue.issueKey}`
+  navigator.clipboard.writeText(url)
+  Message.success('已复制工单链接')
+  closeContextMenu()
+}
+
+function ctxOpenNewTab() {
+  if (!contextMenu.issue) return
+  window.open(`/issues/${contextMenu.issue.issueKey}`, '_blank')
+  closeContextMenu()
+}
+
+async function ctxSetStatus(st: IssueStatusVO) {
+  if (!contextMenu.issue) return
+  const issue = contextMenu.issue
+  closeContextMenu()
+  try {
+    await issueApi.transitStatus(issue.id, st.id, undefined, issue.version)
+    Message.success(`状态已更新为 ${localizeStatusName(st.name)}`)
+    await refreshList()
+  } catch (e: any) {
+    Message.error(e?.response?.data?.message || '状态变更失败')
+  }
+}
+
+async function ctxLoadSprints() {
+  if (!contextMenu.issue) return
+  ctxSprintSubVisible.value = true
+  if (ctxSprintGroupsData.value.length > 0) return // already loaded
+  ctxSprintsLoading.value = true
+  try {
+    const projectId = contextMenu.issue.projectId
+    if (!sprintOptionsCache[projectId]) {
+      const res = await sprintApi.listSprints(projectId)
+      if (res.code === 0) {
+        sprintOptionsCache[projectId] = res.data || []
+      }
+    }
+    const sprints = sprintOptionsCache[projectId] || []
+    const active = sprints.filter((s: SprintVO) => s.status === 'active')
+    const planned = sprints.filter((s: SprintVO) => s.status === 'planned')
+    const groups: { label: string, items: SprintVO[] }[] = []
+    if (active.length) groups.push({ label: '进行中', items: active })
+    if (planned.length) groups.push({ label: '计划中', items: planned })
+    ctxSprintGroupsData.value = groups
+  } catch { /* ignore */ } finally {
+    ctxSprintsLoading.value = false
+  }
+}
+
+function ctxMoveSprint() {
+  // Clicking the parent just toggles the sub menu
+  ctxSprintSubVisible.value = !ctxSprintSubVisible.value
+  if (ctxSprintSubVisible.value) ctxLoadSprints()
+}
+
+async function ctxSelectSprint(sprint: SprintVO | null) {
+  if (!contextMenu.issue) return
+  const issue = contextMenu.issue
+  closeContextMenu()
+  try {
+    await issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version })
+    Message.success(sprint ? `已移至 Sprint: ${sprint.name}` : '已移出 Sprint')
+    await refreshList()
+  } catch (e: any) {
+    Message.error(e?.response?.data?.message || 'Sprint 更新失败')
+  }
+}
+
+// Close context menu on scroll or escape key
+function onGlobalKeydownCtx(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeContextMenu()
+}
+
 // Manual order handlers
 async function onManualOrderChange(issueIds: string[]) {
   await saveManualOrder(issueIds)
@@ -2198,6 +2581,10 @@ function getRowClass(record: TableData): string {
   if (isResolved(record.statusId as string)) classes.push('issue-resolved')
   if (previewMode.value === 'sidebar' && previewVisible.value && record.id === previewIssueId.value) {
     classes.push('issue-previewing')
+  }
+  // Keyboard focus (J/K navigation in table mode)
+  if (focusedIssueId.value && record.id === focusedIssueId.value) {
+    classes.push('issue-keyboard-focused')
   }
   return classes.join(' ')
 }
@@ -2839,6 +3226,9 @@ function selectProject(p: any) {
 watch(currentPage, () => refreshList())
 watch(sortState, () => refreshList(), { deep: true })
 
+// Reset keyboard focus when issues list changes (pagination, filter, sort)
+watch(issues, () => { focusedIndex.value = -1 })
+
 // Load manual order when context changes
 watch([activeProjectId, activeQueryId], () => {
   if (activeProjectId.value) {
@@ -3009,11 +3399,14 @@ onMounted(async () => {
 
   // Keyboard navigation for preview mode
   document.addEventListener('keydown', handleKeyboardNav)
+  // Context menu escape key
+  document.addEventListener('keydown', onGlobalKeydownCtx)
 })
 
 onUnmounted(() => {
   window.removeEventListener('trackflow:issues-restored', handleIssuesRestored)
   document.removeEventListener('keydown', handleKeyboardNav)
+  document.removeEventListener('keydown', onGlobalKeydownCtx)
 })
 
 function handleIssuesRestored() {
@@ -3500,6 +3893,15 @@ onBeforeRouteLeave((_to, _from, next) => {
   border-radius: 0 2px 2px 0;
 }
 
+/* Keyboard focus row highlight (J/K navigation in table mode) */
+.issue-table :deep(.issue-keyboard-focused .arco-table-td) {
+  background: var(--tf-bg-hover, var(--color-fill-1));
+}
+.issue-table :deep(.issue-keyboard-focused) {
+  outline: 2px solid var(--tf-accent, #58a6ff);
+  outline-offset: -2px;
+}
+
 /* Preview mode toggle dropdown active item */
 .doption-active { color: var(--tf-accent) !important; font-weight: 500; }
 .doption-active::before { content: '✓ '; }
@@ -3528,5 +3930,115 @@ onBeforeRouteLeave((_to, _from, next) => {
 }
 .realtime-update-icon {
   color: var(--tf-accent, #58a6ff);
+}
+
+/* Context menu */
+.ctx-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: transparent;
+}
+.issue-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  background: var(--tf-bg-elevated, #2a2d33);
+  border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  padding: 4px 0;
+  user-select: none;
+}
+.ctx-menu-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  padding: 4px 12px 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+.ctx-menu-item:hover {
+  background: var(--tf-bg-hover);
+}
+.ctx-menu-item.ctx-menu-loading {
+  cursor: default;
+  color: var(--tf-text-tertiary);
+}
+.ctx-menu-item.ctx-menu-loading:hover {
+  background: transparent;
+}
+.ctx-menu-item.ctx-menu-has-sub {
+  justify-content: flex-start;
+}
+.ctx-menu-icon {
+  font-size: 14px;
+  color: var(--tf-text-secondary);
+  flex-shrink: 0;
+}
+.ctx-menu-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+.ctx-menu-arrow {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+.ctx-menu-separator {
+  height: 1px;
+  background: var(--tf-border, rgba(255,255,255,0.08));
+  margin: 4px 0;
+}
+.ctx-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ctx-menu-empty {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+.ctx-menu-group-label {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  padding: 4px 12px 2px;
+  font-weight: 500;
+}
+
+/* Context submenu */
+.ctx-menu-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  min-width: 200px;
+  background: var(--tf-bg-elevated, #2a2d33);
+  border: 1px solid var(--tf-border, rgba(255,255,255,0.1));
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  padding: 4px 0;
+  z-index: 1001;
+}
+
+/* Table wrapper for context menu */
+.issue-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 </style>
