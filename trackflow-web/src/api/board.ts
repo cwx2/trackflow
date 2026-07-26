@@ -128,7 +128,7 @@ export const boardApi = {
   },
 
   /** 保存项目看板基本设置 */
-  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; configVersion?: number; allowMultipleSprints?: boolean }) {
+  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; configVersion?: number; allowMultipleSprints?: boolean; backlogViewMode?: string; backlogSavedQueryId?: string | null }) {
     return request.put<any, R<void>>('/boards/general-config', data, {
       params: { projectId }
     })
@@ -145,7 +145,7 @@ export const boardApi = {
     cardConfig: { visibleFields: string[]; colorScheme: string; currentEstimationFieldId?: string | null; originalEstimationFieldId?: string | null; fieldDisplayModes?: Record<string, string> | null; showCustomFieldColors?: boolean }
     swimlaneConfig: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }
     columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
-    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; columnField?: string; allowMultipleSprints?: boolean }
+    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; columnField?: string; allowMultipleSprints?: boolean; backlogViewMode?: string; backlogSavedQueryId?: string | null }
     chartConfig?: { chartType: string; burndownCalculation: string; issueFilterMode: string; issueFilterQuery?: string | null; estimationFieldId?: number | null; originalEstimationFieldId?: number | null }
     priorityColumnWip?: Array<{ fieldValue: string; wipMin?: number | null; wipMax?: number | null }> | null
   }) {

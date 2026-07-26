@@ -310,6 +310,8 @@
           :project-id="selectedProject || ''"
           :board-status-ids="boardStatusIdsForBacklog"
           :filter-keyword="keyword"
+          :view-mode="backlogViewMode"
+          :saved-query-id="backlogSavedQueryId"
           @close="showBacklog = false"
           @open-issue="openIssue"
           @drag-start="onBacklogDragStart"
@@ -1592,6 +1594,12 @@ const boardColumnField = ref<'status' | 'priority'>('status')
 
 /** 当前用户是否有看板编辑权限（来自 board_general_config 动态计算） */
 const canEditBoard = ref(false)
+
+// ===== Backlog 配置 =====
+/** Backlog 视图模式（来自 Board Settings 配置）：list=平铺，tree=树形 */
+const backlogViewMode = ref<'list' | 'tree'>('list')
+/** 过滤 Backlog 工单的保存搜索 ID（null 时使用默认过滤） */
+const backlogSavedQueryId = ref<string | null>(null)
 
 /** 看板页面标题：优先使用管理员设置的名称，fallback 到"项目名 看板"或"看板" */
 const displayBoardName = computed(() => {
@@ -4236,6 +4244,9 @@ async function loadBoardBehavior() {
       canEditBoard.value = res.data.currentUserCanEdit ?? false
       boardName.value = res.data.name || ''
       boardColumnField.value = (res.data.columnField as 'status' | 'priority') || 'status'
+      // Backlog 配置
+      backlogViewMode.value = (res.data.backlogViewMode as 'list' | 'tree') || 'list'
+      backlogSavedQueryId.value = res.data.backlogSavedQueryId ?? null
     }
   } catch {
     boardFilterMode.value = 'all'
@@ -4243,6 +4254,8 @@ async function loadBoardBehavior() {
     boardDoneRetentionDays.value = null
     canEditBoard.value = false
     boardName.value = ''
+    backlogViewMode.value = 'list'
+    backlogSavedQueryId.value = null
   }
 }
 

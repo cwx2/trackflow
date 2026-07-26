@@ -53,4 +53,17 @@ public class UpdateBoardGeneralConfigDTO {
      * null 时默认为 false（向后兼容）。
      */
     private Boolean allowMultipleSprints;
+
+    /**
+     * Backlog 视图模式：list=平铺列表（默认），tree=树形层级。
+     * null 时保持原值不变（向后兼容）。
+     */
+    @Pattern(regexp = "^(list|tree)$", message = "Backlog 视图模式只允许: list, tree")
+    private String backlogViewMode;
+
+    /**
+     * 过滤 Backlog 工单的保存搜索 ID。
+     * null 表示使用默认过滤（不在看板上的工单）。
+     */
+    private Long backlogSavedQueryId;
 }

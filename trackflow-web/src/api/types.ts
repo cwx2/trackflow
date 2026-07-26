@@ -1068,6 +1068,16 @@ export interface BoardGeneralConfigVO {
    * 对应 YouTrack Board Settings > Cards Tab: Allow cards to be assigned to multiple sprints。
    */
   allowMultipleSprints: boolean
+  /**
+   * Backlog 视图模式：list=平铺列表（默认），tree=树形层级。
+   * 对应 YouTrack Board Settings > Backlog Settings: View mode。
+   */
+  backlogViewMode: 'list' | 'tree'
+  /**
+   * 过滤 Backlog 工单的保存搜索 ID（null 表示使用默认过滤）。
+   * 对应 YouTrack Board Settings > Backlog Settings: Saved search。
+   */
+  backlogSavedQueryId: string | null
   /** 当前用户是否有看板查看权限 */
   currentUserCanView: boolean
   /** 当前用户是否有看板编辑权限 */

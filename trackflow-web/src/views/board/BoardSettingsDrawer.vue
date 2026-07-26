@@ -264,6 +264,55 @@
           @update:original-estimation-field-id="editableChartOriginalEstimationFieldId = $event"
         />
       </a-tab-pane>
+
+      <!-- Backlog 设置 标签页（YouTrack 风格：仅在 Backlog 功能开启时显示此 Tab） -->
+      <a-tab-pane key="backlog" title="Backlog">
+        <div class="settings-content">
+          <div class="settings-hint">
+            <p>配置 Backlog 侧边栏的数据来源和展示模式。Backlog 按钮位于看板工具栏右侧。</p>
+          </div>
+
+          <!-- View Mode 配置 -->
+          <div class="settings-section">
+            <div class="settings-section-title">视图模式</div>
+            <a-radio-group v-model="editableBacklogViewMode" direction="vertical">
+              <a-radio value="list">
+                <span class="radio-label">List view（平铺列表）</span>
+                <span class="radio-desc">平铺展示所有匹配工单，忽略层级关系</span>
+              </a-radio>
+              <a-radio value="tree">
+                <span class="radio-label">Tree view（树形层级）</span>
+                <span class="radio-desc">按父子关系嵌套展示，非搜索结果的父节点以灰色背景区分</span>
+              </a-radio>
+            </a-radio-group>
+          </div>
+
+          <!-- Saved Search 配置 -->
+          <div class="settings-section">
+            <div class="settings-section-title">过滤工单（Saved Search）</div>
+            <div class="settings-hint" style="margin-bottom: 8px">
+              <p>选择一个保存的搜索来确定 Backlog 显示哪些工单。未选择时，Backlog 显示不在看板上的所有未解决工单。</p>
+            </div>
+            <a-select
+              v-model="editableBacklogSavedQueryId"
+              placeholder="使用默认过滤（未在看板上的工单）"
+              :loading="loadingSavedQueries"
+              allow-clear
+              style="width: 100%"
+              @focus="loadSavedQueriesIfNeeded"
+            >
+              <a-option
+                v-for="sq in availableSavedQueries"
+                :key="sq.id"
+                :value="sq.id"
+              >
+                {{ sq.name }}
+                <span v-if="sq.shared" class="saved-query-shared-badge">共享</span>
+              </a-option>
+            </a-select>
+          </div>
+        </div>
+      </a-tab-pane>
     </a-tabs>
   </a-drawer>
 </template>
@@ -271,8 +320,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { boardApi } from '@/api'
-import type { BoardColumnVO, BoardColumnItem } from '@/api/types'
+import { boardApi, queryApi } from '@/api'
+import type { BoardColumnVO, BoardColumnItem, SavedQueryVO } from '@/api/types'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
@@ -382,6 +431,31 @@ const editableEstimationFieldId = ref<string | null>(null)
 const editableChartOriginalEstimationFieldId = ref<string | null>(null)
 // 乐观锁版本号（从 getGeneralConfig 响应中获取）
 const configVersion = ref<number>(0)
+
+// ===== Backlog 设置状态 =====
+const editableBacklogViewMode = ref<'list' | 'tree'>('list')
+const editableBacklogSavedQueryId = ref<string | null>(null)
+const availableSavedQueries = ref<Array<{ id: string; name: string; shared: boolean }>>([])
+const loadingSavedQueries = ref(false)
+let savedQueriesLoaded = false
+
+async function loadSavedQueriesIfNeeded() {
+  if (savedQueriesLoaded || !props.projectId) return
+  loadingSavedQueries.value = true
+  try {
+    const res = await queryApi.getAvailableQueries(props.projectId)
+    availableSavedQueries.value = (res.data || []).map((q: any) => ({
+      id: String(q.id),
+      name: q.name,
+      shared: q.shared ?? false
+    }))
+    savedQueriesLoaded = true
+  } catch {
+    availableSavedQueries.value = []
+  } finally {
+    loadingSavedQueries.value = false
+  }
+}
 
 // 拖拽排序状态
 const dragIndex = ref<number | null>(null)
@@ -530,6 +604,9 @@ watch(() => props.visible, async (newVisible) => {
         // 保存版本号用于乐观锁
         configVersion.value = res.data.configVersion ?? 0
         editableAllowMultipleSprints.value = res.data.allowMultipleSprints ?? false
+        // Backlog 设置
+        editableBacklogViewMode.value = (res.data.backlogViewMode as 'list' | 'tree') || 'list'
+        editableBacklogSavedQueryId.value = res.data.backlogSavedQueryId ?? null
       }
     } catch {
       editableBoardName.value = ''
@@ -541,7 +618,13 @@ watch(() => props.visible, async (newVisible) => {
       editableColumnField.value = 'status'
       configVersion.value = 0
       editableAllowMultipleSprints.value = false
+      editableBacklogViewMode.value = 'list'
+      editableBacklogSavedQueryId.value = null
     }
+
+    // 重置 savedQueries 加载状态（面板重新打开时允许重新加载）
+    savedQueriesLoaded = false
+    availableSavedQueries.value = []
 
     // 加载优先级列 WIP 配置（从 columns prop 中的 priority 模式列获取，或从后端重新获取）
     // 优先级模式列在 props.columns 中 statusId 为 null，fieldValue 为 Critical/High/Normal/Low
@@ -828,6 +911,8 @@ async function reloadAllConfigs() {
       editableDoneRetentionDays.value = generalRes.data.doneRetentionDays ?? null
       configVersion.value = generalRes.data.configVersion ?? 0
       editableAllowMultipleSprints.value = generalRes.data.allowMultipleSprints ?? false
+      editableBacklogViewMode.value = (generalRes.data.backlogViewMode as 'list' | 'tree') || 'list'
+      editableBacklogSavedQueryId.value = generalRes.data.backlogSavedQueryId ?? null
     }
 
     // 更新图表配置
@@ -931,7 +1016,9 @@ async function handleSave() {
         filterQuery: editableFilterQuery.value,
         doneRetentionDays: editableDoneRetentionDays.value,
         columnField: editableColumnField.value,
-        allowMultipleSprints: editableAllowMultipleSprints.value
+        allowMultipleSprints: editableAllowMultipleSprints.value,
+        backlogViewMode: editableBacklogViewMode.value,
+        backlogSavedQueryId: editableBacklogSavedQueryId.value
       },
       chartConfig: {
         chartType: editableChartType.value,
@@ -1306,5 +1393,42 @@ async function handleSave() {
   font-weight: 600;
   color: var(--color-text-2);
   margin-bottom: 8px;
+}
+
+/* ===== Backlog 设置标签页样式 ===== */
+.settings-section {
+  margin-bottom: 20px;
+}
+
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-2);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.radio-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  display: block;
+}
+
+.radio-desc {
+  font-size: 12px;
+  color: var(--color-text-3);
+  display: block;
+  margin-top: 2px;
+}
+
+.saved-query-shared-badge {
+  font-size: 10px;
+  color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.1);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
 }
 </style>

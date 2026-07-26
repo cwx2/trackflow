@@ -85,6 +85,9 @@ public class BoardGeneralConfigService {
             vo.setDoneRetentionDays(config.getDoneRetentionDays());
             vo.setColumnField(config.getColumnField() != null ? config.getColumnField() : "status");
             vo.setAllowMultipleSprints(config.getAllowMultipleSprints() != null ? config.getAllowMultipleSprints() : false);
+            // Backlog 设置
+            vo.setBacklogViewMode(config.getBacklogViewMode() != null ? config.getBacklogViewMode() : "list");
+            vo.setBacklogSavedQueryId(config.getBacklogSavedQueryId() != null ? String.valueOf(config.getBacklogSavedQueryId()) : null);
         } else {
             vo.setName("");
             vo.setCanViewRoles(DEFAULT_CAN_VIEW_ROLES);
@@ -94,6 +97,8 @@ public class BoardGeneralConfigService {
             vo.setDoneRetentionDays(null);
             vo.setColumnField("status");
             vo.setAllowMultipleSprints(false);
+            vo.setBacklogViewMode("list");
+            vo.setBacklogSavedQueryId(null);
         }
 
         // 一次性计算当前用户的看板权限（复用已查到的 config，避免 board_general_config 表被重复查询）
@@ -139,6 +144,9 @@ public class BoardGeneralConfigService {
         Integer doneRetentionDays = dto.getDoneRetentionDays();
         String columnField = dto.getColumnField() != null ? dto.getColumnField() : "status";
         boolean allowMultipleSprints = dto.getAllowMultipleSprints() != null ? dto.getAllowMultipleSprints() : false;
+        // Backlog 配置（null 时保留原值，保持向后兼容）
+        String backlogViewMode = dto.getBacklogViewMode();
+        Long backlogSavedQueryId = dto.getBacklogSavedQueryId();
 
         if (existing != null) {
             existing.setName(name);
@@ -149,6 +157,10 @@ public class BoardGeneralConfigService {
             existing.setDoneRetentionDays(doneRetentionDays);
             existing.setColumnField(columnField);
             existing.setAllowMultipleSprints(allowMultipleSprints);
+            if (backlogViewMode != null) {
+                existing.setBacklogViewMode(backlogViewMode);
+            }
+            existing.setBacklogSavedQueryId(backlogSavedQueryId);
             existing.setUpdatedAt(now);
             boardGeneralConfigMapper.updateById(existing);
         } else {
@@ -162,6 +174,8 @@ public class BoardGeneralConfigService {
             config.setDoneRetentionDays(doneRetentionDays);
             config.setColumnField(columnField);
             config.setAllowMultipleSprints(allowMultipleSprints);
+            config.setBacklogViewMode(backlogViewMode != null ? backlogViewMode : "list");
+            config.setBacklogSavedQueryId(backlogSavedQueryId);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardGeneralConfigMapper.insert(config);

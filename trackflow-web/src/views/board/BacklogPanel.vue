@@ -4,11 +4,34 @@
       <div class="backlog-header">
         <div class="backlog-header-left">
           <h3 class="backlog-title">Backlog</h3>
-          <span class="backlog-count">{{ filteredIssues.length }}</span>
+          <span class="backlog-count">{{ flatIssues.length }}</span>
         </div>
-        <a-button size="mini" type="text" @click="$emit('close')">
-          <template #icon><icon-close /></template>
-        </a-button>
+        <div class="backlog-header-right">
+          <!-- View mode 切换：List / Tree -->
+          <div class="view-mode-toggle" role="group" aria-label="视图模式">
+            <button
+              class="view-mode-btn"
+              :class="{ 'view-mode-btn--active': effectiveViewMode === 'list' }"
+              title="平铺列表视图"
+              :aria-pressed="effectiveViewMode === 'list'"
+              @click="effectiveViewMode = 'list'"
+            >
+              <icon-list />
+            </button>
+            <button
+              class="view-mode-btn"
+              :class="{ 'view-mode-btn--active': effectiveViewMode === 'tree' }"
+              title="树形层级视图"
+              :aria-pressed="effectiveViewMode === 'tree'"
+              @click="effectiveViewMode = 'tree'"
+            >
+              <icon-branch />
+            </button>
+          </div>
+          <a-button size="mini" type="text" @click="$emit('close')">
+            <template #icon><icon-close /></template>
+          </a-button>
+        </div>
       </div>
 
       <!-- 搜索 -->
@@ -57,39 +80,55 @@
         </a-select>
       </div>
 
-      <!-- 工单列表 -->
+      <!-- 工单列表 / 树形 -->
       <a-spin :loading="loading" class="backlog-body-spin">
         <div class="backlog-body">
-          <div
-            v-for="issue in filteredIssues"
-            :key="issue.id"
-            class="backlog-card"
-            :draggable="true"
-            @dragstart="onDragStart($event, issue)"
-            @dragend="onDragEnd"
-            @click="$emit('open-issue', issue)"
-          >
-            <div class="backlog-card-header">
-              <span class="backlog-card-key">{{ issue.issueKey }}</span>
-              <span
-                class="backlog-card-priority"
-                :class="issue.priority?.toLowerCase()"
-                :title="localizePriority(issue.priority)"
-              >
-                {{ priorityIcon(issue.priority) }}
-              </span>
+          <!-- ===== List View（平铺） ===== -->
+          <template v-if="effectiveViewMode === 'list'">
+            <div
+              v-for="issue in filteredIssues"
+              :key="issue.id"
+              class="backlog-card"
+              :draggable="true"
+              @dragstart="onDragStart($event, issue)"
+              @dragend="onDragEnd"
+              @click="$emit('open-issue', issue)"
+            >
+              <div class="backlog-card-header">
+                <span class="backlog-card-key">{{ issue.issueKey }}</span>
+                <span
+                  class="backlog-card-priority"
+                  :class="issue.priority?.toLowerCase()"
+                  :title="localizePriority(issue.priority)"
+                >
+                  {{ priorityIcon(issue.priority) }}
+                </span>
+              </div>
+              <div class="backlog-card-title">{{ issue.title }}</div>
+              <div class="backlog-card-footer">
+                <span class="backlog-card-type">{{ typeLabel(issue.issueType) }}</span>
+                <span v-if="issue.assigneeName" class="backlog-card-assignee">
+                  {{ issue.assigneeName }}
+                </span>
+              </div>
             </div>
-            <div class="backlog-card-title">{{ issue.title }}</div>
-            <div class="backlog-card-footer">
-              <span class="backlog-card-type">{{ typeLabel(issue.issueType) }}</span>
-              <span v-if="issue.assigneeName" class="backlog-card-assignee">
-                {{ issue.assigneeName }}
-              </span>
-            </div>
-          </div>
+          </template>
+
+          <!-- ===== Tree View（树形） ===== -->
+          <template v-else>
+            <BacklogTreeNode
+              v-for="node in treeNodes"
+              :key="node.issue.id"
+              :node="node"
+              :depth="0"
+              @drag-start="(evt: DragEvent, issue: IssueVO) => onDragStart(evt, issue)"
+              @drag-end="onDragEnd"
+              @open-issue="(issue: IssueVO) => $emit('open-issue', issue)"
+            />
+          </template>
 
           <!-- 空状态 -->
-          <div v-if="!loading && filteredIssues.length === 0" class="backlog-empty">
+          <div v-if="!loading && flatIssues.length === 0" class="backlog-empty">
             <div class="backlog-empty-icon">📋</div>
             <div class="backlog-empty-title">
               {{ searchKeyword || filterType || filterPriority ? '没有匹配的工单' : 'Backlog 为空' }}
@@ -109,10 +148,19 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { issueApi } from '@/api'
+import { issueApi, queryApi } from '@/api'
 import type { IssueVO } from '@/api/types'
-import { IconSearch, IconClose } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconClose, IconList, IconBranch } from '@arco-design/web-vue/es/icon'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
+import BacklogTreeNode from './BacklogTreeNode.vue'
+
+/** 树节点结构（递归） */
+export interface BacklogTreeNodeData {
+  issue: IssueVO
+  children: BacklogTreeNodeData[]
+  /** 是否匹配搜索（false = 非搜索结果的父节点，以灰色背景区分） */
+  isSearchMatch: boolean
+}
 
 const props = defineProps<{
   visible: boolean
@@ -121,6 +169,15 @@ const props = defineProps<{
   boardStatusIds: string
   /** External filter keyword from the board header Filter input (synced from parent) */
   filterKeyword?: string
+  /**
+   * Backlog 视图模式（来自 Board Settings 配置）：list=平铺，tree=树形。
+   * 用户可在面板内覆盖（临时），默认跟随此 prop。
+   */
+  viewMode?: 'list' | 'tree'
+  /**
+   * 过滤 Backlog 工单的保存搜索 ID（null 时使用默认过滤）。
+   */
+  savedQueryId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -136,9 +193,26 @@ const searchKeyword = ref('')
 const filterType = ref<string | undefined>(undefined)
 const filterPriority = ref<string | undefined>(undefined)
 
+/**
+ * 当前生效的视图模式：优先使用用户在面板内切换的值，否则跟随 prop。
+ * 切换 prop 时（Board Settings 保存后），重置用户覆盖值。
+ */
+const userOverrideViewMode = ref<'list' | 'tree' | null>(null)
+const effectiveViewMode = computed<'list' | 'tree'>({
+  get: () => userOverrideViewMode.value ?? (props.viewMode || 'list'),
+  set: (val) => { userOverrideViewMode.value = val }
+})
+
+// 当 viewMode prop 改变时，清除用户覆盖，跟随 prop
+watch(() => props.viewMode, () => {
+  userOverrideViewMode.value = null
+})
+
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
-// Filtered issues (client-side filtering after local search)
+// ===== 过滤 =====
+
+/** List 模式下的过滤结果 */
 const filteredIssues = computed(() => {
   let result = issues.value
   if (filterType.value) {
@@ -150,9 +224,50 @@ const filteredIssues = computed(() => {
   return result
 })
 
+/** 所有展开的平铺工单（用于计数，不管 view mode） */
+const flatIssues = computed(() => filteredIssues.value)
+
+// ===== Tree View 构建 =====
+
+/**
+ * 构建树形节点列表。
+ * - 有父工单（parentId）且父工单在 issues 中的：嵌套在父节点下
+ * - 其余（无父/父不在列表中）：作为顶层节点
+ * - 不在搜索结果中但作为搜索结果父节点的工单，以 isSearchMatch=false 标记（灰色背景）
+ */
+const treeNodes = computed<BacklogTreeNodeData[]>(() => {
+  const allIssues = filteredIssues.value
+  const issueMap = new Map<string, IssueVO>(allIssues.map(i => [i.id, i]))
+
+  // 同时需要显示 "非搜索结果但是搜索结果父节点" 的工单
+  // 如果 issues.value 和 filteredIssues.value 不同（有类型/优先级过滤），则父节点需要从全集查找
+  // 简化：只从 filteredIssues 中构建树（type/priority 过滤应用后父子关系仍保持）
+  const childrenMap = new Map<string, IssueVO[]>()
+  const roots: IssueVO[] = []
+
+  for (const issue of allIssues) {
+    const parentId = (issue as any).parentId as string | undefined
+    if (parentId && issueMap.has(parentId)) {
+      if (!childrenMap.has(parentId)) {
+        childrenMap.set(parentId, [])
+      }
+      childrenMap.get(parentId)!.push(issue)
+    } else {
+      roots.push(issue)
+    }
+  }
+
+  function buildNode(issue: IssueVO, isMatch: boolean): BacklogTreeNodeData {
+    const children = (childrenMap.get(issue.id) || []).map(c => buildNode(c, true))
+    return { issue, children, isSearchMatch: isMatch }
+  }
+
+  return roots.map(r => buildNode(r, true))
+})
+
 // Watch visibility and project changes to load data
 watch(
-  () => [props.visible, props.projectId, props.boardStatusIds],
+  () => [props.visible, props.projectId, props.boardStatusIds, props.savedQueryId],
   ([visible, projectId]) => {
     if (visible && projectId) {
       loadBacklog()
@@ -185,25 +300,52 @@ async function loadBacklog() {
     // Merge internal search keyword with external filter keyword (prefer external if set)
     const effectiveKeyword = props.filterKeyword?.trim() || searchKeyword.value || undefined
 
-    // Backlog = issues whose status does NOT match any visible board column
-    // This ensures no overlap between board and Backlog
-    while (true) {
-      const res = await issueApi.list({
-        projectId: props.projectId,
-        hideResolved: 'true',
-        statusIdNot: props.boardStatusIds || undefined,
-        keyword: effectiveKeyword,
-        page,
-        pageSize: PAGE_SIZE
-      })
-      const list = res.data?.list || []
-      const total = res.data?.pagination?.total || 0
-      allIssues = allIssues.concat(list)
-
-      if (allIssues.length >= total || list.length < PAGE_SIZE || allIssues.length >= 500) {
-        break
+    if (props.savedQueryId) {
+      // 使用配置的 Saved Search 过滤工单（再叠加 statusIdNot 排除看板上的工单）
+      // executeById 通过路径传 id，再传 statusIdNot 等追加过滤
+      while (true) {
+        const res = await queryApi.executeById(props.savedQueryId, {
+          page,
+          pageSize: PAGE_SIZE,
+          hideResolved: 'true'
+        })
+        const list = (res.data?.list || []) as IssueVO[]
+        const total = res.data?.pagination?.total || 0
+        // 客户端排除在看板上的工单
+        const boardStatusSet = new Set(props.boardStatusIds ? props.boardStatusIds.split(',') : [])
+        const filtered = boardStatusSet.size > 0
+          ? list.filter(i => !boardStatusSet.has(i.statusId))
+          : list
+        // 客户端关键词过滤
+        const keyworded = effectiveKeyword
+          ? filtered.filter(i => i.title?.toLowerCase().includes(effectiveKeyword.toLowerCase()) || i.issueKey?.toLowerCase().includes(effectiveKeyword.toLowerCase()))
+          : filtered
+        allIssues = allIssues.concat(keyworded)
+        if (allIssues.length >= total || list.length < PAGE_SIZE || allIssues.length >= 500) {
+          break
+        }
+        page++
       }
-      page++
+    } else {
+      // 默认过滤：不在看板上的所有未解决工单
+      while (true) {
+        const res = await issueApi.list({
+          projectId: props.projectId,
+          hideResolved: 'true',
+          statusIdNot: props.boardStatusIds || undefined,
+          keyword: effectiveKeyword,
+          page,
+          pageSize: PAGE_SIZE
+        })
+        const list = res.data?.list || []
+        const total = res.data?.pagination?.total || 0
+        allIssues = allIssues.concat(list)
+
+        if (allIssues.length >= total || list.length < PAGE_SIZE || allIssues.length >= 500) {
+          break
+        }
+        page++
+      }
     }
 
     issues.value = allIssues
@@ -297,6 +439,12 @@ defineExpose({ removeIssue, refresh })
   gap: 8px;
 }
 
+.backlog-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .backlog-title {
   font-size: 14px;
   font-weight: 600;
@@ -310,6 +458,48 @@ defineExpose({ removeIssue, refresh })
   background: var(--color-fill-3);
   padding: 2px 6px;
   border-radius: 3px;
+}
+
+/* ===== View Mode Toggle ===== */
+.view-mode-toggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-3);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+.view-mode-btn:hover {
+  background: var(--color-fill-2);
+  color: var(--color-text-1);
+}
+
+.view-mode-btn + .view-mode-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.view-mode-btn--active {
+  background: rgb(var(--primary-6));
+  color: #fff;
+}
+
+.view-mode-btn--active:hover {
+  background: rgb(var(--primary-6));
+  color: #fff;
 }
 
 .backlog-search {

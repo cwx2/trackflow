@@ -40,6 +40,24 @@ public class BoardGeneralConfigVO {
      */
     private Boolean allowMultipleSprints;
 
+    /**
+     * Backlog 视图模式：list=平铺列表（默认），tree=树形层级。
+     * 对应 YouTrack Board Settings > Backlog Settings: View mode。
+     */
+    private String backlogViewMode;
+
+    /**
+     * 过滤 Backlog 工单的保存搜索 ID（String，VO 中 ID 用 String）。
+     * null 表示使用默认过滤（不在看板上的工单）。
+     * 对应 YouTrack Board Settings > Backlog Settings: Saved search。
+     */
+    private String backlogSavedQueryId;
+
+    /**
+     * 保存搜索名称（backlogSavedQueryId 对应的名称，运行时填充）。
+     */
+    private String backlogSavedQueryName;
+
     /** 当前用户是否有看板查看权限（运行时计算） */
     private Boolean currentUserCanView;
 

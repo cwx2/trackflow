@@ -56,6 +56,20 @@ public class BoardGeneralConfig implements Serializable {
      */
     private Boolean allowMultipleSprints;
 
+    /**
+     * Backlog 视图模式：list=平铺列表（默认），tree=树形层级。
+     * 对应 YouTrack Board Settings > Backlog Settings: View mode。
+     */
+    private String backlogViewMode;
+
+    /**
+     * 过滤 Backlog 工单的保存搜索 ID。
+     * null 表示使用默认过滤（不在看板上的工单）。
+     * 对应 YouTrack Board Settings > Backlog Settings: Saved search。
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long backlogSavedQueryId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
