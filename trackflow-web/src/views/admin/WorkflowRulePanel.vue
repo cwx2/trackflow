@@ -154,16 +154,29 @@
                 <a-option value="status">状态</a-option>
                 <a-option value="sprint">迭代</a-option>
               </a-select>
-              <a-select v-model="cond.operator" style="width: 130px" placeholder="操作符">
-                <a-option value="equals">等于</a-option>
-                <a-option value="not_equals">不等于</a-option>
-                <a-option value="contains">包含</a-option>
-                <a-option value="in">属于</a-option>
-                <a-option value="is_empty">为空</a-option>
-                <a-option value="is_not_empty">不为空</a-option>
+              <a-select v-model="cond.operator" style="width: 150px" placeholder="操作符" @change="() => { cond.value = '' }">
+                <a-optgroup label="当前值匹配">
+                  <a-option value="equals">等于</a-option>
+                  <a-option value="not_equals">不等于</a-option>
+                  <a-option value="contains">包含</a-option>
+                  <a-option value="in">属于（逗号分隔）</a-option>
+                  <a-option value="is_empty">为空</a-option>
+                  <a-option value="is_not_empty">不为空</a-option>
+                </a-optgroup>
+                <!-- 仅当触发事件为 field_changed 且选择了监听字段时，显示旧值匹配操作符 -->
+                <a-optgroup
+                  v-if="formData.triggerEvent === 'field_changed' && formData.triggerField"
+                  label="变更前值匹配（旧值）"
+                >
+                  <a-option value="old_value_equals">旧值等于</a-option>
+                  <a-option value="old_value_not_equals">旧值不等于</a-option>
+                  <a-option value="old_value_in">旧值属于（逗号分隔）</a-option>
+                  <a-option value="old_value_is_empty">旧值为空</a-option>
+                  <a-option value="old_value_is_not_empty">旧值不为空</a-option>
+                </a-optgroup>
               </a-select>
               <a-input
-                v-if="!['is_empty', 'is_not_empty'].includes(cond.operator)"
+                v-if="!['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(cond.operator)"
                 v-model="cond.value"
                 style="flex: 1"
                 placeholder="值（如 Bug, Critical）"
@@ -191,12 +204,66 @@
 
               <!-- set_field -->
               <template v-if="act.type === 'set_field'">
-                <a-select v-model="act.field" style="width: 120px" placeholder="字段">
+                <a-select v-model="act.field" style="width: 120px" placeholder="字段" @change="() => { act.value = '' }">
                   <a-option value="priority">优先级</a-option>
                   <a-option value="assignee">负责人</a-option>
                   <a-option value="issue_type">工单类型</a-option>
+                  <a-option value="status">状态</a-option>
+                  <a-option value="sprint">迭代</a-option>
+                  <a-option value="due_date">截止日期</a-option>
                 </a-select>
-                <a-input v-model="act.value" style="flex: 1" placeholder="新值" />
+                <!-- 状态：下拉选择器 -->
+                <a-select
+                  v-if="act.field === 'status'"
+                  v-model="act.value"
+                  style="flex: 1"
+                  placeholder="选择目标状态"
+                  :loading="statusesLoading"
+                  allow-search
+                >
+                  <a-option
+                    v-for="s in availableStatuses"
+                    :key="s.id"
+                    :value="s.id"
+                  >
+                    <span class="status-option">
+                      <span
+                        class="status-dot"
+                        :style="{ backgroundColor: s.color || '#999' }"
+                      ></span>
+                      {{ s.name }}
+                    </span>
+                  </a-option>
+                </a-select>
+                <!-- 迭代：下拉选择器 -->
+                <a-select
+                  v-else-if="act.field === 'sprint'"
+                  v-model="act.value"
+                  style="flex: 1"
+                  placeholder="选择目标迭代"
+                  :loading="sprintsLoading"
+                  allow-search
+                >
+                  <a-option
+                    v-for="sp in availableSprints"
+                    :key="sp.id"
+                    :value="sp.id"
+                  >{{ sp.name }}</a-option>
+                </a-select>
+                <!-- 截止日期：支持绝对日期或相对值 (+7d) -->
+                <a-input
+                  v-else-if="act.field === 'due_date'"
+                  v-model="act.value"
+                  style="flex: 1"
+                  placeholder="日期 (YYYY-MM-DD) 或相对值 (+7d, -3d)"
+                />
+                <!-- 其他字段：文本输入 -->
+                <a-input
+                  v-else
+                  v-model="act.value"
+                  style="flex: 1"
+                  placeholder="新值"
+                />
               </template>
 
               <!-- add_tag -->
@@ -227,8 +294,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { workflowRuleApi } from '@/api'
+import { workflowRuleApi, issueApi, sprintApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO } from '@/api/workflowRule'
+import type { IssueStatusVO, SprintVO } from '@/api/types'
 
 const props = defineProps<{
   projectId: string
@@ -266,6 +334,42 @@ const formData = reactive({
   conditions: [] as ConditionItem[],
   actions: [] as ActionItem[]
 })
+
+// ==================== Status & Sprint Data ====================
+const availableStatuses = ref<IssueStatusVO[]>([])
+const statusesLoading = ref(false)
+const availableSprints = ref<SprintVO[]>([])
+const sprintsLoading = ref(false)
+
+async function loadStatuses() {
+  if (availableStatuses.value.length > 0) return
+  statusesLoading.value = true
+  try {
+    const res = await issueApi.listStatuses()
+    if (res.code === 0) {
+      availableStatuses.value = res.data
+    }
+  } catch {
+    // silent
+  } finally {
+    statusesLoading.value = false
+  }
+}
+
+async function loadSprints() {
+  if (!props.projectId || availableSprints.value.length > 0) return
+  sprintsLoading.value = true
+  try {
+    const res = await sprintApi.listByProject(props.projectId)
+    if (res.code === 0) {
+      availableSprints.value = res.data
+    }
+  } catch {
+    // silent
+  } finally {
+    sprintsLoading.value = false
+  }
+}
 
 // ==================== Computed ====================
 const filteredRules = computed(() => {
@@ -307,6 +411,9 @@ function showCreateModal() {
     actions: []
   })
   modalVisible.value = true
+  // 预加载状态和迭代数据
+  loadStatuses()
+  loadSprints()
 }
 
 function handleEdit(rule: WorkflowRuleVO) {
@@ -322,6 +429,9 @@ function handleEdit(rule: WorkflowRuleVO) {
     actions
   })
   modalVisible.value = true
+  // 预加载状态和迭代数据
+  loadStatuses()
+  loadSprints()
 }
 
 function addCondition() {
@@ -423,6 +533,28 @@ function fieldLabel(field: string) {
   return map[field] || field
 }
 
+function operatorLabel(op: string) {
+  const map: Record<string, string> = {
+    equals: '等于', not_equals: '不等于', contains: '包含', in: '属于',
+    is_empty: '为空', is_not_empty: '不为空',
+    old_value_equals: '旧值等于', old_value_not_equals: '旧值不等于',
+    old_value_in: '旧值属于', old_value_is_empty: '旧值为空', old_value_is_not_empty: '旧值不为空'
+  }
+  return map[op] || op
+}
+
+function conditionSummary(json: string): string {
+  const conditions = parseJson(json, [])
+  if (conditions.length === 0) return '无条件（始终触发）'
+  return conditions.map((c: any) => {
+    const isEmptyOp = ['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(c.operator)
+    if (isEmptyOp) {
+      return `${fieldLabel(c.field)} ${operatorLabel(c.operator)}`
+    }
+    return `${fieldLabel(c.field)} ${operatorLabel(c.operator)} "${c.value}"`
+  }).join(' AND ')
+}
+
 function actionSummary(json: string): string {
   const actions = parseJson(json, [])
   if (actions.length === 0) return '无动作'
@@ -448,7 +580,10 @@ function parseJson(str: string, fallback: any[]): any[] {
 // ==================== Lifecycle ====================
 onMounted(loadRules)
 
-watch(() => props.projectId, loadRules)
+watch(() => props.projectId, () => {
+  availableSprints.value = [] // 切换项目时清空缓存，下次打开弹窗时重新加载
+  loadRules()
+})
 </script>
 
 <style scoped>
@@ -574,5 +709,20 @@ watch(() => props.projectId, loadRules)
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Status option in dropdown */
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>
