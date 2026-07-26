@@ -382,8 +382,24 @@
 
             <div class="sprint-actions">
               <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+              <a-button
+                size="mini"
+                type="text"
+                @click="toggleCompletedBurndown(sprint.id)"
+                v-if="sprint.startDate && sprint.endDate && sprint.totalIssues > 0"
+              >
+                {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
+              </a-button>
               <a-button v-if="canEditSprint" size="mini" type="text" @click="restoreSprint(sprint)">恢复</a-button>
             </div>
+
+            <!-- 已归档 Sprint 的燃尽图（展开时显示） -->
+            <SprintBurndownChart
+              v-if="expandedCompletedSprints.has(sprint.id)"
+              :sprint-id="sprint.id"
+              :sprint-end-date="sprint.endDate"
+              :is-completed="true"
+            />
           </div>
         </template>
       </div>
@@ -496,16 +512,12 @@
         <a-form-item label="目标">
           <a-textarea v-model="editForm.goal" placeholder="迭代目标（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
         </a-form-item>
-        <a-form-item label="开始日期" v-if="!editingCompleted">
+        <a-form-item label="开始日期">
           <a-date-picker v-model="editForm.startDate" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="结束日期" v-if="!editingCompleted">
+        <a-form-item label="结束日期">
           <a-date-picker v-model="editForm.endDate" style="width: 100%" />
         </a-form-item>
-        <div v-if="editingCompleted" class="edit-completed-hint">
-          <span class="hint-icon">ℹ️</span>
-          <span class="hint-text">已完成的迭代不允许修改日期</span>
-        </div>
       </a-form>
     </a-modal>
 
