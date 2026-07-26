@@ -1,5 +1,15 @@
 <template>
   <div class="issue-detail-page" v-if="issue">
+    <!-- 实时更新提示 banner（活动流不在视口时显示） -->
+    <Transition name="slide-up">
+      <div v-if="realtimeUpdateBanner.visible" class="realtime-update-banner" @click="scrollToActivity">
+        <span class="realtime-update-icon">🔄</span>
+        <span class="realtime-update-text">{{ realtimeUpdateBanner.message }}</span>
+        <span class="realtime-update-action">点击查看</span>
+        <button class="realtime-update-close" @click.stop="realtimeUpdateBanner.visible = false">✕</button>
+      </div>
+    </Transition>
+
     <!-- 归档项目提示 -->
     <div v-if="isProjectArchived" class="archived-banner">
       <icon-lock class="archived-icon" />
@@ -63,6 +73,7 @@
         @add-time="openTimeDialog"
       >
         <template #activity>
+          <div ref="activityStreamRef" class="activity-stream-anchor">
           <ActivityStream
             :items="activityItems"
             :current-user-id="currentUserId"
@@ -82,6 +93,7 @@
             @start-timer="handleStartTimer"
             @stop-timer="handleStopTimerFromDetail"
           />
+          </div>
         </template>
       </DetailMainContent>
 
@@ -197,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
@@ -399,6 +411,87 @@ const issueId = computed(() => route.params.id as string || '')
 // ===== WebSocket 实时更新（详情页） =====
 const hasRealtimeUpdates = ref(false)
 
+/**
+ * 活动流区域的 DOM 引用（用于检测是否在视口内）
+ */
+const activityStreamRef = ref<HTMLElement | null>(null)
+
+/**
+ * 实时更新提示 banner 状态
+ */
+const realtimeUpdateBanner = ref<{ visible: boolean; message: string }>({
+  visible: false,
+  message: ''
+})
+
+/**
+ * 非活动标签页期间积累的更新计数
+ */
+let inactiveUpdateCount = 0
+const originalTitle = ref('')
+
+/**
+ * 检测活动流区域是否在视口内
+ */
+function isActivityStreamVisible(): boolean {
+  const el = activityStreamRef.value
+  if (!el) return true // 找不到元素时保守处理，不显示 banner
+  const rect = el.getBoundingClientRect()
+  const viewHeight = window.innerHeight || document.documentElement.clientHeight
+  // 元素顶部在视口内或部分可见
+  return rect.top < viewHeight && rect.bottom > 0
+}
+
+/**
+ * 滚动到活动流区域
+ */
+function scrollToActivity() {
+  realtimeUpdateBanner.value.visible = false
+  const el = activityStreamRef.value
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
+/**
+ * 显示实时更新 banner（若活动流不在视口内）或直接 Message 提示
+ */
+function showRealtimeNotification(message: string, isActivityUpdate: boolean) {
+  // 非活动标签页：修改 title 提示
+  if (document.hidden) {
+    inactiveUpdateCount++
+    document.title = `(${inactiveUpdateCount}) ${originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')}`
+    return
+  }
+
+  // 活动类更新（评论、附件、关联）：若活动流不在视口内，显示 banner
+  if (isActivityUpdate && !isActivityStreamVisible()) {
+    realtimeUpdateBanner.value = { visible: true, message }
+    // 10 秒后自动消失
+    setTimeout(() => {
+      realtimeUpdateBanner.value.visible = false
+    }, 10000)
+  } else {
+    // 字段更新或活动流已可见：使用 Message 提示
+    Message.info({ content: message, duration: 3000 })
+  }
+}
+
+/**
+ * 当用户重新激活标签页时，清除 title 中的未读计数
+ */
+function onVisibilityChange() {
+  if (!document.hidden && inactiveUpdateCount > 0) {
+    inactiveUpdateCount = 0
+    document.title = originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')
+  }
+}
+
+onMounted(() => {
+  originalTitle.value = document.title.replace(/^\(\d+\)\s*/, '')
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
 useIssueDetailSubscription(
   () => issue.value?.id,
   (event: IssueRealtimeEvent) => {
@@ -415,23 +508,31 @@ useIssueDetailSubscription(
       if ('statusId' in event.changes) {
         loadTransitions()
       }
-      Message.info({
-        content: `${event.operatorName || '其他用户'} 更新了此工单`,
-        duration: 3000
-      })
+      showRealtimeNotification(
+        `${event.operatorName || '其他用户'} 更新了此工单`,
+        false
+      )
     } else if (event.action === 'COMMENT_ADDED') {
       // 有新评论 → 重新加载评论和活动列表
       loadCommentsAndActivities()
-      Message.info({
-        content: `${event.operatorName || '其他用户'} 添加了新评论`,
-        duration: 3000
-      })
+      showRealtimeNotification(
+        `${event.operatorName || '其他用户'} 添加了新评论`,
+        true
+      )
     } else if (event.action === 'ATTACHMENT_CHANGED') {
       // 附件变更 → 重新加载附件列表
       loadAttachments()
+      showRealtimeNotification(
+        `${event.operatorName || '其他用户'} 更新了附件`,
+        true
+      )
     } else if (event.action === 'LINK_CHANGED') {
       // 关联变更 → 重新加载关联列表
       loadLinks()
+      showRealtimeNotification(
+        `${event.operatorName || '其他用户'} 更新了关联工单`,
+        true
+      )
     } else if (event.action === 'DELETED') {
       // 工单被删除 → 提示用户并导航回列表
       Message.warning({ content: '此工单已被删除', duration: 5000 })
@@ -479,7 +580,22 @@ async function loadLinks() {
 // ===== End WebSocket =====
 
 // ============ 加载数据 ============
-onMounted(() => loadAll())
+onMounted(() => {
+  loadAll()
+  // 记录原始页面标题（供实时更新未读计数使用）
+  if (!originalTitle.value) {
+    originalTitle.value = document.title.replace(/^\(\d+\)\s*/, '')
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  // 恢复 title
+  if (inactiveUpdateCount > 0) {
+    document.title = originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')
+  }
+})
 watch(() => route.params.id, () => loadAll())
 
 async function loadAll() {
@@ -1420,6 +1536,81 @@ onBeforeRouteLeave((_to, _from, next) => {
 .time-author-avatar { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--tf-accent); color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
 .time-author-name { flex: 1; font-size: 13px; }
 .time-author-self { font-size: 11px; color: var(--tf-text-tertiary); }
+
+/* 实时更新提示 banner */
+.realtime-update-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--tf-accent, #0969da);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.realtime-update-icon {
+  font-size: 14px;
+  animation: spin 1.5s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.realtime-update-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.realtime-update-action {
+  font-size: 12px;
+  opacity: 0.85;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.realtime-update-close {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 14px;
+  opacity: 0.8;
+  line-height: 1;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.realtime-update-close:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.15);
+}
+
+/* Banner 滑入/滑出动画 */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+/* 活动流锚点容器 */
+.activity-stream-anchor {
+  display: contents;
+}
 .issue-detail-page {
   height: 100%;
   display: flex;
