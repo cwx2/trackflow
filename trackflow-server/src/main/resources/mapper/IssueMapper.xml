@@ -277,17 +277,30 @@
         LEFT JOIN workflow_statuses ws ON ws.status_id = s.id
     </select>
 
-    <!-- 燃尽图投影查询：只返回 id, created_at, resolved_at（性能优化） -->
+    <!-- 燃尽图投影查询：只返回 id, created_at, resolved_at（性能优化）
+         按照 YouTrack "All cards" 模式规范：自动排除作为泳道标识符的父工单
+         （即 issue_type='Epic' 且 child_count > 0 的工单，这类工单仅作为泳道分组标识使用）。-->
     <select id="selectBurndownProjection" resultType="com.trackflow.issue.mapper.result.BurndownRow">
         SELECT id, created_at, resolved_at
         FROM issue
         WHERE sprint_id = #{sprintId}
           AND deleted_at IS NULL
+          AND NOT (issue_type = 'Epic' AND child_count > 0)
     </select>
 
     <!-- 批量查询工单 created_at（消除 N+1） -->
     <select id="selectCreatedAtByIds" resultType="com.trackflow.issue.mapper.result.IssueCreatedAtRow">
         SELECT id, created_at
+        FROM issue
+        WHERE id IN
+        <foreach collection="issueIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <!-- 批量查询工单 issue_type 和 child_count（燃尽图过滤泳道标识工单用） -->
+    <select id="selectTypeByIds" resultType="com.trackflow.issue.mapper.result.IssueTypeRow">
+        SELECT id, issue_type, child_count
         FROM issue
         WHERE id IN
         <foreach collection="issueIds" item="id" open="(" separator="," close=")">

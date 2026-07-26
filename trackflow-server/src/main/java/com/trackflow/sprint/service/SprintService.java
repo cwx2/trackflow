@@ -13,6 +13,7 @@ import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.result.BurndownRow;
 import com.trackflow.issue.mapper.result.IssueCreatedAtRow;
 import com.trackflow.issue.mapper.result.IssueEstimatedHoursRow;
+import com.trackflow.issue.mapper.result.IssueTypeRow;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
 import com.trackflow.sprint.dto.CreateSprintDTO;
 import com.trackflow.sprint.dto.DeleteSprintDTO;
@@ -1081,6 +1082,23 @@ public class SprintService {
         List<IssueActivity> movedInActivities = activityMapper.selectMovedInBySprint(sprintIdStr);
         List<IssueActivity> movedOutActivities = activityMapper.selectMovedOutBySprint(sprintIdStr);
 
+        // 过滤活动记录中的泳道标识工单（Epic 且有子工单），保持与燃尽图投影查询一致
+        // 按照 YouTrack "All cards" 模式规范：排除作为泳道标识的父工单
+        List<Long> allActivityIssueIds = movedOutActivities.stream()
+                .map(IssueActivity::getIssueId)
+                .filter(id -> !currentIssueIds.contains(id))
+                .distinct()
+                .toList();
+        Set<Long> epicLaneIds = buildEpicLaneIdSet(allActivityIssueIds);
+        if (!epicLaneIds.isEmpty()) {
+            movedInActivities = movedInActivities.stream()
+                    .filter(a -> !epicLaneIds.contains(a.getIssueId()))
+                    .toList();
+            movedOutActivities = movedOutActivities.stream()
+                    .filter(a -> !epicLaneIds.contains(a.getIssueId()))
+                    .toList();
+        }
+
         Map<Long, LocalDateTime> movedInMap = movedInActivities.stream()
                 .collect(Collectors.toMap(
                         IssueActivity::getIssueId,
@@ -1108,6 +1126,22 @@ public class SprintService {
 
         return new BurndownRawData(currentIssues, currentIssueIds, movedInMap,
                 movedOutActivities, movedOutCreatedAtMap, issueEstimatedHoursMap);
+    }
+
+    /**
+     * 批量查询工单 ID 集合中作为泳道标识符的 Epic 工单 ID 集合。
+     * 泳道标识工单定义：issue_type = 'Epic' 且 child_count > 0。
+     * 用于燃尽图过滤，与 selectBurndownProjection SQL 保持一致。
+     */
+    private Set<Long> buildEpicLaneIdSet(List<Long> issueIds) {
+        if (issueIds.isEmpty()) {
+            return Set.of();
+        }
+        List<IssueTypeRow> typeRows = issueMapper.selectTypeByIds(issueIds);
+        return typeRows.stream()
+                .filter(row -> "Epic".equals(row.getIssueType()) && row.getChildCount() > 0)
+                .map(IssueTypeRow::getId)
+                .collect(Collectors.toSet());
     }
 
     /**
