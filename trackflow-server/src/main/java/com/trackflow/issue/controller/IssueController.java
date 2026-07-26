@@ -482,6 +482,7 @@ public class IssueController {
     // ========== 状态列表 ==========
 
     @GetMapping("/statuses")
+    @PreAuthorize("isAuthenticated()")
     public R<List<IssueStatusVO>> listStatuses() {
         return R.ok(issueConverter.toStatusVOList(issueService.listStatuses()));
     }

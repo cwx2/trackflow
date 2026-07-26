@@ -25,6 +25,13 @@ public class CreateIssueDTO {
     private String description;
     private String issueType;
     private String priority;
+
+    /**
+     * 创建时指定初始状态 ID（可选）。
+     * 若为 null，则使用系统默认状态（isDefault=true）。
+     */
+    private Long statusId;
+
     private Long assigneeId;
     private Long sprintId;
     private Long parentId;

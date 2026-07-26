@@ -118,13 +118,24 @@ public class IssueService {
                 new LambdaQueryWrapper<IssueStatus>().eq(IssueStatus::getIsDefault, true)
         );
 
+        // 确定初始状态：优先使用用户指定的 statusId，否则使用默认状态
+        Long resolvedStatusId = defaultStatus != null ? defaultStatus.getId() : 1L;
+        if (dto.getStatusId() != null) {
+            IssueStatus specifiedStatus = statusMapper.selectById(dto.getStatusId());
+            if (specifiedStatus != null) {
+                resolvedStatusId = specifiedStatus.getId();
+            } else {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的状态不存在: " + dto.getStatusId());
+            }
+        }
+
         Issue issue = new Issue();
         issue.setProjectId(dto.getProjectId());
         issue.setIssueKey(issueKey);
         issue.setTitle(dto.getTitle());
         issue.setDescription(dto.getDescription());
         issue.setIssueType(dto.getIssueType() != null ? dto.getIssueType() : "Task");
-        issue.setStatusId(defaultStatus != null ? defaultStatus.getId() : 1L);
+        issue.setStatusId(resolvedStatusId);
         issue.setPriority(dto.getPriority() != null ? dto.getPriority() : "Normal");
         // 校验 assignee 是否为有效的项目成员
         validateAssignee(dto.getAssigneeId(), dto.getProjectId());

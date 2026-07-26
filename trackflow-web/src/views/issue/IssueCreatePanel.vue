@@ -175,6 +175,14 @@
             </a-select>
           </div>
           <div class="prop-row">
+            <span class="prop-label">状态</span>
+            <a-select v-model="form.statusId" size="small" allow-clear placeholder="默认初始状态">
+              <a-option v-for="s in statuses" :key="s.id" :value="s.id">
+                <span class="status-dot" :style="{ backgroundColor: s.color || '#6b7280' }"></span>{{ s.name }}
+              </a-option>
+            </a-select>
+          </div>
+          <div class="prop-row">
             <span class="prop-label">Sprint</span>
             <a-select v-model="form.sprintId" :placeholder="form.projectId ? '未排期' : '请先选择项目'" size="small" allow-clear :disabled="!form.projectId || lockSprint">
               <a-option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</a-option>
@@ -392,7 +400,7 @@ import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
-import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueVO as SimilarIssue } from '@/api/types'
+import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{
   visible: boolean
@@ -535,6 +543,7 @@ function openSimilarIssue(issue: SimilarIssue) {
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
 const sprints = ref<any[]>([])
+const statuses = ref<IssueStatusVO[]>([])
 
 // 工单模板
 const templates = ref<IssueTemplateVO[]>([])
@@ -545,6 +554,7 @@ const form = reactive({
   description: '',
   issueType: 'Task',
   priority: 'Normal',
+  statusId: undefined as string | undefined,
   assigneeId: undefined as string | undefined,
   sprintId: undefined as string | undefined,
   dueDate: '',
@@ -741,6 +751,7 @@ watch(() => props.visible, (val) => {
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('keydown', handleKeyDown, true)
     loadProjects()
+    loadStatuses()
     // Pre-fill form if clone data is provided
     if (props.cloneData) {
       form.projectId = props.cloneData.projectId
@@ -763,6 +774,16 @@ watch(() => props.visible, (val) => {
     window.removeEventListener('keydown', handleKeyDown, true)
   }
 })
+
+/** 加载系统状态列表 */
+async function loadStatuses() {
+  try {
+    const res = await issueApi.listStatuses()
+    statuses.value = res.data || []
+  } catch {
+    statuses.value = []
+  }
+}
 
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
@@ -848,6 +869,7 @@ function doClose() {
 function resetForm() {
   form.title = ''
   form.description = ''
+  form.statusId = undefined
   form.assigneeId = undefined
   form.sprintId = undefined
   form.dueDate = ''
@@ -943,6 +965,7 @@ async function submitAndContinue() {
     // 保留项目/类型/优先级/Sprint，清空标题和描述等输入内容
     form.title = ''
     form.description = ''
+    form.statusId = undefined
     form.assigneeId = undefined
     form.dueDate = ''
     form.estimatedHours = undefined
@@ -999,6 +1022,7 @@ async function doSubmit(): Promise<boolean> {
       description: form.description || undefined,
       issueType: form.issueType,
       priority: form.priority,
+      statusId: form.statusId || undefined,
       dueDate: form.dueDate || undefined,
       estimatedHours: form.estimatedHours || undefined,
       sprintId: form.sprintId || undefined,
@@ -1021,7 +1045,10 @@ async function doSubmit(): Promise<boolean> {
 }
 
 onMounted(() => {
-  if (props.visible) loadProjects()
+  if (props.visible) {
+    loadProjects()
+    loadStatuses()
+  }
 })
 </script>
 
@@ -1099,6 +1126,8 @@ onMounted(() => {
 .priority-dot.high { background: #f59e0b; }
 .priority-dot.normal { background: #6366f1; }
 .priority-dot.low { background: #64748b; }
+
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
 .required-mark { color: #f85149; margin-left: 2px; }

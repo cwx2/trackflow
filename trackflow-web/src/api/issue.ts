@@ -41,8 +41,8 @@ export const issueApi = {
   /** 创建 Issue */
   create(data: {
     projectId: string; title: string; description?: string
-    issueType?: string; priority?: string; assigneeId?: string
-    sprintId?: string; dueDate?: string; estimatedHours?: number
+    issueType?: string; priority?: string; statusId?: string
+    assigneeId?: string; sprintId?: string; dueDate?: string; estimatedHours?: number
     customFields?: Record<string, string>
     links?: Array<{ targetIssueId: string; linkType: string }>
   }) {
