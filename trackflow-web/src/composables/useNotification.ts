@@ -412,6 +412,23 @@ export function useNotification() {
   }
 
   /**
+   * 属于 subscription 分类的通知类型列表（与后端 NotificationCategory.subscription 枚举保持同步）
+   * YouTrack 标准：分配、评论、状态变更、更新、移动、截止日期提醒、逾期提醒、投票、工时记录均属于 Subscriptions
+   */
+  const SUBSCRIPTION_TYPES = [
+    'issue_assigned',
+    'issue_auto_assigned',
+    'issue_commented',
+    'issue_status_changed',
+    'issue_updated',
+    'issue_moved',
+    'due_date_alert',
+    'overdue_alert',
+    'issue_voted',
+    'issue_spent_time'
+  ]
+
+  /**
    * 根据通知类型递减对应分类的未读计数
    */
   function decrementCategoryCount(type: string) {
@@ -420,7 +437,7 @@ export function useNotification() {
 
     if (type === 'mention') {
       counts.mention = Math.max(0, counts.mention - 1)
-    } else if (['issue_assigned', 'issue_auto_assigned', 'issue_commented', 'issue_status_changed', 'due_date_alert', 'overdue_alert'].includes(type)) {
+    } else if (SUBSCRIPTION_TYPES.includes(type)) {
       counts.subscription = Math.max(0, counts.subscription - 1)
     } else {
       counts.system = Math.max(0, counts.system - 1)
@@ -436,7 +453,7 @@ export function useNotification() {
 
     if (type === 'mention') {
       counts.mention += 1
-    } else if (['issue_assigned', 'issue_auto_assigned', 'issue_commented', 'issue_status_changed', 'due_date_alert', 'overdue_alert'].includes(type)) {
+    } else if (SUBSCRIPTION_TYPES.includes(type)) {
       counts.subscription += 1
     } else {
       counts.system += 1

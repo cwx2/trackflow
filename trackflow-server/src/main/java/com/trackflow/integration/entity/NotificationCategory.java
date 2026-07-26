@@ -23,6 +23,7 @@ public enum NotificationCategory {
 
     /**
      * 订阅更新（基于用户关注的工单变更通知）
+     * 对标 YouTrack Subscriptions 分类：包含工单分配、评论、状态变更、投票、工时记录等订阅事件
      */
     subscription(List.of(
             NotificationType.issue_assigned,
@@ -32,7 +33,9 @@ public enum NotificationCategory {
             NotificationType.issue_updated,
             NotificationType.issue_moved,
             NotificationType.due_date_alert,
-            NotificationType.overdue_alert
+            NotificationType.overdue_alert,
+            NotificationType.issue_voted,
+            NotificationType.issue_spent_time
     )),
 
     /**
