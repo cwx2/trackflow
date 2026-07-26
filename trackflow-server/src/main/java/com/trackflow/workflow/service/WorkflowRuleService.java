@@ -6,6 +6,7 @@ import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.workflow.converter.WorkflowRuleConverter;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
@@ -30,6 +31,7 @@ public class WorkflowRuleService {
     private final WorkflowRuleMapper ruleMapper;
     private final ObjectMapper objectMapper;
     private final PermissionService permissionService;
+    private final WorkflowRuleConverter workflowRuleConverter;
 
     /**
      * 查询项目规则列表（含全局规则）
@@ -47,7 +49,7 @@ public class WorkflowRuleService {
                             .orderByAsc(WorkflowRule::getId)
             );
         }
-        return rules.stream().map(this::toVO).toList();
+        return workflowRuleConverter.toVOList(rules);
     }
 
     /**
@@ -59,7 +61,7 @@ public class WorkflowRuleService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
         checkRuleViewPermission(rule);
-        return toVO(rule);
+        return workflowRuleConverter.toVO(rule);
     }
 
     /** 合法的规则类型 */
@@ -96,7 +98,7 @@ public class WorkflowRuleService {
         ruleMapper.insert(rule);
         log.info("[WorkflowRule] Created {} rule '{}' (id={}) for project={}",
                 ruleType, rule.getName(), rule.getId(), rule.getProjectId());
-        return toVO(rule);
+        return workflowRuleConverter.toVO(rule);
     }
 
     /**
@@ -134,7 +136,7 @@ public class WorkflowRuleService {
 
         ruleMapper.updateById(rule);
         log.info("[WorkflowRule] Updated rule '{}' (id={})", rule.getName(), rule.getId());
-        return toVO(rule);
+        return workflowRuleConverter.toVO(rule);
     }
 
     /**
@@ -165,7 +167,7 @@ public class WorkflowRuleService {
         rule.setUpdatedAt(LocalDateTime.now());
         ruleMapper.updateById(rule);
         log.info("[WorkflowRule] Toggled rule '{}' (id={}) enabled={}", rule.getName(), id, rule.getEnabled());
-        return toVO(rule);
+        return workflowRuleConverter.toVO(rule);
     }
 
     /**
@@ -280,24 +282,5 @@ public class WorkflowRuleService {
         }
     }
 
-    private WorkflowRuleVO toVO(WorkflowRule rule) {
-        WorkflowRuleVO vo = new WorkflowRuleVO();
-        vo.setId(String.valueOf(rule.getId()));
-        vo.setProjectId(rule.getProjectId() != null ? String.valueOf(rule.getProjectId()) : null);
-        vo.setName(rule.getName());
-        vo.setDescription(rule.getDescription());
-        vo.setRuleType(rule.getRuleType());
-        vo.setTriggerEvent(rule.getTriggerEvent());
-        vo.setTriggerField(rule.getTriggerField());
-        vo.setConditionJson(rule.getConditionJson());
-        vo.setActionJson(rule.getActionJson());
-        vo.setEnabled(rule.getEnabled());
-        vo.setSortOrder(rule.getSortOrder());
-        vo.setCronExpression(rule.getCronExpression());
-        vo.setLastExecutedAt(rule.getLastExecutedAt());
-        vo.setCreatedBy(rule.getCreatedBy() != null ? String.valueOf(rule.getCreatedBy()) : null);
-        vo.setCreatedAt(rule.getCreatedAt());
-        vo.setUpdatedAt(rule.getUpdatedAt());
-        return vo;
-    }
 }
+
