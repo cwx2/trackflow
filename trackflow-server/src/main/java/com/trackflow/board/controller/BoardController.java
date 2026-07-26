@@ -1,6 +1,7 @@
 package com.trackflow.board.controller;
 
 import com.trackflow.board.dto.BoardDataQuery;
+import com.trackflow.board.dto.CloneBoardDTO;
 import com.trackflow.board.dto.SaveBoardSettingsDTO;
 import com.trackflow.board.dto.UpdateBoardCardConfigDTO;
 import com.trackflow.board.dto.UpdateBoardChartConfigDTO;
@@ -10,6 +11,7 @@ import com.trackflow.board.dto.UpdateBoardGeneralConfigDTO;
 import com.trackflow.board.dto.UpdateBoardSwimlaneConfigDTO;
 import com.trackflow.board.service.BoardCardConfigService;
 import com.trackflow.board.service.BoardChartConfigService;
+import com.trackflow.board.service.BoardCloneService;
 import com.trackflow.board.service.BoardColumnMergeService;
 import com.trackflow.board.service.BoardColumnService;
 import com.trackflow.board.service.BoardConfigVersionService;
@@ -26,6 +28,7 @@ import com.trackflow.board.vo.BoardDataVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
 import com.trackflow.board.vo.BoardListItemVO;
 import com.trackflow.board.vo.BoardSwimlaneConfigVO;
+import com.trackflow.board.vo.CloneBoardResultVO;
 import com.trackflow.common.model.R;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +56,7 @@ public class BoardController {
     private final BoardSettingsService boardSettingsService;
     private final BoardDataService boardDataService;
     private final BoardFavoriteService boardFavoriteService;
+    private final BoardCloneService boardCloneService;
 
     /**
      * 获取项目看板列配置（纯读取，不执行任何写操作）
@@ -337,6 +341,24 @@ public class BoardController {
     public R<Void> removeFavorite(@RequestParam("projectId") Long projectId) {
         boardFavoriteService.removeFavorite(projectId);
         return R.ok();
+    }
+
+    // ========== 克隆看板 ==========
+
+    /**
+     * 克隆看板（以当前项目为模板创建新项目并复制所有看板配置）。
+     * <p>
+     * 克隆内容：列配置、卡片字段、泳道配置、图表配置、基本设置（行为）。
+     * 不克隆：成员、工作流、标签、自定义字段绑定。
+     * 访问权限重置为默认（仅克隆者可管理）。
+     * <p>
+     * 需要源项目的看板查看权限。
+     */
+    @PostMapping("/clone")
+    @PreAuthorize("@perm.checkBoardView(#dto.sourceProjectId)")
+    public R<CloneBoardResultVO> cloneBoard(@Valid @RequestBody CloneBoardDTO dto) {
+        CloneBoardResultVO result = boardCloneService.cloneBoard(dto);
+        return R.ok(result);
     }
 
     // ========== Private helpers ==========

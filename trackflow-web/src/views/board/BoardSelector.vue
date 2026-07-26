@@ -58,6 +58,14 @@
                 <span class="board-selector-item__meta">{{ board.projectKey }}</span>
               </div>
               <span v-if="board.ownerName" class="board-selector-item__owner">{{ board.ownerName }}</span>
+              <!-- 克隆按钮 -->
+              <button
+                class="board-selector-clone-btn"
+                title="克隆此看板"
+                @click.stop="openCloneModal(board)"
+              >
+                <icon-copy />
+              </button>
             </div>
           </template>
 
@@ -86,6 +94,14 @@
                 <span class="board-selector-item__meta">{{ board.projectKey }}</span>
               </div>
               <span v-if="board.ownerName" class="board-selector-item__owner">{{ board.ownerName }}</span>
+              <!-- 克隆按钮 -->
+              <button
+                class="board-selector-clone-btn"
+                title="克隆此看板"
+                @click.stop="openCloneModal(board)"
+              >
+                <icon-copy />
+              </button>
             </div>
           </template>
 
@@ -108,12 +124,23 @@
       </div>
     </template>
   </a-trigger>
+
+  <!-- 克隆看板弹窗 -->
+  <CloneBoardModal
+    v-if="cloneTarget"
+    v-model="showCloneModal"
+    :source-project-id="cloneTarget.projectId"
+    :source-board-name="cloneTarget.name"
+    :source-project-key="cloneTarget.projectKey"
+    @cloned="onBoardCloned"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { boardApi } from '@/api'
 import type { BoardListItemVO } from '@/api/types'
+import CloneBoardModal from './CloneBoardModal.vue'
 
 const props = defineProps<{
   modelValue: string | undefined
@@ -127,6 +154,10 @@ const popupVisible = ref(false)
 const searchQuery = ref('')
 const boards = ref<BoardListItemVO[]>([])
 const loading = ref(false)
+
+// 克隆看板状态
+const showCloneModal = ref(false)
+const cloneTarget = ref<BoardListItemVO | null>(null)
 
 /** 当前选中看板的名称 */
 const currentBoardName = computed(() => {
@@ -192,6 +223,19 @@ async function toggleFavorite(board: BoardListItemVO) {
     // 回滚
     board.favorite = wasFavorite
   }
+}
+
+/** 打开克隆看板弹窗 */
+function openCloneModal(board: BoardListItemVO) {
+  cloneTarget.value = board
+  showCloneModal.value = true
+  // 关闭下拉面板
+  popupVisible.value = false
+}
+
+/** 克隆成功后重新加载看板列表 */
+function onBoardCloned(newProjectId: string) {
+  loadBoards()
 }
 
 /** 排序看板列表（收藏在前） */
@@ -404,5 +448,32 @@ onMounted(() => {
   padding: 16px;
   color: var(--color-text-3, #6b7280);
   font-size: 12px;
+}
+
+/* 克隆按钮：默认隐藏，hover 时显示 */
+.board-selector-clone-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--color-text-4, #4b5563);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 100ms;
+  padding: 0;
+}
+
+.board-selector-item:hover .board-selector-clone-btn {
+  display: flex;
+}
+
+.board-selector-clone-btn:hover {
+  color: var(--color-text-1, #e6edf3);
+  background: var(--color-fill-3, #3a3d42);
 }
 </style>

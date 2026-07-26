@@ -212,9 +212,8 @@ public class ProjectCopyService {
      * 复制源项目的启用模块配置到新项目
      */
     private void copyEnabledModules(Long sourceId, Long targetId) {
-        Set<String> sourceModules = projectModuleService.getEnabledModules(sourceId);
-        projectModuleService.updateEnabledModules(targetId, new java.util.ArrayList<>(sourceModules));
-        log.debug("Copied {} enabled modules from project {} to {}", sourceModules.size(), sourceId, targetId);
+        projectModuleService.copyEnabledModules(sourceId, targetId);
+        log.debug("Copied enabled modules from project {} to {}", sourceId, targetId);
     }
 
     private void copyWorkflowTransitions(Long sourceId, Long targetId) {

@@ -918,6 +918,8 @@ export interface BoardColumnItem {
 export interface BoardCardVO {
   id: string
   projectId: string
+  /** 项目 Key（如 DE4、APP），多项目看板时用于区分来源项目 */
+  projectKey?: string
   issueKey: string
   title: string
   issueType: string
@@ -1078,6 +1080,16 @@ export interface BoardGeneralConfigVO {
    * 对应 YouTrack Board Settings > Backlog Settings: Saved search。
    */
   backlogSavedQueryId: string | null
+  /**
+   * 关联项目 ID 列表（String 类型）。
+   * 跨项目看板时，除主项目外还关联的其他项目 ID。
+   * 对应 YouTrack Board Settings > General: Projects 多选配置。
+   */
+  linkedProjectIds: string[]
+  /**
+   * 关联项目简要信息（名称 + Key），运行时从后端填充。
+   */
+  linkedProjects: Array<{ id: string; name: string; key: string }>
   /** 当前用户是否有看板查看权限 */
   currentUserCanView: boolean
   /** 当前用户是否有看板编辑权限 */
@@ -1102,6 +1114,26 @@ export interface BoardListItemVO {
   ownerId: string
   /** 是否已收藏 */
   favorite: boolean
+}
+
+/** 克隆看板请求 */
+export interface CloneBoardDTO {
+  /** 源项目 ID */
+  sourceProjectId: string
+  /** 新看板名称 */
+  newName: string
+  /** 新项目 Key */
+  newKey: string
+}
+
+/** 克隆看板结果 */
+export interface CloneBoardResultVO {
+  /** 新项目 ID */
+  projectId: string
+  /** 新看板名称 */
+  name: string
+  /** 新项目 Key */
+  projectKey: string
 }
 
 // ========== Sprint 完成预览 ==========

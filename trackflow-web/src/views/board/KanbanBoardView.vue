@@ -236,6 +236,15 @@
             <template #icon><icon-settings /></template>
           </a-button>
         </a-tooltip>
+        <a-tooltip v-if="selectedProject" content="克隆看板">
+          <a-button
+            size="small"
+            :disabled="!selectedProject"
+            @click="openCloneModal"
+          >
+            <template #icon><icon-copy /></template>
+          </a-button>
+        </a-tooltip>
       </div>
     </div>
 
@@ -422,6 +431,12 @@
                 @keydown="onCardKeydown($event, issue)"
               >
                 <div class="card-header">
+                  <!-- 多项目看板时显示项目 Key 标记 -->
+                  <span
+                    v-if="isMultiProjectBoard && issue.projectKey"
+                    class="card-project-tag"
+                    :title="`来自项目 ${issue.projectKey}`"
+                  >{{ issue.projectKey }}</span>
                   <span class="card-key">{{ issue.issueKey }}</span>
                   <span
                     v-if="isCardFieldVisible('priority')"
@@ -734,6 +749,12 @@
                       @keydown="onCardKeydown($event, issue)"
                     >
                       <div class="card-header">
+                        <!-- 多项目看板时显示项目 Key 标记 -->
+                        <span
+                          v-if="isMultiProjectBoard && issue.projectKey"
+                          class="card-project-tag"
+                          :title="`来自项目 ${issue.projectKey}`"
+                        >{{ issue.projectKey }}</span>
                         <span class="card-key">{{ issue.issueKey }}</span>
                         <span
                           v-if="isCardFieldVisible('priority')"
@@ -928,6 +949,16 @@
       @update:visible="previewVisible = $event"
       @go-detail="onPreviewGoDetail"
       @issue-updated="onPreviewIssueUpdated"
+    />
+
+    <!-- 克隆看板弹窗 -->
+    <CloneBoardModal
+      v-if="selectedProject && showCloneModal"
+      v-model="showCloneModal"
+      :source-project-id="selectedProject"
+      :source-board-name="currentBoardDisplayName"
+      :source-project-key="currentProjectKey || ''"
+      @cloned="onBoardCloned"
     />
 
     <!-- 底部工具栏区域：默认 Footer / 批量操作栏 -->
@@ -1149,8 +1180,9 @@ import BoardSelector from './BoardSelector.vue'
 import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
+import CloneBoardModal from './CloneBoardModal.vue'
 import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
-import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconUser } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconUser, IconCopy } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const route = useRoute()
@@ -1594,6 +1626,12 @@ const boardColumnField = ref<'status' | 'priority'>('status')
 
 /** 当前用户是否有看板编辑权限（来自 board_general_config 动态计算） */
 const canEditBoard = ref(false)
+
+/** 关联项目 ID 列表（多项目看板时有值） */
+const boardLinkedProjectIds = ref<string[]>([])
+
+/** 是否为多项目看板 */
+const isMultiProjectBoard = computed(() => boardLinkedProjectIds.value.length > 0)
 
 // ===== Backlog 配置 =====
 /** Backlog 视图模式（来自 Board Settings 配置）：list=平铺，tree=树形 */
@@ -2546,6 +2584,21 @@ const isManualSortDisabled = computed(() => {
 // 看板列配置
 const allColumnConfigs = ref<BoardColumnVO[]>([])
 const showSettings = ref(false)
+
+// ===== 克隆看板 =====
+const showCloneModal = ref(false)
+
+/** 当前看板显示名称（用于克隆弹窗） */
+const currentBoardDisplayName = computed(() => displayBoardName.value || currentProjectName.value || '看板')
+
+function openCloneModal() {
+  showCloneModal.value = true
+}
+
+function onBoardCloned(newProjectId: string) {
+  // 克隆成功后切换到新看板
+  selectedProject.value = newProjectId
+}
 
 // 看板图表面板
 const showChart = ref(false)
@@ -4247,6 +4300,8 @@ async function loadBoardBehavior() {
       // Backlog 配置
       backlogViewMode.value = (res.data.backlogViewMode as 'list' | 'tree') || 'list'
       backlogSavedQueryId.value = res.data.backlogSavedQueryId ?? null
+      // 关联项目
+      boardLinkedProjectIds.value = res.data.linkedProjectIds || []
     }
   } catch {
     boardFilterMode.value = 'all'
@@ -4256,6 +4311,7 @@ async function loadBoardBehavior() {
     boardName.value = ''
     backlogViewMode.value = 'list'
     backlogSavedQueryId.value = null
+    boardLinkedProjectIds.value = []
   }
 }
 
@@ -5392,6 +5448,18 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 500;
   color: var(--color-text-3);
+}
+
+/* 多项目看板 — 项目来源标记 */
+.card-project-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.12);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-right: 4px;
+  flex-shrink: 0;
 }
 
 .card-priority {

@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO, BoardDataVO, BoardListItemVO } from './types'
+import type { R, BoardColumnVO, BoardColumnItem, BoardCardConfigVO, BoardChartConfigVO, BoardSwimlaneConfigVO, BoardColumnMergeGroupVO, BoardGeneralConfigVO, BoardDataVO, BoardListItemVO, CloneBoardDTO, CloneBoardResultVO } from './types'
 
 /**
  * 看板模块 API
@@ -128,7 +128,7 @@ export const boardApi = {
   },
 
   /** 保存项目看板基本设置 */
-  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; configVersion?: number; allowMultipleSprints?: boolean; backlogViewMode?: string; backlogSavedQueryId?: string | null }) {
+  saveGeneralConfig(projectId: string, data: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; configVersion?: number; allowMultipleSprints?: boolean; backlogViewMode?: string; backlogSavedQueryId?: string | null; linkedProjectIds?: string[] | null }) {
     return request.put<any, R<void>>('/boards/general-config', data, {
       params: { projectId }
     })
@@ -145,7 +145,7 @@ export const boardApi = {
     cardConfig: { visibleFields: string[]; colorScheme: string; currentEstimationFieldId?: string | null; originalEstimationFieldId?: string | null; fieldDisplayModes?: Record<string, string> | null; showCustomFieldColors?: boolean }
     swimlaneConfig: { groupByField: string; selectedValues?: string[] | null; showUncategorized?: boolean; uncategorizedPosition?: 'top' | 'bottom' }
     columnMerges: { mergeGroups: Array<{ mergeGroupId: string; mergeTitle: string; statusIds: number[] }> }
-    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; columnField?: string; allowMultipleSprints?: boolean; backlogViewMode?: string; backlogSavedQueryId?: string | null }
+    generalConfig: { name: string; canViewRoles: string[]; canEditRoles: string[]; filterMode: string; filterQuery?: string | null; doneRetentionDays: number | null; columnField?: string; allowMultipleSprints?: boolean; backlogViewMode?: string; backlogSavedQueryId?: string | null; linkedProjectIds?: string[] | null }
     chartConfig?: { chartType: string; burndownCalculation: string; issueFilterMode: string; issueFilterQuery?: string | null; estimationFieldId?: number | null; originalEstimationFieldId?: number | null }
     priorityColumnWip?: Array<{ fieldValue: string; wipMin?: number | null; wipMax?: number | null }> | null
   }) {
@@ -173,5 +173,15 @@ export const boardApi = {
     return request.delete<any, R<void>>('/boards/favorite', {
       params: { projectId }
     })
+  },
+
+  // ========== 克隆看板 ==========
+
+  /**
+   * 克隆看板（以当前项目为模板创建新项目并复制所有看板配置）。
+   * 访问权限重置为默认（仅克隆者可管理）。
+   */
+  cloneBoard(data: CloneBoardDTO) {
+    return request.post<any, R<CloneBoardResultVO>>('/boards/clone', data)
   }
 }

@@ -180,6 +180,32 @@ public class ProjectModuleService {
     }
 
     /**
+     * 将源项目的启用模块配置复制到目标项目。
+     * <p>
+     * 若源项目无模块记录（老项目），则为目标项目初始化默认模块（全部启用）。
+     *
+     * @param sourceProjectId 源项目 ID
+     * @param targetProjectId 目标项目 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void copyEnabledModules(Long sourceProjectId, Long targetProjectId) {
+        Set<String> sourceModules = moduleMapper.selectEnabledModuleNames(sourceProjectId);
+        List<String> modulesToCopy = (sourceModules == null || sourceModules.isEmpty())
+                ? ALL_MODULES
+                : new java.util.ArrayList<>(sourceModules);
+
+        for (String moduleName : modulesToCopy) {
+            ProjectEnabledModule module = new ProjectEnabledModule();
+            module.setProjectId(targetProjectId);
+            module.setModuleName(moduleName);
+            module.setCreatedAt(LocalDateTime.now());
+            moduleMapper.insert(module);
+        }
+        log.debug("Copied {} modules from project {} to {}",
+                modulesToCopy.size(), sourceProjectId, targetProjectId);
+    }
+
+    /**
      * 清除指定项目的模块缓存
      */
     public void invalidateCache(Long projectId) {
