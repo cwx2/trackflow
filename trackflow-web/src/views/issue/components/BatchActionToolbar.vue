@@ -142,6 +142,24 @@
         </template>
       </a-trigger>
 
+      <!-- 移到下一 Sprint（YouTrack 对标功能） -->
+      <a-tooltip
+        :content="nextSprintTooltip"
+        position="top"
+        mini
+      >
+        <a-button
+          size="small"
+          type="outline"
+          :loading="nextSprintLoading"
+          :disabled="nextSprintDisabled"
+          @click="handleMoveToNextSprint"
+        >
+          <template #icon><icon-right-circle /></template>
+          下一 Sprint
+        </a-button>
+      </a-tooltip>
+
       <!-- 变更优先级 -->
       <a-trigger
         v-model:popup-visible="showPriorityDropdown"
@@ -327,9 +345,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode, IconTag, IconLink, IconClose } from '@arco-design/web-vue/es/icon'
-import { Modal } from '@arco-design/web-vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, IconDownload, IconCode, IconTag, IconLink, IconClose, IconRightCircle } from '@arco-design/web-vue/es/icon'
+import { Modal, Message } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName } from '@/utils/fieldLabels'
@@ -521,6 +539,104 @@ function handleBatchSprint(sprint: SprintVO | null) {
   showSprintDropdown.value = false
   emit('batch-sprint', sprint?.id || null)
 }
+
+// ========== 移到下一 Sprint ==========
+const nextSprintLoading = ref(false)
+const nextSprint = ref<SprintVO | null>(null)
+const nextSprintResolved = ref(false)
+
+/** 确定"下一个 Sprint"：活跃 Sprint 之后最近的 planned Sprint
+ *  若无活跃 Sprint，则是最近的 planned Sprint */
+async function resolveNextSprint(): Promise<SprintVO | null> {
+  const targetProjectId = resolveSprintProjectId()
+  if (!targetProjectId) return null
+
+  nextSprintLoading.value = true
+  try {
+    const res = await sprintApi.listByProject(targetProjectId)
+    const allSprints: SprintVO[] = res.data || []
+
+    // 找活跃 Sprint
+    const active = allSprints.find(s => s.status === 'active')
+    // 找所有 planned Sprint，按 startDate 排序（无日期的放后面）
+    const plannedSprints = allSprints
+      .filter(s => s.status === 'planned')
+      .sort((a, b) => {
+        if (a.startDate && b.startDate) return a.startDate.localeCompare(b.startDate)
+        if (a.startDate) return -1
+        if (b.startDate) return 1
+        return a.name.localeCompare(b.name)
+      })
+
+    if (active) {
+      // 有活跃 Sprint：取 planned 中第一个（按排序即为"下一个"）
+      return plannedSprints.length > 0 ? plannedSprints[0] : null
+    } else {
+      // 无活跃 Sprint：取最近的 planned Sprint
+      return plannedSprints.length > 0 ? plannedSprints[0] : null
+    }
+  } catch {
+    return null
+  } finally {
+    nextSprintLoading.value = false
+  }
+}
+
+/** 计算 tooltip 文字 */
+const nextSprintTooltip = computed(() => {
+  if (nextSprintLoading.value) return '正在确定下一 Sprint...'
+  if (!nextSprintResolved.value) return '移到下一个排期的 Sprint'
+  if (nextSprint.value) return `移到 ${nextSprint.value.name}`
+  return '暂无排期中的 Sprint，点击后可新建'
+})
+
+/** 是否禁用按钮 */
+const nextSprintDisabled = computed(() => nextSprintLoading.value)
+
+/** 处理"移到下一 Sprint"点击 */
+async function handleMoveToNextSprint() {
+  // 检查是否跨项目
+  const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId).filter(Boolean))]
+  if (projectIds.length > 1) {
+    Message.warning('批量移动 Sprint 仅支持同一项目的工单')
+    return
+  }
+
+  if (!nextSprintResolved.value || nextSprintLoading.value) {
+    // 还未加载，先加载
+    const resolved = await resolveNextSprint()
+    nextSprint.value = resolved
+    nextSprintResolved.value = true
+  }
+
+  if (nextSprint.value) {
+    // 有下一 Sprint，直接移动
+    emit('batch-sprint', nextSprint.value.id)
+  } else {
+    // 无下一 Sprint，提示用户
+    Message.warning('当前项目暂无排期中的 Sprint，请先在迭代管理页面创建下一个 Sprint')
+  }
+}
+
+// 当 activeProjectId 或选中工单改变时，重置已解析状态（下次点击时重新加载）
+watch(
+  [() => props.activeProjectId, () => props.selectedIssues.map(i => i.projectId).join(',')],
+  () => {
+    nextSprint.value = null
+    nextSprintResolved.value = false
+  }
+)
+
+// 组件挂载时预加载下一 Sprint（优化用户体验，减少点击时的等待）
+onMounted(async () => {
+  const projectIds = [...new Set(props.selectedIssues.map(i => i.projectId).filter(Boolean))]
+  // 仅单项目时预加载
+  if (projectIds.length === 1 || props.activeProjectId) {
+    const resolved = await resolveNextSprint()
+    nextSprint.value = resolved
+    nextSprintResolved.value = true
+  }
+})
 
 // ========== 优先级下拉 ==========
 const showPriorityDropdown = ref(false)
