@@ -613,9 +613,8 @@
         <icon-loading v-if="loading" class="realtime-update-icon" />
       </div>
 
-      <div v-if="isTableLayout" class="issue-table-wrapper" @contextmenu.prevent="onTableContextMenu">
+      <div v-if="isTableLayout" class="issue-table-wrapper">
       <a-table
-        v-if="isTableLayout"
         class="issue-table"
         :data="issues"
         :columns="tableColumns"
@@ -632,6 +631,7 @@
         :scroll="{ x: tableMinWidth }"
         @row-click="onRowClick"
         @row-dblclick="onRowDblClick"
+        @row-contextmenu="onTableRowContextMenu"
         @selection-change="onSelectionChange"
         @column-resize="onColumnResize"
       >
@@ -828,6 +828,9 @@
         :is-manual-sorted="isManualSorted"
         :is-owner-order="isOwnerOrder"
         :sorted-issue-ids="sortedIssueIds"
+        :sprint-options-cache="sprintOptionsCache"
+        :sprint-loading-ids="listSprintLoadingIds"
+        :can-edit-issue="canEditIssue"
         @item-click="onListItemClick"
         @item-dblclick="onListItemDblClick"
         @item-contextmenu="onListItemContextMenu"
@@ -835,6 +838,8 @@
         @select="onListItemSelect"
         @order-change="onManualOrderChange"
         @discard-order="onDiscardManualOrder"
+        @sprint-edit="onListSprintEdit"
+        @sprint-select="onListSprintSelect"
       />
 
       <!-- Pagination -->
@@ -2404,12 +2409,18 @@ function onTableContextMenu(event: MouseEvent) {
     target = target.parentElement
   }
   if (!target) return
-  // Get issue id from data attribute (arco sets row-key as data-row-key)
-  const rowKey = target.getAttribute('data-row-key') || target.getAttribute('data-key')
-  if (!rowKey) return
-  const issue = issues.value.find(i => i.id === rowKey)
+  // Get issue id from data-issue-id attribute (set via row-props)
+  const issueId = target.getAttribute('data-issue-id')
+  if (!issueId) return
+  const issue = issues.value.find(i => i.id === issueId)
   if (!issue) return
   openContextMenu(issue, event)
+}
+
+// Table row-contextmenu event from Arco Design
+function onTableRowContextMenu(record: IssueWithDesc, event: MouseEvent) {
+  event.preventDefault()
+  openContextMenu(record, event)
 }
 
 function ctxCopyIssueKey() {
@@ -2454,7 +2465,7 @@ async function ctxLoadSprints() {
   try {
     const projectId = contextMenu.issue.projectId
     if (!sprintOptionsCache[projectId]) {
-      const res = await sprintApi.listSprints(projectId)
+      const res = await sprintApi.listByProject(projectId)
       if (res.code === 0) {
         sprintOptionsCache[projectId] = res.data || []
       }
@@ -2720,6 +2731,47 @@ function getSprintGroups(projectId: string) {
 function selectSprint(issue: IssueVO, sprint: SprintVO | null) {
   sprintDropdowns[issue.id] = false
   executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }))
+}
+
+// ========== 列表模式 Sprint 内联编辑 ==========
+// 用于追踪哪些 issue 的 sprint 选项正在加载（Set<issueId>）
+const listSprintLoadingIds = reactive<Set<string>>(new Set())
+
+/**
+ * 列表模式：用户点击了 Sprint 字段，加载该项目的 Sprint 选项
+ */
+async function onListSprintEdit(issue: IssueVO) {
+  if (!issue.projectId) return
+  // 已有缓存（包括空数组）则直接跳过
+  if (sprintOptionsCache[issue.projectId] !== undefined) return
+  listSprintLoadingIds.add(issue.id)
+  try {
+    const res = await sprintApi.listByProject(issue.projectId, { _silent403: true })
+    sprintOptionsCache[issue.projectId] = res.data || []
+  } catch {
+    sprintOptionsCache[issue.projectId] = []
+  } finally {
+    listSprintLoadingIds.delete(issue.id)
+  }
+}
+
+/**
+ * 列表模式：用户选择了某个 Sprint（或"无 Sprint"）
+ */
+function onListSprintSelect(issue: IssueVO, sprint: SprintVO | null) {
+  const newSprintId = sprint?.id ?? null
+  const newSprintName = sprint?.name ?? null
+  executeEdit(
+    issue.id,
+    'sprintId',
+    newSprintId,
+    (_signal) => issueApi.update(issue.id, { sprintId: newSprintId, version: issue.version }),
+    // 乐观更新：同时更新 sprintId 和 sprintName
+    (_iss) => ({
+      sprintId: newSprintId ?? undefined,
+      sprintName: newSprintName ?? undefined
+    })
+  )
 }
 
 // Inline edit - Priority

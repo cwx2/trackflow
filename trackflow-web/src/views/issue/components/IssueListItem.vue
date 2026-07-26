@@ -87,9 +87,59 @@
         <span class="field-label">负责人:</span>
         <span class="field-value">{{ issue.assigneeName }}</span>
       </span>
-      <span class="item-field" v-if="issue.sprintName">
+      <!-- Sprint: inline-editable when sprintOptions is provided (non-null array) -->
+      <span
+        v-if="issue.sprintName || sprintOptions !== null"
+        class="item-field item-sprint-field"
+        :class="{ 'sprint-editable': sprintOptions !== null }"
+        @click.stop
+      >
         <span class="field-label">Sprint:</span>
-        <span class="field-value">{{ issue.sprintName }}</span>
+        <a-trigger
+          v-if="sprintOptions !== null"
+          v-model:popup-visible="sprintDropdownVisible"
+          trigger="click"
+          position="bl"
+          :popup-offset="4"
+          @popup-visible-change="onSprintDropdownChange"
+        >
+          <span
+            class="field-value sprint-editable-value"
+            @click="handleSprintClick"
+          >
+            {{ issue.sprintName || '—' }}
+            <icon-loading v-if="sprintOptionsLoading" :size="10" class="sprint-spinner" />
+            <icon-down v-else :size="10" class="sprint-arrow" />
+          </span>
+          <template #content>
+            <div class="sprint-inline-dropdown" @click.stop>
+              <div v-if="sprintOptionsLoading" class="sprint-dropdown-loading">
+                <a-spin :size="14" />
+              </div>
+              <template v-else>
+                <div class="sprint-dropdown-item" @click="selectSprint(null)">
+                  <span class="sprint-no-sprint">无 Sprint</span>
+                </div>
+                <template v-for="group in sprintGroups" :key="group.label">
+                  <div class="sprint-dropdown-group-label">{{ group.label }}</div>
+                  <div
+                    v-for="s in group.items"
+                    :key="s.id"
+                    class="sprint-dropdown-item"
+                    :class="{ 'sprint-item-active': s.id === issue.sprintId }"
+                    @click="selectSprint(s)"
+                  >
+                    {{ s.name }}
+                  </div>
+                </template>
+                <div v-if="sprintGroups.length === 0 && !sprintOptionsLoading" class="sprint-dropdown-empty">
+                  暂无可用 Sprint
+                </div>
+              </template>
+            </div>
+          </template>
+        </a-trigger>
+        <span v-else class="field-value">{{ issue.sprintName }}</span>
       </span>
       <template v-if="issue.customFieldDetails && issue.customFieldDetails.length > 0">
         <span
@@ -141,15 +191,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp } from '@arco-design/web-vue/es/icon'
-import type { IssueVO, CustomFieldValueVO } from '@/api/types'
+import { computed, ref } from 'vue'
+import { IconRight, IconDown, IconLayers, IconDragDotVertical, IconThumbUp, IconLoading } from '@arco-design/web-vue/es/icon'
+import type { IssueVO, CustomFieldValueVO, SprintVO } from '@/api/types'
 import type { DensityLevel } from '../composables'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 interface IssueListItemIssue extends IssueVO {
   description?: string
+}
+
+interface SprintGroup {
+  label: string
+  items: SprintVO[]
 }
 
 const props = withDefaults(defineProps<{
@@ -163,19 +218,64 @@ const props = withDefaults(defineProps<{
   focused?: boolean
   showCheckbox?: boolean
   showDragHandle?: boolean
+  /** Sprint 选项列表（传入时 Sprint 字段变为可编辑） */
+  sprintOptions?: SprintVO[] | null
+  /** Sprint 选项是否正在加载 */
+  sprintOptionsLoading?: boolean
 }>(), {
   showCheckbox: true,
   showDragHandle: false,
-  focused: false
+  focused: false,
+  sprintOptions: null,
+  sprintOptionsLoading: false
 })
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click'): void
   (e: 'dblclick'): void
   (e: 'toggle-expand'): void
   (e: 'select'): void
   (e: 'contextmenu', event: MouseEvent): void
+  /** 用户点击 Sprint 字段，触发加载 sprint 选项 */
+  (e: 'sprint-edit', issue: IssueListItemIssue): void
+  /** 用户选择了某个 Sprint */
+  (e: 'sprint-select', issue: IssueListItemIssue, sprint: SprintVO | null): void
 }>()
+
+// Sprint 下拉显示状态
+const sprintDropdownVisible = ref(false)
+
+// Sprint 分组（只显示 active/planned）
+const sprintGroups = computed<SprintGroup[]>(() => {
+  const options = props.sprintOptions || []
+  const active = options.filter(s => s.status?.toLowerCase() === 'active')
+  const planned = options.filter(s => s.status?.toLowerCase() === 'planned')
+  const groups: SprintGroup[] = []
+  if (active.length) groups.push({ label: '进行中', items: active })
+  if (planned.length) groups.push({ label: '计划中', items: planned })
+  return groups
+})
+
+function onSprintDropdownChange(visible: boolean) {
+  if (!visible) {
+    sprintDropdownVisible.value = false
+  }
+}
+
+function selectSprint(sprint: SprintVO | null) {
+  sprintDropdownVisible.value = false
+  emit('sprint-select', props.issue, sprint)
+}
+
+/**
+ * 用户点击 Sprint 字段时：
+ * 1. 先触发 sprint-edit（让父组件加载 sprint 选项）
+ * 2. 打开下拉（通过 a-trigger 的 popup-visible 控制）
+ */
+function handleSprintClick() {
+  emit('sprint-edit', props.issue)
+  // a-trigger 会自动在 click 触发时打开下拉，无需手动设置
+}
 
 // Limit custom fields shown (max 4)
 const limitedCustomFieldDetails = computed((): CustomFieldValueVO[] => {
@@ -457,6 +557,107 @@ function truncateDescription(desc?: string): string {
 
 .item-reporter {
   margin-left: auto;
+}
+
+/* Sprint 内联编辑 */
+.item-sprint-field {
+  cursor: default;
+}
+
+.item-sprint-field.sprint-editable {
+  cursor: pointer;
+}
+
+.sprint-editable-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 3px;
+  padding: 0 3px;
+  transition: background 100ms;
+}
+
+.item-sprint-field.sprint-editable:hover .sprint-editable-value {
+  background: var(--tf-bg-hover, var(--color-fill-2));
+  color: var(--tf-text-secondary, var(--color-text-2));
+}
+
+.sprint-arrow {
+  color: var(--tf-text-quaternary, var(--color-text-4));
+  opacity: 0;
+  transition: opacity 100ms;
+  flex-shrink: 0;
+}
+
+.item-sprint-field.sprint-editable:hover .sprint-arrow {
+  opacity: 1;
+}
+
+.sprint-spinner {
+  color: var(--tf-accent, var(--color-primary-6));
+  flex-shrink: 0;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Sprint 下拉菜单 */
+.sprint-inline-dropdown {
+  background: var(--tf-bg-elevated, var(--color-bg-1));
+  border: 1px solid var(--tf-border, var(--color-neutral-3));
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 160px;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.sprint-dropdown-loading {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}
+
+.sprint-dropdown-item {
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tf-text-primary, var(--color-text-1));
+  transition: background 100ms;
+}
+
+.sprint-dropdown-item:hover {
+  background: var(--tf-bg-hover, var(--color-fill-2));
+}
+
+.sprint-dropdown-item.sprint-item-active {
+  color: var(--tf-accent, var(--color-primary-6));
+  font-weight: 500;
+}
+
+.sprint-no-sprint {
+  color: var(--tf-text-tertiary, var(--color-text-3));
+}
+
+.sprint-dropdown-group-label {
+  padding: 4px 8px 2px;
+  font-size: 10px;
+  color: var(--tf-text-quaternary, var(--color-text-4));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.sprint-dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
 }
 
 /* Row 3: description preview */

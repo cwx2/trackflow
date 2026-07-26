@@ -58,10 +58,14 @@
             :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
             :show-drag-handle="draggable"
+            :sprint-options="canEditIssue(issue) ? (sprintOptionsCache[issue.projectId] ?? []) : null"
+            :sprint-options-loading="sprintLoadingIds.has(issue.id)"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
             @contextmenu="emit('item-contextmenu', { issue, event: $event })"
+            @sprint-edit="emit('sprint-edit', $event)"
+            @sprint-select="(iss, sprint) => emit('sprint-select', iss, sprint)"
           />
         </div>
 
@@ -87,10 +91,14 @@
             :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
             :show-drag-handle="draggable"
+            :sprint-options="canEditIssue(issue) ? (sprintOptionsCache[issue.projectId] ?? []) : null"
+            :sprint-options-loading="sprintLoadingIds.has(issue.id)"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
             @contextmenu="emit('item-contextmenu', { issue, event: $event })"
+            @sprint-edit="emit('sprint-edit', $event)"
+            @sprint-select="(iss, sprint) => emit('sprint-select', iss, sprint)"
           />
         </div>
       </template>
@@ -112,11 +120,15 @@
               :selected="selectedIds.has(node.issue.id)"
               :show-checkbox="showCheckbox"
               :show-drag-handle="draggable"
+              :sprint-options="canEditIssue(node.issue) ? (sprintOptionsCache[node.issue.projectId] ?? []) : null"
+              :sprint-options-loading="sprintLoadingIds.has(node.issue.id)"
               @click="$emit('item-click', node.issue)"
               @dblclick="$emit('item-dblclick', node.issue)"
               @toggle-expand="toggleExpand(node.issue)"
               @select="toggleSelect(node.issue)"
               @contextmenu="emit('item-contextmenu', { issue: node.issue, event: $event })"
+              @sprint-edit="emit('sprint-edit', $event)"
+              @sprint-select="(iss, sprint) => emit('sprint-select', iss, sprint)"
             />
           </template>
         </template>
@@ -137,10 +149,14 @@
             :selected="selectedIds.has(issue.id)"
             :show-checkbox="showCheckbox"
             :show-drag-handle="draggable"
+            :sprint-options="canEditIssue(issue) ? (sprintOptionsCache[issue.projectId] ?? []) : null"
+            :sprint-options-loading="sprintLoadingIds.has(issue.id)"
             @click="$emit('item-click', issue)"
             @dblclick="$emit('item-dblclick', issue)"
             @select="toggleSelect(issue)"
             @contextmenu="emit('item-contextmenu', { issue, event: $event })"
+            @sprint-edit="emit('sprint-edit', $event)"
+            @sprint-select="(iss, sprint) => emit('sprint-select', iss, sprint)"
           />
         </div>
       </template>
@@ -152,7 +168,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { IconDown, IconSearch, IconDragDotVertical } from '@arco-design/web-vue/es/icon'
 import Sortable from 'sortablejs'
-import type { IssueVO } from '@/api/types'
+import type { IssueVO, SprintVO } from '@/api/types'
 import type { DensityLevel, StructureMode } from '../composables'
 import type { SortState } from '../composables/useIssueList'
 import IssueListItem from './IssueListItem.vue'
@@ -175,12 +191,21 @@ const props = withDefaults(defineProps<{
   isManualSorted?: boolean
   isOwnerOrder?: boolean
   sortedIssueIds?: string[]
+  /** Sprint 选项缓存（projectId → SprintVO[]），用于列表模式内联编辑 */
+  sprintOptionsCache?: Record<string, SprintVO[]>
+  /** 当前正在加载 sprint 选项的 issue ID 集合 */
+  sprintLoadingIds?: Set<string>
+  /** 判断 issue 是否可编辑的函数（用于权限控制） */
+  canEditIssue?: (issue: IssueWithDesc) => boolean
 }>(), {
   showCheckbox: true,
   draggable: false,
   isManualSorted: false,
   isOwnerOrder: false,
-  focusedIssueId: null
+  focusedIssueId: null,
+  sprintOptionsCache: () => ({}),
+  sprintLoadingIds: () => new Set(),
+  canEditIssue: () => true
 })
 
 const emit = defineEmits<{
@@ -191,6 +216,10 @@ const emit = defineEmits<{
   (e: 'select', issue: IssueWithDesc): void
   (e: 'order-change', issueIds: string[]): void
   (e: 'discard-order'): void
+  /** 列表模式 Sprint 内联编辑：请求加载 sprint 选项 */
+  (e: 'sprint-edit', issue: IssueWithDesc): void
+  /** 列表模式 Sprint 内联编辑：用户选择了某个 Sprint */
+  (e: 'sprint-select', issue: IssueWithDesc, sprint: SprintVO | null): void
 }>()
 
 // Refs for Sortable.js
