@@ -167,5 +167,10 @@ export const projectApi = {
   /** 更新项目启用模块 */
   updateEnabledModules(projectId: string, data: { enabledModules: string[] }) {
     return request.put<any, R<ProjectModulesVO>>(`/projects/${projectId}/modules`, data)
+  },
+
+  /** 获取（或自动创建）项目概览仪表盘 */
+  getOverviewDashboard(projectId: string) {
+    return request.get<any, R<import('./customDashboard').DashboardDetailVO>>(`/projects/${projectId}/overview-dashboard`)
   }
 }

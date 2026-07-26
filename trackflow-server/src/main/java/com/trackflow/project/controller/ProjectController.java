@@ -13,6 +13,7 @@ import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.vo.IssueTagVO;
 import com.trackflow.auth.security.TrackFlowPermissionEvaluator;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.report.service.CustomDashboardService;
 import com.trackflow.project.converter.ProjectConverter;
 import com.trackflow.project.dto.*;
 import com.trackflow.project.entity.Project;
@@ -57,6 +58,7 @@ public class ProjectController {
     private final TrackFlowPermissionEvaluator permissionEvaluator;
     private final ProjectModuleService projectModuleService;
     private final PermissionService permissionService;
+    private final CustomDashboardService dashboardService;
 
     @PostMapping
     @PreAuthorize("@perm.checkGlobal('project:create')")
@@ -386,5 +388,22 @@ public class ProjectController {
         FavoriteToggleVO vo = new FavoriteToggleVO();
         vo.setFavorited(favorited);
         return R.ok(vo);
+    }
+
+    // ========== 项目概览仪表盘 ==========
+
+    /**
+     * 获取项目概览仪表盘（含 Widget 列表）
+     * 首次访问时自动创建仪表盘，确保每个项目只有一个 project_overview 类型仪表盘。
+     * <p>
+     * Widget 的 CRUD 复用 /api/v1/dashboards/{dashboardId}/widgets 接口。
+     */
+    @GetMapping("/{id}/overview-dashboard")
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<com.trackflow.report.vo.DashboardDetailVO> getOverviewDashboard(
+            @PathVariable("id") String id) {
+        Long projectId = projectService.resolveProjectId(id);
+        Long userId = SecurityUtils.getCurrentUserId();
+        return R.ok(dashboardService.getOrCreateProjectOverviewDashboard(projectId, userId));
     }
 }

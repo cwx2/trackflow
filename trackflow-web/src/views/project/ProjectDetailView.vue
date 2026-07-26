@@ -175,6 +175,77 @@
         </div>
       </div>
 
+      <!-- Widget 区域（项目概览仪表盘） -->
+      <div class="section widget-overview-section">
+        <div class="section-header-row">
+          <h2 class="section-title">监控视图</h2>
+          <a-button
+            v-if="canEditProject && !isArchived"
+            size="small"
+            type="outline"
+            @click="showAddWidgetModal = true"
+          >
+            <template #icon><icon-plus /></template>
+            添加 Widget
+          </a-button>
+        </div>
+
+        <!-- Widget 加载中 -->
+        <div v-if="widgetLoading" class="widget-loading-state">
+          <a-spin :size="20" />
+          <span class="widget-loading-text">加载 Widget...</span>
+        </div>
+
+        <!-- Widget Grid -->
+        <template v-else-if="overviewDashboard && overviewDashboard.widgets && overviewDashboard.widgets.length > 0">
+          <GridLayout
+            v-model:layout="widgetGridLayout"
+            :col-num="12"
+            :row-height="80"
+            :margin="[12, 12]"
+            :is-draggable="canEditProject && !isArchived"
+            :is-resizable="canEditProject && !isArchived"
+            @layout-updated="onWidgetLayoutUpdated"
+          >
+            <GridItem
+              v-for="item in widgetGridLayout"
+              :key="item.i"
+              :x="item.x"
+              :y="item.y"
+              :w="item.w"
+              :h="item.h"
+              :i="item.i"
+              class="overview-widget-grid-item"
+            >
+              <WidgetCard
+                :widget="getOverviewWidgetById(item.i)"
+                :is-owner="canEditProject && !isArchived"
+                @edit="editOverviewWidget"
+                @delete="deleteOverviewWidget"
+                @move="() => {}"
+              />
+            </GridItem>
+          </GridLayout>
+        </template>
+
+        <!-- 空状态 -->
+        <div v-else-if="!widgetLoading" class="widget-empty-state">
+          <template v-if="canEditProject && !isArchived">
+            <div class="widget-empty-icon">📊</div>
+            <p class="widget-empty-title">尚未配置监控视图</p>
+            <p class="widget-empty-desc">点击「添加 Widget」开始配置项目监控视图，跟踪工单进度、Sprint 状态等数据</p>
+            <a-button type="primary" size="small" @click="showAddWidgetModal = true">
+              <template #icon><icon-plus /></template>
+              添加 Widget
+            </a-button>
+          </template>
+          <template v-else>
+            <div class="widget-empty-icon">📊</div>
+            <p class="widget-empty-title">暂无监控视图</p>
+          </template>
+        </div>
+      </div>
+
       <!-- 近期活动 -->
       <div class="section">
         <h2 class="section-title">近期活动</h2>
@@ -272,6 +343,74 @@
           <p>暂无成员信息</p>
         </div>
       </div>
+
+      <!-- 添加 Widget 弹窗 -->
+      <a-modal
+        v-model:visible="showAddWidgetModal"
+        title="添加 Widget"
+        :width="640"
+        :footer="false"
+      >
+        <div class="widget-type-grid">
+          <div
+            v-for="wt in widgetTypeList"
+            :key="wt.type"
+            class="widget-type-card"
+            @click="addOverviewWidget(wt.type, wt.defaultTitle)"
+          >
+            <div class="wt-icon">{{ wt.icon }}</div>
+            <div class="wt-info">
+              <div class="wt-name">{{ wt.label }}</div>
+              <div class="wt-desc">{{ wt.description }}</div>
+            </div>
+          </div>
+        </div>
+      </a-modal>
+
+      <!-- Widget 配置弹窗 -->
+      <a-modal
+        v-model:visible="showWidgetConfigModal"
+        title="编辑 Widget 配置"
+        :width="520"
+        @ok="handleWidgetConfigSave"
+        :ok-loading="savingWidgetConfig"
+        ok-text="保存"
+        cancel-text="取消"
+      >
+        <a-form :model="widgetConfigForm" layout="vertical">
+          <a-form-item label="标题">
+            <a-input v-model="widgetConfigForm.title" placeholder="Widget 标题" :max-length="100" />
+          </a-form-item>
+          <!-- number_card 配置 -->
+          <template v-if="editingWidgetType === 'number_card'">
+            <a-form-item label="数据来源">
+              <a-select v-model="widgetConfigForm.queryType" placeholder="选择统计指标" allow-clear>
+                <a-option value="total">工单总数</a-option>
+                <a-option value="open">待处理工单数</a-option>
+                <a-option value="closed">已完成工单数</a-option>
+                <a-option value="unassigned">未分配工单数</a-option>
+                <a-option value="overdue">已逾期工单数</a-option>
+                <a-option value="completion_rate">完成率 (%)</a-option>
+              </a-select>
+            </a-form-item>
+          </template>
+          <!-- note 配置 -->
+          <template v-if="editingWidgetType === 'note'">
+            <a-form-item label="内容">
+              <a-textarea v-model="widgetConfigForm.noteContent" placeholder="笔记内容" :auto-size="{ minRows: 3, maxRows: 8 }" />
+            </a-form-item>
+          </template>
+          <!-- agile_chart 配置 -->
+          <template v-if="editingWidgetType === 'agile_chart'">
+            <a-form-item label="图表类型">
+              <a-select v-model="widgetConfigForm.chartType" placeholder="选择图表类型">
+                <a-option value="burndown">燃尽图</a-option>
+                <a-option value="cumulative_flow">累积流图</a-option>
+              </a-select>
+            </a-form-item>
+          </template>
+        </a-form>
+      </a-modal>
     </template>
 
     <!-- 错误状态 -->
@@ -303,15 +442,20 @@ import {
   IconMore,
   IconEye,
   IconEyeInvisible,
-  IconHistory
+  IconHistory,
+  IconPlus
 } from '@arco-design/web-vue/es/icon'
+import { GridLayout, GridItem } from 'grid-layout-plus'
 import { projectApi, workflowApi } from '@/api'
+import { customDashboardApi } from '@/api/customDashboard'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
 import type { ProjectDetailVO, ProjectMemberVO, ProjectStatisticsVO, ProjectActivityVO } from '@/api/types'
+import type { DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
 import { Message, Modal } from '@arco-design/web-vue'
+import WidgetCard from '@/views/report/dashboard/WidgetCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -352,6 +496,183 @@ const canViewSprints = computed(() => {
 })
 
 const isArchived = computed(() => project.value?.status === 'archived')
+
+// ─── Widget 区域（项目概览仪表盘） ─────────────────────────────────────
+
+const overviewDashboard = ref<DashboardDetailVO | null>(null)
+const widgetLoading = ref(false)
+const showAddWidgetModal = ref(false)
+const showWidgetConfigModal = ref(false)
+const editingWidget = ref<DashboardWidgetVO | null>(null)
+const editingWidgetType = ref<string>('')
+const savingWidgetConfig = ref(false)
+const widgetGridLayout = ref<Array<{ i: string; x: number; y: number; w: number; h: number }>>([])
+
+const widgetConfigForm = ref<{
+  title: string
+  queryType?: string
+  noteContent?: string
+  chartType?: string
+}>({
+  title: '',
+  queryType: undefined,
+  noteContent: '',
+  chartType: 'burndown'
+})
+
+const widgetTypeList = [
+  { type: 'note', label: '快捷笔记', icon: '📝', description: '自由编辑内容', defaultTitle: '笔记' },
+  { type: 'number_card', label: '数字卡片', icon: '🔢', description: '单数字大卡片统计', defaultTitle: '统计' },
+  { type: 'report_distribution', label: '分布图表', icon: '📊', description: '按字段分组的图表', defaultTitle: '分布报表' },
+  { type: 'issue_list', label: 'Issue 列表', icon: '📋', description: '按条件展示工单列表', defaultTitle: 'Issue 列表' },
+  { type: 'activity_feed', label: '活动流', icon: '🔔', description: '最近的工单活动', defaultTitle: '最近活动' },
+  { type: 'sprint_progress', label: 'Sprint 进度', icon: '🏃', description: 'Sprint 完成进度', defaultTitle: 'Sprint 进度' },
+  { type: 'agile_chart', label: '敏捷图表', icon: '📉', description: '燃尽图或累积流图', defaultTitle: '敏捷图表' },
+  { type: 'agile_board_status', label: '看板状态', icon: '📊', description: 'Sprint 工单状态分布', defaultTitle: '看板状态' },
+  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日历视图', defaultTitle: '到期日历' }
+]
+
+function buildWidgetGridLayout(widgets: DashboardWidgetVO[]) {
+  widgetGridLayout.value = widgets.map(w => ({
+    i: w.id,
+    x: w.positionX,
+    y: w.positionY,
+    w: w.width,
+    h: w.height
+  }))
+}
+
+function getOverviewWidgetById(id: string): DashboardWidgetVO | undefined {
+  return overviewDashboard.value?.widgets.find(w => w.id === id)
+}
+
+let widgetLayoutSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function onWidgetLayoutUpdated(layout: Array<{ i: string; x: number; y: number; w: number; h: number }>) {
+  if (widgetLayoutSaveTimer) clearTimeout(widgetLayoutSaveTimer)
+  widgetLayoutSaveTimer = setTimeout(() => saveWidgetLayout(layout), 1000)
+}
+
+async function saveWidgetLayout(layout: Array<{ i: string; x: number; y: number; w: number; h: number }>) {
+  if (!overviewDashboard.value || !canEditProject.value) return
+  try {
+    const items = layout.map(item => ({
+      widgetId: item.i,
+      positionX: item.x,
+      positionY: item.y,
+      width: item.w,
+      height: item.h
+    }))
+    const version = overviewDashboard.value.layoutVersion ?? 0
+    await customDashboardApi.updateLayout(overviewDashboard.value.id, items, version)
+    overviewDashboard.value.layoutVersion = version + 1
+  } catch {
+    // 布局保存失败静默处理
+  }
+}
+
+async function loadOverviewDashboard(projectId: string) {
+  widgetLoading.value = true
+  try {
+    const res = await projectApi.getOverviewDashboard(projectId)
+    overviewDashboard.value = res.data || null
+    if (overviewDashboard.value?.widgets) {
+      buildWidgetGridLayout(overviewDashboard.value.widgets)
+    }
+  } catch {
+    overviewDashboard.value = null
+  } finally {
+    widgetLoading.value = false
+  }
+}
+
+async function addOverviewWidget(widgetType: string, defaultTitle: string) {
+  if (!overviewDashboard.value) return
+  showAddWidgetModal.value = false
+  try {
+    const res = await customDashboardApi.addWidget(overviewDashboard.value.id, {
+      widgetType,
+      title: defaultTitle,
+      config: '{}'
+    })
+    if (res.data && overviewDashboard.value) {
+      overviewDashboard.value.widgets = [...(overviewDashboard.value.widgets || []), res.data]
+      buildWidgetGridLayout(overviewDashboard.value.widgets)
+    }
+    Message.success('Widget 已添加')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '添加 Widget 失败')
+  }
+}
+
+function editOverviewWidget(widget: DashboardWidgetVO) {
+  editingWidget.value = widget
+  editingWidgetType.value = widget.widgetType
+  const config = widget.config ? JSON.parse(widget.config) : {}
+  widgetConfigForm.value = {
+    title: widget.title || '',
+    queryType: config.queryType,
+    noteContent: config.content || '',
+    chartType: config.chartType || 'burndown'
+  }
+  showWidgetConfigModal.value = true
+}
+
+async function handleWidgetConfigSave() {
+  if (!editingWidget.value || !overviewDashboard.value) return
+  savingWidgetConfig.value = true
+  try {
+    const config: Record<string, any> = {}
+    if (editingWidgetType.value === 'number_card' && widgetConfigForm.value.queryType) {
+      config.queryType = widgetConfigForm.value.queryType
+    }
+    if (editingWidgetType.value === 'note') {
+      config.content = widgetConfigForm.value.noteContent
+    }
+    if (editingWidgetType.value === 'agile_chart') {
+      config.chartType = widgetConfigForm.value.chartType
+    }
+    await customDashboardApi.updateWidget(
+      overviewDashboard.value.id,
+      editingWidget.value.id,
+      {
+        title: widgetConfigForm.value.title || undefined,
+        config: JSON.stringify(config)
+      }
+    )
+    showWidgetConfigModal.value = false
+    // Reload dashboard to get fresh widget data
+    const projectKey = project.value?.key || project.value?.id
+    if (projectKey) await loadOverviewDashboard(projectKey)
+    Message.success('Widget 配置已保存')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存失败')
+  } finally {
+    savingWidgetConfig.value = false
+  }
+}
+
+async function deleteOverviewWidget(widget: DashboardWidgetVO) {
+  if (!overviewDashboard.value) return
+  Modal.warning({
+    title: '删除 Widget',
+    content: `确定要删除「${widget.title || widget.widgetType}」Widget？`,
+    okText: '删除',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await customDashboardApi.deleteWidget(overviewDashboard.value!.id, widget.id)
+        if (overviewDashboard.value) {
+          overviewDashboard.value.widgets = overviewDashboard.value.widgets.filter(w => w.id !== widget.id)
+          buildWidgetGridLayout(overviewDashboard.value.widgets)
+        }
+        Message.success('Widget 已删除')
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '删除失败')
+      }
+    }
+  })
+}
 
 // 项目描述 Markdown 渲染
 const projectDescriptionHtml = computed(() => renderMarkdown(project.value?.description || ''))
@@ -442,7 +763,8 @@ async function loadProject() {
       loadMembers(projectIdentifier),
       loadRoles(),
       loadStatistics(projectIdentifier),
-      loadActivities(projectIdentifier)
+      loadActivities(projectIdentifier),
+      loadOverviewDashboard(projectIdentifier)
     ])
   } catch (e: any) {
     if (e.response?.status === 403) {
@@ -1544,5 +1866,120 @@ onMounted(() => {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   margin: 0;
+}
+
+/* ========== Widget 概览区域 ========== */
+.widget-overview-section {
+  margin-bottom: 32px;
+}
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-header-row .section-title {
+  margin-bottom: 0;
+}
+
+.widget-loading-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 0;
+  color: var(--tf-text-tertiary);
+  font-size: 13px;
+}
+
+.widget-loading-text {
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+}
+
+.widget-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px;
+  text-align: center;
+  background: var(--tf-bg-surface);
+  border: 1px dashed var(--tf-border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+}
+
+.widget-empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.widget-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0 0 8px;
+}
+
+.widget-empty-desc {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  margin: 0 0 16px;
+  max-width: 360px;
+  line-height: 1.6;
+}
+
+.overview-widget-grid-item {
+  /* grid-layout-plus sets position/size; we just ensure card fills the cell */
+}
+
+/* Add Widget Type Picker */
+.widget-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.widget-type-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.widget-type-card:hover {
+  border-color: var(--tf-accent);
+  background: var(--tf-bg-hover);
+}
+
+.wt-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.wt-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wt-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+  margin-bottom: 2px;
+}
+
+.wt-desc {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  line-height: 1.4;
 }
 </style>
