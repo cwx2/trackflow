@@ -65,6 +65,7 @@ public class WorkflowService {
     private final PermissionService permissionService;
     private final ObjectMapper objectMapper;
     private final TransitionActionMapper transitionActionMapper;
+    private final TransitionGuardService transitionGuardService;
 
     private final WorkflowDefinitionMapper workflowDefinitionMapper;
     private final ProjectWorkflowMapper projectWorkflowMapper;
@@ -122,9 +123,6 @@ public class WorkflowService {
      * 检查用户是否为工单的"所有者"（assignee 或 reporter 或创建者）。
      *
      * @deprecated 此方法的逻辑已被 author/assignee 查询维度替代。
-     *             工作流引擎现在通过 workflow_transition 表的 author/assignee 字段
-     *             直接在转换规则查询中处理创建者/负责人的额外权限。
-     *             计划在下个版本移除。
      */
     @Deprecated(since = "2026-07-17", forRemoval = true)
     public boolean isIssueOwner(Issue issue, Long userId) {
@@ -134,7 +132,7 @@ public class WorkflowService {
     }
 
     /**
-     * 根据角色 ID 列表查询可用的状态转换。
+     * 根据角色 ID 列表查询可用的状态转换（含守卫条件评估）。
      * <p>
      * 使用 4 级优先级覆盖语义（与 ActionResolver 对齐）：
      * <ol>
@@ -144,12 +142,13 @@ public class WorkflowService {
      *   <li>project_id IS NULL AND issue_type = '*'</li>
      * </ol>
      * 返回最高优先级非空层级的结果（项目级规则存在时不合并全局规则）。
+     * 同一 new_status_id 对应多条规则时，OR 语义：任意一条守卫条件满足即允许。
      */
     private List<IssueStatus> getTransitionsForRoles(Issue issue, List<Long> roleIds,
                                                      boolean isAuthor, boolean isAssignee) {
         List<Long> allowedStatusIds = resolveAllowedStatusIds(
                 issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId(),
-                isAuthor, isAssignee);
+                isAuthor, isAssignee, issue);
 
         if (allowedStatusIds.isEmpty()) {
             return List.of();
@@ -162,16 +161,17 @@ public class WorkflowService {
     }
 
     /**
-     * 4 级优先级解析允许的目标状态 ID（优化版：单次 DB 查询）。
+     * 4 级优先级解析允许的目标状态 ID（含守卫条件评估，单次 DB 查询）。
      * <p>
-     * 将所有 4 级规则通过单次 SQL 查询获取，附带 priority_level 标记，
-     * 然后在 Java 层筛选出最高优先级（最小 priority_level）的结果集。
-     * <p>
-     * 优化前：最坏 4 次串行 DB 调用；优化后：固定 1 次 DB 调用。
+     * 将所有 4 级规则通过单次 SQL 查询获取，附带 priority_level 和 conditions，
+     * 在 Java 层：
+     * 1. 筛选出最高优先级（最小 priority_level）的结果集
+     * 2. 对每个 new_status_id 评估守卫条件（OR 语义：任意一条通过即允许）
      */
     private List<Long> resolveAllowedStatusIds(Long projectId, String issueType,
                                                List<Long> roleIds, Long oldStatusId,
-                                               boolean isAuthor, boolean isAssignee) {
+                                               boolean isAuthor, boolean isAssignee,
+                                               Issue issue) {
         List<Map<String, Object>> results = transitionMapper.findAllowedNewStatusIdsWithPriority(
                 projectId, issueType, roleIds, oldStatusId, isAuthor, isAssignee);
 
@@ -185,16 +185,30 @@ public class WorkflowService {
                 .min()
                 .orElse(Integer.MAX_VALUE);
 
-        // 筛选该优先级层的所有 new_status_id
-        List<Long> statusIds = results.stream()
+        // 筛选该优先级层的所有记录，按 new_status_id 分组评估守卫条件
+        // OR 语义：同一 new_status_id 下任意一条规则通过守卫条件即允许转换
+        java.util.Map<Long, List<Map<String, Object>>> grouped = results.stream()
                 .filter(row -> ((Number) row.get("priority_level")).intValue() == minPriority)
-                .map(row -> ((Number) row.get("new_status_id")).longValue())
-                .distinct()
+                .collect(Collectors.groupingBy(row -> ((Number) row.get("new_status_id")).longValue()));
+
+        List<Long> allowedStatusIds = grouped.entrySet().stream()
+                .filter(entry -> entry.getValue().stream().anyMatch(row -> {
+                    Object conditionsObj = row.get("conditions");
+                    String conditions = conditionsObj != null ? conditionsObj.toString() : null;
+                    boolean guardPassed = transitionGuardService.evaluate(conditions, issue);
+                    if (!guardPassed) {
+                        log.debug("Workflow guard blocked transition to statusId={}, conditions={}",
+                                entry.getKey(), conditions);
+                    }
+                    return guardPassed;
+                }))
+                .map(java.util.Map.Entry::getKey)
+                .sorted()
                 .toList();
 
-        log.debug("Workflow transition resolved at Level {} (single query): {} statuses",
-                minPriority, statusIds.size());
-        return statusIds;
+        log.debug("Workflow resolved at Level {} (with guard): {} allowed out of {} candidates",
+                minPriority, allowedStatusIds.size(), grouped.size());
+        return allowedStatusIds;
     }
 
     /**
@@ -203,6 +217,44 @@ public class WorkflowService {
     public boolean isTransitionAllowed(Issue issue, Long newStatusId, Long userId) {
         List<IssueStatus> available = getAvailableTransitions(issue, userId);
         return available.stream().anyMatch(s -> s.getId().equals(newStatusId));
+    }
+
+    /**
+     * 更新指定转换规则（按 transition ID）的守卫条件。
+     * <p>
+     * 守卫条件以 JSONB 格式存储，格式：
+     * <pre>{"conditions":[{"field":"assignee_id","operator":"is_not_empty"}]}</pre>
+     * 传入空列表或 null 时，清除守卫条件（存为 '{}'）。
+     *
+     * @param transitionId 转换规则 ID
+     * @param dto          守卫条件 DTO
+     * @throws BusinessException 当 transition 不存在时
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateTransitionConditions(Long transitionId,
+                                           com.trackflow.workflow.dto.UpdateTransitionConditionsDTO dto) {
+        WorkflowTransition transition = transitionMapper.selectById(transitionId);
+        if (transition == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                    "工作流转换规则不存在: " + transitionId);
+        }
+
+        String conditionsJson;
+        if (dto.getConditions() == null || dto.getConditions().isEmpty()) {
+            conditionsJson = "{}"; // 清除守卫条件
+        } else {
+            try {
+                java.util.Map<String, Object> condObj = new java.util.LinkedHashMap<>();
+                condObj.put("conditions", dto.getConditions());
+                conditionsJson = objectMapper.writeValueAsString(condObj);
+            } catch (Exception e) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "守卫条件序列化失败: " + e.getMessage());
+            }
+        }
+
+        transition.setConditions(conditionsJson);
+        transitionMapper.updateById(transition);
+        log.info("[Workflow] 更新转换守卫条件: transitionId={}, conditions={}", transitionId, conditionsJson);
     }
 
     /**

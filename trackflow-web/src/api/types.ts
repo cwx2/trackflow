@@ -411,7 +411,7 @@ export interface IssueCommentVO {
 export interface IssueActivityVO {
   id: string
   issueId: string
-  userId: string
+  userId?: string
   userName?: string
   userAvatar?: string
   action: string
@@ -423,6 +423,11 @@ export interface IssueActivityVO {
    * 示例：{"source":"action_rule"} | {"source":"automation","ruleName":"..."} | {"reason":"member_removed"}
    */
   detail?: string
+  /**
+   * 活动来源标识：manual（用户手动）/ automation（自动化规则）/ workflow_action（转换动作）/ system（系统）
+   * null 等同于 manual。
+   */
+  source?: string
   createdAt: string
 }
 
@@ -811,6 +816,9 @@ export interface WorkflowTransitionVO {
   newStatusId: string
   author: boolean
   assignee: boolean
+  requireComment?: boolean
+  /** 守卫条件 JSON 字符串，{} 或 undefined 表示无条件限制 */
+  conditions?: string
 }
 
 export interface UpdateWorkflowDTO {

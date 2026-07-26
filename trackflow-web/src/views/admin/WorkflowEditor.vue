@@ -197,6 +197,7 @@
                       highlighted: highlightRow === getRowIndex(fromStatus) || highlightCol === colIdx
                     }"
                     @click="fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id) && openActionPanel(fromStatus, toStatus)"
+                    @contextmenu.prevent="fromStatus.id !== toStatus.id && isAllowed(fromStatus.id, toStatus.id) && openGuardPanel(fromStatus, toStatus)"
                     @mouseenter="onCellHover(fromStatus, colIdx)"
                     @mouseleave="onCellLeave"
                   >
@@ -211,7 +212,12 @@
                       <span
                         v-if="hasAction(fromStatus.id, toStatus.id)"
                         class="action-dot"
-                        title="已配置动作"
+                        title="已配置动作（左键点击管理）"
+                      ></span>
+                      <span
+                        v-if="hasGuard(fromStatus.id, toStatus.id)"
+                        class="guard-dot"
+                        title="已配置守卫条件（右键点击管理）"
                       ></span>
                     </div>
                     <span v-else class="cell-dash">—</span>
@@ -250,7 +256,9 @@
       <template v-else>
         勾选单元格表示仅当用户是工单<b>负责人</b>时，额外允许此转换（不影响基础规则）。
       </template>
-      点击已允许的转换可配置自动化动作。hover 单元格高亮对应行列。
+      <span style="color: rgb(var(--arcoblue-6))">■</span> 蓝点=已配置动作（左键）；
+      <span style="color: #d29922">■</span> 橙点=已配置守卫条件（右键）。
+      hover 单元格高亮对应行列。
     </div>
 
     <!-- 自动化规则面板 -->
@@ -281,6 +289,16 @@
       @refresh="onActionRefresh"
     />
 
+    <!-- 守卫条件面板 -->
+    <TransitionGuardPanel
+      v-model:visible="guardPanelVisible"
+      :transition-id="guardPanelTransitionId"
+      :old-status-name="guardPanelFromName"
+      :new-status-name="guardPanelToName"
+      :current-conditions="guardPanelConditions"
+      @saved="onGuardSaved"
+    />
+
     <!-- 变更历史抽屉 -->
     <WorkflowActivityDrawer
       v-model:visible="showHistory"
@@ -300,6 +318,7 @@ import TransitionActionPanel from './TransitionActionPanel.vue'
 import WorkflowActivityDrawer from './WorkflowActivityDrawer.vue'
 import WorkflowRulePanel from './WorkflowRulePanel.vue'
 import ScheduledRulePanel from './ScheduledRulePanel.vue'
+import TransitionGuardPanel from './TransitionGuardPanel.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const activeMainTab = ref('matrix')
@@ -374,6 +393,20 @@ const actionPanelFrom = ref('')
 const actionPanelTo = ref('')
 const actionPanelFromName = ref('')
 const actionPanelToName = ref('')
+
+// 守卫条件面板状态
+const guardPanelVisible = ref(false)
+const guardPanelTransitionId = ref('')
+const guardPanelFromName = ref('')
+const guardPanelToName = ref('')
+const guardPanelConditions = ref<string | undefined>(undefined)
+
+// 守卫条件指示器：有守卫条件的转换路径（key: "fromId-toId"，value: transition id）
+const guardPaths = reactive(new Map<string, string>())
+// 每个转换路径对应的 transition id（用于配置守卫条件）
+const transitionIdMap = reactive(new Map<string, string>())
+// 每个转换路径对应的当前守卫条件 JSON（用于编辑面板回填）
+const transitionConditionsMap = reactive(new Map<string, string>())
 
 // --- 分类顺序 ---
 const categoryOrder = ['open', 'in_progress', 'done', 'cancelled']
@@ -493,6 +526,10 @@ function hasAction(from: string, to: string): boolean {
   return actionPaths.has(`${from}-${to}`)
 }
 
+function hasGuard(from: string, to: string): boolean {
+  return guardPaths.has(`${from}-${to}`)
+}
+
 function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   if (!isAllowed(fromStatus.id, toStatus.id)) return
   actionPanelFrom.value = fromStatus.id
@@ -500,6 +537,31 @@ function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   actionPanelFromName.value = localizeStatusName(fromStatus.name)
   actionPanelToName.value = localizeStatusName(toStatus.name)
   actionPanelVisible.value = true
+}
+
+function openGuardPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
+  const key = `${fromStatus.id}-${toStatus.id}`
+  const tid = transitionIdMap.get(key)
+  if (!tid) {
+    Message.warning('请先保存工作流，再配置守卫条件')
+    return
+  }
+  // 获取当前守卫条件（从 transitions 数据获取）
+  const conditions = getTransitionConditions(key)
+  guardPanelTransitionId.value = tid
+  guardPanelFromName.value = localizeStatusName(fromStatus.name)
+  guardPanelToName.value = localizeStatusName(toStatus.name)
+  guardPanelConditions.value = conditions
+  guardPanelVisible.value = true
+}
+
+function getTransitionConditions(key: string): string | undefined {
+  return transitionConditionsMap.get(key)
+}
+
+function onGuardSaved() {
+  // 重新加载矩阵以获取最新守卫条件
+  loadMatrix()
 }
 
 async function loadActionPaths() {
@@ -636,10 +698,30 @@ async function loadMatrix() {
 
     allowedTransitions.clear()
     originalTransitions.clear()
+    transitionIdMap.clear()
+    guardPaths.clear()
+    transitionConditionsMap.clear()
     for (const t of transitions) {
       const key = `${t.oldStatusId}-${t.newStatusId}`
       allowedTransitions.add(key)
       originalTransitions.add(key)
+      // 记录 transition id（用于守卫条件配置）
+      transitionIdMap.set(key, t.id)
+      // 存储 conditions JSON（用于编辑面板回填）
+      if (t.conditions) {
+        transitionConditionsMap.set(key, t.conditions)
+      }
+      // 记录有守卫条件的路径
+      if (t.conditions && t.conditions !== '{}' && t.conditions !== 'null') {
+        try {
+          const parsed = JSON.parse(t.conditions)
+          if (parsed.conditions && parsed.conditions.length > 0) {
+            guardPaths.set(key, t.id)
+          }
+        } catch {
+          // 忽略解析失败
+        }
+      }
     }
 
     // 记录版本号用于乐观锁
@@ -1107,6 +1189,17 @@ onBeforeRouteLeave(() => {
   height: 7px;
   border-radius: 50%;
   background: var(--accent-blue, rgb(var(--arcoblue-6)));
+  box-shadow: 0 0 0 2px var(--bg-primary, var(--color-bg-2));
+}
+
+.guard-dot {
+  position: absolute;
+  top: -4px;
+  right: -16px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d29922;
   box-shadow: 0 0 0 2px var(--bg-primary, var(--color-bg-2));
 }
 

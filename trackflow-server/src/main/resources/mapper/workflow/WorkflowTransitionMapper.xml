@@ -42,7 +42,7 @@
 
     <!--
       合并查询：单次 SQL 获取所有 4 级优先级的匹配规则。
-      返回 new_status_id + priority_level，由 Java 层按最高优先级过滤。
+      返回 new_status_id + priority_level + conditions，由 Java 层按最高优先级过滤并评估守卫条件。
       将原来的 4 次串行 DB 调用合并为 1 次。
     -->
     <select id="findAllowedNewStatusIdsWithPriority" resultType="java.util.Map">
@@ -52,7 +52,9 @@
                  WHEN project_id = #{projectId} AND issue_type = '*' THEN 2
                  WHEN project_id IS NULL AND issue_type = #{issueType} THEN 3
                  WHEN project_id IS NULL AND issue_type = '*' THEN 4
-               END AS priority_level
+               END AS priority_level,
+               conditions,
+               id AS transition_id
         FROM workflow_transition
         WHERE (project_id = #{projectId} OR project_id IS NULL)
           AND (issue_type = #{issueType} OR issue_type = '*')

@@ -2,6 +2,12 @@ package com.trackflow.workflow.vo;
 
 import lombok.Data;
 
+/**
+ * 工作流转换规则 VO
+ *
+ * @author TrackFlow
+ * @since 1.0
+ */
 @Data
 public class WorkflowTransitionVO {
     private String id;
@@ -13,4 +19,11 @@ public class WorkflowTransitionVO {
     private Boolean author;
     private Boolean assignee;
     private Boolean requireComment;
+
+    /**
+     * 守卫条件（JSONB 格式）。
+     * 格式：{"conditions": [{"field": "assignee_id", "operator": "is_not_empty"}]}
+     * 空对象 {} 或 null 表示无守卫条件限制。
+     */
+    private String conditions;
 }

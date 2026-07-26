@@ -148,4 +148,21 @@ public class WorkflowController {
 
         return R.ok(new WorkflowImpactAnalysisVO(stringCounts, total));
     }
+
+    /**
+     * 更新指定工作流转换规则的守卫条件。
+     * <p>
+     * 守卫条件对应 YouTrack 的 Workflow Guard Conditions 功能——
+     * 定义状态转换的前置条件，仅当所有条件满足时转换才对用户可见。
+     * <p>
+     * 权限：与工作流编辑相同（系统管理员或拥有 project:manage_workflow 权限的用户）。
+     */
+    @PatchMapping("/workflows/transitions/{transitionId}/conditions")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<Void> updateTransitionConditions(
+            @PathVariable("transitionId") Long transitionId,
+            @Valid @RequestBody com.trackflow.workflow.dto.UpdateTransitionConditionsDTO dto) {
+        workflowService.updateTransitionConditions(transitionId, dto);
+        return R.ok();
+    }
 }

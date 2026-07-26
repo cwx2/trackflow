@@ -1,6 +1,18 @@
 import request from './request'
 import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO, WorkflowImpactAnalysisVO } from './types'
 
+/** 守卫条件项类型 */
+export interface TransitionConditionItem {
+  field: string
+  operator: string
+  value?: string
+}
+
+/** 更新守卫条件 DTO */
+export interface UpdateTransitionConditionsDTO {
+  conditions: TransitionConditionItem[]
+}
+
 /**
  * 工作流模块 API
  */
@@ -53,5 +65,16 @@ export const workflowApi = {
     issueType?: string
   }) {
     return request.post<any, R<WorkflowImpactAnalysisVO>>('/workflows/impact-analysis', data)
+  },
+
+  /**
+   * 更新指定工作流转换规则的守卫条件。
+   * 空条件列表 = 清除守卫条件（无前置限制）。
+   *
+   * @param transitionId 转换规则 ID（来自 WorkflowTransitionVO.id）
+   * @param data 守卫条件配置
+   */
+  updateTransitionConditions(transitionId: string, data: UpdateTransitionConditionsDTO) {
+    return request.patch<any, R<void>>(`/workflows/transitions/${transitionId}/conditions`, data)
   }
 }
