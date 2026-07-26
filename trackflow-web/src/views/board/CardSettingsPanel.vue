@@ -138,6 +138,36 @@
       </a-radio-group>
     </div>
 
+    <!-- 自定义字段颜色指示（YouTrack Cards Tab 对标） -->
+    <div class="section">
+      <div class="section-title">自定义字段颜色</div>
+      <div class="setting-row">
+        <div class="setting-row-label">
+          <span class="setting-row-name">显示其他自定义字段的颜色指示</span>
+          <span class="setting-row-hint">为卡片上展示的自定义字段值附加对应颜色的视觉指示器（颜色圆点），便于快速识别字段值分类</span>
+        </div>
+        <a-switch
+          v-model="selectedShowCustomFieldColors"
+          @change="onShowCustomFieldColorsChange"
+        />
+      </div>
+    </div>
+
+    <!-- 迭代分配设置（YouTrack Cards Tab: Allow cards to be assigned to multiple sprints） -->
+    <div class="section">
+      <div class="section-title">迭代分配</div>
+      <div class="setting-row">
+        <div class="setting-row-label">
+          <span class="setting-row-name">允许卡片分配到多个迭代</span>
+          <span class="setting-row-hint">启用后，工单可同时关联多个 Sprint，适用于跨迭代规划或延续性工作。关闭时工单仅能属于单个 Sprint。</span>
+        </div>
+        <a-switch
+          v-model="selectedAllowMultipleSprints"
+          @change="onAllowMultipleSprintsChange"
+        />
+      </div>
+    </div>
+
     <!-- 预览 -->
     <div class="section">
       <div class="section-title">卡片预览</div>
@@ -184,6 +214,11 @@ const props = defineProps<{
   currentEstimationFieldId?: string | null
   originalEstimationFieldId?: string | null
   fieldDisplayModes?: Record<string, 'full_name' | 'initial'> | null
+  showCustomFieldColors?: boolean
+  /** 是否允许卡片分配到多个迭代（对应 YouTrack: Allow cards to be assigned to multiple sprints） */
+  allowMultipleSprints?: boolean
+  /** 项目是否有活跃 Sprint（仅当有 Sprint 功能时才显示此选项） */
+  hasActiveSprint?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -192,6 +227,8 @@ const emit = defineEmits<{
   'update:currentEstimationFieldId': [id: string | null]
   'update:originalEstimationFieldId': [id: string | null]
   'update:fieldDisplayModes': [modes: Record<string, 'full_name' | 'initial'> | null]
+  'update:showCustomFieldColors': [value: boolean]
+  'update:allowMultipleSprints': [value: boolean]
 }>()
 
 const availableFields: FieldOption[] = [
@@ -211,6 +248,12 @@ const selectedOriginalEstimationFieldId = ref<string | undefined | null>(props.o
 const selectedFieldDisplayModes = ref<Record<string, 'full_name' | 'initial'>>(
   props.fieldDisplayModes ? { ...props.fieldDisplayModes } : {}
 )
+
+// 自定义字段颜色指示开关（默认 true）
+const selectedShowCustomFieldColors = ref<boolean>(props.showCustomFieldColors !== false)
+
+// 允许卡片分配到多个迭代开关（默认 false，向后兼容）
+const selectedAllowMultipleSprints = ref<boolean>(props.allowMultipleSprints ?? false)
 
 // 项目自定义字段列表（数值类型）
 const projectFields = ref<CustomFieldDefinitionVO[]>([])
@@ -267,6 +310,14 @@ watch(() => props.fieldDisplayModes, (val) => {
   selectedFieldDisplayModes.value = val ? { ...val } : {}
 })
 
+watch(() => props.showCustomFieldColors, (val) => {
+  selectedShowCustomFieldColors.value = val !== false
+})
+
+watch(() => props.allowMultipleSprints, (val) => {
+  selectedAllowMultipleSprints.value = val ?? false
+})
+
 // Emit changes
 watch(selectedColorScheme, (scheme) => {
   emit('update:colorScheme', scheme)
@@ -309,6 +360,15 @@ function onCurrentEstimationFieldChange(val: string | null | undefined) {
 
 function onOriginalEstimationFieldChange(val: string | null | undefined) {
   emit('update:originalEstimationFieldId', val ?? null)
+}
+
+function onShowCustomFieldColorsChange(val: boolean) {
+  emit('update:showCustomFieldColors', val)
+}
+
+function onAllowMultipleSprintsChange(val: boolean) {
+  selectedAllowMultipleSprints.value = val
+  emit('update:allowMultipleSprints', val)
 }
 
 const previewColorClass = computed(() => {
@@ -823,5 +883,37 @@ const previewColorClass = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ===== 设置行（开关类单行设置） ===== */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-2);
+}
+
+.setting-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-row-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.setting-row-hint {
+  font-size: 11px;
+  color: var(--color-text-3);
+  line-height: 1.5;
 }
 </style>

@@ -36,6 +36,9 @@ public class BoardCardConfigService {
     /** 默认颜色方案 */
     private static final String DEFAULT_COLOR_SCHEME = "none";
 
+    /** 自定义字段颜色指示器默认开启 */
+    private static final boolean DEFAULT_SHOW_CUSTOM_FIELD_COLORS = true;
+
     private final BoardCardConfigMapper boardCardConfigMapper;
     private final ObjectMapper objectMapper;
 
@@ -58,12 +61,16 @@ public class BoardCardConfigService {
             vo.setOriginalEstimationFieldId(config.getOriginalEstimationFieldId() != null
                     ? String.valueOf(config.getOriginalEstimationFieldId()) : null);
             vo.setFieldDisplayModes(parseFieldDisplayModes(config.getFieldDisplayModes()));
+            // showCustomFieldColors: 数据库字段为 null 时（旧数据）也默认 true
+            vo.setShowCustomFieldColors(config.getShowCustomFieldColors() == null
+                    ? DEFAULT_SHOW_CUSTOM_FIELD_COLORS : config.getShowCustomFieldColors());
         } else {
             vo.setVisibleFields(DEFAULT_VISIBLE_FIELDS);
             vo.setColorScheme(DEFAULT_COLOR_SCHEME);
             vo.setCurrentEstimationFieldId(null);
             vo.setOriginalEstimationFieldId(null);
             vo.setFieldDisplayModes(null);
+            vo.setShowCustomFieldColors(DEFAULT_SHOW_CUSTOM_FIELD_COLORS);
         }
         return vo;
     }
@@ -110,6 +117,8 @@ public class BoardCardConfigService {
             existing.setCurrentEstimationFieldId(dto.getCurrentEstimationFieldId());
             existing.setOriginalEstimationFieldId(dto.getOriginalEstimationFieldId());
             existing.setFieldDisplayModes(displayModesJson);
+            existing.setShowCustomFieldColors(dto.getShowCustomFieldColors() == null
+                    ? DEFAULT_SHOW_CUSTOM_FIELD_COLORS : dto.getShowCustomFieldColors());
             existing.setUpdatedAt(now);
             boardCardConfigMapper.updateById(existing);
         } else {
@@ -120,6 +129,8 @@ public class BoardCardConfigService {
             config.setCurrentEstimationFieldId(dto.getCurrentEstimationFieldId());
             config.setOriginalEstimationFieldId(dto.getOriginalEstimationFieldId());
             config.setFieldDisplayModes(displayModesJson);
+            config.setShowCustomFieldColors(dto.getShowCustomFieldColors() == null
+                    ? DEFAULT_SHOW_CUSTOM_FIELD_COLORS : dto.getShowCustomFieldColors());
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardCardConfigMapper.insert(config);

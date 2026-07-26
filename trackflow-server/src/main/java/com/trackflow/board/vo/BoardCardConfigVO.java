@@ -37,4 +37,11 @@ public class BoardCardConfigVO {
      * null 或不含某字段表示该字段使用默认的 full_name 模式。
      */
     private java.util.Map<String, String> fieldDisplayModes;
+
+    /**
+     * 是否在卡片自定义字段值旁显示颜色指示器。
+     * 对应 YouTrack Board Settings > Cards Tab 的 "Show colors for other custom fields" 开关。
+     * 默认 true（与 YouTrack 行为一致）。
+     */
+    private Boolean showCustomFieldColors;
 }

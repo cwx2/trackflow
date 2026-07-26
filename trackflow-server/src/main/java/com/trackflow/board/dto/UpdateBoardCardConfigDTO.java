@@ -44,4 +44,11 @@ public class UpdateBoardCardConfigDTO {
      * 对应 YouTrack Cards Tab 字段 Display menu。
      */
     private java.util.Map<String, String> fieldDisplayModes;
+
+    /**
+     * 是否在卡片自定义字段值旁显示颜色指示器。
+     * 对应 YouTrack Board Settings > Cards Tab 的 "Show colors for other custom fields" 开关。
+     * null 时使用默认值 true。
+     */
+    private Boolean showCustomFieldColors;
 }

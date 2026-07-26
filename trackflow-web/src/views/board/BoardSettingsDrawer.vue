@@ -213,11 +213,16 @@
           :current-estimation-field-id="editableCurrentEstimationFieldId"
           :original-estimation-field-id="editableOriginalEstimationFieldId"
           :field-display-modes="editableFieldDisplayModes"
+          :show-custom-field-colors="editableShowCustomFieldColors"
+          :allow-multiple-sprints="editableAllowMultipleSprints"
+          :has-active-sprint="hasActiveSprint"
           @update:visible-fields="editableCardFields = $event"
           @update:color-scheme="editableColorScheme = $event"
           @update:current-estimation-field-id="editableCurrentEstimationFieldId = $event"
           @update:original-estimation-field-id="editableOriginalEstimationFieldId = $event"
           @update:field-display-modes="editableFieldDisplayModes = $event"
+          @update:show-custom-field-colors="editableShowCustomFieldColors = $event"
+          @update:allow-multiple-sprints="editableAllowMultipleSprints = $event"
         />
       </a-tab-pane>
 
@@ -327,6 +332,7 @@ const editableColorScheme = ref('none')
 const editableCurrentEstimationFieldId = ref<string | null>(null)
 const editableOriginalEstimationFieldId = ref<string | null>(null)
 const editableFieldDisplayModes = ref<Record<string, 'full_name' | 'initial'> | null>(null)
+const editableShowCustomFieldColors = ref<boolean>(true)
 
 // 基本设置状态
 const editableBoardName = ref('')
@@ -336,6 +342,7 @@ const editableFilterMode = ref('all')
 const editableFilterQuery = ref<string | null>(null)
 const editableDoneRetentionDays = ref<number | null>(null)
 const editableColumnField = ref('status')
+const editableAllowMultipleSprints = ref(false)
 
 // 优先级列 WIP 配置（columnField=priority 时使用）
 const PRIORITY_COLORS: Record<string, string> = {
@@ -443,6 +450,7 @@ watch(() => props.visible, async (newVisible) => {
         editableCurrentEstimationFieldId.value = res.data.currentEstimationFieldId ?? null
         editableOriginalEstimationFieldId.value = res.data.originalEstimationFieldId ?? null
         editableFieldDisplayModes.value = res.data.fieldDisplayModes ?? null
+        editableShowCustomFieldColors.value = res.data.showCustomFieldColors !== false
       }
     } catch {
       // 使用默认值
@@ -451,6 +459,7 @@ watch(() => props.visible, async (newVisible) => {
       editableCurrentEstimationFieldId.value = null
       editableOriginalEstimationFieldId.value = null
       editableFieldDisplayModes.value = null
+      editableShowCustomFieldColors.value = true
     }
 
     // 加载泳道配置
@@ -520,6 +529,7 @@ watch(() => props.visible, async (newVisible) => {
         editableColumnField.value = res.data.columnField || 'status'
         // 保存版本号用于乐观锁
         configVersion.value = res.data.configVersion ?? 0
+        editableAllowMultipleSprints.value = res.data.allowMultipleSprints ?? false
       }
     } catch {
       editableBoardName.value = ''
@@ -530,6 +540,7 @@ watch(() => props.visible, async (newVisible) => {
       editableDoneRetentionDays.value = null
       editableColumnField.value = 'status'
       configVersion.value = 0
+      editableAllowMultipleSprints.value = false
     }
 
     // 加载优先级列 WIP 配置（从 columns prop 中的 priority 模式列获取，或从后端重新获取）
@@ -784,6 +795,7 @@ async function reloadAllConfigs() {
       editableCurrentEstimationFieldId.value = cardRes.data.currentEstimationFieldId ?? null
       editableOriginalEstimationFieldId.value = cardRes.data.originalEstimationFieldId ?? null
       editableFieldDisplayModes.value = cardRes.data.fieldDisplayModes ?? null
+      editableShowCustomFieldColors.value = cardRes.data.showCustomFieldColors !== false
     }
 
     // 更新泳道配置
@@ -815,6 +827,7 @@ async function reloadAllConfigs() {
       editableFilterQuery.value = generalRes.data.filterQuery ?? null
       editableDoneRetentionDays.value = generalRes.data.doneRetentionDays ?? null
       configVersion.value = generalRes.data.configVersion ?? 0
+      editableAllowMultipleSprints.value = generalRes.data.allowMultipleSprints ?? false
     }
 
     // 更新图表配置
@@ -893,7 +906,8 @@ async function handleSave() {
         colorScheme: editableColorScheme.value,
         currentEstimationFieldId: editableCurrentEstimationFieldId.value,
         originalEstimationFieldId: editableOriginalEstimationFieldId.value,
-        fieldDisplayModes: editableFieldDisplayModes.value
+        fieldDisplayModes: editableFieldDisplayModes.value,
+        showCustomFieldColors: editableShowCustomFieldColors.value
       },
       swimlaneConfig: {
         groupByField: editableSwimlaneGroupBy.value,
@@ -916,7 +930,8 @@ async function handleSave() {
         filterMode: editableFilterMode.value,
         filterQuery: editableFilterQuery.value,
         doneRetentionDays: editableDoneRetentionDays.value,
-        columnField: editableColumnField.value
+        columnField: editableColumnField.value,
+        allowMultipleSprints: editableAllowMultipleSprints.value
       },
       chartConfig: {
         chartType: editableChartType.value,

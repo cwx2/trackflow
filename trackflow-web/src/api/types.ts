@@ -990,6 +990,12 @@ export interface BoardCardConfigVO {
    * null 或缺失 key 表示该字段使用默认的 full_name 模式。
    */
   fieldDisplayModes?: Record<string, 'full_name' | 'initial'> | null
+  /**
+   * 是否在卡片自定义字段值旁显示颜色指示器。
+   * 对应 YouTrack Board Settings > Cards Tab 的 "Show colors for other custom fields"。
+   * 默认 true。
+   */
+  showCustomFieldColors?: boolean
 }
 
 // ========== 看板泳道配置 ==========
@@ -1057,6 +1063,11 @@ export interface BoardGeneralConfigVO {
   doneRetentionDays: number | null
   /** 看板列标识字段：status | priority */
   columnField: 'status' | 'priority'
+  /**
+   * 是否允许卡片分配到多个迭代（Sprint）。
+   * 对应 YouTrack Board Settings > Cards Tab: Allow cards to be assigned to multiple sprints。
+   */
+  allowMultipleSprints: boolean
   /** 当前用户是否有看板查看权限 */
   currentUserCanView: boolean
   /** 当前用户是否有看板编辑权限 */

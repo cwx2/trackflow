@@ -435,9 +435,9 @@
                 <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
                   <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
                     <template v-if="detail.isMulti && detail.displayValues">
-                      <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
+                      <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
                     </template>
-                    <span v-else-if="detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
+                    <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
                     <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
                   </template>
                 </div>
@@ -747,9 +747,9 @@
                       <div v-if="cardSize !== 'S' && hasVisibleCustomFields(issue)" class="card-custom-fields">
                         <template v-for="detail in getVisibleCustomFieldDetails(issue)" :key="detail.customFieldId">
                           <template v-if="detail.isMulti && detail.displayValues">
-                            <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
+                            <span v-for="(dv, idx) in detail.displayValues" :key="idx" class="card-cf-tag" :style="cardConfig.showCustomFieldColors !== false && detail.colors?.[idx] ? { background: detail.colors[idx], color: '#fff' } : {}">{{ dv }}</span>
                           </template>
-                          <span v-else-if="detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
+                          <span v-else-if="cardConfig.showCustomFieldColors !== false && detail.color" class="card-cf-tag" :style="{ background: detail.color, color: '#fff' }">{{ detail.displayValue }}</span>
                           <span v-else class="card-cf-tag">{{ detail.displayValue }}</span>
                         </template>
                       </div>
@@ -2547,7 +2547,8 @@ const boardBurndownCalculation = ref<string>('issue_count')
 // 看板卡片配置（字段显示 + 颜色方案）
 const cardConfig = ref<BoardCardConfigVO>({
   visibleFields: ['assignee', 'priority', 'type'],
-  colorScheme: 'none'
+  colorScheme: 'none',
+  showCustomFieldColors: true
 })
 
 // 看板列合并配置
