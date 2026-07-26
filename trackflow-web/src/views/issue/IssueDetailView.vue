@@ -20,7 +20,7 @@
       :show-create="canCreateIssue"
       @copy="copyIssue"
       @create="showCreatePanel = true"
-      @toggle-sidebar="sidebarVisible = !sidebarVisible"
+      @toggle-sidebar="toggleSidebar"
     />
 
     <!-- 快捷动作栏（需要状态变更权限） -->
@@ -86,10 +86,11 @@
       </DetailMainContent>
 
       <DetailSidebar
-        v-show="sidebarVisible"
+        :collapsed="sidebarCollapsed"
         :status="currentStatus"
         :transitions="availableTransitions"
         :fields="sidebarFields"
+        @toggle-collapse="toggleSidebar"
         @transition="onTransition"
         @edit-field="onEditField"
         @clear-field="onClearField"
@@ -231,7 +232,21 @@ const router = useRouter()
 const tabStore = useTabStore()
 const timerStore = useTimerStore()
 const { recordVisit: recordRecentVisit } = useRecentIssues()
-const sidebarVisible = ref(true)
+
+// localStorage key for sidebar collapsed state
+const SIDEBAR_COLLAPSED_KEY = 'tf_issue_detail_sidebar_collapsed'
+
+// Read initial value from localStorage (default: false = expanded)
+const sidebarCollapsed = ref<boolean>(
+  localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+)
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed.value))
+}
+
+// Keep backward-compat: no longer needed, sidebarCollapsed drives the UI directly
 const showCreatePanel = ref(false)
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
