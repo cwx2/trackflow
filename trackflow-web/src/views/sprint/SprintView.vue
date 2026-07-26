@@ -1259,7 +1259,7 @@ function confirmOverlapAndProceed() {
 
 function openEditModal(sprint: SprintVO) {
   editingSprintId.value = sprint.id
-  editingCompleted.value = (sprint.status === 'completed' || sprint.status === 'Completed' || sprint.status === 'archived' || sprint.status === 'Archived')
+  editingCompleted.value = false  // 所有状态均允许修改日期（YouTrack 标准）
   editForm.name = sprint.name
   editForm.goal = sprint.goal || ''
   editForm.startDate = sprint.startDate || ''
@@ -1273,7 +1273,7 @@ async function handleUpdate() {
     return
   }
   // 前端日期顺序校验
-  if (!editingCompleted.value && editForm.startDate && editForm.endDate) {
+  if (editForm.startDate && editForm.endDate) {
     if (editForm.startDate >= editForm.endDate) {
       Message.warning('开始日期必须早于结束日期')
       return
@@ -1287,11 +1287,9 @@ async function doUpdate(confirmOverlap: boolean) {
   try {
     const data: Record<string, any> = {
       name: editForm.name.trim(),
-      goal: editForm.goal || ''
-    }
-    if (!editingCompleted.value) {
-      data.startDate = editForm.startDate || null
-      data.endDate = editForm.endDate || null
+      goal: editForm.goal || '',
+      startDate: editForm.startDate || null,
+      endDate: editForm.endDate || null
     }
     if (confirmOverlap) {
       data.confirmOverlap = true
