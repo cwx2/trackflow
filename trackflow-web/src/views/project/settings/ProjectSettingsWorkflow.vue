@@ -63,7 +63,7 @@
           <div class="section-info">
             <h3 class="section-title">自动化规则</h3>
             <p class="section-desc">
-              当工单创建或字段变更时自动执行的规则。全局规则自动对此项目生效。
+              当工单创建、字段变更或按计划定时执行的规则。全局规则自动对此项目生效。
             </p>
           </div>
           <a-button
@@ -88,9 +88,16 @@
             <div class="rule-main">
               <div class="rule-header">
                 <span class="rule-name">{{ rule.name }}</span>
-                <a-tag :color="eventColor(rule.triggerEvent)" size="small">
-                  {{ eventLabel(rule.triggerEvent) }}
-                </a-tag>
+                <!-- on_schedule 规则显示调度频率 Tag，on_change 规则显示触发事件 Tag -->
+                <template v-if="rule.ruleType === 'on_schedule'">
+                  <a-tag color="purple" size="small">定时执行</a-tag>
+                  <a-tag size="small" color="gray">{{ scheduleLabel(rule.cronExpression) }}</a-tag>
+                </template>
+                <template v-else>
+                  <a-tag :color="eventColor(rule.triggerEvent)" size="small">
+                    {{ eventLabel(rule.triggerEvent) }}
+                  </a-tag>
+                </template>
                 <a-tag v-if="rule.projectId === null" size="small" color="orangered">
                   全局
                 </a-tag>
@@ -107,6 +114,13 @@
                   {{ actionSummary(rule.actionJson) }}
                 </span>
               </div>
+              <!-- on_schedule 规则显示上次执行时间 -->
+              <div v-if="rule.ruleType === 'on_schedule'" class="rule-meta">
+                <span v-if="rule.lastExecutedAt" class="meta-item">
+                  上次执行: {{ formatTime(rule.lastExecutedAt) }}
+                </span>
+                <span v-else class="meta-item">尚未执行</span>
+              </div>
             </div>
             <div class="rule-actions" v-if="canManage && !isArchived">
               <a-switch
@@ -116,6 +130,15 @@
                 @change="handleToggleRule(rule)"
               />
               <template v-if="rule.projectId !== null">
+                <!-- on_schedule 规则额外提供手动执行按钮 -->
+                <a-button
+                  v-if="rule.ruleType === 'on_schedule'"
+                  size="mini"
+                  @click="handleExecuteRule(rule)"
+                >
+                  <template #icon><icon-play-arrow /></template>
+                  执行
+                </a-button>
                 <a-button size="mini" @click="handleEditRule(rule)">编辑</a-button>
                 <a-popconfirm
                   content="确定删除此规则？"
@@ -135,7 +158,7 @@
         <div v-else class="empty-state">
           <icon-thunderbolt class="empty-icon" />
           <h4 class="empty-title">暂无自动化规则</h4>
-          <p class="empty-desc">创建自动化规则，在工单创建或字段变更时自动执行动作。</p>
+          <p class="empty-desc">创建自动化规则，在工单创建、字段变更或按计划定时执行动作。</p>
           <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showCreateRuleModal">
             <template #icon><icon-plus /></template>
             创建第一条规则
@@ -157,46 +180,89 @@
       unmount-on-close
     >
       <a-form :model="ruleForm" layout="vertical" ref="ruleFormRef">
+        <!-- 规则类型选择（编辑时不可更改） -->
+        <a-form-item label="规则类型" field="ruleType">
+          <a-radio-group v-model="ruleForm.ruleType" type="button" :disabled="!!editingRule">
+            <a-radio value="on_change">变更触发</a-radio>
+            <a-radio value="on_schedule">定时触发</a-radio>
+          </a-radio-group>
+          <template #extra>
+            <span v-if="ruleForm.ruleType === 'on_change'">工单创建或字段变更时自动触发</span>
+            <span v-else>按照设定的时间周期定期检查工单并执行动作</span>
+          </template>
+        </a-form-item>
+
         <a-form-item label="规则名称" field="name" :rules="[{ required: true, message: '请输入规则名称' }]">
-          <a-input v-model="ruleForm.name" placeholder="如：Bug 创建时自动设置高优先级" :max-length="100" />
+          <a-input
+            v-model="ruleForm.name"
+            :placeholder="ruleForm.ruleType === 'on_schedule' ? '如：每天检查超期工单并添加逾期标签' : '如：Bug 创建时自动设置高优先级'"
+            :max-length="100"
+          />
         </a-form-item>
 
         <a-form-item label="描述" field="description">
           <a-textarea v-model="ruleForm.description" placeholder="规则功能说明（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
         </a-form-item>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="触发事件" field="triggerEvent" :rules="[{ required: true, message: '请选择触发事件' }]">
-              <a-select v-model="ruleForm.triggerEvent">
-                <a-option value="issue_created">工单创建时</a-option>
-                <a-option value="field_changed">字段变更时</a-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item
-              v-if="ruleForm.triggerEvent === 'field_changed'"
-              label="监听字段"
-              field="triggerField"
-            >
-              <a-select v-model="ruleForm.triggerField" placeholder="全部字段" allow-clear>
-                <a-option value="status_id">状态</a-option>
-                <a-option value="issue_type">工单类型</a-option>
-                <a-option value="priority">优先级</a-option>
-                <a-option value="assignee">负责人</a-option>
-                <a-option value="sprint">迭代</a-option>
-                <a-option value="title">标题</a-option>
-                <a-option value="due_date">截止日期</a-option>
-              </a-select>
-              <template #extra>为空表示任意字段变更都触发</template>
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <!-- on_change 专属：触发事件 -->
+        <template v-if="ruleForm.ruleType === 'on_change'">
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="触发事件" field="triggerEvent" :rules="[{ required: true, message: '请选择触发事件' }]">
+                <a-select v-model="ruleForm.triggerEvent">
+                  <a-option value="issue_created">工单创建时</a-option>
+                  <a-option value="field_changed">字段变更时</a-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item
+                v-if="ruleForm.triggerEvent === 'field_changed'"
+                label="监听字段"
+                field="triggerField"
+              >
+                <a-select v-model="ruleForm.triggerField" placeholder="全部字段" allow-clear>
+                  <a-option value="status_id">状态</a-option>
+                  <a-option value="issue_type">工单类型</a-option>
+                  <a-option value="priority">优先级</a-option>
+                  <a-option value="assignee">负责人</a-option>
+                  <a-option value="sprint">迭代</a-option>
+                  <a-option value="title">标题</a-option>
+                  <a-option value="due_date">截止日期</a-option>
+                </a-select>
+                <template #extra>为空表示任意字段变更都触发</template>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </template>
+
+        <!-- on_schedule 专属：执行频率 -->
+        <template v-if="ruleForm.ruleType === 'on_schedule'">
+          <a-form-item label="执行频率" field="cronExpression" :rules="[{ required: true, message: '请选择执行频率' }]">
+            <a-select v-model="ruleForm.cronExpression">
+              <a-option value="hourly">每小时</a-option>
+              <a-option value="daily">每天</a-option>
+              <a-option value="weekly">每周</a-option>
+              <a-option value="custom">自定义 Cron</a-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item
+            v-if="ruleForm.cronExpression === 'custom'"
+            label="Cron 表达式"
+            field="customCron"
+            :rules="[{ required: true, message: '请输入 Cron 表达式' }]"
+          >
+            <a-input v-model="ruleForm.customCron" placeholder="如：0 9 * * *（每天 9 点）" />
+            <template #extra>标准 5 段 cron 格式：分 时 日 月 周</template>
+          </a-form-item>
+        </template>
 
         <!-- 前置条件 -->
         <a-form-item label="前置条件" field="conditions">
-          <template #extra>所有条件为 AND 关系（全部满足才触发）</template>
+          <template #extra>
+            <span v-if="ruleForm.ruleType === 'on_change'">所有条件为 AND 关系（全部满足才触发）</span>
+            <span v-else>所有条件为 AND 关系（全部满足的工单才会被处理）</span>
+          </template>
           <div class="condition-list">
             <div v-for="(cond, idx) in ruleForm.conditions" :key="idx" class="condition-row">
               <a-select v-model="cond.field" style="width: 140px" placeholder="字段">
@@ -213,12 +279,17 @@
                 <a-option value="in">属于</a-option>
                 <a-option value="is_empty">为空</a-option>
                 <a-option value="is_not_empty">不为空</a-option>
+                <!-- on_schedule 额外支持逾期相关操作符 -->
+                <template v-if="ruleForm.ruleType === 'on_schedule'">
+                  <a-option value="overdue">已逾期</a-option>
+                  <a-option value="due_within_days">N天内到期</a-option>
+                </template>
               </a-select>
               <a-input
-                v-if="!['is_empty', 'is_not_empty'].includes(cond.operator)"
+                v-if="!['is_empty', 'is_not_empty', 'overdue'].includes(cond.operator)"
                 v-model="cond.value"
                 style="flex: 1"
-                placeholder="值（如 Bug, Critical）"
+                :placeholder="cond.operator === 'due_within_days' ? '天数（如 3）' : '值（如 Bug, Critical）'"
               />
               <a-button type="text" status="danger" size="mini" @click="removeCondition(idx)">
                 <icon-delete />
@@ -255,7 +326,7 @@
               </template>
 
               <template v-else-if="act.type === 'add_comment'">
-                <a-input v-model="act.content" style="flex: 1" placeholder="评论内容" />
+                <a-input v-model="act.content" style="flex: 1" placeholder="评论内容（支持 {{rule_name}}、{{issue_key}}）" />
               </template>
 
               <a-button type="text" status="danger" size="mini" @click="removeAction(idx)">
@@ -277,7 +348,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete } from '@arco-design/web-vue/es/icon'
+import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow } from '@arco-design/web-vue/es/icon'
 import { workflowApi, workflowRuleApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO } from '@/api/workflowRule'
 import type { ProjectDetailVO } from '@/api/types'
@@ -322,8 +393,11 @@ interface ActionItem {
 const ruleForm = reactive({
   name: '',
   description: '',
+  ruleType: 'on_change' as 'on_change' | 'on_schedule',
   triggerEvent: 'issue_created',
   triggerField: null as string | null,
+  cronExpression: 'daily',
+  customCron: '',
   conditions: [] as ConditionItem[],
   actions: [] as ActionItem[]
 })
@@ -407,8 +481,11 @@ function showCreateRuleModal() {
   Object.assign(ruleForm, {
     name: '',
     description: '',
+    ruleType: 'on_change',
     triggerEvent: 'issue_created',
     triggerField: null,
+    cronExpression: 'daily',
+    customCron: '',
     conditions: [],
     actions: []
   })
@@ -419,11 +496,17 @@ function handleEditRule(rule: WorkflowRuleVO) {
   editingRule.value = rule
   const conditions = parseJson(rule.conditionJson, [])
   const actions = parseJson(rule.actionJson, [])
+  const isScheduled = rule.ruleType === 'on_schedule'
+  const cron = rule.cronExpression || 'daily'
+  const isPreset = ['hourly', 'daily', 'weekly'].includes(cron)
   Object.assign(ruleForm, {
     name: rule.name,
     description: rule.description || '',
-    triggerEvent: rule.triggerEvent,
+    ruleType: isScheduled ? 'on_schedule' : 'on_change',
+    triggerEvent: isScheduled ? 'scheduled' : (rule.triggerEvent || 'issue_created'),
     triggerField: rule.triggerField,
+    cronExpression: isScheduled ? (isPreset ? cron : 'custom') : 'daily',
+    customCron: isScheduled && !isPreset ? cron : '',
     conditions,
     actions
   })
@@ -436,14 +519,30 @@ async function handleSubmitRule() {
 
   submitting.value = true
   try {
-    const dto: WorkflowRuleDTO = {
-      name: ruleForm.name,
-      description: ruleForm.description || undefined,
-      triggerEvent: ruleForm.triggerEvent,
-      triggerField: ruleForm.triggerField || undefined,
-      conditionJson: JSON.stringify(ruleForm.conditions.filter(c => c.field)),
-      actionJson: JSON.stringify(ruleForm.actions.filter(a => a.type)),
-      enabled: true
+    let dto: WorkflowRuleDTO
+    if (ruleForm.ruleType === 'on_schedule') {
+      const cronExpr = ruleForm.cronExpression === 'custom' ? ruleForm.customCron : ruleForm.cronExpression
+      dto = {
+        name: ruleForm.name,
+        description: ruleForm.description || undefined,
+        ruleType: 'on_schedule',
+        triggerEvent: 'scheduled',
+        conditionJson: JSON.stringify(ruleForm.conditions.filter(c => c.field)),
+        actionJson: JSON.stringify(ruleForm.actions.filter(a => a.type)),
+        enabled: true,
+        cronExpression: cronExpr
+      }
+    } else {
+      dto = {
+        name: ruleForm.name,
+        description: ruleForm.description || undefined,
+        ruleType: 'on_change',
+        triggerEvent: ruleForm.triggerEvent,
+        triggerField: ruleForm.triggerField || undefined,
+        conditionJson: JSON.stringify(ruleForm.conditions.filter(c => c.field)),
+        actionJson: JSON.stringify(ruleForm.actions.filter(a => a.type)),
+        enabled: true
+      }
     }
 
     if (editingRule.value) {
@@ -481,6 +580,19 @@ async function handleDeleteRule(rule: WorkflowRuleVO) {
   }
 }
 
+async function handleExecuteRule(rule: WorkflowRuleVO) {
+  try {
+    const res = await workflowRuleApi.execute(rule.id)
+    if (res.code === 0) {
+      const log = res.data
+      Message.success(`执行完成：匹配 ${log.matchedCount} 个工单，成功 ${log.successCount}，失败 ${log.failureCount}`)
+      await loadRules()
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '执行失败')
+  }
+}
+
 // ==================== Form helpers ====================
 function addCondition() {
   ruleForm.conditions.push({ field: '', operator: 'equals', value: '' })
@@ -511,7 +623,8 @@ function eventLabel(event: string) {
   const map: Record<string, string> = {
     issue_created: '创建时',
     field_changed: '变更时',
-    on_schedule: '定时执行'
+    on_schedule: '定时执行',
+    scheduled: '定时执行'
   }
   return map[event] || event
 }
@@ -520,9 +633,28 @@ function eventColor(event: string) {
   const map: Record<string, string> = {
     issue_created: 'green',
     field_changed: 'blue',
-    on_schedule: 'purple'
+    on_schedule: 'purple',
+    scheduled: 'purple'
   }
   return map[event] || 'gray'
+}
+
+function scheduleLabel(cron: string | null) {
+  const map: Record<string, string> = {
+    hourly: '每小时',
+    daily: '每天',
+    weekly: '每周'
+  }
+  return cron ? (map[cron] || `cron: ${cron}`) : '未设置'
+}
+
+function formatTime(dateStr: string) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  })
 }
 
 function fieldLabel(field: string) {
@@ -728,6 +860,16 @@ onMounted(loadData)
   font-size: 12px;
   color: var(--color-text-3);
   margin-bottom: 6px;
+}
+
+.rule-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-4);
+}
+
+.meta-item {
+  color: var(--color-text-3);
 }
 
 .rule-summary {
