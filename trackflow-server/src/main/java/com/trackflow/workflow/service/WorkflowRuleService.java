@@ -50,13 +50,14 @@ public class WorkflowRuleService {
     }
 
     /**
-     * 获取单个规则
+     * 获取单个规则（带权限校验）
      */
     public WorkflowRuleVO getRule(Long id) {
         WorkflowRule rule = ruleMapper.selectById(id);
         if (rule == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
+        checkRuleViewPermission(rule);
         return toVO(rule);
     }
 
@@ -164,6 +165,29 @@ public class WorkflowRuleService {
         ruleMapper.updateById(rule);
         log.info("[WorkflowRule] Toggled rule '{}' (id={}) enabled={}", rule.getName(), id, rule.getEnabled());
         return toVO(rule);
+    }
+
+    /**
+     * 校验当前用户是否有权限查看指定规则。
+     * <ul>
+     *   <li>全局规则（projectId == null）→ 需要 system:admin</li>
+     *   <li>项目规则（projectId != null）→ 需要 project:manage_workflow</li>
+     * </ul>
+     */
+    private void checkRuleViewPermission(WorkflowRule rule) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        Long projectId = rule.getProjectId();
+        if (projectId == null) {
+            // 全局规则 → 需要系统管理员
+            if (!permissionService.isSystemAdmin(userId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "查看全局工作流规则需要系统管理员权限");
+            }
+        } else {
+            // 项目规则 → 需要 project:manage_workflow
+            if (!permissionService.hasPermission(userId, projectId, "project:manage_workflow")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权限查看该项目的工作流规则");
+            }
+        }
     }
 
     /**

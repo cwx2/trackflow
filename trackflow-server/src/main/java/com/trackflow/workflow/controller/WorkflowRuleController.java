@@ -94,13 +94,15 @@ public class WorkflowRuleController {
     }
 
     /**
-     * 获取规则执行日志
+     * 获取规则执行日志（需要与查看规则相同的权限）
      */
     @GetMapping("/workflow-rules/{id}/execution-logs")
     @PreAuthorize("isAuthenticated()")
     public R<List<WorkflowRuleExecutionLogVO>> getExecutionLogs(
             @PathVariable("id") Long id,
             @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        // 先通过 getRule 触发权限校验（getRule 内部已实现 checkRuleViewPermission）
+        ruleService.getRule(id);
         return R.ok(scheduledRuleService.getExecutionLogs(id, Math.min(limit, 100)));
     }
 }
