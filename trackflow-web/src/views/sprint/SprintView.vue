@@ -82,6 +82,12 @@
           <span class="warning-text">{{ sprint.statusHint }}</span>
         </div>
 
+        <!-- Sprint 目标 -->
+        <div class="sprint-goal-banner" v-if="sprint.goal">
+          <span class="sprint-goal-banner-icon">🎯</span>
+          <span class="sprint-goal-banner-text">{{ sprint.goal }}</span>
+        </div>
+
         <!-- 进度区域 -->
         <div class="sprint-progress-section">
           <div class="progress-bar-container">
@@ -151,7 +157,6 @@
           :project-key="selectedProjectKey"
         />
 
-        <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
@@ -177,6 +182,12 @@
         <div class="sprint-status-hint" v-if="sprint.statusHint">
           <span class="hint-icon">💡</span>
           <span class="hint-text">{{ sprint.statusHint }}</span>
+        </div>
+
+        <!-- Sprint 目标 -->
+        <div class="sprint-goal-banner" v-if="sprint.goal">
+          <span class="sprint-goal-banner-icon">🎯</span>
+          <span class="sprint-goal-banner-text">{{ sprint.goal }}</span>
         </div>
 
         <!-- 进度区域 -->
@@ -236,7 +247,6 @@
           :project-key="selectedProjectKey"
         />
 
-        <p class="sprint-goal" v-if="sprint.goal">{{ sprint.goal }}</p>
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
@@ -1590,11 +1600,31 @@ function syncUrlProjectParam() {
   font-style: italic;
 }
 
-.sprint-goal {
-  margin-top: 8px;
+.sprint-goal-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(var(--primary-6), 0.05);
+  border-left: 2px solid rgba(var(--primary-6), 0.4);
+  border-radius: 0 4px 4px 0;
   font-size: 13px;
   color: var(--color-text-2);
   line-height: 1.5;
+}
+
+.sprint-goal-banner-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sprint-goal-banner-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .sprint-actions {

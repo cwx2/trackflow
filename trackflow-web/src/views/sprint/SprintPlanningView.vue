@@ -190,6 +190,33 @@
             </div>
           </div>
 
+          <!-- Sprint Goal 区域 -->
+          <div class="sprint-goal-section">
+            <template v-if="editingGoalSprintId === sprint.id">
+              <textarea
+                ref="goalTextareaRef"
+                v-model="editingGoalValue"
+                class="sprint-goal-textarea"
+                placeholder="输入 Sprint 目标..."
+                rows="2"
+                @blur="saveGoal(sprint.id)"
+                @keydown.enter.exact.prevent="saveGoal(sprint.id)"
+                @keydown.escape="cancelGoalEdit"
+              ></textarea>
+            </template>
+            <template v-else>
+              <div
+                class="sprint-goal-display"
+                :class="{ 'sprint-goal-empty': !sprint.goal, 'sprint-goal-editable': canEditSprint }"
+                @click="canEditSprint && startGoalEdit(sprint)"
+              >
+                <span class="sprint-goal-icon">🎯</span>
+                <span class="sprint-goal-text">{{ sprint.goal || '设置 Sprint 目标...' }}</span>
+                <span v-if="canEditSprint" class="sprint-goal-edit-hint">点击编辑</span>
+              </div>
+            </template>
+          </div>
+
           <!-- Sprint 工单列表（drop target） -->
           <div
             class="panel-body"
@@ -306,13 +333,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, reactive } from 'vue'
+import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
+import { usePermission } from '@/composables/usePermission'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
 import type { IssueVO, SprintVO, ProjectMemberVO } from '@/api/types'
@@ -326,6 +354,7 @@ const selectedProject = computed({
 })
 
 const { projects, projectLoadState, loadProjects } = useProjectList()
+const { canEditSprint } = usePermission(() => selectedProject.value)
 
 // ===== Data =====
 const backlogIssues = ref<IssueVO[]>([])
@@ -854,7 +883,59 @@ async function quickCreateForSprint(sprintId: string) {
   }
 }
 
-// ===== Lifecycle =====
+// ===== Sprint Goal Inline Edit =====
+const editingGoalSprintId = ref<string | null>(null)
+const editingGoalValue = ref('')
+const goalTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const savingGoalId = ref<string | null>(null)
+
+function startGoalEdit(sprint: SprintVO) {
+  editingGoalSprintId.value = sprint.id
+  editingGoalValue.value = sprint.goal || ''
+  nextTick(() => {
+    goalTextareaRef.value?.focus()
+    goalTextareaRef.value?.select()
+  })
+}
+
+function cancelGoalEdit() {
+  editingGoalSprintId.value = null
+  editingGoalValue.value = ''
+}
+
+async function saveGoal(sprintId: string) {
+  if (savingGoalId.value === sprintId) return // prevent duplicate saves on blur+enter
+  const sprint = sprints.value.find(s => s.id === sprintId)
+  if (!sprint) { cancelGoalEdit(); return }
+
+  const newGoal = editingGoalValue.value.trim()
+  // No change — just cancel
+  if (newGoal === (sprint.goal || '')) {
+    cancelGoalEdit()
+    return
+  }
+
+  savingGoalId.value = sprintId
+  cancelGoalEdit()
+
+  try {
+    await sprintApi.update(sprintId, { goal: newGoal })
+    // Update local sprint goal
+    const idx = sprints.value.findIndex(s => s.id === sprintId)
+    if (idx >= 0) {
+      sprints.value[idx] = { ...sprints.value[idx], goal: newGoal || undefined }
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '保存目标失败')
+    // Restore edit mode on failure
+    const s = sprints.value.find(s => s.id === sprintId)
+    if (s) startGoalEdit(s)
+  } finally {
+    savingGoalId.value = null
+  }
+}
+
+
 watch(selectedProject, (val) => {
   if (val) onProjectChange()
 }, { immediate: false })
@@ -1246,6 +1327,93 @@ onMounted(async () => {
   height: 1px;
   background: var(--color-border);
   margin: 4px 0;
+}
+
+/* ===== Sprint Goal Section ===== */
+.sprint-goal-section {
+  padding: 0 12px 8px;
+  flex-shrink: 0;
+}
+
+.sprint-goal-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-2);
+  background: var(--color-fill-1);
+  border: 1px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 32px;
+}
+
+.sprint-goal-display.sprint-goal-editable {
+  cursor: pointer;
+}
+
+.sprint-goal-display.sprint-goal-editable:hover {
+  border-color: var(--color-border);
+  background: var(--color-fill-2);
+}
+
+.sprint-goal-display.sprint-goal-empty {
+  color: var(--color-text-4);
+  font-style: italic;
+}
+
+.sprint-goal-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sprint-goal-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sprint-goal-edit-hint {
+  font-size: 10px;
+  color: var(--color-text-4);
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.sprint-goal-display.sprint-goal-editable:hover .sprint-goal-edit-hint {
+  opacity: 1;
+}
+
+.sprint-goal-textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid rgb(var(--primary-6));
+  border-radius: 4px;
+  background: var(--color-bg-2);
+  color: var(--color-text-1);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  font-family: inherit;
+  box-shadow: 0 0 0 2px rgba(var(--primary-6), 0.15);
+  transition: border-color 0.15s;
+}
+
+.sprint-goal-textarea::placeholder {
+  color: var(--color-text-4);
 }
 
 /* ===== Create Button ===== */
