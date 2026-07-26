@@ -529,6 +529,37 @@
           <a-date-picker v-model="editForm.endDate" style="width: 100%" />
         </a-form-item>
       </a-form>
+      <template #footer>
+        <div class="edit-modal-footer">
+          <!-- 左侧：归档/恢复 + 删除 -->
+          <div class="edit-modal-footer-left">
+            <a-button
+              v-if="canEditSprint && editingSprint && editingSprint.status === 'completed'"
+              size="small"
+              type="secondary"
+              @click="handleEditModalArchive"
+            >归档</a-button>
+            <a-button
+              v-if="canEditSprint && editingSprint && editingSprint.status === 'archived'"
+              size="small"
+              type="secondary"
+              @click="handleEditModalRestore"
+            >恢复</a-button>
+            <a-button
+              v-if="canDeleteSprint && editingSprint"
+              size="small"
+              status="danger"
+              type="secondary"
+              @click="handleEditModalDelete"
+            >删除</a-button>
+          </div>
+          <!-- 右侧：保存修改 + 取消 -->
+          <div class="edit-modal-footer-right">
+            <a-button size="small" @click="showEdit = false">取消</a-button>
+            <a-button size="small" type="primary" :loading="updating" @click="handleUpdate">保存修改</a-button>
+          </div>
+        </div>
+      </template>
     </a-modal>
 
     <!-- 完成 Sprint 确认弹窗 -->
@@ -770,6 +801,7 @@ const showEdit = ref(false)
 const updating = ref(false)
 const editingSprintId = ref<string>('')
 const editingCompleted = ref(false)
+const editingSprint = ref<SprintVO | null>(null)
 const editForm = reactive({
   name: '',
   goal: '',
@@ -1270,11 +1302,33 @@ function confirmOverlapAndProceed() {
 function openEditModal(sprint: SprintVO) {
   editingSprintId.value = sprint.id
   editingCompleted.value = false  // 所有状态均允许修改日期（YouTrack 标准）
+  editingSprint.value = sprint
   editForm.name = sprint.name
   editForm.goal = sprint.goal || ''
   editForm.startDate = sprint.startDate || ''
   editForm.endDate = sprint.endDate || ''
   showEdit.value = true
+}
+
+async function handleEditModalArchive() {
+  if (!editingSprint.value) return
+  const sprint = editingSprint.value
+  showEdit.value = false
+  await archiveSprint(sprint)
+}
+
+async function handleEditModalRestore() {
+  if (!editingSprint.value) return
+  const sprint = editingSprint.value
+  showEdit.value = false
+  await restoreSprint(sprint)
+}
+
+async function handleEditModalDelete() {
+  if (!editingSprint.value) return
+  const sprint = editingSprint.value
+  showEdit.value = false
+  await handleDeleteSprint(sprint)
 }
 
 async function handleUpdate() {
@@ -1629,6 +1683,23 @@ function syncUrlProjectParam() {
 
 .sprint-actions {
   margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.edit-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.edit-modal-footer-left {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-modal-footer-right {
   display: flex;
   gap: 8px;
 }
