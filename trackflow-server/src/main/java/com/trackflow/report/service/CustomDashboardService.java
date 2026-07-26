@@ -489,6 +489,84 @@ public class CustomDashboardService {
         return systemDefault != null ? systemDefault.getId() : null;
     }
 
+    /**
+     * 获取或自动创建项目概览仪表盘
+     * <p>
+     * 一个项目只有一个 project_overview 类型仪表盘，由系统自动维护（owner = 项目创建者/首位访问者）。
+     * 使用 SELECT FOR UPDATE（分布式场景下用 getOrCreate + unique 索引保障幂等）。
+     *
+     * @param projectId 项目 ID
+     * @param userId    当前用户 ID（首次创建时作为 owner）
+     * @return 项目概览仪表盘详情 VO
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public DashboardDetailVO getOrCreateProjectOverviewDashboard(Long projectId, Long userId) {
+        // 先尝试查找已存在的项目概览仪表盘
+        Dashboard existing = dashboardMapper.selectOne(
+                new LambdaQueryWrapper<Dashboard>()
+                        .eq(Dashboard::getDashboardType, "project_overview")
+                        .eq(Dashboard::getProjectId, projectId));
+
+        if (existing != null) {
+            return buildProjectOverviewDetailVO(existing, userId);
+        }
+
+        // 不存在则自动创建（unique 索引保证并发安全）
+        Dashboard dashboard = new Dashboard();
+        dashboard.setName("项目概览");
+        dashboard.setDescription("项目概览仪表盘");
+        dashboard.setOwnerId(userId);
+        dashboard.setShared(true); // 项目成员均可查看
+        dashboard.setLayout("{}");
+        dashboard.setDashboardType("project_overview");
+        dashboard.setProjectId(projectId);
+        dashboard.setIsSystemDefault(false);
+
+        try {
+            dashboardMapper.insert(dashboard);
+            log.info("Project overview dashboard created: projectId={}, dashboardId={}, owner={}",
+                    projectId, dashboard.getId(), userId);
+        } catch (Exception e) {
+            // 并发场景下另一线程已经创建，重新查询
+            Dashboard reFetch = dashboardMapper.selectOne(
+                    new LambdaQueryWrapper<Dashboard>()
+                            .eq(Dashboard::getDashboardType, "project_overview")
+                            .eq(Dashboard::getProjectId, projectId));
+            if (reFetch != null) {
+                return buildProjectOverviewDetailVO(reFetch, userId);
+            }
+            throw e;
+        }
+
+        return buildProjectOverviewDetailVO(dashboard, userId);
+    }
+
+    /**
+     * 构建项目概览仪表盘 VO（含 widgets）
+     */
+    private DashboardDetailVO buildProjectOverviewDetailVO(Dashboard dashboard, Long userId) {
+        DashboardDetailVO vo = dashboardConverter.toDetailVO(dashboard);
+        vo.setLayoutVersion(dashboard.getLayoutVersion() != null ? dashboard.getLayoutVersion() : 0);
+        vo.setIsSystemDefault(false);
+
+        SysUser owner = sysUserMapper.selectById(dashboard.getOwnerId());
+        vo.setOwnerName(owner != null ? owner.getDisplayName() : "");
+
+        Long shareCount = shareMapper.selectCount(new LambdaQueryWrapper<DashboardShare>()
+                .eq(DashboardShare::getDashboardId, dashboard.getId()));
+        vo.setShareCount(shareCount.intValue());
+
+        LambdaQueryWrapper<DashboardWidget> widgetWrapper = new LambdaQueryWrapper<DashboardWidget>()
+                .eq(DashboardWidget::getDashboardId, dashboard.getId())
+                .orderByAsc(DashboardWidget::getSortOrder)
+                .orderByAsc(DashboardWidget::getPositionY)
+                .orderByAsc(DashboardWidget::getPositionX);
+        List<DashboardWidget> widgets = widgetMapper.selectList(widgetWrapper);
+        vo.setWidgets(dashboardConverter.toWidgetVOList(widgets));
+
+        return vo;
+    }
+
     // ─── Widget 操作 ────────────────────────────────────────
 
     /**
@@ -654,6 +732,7 @@ public class CustomDashboardService {
 
     /**
      * 校验用户是否有编辑权限（owner 或 share 权限为 edit，或系统管理员对系统默认仪表盘）
+     * 对 project_overview 类型，还允许有项目 project:edit 权限的用户编辑 Widget
      */
     private void assertCanEdit(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
@@ -668,6 +747,12 @@ public class CustomDashboardService {
                 && permissionService.isSystemAdmin(userId)) {
             return;
         }
+        // 项目概览仪表盘：有项目 project:edit 权限的用户可编辑 Widget
+        if ("project_overview".equals(dashboard.getDashboardType())
+                && dashboard.getProjectId() != null
+                && permissionService.hasPermission(userId, dashboard.getProjectId(), "project:edit")) {
+            return;
+        }
         // 检查是否有 edit 权限的共享
         if (shareMapper.countEditAccessByUser(dashboardId, userId) > 0) {
             return;
@@ -676,7 +761,7 @@ public class CustomDashboardService {
     }
 
     /**
-     * 校验用户是否有查看权限（系统默认 / owner / 全局共享 / 精确共享）
+     * 校验用户是否有查看权限（系统默认 / owner / 全局共享 / 精确共享 / project_overview 项目成员）
      */
     private void assertCanView(Long dashboardId, Long userId) {
         Dashboard dashboard = dashboardMapper.selectById(dashboardId);
@@ -690,6 +775,12 @@ public class CustomDashboardService {
             return;
         }
         if (Boolean.TRUE.equals(dashboard.getShared())) {
+            return;
+        }
+        // 项目概览仪表盘：有项目 project:view 权限的用户可查看
+        if ("project_overview".equals(dashboard.getDashboardType())
+                && dashboard.getProjectId() != null
+                && permissionService.hasPermission(userId, dashboard.getProjectId(), "project:view")) {
             return;
         }
         if (shareMapper.countAccessByUser(dashboardId, userId) > 0) {

@@ -34,6 +34,18 @@ public class Dashboard implements Serializable {
     /** 是否为系统默认仪表盘（全站唯一，所有用户可见，仅管理员可编辑） */
     private Boolean isSystemDefault;
 
+    /**
+     * 仪表盘类型：
+     * - personal（默认）：个人仪表盘
+     * - project_overview：项目概览仪表盘
+     */
+    private String dashboardType;
+
+    /**
+     * 所属项目 ID（dashboardType=project_overview 时必填）
+     */
+    private Long projectId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

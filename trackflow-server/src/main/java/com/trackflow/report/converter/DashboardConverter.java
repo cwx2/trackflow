@@ -30,6 +30,7 @@ public interface DashboardConverter extends BaseConverter {
     @Mapping(target = "ownerName", ignore = true)
     @Mapping(target = "widgets", ignore = true)
     @Mapping(target = "shareCount", ignore = true)
+    @Mapping(target = "projectId", expression = "java(longToString(entity.getProjectId()))")
     DashboardDetailVO toDetailVO(Dashboard entity);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")

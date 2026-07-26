@@ -20,6 +20,10 @@ public class DashboardDetailVO {
     private Integer layoutVersion;
     /** 是否为系统默认仪表盘 */
     private Boolean isSystemDefault;
+    /** 仪表盘类型：personal / project_overview */
+    private String dashboardType;
+    /** 所属项目 ID（project_overview 类型时有值） */
+    private String projectId;
     /** 精细化共享对象数量 */
     private Integer shareCount;
     private LocalDateTime createdAt;
