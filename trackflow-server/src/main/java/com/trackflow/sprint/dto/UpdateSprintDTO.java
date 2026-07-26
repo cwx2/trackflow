@@ -26,4 +26,17 @@ public class UpdateSprintDTO {
      * 前端展示确认弹窗后，带 confirmOverlap=true 重新提交以跳过重叠检测。
      */
     private Boolean confirmOverlap;
+
+    /**
+     * 是否清空开始日期（true = 将 start_date 设为 NULL，恢复为"未排期"状态）。
+     * 与 startDate 互斥：clearStartDate=true 时忽略 startDate 的值。
+     * 对标 YouTrack：Sprint 日期是可选的，用户可随时将日期清空（unscheduled sprint）。
+     */
+    private Boolean clearStartDate;
+
+    /**
+     * 是否清空结束日期（true = 将 end_date 设为 NULL）。
+     * 与 endDate 互斥：clearEndDate=true 时忽略 endDate 的值。
+     */
+    private Boolean clearEndDate;
 }

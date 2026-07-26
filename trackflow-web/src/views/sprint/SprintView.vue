@@ -1351,10 +1351,34 @@ async function doUpdate(confirmOverlap: boolean) {
   try {
     const data: Record<string, any> = {
       name: editForm.name.trim(),
-      goal: editForm.goal || '',
-      startDate: editForm.startDate || null,
-      endDate: editForm.endDate || null
+      goal: editForm.goal || ''
     }
+
+    // 日期处理：区分"清空"和"设置"语义
+    // 若用户清空了日期（原来有值，现在为空），需发送 clearXxxDate=true
+    // 若用户设置了日期，直接发送日期值
+    if (!editForm.startDate) {
+      // 用户清空了开始日期
+      if (editingSprint.value?.startDate) {
+        // 原来有日期，现在清空——发送清空信号
+        data.clearStartDate = true
+      }
+      // 原来就没有日期，无需操作
+    } else {
+      data.startDate = editForm.startDate
+    }
+
+    if (!editForm.endDate) {
+      // 用户清空了结束日期
+      if (editingSprint.value?.endDate) {
+        // 原来有日期，现在清空——发送清空信号
+        data.clearEndDate = true
+      }
+      // 原来就没有日期，无需操作
+    } else {
+      data.endDate = editForm.endDate
+    }
+
     if (confirmOverlap) {
       data.confirmOverlap = true
     }

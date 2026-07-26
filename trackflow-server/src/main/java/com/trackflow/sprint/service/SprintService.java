@@ -482,31 +482,67 @@ public class SprintService {
             }
             sprint.setGoal(dto.getGoal());
         }
-        if (dto.getStartDate() != null) {
+        // 开始日期：clearStartDate=true 时清空，否则若有新值则更新
+        boolean startDateCleared = false;
+        boolean startDateSet = false;
+        if (Boolean.TRUE.equals(dto.getClearStartDate())) {
+            // 显式清空开始日期（恢复为"未排期"状态，对标 YouTrack unscheduled sprint）
+            if (sprint.getStartDate() != null) {
+                changes.add(buildFieldChange("start_date", sprint.getStartDate().toString(), ""));
+            }
+            sprint.setStartDate(null);
+            startDateCleared = true;
+        } else if (dto.getStartDate() != null) {
             String oldDate = sprint.getStartDate() != null ? sprint.getStartDate().toString() : "";
             if (!dto.getStartDate().equals(sprint.getStartDate())) {
                 changes.add(buildFieldChange("start_date", oldDate, dto.getStartDate().toString()));
             }
             sprint.setStartDate(dto.getStartDate());
+            startDateSet = true;
         }
-        if (dto.getEndDate() != null) {
+
+        // 结束日期：clearEndDate=true 时清空，否则若有新值则更新
+        boolean endDateCleared = false;
+        boolean endDateSet = false;
+        if (Boolean.TRUE.equals(dto.getClearEndDate())) {
+            // 显式清空结束日期
+            if (sprint.getEndDate() != null) {
+                changes.add(buildFieldChange("end_date", sprint.getEndDate().toString(), ""));
+            }
+            sprint.setEndDate(null);
+            endDateCleared = true;
+        } else if (dto.getEndDate() != null) {
             String oldDate = sprint.getEndDate() != null ? sprint.getEndDate().toString() : "";
             if (!dto.getEndDate().equals(sprint.getEndDate())) {
                 changes.add(buildFieldChange("end_date", oldDate, dto.getEndDate().toString()));
             }
             sprint.setEndDate(dto.getEndDate());
+            endDateSet = true;
         }
 
         // 日期合理性校验：如果两个日期都存在，开始必须早于结束
         validateDateRange(sprint.getStartDate(), sprint.getEndDate());
 
-        // 日期重叠检测：仅在日期有变更且未确认时触发
-        boolean dateChanged = (dto.getStartDate() != null || dto.getEndDate() != null);
+        // 日期重叠检测：仅在日期有变更（设置或清空）且未确认时触发
+        boolean dateChanged = startDateCleared || startDateSet || endDateCleared || endDateSet;
         if (dateChanged && !Boolean.TRUE.equals(dto.getConfirmOverlap())) {
             checkDateOverlap(sprint.getProjectId(), sprint.getStartDate(), sprint.getEndDate(), id);
         }
 
-        sprintMapper.updateById(sprint);
+        // 持久化：若有日期被清空，需要使用 LambdaUpdateWrapper 明确 SET NULL
+        // （updateById 默认跳过 null 字段，无法将日期清空）
+        if (startDateCleared || endDateCleared) {
+            LambdaUpdateWrapper<Sprint> wrapper = new LambdaUpdateWrapper<Sprint>()
+                    .eq(Sprint::getId, sprint.getId())
+                    .set(Sprint::getName, sprint.getName())
+                    .set(Sprint::getGoal, sprint.getGoal())
+                    .set(Sprint::getStatus, sprint.getStatus())
+                    .set(Sprint::getStartDate, sprint.getStartDate())
+                    .set(Sprint::getEndDate, sprint.getEndDate());
+            sprintMapper.update(null, wrapper);
+        } else {
+            sprintMapper.updateById(sprint);
+        }
 
         // 记录项目活动日志（只在有实际变更时记录）
         if (!changes.isEmpty()) {
