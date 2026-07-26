@@ -2016,6 +2016,27 @@ public class ProjectService {
     }
 
     /**
+     * 获取项目时间追踪设置 VO。
+     */
+    public com.trackflow.project.vo.ProjectTimeTrackingSettingsVO getTimeTrackingSettingsVO(Long projectId) {
+        com.trackflow.project.vo.ProjectTimeTrackingSettingsVO vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
+        vo.setEnabled(isTimeTrackingEnabled(projectId));
+        return vo;
+    }
+
+    /**
+     * 更新项目时间追踪设置并返回最新的设置 VO。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public com.trackflow.project.vo.ProjectTimeTrackingSettingsVO updateTimeTrackingSettingsVO(
+            Long projectId, com.trackflow.project.dto.UpdateTimeTrackingSettingsDTO dto) {
+        if (dto.getEnabled() != null) {
+            updateTimeTrackingEnabled(projectId, dto.getEnabled());
+        }
+        return getTimeTrackingSettingsVO(projectId);
+    }
+
+    /**
      * 检查项目是否启用了时间追踪功能。
      * 默认启用（兼容已有项目）。
      */

@@ -33,8 +33,10 @@ import com.trackflow.project.vo.ProjectMemberVO;
 import com.trackflow.project.vo.ProjectMembersViewVO;
 import com.trackflow.project.vo.ProjectModulesVO;
 import com.trackflow.project.vo.ProjectStatisticsVO;
+import com.trackflow.project.vo.ProjectTimeTrackingSettingsVO;
 import com.trackflow.project.vo.ProjectTrashSettingsVO;
 import com.trackflow.project.vo.ProjectVO;
+import com.trackflow.project.vo.TimeTrackingDisableImpactVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -304,25 +306,18 @@ public class ProjectController {
 
     @GetMapping("/{id}/time-tracking-settings")
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
-    public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> getTimeTrackingSettings(@PathVariable("id") String id) {
+    public R<ProjectTimeTrackingSettingsVO> getTimeTrackingSettings(@PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
-        var vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
-        vo.setEnabled(projectService.isTimeTrackingEnabled(projectId));
-        return R.ok(vo);
+        return R.ok(projectService.getTimeTrackingSettingsVO(projectId));
     }
 
     @PutMapping("/{id}/time-tracking-settings")
     @PreAuthorize("@perm.checkProject(#id, 'project:edit')")
-    public R<com.trackflow.project.vo.ProjectTimeTrackingSettingsVO> updateTimeTrackingSettings(
+    public R<ProjectTimeTrackingSettingsVO> updateTimeTrackingSettings(
             @PathVariable("id") String id,
-            @Valid @RequestBody com.trackflow.project.dto.UpdateTimeTrackingSettingsDTO dto) {
+            @Valid @RequestBody UpdateTimeTrackingSettingsDTO dto) {
         Long projectId = projectService.resolveProjectId(id);
-        if (dto.getEnabled() != null) {
-            projectService.updateTimeTrackingEnabled(projectId, dto.getEnabled());
-        }
-        var vo = new com.trackflow.project.vo.ProjectTimeTrackingSettingsVO();
-        vo.setEnabled(projectService.isTimeTrackingEnabled(projectId));
-        return R.ok(vo);
+        return R.ok(projectService.updateTimeTrackingSettingsVO(projectId, dto));
     }
 
     /**
@@ -330,7 +325,7 @@ public class ProjectController {
      */
     @GetMapping("/{id}/time-tracking-settings/disable-impact")
     @PreAuthorize("@perm.checkProject(#id, 'project:edit')")
-    public R<com.trackflow.project.vo.TimeTrackingDisableImpactVO> getTimeTrackingDisableImpact(
+    public R<TimeTrackingDisableImpactVO> getTimeTrackingDisableImpact(
             @PathVariable("id") String id) {
         Long projectId = projectService.resolveProjectId(id);
         return R.ok(projectService.getTimeTrackingDisableImpact(projectId));
