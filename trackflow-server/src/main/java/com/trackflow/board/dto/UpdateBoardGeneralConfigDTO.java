@@ -46,4 +46,11 @@ public class UpdateBoardGeneralConfigDTO {
     /** 看板列标识字段：status | priority（默认 status） */
     @Pattern(regexp = "^(status|priority)$", message = "列标识字段只允许: status, priority")
     private String columnField;
+
+    /**
+     * 是否允许卡片分配到多个迭代（Sprint）。
+     * 对应 YouTrack Board Settings > Cards Tab: Allow cards to be assigned to multiple sprints。
+     * null 时默认为 false（向后兼容）。
+     */
+    private Boolean allowMultipleSprints;
 }

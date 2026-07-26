@@ -84,6 +84,7 @@ public class BoardGeneralConfigService {
             vo.setFilterQuery(config.getFilterQuery());
             vo.setDoneRetentionDays(config.getDoneRetentionDays());
             vo.setColumnField(config.getColumnField() != null ? config.getColumnField() : "status");
+            vo.setAllowMultipleSprints(config.getAllowMultipleSprints() != null ? config.getAllowMultipleSprints() : false);
         } else {
             vo.setName("");
             vo.setCanViewRoles(DEFAULT_CAN_VIEW_ROLES);
@@ -92,6 +93,7 @@ public class BoardGeneralConfigService {
             vo.setFilterQuery(null);
             vo.setDoneRetentionDays(null);
             vo.setColumnField("status");
+            vo.setAllowMultipleSprints(false);
         }
 
         // 一次性计算当前用户的看板权限（复用已查到的 config，避免 board_general_config 表被重复查询）
@@ -136,6 +138,7 @@ public class BoardGeneralConfigService {
         String canEditJson = serializeRoles(dto.getCanEditRoles());
         Integer doneRetentionDays = dto.getDoneRetentionDays();
         String columnField = dto.getColumnField() != null ? dto.getColumnField() : "status";
+        boolean allowMultipleSprints = dto.getAllowMultipleSprints() != null ? dto.getAllowMultipleSprints() : false;
 
         if (existing != null) {
             existing.setName(name);
@@ -145,6 +148,7 @@ public class BoardGeneralConfigService {
             existing.setFilterQuery(filterQuery);
             existing.setDoneRetentionDays(doneRetentionDays);
             existing.setColumnField(columnField);
+            existing.setAllowMultipleSprints(allowMultipleSprints);
             existing.setUpdatedAt(now);
             boardGeneralConfigMapper.updateById(existing);
         } else {
@@ -157,6 +161,7 @@ public class BoardGeneralConfigService {
             config.setFilterQuery(filterQuery);
             config.setDoneRetentionDays(doneRetentionDays);
             config.setColumnField(columnField);
+            config.setAllowMultipleSprints(allowMultipleSprints);
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardGeneralConfigMapper.insert(config);

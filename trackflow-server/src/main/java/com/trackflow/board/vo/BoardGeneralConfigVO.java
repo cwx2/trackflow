@@ -34,6 +34,12 @@ public class BoardGeneralConfigVO {
     /** 看板列标识字段：status | priority（默认 status） */
     private String columnField;
 
+    /**
+     * 是否允许卡片分配到多个迭代（Sprint）。
+     * 对应 YouTrack Board Settings > Cards Tab: Allow cards to be assigned to multiple sprints。
+     */
+    private Boolean allowMultipleSprints;
+
     /** 当前用户是否有看板查看权限（运行时计算） */
     private Boolean currentUserCanView;
 

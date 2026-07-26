@@ -49,6 +49,13 @@ public class BoardGeneralConfig implements Serializable {
     /** 看板列标识字段：status=按状态分列(默认), priority=按优先级分列 */
     private String columnField;
 
+    /**
+     * 是否允许卡片分配到多个迭代（Sprint）。
+     * 对应 YouTrack Board Settings > Cards Tab: Allow cards to be assigned to multiple sprints。
+     * 默认 false，向后兼容。
+     */
+    private Boolean allowMultipleSprints;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
