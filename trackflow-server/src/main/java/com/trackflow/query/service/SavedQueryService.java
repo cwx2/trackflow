@@ -208,29 +208,52 @@ public class SavedQueryService {
     }
 
     /**
-     * 确保用户有默认收藏（首次使用时初始化）
-     * 默认收藏 "分配给我"(id=5) 和 "我报告的"(id=6)
+     * 系统默认收藏的查询名称列表（YouTrack 标准预设）
+     * 新增预设查询后，在此列表追加名称即可自动同步给所有用户
+     */
+    private static final List<String> DEFAULT_QUERY_NAMES = List.of("分配给我", "我报告的", "我评论的");
+
+    /**
+     * 确保用户拥有全部默认收藏（差量补充模式）。
+     * <p>
+     * 与旧的"首次初始化"不同，此方法每次调用都会检查并补充缺失的默认查询，
+     * 保证新增的预设查询能自动出现在所有用户的侧边栏中。
      */
     private void ensureDefaultFavorites(Long userId) {
-        LambdaQueryWrapper<UserQueryFavorite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(UserQueryFavorite::getUserId, userId);
-        long count = favoriteMapper.selectCount(wrapper);
-        if (count > 0) return; // 已有收藏记录，不再初始化
-
-        // 查找默认查询（"分配给我" 和 "我报告的"）
-        List<Long> defaultQueryIds = List.of(5L, 6L);
+        // 查找所有系统默认查询（按名称匹配 shared 查询）
         LambdaQueryWrapper<SavedQuery> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.in(SavedQuery::getId, defaultQueryIds);
+        queryWrapper.in(SavedQuery::getName, DEFAULT_QUERY_NAMES)
+                .eq(SavedQuery::getShared, true)
+                .orderByAsc(SavedQuery::getSortOrder);
         List<SavedQuery> defaultQueries = queryMapper.selectList(queryWrapper);
+        if (defaultQueries.isEmpty()) return;
 
-        int order = 0;
+        // 获取用户已收藏的查询 ID 集合
+        LambdaQueryWrapper<UserQueryFavorite> favWrapper = new LambdaQueryWrapper<>();
+        favWrapper.eq(UserQueryFavorite::getUserId, userId);
+        Set<Long> existingFavIds = favoriteMapper.selectList(favWrapper).stream()
+                .map(UserQueryFavorite::getQueryId)
+                .collect(Collectors.toSet());
+
+        // 获取当前最大 sortOrder（用于追加新收藏时排在已有项之后）
+        LambdaQueryWrapper<UserQueryFavorite> maxWrapper = new LambdaQueryWrapper<>();
+        maxWrapper.eq(UserQueryFavorite::getUserId, userId)
+                .orderByDesc(UserQueryFavorite::getSortOrder)
+                .last("LIMIT 1");
+        UserQueryFavorite maxFav = favoriteMapper.selectOne(maxWrapper);
+        int nextOrder = (maxFav != null) ? maxFav.getSortOrder() + 1 : 0;
+
+        // 差量补充：只为尚未收藏的默认查询创建收藏记录
         for (SavedQuery q : defaultQueries) {
-            UserQueryFavorite fav = new UserQueryFavorite();
-            fav.setUserId(userId);
-            fav.setQueryId(q.getId());
-            fav.setSortOrder(order++);
-            fav.setCreatedAt(LocalDateTime.now());
-            favoriteMapper.insert(fav);
+            if (!existingFavIds.contains(q.getId())) {
+                UserQueryFavorite fav = new UserQueryFavorite();
+                fav.setUserId(userId);
+                fav.setQueryId(q.getId());
+                fav.setSortOrder(nextOrder++);
+                fav.setCreatedAt(LocalDateTime.now());
+                favoriteMapper.insert(fav);
+                log.debug("为用户 {} 补充默认收藏查询: {}", userId, q.getName());
+            }
         }
     }
 
