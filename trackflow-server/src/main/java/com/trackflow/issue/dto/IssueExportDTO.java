@@ -54,6 +54,8 @@ public class IssueExportDTO {
     private String dueSoon;
     private String reportedByMe;
     private String hideResolved;
+    private String dueAfter;   // due_date >= dueAfter (yyyy-MM-dd)
+    private String dueBefore;  // due_date <= dueBefore (yyyy-MM-dd)
 
     /**
      * 将导出 DTO 中的筛选条件转换为 IssueQuery，以便复用统一的筛选引擎。
@@ -93,6 +95,12 @@ public class IssueExportDTO {
         }
         if (this.updatedBefore != null && !this.updatedBefore.isBlank()) {
             q.setUpdatedBefore(LocalDate.parse(this.updatedBefore));
+        }
+        if (this.dueAfter != null && !this.dueAfter.isBlank()) {
+            q.setDueAfter(LocalDate.parse(this.dueAfter));
+        }
+        if (this.dueBefore != null && !this.dueBefore.isBlank()) {
+            q.setDueBefore(LocalDate.parse(this.dueBefore));
         }
         return q;
     }

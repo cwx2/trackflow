@@ -370,6 +370,14 @@ public class IssueService {
             }
         }
 
+        // dueAfter / dueBefore: 按截止日期范围筛选（用于日历 Widget 等场景）
+        if (query.getDueAfter() != null) {
+            wrapper.ge("due_date", query.getDueAfter());
+        }
+        if (query.getDueBefore() != null) {
+            wrapper.le("due_date", query.getDueBefore());
+        }
+
         // reportedByMe: reporter_id = current user
         if ("true".equals(query.getReportedByMe())) {
             wrapper.eq("reporter_id", currentUserId);

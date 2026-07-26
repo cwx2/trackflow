@@ -23,6 +23,7 @@ export const issueApi = {
     createdAfter?: string; createdBefore?: string
     updatedAfter?: string; updatedBefore?: string
     resolvedAfter?: string; resolvedBefore?: string
+    dueAfter?: string; dueBefore?: string
     excludeDoneBefore?: string
   }) {
     return request.get<any, R<PageResult<IssueVO>>>('/issues', { params })

@@ -44,6 +44,10 @@ public class IssueQuery extends PageQuery {
     private LocalDate resolvedAfter;
     private LocalDate resolvedBefore;
 
+    // Due date range filters (ISO date format yyyy-MM-dd)
+    private LocalDate dueAfter;    // due_date >= dueAfter
+    private LocalDate dueBefore;   // due_date <= dueBefore
+
     // Special filters
     private String overdue;   // "true" = due_date < today AND status not done
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
