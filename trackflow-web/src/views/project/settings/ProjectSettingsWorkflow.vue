@@ -181,6 +181,7 @@
               field="triggerField"
             >
               <a-select v-model="ruleForm.triggerField" placeholder="全部字段" allow-clear>
+                <a-option value="status_id">状态</a-option>
                 <a-option value="issue_type">工单类型</a-option>
                 <a-option value="priority">优先级</a-option>
                 <a-option value="assignee">负责人</a-option>
@@ -526,7 +527,7 @@ function eventColor(event: string) {
 
 function fieldLabel(field: string) {
   const map: Record<string, string> = {
-    issue_type: '类型', priority: '优先级', assignee: '负责人',
+    status_id: '状态', issue_type: '类型', priority: '优先级', assignee: '负责人',
     sprint: '迭代', title: '标题', due_date: '截止日期',
     type: '类型', status: '状态'
   }
