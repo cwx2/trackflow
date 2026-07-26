@@ -552,6 +552,32 @@ export interface SprintAssigneeItem {
   estimatedHoursTotal: number
 }
 
+/** Sprint 速率统计（用于规划页历史速率参考） */
+export interface SprintVelocityVO {
+  /** 用于统计的 Sprint 数量 */
+  sprintCount: number
+  /** 最近已完成 Sprint 的速率列表（时间从旧到新） */
+  sprints: SprintVelocityItem[]
+  /** 平均速率（已完成工时/Sprint，单位：小时） */
+  averageVelocity: number
+  /** 最近一个 Sprint 的速率 */
+  lastVelocity: number
+}
+
+/** Sprint 速率统计中的单个 Sprint 数据 */
+export interface SprintVelocityItem {
+  id: string
+  name: string
+  startDate?: string
+  endDate?: string
+  /** 该 Sprint 完成的工时（已关闭工单的 estimated_hours 之和，单位：小时） */
+  completedHours: number
+  /** 该 Sprint 规划的总工时 */
+  plannedHours: number
+  totalIssues: number
+  doneIssues: number
+}
+
 // ========== 用户/角色/组织 ==========
 export interface UserVO {
   id: string

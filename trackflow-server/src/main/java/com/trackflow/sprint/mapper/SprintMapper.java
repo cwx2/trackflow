@@ -50,4 +50,17 @@ public interface SprintMapper extends BaseMapper<Sprint> {
      */
     List<com.trackflow.issue.mapper.result.DailyLoggedMinutesRow> selectSprintDailyLoggedMinutes(
             @Param("sprintId") Long sprintId);
+
+    /**
+     * 查询项目最近已完成 Sprint 的速率统计数据。
+     * 按完成时间倒序取最近 N 个 completed/archived 状态的 Sprint，
+     * 包含各 Sprint 的规划工时和已完成工时（JOIN issue_status）。
+     *
+     * @param projectId 项目 ID
+     * @param limit     最多取几个 Sprint（通常 3~5）
+     * @return Sprint 速率列表（含工时统计），时间从旧到新
+     */
+    List<com.trackflow.sprint.vo.SprintVelocityVO.SprintVelocityItem> selectSprintVelocity(
+            @Param("projectId") Long projectId,
+            @Param("limit") int limit);
 }

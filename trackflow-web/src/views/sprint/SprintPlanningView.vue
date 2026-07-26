@@ -171,6 +171,7 @@
           :key="sprint.id"
           class="sprint-column"
         >
+          <!-- Sprint 面板头部 -->
           <div class="panel-header">
             <div class="panel-header-left">
               <span class="sprint-badge" :class="sprint.status">
@@ -187,6 +188,55 @@
                   <icon-plus />
                 </button>
               </a-tooltip>
+            </div>
+          </div>
+
+          <!-- Sprint 工时统计条 -->
+          <div class="sprint-hours-bar" v-if="getSprintTotalHours(sprint.id) > 0 || velocityData">
+            <div class="sprint-hours-stats">
+              <div class="hours-stat-item">
+                <span class="hours-stat-label">已规划</span>
+                <span class="hours-stat-value planned">{{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
+              </div>
+              <div class="hours-stat-divider" v-if="velocityData && velocityData.averageVelocity > 0"></div>
+              <div class="hours-stat-item" v-if="velocityData && velocityData.averageVelocity > 0">
+                <span class="hours-stat-label">历史均速</span>
+                <span class="hours-stat-value velocity">{{ formatHours(velocityData.averageVelocity) }}/Sprint</span>
+              </div>
+              <div class="hours-stat-item" v-if="velocityData && velocityData.sprintCount > 0">
+                <a-tooltip :content="getVelocityTooltip()">
+                  <span
+                    class="hours-stat-badge"
+                    :class="getLoadBadgeClass(sprint.id)"
+                  >{{ getLoadLabel(sprint.id) }}</span>
+                </a-tooltip>
+              </div>
+            </div>
+            <!-- 工时进度条（仅有历史速率时才显示对比条） -->
+            <div
+              class="hours-progress-bar"
+              v-if="velocityData && velocityData.averageVelocity > 0 && getSprintTotalHours(sprint.id) > 0"
+            >
+              <div
+                class="hours-progress-fill"
+                :class="getProgressBarClass(sprint.id)"
+                :style="{ width: getProgressWidth(sprint.id) + '%' }"
+              ></div>
+              <div class="hours-progress-reference" title="历史平均速率">
+                <!-- 参考线标记 -->
+              </div>
+            </div>
+            <div
+              class="hours-velocity-history"
+              v-if="velocityData && velocityData.sprints.length > 0"
+            >
+              <span class="velocity-history-label">近期速率：</span>
+              <span
+                v-for="item in velocityData.sprints.slice(-3)"
+                :key="item.id"
+                class="velocity-history-chip"
+                :title="item.name + ': ' + formatHours(item.completedHours)"
+              >{{ formatHours(item.completedHours) }}</span>
             </div>
           </div>
 
@@ -343,7 +393,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
-import type { IssueVO, SprintVO, ProjectMemberVO } from '@/api/types'
+import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO } from '@/api/types'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -363,6 +413,9 @@ const sprints = ref<SprintVO[]>([])
 const projectMembers = ref<ProjectMemberVO[]>([])
 const backlogLoading = ref(false)
 const sprintsLoading = ref(false)
+
+// ===== Velocity Data =====
+const velocityData = ref<SprintVelocityVO | null>(null)
 
 // ===== Filters =====
 const backlogSearch = ref('')
@@ -429,6 +482,66 @@ function formatDate(dateStr?: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/**
+ * 计算当前已规划工时占历史平均速率的百分比（用于进度条宽度）
+ * 超过 120% 时固定显示 100%（避免进度条溢出容器）
+ */
+function getProgressWidth(sprintId: string): number {
+  const totalHours = getSprintTotalHours(sprintId)
+  const avgVelocity = velocityData.value?.averageVelocity || 0
+  if (avgVelocity <= 0 || totalHours <= 0) return 0
+  // 以 120% 的历史均速为 100% 宽度（留出超载红色区域）
+  const ratio = totalHours / (avgVelocity * 1.2)
+  return Math.min(Math.round(ratio * 100), 100)
+}
+
+/**
+ * 根据已规划工时 vs 历史速率，返回进度条颜色类名
+ * - 0% ~ 80%：蓝色（充足）
+ * - 80% ~ 100%：橙色（合理）
+ * - > 100%（即 > 历史均速 * 1.2）：红色（可能超载）
+ */
+function getProgressBarClass(sprintId: string): string {
+  const totalHours = getSprintTotalHours(sprintId)
+  const avgVelocity = velocityData.value?.averageVelocity || 0
+  if (avgVelocity <= 0) return 'progress-normal'
+  const ratio = totalHours / avgVelocity
+  if (ratio > 1.2) return 'progress-overloaded'
+  if (ratio > 0.8) return 'progress-healthy'
+  return 'progress-normal'
+}
+
+/**
+ * 根据工作量负荷返回 badge 类名和文本
+ */
+function getLoadBadgeClass(sprintId: string): string {
+  const totalHours = getSprintTotalHours(sprintId)
+  const avgVelocity = velocityData.value?.averageVelocity || 0
+  if (avgVelocity <= 0) return 'load-badge-neutral'
+  const ratio = totalHours / avgVelocity
+  if (ratio > 1.2) return 'load-badge-overloaded'
+  if (ratio > 0.8) return 'load-badge-healthy'
+  if (totalHours === 0) return 'load-badge-neutral'
+  return 'load-badge-light'
+}
+
+function getLoadLabel(sprintId: string): string {
+  const totalHours = getSprintTotalHours(sprintId)
+  const avgVelocity = velocityData.value?.averageVelocity || 0
+  if (avgVelocity <= 0 || totalHours === 0) return '无参考'
+  const ratio = totalHours / avgVelocity
+  if (ratio > 1.2) return '超出建议'
+  if (ratio > 0.8) return '负荷合理'
+  return '负荷偏轻'
+}
+
+function getVelocityTooltip(): string {
+  const avg = velocityData.value?.averageVelocity || 0
+  const count = velocityData.value?.sprintCount || 0
+  if (avg <= 0 || count === 0) return '暂无历史数据'
+  return `基于最近 ${count} 个已完成 Sprint，平均完成 ${formatHours(avg)}/Sprint`
+}
+
 function priorityIcon(priority?: string): string {
   const map: Record<string, string> = { Critical: '🔴', High: '🟠', Normal: '🔵', Low: '⚪' }
   return map[priority || ''] || '🔵'
@@ -445,7 +558,7 @@ function clearSelection() {
 async function onProjectChange() {
   clearSelection()
   if (!selectedProject.value) return
-  await Promise.all([loadBacklog(), loadSprints(), loadMembers()])
+  await Promise.all([loadBacklog(), loadSprints(), loadMembers(), loadVelocity()])
 }
 
 async function loadBacklog() {
@@ -523,6 +636,16 @@ async function loadMembers() {
     projectMembers.value = res.data || []
   } catch {
     projectMembers.value = []
+  }
+}
+
+async function loadVelocity() {
+  if (!selectedProject.value) return
+  try {
+    const res = await sprintApi.velocity(selectedProject.value, 5)
+    velocityData.value = res.data || null
+  } catch {
+    velocityData.value = null
   }
 }
 
@@ -1201,6 +1324,132 @@ onMounted(async () => {
   padding: 2px 6px;
   border-radius: 3px;
   margin-right: 8px;
+}
+
+/* ===== Sprint 工时统计条 ===== */
+.sprint-hours-bar {
+  padding: 0 12px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+.sprint-hours-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.hours-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hours-stat-label {
+  font-size: 10px;
+  color: var(--color-text-3);
+}
+
+.hours-stat-value {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.hours-stat-value.planned {
+  color: rgb(var(--primary-6));
+}
+
+.hours-stat-value.velocity {
+  color: var(--color-text-2);
+}
+
+.hours-stat-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--color-border);
+}
+
+/* 负荷状态 badge */
+.hours-stat-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  cursor: default;
+}
+
+.load-badge-neutral {
+  background: var(--color-fill-2);
+  color: var(--color-text-3);
+}
+
+.load-badge-light {
+  background: rgba(var(--blue-4), 0.1);
+  color: rgb(var(--blue-6));
+}
+
+.load-badge-healthy {
+  background: rgba(var(--green-4), 0.15);
+  color: rgb(var(--green-6));
+}
+
+.load-badge-overloaded {
+  background: rgba(var(--red-4), 0.15);
+  color: rgb(var(--red-6));
+}
+
+/* 工时进度条 */
+.hours-progress-bar {
+  height: 4px;
+  background: var(--color-fill-3);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  position: relative;
+}
+
+.hours-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.hours-progress-fill.progress-normal {
+  background: rgb(var(--primary-6));
+}
+
+.hours-progress-fill.progress-healthy {
+  background: rgb(var(--green-6));
+}
+
+.hours-progress-fill.progress-overloaded {
+  background: rgb(var(--red-5));
+}
+
+/* 历史速率芯片 */
+.hours-velocity-history {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.velocity-history-label {
+  font-size: 10px;
+  color: var(--color-text-3);
+}
+
+.velocity-history-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--color-fill-2);
+  border-radius: 3px;
+  color: var(--color-text-2);
+  cursor: default;
+  border: 1px solid var(--color-border);
 }
 
 /* ===== Empty States ===== */

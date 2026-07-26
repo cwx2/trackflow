@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
+import type { R, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, SprintVelocityVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -87,5 +87,15 @@ export const sprintApi = {
   /** 恢复 Sprint（archived → completed） */
   restore(id: string) {
     return request.put<any, R<SprintVO>>(`/sprints/${id}/restore`)
+  },
+
+  /**
+   * 获取项目最近已完成 Sprint 的速率统计数据
+   * 用于规划页展示历史速率参考（工时完成量/Sprint）
+   */
+  velocity(projectId: string, limit = 5) {
+    return request.get<any, R<SprintVelocityVO>>(`/projects/${projectId}/sprint-velocity`, {
+      params: { limit }
+    })
   }
 }

@@ -200,4 +200,51 @@
         ORDER BY te.work_date
     </select>
 
+    <!-- 项目最近已完成 Sprint 的速率统计（用于规划页参考） -->
+    <!-- 取最近 N 个已完成/已归档 Sprint，按完成时间从新到旧排序（LIMIT 后 reverse 在 Service 层处理） -->
+    <resultMap id="sprintVelocityItemMap" type="com.trackflow.sprint.vo.SprintVelocityVO$SprintVelocityItem">
+        <id property="id" column="id" javaType="java.lang.String"/>
+        <result property="name" column="name"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="completedHours" column="completed_hours"/>
+        <result property="plannedHours" column="planned_hours"/>
+        <result property="totalIssues" column="total_issues"/>
+        <result property="doneIssues" column="done_issues"/>
+    </resultMap>
+
+    <select id="selectSprintVelocity" resultMap="sprintVelocityItemMap">
+        SELECT
+            s.id,
+            s.name,
+            s.start_date,
+            s.end_date,
+            COALESCE(stats.completed_hours, 0) AS completed_hours,
+            COALESCE(stats.planned_hours, 0) AS planned_hours,
+            COALESCE(stats.total_issues, 0) AS total_issues,
+            COALESCE(stats.done_issues, 0) AS done_issues
+        FROM sprint s
+        LEFT JOIN (
+            SELECT
+                i.sprint_id,
+                COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_hours,
+                COALESCE(SUM(i.estimated_hours), 0) AS planned_hours,
+                COUNT(*) AS total_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues
+            FROM issue i
+            LEFT JOIN issue_status ist ON ist.id = i.status_id
+            WHERE i.deleted_at IS NULL
+              AND i.sprint_id IN (
+                  SELECT sp.id FROM sprint sp
+                  WHERE sp.project_id = #{projectId}
+                    AND sp.status IN ('completed', 'archived')
+              )
+            GROUP BY i.sprint_id
+        ) stats ON stats.sprint_id = s.id
+        WHERE s.project_id = #{projectId}
+          AND s.status IN ('completed', 'archived')
+        ORDER BY s.updated_at DESC, s.end_date DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

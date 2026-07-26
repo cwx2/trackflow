@@ -13,6 +13,7 @@ import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
 import com.trackflow.sprint.vo.SprintVO;
+import com.trackflow.sprint.vo.SprintVelocityVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -112,5 +113,22 @@ public class SprintController {
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintAssigneeDistributionVO> assigneeDistribution(@PathVariable("id") Long id) {
         return R.ok(sprintService.getAssigneeDistribution(id));
+    }
+
+    /**
+     * 获取项目最近已完成 Sprint 的速率统计数据。
+     * 用于 Sprint 规划页展示历史速率参考（帮助团队合理规划工作量）。
+     *
+     * @param projectId 项目 ID
+     * @param limit     最多统计几个 Sprint，默认 5，最大 10
+     */
+    @GetMapping("/api/v1/projects/{projectId}/sprint-velocity")
+    @PreAuthorize("@perm.check(#projectId, 'sprint:view')")
+    public R<SprintVelocityVO> sprintVelocity(
+            @PathVariable("projectId") Long projectId,
+            @RequestParam(value = "limit", defaultValue = "5") int limit) {
+        // 安全限制：最多查询 10 个 Sprint，防止超大查询
+        int safeLimit = Math.min(Math.max(limit, 1), 10);
+        return R.ok(sprintService.getSprintVelocity(projectId, safeLimit));
     }
 }

@@ -27,6 +27,7 @@ import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
 import com.trackflow.sprint.vo.SprintOverlapWarningVO;
 import com.trackflow.sprint.vo.SprintVO;
+import com.trackflow.sprint.vo.SprintVelocityVO;
 import com.trackflow.project.service.ProjectActivityService;
 import com.trackflow.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -1680,5 +1681,48 @@ public class SprintService {
             projectService.updateProjectSetting(projectId, "defaultSprintId", null);
             log.info("已清除项目 {} 的默认 Sprint 设置（Sprint {} 已不可用）", projectId, sprintId);
         }
+    }
+
+    /**
+     * 获取项目最近已完成 Sprint 的速率统计数据。
+     * 用于 Sprint 规划页展示历史速率，帮助团队合理规划工作量。
+     * <p>
+     * 速率 = 每个已完成 Sprint 中已关闭工单的 estimated_hours 之和。
+     * 平均速率 = 所有统计 Sprint 的 completedHours 算术平均值。
+     * <p>
+     * 使用 readOnly 事务确保统计数据一致性。
+     *
+     * @param projectId 项目 ID
+     * @param limit     最多取几个已完成 Sprint（通常 3~5）
+     * @return Sprint 速率统计 VO
+     */
+    @Transactional(readOnly = true)
+    public SprintVelocityVO getSprintVelocity(Long projectId, int limit) {
+        // 取最近 N 个已完成 Sprint（Mapper 按完成时间倒序，此处反转为从旧到新展示）
+        List<SprintVelocityVO.SprintVelocityItem> items = sprintMapper.selectSprintVelocity(projectId, limit);
+        // Mapper 返回的是倒序（最新的在前），反转为时间正序（旧 → 新）供前端图表展示
+        List<SprintVelocityVO.SprintVelocityItem> ordered = new ArrayList<>(items);
+        java.util.Collections.reverse(ordered);
+
+        SprintVelocityVO vo = new SprintVelocityVO();
+        vo.setSprintCount(ordered.size());
+        vo.setSprints(ordered);
+
+        if (ordered.isEmpty()) {
+            vo.setAverageVelocity(0.0);
+            vo.setLastVelocity(0.0);
+        } else {
+            double totalCompleted = ordered.stream()
+                    .mapToDouble(SprintVelocityVO.SprintVelocityItem::getCompletedHours)
+                    .sum();
+            double avg = totalCompleted / ordered.size();
+            vo.setAverageVelocity(Math.round(avg * 10.0) / 10.0);
+
+            // lastVelocity 取最新已完成 Sprint（列表末尾，即时间最新）
+            double last = ordered.get(ordered.size() - 1).getCompletedHours();
+            vo.setLastVelocity(Math.round(last * 10.0) / 10.0);
+        }
+
+        return vo;
     }
 }
