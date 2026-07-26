@@ -24,9 +24,6 @@ public class ProjectDetailVO extends ProjectVO {
     /** 当前登录用户在该项目中的所有角色代码列表 */
     private List<String> myRoleCodes;
 
-    /** 项目成员总数 */
-    private Integer memberCount;
-
     /** 项目负责人显示名称 */
     private String leadName;
 
