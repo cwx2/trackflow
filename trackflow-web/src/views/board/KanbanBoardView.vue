@@ -62,6 +62,7 @@
               <span v-if="isActiveSprint(s)" class="sprint-option-badge sprint-option-badge--active">当前</span>
               <span v-else-if="s.status === 'planned'" class="sprint-option-badge sprint-option-badge--planned">计划</span>
               <span v-else-if="s.status === 'completed'" class="sprint-option-badge sprint-option-badge--completed">完成</span>
+              <span v-else-if="s.status === 'archived'" class="sprint-option-badge sprint-option-badge--archived">归档</span>
             </span>
           </a-option>
         </a-select>
@@ -949,7 +950,39 @@
       </div>
       <!-- 默认 Footer（无选中卡片时，显示 Sprint 目标和看板所有者） -->
       <div v-else-if="selectedProject && !loading" class="board-footer-wrapper" key="footer">
-        <div class="board-footer">
+        <!-- 已归档 Sprint 的特殊 Footer 提示区域 -->
+        <div v-if="currentSelectedSprint && currentSelectedSprint.status === 'archived'" class="board-footer board-footer--archived">
+          <div class="board-footer-left">
+            <span class="footer-archived-badge">
+              <span class="footer-archived-icon">📦</span>
+              <span class="footer-archived-text">本迭代已归档</span>
+            </span>
+            <span class="footer-archived-sprint-name">{{ currentSelectedSprint.name }}</span>
+          </div>
+          <div class="board-footer-right">
+            <a-button
+              v-if="canEditSprint"
+              size="small"
+              type="primary"
+              :loading="restoringArchivedSprint"
+              @click="handleRestoreArchivedSprint"
+            >
+              恢复 Sprint
+            </a-button>
+            <a-button
+              v-if="canDeleteSprint"
+              size="small"
+              status="danger"
+              style="margin-left: 8px"
+              :loading="deletingArchivedSprint"
+              @click="handleDeleteArchivedSprint"
+            >
+              删除
+            </a-button>
+          </div>
+        </div>
+        <!-- 普通 Footer（非归档状态） -->
+        <div v-else class="board-footer">
           <div class="board-footer-left">
             <!-- Board owner（项目负责人） -->
             <span v-if="boardOwnerName" class="footer-item footer-owner" :title="'看板所有者: ' + boardOwnerName">
@@ -1048,6 +1081,44 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 看板页脚：删除已归档 Sprint 确认对话框 -->
+    <a-modal
+      v-model:visible="showDeleteArchivedSprintModal"
+      title="删除迭代"
+      :width="480"
+      :ok-loading="deletingArchivedSprint"
+      ok-text="确认删除"
+      cancel-text="取消"
+      ok-status="danger"
+      @ok="confirmDeleteArchivedSprint"
+      @cancel="showDeleteArchivedSprintModal = false"
+    >
+      <div v-if="deleteArchivedSprintPreview">
+        <p v-if="deleteArchivedSprintPreview.totalIssues === 0">
+          确定要删除迭代 <strong>{{ currentSelectedSprint?.name }}</strong> 吗？该迭代不含任何工单。
+        </p>
+        <template v-else>
+          <p>迭代 <strong>{{ currentSelectedSprint?.name }}</strong> 包含 <strong>{{ deleteArchivedSprintPreview.totalIssues }}</strong> 个工单，请选择处理方式：</p>
+          <a-radio-group v-model="deleteArchivedSprintMoveOption" direction="vertical" style="margin-top: 8px;">
+            <a-radio value="backlog">移入待办（不分配迭代）</a-radio>
+            <a-radio v-if="deleteArchivedSprintPreview.targetSprints && deleteArchivedSprintPreview.targetSprints.length > 0" value="next_sprint">移入其他迭代</a-radio>
+          </a-radio-group>
+          <a-select
+            v-if="deleteArchivedSprintMoveOption === 'next_sprint' && deleteArchivedSprintPreview.targetSprints"
+            v-model="deleteArchivedSprintTargetId"
+            placeholder="选择目标迭代"
+            style="width: 100%; margin-top: 8px"
+          >
+            <a-option v-for="s in deleteArchivedSprintPreview.targetSprints" :key="s.id" :value="s.id">{{ s.name }}</a-option>
+          </a-select>
+        </template>
+      </div>
+      <div v-else style="text-align: center; padding: 12px 0">
+        <a-spin />
+      </div>
+    </a-modal>
+
   </div>
 </template>
 
@@ -1056,7 +1127,7 @@ import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
 import { issueApi, sprintApi, boardApi, workflowApi, projectApi } from '@/api'
-import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO, R, TransitStatusResultVO } from '@/api/types'
+import type { IssueVO, IssueStatusVO, SprintVO, BoardColumnVO, BoardCardConfigVO, BoardColumnMergeGroupVO, BoardCardVO, R, TransitStatusResultVO, DeletionPreviewVO } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
@@ -1364,7 +1435,7 @@ const selectedProject = computed({
 })
 
 // 权限控制
-const { canChangeStatus, canCreateIssue, canDeleteIssue } = usePermission(() => selectedProject.value)
+const { canChangeStatus, canCreateIssue, canDeleteIssue, canEditSprint, canDeleteSprint } = usePermission(() => selectedProject.value)
 const selectedSprint = ref<string | undefined>(undefined)
 /** 用户是否手动清除了 Sprint 选择（区分"未选择"和"显式选全部"） */
 let userExplicitlySelectedAll = false
@@ -2155,6 +2226,97 @@ const sprintRemainingDays = computed(() => {
 /** 判断某 Sprint 是否为当前活跃 Sprint（用于下拉列表标记"当前"） */
 function isActiveSprint(sprint: SprintVO): boolean {
   return sprint.id === activeSprint.value?.id
+}
+
+// ===== 看板 Footer：已归档 Sprint 操作 =====
+
+/** 恢复归档 Sprint 的 loading 状态 */
+const restoringArchivedSprint = ref(false)
+
+/** 删除归档 Sprint 的 loading 状态 */
+const deletingArchivedSprint = ref(false)
+
+/** 是否显示删除归档 Sprint 的确认弹框 */
+const showDeleteArchivedSprintModal = ref(false)
+
+/** 删除预览信息 */
+const deleteArchivedSprintPreview = ref<DeletionPreviewVO | null>(null)
+
+/** 删除时的工单处理方式 */
+const deleteArchivedSprintMoveOption = ref<string>('backlog')
+
+/** 删除时的目标迭代 ID */
+const deleteArchivedSprintTargetId = ref<string>('')
+
+/** 从看板 Footer 恢复已归档 Sprint */
+async function handleRestoreArchivedSprint() {
+  if (!currentSelectedSprint.value) return
+  restoringArchivedSprint.value = true
+  try {
+    await sprintApi.restore(currentSelectedSprint.value.id)
+    Message.success('迭代已恢复为已完成状态')
+    // 刷新 Sprint 列表
+    if (selectedProject.value) {
+      const res = await sprintApi.listByProject(selectedProject.value)
+      sprints.value = res.data || []
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '恢复失败')
+  } finally {
+    restoringArchivedSprint.value = false
+  }
+}
+
+/** 从看板 Footer 删除已归档 Sprint（显示确认弹框） */
+async function handleDeleteArchivedSprint() {
+  if (!currentSelectedSprint.value) return
+  deleteArchivedSprintPreview.value = null
+  deleteArchivedSprintMoveOption.value = 'backlog'
+  deleteArchivedSprintTargetId.value = ''
+  showDeleteArchivedSprintModal.value = true
+
+  try {
+    const res = await sprintApi.deletionPreview(currentSelectedSprint.value.id)
+    deleteArchivedSprintPreview.value = res.data
+    if (res.data.totalIssues > 0 && res.data.targetSprints && res.data.targetSprints.length > 0) {
+      deleteArchivedSprintTargetId.value = res.data.targetSprints[0].id
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '获取预览信息失败')
+    showDeleteArchivedSprintModal.value = false
+  }
+}
+
+/** 确认删除已归档 Sprint */
+async function confirmDeleteArchivedSprint() {
+  if (!currentSelectedSprint.value || !deleteArchivedSprintPreview.value) return
+
+  const hasIssues = deleteArchivedSprintPreview.value.totalIssues > 0
+  if (hasIssues && deleteArchivedSprintMoveOption.value === 'next_sprint' && !deleteArchivedSprintTargetId.value) {
+    Message.warning('请选择目标迭代')
+    return
+  }
+
+  deletingArchivedSprint.value = true
+  try {
+    const body = hasIssues
+      ? { moveOption: deleteArchivedSprintMoveOption.value, targetSprintId: deleteArchivedSprintMoveOption.value === 'next_sprint' ? deleteArchivedSprintTargetId.value : undefined }
+      : undefined
+
+    await sprintApi.delete(currentSelectedSprint.value.id, body)
+    Message.success('迭代已删除')
+    showDeleteArchivedSprintModal.value = false
+    // 清空选中的 Sprint，刷新列表
+    selectedSprint.value = undefined
+    if (selectedProject.value) {
+      const res = await sprintApi.listByProject(selectedProject.value)
+      sprints.value = res.data || []
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '删除失败')
+  } finally {
+    deletingArchivedSprint.value = false
+  }
 }
 
 // ===== 无活跃 Sprint 引导 =====
@@ -4790,6 +4952,12 @@ onUnmounted(() => {
   background: var(--color-fill-2);
 }
 
+.sprint-option-badge--archived {
+  color: var(--color-text-4);
+  background: var(--color-fill-3);
+  font-style: italic;
+}
+
 .sprint-countdown {
   font-size: 11px;
   font-weight: 500;
@@ -5852,6 +6020,38 @@ onUnmounted(() => {
 
 .footer-stats .footer-value {
   color: var(--color-text-3);
+}
+
+/* 已归档 Sprint Footer 样式 */
+.board-footer--archived {
+  background: var(--color-fill-2);
+  border-top: 1px solid var(--color-warning-light-4, #faad14);
+}
+
+.footer-archived-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--color-warning-light-1, #fffbe6);
+  border: 1px solid var(--color-warning-light-4, #faad14);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--color-warning-6, #d48806);
+}
+
+.footer-archived-icon {
+  font-size: 13px;
+}
+
+.footer-archived-text {
+  font-weight: 500;
+}
+
+.footer-archived-sprint-name {
+  font-size: 12px;
+  color: var(--color-text-2);
+  font-weight: 500;
 }
 
 .slide-up-enter-active,
