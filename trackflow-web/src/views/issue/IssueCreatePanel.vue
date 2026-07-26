@@ -346,6 +346,7 @@
       <div class="panel-footer">
         <a-space>
           <div class="split-button">
+
             <a-button type="primary" :loading="submitting" :disabled="!canSubmit" class="split-main" @click="executeDefaultAction">
               {{ defaultActionLabel }}
             </a-button>
@@ -374,6 +375,7 @@
           <a-button @click="close">取消</a-button>
           <a-button v-if="isDirty" type="text" status="danger" @click="discardDraft">丢弃</a-button>
         </a-space>
+        <span class="shortcut-hint">{{ isMac ? '⌘' : 'Ctrl' }}+Enter 快速创建</span>
       </div>
     </div>
   </a-modal>
@@ -695,6 +697,9 @@ const isDirty = computed(() => {
 // 暴露 isDirty 供父组件路由守卫使用
 defineExpose({ isDirty })
 
+// 检测 macOS 以显示正确的修饰键提示
+const isMac = navigator.platform.toUpperCase().includes('MAC')
+
 // beforeunload 监听：浏览器关闭/刷新时提示
 function handleBeforeUnload(e: BeforeUnloadEvent) {
   if (props.visible && isDirty.value) {
@@ -703,8 +708,21 @@ function handleBeforeUnload(e: BeforeUnloadEvent) {
   }
 }
 
+// Ctrl+Enter / Cmd+Enter 快捷键处理
+function handleKeyDown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    // 阻止默认行为（如换行）
+    e.preventDefault()
+    e.stopPropagation()
+    if (canSubmit.value && !submitting.value) {
+      executeDefaultAction()
+    }
+  }
+}
+
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('keydown', handleKeyDown, true)
 })
 
 // 接收外部传入的 projectId
@@ -721,6 +739,7 @@ watch(() => props.projectId, (val) => {
 watch(() => props.visible, (val) => {
   if (val) {
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('keydown', handleKeyDown, true)
     loadProjects()
     // Pre-fill form if clone data is provided
     if (props.cloneData) {
@@ -741,6 +760,7 @@ watch(() => props.visible, (val) => {
     }
   } else {
     window.removeEventListener('beforeunload', handleBeforeUnload)
+    window.removeEventListener('keydown', handleKeyDown, true)
   }
 })
 
@@ -1088,6 +1108,13 @@ onMounted(() => {
 .field-error-msg { display: block; font-size: 11px; color: #f85149; margin-top: 2px; line-height: 1.3; }
 
 .panel-footer { display: flex; align-items: center; padding: 10px 0; border-top: 1px solid var(--color-border); flex-shrink: 0; }
+
+.shortcut-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-4, var(--tf-text-tertiary));
+  user-select: none;
+}
 
 .split-button { display: inline-flex; }
 .split-button .split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
