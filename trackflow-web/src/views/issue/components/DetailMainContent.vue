@@ -5,6 +5,11 @@
       <div class="identity-row">
         <span class="iss-key">{{ issueKey }}</span>
         <span class="type-badge" :class="'t-' + issueType.toLowerCase()">{{ issueType }}</span>
+        <a-tooltip content="复制 ID 和摘要" position="right" mini>
+          <button class="copy-id-btn" @click="onCopyIdAndSummary" aria-label="复制 ID 和摘要">
+            <icon-copy />
+          </button>
+        </a-tooltip>
       </div>
 
       <!-- Title + Action Icons -->
@@ -26,9 +31,9 @@
           <a-dropdown trigger="click" position="br">
             <button class="action-icon" title="更多操作">&#8943;</button>
             <template #content>
-              <a-doption @click="$emit('copy-id')">
+              <a-doption @click="onCopyIdAndSummary">
                 <template #icon><icon-copy /></template>
-                复制工单 ID
+                复制 ID 和摘要
               </a-doption>
               <a-doption @click="handlePrint">
                 <template #icon><icon-printer /></template>
@@ -187,6 +192,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
@@ -265,6 +271,12 @@ function createNewTag() {
 }
 
 // --- Show More menu actions ---
+function onCopyIdAndSummary() {
+  const text = `${props.issueKey} ${props.title}`
+  navigator.clipboard.writeText(text)
+  Message.success('已复制 ID 和摘要')
+}
+
 function handlePrint() {
   window.print()
 }
@@ -335,6 +347,31 @@ function commitDesc(content: string) {
 .t-feature { background: #388e3c; color: #fff; }
 .t-epic { background: #7b1fa2; color: #fff; }
 .t-story { background: #f57c00; color: #fff; }
+
+/* Copy ID button */
+.copy-id-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 150ms, color 150ms, background 150ms;
+  font-size: 13px;
+}
+.identity-row:hover .copy-id-btn {
+  opacity: 1;
+}
+.copy-id-btn:hover {
+  color: var(--tf-text-primary);
+  background: var(--tf-bg-hover);
+}
 
 /* Title */
 .title-row {
