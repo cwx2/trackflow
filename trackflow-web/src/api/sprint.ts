@@ -68,7 +68,7 @@ export const sprintApi = {
   },
 
   /** 获取 Sprint 燃尽图数据 */
-  burndown(id: string, mode?: 'issue_count' | 'estimation') {
+  burndown(id: string, mode?: 'issue_count' | 'estimation' | 'work_items') {
     return request.get<any, R<SprintBurndownVO>>(`/sprints/${id}/burndown`, {
       params: mode ? { mode } : undefined
     })

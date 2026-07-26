@@ -12,7 +12,8 @@
           @change="onModeChange"
         >
           <a-radio value="issue_count">工单数</a-radio>
-          <a-radio value="estimation">工时</a-radio>
+          <a-radio value="estimation">估算工时</a-radio>
+          <a-radio value="work_items">实际工时</a-radio>
         </a-radio-group>
       </div>
       <div class="burndown-meta" v-if="burndownData">
@@ -23,7 +24,7 @@
         <span class="meta-item" v-if="hasScopeChange">
           <span class="meta-label">起始/当前</span>
           <span class="meta-value scope-change" v-if="currentMode === 'issue_count'">{{ burndownData.startScopeIssues }} → {{ burndownData.totalIssues }}</span>
-          <span class="meta-value scope-change" v-else>{{ formatHours(burndownData.startScopeHours) }}h</span>
+          <span class="meta-value scope-change" v-else>{{ formatHours(burndownData.startScopeHours) }}{{ currentMode === 'work_items' ? 'min' : 'h' }}</span>
         </span>
         <span class="meta-item forecast" v-if="burndownData.forecastDate && !isCompleted">
           <span class="meta-label">预计完成</span>
@@ -74,9 +75,13 @@ const props = defineProps<{
 const burndownData = ref<SprintBurndownVO | null>(null)
 const loading = ref(false)
 const error = ref(false)
-const currentMode = ref<'issue_count' | 'estimation'>('issue_count')
+const currentMode = ref<'issue_count' | 'estimation' | 'work_items'>('issue_count')
 
-const modeUnit = computed(() => currentMode.value === 'estimation' ? '小时' : '工单')
+const modeUnit = computed(() => {
+  if (currentMode.value === 'estimation') return '小时'
+  if (currentMode.value === 'work_items') return '分钟'
+  return '工单'
+})
 
 const isForecastLate = computed(() => {
   if (!burndownData.value?.forecastDate || !props.sprintEndDate) return false
@@ -85,7 +90,7 @@ const isForecastLate = computed(() => {
 
 const hasScopeChange = computed(() => {
   if (!burndownData.value) return false
-  if (currentMode.value === 'estimation') {
+  if (currentMode.value === 'estimation' || currentMode.value === 'work_items') {
     return burndownData.value.startScopeHours != null && burndownData.value.startScopeHours > 0
   }
   return burndownData.value.startScopeIssues !== burndownData.value.totalIssues
@@ -199,7 +204,7 @@ const chartOption = computed(() => {
         if (!params || params.length === 0) return ''
         const dateIdx = params[0].dataIndex
         const fullDate = dates[dateIdx]
-        const unit = currentMode.value === 'estimation' ? '小时' : '工单'
+        const unit = currentMode.value === 'estimation' ? '小时' : currentMode.value === 'work_items' ? '分钟' : '工单'
         let html = `<div style="font-weight:500;margin-bottom:4px">${fullDate}</div>`
         for (const p of params) {
           if (p.value !== undefined) {
