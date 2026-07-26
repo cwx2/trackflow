@@ -24,7 +24,9 @@ public class ActionExecutionResult {
         /** 无匹配动作配置 */
         NO_ACTIONS,
         /** 动作执行抛出异常 */
-        EXECUTION_ERROR
+        EXECUTION_ERROR,
+        /** 自动添加评论成功 */
+        COMMENT_ADDED
     }
 
     /** 是否有动作被成功执行 */
@@ -88,6 +90,14 @@ public class ActionExecutionResult {
         r.setExecuted(false);
         r.setActionType("auto_assign");
         r.setOutcome(Outcome.EXECUTION_ERROR);
+        return r;
+    }
+
+    public static ActionExecutionResult commentAdded() {
+        ActionExecutionResult r = new ActionExecutionResult();
+        r.setExecuted(true);
+        r.setActionType("add_comment");
+        r.setOutcome(Outcome.COMMENT_ADDED);
         return r;
     }
 }

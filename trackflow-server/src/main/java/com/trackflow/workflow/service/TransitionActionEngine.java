@@ -5,8 +5,10 @@ import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationService;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.system.entity.SysUser;
@@ -42,6 +44,7 @@ public class TransitionActionEngine {
     private final ActionConfigValidator actionConfigValidator;
     private final IssueMapper issueMapper;
     private final IssueActivityMapper issueActivityMapper;
+    private final IssueCommentMapper issueCommentMapper;
     private final WorkflowActivityMapper workflowActivityMapper;
     private final NotificationService notificationService;
     private final IssueStatusMapper issueStatusMapper;
@@ -103,18 +106,22 @@ public class TransitionActionEngine {
             return ActionExecutionResult.noActions();
         }
 
-        // 3. 按 sort_order 顺序执行每个动作
+        // 3. 按 sort_order 顺序执行每个动作（所有动作都执行，不因第一个成功而早退）
+        ActionExecutionResult lastAssignResult = null;
         boolean hasError = false;
         for (TransitionAction action : actions) {
             try {
                 ActionExecutionResult result = executeActionWithResult(
                         action, issue, triggeredBy, oldStatusId, newStatusId);
                 if (result != null && result.isExecuted()) {
-                    // 第一个成功的 auto_assign 后停止（不重复分配）
-                    return result;
+                    if ("auto_assign".equals(action.getActionType())) {
+                        // 记录最后一个成功的 auto_assign 结果（通常只配一个，但仍继续执行后续动作）
+                        lastAssignResult = result;
+                    }
+                    // 不 return，继续执行后续动作
                 }
             } catch (RuntimeException e) {
-                // 4. 错误处理：记录错误，继续执行下一个动作
+                // 4. 错误处理：记录错误，继续执行下一个动作（单个动作失败不影响其他动作）
                 log.error("[TransitionActionEngine] Issue {} action {} 执行异常: {}",
                         issue.getId(), action.getId(), e.getMessage(), e);
                 recordWorkflowFailure(action, issue, e);
@@ -122,7 +129,10 @@ public class TransitionActionEngine {
             }
         }
 
-        // 所有动作都未成功分配
+        // 所有动作执行完成后，返回最终结果
+        if (lastAssignResult != null) {
+            return lastAssignResult;
+        }
         return hasError ? ActionExecutionResult.executionError()
                 : ActionExecutionResult.strategyFailed();
     }
@@ -146,12 +156,19 @@ public class TransitionActionEngine {
             return;
         }
 
-        // 按 sort_order 顺序执行
+        // 按 sort_order 顺序执行（所有动作都执行，auto_assign 找到第一个成功后不再尝试后续的 auto_assign）
+        boolean autoAssigned = false;
         for (TransitionAction action : actions) {
             try {
-                boolean assigned = executeCreateAction(action, issue, creatorId);
-                if (assigned) {
-                    break;
+                if ("auto_assign".equals(action.getActionType()) && autoAssigned) {
+                    // 已有 auto_assign 成功，跳过同类型后续动作（创建时只分配一次）
+                    log.debug("[TransitionActionEngine] Issue {} on-create: skip duplicate auto_assign action_id={}",
+                            issue.getId(), action.getId());
+                    continue;
+                }
+                boolean executed = executeCreateAction(action, issue, creatorId);
+                if (executed && "auto_assign".equals(action.getActionType())) {
+                    autoAssigned = true;
                 }
             } catch (RuntimeException e) {
                 log.error("[TransitionActionEngine] Issue {} on-create action {} 执行异常: {}",
@@ -164,17 +181,29 @@ public class TransitionActionEngine {
     /**
      * 执行单个动作并返回结果。
      *
-     * @return ActionExecutionResult（成功时 executed=true），null 表示跳过非 auto_assign 类型
+     * @return ActionExecutionResult（成功时 executed=true），null 表示动作未执行（策略失败或跳过）
      */
     private ActionExecutionResult executeActionWithResult(TransitionAction action, Issue issue, Long triggeredBy,
                                   Long oldStatusId, Long newStatusId) {
-        // 仅处理 auto_assign 类型（未来可扩展 switch）
-        if (!"auto_assign".equals(action.getActionType())) {
-            log.debug("[TransitionActionEngine] 跳过非 auto_assign 动作: type={}",
-                    action.getActionType());
-            return null;
-        }
+        String actionType = action.getActionType();
 
+        switch (actionType) {
+            case "auto_assign":
+                return executeAutoAssignAction(action, issue, triggeredBy, oldStatusId, newStatusId);
+            case "add_comment":
+                return executeAddCommentAction(action, issue, triggeredBy, oldStatusId, newStatusId);
+            default:
+                log.debug("[TransitionActionEngine] 跳过未支持的动作类型: type={}, action_id={}",
+                        actionType, action.getId());
+                return null;
+        }
+    }
+
+    /**
+     * 执行 auto_assign 动作：自动分配负责人。
+     */
+    private ActionExecutionResult executeAutoAssignAction(TransitionAction action, Issue issue, Long triggeredBy,
+                                                          Long oldStatusId, Long newStatusId) {
         // 解析 action_config
         ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
         if (config == null) {
@@ -251,19 +280,68 @@ public class TransitionActionEngine {
     }
 
     /**
-     * 执行创建时的单个自动分配动作。
+     * 执行 add_comment 动作：自动添加系统评论。
+     */
+    private ActionExecutionResult executeAddCommentAction(TransitionAction action, Issue issue, Long triggeredBy,
+                                                          Long oldStatusId, Long newStatusId) {
+        // 解析 action_config 获取评论模板
+        ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
+        String commentText;
+        if (config != null && config.getCommentTemplate() != null && !config.getCommentTemplate().isBlank()) {
+            // 支持简单占位符替换
+            commentText = config.getCommentTemplate()
+                    .replace("{issue_key}", issue.getIssueKey() != null ? issue.getIssueKey() : "")
+                    .replace("{old_status}", getStatusName(oldStatusId))
+                    .replace("{new_status}", getStatusName(newStatusId));
+        } else {
+            // 默认模板
+            commentText = String.format("状态已从「%s」变更为「%s」。",
+                    getStatusName(oldStatusId), getStatusName(newStatusId));
+        }
+
+        // 插入系统评论（source = "workflow_action" 区分手动评论）
+        IssueComment comment = new IssueComment();
+        comment.setIssueId(issue.getId());
+        comment.setUserId(triggeredBy);
+        comment.setContent(commentText);
+        comment.setSource("workflow_action");
+        comment.setCreatedAt(LocalDateTime.now());
+        comment.setUpdatedAt(LocalDateTime.now());
+        issueCommentMapper.insert(comment);
+
+        log.info("[TransitionActionEngine] Issue {} auto add_comment via action_id={}",
+                issue.getId(), action.getId());
+
+        return ActionExecutionResult.commentAdded();
+    }
+
+    /**
+     * 执行创建时的单个动作。
      * <p>
      * 与 executeActionWithResult 区别：
      * - 不传 oldStatusId（创建时无先前状态）
      * - 通知内容为"创建时自动分配"
      *
-     * @return true 如果成功执行了 auto_assign
+     * @return true 如果成功执行了动作
      */
     private boolean executeCreateAction(TransitionAction action, Issue issue, Long creatorId) {
-        if (!"auto_assign".equals(action.getActionType())) {
-            return false;
+        String actionType = action.getActionType();
+        switch (actionType) {
+            case "auto_assign":
+                return executeCreateAutoAssignAction(action, issue, creatorId);
+            case "add_comment":
+                return executeCreateAddCommentAction(action, issue, creatorId);
+            default:
+                log.debug("[TransitionActionEngine] on-create 跳过未支持的动作类型: type={}, action_id={}",
+                        actionType, action.getId());
+                return false;
         }
+    }
 
+    /**
+     * 创建时执行 auto_assign 动作。
+     */
+    private boolean executeCreateAutoAssignAction(TransitionAction action, Issue issue, Long creatorId) {
         ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
         if (config == null) {
             log.error("[TransitionActionEngine] Issue {} on-create action {} config 解析失败, json={}",
@@ -319,6 +397,35 @@ public class TransitionActionEngine {
         log.warn("[TransitionActionEngine] On-create auto-assign failed for issue {} (action_id={}, strategy={})",
                 issue.getId(), action.getId(), strategyKey);
         return false;
+    }
+
+    /**
+     * 创建时执行 add_comment 动作（添加系统评论）。
+     */
+    private boolean executeCreateAddCommentAction(TransitionAction action, Issue issue, Long creatorId) {
+        ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
+        String commentText;
+        if (config != null && config.getCommentTemplate() != null && !config.getCommentTemplate().isBlank()) {
+            commentText = config.getCommentTemplate()
+                    .replace("{issue_key}", issue.getIssueKey() != null ? issue.getIssueKey() : "")
+                    .replace("{old_status}", "")
+                    .replace("{new_status}", getStatusName(issue.getStatusId()));
+        } else {
+            commentText = "工单已创建。";
+        }
+
+        IssueComment comment = new IssueComment();
+        comment.setIssueId(issue.getId());
+        comment.setUserId(creatorId);
+        comment.setContent(commentText);
+        comment.setSource("workflow_action");
+        comment.setCreatedAt(LocalDateTime.now());
+        comment.setUpdatedAt(LocalDateTime.now());
+        issueCommentMapper.insert(comment);
+
+        log.info("[TransitionActionEngine] Issue {} on-create add_comment via action_id={}",
+                issue.getId(), action.getId());
+        return true;
     }
 
     /**

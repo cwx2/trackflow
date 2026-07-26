@@ -4,15 +4,22 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 /**
- * Auto-Assign 动作配置 —— 对应 transition_action.action_config JSONB 结构。
+ * 动作配置 —— 对应 transition_action.action_config JSONB 结构。
  * <p>
- * JSON 示例:
+ * auto_assign JSON 示例:
  * <pre>
  * {
  *   "strategy": "role_based",
  *   "role_id": 6,
  *   "mode": "round_robin",
  *   "fallback_strategy": "project_lead"
+ * }
+ * </pre>
+ * <p>
+ * add_comment JSON 示例:
+ * <pre>
+ * {
+ *   "comment_template": "状态已自动变更，请及时处理。"
  * }
  * </pre>
  */
@@ -55,4 +62,11 @@ public class ActionConfig {
      */
     @JsonProperty("exclude_reporter")
     private Boolean excludeReporter;
+
+    /**
+     * 评论模板文本（action_type = add_comment 时使用）。
+     * 支持占位符：{issue_key}, {old_status}, {new_status}（留待未来扩展）。
+     */
+    @JsonProperty("comment_template")
+    private String commentTemplate;
 }
