@@ -455,6 +455,7 @@
                     <template v-else>{{ typeLabel(issue.issueType) }}</template>
                   </span>
                   <span v-else class="card-type-spacer"></span>
+                  <!-- 已分配：显示头像 -->
                   <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
                     <template v-if="getCardFieldDisplayMode('assignee') === 'full_name'">
                       <span class="assignee-full-name">{{ issue.assigneeName }}</span>
@@ -469,6 +470,25 @@
                       <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
                     </template>
                   </div>
+                  <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->
+                  <a-dropdown
+                    v-else-if="isCardFieldVisible('assignee') && !issue.assigneeName && canCreateIssue && projectMembers.length > 0"
+                    trigger="click"
+                    @select="(userId: any) => onCardSetAssignee(userId, issue)"
+                  >
+                    <button
+                      class="set-assignee-btn"
+                      :title="'分配负责人'"
+                      @click.stop
+                    >
+                      <icon-user class="set-assignee-icon" />
+                    </button>
+                    <template #content>
+                      <a-doption v-for="m in projectMembers" :key="m.userId" :value="m.userId">
+                        {{ m.displayName }}
+                      </a-doption>
+                    </template>
+                  </a-dropdown>
                 </div>
               </div>
               <div
@@ -747,6 +767,7 @@
                           <template v-else>{{ typeLabel(issue.issueType) }}</template>
                         </span>
                         <span v-else class="card-type-spacer"></span>
+                        <!-- 已分配：显示头像 -->
                         <div class="card-assignee-avatar" v-if="isCardFieldVisible('assignee') && issue.assigneeName" :title="issue.assigneeName">
                           <template v-if="getCardFieldDisplayMode('assignee') === 'full_name'">
                             <span class="assignee-full-name">{{ issue.assigneeName }}</span>
@@ -761,6 +782,25 @@
                             <span v-else class="avatar-initials">{{ getInitials(issue.assigneeName) }}</span>
                           </template>
                         </div>
+                        <!-- 未分配 + 有权限：显示 Set assignee 按钮 -->
+                        <a-dropdown
+                          v-else-if="isCardFieldVisible('assignee') && !issue.assigneeName && canCreateIssue && projectMembers.length > 0"
+                          trigger="click"
+                          @select="(userId: any) => onCardSetAssignee(userId, issue)"
+                        >
+                          <button
+                            class="set-assignee-btn"
+                            :title="'分配负责人'"
+                            @click.stop
+                          >
+                            <icon-user class="set-assignee-icon" />
+                          </button>
+                          <template #content>
+                            <a-doption v-for="m in projectMembers" :key="m.userId" :value="m.userId">
+                              {{ m.displayName }}
+                            </a-doption>
+                          </template>
+                        </a-dropdown>
                       </div>
                     </div>
                     <!-- 空单元格 drop hint -->
@@ -1037,7 +1077,7 @@ import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
-import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconUser } from '@arco-design/web-vue/es/icon'
 
 const router = useRouter()
 const route = useRoute()
@@ -1163,6 +1203,33 @@ function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/)
   if (parts.length === 1) return parts[0][0].toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/**
+ * 卡片上"Set assignee"按钮的点击处理：乐观更新 + API 保存。
+ * 阻止事件冒泡，避免打开工单预览面板。
+ */
+async function onCardSetAssignee(userId: string, issue: BoardIssue) {
+  if (!userId) return
+  const member = projectMembers.value.find(m => m.userId === userId)
+  if (!member) return
+
+  // 乐观更新
+  const oldAssigneeId = issue.assigneeId
+  const oldAssigneeName = issue.assigneeName
+  issue.assigneeId = userId
+  issue.assigneeName = member.displayName
+
+  try {
+    await issueApi.update(issue.id, { assigneeId: userId })
+    issue.version = (issue.version || 0) + 1
+    Message.success(`${issue.issueKey} 负责人已设置为「${member.displayName}」`)
+  } catch (e: any) {
+    // 回滚
+    issue.assigneeId = oldAssigneeId
+    issue.assigneeName = oldAssigneeName
+    Message.error(e.response?.data?.message || '设置负责人失败')
+  }
 }
 
 /** 检查卡片是否有可见的自定义字段 */
@@ -5867,6 +5934,33 @@ onUnmounted(() => {
 
 .card-type-spacer {
   flex: 1;
+}
+
+/* ===== Set Assignee Button（卡片未分配时） ===== */
+.set-assignee-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--color-text-4);
+  padding: 0;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.set-assignee-btn:hover {
+  border-color: rgb(var(--primary-6));
+  color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.06);
+}
+
+.set-assignee-icon {
+  font-size: 12px;
 }
 
 /* ===== 无活跃 Sprint 引导横幅 ===== */
