@@ -60,9 +60,10 @@
                 COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
                 COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
             FROM issue i
+            JOIN sprint sp ON sp.id = i.sprint_id
+                          AND sp.project_id = #{projectId}
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
-              AND i.sprint_id IN (SELECT sp.id FROM sprint sp WHERE sp.project_id = #{projectId})
             GROUP BY i.sprint_id
         ) stats ON stats.sprint_id = s.id
         WHERE s.project_id = #{projectId}
@@ -232,13 +233,11 @@
                 COUNT(*) AS total_issues,
                 COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues
             FROM issue i
+            JOIN sprint sp ON sp.id = i.sprint_id
+                          AND sp.project_id = #{projectId}
+                          AND sp.status IN ('completed', 'archived')
             LEFT JOIN issue_status ist ON ist.id = i.status_id
             WHERE i.deleted_at IS NULL
-              AND i.sprint_id IN (
-                  SELECT sp.id FROM sprint sp
-                  WHERE sp.project_id = #{projectId}
-                    AND sp.status IN ('completed', 'archived')
-              )
             GROUP BY i.sprint_id
         ) stats ON stats.sprint_id = s.id
         WHERE s.project_id = #{projectId}
