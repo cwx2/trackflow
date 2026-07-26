@@ -12,6 +12,7 @@ import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -252,15 +253,14 @@ public class WorkflowRuleService {
         if (cron == null || cron.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "调度表达式不能为空");
         }
-        // 支持预设值和标准 cron（5 段或 6 段）
+        // 支持预设值（hourly/daily/weekly）
         if (VALID_SCHEDULES.contains(cron.toLowerCase())) {
             return;
         }
-        // 简单校验 cron 格式（5-6 个段，空格分隔）
-        String[] parts = cron.trim().split("\\s+");
-        if (parts.length < 5 || parts.length > 6) {
+        // 使用 Spring CronExpression 校验标准 cron 格式（6 段：秒 分 时 日 月 周）
+        if (!CronExpression.isValidExpression(cron)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "无效的调度表达式: " + cron + "，支持 hourly/daily/weekly 或标准 cron 格式");
+                    "无效的调度表达式: " + cron + "，请使用 hourly/daily/weekly 或标准 Spring cron 格式（秒 分 时 日 月 周）");
         }
     }
 

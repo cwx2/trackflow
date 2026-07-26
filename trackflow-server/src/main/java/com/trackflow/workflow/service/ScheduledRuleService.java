@@ -14,6 +14,7 @@ import com.trackflow.workflow.vo.WorkflowRuleExecutionLogVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -469,13 +470,21 @@ public class ScheduledRuleService {
     }
 
     /**
-     * 简化的 cron 评估：对自定义 cron，按最小间隔 1 小时控制频率。
-     * 生产环境可替换为 Quartz CronExpression 解析。
+     * 使用 Spring CronExpression 精确评估自定义 cron 表达式。
+     * 检查从 lastExec 到 now 之间是否存在 cron 触发时间点。
      */
     private boolean evaluateCustomCron(String cron, LocalDateTime lastExec, LocalDateTime now) {
-        // 自定义 cron 格式，至少间隔 1 小时才执行
-        if (lastExec == null) return true;
-        return ChronoUnit.MINUTES.between(lastExec, now) >= 60;
+        try {
+            CronExpression cronExpr = CronExpression.parse(cron);
+            // 以 lastExec 为起点（若 null 则用 1 年前），找下一个触发时间
+            LocalDateTime startTime = (lastExec != null) ? lastExec : now.minusYears(1);
+            LocalDateTime nextTime = cronExpr.next(startTime);
+            // 如果下一次触发时间不晚于 now，则应执行
+            return nextTime != null && !nextTime.isAfter(now);
+        } catch (IllegalArgumentException e) {
+            log.warn("[ScheduledRule] Invalid cron expression '{}': {}", cron, e.getMessage());
+            return false;
+        }
     }
 
     // ============ 工具方法 ============
