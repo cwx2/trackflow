@@ -40,6 +40,11 @@ public class CreateIssueDTO {
     private Map<String, String> customFields;
 
     /**
+     * 创建工单时同时绑定的标签 ID 列表（可选）。
+     */
+    private List<Long> tagIds;
+
+    /**
      * 创建工单时同时建立的关联（可选）。
      * 支持在创建工单的同时指定与已有工单的关联关系。
      */

@@ -195,6 +195,22 @@
             </a-select>
           </div>
           <div class="prop-row">
+            <span class="prop-label">标签</span>
+            <a-select
+              v-model="form.tagIds"
+              :placeholder="form.projectId ? '选择标签（可多选）' : '请先选择项目'"
+              size="small"
+              multiple
+              allow-clear
+              allow-search
+              :disabled="!form.projectId"
+            >
+              <a-option v-for="tag in projectTags" :key="tag.id" :value="tag.id">
+                <span class="tag-color-dot" :style="{ backgroundColor: tag.color || '#808080' }"></span>{{ tag.name }}
+              </a-option>
+            </a-select>
+          </div>
+          <div class="prop-row">
             <span class="prop-label">截止日期</span>
             <a-date-picker v-model="form.dueDate" size="small" style="width: 100%" placeholder="无" />
           </div>
@@ -393,7 +409,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck } from '@arco-design/web-vue/es/icon'
-import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi } from '@/api'
+import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
@@ -544,6 +560,7 @@ const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
 const sprints = ref<any[]>([])
 const statuses = ref<IssueStatusVO[]>([])
+const projectTags = ref<any[]>([])
 
 // 工单模板
 const templates = ref<IssueTemplateVO[]>([])
@@ -557,6 +574,7 @@ const form = reactive({
   statusId: undefined as string | undefined,
   assigneeId: undefined as string | undefined,
   sprintId: undefined as string | undefined,
+  tagIds: [] as string[],
   dueDate: '',
   estimatedHours: undefined as number | undefined
 })
@@ -787,9 +805,11 @@ async function loadStatuses() {
 
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
-  if (!pid) { members.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; return }
+  if (!pid) { members.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; projectTags.value = []; return }
   try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
   try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed' && s.status !== 'completed' && s.status !== 'Archived' && s.status !== 'archived') } catch { sprints.value = [] }
+  // 加载项目标签
+  try { const res = await tagApi.listProjectTags(pid, { _silent403: true }); projectTags.value = res.data || [] } catch { projectTags.value = [] }
   // 加载项目模板
   try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
   selectedTemplateId.value = null
@@ -872,6 +892,7 @@ function resetForm() {
   form.statusId = undefined
   form.assigneeId = undefined
   form.sprintId = undefined
+  form.tagIds = []
   form.dueDate = ''
   form.estimatedHours = undefined
   selectedTemplateId.value = null
@@ -967,6 +988,7 @@ async function submitAndContinue() {
     form.description = ''
     form.statusId = undefined
     form.assigneeId = undefined
+    form.tagIds = []
     form.dueDate = ''
     form.estimatedHours = undefined
     selectedTemplateId.value = null
@@ -1027,6 +1049,7 @@ async function doSubmit(): Promise<boolean> {
       estimatedHours: form.estimatedHours || undefined,
       sprintId: form.sprintId || undefined,
       assigneeId: form.assigneeId || undefined,
+      tagIds: form.tagIds.length > 0 ? form.tagIds : undefined,
       customFields: getCustomFieldPayload(),
       links: linkedIssues.value.length > 0
         ? linkedIssues.value.map(l => ({ targetIssueId: l.targetIssueId, linkType: l.linkType }))
@@ -1131,6 +1154,7 @@ onMounted(() => {
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
 .required-mark { color: #f85149; margin-left: 2px; }
+.tag-color-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; vertical-align: middle; }
 .field-error :deep(.arco-input-wrapper),
 .field-error :deep(.arco-select-view),
 .field-error :deep(.arco-picker) { border-color: #f85149 !important; }

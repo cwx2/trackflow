@@ -44,6 +44,7 @@ export const issueApi = {
     issueType?: string; priority?: string; statusId?: string
     assigneeId?: string; sprintId?: string; dueDate?: string; estimatedHours?: number
     customFields?: Record<string, string>
+    tagIds?: string[]
     links?: Array<{ targetIssueId: string; linkType: string }>
   }) {
     return request.post<any, R<IssueDetailVO>>('/issues', data)

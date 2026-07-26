@@ -208,6 +208,19 @@ public class IssueService {
             }
         }
 
+        // 关联标签（如果创建时指定了 tagIds）
+        if (dto.getTagIds() != null && !dto.getTagIds().isEmpty()) {
+            for (Long tagId : dto.getTagIds()) {
+                try {
+                    tagService.addTagToIssue(issue.getId(), tagId);
+                } catch (Exception e) {
+                    // 标签关联失败不阻塞主工单创建，仅记录警告
+                    log.warn("创建工单时关联标签失败: issueId={}, tagId={}, error={}",
+                            issue.getId(), tagId, e.getMessage());
+                }
+            }
+        }
+
         // 通知被分配人（若创建时指定了 assignee）— 事务提交后触发
         eventPublisher.publishEvent(new IssueNotificationEvent.Created(issue, currentUserId));
 
