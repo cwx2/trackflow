@@ -749,20 +749,21 @@ public class SprintService {
     }
 
     /**
-     * 归档 Sprint：将已完成的 Sprint 归档，从主列表中隐藏但保留数据。
-     * 只有 completed 状态的 Sprint 才能归档。
+     * 归档 Sprint：将非归档状态的 Sprint 归档，从主列表中隐藏但保留数据。
+     * 允许对 planned、active、completed 状态的 Sprint 执行归档操作。
+     * 对标 YouTrack 标准：无状态限制，任何非归档 Sprint 均可归档。
      *
      * @param id Sprint ID
      * @return 归档后的 Sprint
-     * @throws BusinessException 当 Sprint 不是 completed 状态时
+     * @throws BusinessException 当 Sprint 已经是 archived 状态时
      */
     @Transactional(rollbackFor = Exception.class)
     public Sprint archive(Long id) {
         Sprint sprint = getById(id);
         projectService.assertProjectActive(sprint.getProjectId());
 
-        if (sprint.getStatus() != SprintStatus.COMPLETED) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有已完成的迭代才能归档");
+        if (sprint.getStatus() == SprintStatus.ARCHIVED) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "迭代已经是归档状态");
         }
 
         sprint.setStatus(SprintStatus.ARCHIVED);

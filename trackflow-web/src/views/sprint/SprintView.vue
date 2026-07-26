@@ -161,6 +161,7 @@
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
+          <a-button v-if="canEditSprint" size="mini" type="text" @click="handleArchiveActiveSprint(sprint)">归档</a-button>
           <a-button v-if="canEditSprint" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
         </div>
       </div>
@@ -254,6 +255,7 @@
           <a-tooltip :content="getActivateTooltip(sprint)">
             <a-button type="primary" size="mini" :disabled="!canEditSprint || hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
+          <a-button v-if="canEditSprint" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
           <a-button v-if="canDeleteSprint" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
         </div>
       </div>
@@ -534,7 +536,7 @@
           <!-- 左侧：归档/恢复 + 删除 -->
           <div class="edit-modal-footer-left">
             <a-button
-              v-if="canEditSprint && editingSprint && editingSprint.status === 'completed'"
+              v-if="canEditSprint && editingSprint && editingSprint.status !== 'archived'"
               size="small"
               type="secondary"
               @click="handleEditModalArchive"
@@ -766,7 +768,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
@@ -1205,6 +1207,23 @@ async function archiveSprint(sprint: SprintVO) {
     loadSprints()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '归档失败')
+  }
+}
+
+async function handleArchiveActiveSprint(sprint: SprintVO) {
+  // active Sprint 归档时给出确认提示
+  const confirmed = await new Promise<boolean>((resolve) => {
+    Modal.confirm({
+      title: '确认归档进行中的迭代',
+      content: `迭代「${sprint.name}」当前仍在进行中，确认要归档吗？归档后工单将保留原迭代关联。`,
+      okText: '确认归档',
+      cancelText: '取消',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    })
+  })
+  if (confirmed) {
+    await archiveSprint(sprint)
   }
 }
 
