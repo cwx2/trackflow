@@ -71,6 +71,13 @@
         <div class="group-header" @click="toggleGroup('projects')">
           <span class="group-arrow">{{ expandedGroups.has('projects') ? '▾' : '▸' }}</span>
           <span class="group-title">项目</span>
+          <a-button
+            type="text" size="mini" class="group-action-btn"
+            title="管理收藏项目"
+            @click.stop="openManageProjectsModal"
+          >
+            <template #icon><icon-settings :size="12" /></template>
+          </a-button>
         </div>
         <div v-if="expandedGroups.has('projects')" class="group-items">
           <div
@@ -80,17 +87,66 @@
           >
             <span class="query-name">所有项目</span>
           </div>
-          <div
-            v-for="p in projectList"
-            :key="p.id"
-            class="query-item"
-            :class="{ active: activeProjectId === p.id }"
-            @click="selectProject(p)"
-          >
-            <span class="query-name">{{ p.name }}</span>
+          <template v-if="favoriteProjects.length > 0">
+            <div
+              v-for="p in favoriteProjects"
+              :key="p.id"
+              class="query-item"
+              :class="{ active: activeProjectId === p.id }"
+              @click="selectProject(p)"
+            >
+              <span class="query-name">{{ p.name }}</span>
+            </div>
+          </template>
+          <div v-else class="empty-queries" style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+            <span>暂无收藏项目</span>
+            <a-link style="font-size: 12px;" @click.stop="openManageProjectsModal">添加收藏</a-link>
           </div>
         </div>
       </div>
+
+      <!-- Manage Projects (Favorites) Modal -->
+      <a-modal
+        v-model:visible="showManageProjectsModal"
+        title="管理收藏项目"
+        :width="480"
+        :footer="false"
+        @cancel="showManageProjectsModal = false"
+      >
+        <div class="manage-projects-content">
+          <p class="manage-projects-hint">点击星标将项目添加到侧边栏快速访问列表。</p>
+          <div class="manage-projects-search">
+            <a-input v-model="manageProjectSearch" placeholder="搜索项目..." size="small" allow-clear>
+              <template #prefix><icon-search /></template>
+            </a-input>
+          </div>
+          <div v-if="manageProjectsLoading" class="manage-projects-loading">
+            <a-spin :size="24" />
+          </div>
+          <div v-else class="manage-projects-list">
+            <div
+              v-for="p in filteredManageProjects"
+              :key="p.id"
+              class="manage-project-item"
+              @click="toggleProjectFavorite(p)"
+            >
+              <span class="manage-project-star" :class="{ favorited: p.favorited }">
+                {{ p.favorited ? '★' : '☆' }}
+              </span>
+              <div class="manage-project-info">
+                <span class="manage-project-name">{{ p.name }}</span>
+                <span class="manage-project-key">{{ p.key }}</span>
+              </div>
+              <span class="manage-project-action">
+                {{ p.favorited ? '移除收藏' : '添加收藏' }}
+              </span>
+            </div>
+            <div v-if="filteredManageProjects.length === 0" class="manage-projects-empty">
+              没有找到匹配的项目
+            </div>
+          </div>
+        </div>
+      </a-modal>
 
       <!-- Tags section (YouTrack style) -->
       <div class="query-group">
@@ -909,6 +965,56 @@ const favoriteTags = ref<TagPanelItemVO[]>([])
 const activeTagId = ref<string | null>(null)
 const showManageTagsModal = ref(false)
 const availableTags = ref<AvailableTagVO[]>([])
+
+// Projects favorite panel state
+const favoriteProjects = computed(() => projectList.value.filter(p => p.favorited))
+const showManageProjectsModal = ref(false)
+const manageProjectSearch = ref('')
+const manageProjectsLoading = ref(false)
+const allProjectsForManage = ref<any[]>([])
+
+const filteredManageProjects = computed(() => {
+  const list = allProjectsForManage.value
+  if (!manageProjectSearch.value) return list
+  const kw = manageProjectSearch.value.toLowerCase()
+  return list.filter((p: any) => p.name.toLowerCase().includes(kw) || p.key.toLowerCase().includes(kw))
+})
+
+async function openManageProjectsModal() {
+  showManageProjectsModal.value = true
+  manageProjectSearch.value = ''
+  manageProjectsLoading.value = true
+  try {
+    // Load all accessible projects (no pagination limit), and merge favorite status
+    const res = await projectApi.list({ pageSize: 200 })
+    const projects = res.data?.list || []
+    // Merge favorited status from projectList (which was loaded with populateFavoriteStatus)
+    const favoriteIds = new Set(projectList.value.filter(p => p.favorited).map(p => p.id))
+    allProjectsForManage.value = projects.map((p: any) => ({
+      ...p,
+      favorited: favoriteIds.has(p.id)
+    }))
+  } catch {
+    allProjectsForManage.value = []
+  } finally {
+    manageProjectsLoading.value = false
+  }
+}
+
+async function toggleProjectFavorite(p: any) {
+  try {
+    const res = await projectApi.toggleFavorite(p.id)
+    const newFavorited = res.data?.favorited ?? !p.favorited
+    p.favorited = newFavorited
+    // Sync favorited status back to projectList (used by favoriteProjects computed)
+    const inList = projectList.value.find(pr => pr.id === p.id)
+    if (inList) {
+      inList.favorited = newFavorited
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
 
 // ===== Breadcrumb navigation computed =====
 const activeProjectName = computed(() => {
@@ -3207,6 +3313,25 @@ onBeforeRouteLeave((_to, _from, next) => {
 .manage-query-name { font-size: 13px; color: var(--tf-text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .manage-query-owner { font-size: 11px; color: var(--tf-text-tertiary); flex-shrink: 0; padding: 1px 6px; background: var(--tf-bg-surface); border-radius: 3px; }
 .manage-queries-empty { text-align: center; padding: 24px; font-size: 13px; color: var(--tf-text-tertiary); }
+
+/* Manage projects (favorites) modal */
+.manage-projects-content { display: flex; flex-direction: column; gap: 12px; }
+.manage-projects-hint { font-size: 12px; color: var(--tf-text-tertiary); margin: 0; }
+.manage-projects-search { margin-bottom: 4px; }
+.manage-projects-loading { display: flex; justify-content: center; padding: 32px; }
+.manage-projects-list { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.manage-project-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: 6px; cursor: pointer; transition: background 100ms;
+}
+.manage-project-item:hover { background: var(--tf-bg-hover); }
+.manage-project-star { font-size: 16px; color: var(--tf-text-tertiary); transition: color 100ms; flex-shrink: 0; }
+.manage-project-star.favorited { color: var(--tf-accent); }
+.manage-project-info { flex: 1; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+.manage-project-name { font-size: 13px; color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manage-project-key { font-size: 11px; color: var(--tf-text-tertiary); font-family: monospace; }
+.manage-project-action { font-size: 12px; color: var(--tf-accent); flex-shrink: 0; white-space: nowrap; }
+.manage-projects-empty { text-align: center; padding: 24px; font-size: 13px; color: var(--tf-text-tertiary); }
 
 /* Right area */
 .issue-list-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
