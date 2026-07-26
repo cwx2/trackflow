@@ -7,6 +7,8 @@ import com.trackflow.board.mapper.BoardGeneralConfigMapper;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.project.entity.Project;
+import com.trackflow.project.mapper.ProjectMapper;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +16,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 看板基本设置服务。
@@ -58,6 +63,7 @@ public class BoardGeneralConfigService {
     private final ObjectMapper objectMapper;
     private final BoardAccessService boardAccessService;
     private final BoardConfigVersionService boardConfigVersionService;
+    private final ProjectMapper projectMapper;
 
     /**
      * 获取项目的看板基本设置。
@@ -88,6 +94,10 @@ public class BoardGeneralConfigService {
             // Backlog 设置
             vo.setBacklogViewMode(config.getBacklogViewMode() != null ? config.getBacklogViewMode() : "list");
             vo.setBacklogSavedQueryId(config.getBacklogSavedQueryId() != null ? String.valueOf(config.getBacklogSavedQueryId()) : null);
+            // 关联项目
+            List<Long> linkedIds = parseLinkedProjectIds(config.getLinkedProjectIds());
+            vo.setLinkedProjectIds(linkedIds.stream().map(String::valueOf).collect(Collectors.toList()));
+            vo.setLinkedProjects(loadLinkedProjectInfos(linkedIds));
         } else {
             vo.setName("");
             vo.setCanViewRoles(DEFAULT_CAN_VIEW_ROLES);
@@ -99,6 +109,8 @@ public class BoardGeneralConfigService {
             vo.setAllowMultipleSprints(false);
             vo.setBacklogViewMode("list");
             vo.setBacklogSavedQueryId(null);
+            vo.setLinkedProjectIds(Collections.emptyList());
+            vo.setLinkedProjects(Collections.emptyList());
         }
 
         // 一次性计算当前用户的看板权限（复用已查到的 config，避免 board_general_config 表被重复查询）
@@ -147,6 +159,9 @@ public class BoardGeneralConfigService {
         // Backlog 配置（null 时保留原值，保持向后兼容）
         String backlogViewMode = dto.getBacklogViewMode();
         Long backlogSavedQueryId = dto.getBacklogSavedQueryId();
+        // 关联项目（null 时保留原值，空列表时清除所有关联）
+        String linkedProjectIdsJson = dto.getLinkedProjectIds() != null
+                ? serializeLinkedProjectIds(dto.getLinkedProjectIds()) : null;
 
         if (existing != null) {
             existing.setName(name);
@@ -161,6 +176,9 @@ public class BoardGeneralConfigService {
                 existing.setBacklogViewMode(backlogViewMode);
             }
             existing.setBacklogSavedQueryId(backlogSavedQueryId);
+            if (linkedProjectIdsJson != null) {
+                existing.setLinkedProjectIds(linkedProjectIdsJson);
+            }
             existing.setUpdatedAt(now);
             boardGeneralConfigMapper.updateById(existing);
         } else {
@@ -176,6 +194,7 @@ public class BoardGeneralConfigService {
             config.setAllowMultipleSprints(allowMultipleSprints);
             config.setBacklogViewMode(backlogViewMode != null ? backlogViewMode : "list");
             config.setBacklogSavedQueryId(backlogSavedQueryId);
+            config.setLinkedProjectIds(linkedProjectIdsJson != null ? linkedProjectIdsJson : "[]");
             config.setCreatedAt(now);
             config.setUpdatedAt(now);
             boardGeneralConfigMapper.insert(config);
@@ -256,5 +275,50 @@ public class BoardGeneralConfigService {
         } catch (Exception e) {
             return "[]";
         }
+    }
+
+    /**
+     * 解析 JSONB 关联项目 ID 列表。
+     */
+    private List<Long> parseLinkedProjectIds(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Long>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 序列化关联项目 ID 列表为 JSONB 字符串。
+     */
+    private String serializeLinkedProjectIds(List<Long> ids) {
+        try {
+            return objectMapper.writeValueAsString(ids != null ? ids : Collections.emptyList());
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    /**
+     * 根据 ID 列表批量加载关联项目的简要信息（名称 + Key）。
+     * 若列表为空则返回空列表，不发出 SQL 查询。
+     */
+    private List<BoardGeneralConfigVO.LinkedProjectVO> loadLinkedProjectInfos(List<Long> projectIds) {
+        if (projectIds == null || projectIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Project> projects = projectMapper.selectBatchIds(projectIds);
+        List<BoardGeneralConfigVO.LinkedProjectVO> result = new ArrayList<>(projects.size());
+        for (Project p : projects) {
+            BoardGeneralConfigVO.LinkedProjectVO item = new BoardGeneralConfigVO.LinkedProjectVO();
+            item.setId(String.valueOf(p.getId()));
+            item.setName(p.getName());
+            item.setKey(p.getKey());
+            result.add(item);
+        }
+        return result;
     }
 }

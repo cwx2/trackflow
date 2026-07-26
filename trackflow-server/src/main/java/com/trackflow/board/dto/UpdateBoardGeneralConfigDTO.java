@@ -66,4 +66,11 @@ public class UpdateBoardGeneralConfigDTO {
      * null 表示使用默认过滤（不在看板上的工单）。
      */
     private Long backlogSavedQueryId;
+
+    /**
+     * 关联项目 ID 列表（Long 类型，DTO 中 ID 为 Long）。
+     * 跨项目看板时配置额外关联的项目 ID（主项目已由 URL 中的 projectId 确定）。
+     * null 时保留原值，空列表表示清除所有关联项目（仅保留主项目）。
+     */
+    private List<Long> linkedProjectIds;
 }

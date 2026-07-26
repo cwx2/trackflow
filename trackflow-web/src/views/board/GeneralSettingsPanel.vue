@@ -17,6 +17,42 @@
       />
     </div>
 
+    <!-- 关联项目（跨项目看板） -->
+    <div class="section">
+      <div class="section-title">关联项目</div>
+      <div class="section-desc">
+        选择此看板关联的项目。默认只关联当前项目，选择多个项目后看板将展示所有关联项目的工单。
+      </div>
+      <a-select
+        :model-value="editableLinkedProjectIds"
+        multiple
+        placeholder="仅当前项目（单击添加更多项目）"
+        allow-clear
+        :max-tag-count="3"
+        style="width: 100%"
+        :loading="false"
+        @change="onLinkedProjectsChange"
+      >
+        <a-option
+          v-for="project in filteredAvailableProjects"
+          :key="project.id"
+          :value="project.id"
+        >
+          <span class="project-option-key">{{ project.key }}</span>
+          <span class="project-option-name">{{ project.name }}</span>
+        </a-option>
+      </a-select>
+      <div v-if="editableLinkedProjectIds.length > 0" class="multi-project-hint">
+        <icon-info-circle style="color: rgb(var(--primary-6)); margin-right: 4px;" />
+        <span>
+          跨项目看板将合并展示来自
+          <strong>{{ editableLinkedProjectIds.length + 1 }}</strong>
+          个项目的工单（当前项目 + {{ editableLinkedProjectIds.length }} 个关联项目）。
+          卡片上会显示项目 Key 以区分来源。
+        </span>
+      </div>
+    </div>
+
     <!-- Board Behavior -->
     <div class="section">
       <div class="section-title">Board Behavior</div>
@@ -229,16 +265,25 @@ interface OperatorOption {
   label: string
 }
 
+interface ProjectOption {
+  id: string
+  name: string
+  key: string
+}
+
 const props = defineProps<{
   name: string
   canViewRoles: string[]
   canEditRoles: string[]
   projectName: string
+  projectId: string
   filterMode: string
   filterQuery: string | null
   doneRetentionDays: number | null
   columnField: string
   hasActiveSprint: boolean
+  linkedProjectIds: string[]
+  availableProjects: ProjectOption[]
 }>()
 
 const emit = defineEmits<{
@@ -249,6 +294,7 @@ const emit = defineEmits<{
   'update:filterQuery': [value: string | null]
   'update:doneRetentionDays': [value: number | null]
   'update:columnField': [value: string]
+  'update:linkedProjectIds': [value: string[]]
 }>()
 
 const availableRoles: RoleOption[] = [
@@ -307,6 +353,25 @@ const editRolesSet = ref<Set<string>>(new Set(props.canEditRoles))
 const editableFilterMode = ref(props.filterMode || 'all')
 const editableDoneRetentionDays = ref<number | undefined>(props.doneRetentionDays ?? undefined)
 const editableColumnField = ref(props.columnField || 'status')
+
+// ===== 关联项目 =====
+const editableLinkedProjectIds = ref<string[]>([...props.linkedProjectIds])
+
+/** 过滤掉当前主项目，只显示其他可选项目 */
+const filteredAvailableProjects = computed(() =>
+  props.availableProjects.filter(p => p.id !== props.projectId)
+)
+
+function onLinkedProjectsChange(value: string | string[]) {
+  const ids = Array.isArray(value) ? value : (value ? [value] : [])
+  editableLinkedProjectIds.value = ids
+  emit('update:linkedProjectIds', ids)
+}
+
+// Sync from props
+watch(() => props.linkedProjectIds, (newIds) => {
+  editableLinkedProjectIds.value = [...newIds]
+})
 
 function onColumnFieldChange(value: string) {
   editableColumnField.value = value
@@ -390,7 +455,6 @@ watch(() => props.doneRetentionDays, (newDays) => {
   editableDoneRetentionDays.value = newDays ?? undefined
 })
 
-// 当 filterRows 变化时，自动校验并 emit
 watch(filterRows, () => {
   queryValidationError.value = validateFilterRows()
   emitFilterQuery()
@@ -719,6 +783,32 @@ function toggleEditRole(code: string, checked: boolean) {
   margin-top: 8px;
   font-size: 12px;
   color: rgb(var(--warning-6));
+  line-height: 1.5;
+}
+
+/* ===== 关联项目多选 ===== */
+.project-option-key {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(var(--primary-6));
+  margin-right: 6px;
+  background: rgba(var(--primary-6), 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.project-option-name {
+  font-size: 13px;
+  color: var(--color-text-1);
+}
+
+.multi-project-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-2);
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   line-height: 1.5;
 }
 </style>

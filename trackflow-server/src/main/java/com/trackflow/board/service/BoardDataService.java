@@ -153,18 +153,43 @@ public class BoardDataService {
                 && !"none".equals(swimlaneField)
                 && swimlaneValues != null && !swimlaneValues.isEmpty();
 
-        // REQ-274: 检查项目是否有手动排序，有则在 SQL 层面按手动排序截断
-        boolean projectHasManualOrder = hasManualOrder(projectId);
-        String manualOrderContextType = projectHasManualOrder ? "project" : null;
-        Long manualOrderContextId = projectHasManualOrder ? projectId : null;
+        // REQ-602: 检查是否为跨项目看板（有关联项目时使用多项目查询）
+        List<String> linkedProjectIdStrs = generalConfig.getLinkedProjectIds();
+        boolean isMultiProjectBoard = linkedProjectIdStrs != null && !linkedProjectIdStrs.isEmpty();
 
-        List<BoardCardRow> cardRows = issueMapper.selectBoardCards(
-                projectId, statusIds, priorities, sprintId, assigneeId, keyword,
-                excludeDoneBefore, BOARD_MAX_ISSUES,
-                manualOrderContextType, manualOrderContextId,
-                hasSwimlaneFilter ? swimlaneField : null,
-                hasSwimlaneFilter ? swimlaneValues : null
-        );
+        List<BoardCardRow> cardRows;
+        if (isMultiProjectBoard) {
+            // 多项目看板：合并主项目和关联项目的工单
+            List<Long> allProjectIds = new ArrayList<>();
+            allProjectIds.add(projectId);
+            for (String idStr : linkedProjectIdStrs) {
+                try {
+                    allProjectIds.add(Long.parseLong(idStr));
+                } catch (NumberFormatException e) {
+                    log.warn("Board 关联项目 ID 格式无效: {}", idStr);
+                }
+            }
+            cardRows = issueMapper.selectBoardCardsMultiProject(
+                    allProjectIds, statusIds, priorities, sprintId, assigneeId, keyword,
+                    excludeDoneBefore, BOARD_MAX_ISSUES,
+                    hasSwimlaneFilter ? swimlaneField : null,
+                    hasSwimlaneFilter ? swimlaneValues : null
+            );
+        } else {
+            // 单项目看板：按项目 ID 查询（支持手动排序）
+            // REQ-274: 检查项目是否有手动排序，有则在 SQL 层面按手动排序截断
+            boolean projectHasManualOrder = hasManualOrder(projectId);
+            String manualOrderContextType = projectHasManualOrder ? "project" : null;
+            Long manualOrderContextId = projectHasManualOrder ? projectId : null;
+
+            cardRows = issueMapper.selectBoardCards(
+                    projectId, statusIds, priorities, sprintId, assigneeId, keyword,
+                    excludeDoneBefore, BOARD_MAX_ISSUES,
+                    manualOrderContextType, manualOrderContextId,
+                    hasSwimlaneFilter ? swimlaneField : null,
+                    hasSwimlaneFilter ? swimlaneValues : null
+            );
+        }
 
         // 4.1 如果 filterMode='query'，获取匹配的 issue IDs 做交集
         Set<Long> queryFilteredIssueIds = resolveQueryFilterIssueIds(generalConfig, projectId);
@@ -248,6 +273,7 @@ public class BoardDataService {
             BoardCardVO card = new BoardCardVO();
             card.setId(String.valueOf(row.getId()));
             card.setProjectId(String.valueOf(row.getProjectId()));
+            card.setProjectKey(row.getProjectKey());
             card.setIssueKey(row.getIssueKey());
             card.setTitle(row.getTitle());
             card.setIssueType(row.getIssueType());

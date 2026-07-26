@@ -22,11 +22,14 @@
           :can-view-roles="editableCanViewRoles"
           :can-edit-roles="editableCanEditRoles"
           :project-name="projectName"
+          :project-id="projectId"
           :filter-mode="editableFilterMode"
           :filter-query="editableFilterQuery"
           :done-retention-days="editableDoneRetentionDays"
           :column-field="editableColumnField"
           :has-active-sprint="hasActiveSprint"
+          :linked-project-ids="editableLinkedProjectIds"
+          :available-projects="availableProjects"
           @update:name="editableBoardName = $event"
           @update:can-view-roles="editableCanViewRoles = $event"
           @update:can-edit-roles="editableCanEditRoles = $event"
@@ -34,6 +37,7 @@
           @update:filter-query="editableFilterQuery = $event"
           @update:done-retention-days="editableDoneRetentionDays = $event"
           @update:column-field="editableColumnField = $event"
+          @update:linked-project-ids="editableLinkedProjectIds = $event"
         />
       </a-tab-pane>
 
@@ -320,8 +324,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { boardApi, queryApi } from '@/api'
-import type { BoardColumnVO, BoardColumnItem, SavedQueryVO } from '@/api/types'
+import { boardApi, queryApi, projectApi } from '@/api'
+import type { BoardColumnVO, BoardColumnItem, SavedQueryVO, ProjectVO } from '@/api/types'
 import { localizeStatusName, localizePriority } from '@/utils/fieldLabels'
 import CardSettingsPanel from './CardSettingsPanel.vue'
 import ChartSettingsPanel from './ChartSettingsPanel.vue'
@@ -439,6 +443,23 @@ const availableSavedQueries = ref<Array<{ id: string; name: string; shared: bool
 const loadingSavedQueries = ref(false)
 let savedQueriesLoaded = false
 
+// ===== 关联项目状态（跨项目看板）=====
+const editableLinkedProjectIds = ref<string[]>([])
+/** 所有可选项目列表（用于关联项目多选） */
+const availableProjects = ref<ProjectVO[]>([])
+let projectsLoaded = false
+
+async function loadProjectsIfNeeded() {
+  if (projectsLoaded) return
+  try {
+    const res = await projectApi.list({ pageSize: 200 })
+    availableProjects.value = res.data?.list || []
+    projectsLoaded = true
+  } catch {
+    availableProjects.value = []
+  }
+}
+
 async function loadSavedQueriesIfNeeded() {
   if (savedQueriesLoaded || !props.projectId) return
   loadingSavedQueries.value = true
@@ -465,6 +486,8 @@ const dropPosition = ref<'above' | 'below' | null>(null)
 // 当 drawer 打开时加载配置
 watch(() => props.visible, async (newVisible) => {
   if (newVisible && props.projectId) {
+    // 加载可用项目列表（用于关联项目多选），每次打开时可刷新
+    loadProjectsIfNeeded()
     // 加载列配置（始终加载状态列用于列设置，不论 columnField 如何）
     // 当 columnField=priority 时 props.columns 是优先级列，需要单独获取状态列
     const statusColumns = props.columns.filter(c => c.statusId != null)
@@ -607,6 +630,8 @@ watch(() => props.visible, async (newVisible) => {
         // Backlog 设置
         editableBacklogViewMode.value = (res.data.backlogViewMode as 'list' | 'tree') || 'list'
         editableBacklogSavedQueryId.value = res.data.backlogSavedQueryId ?? null
+        // 关联项目
+        editableLinkedProjectIds.value = res.data.linkedProjectIds || []
       }
     } catch {
       editableBoardName.value = ''
@@ -620,6 +645,7 @@ watch(() => props.visible, async (newVisible) => {
       editableAllowMultipleSprints.value = false
       editableBacklogViewMode.value = 'list'
       editableBacklogSavedQueryId.value = null
+      editableLinkedProjectIds.value = []
     }
 
     // 重置 savedQueries 加载状态（面板重新打开时允许重新加载）
@@ -1018,7 +1044,8 @@ async function handleSave() {
         columnField: editableColumnField.value,
         allowMultipleSprints: editableAllowMultipleSprints.value,
         backlogViewMode: editableBacklogViewMode.value,
-        backlogSavedQueryId: editableBacklogSavedQueryId.value
+        backlogSavedQueryId: editableBacklogSavedQueryId.value,
+        linkedProjectIds: editableLinkedProjectIds.value
       },
       chartConfig: {
         chartType: editableChartType.value,

@@ -179,6 +179,37 @@ public interface IssueMapper extends BaseMapper<Issue> {
     );
 
     /**
+     * 跨项目看板卡片查询 — 查询多个项目中的工单，按状态合并展示。
+     * <p>
+     * 与 selectBoardCards 相同，但将 project_id = ? 改为 project_id IN (...)，
+     * 同时查出项目 key 用于卡片标识。
+     * 不支持手动排序（跨项目场景无跨项目统一排序），始终按创建时间倒序。
+     *
+     * @param projectIds        项目 ID 列表（必填，包含主项目和所有关联项目）
+     * @param statusIds         可见列的状态 ID 集合（可选）
+     * @param priorities        可见列的优先级值集合（可选）
+     * @param sprintId          Sprint 过滤（可选）
+     * @param assigneeId        负责人过滤（可选）
+     * @param keyword           关键词搜索（可选）
+     * @param excludeDoneBefore 排除此日期前已完成的工单（可选）
+     * @param limit             最大返回数量
+     * @param swimlaneField     泳道分组字段（可选）
+     * @param swimlaneValues    泳道选中值列表（可选）
+     */
+    List<BoardCardRow> selectBoardCardsMultiProject(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("statusIds") List<Long> statusIds,
+            @Param("priorities") List<String> priorities,
+            @Param("sprintId") Long sprintId,
+            @Param("assigneeId") Long assigneeId,
+            @Param("keyword") String keyword,
+            @Param("excludeDoneBefore") java.time.LocalDateTime excludeDoneBefore,
+            @Param("limit") int limit,
+            @Param("swimlaneField") String swimlaneField,
+            @Param("swimlaneValues") List<String> swimlaneValues
+    );
+
+    /**
      * 工作流影响分析：按状态 ID 列表聚合工单数量（单次 GROUP BY 查询，消除 N+1）。
      *
      * @param statusIds 需要统计的状态 ID 列表

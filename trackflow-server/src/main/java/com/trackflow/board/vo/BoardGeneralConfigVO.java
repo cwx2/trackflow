@@ -58,9 +58,35 @@ public class BoardGeneralConfigVO {
      */
     private String backlogSavedQueryName;
 
+    /**
+     * 关联项目 ID 列表（String 类型，VO 中 ID 用 String）。
+     * 跨项目看板时存储额外关联的项目 ID（主项目已由外层 projectId 确定）。
+     * 对应 YouTrack Board Settings > General: Projects 多选配置。
+     */
+    private List<String> linkedProjectIds;
+
+    /**
+     * 关联项目的简要信息列表（用于前端展示项目名称 + Key）。
+     * 运行时从数据库填充，不持久化。
+     */
+    private List<LinkedProjectVO> linkedProjects;
+
     /** 当前用户是否有看板查看权限（运行时计算） */
     private Boolean currentUserCanView;
 
     /** 当前用户是否有看板编辑权限（运行时计算） */
     private Boolean currentUserCanEdit;
+
+    /**
+     * 关联项目简要信息 VO（嵌套在 BoardGeneralConfigVO 中）。
+     */
+    @Data
+    public static class LinkedProjectVO {
+        /** 项目 ID（String，防止 JS 精度丢失） */
+        private String id;
+        /** 项目名称 */
+        private String name;
+        /** 项目 Key（如 DE4、APP） */
+        private String key;
+    }
 }

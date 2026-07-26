@@ -70,6 +70,14 @@ public class BoardGeneralConfig implements Serializable {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long backlogSavedQueryId;
 
+    /**
+     * 关联项目 ID 列表（JSONB 数组）。
+     * 跨项目看板时存储额外关联的项目 ID（主项目已由 projectId 字段确定）。
+     * 对应 YouTrack Board Settings > General: Projects 多选配置。
+     */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String linkedProjectIds;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -340,7 +340,7 @@
     <!-- REQ-274: 看板卡片查询支持手动排序感知的截断策略 -->
     <select id="selectBoardCards" resultType="com.trackflow.issue.mapper.result.BoardCardRow">
         SELECT
-            i.id, i.project_id, i.issue_key, i.title, i.issue_type,
+            i.id, i.project_id, p.key AS project_key, i.issue_key, i.title, i.issue_type,
             i.status_id, i.priority, i.assignee_id, i.sprint_id,
             i.due_date, i.estimated_hours, i.child_count, i.child_closed_count,
             i.created_at, i.resolved_at,
@@ -351,6 +351,7 @@
             u.display_name AS assignee_name, u.avatar_url AS assignee_avatar_url,
             sp.name AS sprint_name
         FROM issue i
+        LEFT JOIN project p ON p.id = i.project_id
         LEFT JOIN issue_status s ON s.id = i.status_id
         LEFT JOIN sys_user u ON u.id = i.assignee_id
         LEFT JOIN sprint sp ON sp.id = i.sprint_id
@@ -426,6 +427,88 @@
                 ORDER BY i.created_at DESC
             </otherwise>
         </choose>
+        LIMIT #{limit}
+    </select>
+
+    <!-- 跨项目看板卡片查询 — 查询多个项目中的工单，同时关联 project 表获取 project key -->
+    <select id="selectBoardCardsMultiProject" resultType="com.trackflow.issue.mapper.result.BoardCardRow">
+        SELECT
+            i.id, i.project_id, p.key AS project_key, i.issue_key, i.title, i.issue_type,
+            i.status_id, i.priority, i.assignee_id, i.sprint_id,
+            i.due_date, i.estimated_hours, i.child_count, i.child_closed_count,
+            i.created_at, i.resolved_at,
+            i.parent_id,
+            pi.issue_key AS parent_issue_key,
+            pi.title AS parent_title,
+            s.name AS status_name, s.color AS status_color,
+            u.display_name AS assignee_name, u.avatar_url AS assignee_avatar_url,
+            sp.name AS sprint_name
+        FROM issue i
+        LEFT JOIN project p ON p.id = i.project_id
+        LEFT JOIN issue_status s ON s.id = i.status_id
+        LEFT JOIN sys_user u ON u.id = i.assignee_id
+        LEFT JOIN sprint sp ON sp.id = i.sprint_id
+        LEFT JOIN issue pi ON pi.id = i.parent_id AND pi.deleted_at IS NULL
+        WHERE i.project_id IN
+          <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+              #{pid}
+          </foreach>
+          AND i.deleted_at IS NULL
+          <if test="statusIds != null and statusIds.size() > 0">
+            AND i.status_id IN
+            <foreach collection="statusIds" item="sid" open="(" separator="," close=")">
+                #{sid}
+            </foreach>
+          </if>
+          <if test="priorities != null and priorities.size() > 0">
+            AND i.priority IN
+            <foreach collection="priorities" item="pr" open="(" separator="," close=")">
+                #{pr}
+            </foreach>
+          </if>
+          <if test="sprintId != null">
+            AND i.sprint_id = #{sprintId}
+          </if>
+          <if test="assigneeId != null">
+            AND i.assignee_id = #{assigneeId}
+          </if>
+          <if test="keyword != null and keyword != ''">
+            AND (i.title ILIKE CONCAT('%', #{keyword}, '%')
+                 OR i.issue_key ILIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+          <if test="excludeDoneBefore != null">
+            AND (
+                s.is_closed = false
+                OR i.resolved_at IS NULL
+                OR i.resolved_at >= #{excludeDoneBefore}
+            )
+          </if>
+          <!-- 泳道服务端过滤 -->
+          <if test="swimlaneField == 'assignee' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.assignee_id IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                CAST(#{v} AS BIGINT)
+            </foreach>
+          </if>
+          <if test="swimlaneField == 'priority' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.priority IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                #{v}
+            </foreach>
+          </if>
+          <if test="swimlaneField == 'type' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.issue_type IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                #{v}
+            </foreach>
+          </if>
+          <if test="swimlaneField == 'sprint' and swimlaneValues != null and swimlaneValues.size() > 0">
+            AND i.sprint_id IN
+            <foreach collection="swimlaneValues" item="v" open="(" separator="," close=")">
+                CAST(#{v} AS BIGINT)
+            </foreach>
+          </if>
+        ORDER BY i.created_at DESC
         LIMIT #{limit}
     </select>
 

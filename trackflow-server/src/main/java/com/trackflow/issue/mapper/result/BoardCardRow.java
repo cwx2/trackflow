@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 public class BoardCardRow {
     private Long id;
     private Long projectId;
+    /** 项目 Key（如 DE4、APP），多项目看板时用于区分来源项目 */
+    private String projectKey;
     private String issueKey;
     private String title;
     private String issueType;
