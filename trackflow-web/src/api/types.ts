@@ -294,6 +294,8 @@ export interface IssueVO {
   customFieldColors?: Record<string, string>
   /** 投票数（来自 issue.vote_count 冗余字段） */
   voteCount?: number
+  /** 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户） */
+  visibility?: string
 }
 
 export interface IssueDetailVO extends IssueVO {
@@ -319,6 +321,10 @@ export interface IssueDetailVO extends IssueVO {
   childProgress?: ChildProgressVO
   /** 类型变更导致状态自动重置时为 true（仅 update 响应中出现） */
   statusAutoReset?: boolean
+  /** 受限工单的可见用户 ID 列表（visibility=restricted 时非空） */
+  visibilityUserIds?: string[]
+  /** 受限工单的可见用户显示名列表 */
+  visibilityUserNames?: string[]
 }
 
 /** 子任务简要信息 */

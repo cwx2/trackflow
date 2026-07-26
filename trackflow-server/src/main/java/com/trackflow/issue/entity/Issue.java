@@ -45,6 +45,11 @@ public class Issue implements Serializable {
     private Integer voteCount;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime resolvedAt;
+    /**
+     * 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户）。
+     * 默认 public，修改后需同步维护 issue_visibility_user 表。
+     */
+    private String visibility;
     private LocalDateTime deletedAt;
 
     @com.baomidou.mybatisplus.annotation.Version

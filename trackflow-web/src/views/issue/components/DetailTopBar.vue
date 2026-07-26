@@ -8,6 +8,10 @@
         <a class="crumb" @click="$router.push('/issues')">{{ projectName }}</a>
         <span class="sep">/</span>
         <span class="crumb-current">{{ issueKey }}</span>
+        <!-- 受限工单锁定图标（对标 YouTrack "Visible to" 锁定标识） -->
+        <a-tooltip v-if="isRestricted" content="此工单为受限访问，仅部分用户可见">
+          <icon-lock class="restricted-icon" :size="13" />
+        </a-tooltip>
       </nav>
       <span class="meta">
         创建者 <b>{{ createdBy }}</b> · {{ createdAgo }}
@@ -57,7 +61,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { IconLeft, IconRight, IconCopy, IconPlus, IconMenu, IconThumbUp, IconStar, IconStarFill } from '@arco-design/web-vue/es/icon'
+import { IconLeft, IconRight, IconCopy, IconPlus, IconMenu, IconThumbUp, IconStar, IconStarFill, IconLock } from '@arco-design/web-vue/es/icon'
 import { issueVoteApi, issueWatcherApi } from '@/api'
 import type { IssueVoteStatusVO } from '@/api/issueVote'
 import type { IssueWatcherStatusVO } from '@/api/issueWatcher'
@@ -74,6 +78,8 @@ const props = defineProps<{
   index?: number
   total?: number
   showCreate?: boolean
+  /** 是否为受限访问工单（显示锁定图标） */
+  isRestricted?: boolean
 }>()
 
 defineEmits<{
@@ -219,4 +225,12 @@ watch(() => props.issueId, (newId) => {
 
 .nav-group { display: flex; align-items: center; gap: 4px; margin-right: 8px; }
 .nav-pos { font-size: 11px; color: var(--tf-text-muted); min-width: 36px; text-align: center; }
+
+/* 受限访问锁定图标 */
+.restricted-icon {
+  color: var(--tf-text-tertiary);
+  vertical-align: middle;
+  margin-left: 2px;
+  cursor: default;
+}
 </style>

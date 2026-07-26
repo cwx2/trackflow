@@ -66,4 +66,10 @@ public class IssueVO {
      */
     @Deprecated
     private Map<String, String> customFieldColors;
+
+    /**
+     * 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户）。
+     * 默认 public。
+     */
+    private String visibility;
 }

@@ -28,6 +28,7 @@
       :created-ago="timeAgo(issue.createdAt)"
       :updated-ago="timeAgo(issue.updatedAt)"
       :show-create="canCreateIssue"
+      :is-restricted="issue.visibility === 'restricted'"
       @copy="copyIssue"
       @create="showCreatePanel = true"
       @toggle-sidebar="toggleSidebar"
@@ -830,6 +831,19 @@ const sidebarFields = computed<SidebarField[]>(() => {
     // 自定义字段
     ...buildCustomFieldSidebarEntries(i, canEditCF),
     { key: '_sep', label: '', value: '', readonly: true },
+    // 可见性字段（仅报告者或项目管理员可修改）
+    {
+      key: 'visibility',
+      label: '可见性',
+      value: i.visibility === 'restricted' ? '受限访问' : '所有成员',
+      editType: 'select' as const,
+      rawValue: i.visibility || 'public',
+      readonly: !(isReporter.value || hasProjectPermission('project:admin')),
+      options: [
+        { value: 'public', label: '所有成员' },
+        { value: 'restricted', label: '受限访问（仅指定用户）' },
+      ]
+    },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(i.createdAt), readonly: true },
     { key: 'updatedAt', label: '更新时间', value: formatDateTime(i.updatedAt), readonly: true },
   ]
@@ -1430,6 +1444,13 @@ async function onEditField(key: string, newValue: string | string[]) {
     return
   }
 
+  // 可见性字段：切换到 restricted 时需要额外配置（当前版本简单切换，受限用户需后续通过弹窗指定）
+  if (key === 'visibility') {
+    const visValue = Array.isArray(newValue) ? newValue[0] : newValue
+    await onUpdateVisibility(visValue as string, [])
+    return
+  }
+
   const fieldMap: Record<string, string> = { priority: 'priority', issueType: 'issueType', assignee: 'assigneeId', sprint: 'sprintId', dueDate: 'dueDate', estimatedHours: 'estimatedHours' }
   const prop = fieldMap[key]
   if (!prop) return
@@ -1450,6 +1471,26 @@ async function onEditField(key: string, newValue: string | string[]) {
     await loadAll()
     Message.success('已更新')
   } catch (e: any) { handleUpdateError(e) }
+}
+
+/**
+ * 修改工单可见性
+ * @param visibility 新的可见性值：'public' 或 'restricted'
+ * @param userIds 受限可见用户 ID 列表（visibility=restricted 时有效）
+ */
+async function onUpdateVisibility(visibility: string, userIds: string[] = []) {
+  if (!issue.value) return
+  try {
+    await issueApi.update(issue.value.id, {
+      visibility,
+      visibilityUserIds: userIds.map(Number),
+      version: issue.value.version
+    })
+    await loadAll()
+    Message.success('可见性已更新')
+  } catch (e: any) {
+    handleUpdateError(e, '更新可见性失败')
+  }
 }
 
 /**

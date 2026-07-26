@@ -97,6 +97,7 @@ public class IssueService {
     private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
     private final com.trackflow.board.mapper.BoardColumnConfigMapper boardColumnConfigMapper;
     private final com.trackflow.issue.service.precheck.ClosePreCheckChain closePreCheckChain;
+    private final com.trackflow.issue.mapper.IssueVisibilityUserMapper visibilityUserMapper;
 
     /**
      * 创建 Issue
@@ -1234,6 +1235,41 @@ public class IssueService {
                     issue.getIssueType(), issue.getProjectId(),
                     CustomFieldValidateMode.PARTIAL);
         }
+        // 可见性字段更新：只有项目管理员或工单报告者有权修改
+        if (dto.getVisibility() != null) {
+            boolean canChangeVisibility = issue.getReporterId().equals(currentUserId)
+                    || permissionService.hasPermission(currentUserId, issue.getProjectId(), "project:admin")
+                    || permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_visibility");
+            if (!canChangeVisibility) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权修改工单可见性，仅报告者或项目管理员可修改");
+            }
+            String newVisibility = dto.getVisibility();
+            if (!newVisibility.equals("public") && !newVisibility.equals("restricted")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的可见性值：" + newVisibility + "，有效值为 public/restricted");
+            }
+            String oldVisibility = issue.getVisibility() != null ? issue.getVisibility() : "public";
+            if (!newVisibility.equals(oldVisibility)) {
+                recordActivity(id, currentUserId, "updated", "visibility", oldVisibility, newVisibility);
+                issue.setVisibility(newVisibility);
+                fieldChanges.put("visibility", new String[]{oldVisibility, newVisibility});
+            }
+            // 更新可见用户列表（仅 restricted 时有意义）
+            if ("restricted".equals(newVisibility)) {
+                visibilityUserMapper.deleteByIssueId(id);
+                List<Long> userIds = dto.getVisibilityUserIds();
+                if (userIds != null && !userIds.isEmpty()) {
+                    for (Long userId : userIds) {
+                        com.trackflow.issue.entity.IssueVisibilityUser vu = new com.trackflow.issue.entity.IssueVisibilityUser();
+                        vu.setIssueId(id);
+                        vu.setUserId(userId);
+                        visibilityUserMapper.insert(vu);
+                    }
+                }
+            } else {
+                // 切回 public 时清空访问列表
+                visibilityUserMapper.deleteByIssueId(id);
+            }
+        }
 
         int rows = issueMapper.updateById(issue);
         if (rows == 0) {
@@ -2304,14 +2340,46 @@ public class IssueService {
     // ========== 增强详情（性能优化：单次 JOIN 查询） ==========
 
     /**
-     * 获取 Issue 详情（带项目成员校验）—— 避免先查 Issue 再查详情导致两次 DB 查询
+     * 获取 Issue 详情（带项目成员校验 + 可见性校验）—— 避免先查 Issue 再查详情导致两次 DB 查询
      */
     @Transactional(readOnly = true)
     public IssueDetailVO getDetailWithAccessCheck(Long id) {
         IssueDetailVO detail = getDetail(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectAccessible(currentUserId, Long.parseLong(detail.getProjectId()));
+        // 可见性校验：受限工单只有有权限的用户才能访问
+        assertVisibilityAccessible(id, detail, currentUserId);
         return detail;
+    }
+
+    /**
+     * 校验当前用户是否有权访问受限工单。
+     * <p>
+     * 访问规则：
+     * - visibility = public：所有项目成员均可访问（已由 assertProjectAccessible 保证）
+     * - visibility = restricted：仅报告者、负责人、issue_visibility_user 表中列出的用户、项目管理员可访问
+     */
+    private void assertVisibilityAccessible(Long issueId, IssueDetailVO detail, Long currentUserId) {
+        if (!"restricted".equals(detail.getVisibility())) {
+            return; // public 工单不做额外校验
+        }
+        // 报告者始终可访问
+        if (detail.getReporterId() != null && String.valueOf(currentUserId).equals(detail.getReporterId())) {
+            return;
+        }
+        // 负责人始终可访问
+        if (detail.getAssigneeId() != null && String.valueOf(currentUserId).equals(detail.getAssigneeId())) {
+            return;
+        }
+        // 项目管理员始终可访问
+        if (permissionService.hasPermission(currentUserId, Long.parseLong(detail.getProjectId()), "project:admin")) {
+            return;
+        }
+        // 检查是否在可见用户列表中
+        if (visibilityUserMapper.existsByIssueIdAndUserId(issueId, currentUserId)) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
     }
 
     /**
@@ -2380,6 +2448,20 @@ public class IssueService {
         // 标签（单独查询，因为是多对多关系）
         List<IssueTag> tags = tagService.listIssueTags(id);
         vo.setTags(issueConverter.toTagVOList(tags));
+
+        // 可见性字段
+        vo.setVisibility(row.getVisibility() != null ? row.getVisibility() : "public");
+        if ("restricted".equals(vo.getVisibility())) {
+            List<Long> visibleUserIds = visibilityUserMapper.selectUserIdsByIssueId(id);
+            if (!visibleUserIds.isEmpty()) {
+                List<SysUser> visibleUsers = sysUserMapper.selectBatchIds(visibleUserIds);
+                vo.setVisibilityUserIds(visibleUsers.stream().map(u -> String.valueOf(u.getId())).toList());
+                vo.setVisibilityUserNames(visibleUsers.stream().map(SysUser::getDisplayName).toList());
+            } else {
+                vo.setVisibilityUserIds(java.util.List.of());
+                vo.setVisibilityUserNames(java.util.List.of());
+            }
+        }
 
         // 自定义字段结构化值
         Long projectIdLong = Long.parseLong(vo.getProjectId());

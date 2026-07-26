@@ -61,4 +61,21 @@ public class IssueDetailVO {
 
     /** 类型变更导致状态自动重置时为 true（仅 update 响应中出现） */
     private Boolean statusAutoReset;
+
+    /**
+     * 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户）。
+     * 默认 public。
+     */
+    private String visibility;
+
+    /**
+     * 受限工单的可见用户 ID 列表（仅 visibility=restricted 时非空）。
+     * 格式：String ID 列表（避免 JS 精度丢失）。
+     */
+    private List<String> visibilityUserIds;
+
+    /**
+     * 受限工单的可见用户显示名列表（与 visibilityUserIds 顺序对应）。
+     */
+    private List<String> visibilityUserNames;
 }

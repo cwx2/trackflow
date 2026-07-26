@@ -33,6 +33,7 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "derivedSpentHours", source = "derivedSpentHours")
     @Mapping(target = "derivedEstimatedHours", source = "derivedEstimatedHours")
     @Mapping(target = "voteCount", source = "voteCount")
+    @Mapping(target = "visibility", source = "visibility")
     IssueVO toVO(Issue entity);
 
     List<IssueVO> toVOList(List<Issue> entities);

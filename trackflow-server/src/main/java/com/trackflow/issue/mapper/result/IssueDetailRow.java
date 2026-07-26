@@ -70,4 +70,7 @@ public class IssueDetailRow {
 
     // JOIN issue (parent)
     private String parentKey;
+
+    // issue.visibility
+    private String visibility;
 }

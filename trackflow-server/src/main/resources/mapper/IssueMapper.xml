@@ -20,6 +20,7 @@
             i.sprint_id, i.parent_id, i.due_date, i.estimated_hours, i.spent_hours,
             i.derived_spent_hours, i.derived_estimated_hours,
             i.resolved_at, i.created_at, i.updated_at, i.version,
+            i.visibility,
             p.name AS project_name,
             p.status AS project_status,
             s.name AS status_name, s.code AS status_code, s.color AS status_color,

@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -45,4 +46,16 @@ public class UpdateIssueDTO {
      * 仅在更新 priority 字段且看板为优先级模式时生效。
      */
     private Boolean forceWip;
+
+    /**
+     * 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户）。
+     * 传入该字段时必须同时传 visibilityUserIds（restricted 时指定可见用户）。
+     */
+    private String visibility;
+
+    /**
+     * 受限工单的可见用户 ID 列表（仅 visibility=restricted 时有效）。
+     * 传 null 或空列表表示清空（退化为仅报告者可见）。
+     */
+    private List<Long> visibilityUserIds;
 }
