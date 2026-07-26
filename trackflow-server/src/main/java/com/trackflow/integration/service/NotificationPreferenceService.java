@@ -480,6 +480,11 @@ public class NotificationPreferenceService {
         pref.setEmailOnWatchedUpdated(false);
         // Watched 通知开关默认开启
         pref.setOnWatchedUpdated(true);
+        // 投票和工时记录通知默认值（对标 YouTrack：站内通知启用，邮件关闭）
+        pref.setOnIssueVoted(true);
+        pref.setEmailOnIssueVoted(false);
+        pref.setOnIssueSpentTime(true);
+        pref.setEmailOnIssueSpentTime(false);
         // 自动关注行为默认值
         pref.setAutoWatchOnCreate(true);
         pref.setAutoWatchOnComment(true);
