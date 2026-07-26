@@ -266,8 +266,8 @@ public class ProjectController {
     @PreAuthorize("@perm.checkProject(#id, 'project:view')")
     public R<PageResult<ProjectActivityVO>> listActivities(
             @PathVariable("id") String id,
-            @RequestParam(required = false, defaultValue = "1") Integer page,
-            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
+            @RequestParam(name = "page", required = false, defaultValue = "1") Integer page,
+            @RequestParam(name = "pageSize", required = false, defaultValue = "20") Integer pageSize) {
         Long projectId = projectService.resolveProjectId(id);
         Page<ProjectActivity> pageObj = new Page<>(page, pageSize);
         Page<ProjectActivityVO> result = projectActivityService.listByProject(projectId, pageObj);
