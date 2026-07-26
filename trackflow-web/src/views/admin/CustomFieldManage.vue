@@ -32,6 +32,14 @@
                 <a-button size="mini" type="outline" @click="batchToggleAutoAttach(false)">
                   禁用 Auto-attach
                 </a-button>
+                <a-button size="mini" type="outline" @click="batchTogglePrivate(true)">
+                  <template #icon><icon-lock /></template>
+                  设为私有
+                </a-button>
+                <a-button size="mini" type="outline" @click="batchTogglePrivate(false)">
+                  <template #icon><icon-unlock /></template>
+                  取消私有
+                </a-button>
                 <a-button size="mini" type="outline" @click="batchToggleHidden(true)">
                   <template #icon><icon-eye-invisible /></template>
                   隐藏于列表
@@ -106,6 +114,11 @@
                     <icon-check v-if="record.isForAll" style="color: var(--tf-accent)" />
                   </template>
                 </a-table-column>
+                <a-table-column title="私有" data-index="isPrivate" :width="60" align="center">
+                  <template #cell="{ record }">
+                    <icon-lock v-if="record.isPrivate" style="color: var(--tf-warning)" />
+                  </template>
+                </a-table-column>
                 <a-table-column title="使用项目" :width="140">
                   <template #cell="{ record }">
                     <a-tooltip v-if="record.isForAll" :content="`全局字段，适用于系统全部 ${projectList.length} 个项目`">
@@ -168,6 +181,12 @@
               <div class="detail-row">
                 <span class="detail-label">全局可用</span>
                 <span class="detail-value">{{ selectedField.isForAll ? '是' : '否' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">私有字段</span>
+                <span class="detail-value" :style="selectedField.isPrivate ? 'color: var(--tf-warning)' : ''">
+                  {{ selectedField.isPrivate ? '是（仅授权用户可见）' : '否' }}
+                </span>
               </div>
               <div v-if="selectedField.isMulti" class="detail-row">
                 <span class="detail-label">多值</span>
@@ -504,7 +523,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
@@ -1118,6 +1137,22 @@ async function batchToggleHidden(hidden: boolean) {
       value: hidden
     })
     Message.success(`已${hidden ? '隐藏' : '显示'} ${selectedKeys.value.length} 个字段`)
+    selectedKeys.value = []
+    loadList()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '批量操作失败')
+  }
+}
+
+async function batchTogglePrivate(isPrivate: boolean) {
+  if (selectedKeys.value.length === 0) return
+  try {
+    await customFieldApi.batchUpdate({
+      ids: selectedKeys.value,
+      field: 'isPrivate',
+      value: isPrivate
+    })
+    Message.success(`已将 ${selectedKeys.value.length} 个字段${isPrivate ? '设为私有' : '取消私有'}`)
     selectedKeys.value = []
     loadList()
   } catch (e: any) {

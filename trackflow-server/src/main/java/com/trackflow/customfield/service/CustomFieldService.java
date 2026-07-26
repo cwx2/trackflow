@@ -403,6 +403,7 @@ public class CustomFieldService {
         switch (field) {
             case "isForAll" -> wrapper.set(CustomFieldDefinition::getIsForAll, value);
             case "isHiddenInList" -> wrapper.set(CustomFieldDefinition::getIsHiddenInList, value);
+            case "isPrivate" -> wrapper.set(CustomFieldDefinition::getIsPrivate, value);
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的批量更新字段: " + field);
         }
 
