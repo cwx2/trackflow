@@ -1817,12 +1817,11 @@ public class ProjectService {
         // 4.6 清理项目专属 WorkflowDefinition（非系统默认工作流，project_workflow 无 FK → workflow_definition，不会被 CASCADE 删除）
         List<Long> defIds = projectWorkflowMapper.selectDefinitionIdsByProjectId(projectId);
         if (!defIds.isEmpty()) {
-            // 只删除非系统默认工作流（项目初始化时为该项目单独创建的工作流定义）
-            List<Long> defIdsToDelete = defIds.stream()
-                    .filter(defId -> {
-                        WorkflowDefinition def = workflowDefinitionMapper.selectById(defId);
-                        return def != null && !Boolean.TRUE.equals(def.getIsDefault());
-                    })
+            // 批量加载后内存过滤，避免 N+1 查询（java-coding-standards.md 第十四节）
+            List<WorkflowDefinition> defs = workflowDefinitionMapper.selectBatchIds(defIds);
+            List<Long> defIdsToDelete = defs.stream()
+                    .filter(def -> !Boolean.TRUE.equals(def.getIsDefault()))
+                    .map(WorkflowDefinition::getId)
                     .toList();
             if (!defIdsToDelete.isEmpty()) {
                 workflowDefinitionMapper.deleteBatchIds(defIdsToDelete);
