@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.dao.DuplicateKeyException;
 
 @Slf4j
 @Service
@@ -614,7 +615,14 @@ public class SprintService {
         sprint.setStartScopeIssues(sprintIssues.size());
 
         sprint.setStatus(SprintStatus.ACTIVE);
-        sprintMapper.updateById(sprint);
+        try {
+            sprintMapper.updateById(sprint);
+        } catch (DuplicateKeyException e) {
+            // 数据库层部分唯一索引触发（idx_sprint_project_active_unique）
+            // 并发场景下两个事务都通过了应用层 selectCount 检查，但只有一个能成功 COMMIT
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "该项目已有一个活跃的迭代，请先完成当前迭代再激活新的（并发冲突）");
+        }
 
         // 记录项目活动日志
         Long currentUserId = SecurityUtils.getCurrentUserId();
