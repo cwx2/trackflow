@@ -130,7 +130,7 @@ public class CustomFieldService {
             }
         }
 
-        if (!Boolean.TRUE.equals(dto.getIsForAll()) && dto.getProjectIds() != null) {
+        if (dto.getProjectIds() != null) {
             for (Long projectId : dto.getProjectIds()) {
                 CustomFieldProject cfp = new CustomFieldProject();
                 cfp.setCustomFieldId(entity.getId());

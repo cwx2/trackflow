@@ -471,14 +471,20 @@
           </a-form-item>
         </template>
 
-        <!-- 项目关联（非全局时） -->
-        <a-form-item v-if="!form.isForAll" label="关联项目">
+        <!-- 项目关联 -->
+        <a-form-item :label="form.isForAll ? '附加到项目（可选）' : '关联项目'">
           <CheckboxGroupEnhanced
             v-model="form.projectIds"
             :options="projectCheckboxOptions"
             :search-threshold="8"
             :scroll-threshold="10"
           />
+          <div v-if="form.isForAll" class="form-help">
+            全局字段已对所有项目生效。此处选择的项目将额外创建项目级配置记录，便于后续设置条件显示、角色权限等。
+          </div>
+          <div v-else class="form-help">
+            不选则字段不关联任何项目，可在项目字段管理中手动添加。
+          </div>
         </a-form-item>
 
         <!-- Issue 类型关联 -->
@@ -994,7 +1000,7 @@ async function handleSave() {
         options: form.fieldFormat === 'list'
           ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
           : undefined,
-        projectIds: form.isForAll ? [] : form.projectIds,
+        projectIds: form.projectIds,
         issueTypes: form.issueTypes
       })
       Message.success('更新成功')
@@ -1013,7 +1019,7 @@ async function handleSave() {
         options: form.fieldFormat === 'list'
           ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
           : undefined,
-        projectIds: form.isForAll ? [] : form.projectIds,
+        projectIds: form.projectIds,
         issueTypes: form.issueTypes
       })
       Message.success('创建成功')
