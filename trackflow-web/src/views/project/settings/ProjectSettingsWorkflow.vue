@@ -12,6 +12,73 @@
     </div>
 
     <template v-else>
+      <!-- 工作流定义附加 Section (YouTrack 风格) -->
+      <div class="workflow-section">
+        <div class="section-header">
+          <div class="section-info">
+            <h3 class="section-title">工作流</h3>
+            <p class="section-desc">
+              管理此项目使用的工作流。工作流定义了工单的状态转换规则。未附加工作流时使用全局默认规则。
+            </p>
+          </div>
+          <a-button
+            v-if="canManage && !isArchived"
+            type="primary"
+            size="small"
+            @click="showAttachWorkflowModal"
+          >
+            <template #icon><icon-plus /></template>
+            附加工作流
+          </a-button>
+        </div>
+
+        <!-- 已附加工作流列表 -->
+        <div v-if="attachedWorkflows.length > 0" class="workflow-list">
+          <div
+            v-for="wf in attachedWorkflows"
+            :key="wf.id"
+            class="workflow-def-card"
+          >
+            <div class="wf-main">
+              <div class="wf-header">
+                <icon-settings class="wf-icon" />
+                <span class="wf-name">{{ wf.name }}</span>
+                <a-tag v-if="wf.isDefault" color="arcoblue" size="small">默认</a-tag>
+              </div>
+              <div v-if="wf.description" class="wf-desc">{{ wf.description }}</div>
+              <div class="wf-meta">
+                <span>{{ wf.transitionCount }} 条转换规则</span>
+              </div>
+            </div>
+            <div v-if="canManage && !isArchived" class="wf-actions">
+              <a-popconfirm
+                content="确定从项目中分离此工作流？分离后将使用全局默认规则。"
+                @ok="handleDetachWorkflow(wf.id)"
+              >
+                <a-button size="mini" type="text" status="danger">
+                  <template #icon><icon-minus /></template>
+                  分离
+                </a-button>
+              </a-popconfirm>
+            </div>
+          </div>
+        </div>
+
+        <!-- 空状态：未附加工作流 -->
+        <div v-else class="wf-empty-state">
+          <icon-branch class="empty-icon" style="font-size: 36px; color: var(--color-text-4);" />
+          <p class="empty-title">尚未附加工作流</p>
+          <p class="empty-desc">当前项目使用全局默认工作流规则。附加工作流以使用自定义状态转换。</p>
+          <a-button v-if="canManage && !isArchived" type="primary" size="small" @click="showAttachWorkflowModal">
+            <template #icon><icon-plus /></template>
+            附加工作流
+          </a-button>
+        </div>
+      </div>
+
+      <!-- 分隔线 -->
+      <div class="section-divider"></div>
+
       <!-- 状态转换概览 Section -->
       <div class="workflow-section">
         <div class="section-header">
@@ -341,6 +408,44 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 附加工作流弹窗 -->
+    <a-modal
+      v-model:visible="attachWorkflowModalVisible"
+      title="附加工作流到项目"
+      :width="480"
+      @ok="handleAttachWorkflow"
+      @cancel="attachWorkflowModalVisible = false"
+      :ok-loading="attaching"
+      ok-text="附加"
+      cancel-text="取消"
+      unmount-on-close
+    >
+      <div v-if="availableWorkflows.length === 0" class="empty-available">
+        <p>暂无可附加的工作流定义。</p>
+        <a-link href="/workflow" target="_blank">前往全局工作流管理页创建</a-link>
+      </div>
+      <a-form v-else layout="vertical">
+        <a-form-item label="选择工作流定义" required>
+          <a-select
+            v-model="selectedWorkflowId"
+            placeholder="请选择工作流定义"
+            style="width: 100%"
+            :loading="loadingAvailable"
+          >
+            <a-option
+              v-for="wf in availableWorkflows"
+              :key="wf.id"
+              :value="wf.id"
+            >
+              {{ wf.name }}
+              <span v-if="wf.isDefault" style="color: var(--color-text-3); font-size: 12px;"> (默认)</span>
+              <span style="color: var(--color-text-3); font-size: 12px;"> · {{ wf.transitionCount }} 条规则</span>
+            </a-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -348,8 +453,10 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow } from '@arco-design/web-vue/es/icon'
+import { IconLock, IconSettings, IconPlus, IconThunderbolt, IconInfoCircle, IconDelete, IconPlayArrow, IconMinus, IconBranch } from '@arco-design/web-vue/es/icon'
 import { workflowApi, workflowRuleApi } from '@/api'
+import { workflowDefinitionApi } from '@/api/workflowDefinition'
+import type { WorkflowDefinitionVO } from '@/api/workflowDefinition'
 import type { WorkflowRuleVO, WorkflowRuleDTO } from '@/api/workflowRule'
 import type { ProjectDetailVO } from '@/api/types'
 
@@ -360,6 +467,14 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+
+// ==================== Workflow Definition State ====================
+const attachedWorkflows = ref<WorkflowDefinitionVO[]>([])
+const availableWorkflows = ref<WorkflowDefinitionVO[]>([])
+const attachWorkflowModalVisible = ref(false)
+const selectedWorkflowId = ref<string | undefined>(undefined)
+const attaching = ref(false)
+const loadingAvailable = ref(false)
 
 // ==================== State ====================
 const loading = ref(false)
@@ -406,9 +521,20 @@ const ruleForm = reactive({
 async function loadData() {
   loading.value = true
   try {
-    await Promise.all([loadTransitionStats(), loadRules()])
+    await Promise.all([loadAttachedWorkflows(), loadTransitionStats(), loadRules()])
   } finally {
     loading.value = false
+  }
+}
+
+async function loadAttachedWorkflows() {
+  try {
+    const res = await workflowDefinitionApi.getProjectWorkflows(props.project.id)
+    if (res.code === 0) {
+      attachedWorkflows.value = res.data || []
+    }
+  } catch {
+    // silent - user may not have manage_workflow permission
   }
 }
 
@@ -467,6 +593,54 @@ async function loadRules() {
     }
   } catch {
     // silent
+  }
+}
+
+// ==================== Workflow Definition Actions ====================
+async function showAttachWorkflowModal() {
+  selectedWorkflowId.value = undefined
+  loadingAvailable.value = true
+  attachWorkflowModalVisible.value = true
+  try {
+    // 获取所有定义，过滤已附加的
+    const res = await workflowDefinitionApi.list()
+    if (res.code === 0) {
+      const allDefs = res.data || []
+      const attachedIds = new Set(attachedWorkflows.value.map(w => w.id))
+      availableWorkflows.value = allDefs.filter(w => !attachedIds.has(w.id))
+    }
+  } catch {
+    Message.error('加载工作流列表失败')
+  } finally {
+    loadingAvailable.value = false
+  }
+}
+
+async function handleAttachWorkflow() {
+  if (!selectedWorkflowId.value) {
+    Message.warning('请选择要附加的工作流')
+    return
+  }
+  attaching.value = true
+  try {
+    await workflowDefinitionApi.attachToProject(props.project.id, selectedWorkflowId.value)
+    Message.success('工作流已附加到项目')
+    attachWorkflowModalVisible.value = false
+    await loadAttachedWorkflows()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '附加失败')
+  } finally {
+    attaching.value = false
+  }
+}
+
+async function handleDetachWorkflow(workflowDefinitionId: string) {
+  try {
+    await workflowDefinitionApi.detachFromProject(props.project.id, workflowDefinitionId)
+    Message.success('工作流已从项目中分离')
+    await loadAttachedWorkflows()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '分离失败')
   }
 }
 
@@ -806,6 +980,86 @@ onMounted(loadData)
   color: var(--tf-text-secondary, var(--color-text-2));
   padding-top: 8px;
   border-top: 1px solid var(--color-border-1);
+}
+
+/* Workflow definitions list */
+.workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workflow-def-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border-2);
+  transition: border-color 150ms;
+}
+
+.workflow-def-card:hover {
+  border-color: var(--color-primary-light-4);
+}
+
+.wf-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.wf-icon {
+  font-size: 16px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
+}
+
+.wf-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--color-text-1);
+}
+
+.wf-desc {
+  font-size: 12px;
+  color: var(--color-text-3);
+  margin-bottom: 4px;
+}
+
+.wf-meta {
+  font-size: 12px;
+  color: var(--color-text-4);
+}
+
+.wf-actions {
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.wf-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  border-radius: 6px;
+  background: var(--color-bg-2);
+  border: 1px dashed var(--color-border-2);
+}
+
+.empty-available {
+  text-align: center;
+  padding: 16px 0;
+  color: var(--color-text-3);
 }
 
 /* Rules list */
