@@ -1,5 +1,18 @@
 <template>
-  <aside class="detail-sidebar" :class="{ collapsed: collapsed }">
+  <aside
+    class="detail-sidebar"
+    :class="{ collapsed: collapsed, resizing: isResizing }"
+    :style="collapsed ? {} : { width: sidebarWidth + 'px' }"
+  >
+    <!-- 拖拽调整宽度的 resize handle（左边缘） -->
+    <div
+      v-if="!collapsed"
+      class="resize-handle"
+      :title="'拖拽调整宽度，双击收起'"
+      @mousedown.prevent="startResize"
+      @dblclick="onResizeHandleDblClick"
+    ></div>
+
     <!-- 折叠控制按钮 -->
     <button
       class="sidebar-toggle-btn"
@@ -182,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onUnmounted } from 'vue'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 export interface FieldOption {
@@ -242,6 +255,78 @@ const emit = defineEmits<{
   'add-option': [fieldId: string, value: string]
   'toggle-collapse': []
 }>()
+
+// ========== 拖拽调整宽度 ==========
+const SIDEBAR_WIDTH_KEY = 'tf_issue_detail_sidebar_width'
+const MIN_WIDTH = 160
+const MAX_WIDTH = 480
+const DEFAULT_WIDTH = 240
+
+/** 当前侧边栏宽度（px），从 localStorage 恢复或使用默认值 */
+const sidebarWidth = ref<number>((() => {
+  const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY)
+  if (saved) {
+    const n = parseInt(saved, 10)
+    if (!isNaN(n) && n >= MIN_WIDTH && n <= MAX_WIDTH) return n
+  }
+  return DEFAULT_WIDTH
+})())
+
+/** 是否正在拖拽调整宽度（控制 cursor 样式） */
+const isResizing = ref(false)
+
+/** 拖拽开始时的鼠标 X 坐标 */
+let startX = 0
+/** 拖拽开始时的侧边栏宽度 */
+let startWidth = 0
+
+function startResize(e: MouseEvent) {
+  isResizing.value = true
+  startX = e.clientX
+  startWidth = sidebarWidth.value
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', stopResize)
+  // 防止拖拽时选中文本
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+}
+
+function onMouseMove(e: MouseEvent) {
+  if (!isResizing.value) return
+  // sidebar 在右侧，鼠标向左移动（clientX 减小）→ 宽度增加
+  const delta = startX - e.clientX
+  const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta))
+  sidebarWidth.value = newWidth
+}
+
+function stopResize() {
+  if (!isResizing.value) return
+  isResizing.value = false
+  document.removeEventListener('mousemove', onMouseMove)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.userSelect = ''
+  document.body.style.cursor = ''
+  // 持久化到 localStorage
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth.value))
+}
+
+/**
+ * 双击 resize handle：在收起（通知父组件 toggle-collapse）和展开（恢复上次宽度）之间切换
+ * 若当前已展开，则收起；若已收起，则展开（父组件负责实际折叠状态）
+ */
+function onResizeHandleDblClick() {
+  emit('toggle-collapse')
+}
+
+onUnmounted(() => {
+  // 清理事件监听器（防止组件卸载后残留）
+  document.removeEventListener('mousemove', onMouseMove)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.userSelect = ''
+  document.body.style.cursor = ''
+})
+// ========== End 拖拽调整宽度 ==========
 
 const editingKey = ref<string | null>(null)
 const searchText = ref('')
@@ -346,24 +431,63 @@ function confirmAddOption(field: SidebarField) {
 
 <style scoped>
 .detail-sidebar {
-  width: 240px;
+  width: 240px; /* 默认宽度，JS 会通过 :style 绑定覆盖 */
   flex-shrink: 0;
   border-left: 1px solid var(--tf-border);
   padding: 12px;
   overflow-y: auto;
   font-size: 12px;
   background: var(--tf-bg-surface);
-  /* 过渡动画 */
+  /* 过渡动画：折叠/展开时有动画，拖拽时禁用（isResizing class 取消 transition） */
   transition: width 200ms ease, padding 200ms ease;
   position: relative;
 }
 
+/* 拖拽时禁用 transition 避免卡顿 */
+.detail-sidebar.resizing {
+  transition: none;
+}
+
 /* 折叠状态：只显示一个细条 */
 .detail-sidebar.collapsed {
-  width: 32px;
+  width: 32px !important;
   min-width: 32px;
   padding: 8px 0;
   overflow: hidden;
+}
+
+/* ========== Resize Handle ========== */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 150ms;
+}
+
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 40px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 150ms;
+}
+
+.resize-handle:hover::before,
+.detail-sidebar.resizing .resize-handle::before {
+  background: var(--tf-accent, #58a6ff);
+}
+
+.resize-handle:hover {
+  background: rgba(88, 166, 255, 0.08);
 }
 
 /* ========== 折叠控制按钮 ========== */
