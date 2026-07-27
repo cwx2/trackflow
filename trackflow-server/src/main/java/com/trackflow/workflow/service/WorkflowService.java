@@ -99,6 +99,7 @@ public class WorkflowService {
      * - 如果用户是工单创建者，额外包含 author=true 的规则
      * - 如果用户是工单负责人，额外包含 assignee=true 的规则
      */
+    @Transactional(readOnly = true)
     public List<IssueStatus> getAvailableTransitions(Issue issue, Long userId) {
         boolean isAuthor = userId.equals(issue.getCreatedBy());
         boolean isAssignee = userId.equals(issue.getAssigneeId());
@@ -214,6 +215,7 @@ public class WorkflowService {
     /**
      * 检查状态转换是否合法
      */
+    @Transactional(readOnly = true)
     public boolean isTransitionAllowed(Issue issue, Long newStatusId, Long userId) {
         List<IssueStatus> available = getAvailableTransitions(issue, userId);
         return available.stream().anyMatch(s -> s.getId().equals(newStatusId));
@@ -267,6 +269,7 @@ public class WorkflowService {
      * @param newStatusIds  候选目标状态 ID 列表
      * @return 需要强制评论的目标状态 ID 集合
      */
+    @Transactional(readOnly = true)
     public Set<Long> getRequireCommentStatusIds(Long oldStatusId, List<Long> newStatusIds) {
         if (newStatusIds == null || newStatusIds.isEmpty()) {
             return Set.of();
@@ -285,6 +288,7 @@ public class WorkflowService {
     /**
      * 检查单个状态转换是否需要强制评论。
      */
+    @Transactional(readOnly = true)
     public boolean isCommentRequired(Long oldStatusId, Long newStatusId) {
         return !getRequireCommentStatusIds(oldStatusId, List.of(newStatusId)).isEmpty();
     }
@@ -296,6 +300,7 @@ public class WorkflowService {
      * @param author  null=不筛选, false=Normal模式, true=Author模式
      * @param assignee null=不筛选, false=Normal模式, true=Assignee模式
      */
+    @Transactional(readOnly = true)
     public List<WorkflowTransition> getTransitionMatrix(Long projectId, String issueType,
                                                         Long roleId, Boolean author, Boolean assignee) {
         LambdaQueryWrapper<WorkflowTransition> wrapper = new LambdaQueryWrapper<>();
@@ -330,6 +335,7 @@ public class WorkflowService {
     /**
      * 获取项目的工作流转换矩阵（向后兼容旧接口，不筛选 author/assignee）
      */
+    @Transactional(readOnly = true)
     public List<WorkflowTransition> getTransitionMatrix(Long projectId, String issueType, Long roleId) {
         return getTransitionMatrix(projectId, issueType, roleId, null, null);
     }
@@ -337,6 +343,7 @@ public class WorkflowService {
     /**
      * 获取工作流转换矩阵 + 版本号（用于编辑器，支持乐观锁）
      */
+    @Transactional(readOnly = true)
     public WorkflowMatrixVO getTransitionMatrixWithVersion(Long projectId, String issueType,
                                                            Long roleId, Boolean author, Boolean assignee) {
         List<WorkflowTransition> transitions = getTransitionMatrix(projectId, issueType, roleId, author, assignee);
@@ -538,6 +545,7 @@ public class WorkflowService {
     /**
      * 获取项目级角色列表（用于工作流编辑器筛选下拉）
      */
+    @Transactional(readOnly = true)
     public List<RoleVO> listProjectRoles() {
         List<SysRole> roles = roleMapper.selectList(
                 new LambdaQueryWrapper<SysRole>()
@@ -559,6 +567,7 @@ public class WorkflowService {
      * 注意：此方法不涉及 issue_type 维度（看板是项目级视图，不按类型区分）。
      * 也不区分 author/assignee（看板预判使用所有转换规则的并集）。
      */
+    @Transactional(readOnly = true)
     public Set<Long> getTransitionableSourceStatuses(Long projectId, Long userId) {
         // 系统管理员：使用 project_admin 规则
         if (permissionService.isSystemAdmin(userId)) {
@@ -594,6 +603,7 @@ public class WorkflowService {
      * 获取系统中已使用的工单类型列表
      * 返回数据库中 issue 表的 distinct issue_type 值 + 预定义类型
      */
+    @Transactional(readOnly = true)
     public List<String> listIssueTypes() {
         // 预定义的基础类型（与系统内置类型一致）
         List<String> baseTypes = List.of("Bug", "Task", "Feature", "Epic");
@@ -621,6 +631,7 @@ public class WorkflowService {
      * 即该状态是否作为任何转换规则的 old_status 或 new_status 出现。
      * 用于类型变更后判断当前状态在新类型下是否仍然可达。
      */
+    @Transactional(readOnly = true)
     public boolean isStatusInWorkflow(Long projectId, String issueType, Long statusId) {
         int count = transitionMapper.countStatusInWorkflow(projectId, issueType, statusId);
         return count > 0;
@@ -629,6 +640,7 @@ public class WorkflowService {
     /**
      * 获取系统默认状态（is_default = true 的状态）
      */
+    @Transactional(readOnly = true)
     public IssueStatus getDefaultStatus() {
         return statusMapper.selectOne(
                 new LambdaQueryWrapper<IssueStatus>().eq(IssueStatus::getIsDefault, true));
@@ -637,6 +649,7 @@ public class WorkflowService {
     /**
      * 分页查询工作流变更历史
      */
+    @Transactional(readOnly = true)
     public Page<WorkflowActivity> listActivities(WorkflowActivityQuery query) {
         LambdaQueryWrapper<WorkflowActivity> wrapper = new LambdaQueryWrapper<>();
 
@@ -674,6 +687,7 @@ public class WorkflowService {
      * @param issueType 工单类型（null 或 "*" 表示所有类型）
      * @return Map: statusId → issueCount
      */
+    @Transactional(readOnly = true)
     public Map<Long, Long> getIssueCountByStatuses(List<Long> statusIds, Long projectId, String issueType) {
         if (statusIds == null || statusIds.isEmpty()) {
             return Map.of();
