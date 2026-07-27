@@ -3,6 +3,8 @@
     <IssueCreatePanel
       ref="createPanelRef"
       :visible="true"
+      :is-full-page="true"
+      :draft-id="draftIdFromQuery"
       @update:visible="onClose"
       @created="onCreated"
       @cancel-with-data="onCancelWithData"
@@ -11,15 +13,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter, onBeforeRouteLeave } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import { useDrafts } from './composables/useDrafts'
 
 const router = useRouter()
+const route = useRoute()
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 const { saveDraft } = useDrafts()
+
+/** 从路由查询参数读取 draftId，支持从弹窗全屏跳转时恢复数据 */
+const draftIdFromQuery = computed(() => {
+  const v = route.query.draftId
+  return v ? String(v) : null
+})
 
 function onClose() {
   router.back()

@@ -849,7 +849,7 @@
     </section>
 
     <!-- Create issue panel -->
-    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" :draft-id="activeDraftId" @created="onCreatePanelCreated" @cancel-with-data="onCreatePanelCancel" />
+    <IssueCreatePanel ref="createPanelRef" v-model:visible="showCreatePanel" :project-id="activeProjectId || undefined" :draft-id="activeDraftId" @created="onCreatePanelCreated" @cancel-with-data="onCreatePanelCancel" @expand-to-fullscreen="onCreatePanelExpand" />
 
     <!-- Sidebar preview drawer -->
     <IssuePreviewDrawer
@@ -1974,6 +1974,25 @@ function onCreatePanelCreated() {
     activeDraftId.value = null
   }
   refreshList()
+}
+
+/**
+ * 用户点击创建面板的「全屏」按钮
+ * 保存草稿后跳转到全屏创建页面，已填写内容通过草稿恢复
+ */
+function onCreatePanelExpand(formData: any) {
+  // 关闭弹窗
+  showCreatePanel.value = false
+  activeDraftId.value = null
+  // 如果有内容，先保存为草稿
+  if (formData && (formData.title?.trim() || formData.description?.trim())) {
+    const draftId = saveDraft(formData)
+    if (draftId) {
+      router.push({ name: 'IssueCreate', query: { draftId } })
+      return
+    }
+  }
+  router.push({ name: 'IssueCreate' })
 }
 
 // Apply Command dialog

@@ -124,7 +124,7 @@
     <a-button type="primary" size="small" @click="loadAll">重试</a-button>
   </div>
 
-  <IssueCreatePanel ref="createPanelRef" :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" />
+  <IssueCreatePanel ref="createPanelRef" :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" @expand-to-fullscreen="onCreatePanelExpand" />
 
   <!-- Move Issue Modal -->
   <MoveIssueModal
@@ -226,6 +226,7 @@ import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
 import { useRecentIssues } from './composables/useRecentIssues'
+import { useDrafts } from './composables/useDrafts'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import QuickActionBar from './components/QuickActionBar.vue'
@@ -245,6 +246,7 @@ const router = useRouter()
 const tabStore = useTabStore()
 const timerStore = useTimerStore()
 const { recordVisit: recordRecentVisit } = useRecentIssues()
+const { saveDraft: saveIssueDraft } = useDrafts()
 
 // localStorage key for sidebar collapsed state
 const SIDEBAR_COLLAPSED_KEY = 'tf_issue_detail_sidebar_collapsed'
@@ -1144,6 +1146,22 @@ function onCreatePanelClose(val: boolean) {
 function onIssueCreated() {
   showCreatePanel.value = false
   cloneData.value = undefined
+}
+
+/**
+ * 用户点击创建面板的「全屏」按钮，跳转到全屏创建页面
+ */
+function onCreatePanelExpand(formData: any) {
+  showCreatePanel.value = false
+  cloneData.value = undefined
+  if (formData && (formData.title?.trim() || formData.description?.trim())) {
+    const draftId = saveIssueDraft(formData)
+    if (draftId) {
+      router.push({ name: 'IssueCreate', query: { draftId } })
+      return
+    }
+  }
+  router.push({ name: 'IssueCreate' })
 }
 
 async function onUpdateTitle(val: string) {

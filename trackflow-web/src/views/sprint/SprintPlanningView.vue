@@ -383,6 +383,7 @@
       :sprint-id="createPanelSprintId"
       :lock-sprint="createPanelLockSprint"
       @created="onIssueCreated"
+      @expand-to-fullscreen="onCreatePanelExpand"
     />
   </div>
 </template>
@@ -398,10 +399,12 @@ import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'
 import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
+import { useDrafts } from '@/views/issue/composables/useDrafts'
 import type { IssueVO, SprintVO, ProjectMemberVO, SprintVelocityVO } from '@/api/types'
 
 const router = useRouter()
 const projectStore = useProjectStore()
+const { saveDraft: saveIssueDraft } = useDrafts()
 
 const selectedProject = computed({
   get: () => projectStore.selectedProjectId,
@@ -958,6 +961,21 @@ function onIssueCreated() {
   // Reload all data after issue creation
   loadBacklog()
   loadAllSprintIssues()
+}
+
+/**
+ * 用户点击创建面板的「全屏」按钮，跳转到全屏创建页面
+ */
+function onCreatePanelExpand(formData: any) {
+  showCreatePanel.value = false
+  if (formData && (formData.title?.trim() || formData.description?.trim())) {
+    const draftId = saveIssueDraft(formData)
+    if (draftId) {
+      router.push({ name: 'IssueCreate', query: { draftId } })
+      return
+    }
+  }
+  router.push({ name: 'IssueCreate' })
 }
 
 async function quickCreateForBacklog() {
