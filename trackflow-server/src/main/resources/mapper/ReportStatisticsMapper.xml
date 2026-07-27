@@ -892,30 +892,6 @@
         </if>
     </sql>
 
-    <!-- 分组维度 SELECT 表达式 -->
-    <sql id="groupByExpression">
-        <choose>
-            <when test="${dimensionParam} == 'status'">
-                s.name
-            </when>
-            <when test="${dimensionParam} == 'priority'">
-                COALESCE(i.priority, 'Normal')
-            </when>
-            <when test="${dimensionParam} == 'type'">
-                COALESCE(i.issue_type, 'Task')
-            </when>
-            <when test="${dimensionParam} == 'assignee'">
-                COALESCE(u.display_name, '未分配')
-            </when>
-            <when test="${dimensionParam} == 'project'">
-                p.name
-            </when>
-            <otherwise>
-                s.name
-            </otherwise>
-        </choose>
-    </sql>
-
     <!-- 通用单维度分组查询 -->
     <select id="selectReportGrouped" resultType="com.trackflow.report.mapper.result.ReportGroupRow">
         SELECT
