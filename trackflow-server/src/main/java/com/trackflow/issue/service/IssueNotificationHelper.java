@@ -1186,6 +1186,7 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
      * 匹配逻辑：
      * - assigned_to_me：订阅了此 builtin 的用户中，只有当该用户恰好是工单的 assignee 时才匹配
      * - reported_by_me：订阅了此 builtin 的用户中，只有当该用户恰好是工单的 reporter 时才匹配
+     * - commented_by_me：订阅了此 builtin 的用户中，只有当该用户曾对该工单发表过评论时才匹配
      *
      * @param issue    当前变更的工单
      * @param eventKey 事件键
@@ -1207,6 +1208,19 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
             Set<Long> reportedSubscribers = subscriptionService.findBuiltinSubscribers("reported_by_me", eventKey);
             if (reportedSubscribers.contains(issue.getReporterId())) {
                 result.add(issue.getReporterId());
+            }
+        }
+
+        // commented_by_me：订阅了此 builtin 的用户中，与该工单的历史评论者取交集
+        Set<Long> commentedSubscribers = subscriptionService.findBuiltinSubscribers("commented_by_me", eventKey);
+        if (!commentedSubscribers.isEmpty()) {
+            List<Long> commenterIds = commentMapper.selectDistinctCommenterIds(issue.getId());
+            if (commenterIds != null) {
+                for (Long commenterId : commenterIds) {
+                    if (commentedSubscribers.contains(commenterId)) {
+                        result.add(commenterId);
+                    }
+                }
             }
         }
 

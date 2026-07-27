@@ -47,46 +47,75 @@ public class NotificationSubscriptionService {
     // ==================== 默认订阅初始化 ====================
 
     /**
-     * 确保用户有默认订阅（首次访问时懒加载创建）。
-     * 默认订阅：assigned_to_me / reported_by_me
+     * 确保用户有三个默认订阅（首次访问时懒加载创建）。
+     * 默认订阅：assigned_to_me / reported_by_me / commented_by_me
+     * <p>
+     * 按每个 builtin_key 单独检查，确保存量用户也能补全缺失的第三个订阅。
      */
     public void ensureDefaultSubscriptions(Long userId) {
-        long count = subscriptionMapper.selectCount(
+        // 获取当前已有的 builtin 订阅 key 集合
+        List<NotificationSubscription> existing = subscriptionMapper.selectList(
                 new LambdaQueryWrapper<NotificationSubscription>()
                         .eq(NotificationSubscription::getUserId, userId)
-                        .eq(NotificationSubscription::getSourceType, "builtin"));
-        if (count > 0) {
-            return; // 已有默认订阅
+                        .eq(NotificationSubscription::getSourceType, "builtin")
+                        .select(NotificationSubscription::getBuiltinKey));
+        Set<String> existingKeys = existing.stream()
+                .map(NotificationSubscription::getBuiltinKey)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 如果三个默认订阅都已存在，则直接返回
+        if (existingKeys.contains("assigned_to_me")
+                && existingKeys.contains("reported_by_me")
+                && existingKeys.contains("commented_by_me")) {
+            return;
         }
 
         LocalDateTime now = LocalDateTime.now();
         String defaultEvents = buildDefaultEventsJson();
 
-        // 分配给我
-        NotificationSubscription assigned = new NotificationSubscription();
-        assigned.setUserId(userId);
-        assigned.setName("分配给我");
-        assigned.setSourceType("builtin");
-        assigned.setBuiltinKey("assigned_to_me");
-        assigned.setIsDefault(true);
-        assigned.setEvents(defaultEvents);
-        assigned.setCreatedAt(now);
-        assigned.setUpdatedAt(now);
-        subscriptionMapper.insert(assigned);
+        // 分配给我（按需创建）
+        if (!existingKeys.contains("assigned_to_me")) {
+            NotificationSubscription assigned = new NotificationSubscription();
+            assigned.setUserId(userId);
+            assigned.setName("分配给我");
+            assigned.setSourceType("builtin");
+            assigned.setBuiltinKey("assigned_to_me");
+            assigned.setIsDefault(true);
+            assigned.setEvents(defaultEvents);
+            assigned.setCreatedAt(now);
+            assigned.setUpdatedAt(now);
+            subscriptionMapper.insert(assigned);
+        }
 
-        // 我报告的
-        NotificationSubscription reported = new NotificationSubscription();
-        reported.setUserId(userId);
-        reported.setName("我报告的");
-        reported.setSourceType("builtin");
-        reported.setBuiltinKey("reported_by_me");
-        reported.setIsDefault(true);
-        reported.setEvents(defaultEvents);
-        reported.setCreatedAt(now);
-        reported.setUpdatedAt(now);
-        subscriptionMapper.insert(reported);
+        // 我报告的（按需创建）
+        if (!existingKeys.contains("reported_by_me")) {
+            NotificationSubscription reported = new NotificationSubscription();
+            reported.setUserId(userId);
+            reported.setName("我报告的");
+            reported.setSourceType("builtin");
+            reported.setBuiltinKey("reported_by_me");
+            reported.setIsDefault(true);
+            reported.setEvents(defaultEvents);
+            reported.setCreatedAt(now);
+            reported.setUpdatedAt(now);
+            subscriptionMapper.insert(reported);
+        }
 
-        log.debug("[Subscription] 为用户 {} 创建了默认订阅", userId);
+        // 我评论过的（按需创建）
+        if (!existingKeys.contains("commented_by_me")) {
+            NotificationSubscription commented = new NotificationSubscription();
+            commented.setUserId(userId);
+            commented.setName("我评论过的");
+            commented.setSourceType("builtin");
+            commented.setBuiltinKey("commented_by_me");
+            commented.setIsDefault(true);
+            commented.setEvents(defaultEvents);
+            commented.setCreatedAt(now);
+            commented.setUpdatedAt(now);
+            subscriptionMapper.insert(commented);
+        }
+
+        log.debug("[Subscription] 为用户 {} 补全了默认订阅", userId);
     }
 
     // ==================== CRUD ====================
