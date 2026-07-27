@@ -217,6 +217,24 @@ public class WorkflowRuleEngine {
         }
         if ("is_empty".equals(op)) return actual == null || actual.isBlank();
         if ("is_not_empty".equals(op)) return actual != null && !actual.isBlank();
+
+        // 时间相关操作符：直接对 issue 的 due_date 进行判断
+        if ("overdue".equals(op)) {
+            if (issue.getDueDate() == null) return false;
+            return issue.getDueDate().isBefore(LocalDate.now());
+        }
+        if ("due_within_days".equals(op)) {
+            if (issue.getDueDate() == null || expected == null) return false;
+            try {
+                int days = Integer.parseInt(expected);
+                LocalDate today = LocalDate.now();
+                LocalDate due = issue.getDueDate();
+                return !due.isBefore(today) && due.isBefore(today.plusDays(days + 1));
+            } catch (NumberFormatException e) {
+                log.warn("[WorkflowRuleEngine] due_within_days 的 value 不是有效整数: {}", expected);
+                return false;
+            }
+        }
         return true;
     }
 
