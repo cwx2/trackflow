@@ -183,6 +183,11 @@
             <div class="panel-header-right">
               <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0">⏱ {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
               <span v-if="sprint.startDate" class="sprint-dates">{{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}</span>
+              <a-tooltip content="在工单列表中查看此 Sprint 的工单">
+                <button class="panel-view-issues-btn" @click="viewSprintIssues(sprint)">
+                  <icon-list />
+                </button>
+              </a-tooltip>
               <a-tooltip content="创建工单到此 Sprint">
                 <button class="panel-create-btn" @click="openCreateForSprint(sprint.id)">
                   <icon-plus />
@@ -386,7 +391,7 @@
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus, IconList } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
@@ -921,6 +926,18 @@ function updateAssigneeOnCards(issueIds: string[], userId: string | null, assign
 
 function goToSprintPage() {
   router.push('/sprints')
+}
+
+/**
+ * 跳转到工单列表，自动应用当前 Sprint 过滤器
+ */
+function viewSprintIssues(sprint: SprintVO) {
+  const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const query: Record<string, string> = { sprint: sprint.id, label: sprint.name }
+  if (currentProject) {
+    query.project = currentProject.key
+  }
+  router.push({ path: '/issues', query })
 }
 
 // ===== Create Issue =====
@@ -1666,7 +1683,8 @@ onMounted(async () => {
 }
 
 /* ===== Create Button ===== */
-.panel-create-btn {
+.panel-create-btn,
+.panel-view-issues-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1680,12 +1698,17 @@ onMounted(async () => {
   transition: all 0.15s;
   font-size: 14px;
 }
-.panel-create-btn:hover {
+.panel-create-btn:hover,
+.panel-view-issues-btn:hover {
   background: var(--color-fill-3);
   color: rgb(var(--primary-6));
 }
-.panel-create-btn:active {
+.panel-create-btn:active,
+.panel-view-issues-btn:active {
   background: var(--color-fill-4);
+}
+.panel-header-right {
+  gap: 4px;
 }
 
 /* ===== Quick Add ===== */
