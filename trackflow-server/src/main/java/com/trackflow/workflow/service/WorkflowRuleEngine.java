@@ -3,6 +3,7 @@ package com.trackflow.workflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueComment;
@@ -22,6 +23,7 @@ import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,11 +50,19 @@ public class WorkflowRuleEngine {
     private final SprintMapper sprintMapper;
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** Valid priority values recognized by the system. */
     private static final Set<String> VALID_PRIORITIES = Set.of(
             "Critical", "High", "Normal", "Low"
     );
+
+    /**
+     * 链式规则触发深度防护：每次进入 fireOnFieldChanged 时递增，退出时递减。
+     * 当深度超过 MAX_CHAIN_DEPTH 时跳过规则触发，防止链式循环造成无限递归。
+     */
+    private static final int MAX_CHAIN_DEPTH = 5;
+    private static final ThreadLocal<Integer> CHAIN_DEPTH = ThreadLocal.withInitial(() -> 0);
 
     /**
      * 触发 on-create 规则。
@@ -79,24 +89,37 @@ public class WorkflowRuleEngine {
      * <p>
      * 从 DB 重新加载 issue 实体，过滤匹配 changedField 的规则后执行。
      * oldValue 传递给条件评估，支持 old_value_equals 等操作符。
+     * <p>
+     * 内置链式深度防护：超过 MAX_CHAIN_DEPTH 层时记录 WARN 并跳过，防止无限循环。
      */
     @Transactional(rollbackFor = Exception.class)
     public void fireOnFieldChanged(Long issueId, Long projectId, String changedField, String oldValue) {
-        List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "field_changed");
-        if (rules.isEmpty()) return;
-
-        Issue issue = issueMapper.selectById(issueId);
-        if (issue == null || issue.getDeletedAt() != null) {
-            log.warn("[RuleEngine] on-field-changed: issue {} 不存在或已删除，跳过规则执行", issueId);
+        int depth = CHAIN_DEPTH.get();
+        if (depth >= MAX_CHAIN_DEPTH) {
+            log.warn("[RuleEngine] on-field-changed: 链式规则深度已达上限 {}，跳过触发。issueId={}, field={}",
+                    MAX_CHAIN_DEPTH, issueId, changedField);
             return;
         }
+        CHAIN_DEPTH.set(depth + 1);
+        try {
+            List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "field_changed");
+            if (rules.isEmpty()) return;
 
-        List<WorkflowRule> matching = rules.stream()
-                .filter(r -> r.getTriggerField() == null || r.getTriggerField().equals(changedField))
-                .toList();
-        if (matching.isEmpty()) return;
+            Issue issue = issueMapper.selectById(issueId);
+            if (issue == null || issue.getDeletedAt() != null) {
+                log.warn("[RuleEngine] on-field-changed: issue {} 不存在或已删除，跳过规则执行", issueId);
+                return;
+            }
 
-        evaluateAndExecute(matching, issue, changedField, oldValue);
+            List<WorkflowRule> matching = rules.stream()
+                    .filter(r -> r.getTriggerField() == null || r.getTriggerField().equals(changedField))
+                    .toList();
+            if (matching.isEmpty()) return;
+
+            evaluateAndExecute(matching, issue, changedField, oldValue);
+        } finally {
+            CHAIN_DEPTH.set(depth);
+        }
     }
 
     /**
@@ -301,7 +324,26 @@ public class WorkflowRuleEngine {
             }
         }
         logActivity(issue.getId(), rule, "updated", field, old, value);
+        // 发布字段变更事件，支持链式规则触发（如规则 A 改状态 → 触发监听状态变更的规则 B）
+        // 使用规范化的字段名发布事件，与 IssueService 保持一致
+        String canonicalField = canonicalFieldName(field);
+        eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(
+                issue.getId(), issue.getProjectId(), canonicalField, old));
         return true;
+    }
+
+    /**
+     * 将字段别名统一为规范化字段名，与 IssueService 发布事件时使用的字段名保持一致。
+     */
+    private String canonicalFieldName(String field) {
+        return switch (field) {
+            case "assignee" -> "assignee_id";
+            case "type" -> "issue_type";
+            case "status" -> "status_id";
+            case "sprint" -> "sprint_id";
+            case "dueDate" -> "due_date";
+            default -> field;
+        };
     }
 
     // ===== Validation helpers for doSetField =====
@@ -487,7 +529,9 @@ public class WorkflowRuleEngine {
     private void logActivity(Long issueId, WorkflowRule rule, String action, String field, String oldVal, String newVal) {
         IssueActivity a = new IssueActivity();
         a.setIssueId(issueId);
-        a.setUserId(rule.getCreatedBy());
+        // 自动化规则操作不归属具体用户，userId = null
+        // 使用规则创建者 ID 会造成活动流显示该用户名，产生误导（REQ-630）
+        a.setUserId(null);
         a.setAction(action);
         a.setFieldName(field);
         a.setOldValue(oldVal);
@@ -498,6 +542,8 @@ public class WorkflowRuleEngine {
             a.setNewDisplayValue(resolveUserDisplayName(newVal));
         }
         a.setDetail("{\"source\":\"automation\",\"ruleId\":" + rule.getId() + ",\"ruleName\":\"" + rule.getName().replace("\"", "\\\"") + "\"}");
+        // 设置来源标识，前端活动流可据此展示特殊样式（⚡ 自动规则）
+        a.setSource("automation");
         a.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(a);
     }
