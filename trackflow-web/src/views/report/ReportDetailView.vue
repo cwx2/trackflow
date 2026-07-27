@@ -180,6 +180,9 @@
               <a-option value="cumulative_flow">累积流图</a-option>
               <a-option value="resolution_time">解决时间分析</a-option>
               <a-option value="average_issue_age">平均工单年龄</a-option>
+              <a-option value="fixed_vs_reported">修复率 vs 报告率</a-option>
+              <a-option value="verified_vs_reopened">验证率 vs 重开率</a-option>
+              <a-option value="resolved_vs_new">解决率 vs 新增率</a-option>
             </a-option-group>
             <a-option-group label="状态转换">
               <a-option value="state_transition">状态转换统计</a-option>
