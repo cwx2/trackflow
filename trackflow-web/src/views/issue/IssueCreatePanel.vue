@@ -11,6 +11,11 @@
   >
     <template #title>
       <span class="panel-modal-title">{{ cloneData ? '克隆工单' : draftId ? '继续编辑草稿' : '创建工单' }}</span>
+      <a-tooltip v-if="!isFullPage" content="在全屏页面中查看" position="bottom" mini>
+        <span class="fullscreen-btn" @click.stop="goFullscreen">
+          <icon-fullscreen />
+        </span>
+      </a-tooltip>
     </template>
 
     <div class="create-panel">
@@ -54,15 +59,32 @@
           <RichEditor v-model="form.description" placeholder="在此处键入或粘贴描述" mode="inline" />
 
           <!-- 附件区域 -->
-          <div class="attachment-area">
-            <a-upload :auto-upload="false" :show-file-list="true" multiple>
+          <div class="attachment-area" ref="attachmentAreaRef">
+            <a-upload
+              :auto-upload="false"
+              :show-file-list="false"
+              multiple
+              :accept="'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.tar,.gz,.7z'"
+              @change="onUploadChange"
+            >
               <template #upload-button>
                 <div class="upload-trigger">
                   <icon-attachment />
-                  <span>点击以<a-link>浏览</a-link>或将文件拖到此处</span>
+                  <span>点击以<a-link>浏览</a-link>或将文件拖到此处，或 <kbd>Ctrl+V</kbd> 粘贴截图</span>
                 </div>
               </template>
             </a-upload>
+            <!-- 附件文件列表 -->
+            <div v-if="attachmentFiles.length > 0" class="attachment-file-list">
+              <div v-for="(file, idx) in attachmentFiles" :key="idx" class="attachment-file-item">
+                <span class="attachment-file-icon">{{ getFileIcon(file.name) }}</span>
+                <span class="attachment-file-name">{{ file.name }}</span>
+                <span class="attachment-file-size">{{ formatFileSize(file.size) }}</span>
+                <icon-close class="attachment-file-remove" @click="removeAttachment(idx)" />
+              </div>
+            </div>
+            <!-- 粘贴提示（无文件时显示） -->
+            <div v-if="pasteHint" class="paste-hint">{{ pasteHint }}</div>
           </div>
 
           <!-- 关联工单区域 -->
@@ -407,8 +429,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
@@ -425,16 +448,107 @@ const props = defineProps<{
   lockSprint?: boolean
   cloneData?: { projectId: string; title: string; description: string; issueType: string; priority: string }
   draftId?: string | null
+  /** 是否以全屏页面模式运行（true 时隐藏全屏按钮） */
+  isFullPage?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:visible': [val: boolean]
   created: []
   'cancel-with-data': [formData: any]
+  /** 用户点击全屏按钮，携带当前表单数据 */
+  'expand-to-fullscreen': [formData: any]
 }>()
+
+const router = useRouter()
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+
+// ========== 附件管理 ==========
+const attachmentAreaRef = ref<HTMLElement | null>(null)
+const attachmentFiles = ref<File[]>([])
+const pasteHint = ref<string>('')
+let pasteHintTimer: any = null
+
+/** 处理 a-upload change 事件（手动选择或拖拽） */
+function onUploadChange(fileList: any, file: any) {
+  // Arco Upload fileList 是 FileItem[]，从 raw 取 File 对象
+  if (file?.raw instanceof File) {
+    attachmentFiles.value.push(file.raw)
+  }
+}
+
+/** 从附件列表删除 */
+function removeAttachment(idx: number) {
+  attachmentFiles.value.splice(idx, 1)
+}
+
+/** 格式化文件大小 */
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** 根据文件名返回 emoji 图标 */
+function getFileIcon(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return '🖼️'
+  if (['mp4', 'mov', 'avi', 'mkv'].includes(ext)) return '🎬'
+  if (ext === 'pdf') return '📄'
+  if (['doc', 'docx'].includes(ext)) return '📝'
+  if (['xls', 'xlsx'].includes(ext)) return '📊'
+  if (['ppt', 'pptx'].includes(ext)) return '📋'
+  if (['zip', 'tar', 'gz', '7z'].includes(ext)) return '📦'
+  return '📎'
+}
+
+/** 粘贴事件处理：从剪贴板获取图片文件 */
+function handlePaste(e: ClipboardEvent) {
+  // 仅在弹窗可见时处理
+  if (!props.visible) return
+
+  const items = e.clipboardData?.items
+  if (!items) return
+
+  let hasImage = false
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (!file) continue
+      hasImage = true
+      // 生成自动文件名（时间戳格式，类似 YouTrack）
+      const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)
+      const ext = item.type.split('/')[1] || 'png'
+      const renamedFile = new File([file], `screenshot_${timestamp}.${ext}`, { type: item.type })
+      attachmentFiles.value.push(renamedFile)
+    }
+  }
+
+  if (hasImage) {
+    // 阻止默认的 paste 行为（避免图片被粘贴到 RichEditor 或其他地方）
+    // 注意：仅在焦点不在 RichEditor 时阻止
+    const activeEl = document.activeElement
+    const isInEditor = activeEl?.closest('.tiptap-body') != null
+    if (!isInEditor) {
+      e.preventDefault()
+    }
+    showPasteHint('✅ 截图已添加到附件列表')
+  } else if (e.clipboardData?.items?.length && !Array.from(e.clipboardData.items).some(i => i.kind === 'string')) {
+    // 剪贴板有内容但不是图片
+    showPasteHint('⚠️ 仅支持粘贴图片文件')
+  }
+}
+
+function showPasteHint(msg: string) {
+  pasteHint.value = msg
+  if (pasteHintTimer) clearTimeout(pasteHintTimer)
+  pasteHintTimer = setTimeout(() => {
+    pasteHint.value = ''
+  }, 3000)
+}
 
 // 创建模式记忆（localStorage 持久化）
 type CreateMode = 'close' | 'continue' | 'copy'
@@ -751,6 +865,8 @@ function handleKeyDown(e: KeyboardEvent) {
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('keydown', handleKeyDown, true)
+  window.removeEventListener('paste', handlePaste)
+  if (pasteHintTimer) clearTimeout(pasteHintTimer)
 })
 
 // 接收外部传入的 projectId
@@ -768,6 +884,7 @@ watch(() => props.visible, (val) => {
   if (val) {
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('paste', handlePaste)
     loadProjects()
     loadStatuses()
     // Pre-fill form if clone data is provided
@@ -790,6 +907,7 @@ watch(() => props.visible, (val) => {
   } else {
     window.removeEventListener('beforeunload', handleBeforeUnload)
     window.removeEventListener('keydown', handleKeyDown, true)
+    window.removeEventListener('paste', handlePaste)
   }
 })
 
@@ -897,6 +1015,9 @@ function resetForm() {
   form.estimatedHours = undefined
   selectedTemplateId.value = null
   cfValidationErrors.value = {}
+  // 重置附件
+  attachmentFiles.value = []
+  pasteHint.value = ''
   // 重置 link 状态
   linkedIssues.value = []
   newLinkType.value = 'relates_to'
@@ -935,6 +1056,27 @@ function loadDraftData(draftId: string) {
       }
     })
   }
+}
+
+/**
+ * 全屏按钮点击：将当前表单数据通过 emit 传递给父组件，由父组件保存草稿并跳转全屏页面
+ */
+function goFullscreen() {
+  const formData = {
+    title: form.title,
+    description: form.description,
+    projectId: form.projectId || '',
+    issueType: form.issueType,
+    priority: form.priority,
+    statusId: form.statusId || '',
+    sprintId: form.sprintId || '',
+    assigneeId: form.assigneeId || '',
+    tagIds: [...form.tagIds],
+    dueDate: form.dueDate || '',
+    estimatedHours: form.estimatedHours ?? null,
+    customFieldValues: { ...customFieldValues.value }
+  }
+  emit('expand-to-fullscreen', formData)
 }
 
 function onSplitSelect(action: CreateMode) {
@@ -1038,7 +1180,7 @@ async function doSubmit(): Promise<boolean> {
 
   submitting.value = true
   try {
-    await issueApi.create({
+    const res = await issueApi.create({
       projectId: form.projectId!,
       title: form.title.trim(),
       description: form.description || undefined,
@@ -1055,7 +1197,23 @@ async function doSubmit(): Promise<boolean> {
         ? linkedIssues.value.map(l => ({ targetIssueId: l.targetIssueId, linkType: l.linkType }))
         : undefined
     })
-    Message.success('工单创建成功')
+
+    // 上传附件（创建工单成功后批量上传）
+    if (attachmentFiles.value.length > 0 && res.data?.id) {
+      const issueId = res.data.id
+      const uploadResults = await Promise.allSettled(
+        attachmentFiles.value.map(file => issueApi.uploadAttachment(issueId, file))
+      )
+      const failed = uploadResults.filter(r => r.status === 'rejected')
+      if (failed.length > 0) {
+        Message.warning(`工单已创建，但 ${failed.length} 个附件上传失败`)
+      } else {
+        Message.success('工单创建成功')
+      }
+    } else {
+      Message.success('工单创建成功')
+    }
+
     // Remember last used project for quick create
     localStorage.setItem('trackflow:quick-create-project', form.projectId!)
     return true
@@ -1077,6 +1235,31 @@ onMounted(() => {
 
 <style scoped>
 .create-panel { display: flex; flex-direction: column; height: 70vh; }
+
+.panel-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-3);
+  font-size: 14px;
+  transition: color 120ms, background 120ms;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.fullscreen-btn:hover {
+  color: var(--color-text-1);
+  background: var(--color-fill-2, var(--tf-bg-hover));
+}
 
 .title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
 .title-input { font-size: 18px; font-weight: 500; }
@@ -1139,6 +1322,68 @@ onMounted(() => {
 
 .attachment-area { padding: 10px 16px; border-top: 1px solid var(--color-border); }
 .upload-trigger { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-3); cursor: pointer; }
+.upload-trigger kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: monospace;
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+  border-radius: 3px;
+  background: var(--color-fill-1, var(--tf-bg-surface));
+  color: var(--color-text-2);
+  line-height: 1.4;
+}
+
+/* 附件文件列表 */
+.attachment-file-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.attachment-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-fill-1, var(--tf-bg-surface));
+  font-size: 12px;
+  transition: background 100ms;
+}
+.attachment-file-item:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
+.attachment-file-icon { font-size: 14px; flex-shrink: 0; }
+.attachment-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-1);
+}
+.attachment-file-size {
+  color: var(--color-text-3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.attachment-file-remove {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
+  transition: color 100ms;
+}
+.attachment-file-remove:hover { color: var(--color-danger-light-4, #f53f3f); }
+
+/* 粘贴提示 */
+.paste-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-text-2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-fill-2, var(--tf-bg-hover));
+  display: inline-block;
+}
 
 .props-panel { width: 250px; flex-shrink: 0; padding: 16px; overflow-y: auto; }
 .prop-row { margin-bottom: 14px; }
