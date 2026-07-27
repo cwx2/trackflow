@@ -24,9 +24,11 @@ import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -51,6 +53,7 @@ public class WorkflowRuleEngine {
     private final ProjectService projectService;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final StringRedisTemplate redisTemplate;
 
     /** Valid priority values recognized by the system. */
     private static final Set<String> VALID_PRIORITIES = Set.of(
@@ -58,11 +61,15 @@ public class WorkflowRuleEngine {
     );
 
     /**
-     * 链式规则触发深度防护：每次进入 fireOnFieldChanged 时递增，退出时递减。
-     * 当深度超过 MAX_CHAIN_DEPTH 时跳过规则触发，防止链式循环造成无限递归。
+     * 链式规则触发深度防护：使用 Redis INCR+TTL 跨线程计数。
+     * <p>
+     * 由于 WorkflowRuleEventListener 使用 @Async，每次链式触发在新线程中执行，
+     * 原 ThreadLocal 方案会导致每条线程的计数都从 0 开始，无法防止跨线程循环。
+     * 改用 Redis key 实现跨线程、跨进程的深度计数，key 格式：wf:chain:{issueId}:{changedField}
      */
     private static final int MAX_CHAIN_DEPTH = 5;
-    private static final ThreadLocal<Integer> CHAIN_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final String CHAIN_DEPTH_KEY_PREFIX = "wf:chain:";
+    private static final Duration CHAIN_DEPTH_TTL = Duration.ofSeconds(10);
 
     /**
      * 触发 on-create 规则。
@@ -90,17 +97,28 @@ public class WorkflowRuleEngine {
      * 从 DB 重新加载 issue 实体，过滤匹配 changedField 的规则后执行。
      * oldValue 传递给条件评估，支持 old_value_equals 等操作符。
      * <p>
-     * 内置链式深度防护：超过 MAX_CHAIN_DEPTH 层时记录 WARN 并跳过，防止无限循环。
+     * 内置链式深度防护：使用 Redis INCR+TTL 跨线程计数，超过 MAX_CHAIN_DEPTH 层时记录 WARN 并跳过，
+     * 防止 @Async 新线程下 ThreadLocal 失效导致的无限循环。
      */
     @Transactional(rollbackFor = Exception.class)
     public void fireOnFieldChanged(Long issueId, Long projectId, String changedField, String oldValue) {
-        int depth = CHAIN_DEPTH.get();
-        if (depth >= MAX_CHAIN_DEPTH) {
-            log.warn("[RuleEngine] on-field-changed: 链式规则深度已达上限 {}，跳过触发。issueId={}, field={}",
-                    MAX_CHAIN_DEPTH, issueId, changedField);
+        String depthKey = CHAIN_DEPTH_KEY_PREFIX + issueId + ":" + changedField;
+        Long depth = redisTemplate.opsForValue().increment(depthKey);
+        if (depth == null) {
+            // Redis 不可用时，降级为允许执行（避免规则系统完全不工作）
+            log.warn("[RuleEngine] Redis 不可用，链式深度计数降级跳过，issueId={}, field={}", issueId, changedField);
+            depth = 1L;
+        }
+        if (depth == 1L) {
+            // 第一次设置 TTL，防止异常情况下 key 永不过期
+            redisTemplate.expire(depthKey, CHAIN_DEPTH_TTL);
+        }
+        if (depth > MAX_CHAIN_DEPTH) {
+            log.warn("[RuleEngine] on-field-changed: 链式规则深度已达上限 {}，跳过触发。issueId={}, field={}, depth={}",
+                    MAX_CHAIN_DEPTH, issueId, changedField, depth);
+            redisTemplate.opsForValue().decrement(depthKey);
             return;
         }
-        CHAIN_DEPTH.set(depth + 1);
         try {
             List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "field_changed");
             if (rules.isEmpty()) return;
@@ -118,7 +136,7 @@ public class WorkflowRuleEngine {
 
             evaluateAndExecute(matching, issue, changedField, oldValue);
         } finally {
-            CHAIN_DEPTH.set(depth);
+            redisTemplate.opsForValue().decrement(depthKey);
         }
     }
 
