@@ -2467,7 +2467,7 @@ async function ctxLoadSprints() {
     if (!sprintOptionsCache[projectId]) {
       const res = await sprintApi.listByProject(projectId)
       if (res.code === 0) {
-        sprintOptionsCache[projectId] = res.data || []
+        sprintOptionsCache[projectId] = res.data?.list || []
       }
     }
     const sprints = sprintOptionsCache[projectId] || []
@@ -2709,7 +2709,7 @@ async function openSprintEdit(issue: IssueVO) {
     sprintOptionsLoading[issue.id] = true
     try {
       const res = await sprintApi.listByProject(issue.projectId, { _silent403: true })
-      sprintOptionsCache[issue.projectId] = res.data || []
+      sprintOptionsCache[issue.projectId] = res.data?.list || []
     } catch {
       sprintOptionsCache[issue.projectId] = []
     } finally {
@@ -2747,7 +2747,7 @@ async function onListSprintEdit(issue: IssueVO) {
   listSprintLoadingIds.add(issue.id)
   try {
     const res = await sprintApi.listByProject(issue.projectId, { _silent403: true })
-    sprintOptionsCache[issue.projectId] = res.data || []
+    sprintOptionsCache[issue.projectId] = res.data?.list || []
   } catch {
     sprintOptionsCache[issue.projectId] = []
   } finally {
@@ -3078,7 +3078,7 @@ async function preloadSprintNames() {
   await Promise.all(toLoad.map(async (pid) => {
     try {
       const res = await sprintApi.listByProject(pid, { _silent403: true })
-      sprintOptionsCache[pid] = res.data || []
+      sprintOptionsCache[pid] = res.data?.list || []
     } catch {
       sprintOptionsCache[pid] = []
     }

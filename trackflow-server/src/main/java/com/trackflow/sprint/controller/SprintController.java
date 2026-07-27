@@ -1,5 +1,6 @@
 package com.trackflow.sprint.controller;
 
+import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.sprint.converter.SprintConverter;
 import com.trackflow.sprint.dto.CompleteSprintDTO;
@@ -19,8 +20,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequiredArgsConstructor
 public class SprintController {
@@ -31,8 +30,10 @@ public class SprintController {
 
     @GetMapping("/api/v1/projects/{projectId}/sprints")
     @PreAuthorize("@perm.check(#projectId, 'sprint:view')")
-    public R<List<SprintVO>> list(@PathVariable("projectId") Long projectId) {
-        return R.ok(sprintService.listByProjectWithStats(projectId));
+    public R<PageResult<SprintVO>> list(@PathVariable("projectId") Long projectId,
+                                        @RequestParam(value = "page", defaultValue = "1") int page,
+                                        @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+        return R.ok(sprintService.listByProjectWithStatsPage(projectId, page, pageSize));
     }
 
     @PostMapping("/api/v1/projects/{projectId}/sprints")

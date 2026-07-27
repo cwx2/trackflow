@@ -1087,7 +1087,7 @@ async function loadSprints() {
   if (!selectedProjectId.value) return
   try {
     const res = await sprintApi.listByProject(selectedProjectId.value)
-    sprints.value = (res.data || []).map((s: any) => ({
+    sprints.value = (res.data?.list || []).map((s: any) => ({
       id: s.id,
       name: s.name,
       status: s.status

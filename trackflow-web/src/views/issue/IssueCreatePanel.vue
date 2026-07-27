@@ -807,7 +807,7 @@ async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
   if (!pid) { members.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; projectTags.value = []; return }
   try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
-  try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data || []).filter((s: any) => s.status !== 'Completed' && s.status !== 'completed' && s.status !== 'Archived' && s.status !== 'archived') } catch { sprints.value = [] }
+  try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data?.list || []).filter((s: any) => s.status !== 'Completed' && s.status !== 'completed' && s.status !== 'Archived' && s.status !== 'archived') } catch { sprints.value = [] }
   // 加载项目标签
   try { const res = await tagApi.listProjectTags(pid, { _silent403: true }); projectTags.value = res.data || [] } catch { projectTags.value = [] }
   // 加载项目模板

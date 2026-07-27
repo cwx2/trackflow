@@ -513,7 +513,7 @@ watch(showSprintDropdown, async (visible) => {
     sprintLoading.value = true
     try {
       const res = await sprintApi.listByProject(targetProjectId)
-      sprints.value = res.data || []
+      sprints.value = res.data?.list || []
       // 如果 API 成功但没有 active/planned Sprint，给出明确提示
       if (sprints.value.length > 0 && sprintGroups.value.length === 0) {
         // 有 Sprint 但都已完成
@@ -554,7 +554,7 @@ async function resolveNextSprint(): Promise<SprintVO | null> {
   nextSprintLoading.value = true
   try {
     const res = await sprintApi.listByProject(targetProjectId)
-    const allSprints: SprintVO[] = res.data || []
+    const allSprints: SprintVO[] = res.data?.list || []
 
     // 找活跃 Sprint
     const active = allSprints.find(s => s.status === 'active')

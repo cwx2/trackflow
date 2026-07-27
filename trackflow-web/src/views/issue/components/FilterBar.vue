@@ -667,7 +667,7 @@ async function loadValueOptions(fieldKey: string) {
         const pid = projectFilter?.values[0] || props.projectId
         if (pid) {
           const res = await sprintApi.listByProject(pid, { _silent403: true })
-          const sprints = res.data || []
+          const sprints = res.data?.list || []
           valueOptions.value = sprints.map((s: SprintVO) => ({
             id: s.id,
             label: `${s.name}${s.status === 'Active' ? ' (进行中)' : s.status === 'Completed' ? ' (已完成)' : ''}`
@@ -678,7 +678,7 @@ async function loadValueOptions(fieldKey: string) {
           for (const p of props.projectList.slice(0, 5)) {
             try {
               const res = await sprintApi.listByProject(p.id, { _silent403: true })
-              const sprints = res.data || []
+              const sprints = res.data?.list || []
               sprints.forEach((s: SprintVO) => {
                 allSprints.push({ id: s.id, label: `${p.key} / ${s.name}` })
               })

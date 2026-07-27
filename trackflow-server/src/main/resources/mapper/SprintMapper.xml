@@ -85,6 +85,74 @@
             s.created_at DESC
     </select>
 
+    <!-- Sprint 总数查询（用于分页） -->
+    <select id="countByProjectId" resultType="long">
+        SELECT COUNT(*)
+        FROM sprint
+        WHERE project_id = #{projectId}
+    </select>
+
+    <!-- 带工单统计的 Sprint 列表分页查询 -->
+    <select id="selectSprintsWithStatsPage" resultMap="sprintWithStatsMap">
+        SELECT
+            s.id,
+            s.project_id,
+            s.name,
+            s.goal,
+            s.status,
+            s.start_date,
+            s.end_date,
+            s.created_at,
+            s.started_at,
+            s.start_scope_hours,
+            s.start_scope_issues,
+            COALESCE(stats.total_issues, 0) AS total_issues,
+            COALESCE(stats.done_issues, 0) AS done_issues,
+            COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
+            COALESCE(stats.todo_issues, 0) AS todo_issues,
+            COALESCE(stats.overdue_issues, 0) AS overdue_issues,
+            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues,
+            COALESCE(stats.total_estimated_hours, 0) AS total_estimated_hours,
+            COALESCE(stats.completed_estimated_hours, 0) AS completed_estimated_hours
+        FROM sprint s
+        LEFT JOIN (
+            SELECT
+                i.sprint_id,
+                COUNT(*) AS total_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
+                COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
+                COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
+            FROM issue i
+            JOIN sprint sp ON sp.id = i.sprint_id
+                          AND sp.project_id = #{projectId}
+            LEFT JOIN issue_status ist ON ist.id = i.status_id
+            WHERE i.deleted_at IS NULL
+            GROUP BY i.sprint_id
+        ) stats ON stats.sprint_id = s.id
+        WHERE s.project_id = #{projectId}
+        ORDER BY
+            CASE s.status
+                WHEN 'active' THEN 1
+                WHEN 'planned' THEN 2
+                WHEN 'completed' THEN 3
+                WHEN 'archived' THEN 4
+            END,
+            CASE
+                WHEN s.status = 'planned' THEN s.start_date
+                ELSE NULL
+            END ASC NULLS LAST,
+            CASE
+                WHEN s.status != 'planned' THEN s.start_date
+                ELSE NULL
+            END DESC NULLS LAST,
+            s.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
     <!-- 带工单统计的单个 Sprint 查询（复用 selectSprintsWithStats 的统计逻辑） -->
     <select id="selectSprintWithStats" resultMap="sprintWithStatsMap">
         SELECT

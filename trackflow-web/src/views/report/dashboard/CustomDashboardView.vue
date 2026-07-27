@@ -994,8 +994,8 @@ async function loadAvailableSprintsAndProjects() {
     for (const project of availableProjects.value.slice(0, 10)) {
       try {
         const sprintRes = await sprintApi.listByProject(project.id, { _silent403: true } as any)
-        if (sprintRes.data) {
-          allSprints.push(...sprintRes.data)
+        if (sprintRes.data?.list) {
+          allSprints.push(...sprintRes.data.list)
         }
       } catch { /* skip projects without sprint access */ }
     }

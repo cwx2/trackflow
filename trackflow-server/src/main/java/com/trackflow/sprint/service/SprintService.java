@@ -80,6 +80,32 @@ public class SprintService {
     }
 
     /**
+     * 查询项目的 Sprint 列表（带工单统计 + 状态推导 + 分页）。
+     * 支持 page/pageSize 参数，默认 page=1, pageSize=20。
+     * 使用 readOnly 事务确保多步查询在同一个数据库快照中执行，避免并发修改导致数据不一致。
+     *
+     * @param projectId 项目 ID
+     * @param page      页码（从 1 开始）
+     * @param pageSize  每页数量
+     * @return 分页结果
+     */
+    @Transactional(readOnly = true)
+    public com.trackflow.common.model.PageResult<SprintVO> listByProjectWithStatsPage(Long projectId, int page, int pageSize) {
+        // 安全限制
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.min(Math.max(1, pageSize), 200);
+        int offset = (safePage - 1) * safePageSize;
+
+        long total = sprintMapper.countByProjectId(projectId);
+        List<SprintVO> sprints = sprintMapper.selectSprintsWithStatsPage(projectId, offset, safePageSize);
+        LocalDate today = LocalDate.now();
+        for (SprintVO sprint : sprints) {
+            computeStatusHint(sprint, today);
+        }
+        return new com.trackflow.common.model.PageResult<>(sprints, total, safePage, safePageSize);
+    }
+
+    /**
      * 根据 Sprint 的 status 和日期范围，推导状态是否合理并设置提示信息。
      */
     private void computeStatusHint(SprintVO sprint, LocalDate today) {

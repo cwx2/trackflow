@@ -19,6 +19,22 @@ public interface SprintMapper extends BaseMapper<Sprint> {
     List<SprintVO> selectSprintsWithStats(@Param("projectId") Long projectId);
 
     /**
+     * 查询项目的 Sprint 总数（用于分页）。
+     */
+    long countByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 查询项目的 Sprint 列表（带工单统计 + 分页）。
+     *
+     * @param projectId 项目 ID
+     * @param offset    偏移量
+     * @param limit     每页数量
+     */
+    List<SprintVO> selectSprintsWithStatsPage(@Param("projectId") Long projectId,
+                                              @Param("offset") int offset,
+                                              @Param("limit") int limit);
+
+    /**
      * 查询单个 Sprint，带工单统计数据。
      * 复用列表查询的统计逻辑，确保数据一致性。
      */

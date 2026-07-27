@@ -723,7 +723,7 @@ async function loadRelatedData() {
       idx++
     }
     if (needSprintOptions) {
-      if (results[idx].status === 'fulfilled') sprints.value = (results[idx] as any).value.data || []
+      if (results[idx].status === 'fulfilled') sprints.value = (results[idx] as any).value.data?.list || []
       idx++
     }
   } catch { /* ignore partial failures */ }

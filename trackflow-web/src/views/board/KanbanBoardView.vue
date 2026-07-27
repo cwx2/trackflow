@@ -2389,7 +2389,7 @@ async function handleRestoreArchivedSprint() {
     // 刷新 Sprint 列表
     if (selectedProject.value) {
       const res = await sprintApi.listByProject(selectedProject.value)
-      sprints.value = res.data || []
+      sprints.value = res.data?.list || []
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '恢复失败')
@@ -2441,7 +2441,7 @@ async function confirmDeleteArchivedSprint() {
     selectedSprint.value = undefined
     if (selectedProject.value) {
       const res = await sprintApi.listByProject(selectedProject.value)
-      sprints.value = res.data || []
+      sprints.value = res.data?.list || []
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '删除失败')
@@ -4331,7 +4331,7 @@ async function loadSprints() {
   if (!selectedProject.value) { sprints.value = []; return }
   try {
     const res = await sprintApi.listByProject(selectedProject.value)
-    const rawSprints = res.data || []
+    const rawSprints = res.data?.list || []
 
     // Sort sprints: active first, then planned, then completed; within group by startDate desc
     const statusOrder: Record<string, number> = { active: 0, planned: 1, completed: 2 }

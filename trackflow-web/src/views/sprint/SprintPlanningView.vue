@@ -602,7 +602,7 @@ async function loadSprints() {
   sprintsLoading.value = true
   try {
     const res = await sprintApi.listByProject(selectedProject.value)
-    sprints.value = res.data || []
+    sprints.value = res.data?.list || []
     // Load issues for each active/planned sprint
     await loadAllSprintIssues()
   } catch {

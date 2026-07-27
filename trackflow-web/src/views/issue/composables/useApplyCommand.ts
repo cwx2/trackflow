@@ -128,7 +128,7 @@ export function useApplyCommand(selectedIssues: Ref<IssueVO[]>) {
       const allSprints: SprintVO[] = []
       const sprintResults = otherResults.slice(projectIds.length, projectIds.length * 2)
       for (const res of sprintResults) {
-        allSprints.push(...((res as any).data || []))
+        allSprints.push(...((res as any).data?.list || []))
       }
       sprints.value = allSprints
 

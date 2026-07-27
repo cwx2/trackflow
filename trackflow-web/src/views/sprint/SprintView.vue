@@ -1074,7 +1074,7 @@ async function loadSprints() {
   loadingState.value = 'loading'
   try {
     const res = await sprintApi.listByProject(selectedProject.value, { _silent403: true })
-    sprints.value = res.data || []
+    sprints.value = res.data?.list || []
     loadingState.value = 'success'
   } catch (e: any) {
     sprints.value = []

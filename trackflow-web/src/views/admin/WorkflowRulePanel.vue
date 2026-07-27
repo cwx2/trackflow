@@ -368,7 +368,7 @@ async function loadSprints() {
   try {
     const res = await sprintApi.listByProject(props.projectId)
     if (res.code === 0) {
-      availableSprints.value = res.data
+      availableSprints.value = res.data?.list || []
     }
   } catch {
     // silent

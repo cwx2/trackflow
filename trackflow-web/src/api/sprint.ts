@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, SprintVelocityVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
+import type { R, PageResult, SprintVO, SprintBurndownVO, SprintAssigneeDistributionVO, SprintVelocityVO, CompletionPreviewVO, CreationPreviewVO, DeletionPreviewVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */
@@ -9,9 +9,13 @@ type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
  * Sprint 模块 API
  */
 export const sprintApi = {
-  /** 项目的 Sprint 列表 */
-  listByProject(projectId: string, config?: RequestOptions) {
-    return request.get<any, R<SprintVO[]>>(`/projects/${projectId}/sprints`, config)
+  /** 项目的 Sprint 列表（分页，默认 pageSize=200 以兼容不需要分页的场景） */
+  listByProject(projectId: string, options?: { page?: number; pageSize?: number } & RequestOptions) {
+    const { page = 1, pageSize = 200, ...config } = options || {}
+    return request.get<any, R<PageResult<SprintVO>>>(`/projects/${projectId}/sprints`, {
+      ...config,
+      params: { page, pageSize }
+    })
   },
 
   /** 创建 Sprint（含可选的移入未完成工单 + 设为默认 Sprint） */
