@@ -75,6 +75,7 @@
                   <icon-more />
                 </a-button>
                 <template #content>
+                  <a-doption @click="goToProject(project)">项目概览</a-doption>
                   <a-doption @click="editProject(project)">编辑</a-doption>
                   <a-doption @click="manageMembers(project)">成员管理</a-doption>
                   <a-doption v-if="canCreateProject" @click="openCopyDialog(project)">复制项目</a-doption>
@@ -142,6 +143,7 @@
                 <icon-more />
               </a-button>
               <template #content>
+                <a-doption @click="goToProject(project)">项目概览</a-doption>
                 <a-doption @click="editProject(project)">编辑</a-doption>
                 <a-doption @click="manageMembers(project)">成员管理</a-doption>
                 <a-doption v-if="canCreateProject" @click="openCopyDialog(project)">复制项目</a-doption>
