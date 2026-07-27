@@ -52,6 +52,12 @@
             <span class="radio-desc">选择一种高层级 Issue 类型作为泳道行，该类型的工单成为泳道标题，其子工单排列在泳道内</span>
           </div>
         </a-radio>
+        <a-radio value="dueDate">
+          <div class="radio-option">
+            <span class="radio-label">按截止日期</span>
+            <span class="radio-desc">自动按相对日期范围分组：已过期 / 今天 / 本周 / 下周 / 本月 / 更晚 / 无截止日期</span>
+          </div>
+        </a-radio>
       </a-radio-group>
     </div>
 
@@ -77,8 +83,70 @@
       </div>
     </div>
 
-    <!-- 泳道值选择器（当选择了非 none 的分组字段时显示） -->
-    <div v-if="groupByField !== 'none'" class="settings-section">
+    <!-- 截止日期泳道说明 -->
+    <div v-if="groupByField === 'dueDate'" class="settings-section">
+      <div class="section-title">截止日期泳道说明</div>
+      <div class="date-range-info">
+        <div class="date-range-item">
+          <span class="date-range-icon">⚠️</span>
+          <div class="date-range-content">
+            <span class="date-range-label">已过期</span>
+            <span class="date-range-desc">截止日期早于今天的工单</span>
+          </div>
+        </div>
+        <div class="date-range-item">
+          <span class="date-range-icon">📅</span>
+          <div class="date-range-content">
+            <span class="date-range-label">今天</span>
+            <span class="date-range-desc">截止日期为今天的工单</span>
+          </div>
+        </div>
+        <div class="date-range-item">
+          <span class="date-range-icon">📅</span>
+          <div class="date-range-content">
+            <span class="date-range-label">本周</span>
+            <span class="date-range-desc">截止日期在本周内（周一到周日）</span>
+          </div>
+        </div>
+        <div class="date-range-item">
+          <span class="date-range-icon">📅</span>
+          <div class="date-range-content">
+            <span class="date-range-label">下周</span>
+            <span class="date-range-desc">截止日期在下周内</span>
+          </div>
+        </div>
+        <div class="date-range-item">
+          <span class="date-range-icon">📅</span>
+          <div class="date-range-content">
+            <span class="date-range-label">本月</span>
+            <span class="date-range-desc">截止日期在本月内（不含本周/下周已覆盖的范围）</span>
+          </div>
+        </div>
+        <div class="date-range-item">
+          <span class="date-range-icon">📅</span>
+          <div class="date-range-content">
+            <span class="date-range-label">更晚</span>
+            <span class="date-range-desc">截止日期超出本月</span>
+          </div>
+        </div>
+        <div class="date-range-item">
+          <span class="date-range-icon">—</span>
+          <div class="date-range-content">
+            <span class="date-range-label">无截止日期</span>
+            <span class="date-range-desc">未设置截止日期的工单</span>
+          </div>
+        </div>
+      </div>
+      <div class="section-desc" style="margin-top: 8px">
+        💡 日期范围基于当前日期动态计算，每次加载看板时自动更新。只显示包含工单的泳道。
+      </div>
+      <div class="section-desc">
+        ℹ️ 拖拽卡片到其他泳道不会更新截止日期（只变更状态）。
+      </div>
+    </div>
+
+    <!-- 泳道值选择器（当选择了非 none 且非 dueDate 的分组字段时显示） -->
+    <div v-if="groupByField !== 'none' && groupByField !== 'dueDate'" class="settings-section">
       <div class="section-title">泳道值选择</div>
       <div class="section-desc">
         选择要显示为泳道行的具体值。未选中值的工单将归入"未分类"泳道。
@@ -743,5 +811,46 @@ function generateId(): string {
   content: '•';
   margin-right: 6px;
   color: var(--color-text-4);
+}
+
+/* ===== 截止日期泳道说明 ===== */
+.date-range-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-fill-1);
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
+.date-range-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.date-range-icon {
+  font-size: 14px;
+  width: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.date-range-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.date-range-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.date-range-desc {
+  font-size: 11px;
+  color: var(--color-text-3);
 }
 </style>

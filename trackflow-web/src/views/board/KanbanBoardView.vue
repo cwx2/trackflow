@@ -98,6 +98,7 @@
           <a-option value="sprint">按迭代</a-option>
           <a-option value="tag">按标签</a-option>
           <a-option value="parent">按父工单</a-option>
+          <a-option value="dueDate">按截止日期</a-option>
         </a-select>
       </div>
       <div class="toolbar-right">
@@ -1460,7 +1461,7 @@ function getSprintName(sprintId: string): string {
 }
 
 // ===== Swimlane 类型（提前声明供 URL 状态恢复使用） =====
-type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag' | 'parent'
+type SwimlaneGroupBy = 'none' | 'assignee' | 'priority' | 'type' | 'sprint' | 'tag' | 'parent' | 'dueDate'
 const SWIMLANE_STORAGE_KEY = 'tf_kanban_swimlane'
 
 const selectedProject = computed({
@@ -1602,7 +1603,7 @@ function restoreFromUrl(): boolean {
     selectedSprint.value = querySprint
   }
 
-  if (queryGroup && ['none', 'assignee', 'priority', 'type', 'sprint', 'tag', 'parent'].includes(queryGroup)) {
+  if (queryGroup && ['none', 'assignee', 'priority', 'type', 'sprint', 'tag', 'parent', 'dueDate'].includes(queryGroup)) {
     swimlaneGroupBy.value = queryGroup as SwimlaneGroupBy
     localStorage.setItem(SWIMLANE_STORAGE_KEY, queryGroup)
   }
@@ -1928,6 +1929,9 @@ const swimlanes = computed<SwimlaneRow[]>(() => {
     case 'parent':
       rows = groupByParent(allIssues)
       break
+    case 'dueDate':
+      // 日期泳道不支持自定义 selectedValues 过滤，直接返回
+      return groupByDueDate(allIssues)
     default:
       return []
   }
@@ -2187,9 +2191,90 @@ function groupByParent(allIssues: BoardIssue[]): SwimlaneRow[] {
   return rows
 }
 
+/**
+ * 按截止日期分组 — YouTrack 风格相对日期范围泳道。
+ * 分组顺序：已过期 → 今天 → 本周 → 下周 → 本月 → 更晚 → 无截止日期
+ * 相对日期基于看板加载时的客户端本地时间动态计算。
+ */
+function groupByDueDate(allIssues: BoardIssue[]): SwimlaneRow[] {
+  const now = new Date()
+  const todayStr = now.toISOString().slice(0, 10)
+
+  // 计算当周起止（周一~周日）
+  const dayOfWeek = now.getDay() // 0=周日
+  const daysToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek)
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + daysToMonday)
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+
+  // 下周起止
+  const nextMonday = new Date(monday)
+  nextMonday.setDate(monday.getDate() + 7)
+  const nextSunday = new Date(sunday)
+  nextSunday.setDate(sunday.getDate() + 7)
+
+  // 本月起止
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  monthEnd.setHours(23, 59, 59, 999)
+
+  type DueDateBucket = 'overdue' | 'today' | 'this_week' | 'next_week' | 'this_month' | 'later' | 'no_date'
+
+  function getBucket(dueDate: string | undefined): DueDateBucket {
+    if (!dueDate) return 'no_date'
+
+    // dueDate 格式为 'YYYY-MM-DD'
+    if (dueDate < todayStr) return 'overdue'
+    if (dueDate === todayStr) return 'today'
+
+    const d = new Date(dueDate + 'T00:00:00')
+    if (d >= monday && d <= sunday) return 'this_week'
+    if (d >= nextMonday && d <= nextSunday) return 'next_week'
+    if (d >= monthStart && d <= monthEnd) return 'this_month'
+    return 'later'
+  }
+
+  const bucketOrder: DueDateBucket[] = ['overdue', 'today', 'this_week', 'next_week', 'this_month', 'later', 'no_date']
+  const bucketLabels: Record<DueDateBucket, string> = {
+    overdue: '⚠️ 已过期',
+    today: '📅 今天',
+    this_week: '📅 本周',
+    next_week: '📅 下周',
+    this_month: '📅 本月',
+    later: '📅 更晚',
+    no_date: '— 无截止日期',
+  }
+
+  const groups: Record<DueDateBucket, BoardIssue[]> = {
+    overdue: [],
+    today: [],
+    this_week: [],
+    next_week: [],
+    this_month: [],
+    later: [],
+    no_date: [],
+  }
+
+  for (const issue of allIssues) {
+    const bucket = getBucket(issue.dueDate)
+    groups[bucket].push(issue)
+  }
+
+  // 只返回有工单的泳道（保持 YouTrack 风格：空泳道不展示）
+  return bucketOrder
+    .filter(b => groups[b].length > 0)
+    .map(b => ({
+      key: b,
+      label: bucketLabels[b],
+      issues: groups[b],
+    }))
+}
+
 /** 获取某泳道中某状态列的工单 */
 function getSwimlaneColumnIssues(laneKey: string, statusId: string): BoardIssue[] {
-  const lane = swimlanes.value.find(l => l.key === laneKey)
   if (!lane) return []
   return lane.issues.filter(i => i.statusId === statusId)
 }
@@ -3622,6 +3707,9 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     case 'parent':
       currentLaneKey = (issue as any).parentId || '__uncategorized__'
       break
+    case 'dueDate':
+      // 日期泳道为只读：拖拽不更新截止日期（日期按相对范围分组，不是可选泳道值）
+      return false
   }
 
   // If the issue is already in the target swimlane, nothing to do
