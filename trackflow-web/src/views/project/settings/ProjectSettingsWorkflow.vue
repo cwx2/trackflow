@@ -844,6 +844,8 @@ function conditionSummary(json: string): string {
   const conditions = parseJson(json, [])
   if (conditions.length === 0) return '无条件（始终触发）'
   return conditions.map((c: any) => {
+    if (c.operator === 'overdue') return `${fieldLabel(c.field)} 已逾期`
+    if (c.operator === 'due_within_days') return `${fieldLabel(c.field)} ${c.value || '?'}天内到期`
     const op: Record<string, string> = { equals: '=', not_equals: '≠', contains: '含', in: '∈', is_empty: '为空', is_not_empty: '非空' }
     return `${fieldLabel(c.field)} ${op[c.operator] || c.operator} ${c.value || ''}`
   }).join(' 且 ')

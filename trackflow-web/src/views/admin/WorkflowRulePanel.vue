@@ -153,6 +153,7 @@
                 <a-option value="assignee">负责人</a-option>
                 <a-option value="status">状态</a-option>
                 <a-option value="sprint">迭代</a-option>
+                <a-option value="due_date">截止日期</a-option>
               </a-select>
               <a-select v-model="cond.operator" style="width: 150px" placeholder="操作符" @change="() => { cond.value = '' }">
                 <a-optgroup label="当前值匹配">
@@ -162,6 +163,11 @@
                   <a-option value="in">属于（逗号分隔）</a-option>
                   <a-option value="is_empty">为空</a-option>
                   <a-option value="is_not_empty">不为空</a-option>
+                </a-optgroup>
+                <!-- 时间条件操作符（适用于 due_date 字段的条件） -->
+                <a-optgroup label="时间条件">
+                  <a-option value="overdue">已逾期（截止日期 &lt; 今天）</a-option>
+                  <a-option value="due_within_days">N天内到期</a-option>
                 </a-optgroup>
                 <!-- 仅当触发事件为 field_changed 且选择了监听字段时，显示旧值匹配操作符 -->
                 <a-optgroup
@@ -176,10 +182,10 @@
                 </a-optgroup>
               </a-select>
               <a-input
-                v-if="!['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(cond.operator)"
+                v-if="!['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty', 'overdue'].includes(cond.operator)"
                 v-model="cond.value"
                 style="flex: 1"
-                placeholder="值（如 Bug, Critical）"
+                :placeholder="cond.operator === 'due_within_days' ? '天数（如 3）' : '值（如 Bug, Critical）'"
               />
               <a-button type="text" status="danger" size="mini" @click="removeCondition(idx)">
                 <icon-delete />
@@ -537,6 +543,7 @@ function operatorLabel(op: string) {
   const map: Record<string, string> = {
     equals: '等于', not_equals: '不等于', contains: '包含', in: '属于',
     is_empty: '为空', is_not_empty: '不为空',
+    overdue: '已逾期', due_within_days: 'N天内到期',
     old_value_equals: '旧值等于', old_value_not_equals: '旧值不等于',
     old_value_in: '旧值属于', old_value_is_empty: '旧值为空', old_value_is_not_empty: '旧值不为空'
   }
@@ -547,6 +554,8 @@ function conditionSummary(json: string): string {
   const conditions = parseJson(json, [])
   if (conditions.length === 0) return '无条件（始终触发）'
   return conditions.map((c: any) => {
+    if (c.operator === 'overdue') return `${fieldLabel(c.field)} 已逾期`
+    if (c.operator === 'due_within_days') return `${fieldLabel(c.field)} ${c.value || '?'}天内到期`
     const isEmptyOp = ['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(c.operator)
     if (isEmptyOp) {
       return `${fieldLabel(c.field)} ${operatorLabel(c.operator)}`
