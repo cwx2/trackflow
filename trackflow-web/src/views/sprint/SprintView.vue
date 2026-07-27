@@ -58,7 +58,27 @@
             <span class="sprint-status-badge active" :class="{ overdue: sprint.overdue }">
               {{ sprint.overdue ? '已超期' : '进行中' }}
             </span>
-            <h3 class="sprint-name">{{ sprint.name }}</h3>
+            <div class="sprint-name-wrapper" @mouseenter="hoveredSprintId = sprint.id" @mouseleave="hoveredSprintId = null">
+              <template v-if="inlineEditingSprintId === sprint.id">
+                <input
+                  ref="inlineEditInputRef"
+                  v-model="inlineEditName"
+                  class="sprint-name-input"
+                  @keydown.enter="confirmInlineEdit"
+                  @keydown.esc="cancelInlineEdit"
+                  @blur="cancelInlineEdit"
+                  @click.stop
+                />
+              </template>
+              <template v-else>
+                <h3 class="sprint-name active-name">{{ sprint.name }}</h3>
+                <a-tooltip content="编辑迭代名称" v-if="canEditSprint && hoveredSprintId === sprint.id">
+                  <span class="sprint-name-edit-icon" @click.stop="startInlineEdit(sprint)">
+                    <icon-edit />
+                  </span>
+                </a-tooltip>
+              </template>
+            </div>
             <span class="sprint-remaining" v-if="getRemainingDays(sprint) !== null">
               <template v-if="(getRemainingDays(sprint) ?? 0) > 0">
                 <span class="remaining-icon">⏳</span> 还剩 {{ getRemainingDays(sprint) }} 天
@@ -172,7 +192,27 @@
           <div class="sprint-info">
             <span class="sprint-status-badge next" v-if="!hasActiveSprint && sprint.id === nextPlannedSprintId">下一个</span>
             <span class="sprint-status-badge planned" v-else>计划中</span>
-            <h3 class="sprint-name">{{ sprint.name }}</h3>
+            <div class="sprint-name-wrapper" @mouseenter="hoveredSprintId = sprint.id" @mouseleave="hoveredSprintId = null">
+              <template v-if="inlineEditingSprintId === sprint.id">
+                <input
+                  ref="inlineEditInputRef"
+                  v-model="inlineEditName"
+                  class="sprint-name-input"
+                  @keydown.enter="confirmInlineEdit"
+                  @keydown.esc="cancelInlineEdit"
+                  @blur="cancelInlineEdit"
+                  @click.stop
+                />
+              </template>
+              <template v-else>
+                <h3 class="sprint-name">{{ sprint.name }}</h3>
+                <a-tooltip content="编辑迭代名称" v-if="canEditSprint && hoveredSprintId === sprint.id">
+                  <span class="sprint-name-edit-icon" @click.stop="startInlineEdit(sprint)">
+                    <icon-edit />
+                  </span>
+                </a-tooltip>
+              </template>
+            </div>
           </div>
           <div class="sprint-dates" v-if="sprint.startDate">
             {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
@@ -766,9 +806,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
+import { IconEdit } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission } from '@/composables/usePermission'
@@ -810,6 +851,12 @@ const editForm = reactive({
   startDate: '',
   endDate: ''
 })
+
+// ===== 内联编辑迭代名称 =====
+const hoveredSprintId = ref<string | null>(null)
+const inlineEditingSprintId = ref<string | null>(null)
+const inlineEditName = ref<string>('')
+const inlineEditInputRef = ref<HTMLInputElement[]>([])
 
 // ===== 完成迭代相关 =====
 const showCompleteModal = ref(false)
@@ -1068,6 +1115,50 @@ function toggleCompletedBurndown(sprintId: string) {
 }
 
 // ===== API 调用 =====
+
+// ===== 内联编辑迭代名称 =====
+
+function startInlineEdit(sprint: SprintVO) {
+  inlineEditingSprintId.value = sprint.id
+  inlineEditName.value = sprint.name
+  nextTick(() => {
+    const input = inlineEditInputRef.value[0]
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
+}
+
+async function confirmInlineEdit() {
+  const sprintId = inlineEditingSprintId.value
+  const newName = inlineEditName.value.trim()
+  if (!sprintId) return
+  if (!newName) {
+    Message.warning('迭代名称不能为空')
+    return
+  }
+  // 找原始 sprint 对比是否有改动
+  const original = sprints.value.find(s => s.id === sprintId)
+  inlineEditingSprintId.value = null
+  if (!original || original.name === newName) return
+  try {
+    await sprintApi.update(sprintId, { name: newName })
+    // 本地更新，无需全量刷新
+    const idx = sprints.value.findIndex(s => s.id === sprintId)
+    if (idx !== -1) {
+      sprints.value[idx] = { ...sprints.value[idx], name: newName }
+    }
+    Message.success('迭代名称已更新')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '更新失败')
+  }
+}
+
+function cancelInlineEdit() {
+  inlineEditingSprintId.value = null
+  inlineEditName.value = ''
+}
 
 async function loadSprints() {
   if (!selectedProject.value) { sprints.value = []; loadingState.value = 'idle'; return }
@@ -1553,6 +1644,52 @@ function syncUrlProjectParam() {
   font-size: 14px;
   color: var(--color-text-1);
   font-weight: 500;
+}
+
+/* 活跃 Sprint 名称加粗 */
+.sprint-name.active-name {
+  font-weight: 700;
+}
+
+/* Sprint 名称区域：hover 时显示编辑图标 */
+.sprint-name-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sprint-name-edit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  color: var(--color-text-3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.sprint-name-edit-icon:hover {
+  color: var(--color-text-1);
+  background: var(--color-fill-2);
+}
+
+/* 内联编辑输入框 */
+.sprint-name-input {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  background: var(--color-bg-2);
+  border: 1px solid rgb(var(--primary-6));
+  border-radius: 4px;
+  padding: 2px 8px;
+  outline: none;
+  min-width: 120px;
+  max-width: 320px;
+  width: auto;
+  box-shadow: 0 0 0 2px rgba(var(--primary-6), 0.15);
+  transition: box-shadow 0.15s;
 }
 
 .sprint-remaining {
