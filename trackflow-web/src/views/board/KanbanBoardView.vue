@@ -291,14 +291,32 @@
           当前项目共 {{ boardTotalCount }} 个工单，看板仅展示前 {{ issues.length }} 个。请使用搜索或筛选缩小范围。
         </span>
       </div>
-      <!-- 隐藏列中有工单的警告提示 -->
-      <div v-if="hiddenIssueColumns.length > 0 && !loading && !showAllColumns" class="board-hidden-issues-banner">
-        <span class="hidden-issues-icon">⚠️</span>
-        <span class="hidden-issues-text">
-          <strong>{{ hiddenIssueTotalCount }} 个工单</strong>处于未显示的状态列中（{{ hiddenIssueColumnsDetail }}）。
-        </span>
+      <!-- 隐藏列中有工单的警告提示（增强版 Banner — REQ-753） -->
+      <div v-if="hiddenIssueColumns.length > 0 && !loading && !showAllColumns" class="board-hidden-issues-banner board-hidden-issues-banner--enhanced">
+        <div class="hidden-issues-header">
+          <span class="hidden-issues-icon">⚠️</span>
+          <span class="hidden-issues-text">
+            <strong>{{ hiddenIssueTotalCount }} 个工单</strong>处于未显示的状态列中
+          </span>
+        </div>
+        <div class="hidden-issues-tags">
+          <button
+            v-for="col in hiddenIssueColumns"
+            :key="col.fieldValue || col.statusId"
+            class="hidden-status-tag"
+            :style="col.statusColor ? { '--tag-color': col.statusColor } : {}"
+            :title="`查看「${localizeStatusName(col.statusName)}」状态下的 ${col.issueCount || 0} 个工单`"
+            @click="onHiddenStatusTagClick(col)"
+          >
+            <span class="hidden-status-tag-dot" :style="{ background: col.statusColor || 'var(--color-fill-4)' }"></span>
+            <span class="hidden-status-tag-name">{{ localizeStatusName(col.statusName) }}</span>
+            <span class="hidden-status-tag-count">{{ col.issueCount || 0 }}</span>
+          </button>
+        </div>
         <div class="hidden-issues-actions">
-          <a-button size="mini" type="outline" @click="showAllColumns = true">显示全部列</a-button>
+          <a-button size="mini" type="primary" @click="showAllColumns = true">
+            显示全部列 →
+          </a-button>
           <a-button v-if="canEditBoard" size="mini" type="text" @click="showSettings = true">列设置</a-button>
         </div>
       </div>
@@ -2880,6 +2898,23 @@ const hiddenIssueColumnsDetail = computed(() => {
     .map(c => `${localizeStatusName(c.statusName)} ${c.issueCount || 0}个`)
     .join('、')
 })
+
+/**
+ * 隐藏状态标签点击处理（REQ-753）：
+ * 临时显示全部列并滚动到被点击的状态列。
+ */
+function onHiddenStatusTagClick(col: BoardColumnVO) {
+  if (!col.statusId && !col.fieldValue) return
+  // 先展示全部列
+  showAllColumns.value = true
+  // 等待 DOM 更新后滚动到目标列
+  const targetId = col.statusId || col.fieldValue
+  nextTick(() => {
+    setTimeout(() => {
+      scrollToColumn(targetId)
+    }, 100)
+  })
+}
 
 // 被手动展开的空列集合
 const expandedEmptyColumns = ref<Set<string>>(new Set())
@@ -6419,6 +6454,78 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+/* 增强版 Banner — REQ-753 */
+.board-hidden-issues-banner--enhanced {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(var(--warning-6), 0.06), rgba(var(--warning-6), 0.12));
+  border: 1px solid rgba(var(--warning-6), 0.35);
+}
+
+.hidden-issues-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hidden-issues-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 22px;
+}
+
+.hidden-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-text-1);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.hidden-status-tag:hover {
+  background: var(--color-fill-2);
+  border-color: rgb(var(--primary-6));
+  box-shadow: 0 1px 4px rgba(var(--primary-6), 0.15);
+  transform: translateY(-1px);
+}
+
+.hidden-status-tag:active {
+  transform: translateY(0);
+}
+
+.hidden-status-tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.hidden-status-tag-name {
+  font-weight: 500;
+  color: var(--color-text-1);
+}
+
+.hidden-status-tag-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-3);
+  background: var(--color-fill-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  min-width: 18px;
+  text-align: center;
+}
+
 .board-hidden-issues-banner--info {
   background: rgba(var(--primary-6), 0.06);
   border-color: rgba(var(--primary-6), 0.2);
@@ -6444,8 +6551,9 @@ onUnmounted(() => {
 .hidden-issues-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
+  padding-left: 22px;
 }
 
 /* ===== TV 模式样式 ===== */
