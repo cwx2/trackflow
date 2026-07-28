@@ -266,6 +266,7 @@ public class QueryExecutor {
                 case "keyword" -> applyKeywordFilter(wrapper, values);
                 case "tag" -> applyTagFilter(wrapper, operator, values);
                 case "parent" -> applyParentFilter(wrapper, operator, values);
+                case "commenter" -> applyCommenterFilter(wrapper, operator, values, currentUserId);
                 case "dueDate" -> applyDateFilter(wrapper, "due_date", operator, values);
                 case "createdAt" -> applyDateFilter(wrapper, "created_at", operator, values);
                 case "updatedAt" -> applyDateFilter(wrapper, "updated_at", operator, values);
@@ -395,6 +396,40 @@ public class QueryExecutor {
             case "in" -> wrapper.in("parent_id", values.stream().map(Long::parseLong).toList());
             case "is_empty" -> wrapper.isNull("parent_id");     // top-level issues only
             case "is_not_empty" -> wrapper.isNotNull("parent_id"); // sub-tasks only
+        }
+    }
+
+    private void applyCommenterFilter(QueryWrapper<Issue> wrapper, String operator,
+                                       List<String> values, Long currentUserId) {
+        switch (operator) {
+            case "eq" -> {
+                long userId = Long.parseLong(values.get(0));
+                wrapper.apply(
+                        "EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.user_id = {0} AND ic.deleted_at IS NULL)",
+                        userId);
+            }
+            case "in" -> {
+                List<Long> userIds = values.stream().map(Long::parseLong).toList();
+                if (userIds.size() == 1) {
+                    wrapper.apply(
+                            "EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.user_id = {0} AND ic.deleted_at IS NULL)",
+                            userIds.get(0));
+                } else {
+                    wrapper.apply(
+                            "EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.user_id IN ("
+                                    + userIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + ") AND ic.deleted_at IS NULL)");
+                }
+            }
+            case "neq" -> {
+                long userId = Long.parseLong(values.get(0));
+                wrapper.apply(
+                        "NOT EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.user_id = {0} AND ic.deleted_at IS NULL)",
+                        userId);
+            }
+            case "is_empty" -> wrapper.apply(
+                    "NOT EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.deleted_at IS NULL)");
+            case "is_not_empty" -> wrapper.apply(
+                    "EXISTS (SELECT 1 FROM issue_comment ic WHERE ic.issue_id = issue.id AND ic.deleted_at IS NULL)");
         }
     }
 

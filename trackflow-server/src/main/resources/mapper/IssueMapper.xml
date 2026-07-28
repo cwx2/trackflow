@@ -69,7 +69,7 @@
         SELECT
             a.id, a.issue_id, a.user_id, a.action, a.field_name,
             <include refid="activity_value_columns"/>,
-            a.detail, a.created_at,
+            a.detail, a.source, a.created_at,
             u.display_name AS user_name,
             u.avatar_url AS user_avatar
         FROM issue_activity a

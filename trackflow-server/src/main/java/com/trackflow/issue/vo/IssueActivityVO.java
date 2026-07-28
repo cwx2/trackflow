@@ -25,5 +25,10 @@ public class IssueActivityVO {
      * - {"actionKey":"postpone_one_week","executedActions":[...]} — 规则执行摘要
      */
     private String detail;
+    /**
+     * 活动记录来源标识：manual（用户手动）/ automation（自动化规则）/ workflow_action（转换动作）/ system（系统）
+     * null 等同于 manual。
+     */
+    private String source;
     private LocalDateTime createdAt;
 }

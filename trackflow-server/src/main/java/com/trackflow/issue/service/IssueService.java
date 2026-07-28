@@ -2616,14 +2616,21 @@ public class IssueService {
             IssueActivityVO vo = new IssueActivityVO();
             vo.setId(String.valueOf(row.getId()));
             vo.setIssueId(String.valueOf(row.getIssueId()));
-            vo.setUserId(String.valueOf(row.getUserId()));
-            vo.setUserName(row.getUserName());
+            // 自动化规则操作的 userId 为 null，避免 String.valueOf(null) = "null"
+            vo.setUserId(row.getUserId() != null ? String.valueOf(row.getUserId()) : null);
+            // 自动化操作无关联用户时，使用友好展示名
+            if ("automation".equals(row.getSource())) {
+                vo.setUserName(row.getUserName() != null ? row.getUserName() : "自动化规则");
+            } else {
+                vo.setUserName(row.getUserName());
+            }
             vo.setUserAvatar(row.getUserAvatar());
             vo.setAction(row.getAction());
             vo.setFieldName(row.getFieldName());
             vo.setOldValue(row.getOldValue());
             vo.setNewValue(row.getNewValue());
             vo.setDetail(row.getDetail());
+            vo.setSource(row.getSource());
             vo.setCreatedAt(row.getCreatedAt());
             return vo;
         }).toList();

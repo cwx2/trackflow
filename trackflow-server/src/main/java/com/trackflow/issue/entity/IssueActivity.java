@@ -28,5 +28,15 @@ public class IssueActivity implements Serializable {
     private String newDisplayValue;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String detail;
+    /**
+     * 活动记录来源标识。
+     * <ul>
+     *   <li>{@code null} / {@code "manual"} — 用户手动操作</li>
+     *   <li>{@code "automation"} — 工作流自动化规则触发</li>
+     *   <li>{@code "workflow_action"} — 状态转换动作触发</li>
+     *   <li>{@code "system"} — 系统内部操作（如成员移除触发的清空）</li>
+     * </ul>
+     */
+    private String source;
     private LocalDateTime createdAt;
 }

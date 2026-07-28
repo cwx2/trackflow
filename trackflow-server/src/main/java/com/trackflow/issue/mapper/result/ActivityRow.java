@@ -33,6 +33,8 @@ public class ActivityRow {
     // JOIN sys_user
     private String userName;
     private String userAvatar;
+    // 活动来源标识（来自 issue_activity.source 列）
+    private String source;
 
     // JOIN issue（仅 Dashboard 查询返回）
     private String issueKey;
