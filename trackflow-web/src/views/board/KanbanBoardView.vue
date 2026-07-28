@@ -4902,7 +4902,7 @@ onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
   document.addEventListener('keydown', handleKeydown)
 
-  // URL 状态恢复优先级：URL params > projectStore (localStorage) > 自动选择
+  // URL 状态恢复优先级：URL params > projectStore (localStorage) > 首个项目
   restoreFromUrl()
 
   if (selectedProject.value) {
@@ -4910,8 +4910,8 @@ onMounted(async () => {
     syncUrlState()
     loadBoard()
   } else {
-    // 尝试自动选择（单项目用户）
-    if (projects.value.length === 1) {
+    // 尝试自动选择：首个项目（收藏项目已排在前面）
+    if (projects.value.length > 0) {
       selectedProject.value = projects.value[0].id
       syncUrlState()
       loadBoard()
@@ -4923,6 +4923,9 @@ onMounted(async () => {
 watch(() => route.query, (newQuery, oldQuery) => {
   // 避免自身 replace 触发的变化导致循环
   if (JSON.stringify(newQuery) === JSON.stringify(oldQuery)) return
+
+  // 仅当仍在看板路由时才响应 query 变化（导航离开时忽略，避免清空 store）
+  if (route.name !== 'Boards') return
 
   const queryProject = newQuery.project as string | undefined
   const querySprint = newQuery.sprint as string | undefined
@@ -4947,11 +4950,10 @@ watch(() => route.query, (newQuery, oldQuery) => {
       return
     }
   } else if (selectedProject.value) {
-    // URL 无项目参数了（用户后退到初始状态）
-    selectedProject.value = undefined
-    selectedSprint.value = undefined
-    issues.value = []
+    // URL 无项目参数但仍有选中项目（浏览器后退到无参数的 /boards）
+    // 不清除 store 中的选中状态——重新同步 URL 并保持看板显示
     suppressUrlSync = false
+    syncUrlState()
     return
   }
 
