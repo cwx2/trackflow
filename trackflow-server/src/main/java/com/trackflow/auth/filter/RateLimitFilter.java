@@ -48,11 +48,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String clientIp = WebUtils.getClientIp(request);
 
-        // 第一层：检查认证封禁
+        // 第一层：检查认证封禁（认证失败过多触发）
         if (rateLimitService.isAuthBanned(clientIp)) {
             long retryAfter = rateLimitService.getBanRemainingSeconds(clientIp);
             writeRateLimitResponse(response, retryAfter,
-                    "请求过于频繁，您的 IP 已被临时封禁，请稍后重试");
+                    "登录尝试过于频繁，请 " + retryAfter + " 秒后重试");
             log.debug("Rate limit: blocked banned IP {}", clientIp);
             return;
         }
@@ -61,7 +61,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (rateLimitService.isGlobalApiLimited(clientIp)) {
             long retryAfter = rateLimitService.getGlobalApiWindowSeconds();
             writeRateLimitResponse(response, retryAfter,
-                    "请求过于频繁，请稍后重试");
+                    "请求过于频繁，请 " + retryAfter + " 秒后重试");
 
             // 记录限流审计事件（仅首次触发记录，避免日志风暴）
             logRateLimitEvent(request, clientIp, "global_api_limited");

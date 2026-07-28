@@ -35,8 +35,8 @@ public class RateLimitService {
     private static final long AUTH_BAN_DURATION_SECONDS = 900; // 15 分钟
 
     // ====== 全局 API 限流配置 ======
-    /** 全局 API 每分钟最大请求数 */
-    private static final int GLOBAL_API_MAX_REQUESTS = 200;
+    /** 全局 API 每分钟最大请求数（正常浏览单页产生 5-10 次 API 调用，600/min 允许快速翻页和搜索） */
+    private static final int GLOBAL_API_MAX_REQUESTS = 600;
     /** 全局 API 计数窗口（秒） */
     private static final long GLOBAL_API_WINDOW_SECONDS = 60; // 1 分钟
 

@@ -281,7 +281,12 @@
               </template>
             </template>
           </a-dropdown>
-          <div v-if="filteredQueries.length === 0" class="empty-queries">暂无保存的搜索</div>
+          <div v-if="panelLoadFailed && filteredQueries.length === 0" class="empty-queries panel-error">
+            <icon-exclamation-circle-fill style="color: var(--color-warning-6); margin-right: 4px;" />
+            加载失败
+            <a-link :hoverable="false" style="margin-left: 8px; font-size: 12px;" @click="loadPanel()">重试</a-link>
+          </div>
+          <div v-else-if="filteredQueries.length === 0" class="empty-queries">暂无保存的搜索</div>
         </div>
       </div>
 
@@ -3313,17 +3318,25 @@ watch([activeProjectId, activeQueryId], () => {
 })
 
 // Init
+const panelLoadFailed = ref(false)
+
 async function loadPanel() {
   try {
+    panelLoadFailed.value = false
     const res = await queryApi.getPanel(activeProjectId.value || undefined)
     const data = res.data || {}
     savedQueries.value = [...(data.pinned || []), ...(data.queries || [])]
-  } catch {
-    savedQueries.value = [
-      { id: '1', name: 'Assigned to me', count: 12 },
-      { id: '2', name: 'Reported by me', count: 8 },
-      { id: '3', name: 'All open', count: 45 }
-    ]
+  } catch (error: any) {
+    panelLoadFailed.value = true
+    // Keep previous data if available; only clear if this is the first load
+    if (savedQueries.value.length === 0 || savedQueries.value[0]?.id === '1') {
+      savedQueries.value = []
+    }
+    // For 429 specifically, schedule an auto-retry after the retry-after period
+    if (error?.response?.status === 429) {
+      const retryAfter = parseInt(error.response.headers?.['retry-after'] || '60', 10)
+      setTimeout(() => loadPanel(), Math.min(retryAfter, 120) * 1000)
+    }
   }
 }
 async function loadProjects() {
