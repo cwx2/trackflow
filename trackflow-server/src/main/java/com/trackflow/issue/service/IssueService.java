@@ -2502,6 +2502,27 @@ public class IssueService {
     // ========== 增强详情（性能优化：单次 JOIN 查询） ==========
 
     /**
+     * 通过 ID 或 Issue Key 获取详情（自动识别格式）。
+     * <p>
+     * 判断规则：如果参数全部由数字组成则视为 ID，否则视为 Issue Key。
+     * 与 YouTrack API 行为一致：单个端点同时接受 entity ID 和 human-readable ID。
+     */
+    @Transactional(readOnly = true)
+    public IssueDetailVO getDetailByIdOrKey(String idOrKey) {
+        if (idOrKey == null || idOrKey.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "ID 或 Issue Key 不能为空");
+        }
+        // 纯数字 → 按 ID 查询
+        if (idOrKey.matches("\\d+")) {
+            Long id = Long.parseLong(idOrKey);
+            return getDetailWithAccessCheck(id);
+        }
+        // 否则按 Issue Key 查询
+        Issue issue = getByKeyWithAccessCheck(idOrKey);
+        return getDetailWithAccessCheck(issue.getId());
+    }
+
+    /**
      * 获取 Issue 详情（带项目成员校验 + 可见性校验）—— 避免先查 Issue 再查详情导致两次 DB 查询
      */
     @Transactional(readOnly = true)

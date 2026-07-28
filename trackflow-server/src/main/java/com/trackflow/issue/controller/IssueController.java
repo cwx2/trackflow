@@ -57,17 +57,21 @@ public class IssueController {
         return R.ok(issueService.listWithDetails(query));
     }
 
-    @GetMapping("/{id}")
-    public R<IssueDetailVO> getById(@PathVariable("id") Long id) {
-        // 校验项目成员权限并获取详情
-        return R.ok(issueService.getDetailWithAccessCheck(id));
+    /**
+     * 获取工单详情 — 同时支持数字 ID 和 Issue Key（如 DE4-1543）。
+     * 与 YouTrack API 行为一致：单个端点自动识别参数格式。
+     */
+    @GetMapping("/{idOrKey}")
+    public R<IssueDetailVO> getById(@PathVariable("idOrKey") String idOrKey) {
+        return R.ok(issueService.getDetailByIdOrKey(idOrKey));
     }
 
+    /**
+     * 通过 Issue Key 获取工单详情（保留向后兼容）。
+     */
     @GetMapping("/key/{issueKey}")
     public R<IssueDetailVO> getByKey(@PathVariable("issueKey") String issueKey) {
-        // 先校验项目成员权限
-        Issue issue = issueService.getByKeyWithAccessCheck(issueKey);
-        return R.ok(issueService.getDetail(issue.getId()));
+        return R.ok(issueService.getDetailByIdOrKey(issueKey));
     }
 
     @PutMapping("/{id}")
