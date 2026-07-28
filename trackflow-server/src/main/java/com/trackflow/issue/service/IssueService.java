@@ -76,6 +76,7 @@ public class IssueService {
     private final IssueActivityMapper activityMapper;
     private final IssueKeyHistoryMapper issueKeyHistoryMapper;
     private final com.trackflow.sprint.mapper.SprintMapper sprintMapper;
+    private final com.trackflow.issue.mapper.IssueSprintMapper issueSprintMapper;
     private final ProjectService projectService;
     private final MinioService minioService;
     private final IssueConverter issueConverter;
@@ -96,6 +97,7 @@ public class IssueService {
     private final com.trackflow.timeentry.mapper.TimeEntryMapper timeEntryMapper;
     private final com.trackflow.integration.service.MutedThreadService mutedThreadService;
     private final com.trackflow.board.mapper.BoardColumnConfigMapper boardColumnConfigMapper;
+    private final com.trackflow.board.mapper.BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final com.trackflow.issue.service.precheck.ClosePreCheckChain closePreCheckChain;
     private final com.trackflow.issue.mapper.IssueVisibilityUserMapper visibilityUserMapper;
 
@@ -171,6 +173,15 @@ public class IssueService {
         issue.setCreatedBy(currentUserId);
 
         issueMapper.insert(issue);
+
+        // 同步 issue_sprint 关联表
+        if (issue.getSprintId() != null) {
+            IssueSprint relation = new IssueSprint();
+            relation.setIssueId(issue.getId());
+            relation.setSprintId(issue.getSprintId());
+            relation.setCreatedAt(LocalDateTime.now());
+            issueSprintMapper.insert(relation);
+        }
 
         // 自动分配：用户未指定 assignee 时，触发创建时自动分配规则
         if (issue.getAssigneeId() == null) {
@@ -456,6 +467,7 @@ public class IssueService {
         fillChildProgress(result.getRecords(), voList);
         fillStatusInfo(result.getRecords(), voList);
         fillSprintInfo(result.getRecords(), voList);
+        fillMultiSprintInfo(result.getRecords(), voList);
         fillCustomFieldValues(result.getRecords(), voList);
 
         return new PageResult<>(voList, result.getTotal(),
@@ -629,6 +641,61 @@ public class IssueService {
                 }
             }
         }
+    }
+
+    /**
+     * 批量填充多 Sprint 信息（issue_sprint 关联表）
+     */
+    private void fillMultiSprintInfo(List<Issue> issues, List<IssueVO> voList) {
+        List<Long> issueIds = issues.stream().map(Issue::getId).toList();
+        if (issueIds.isEmpty()) return;
+
+        List<IssueSprint> allRelations = issueSprintMapper.selectByIssueIds(issueIds);
+        if (allRelations.isEmpty()) return;
+
+        // 按 issueId 分组
+        Map<Long, List<Long>> issueSprintMap = new java.util.HashMap<>();
+        Set<Long> allSprintIds = new java.util.HashSet<>();
+        for (IssueSprint rel : allRelations) {
+            issueSprintMap.computeIfAbsent(rel.getIssueId(), k -> new java.util.ArrayList<>()).add(rel.getSprintId());
+            allSprintIds.add(rel.getSprintId());
+        }
+
+        // 批量查询 Sprint 名称
+        Map<Long, String> sprintNameMap = java.util.Collections.emptyMap();
+        if (!allSprintIds.isEmpty()) {
+            sprintNameMap = sprintMapper.selectBatchIds(allSprintIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            com.trackflow.sprint.entity.Sprint::getId,
+                            com.trackflow.sprint.entity.Sprint::getName,
+                            (a, b) -> a));
+        }
+
+        // 仅填充有多个 Sprint 关联的工单
+        for (int i = 0; i < issues.size(); i++) {
+            Long issueId = issues.get(i).getId();
+            List<Long> sprintIds = issueSprintMap.get(issueId);
+            if (sprintIds != null && sprintIds.size() > 1) {
+                List<String> ids = new java.util.ArrayList<>();
+                List<String> names = new java.util.ArrayList<>();
+                for (Long sid : sprintIds) {
+                    ids.add(String.valueOf(sid));
+                    names.add(sprintNameMap.getOrDefault(sid, ""));
+                }
+                voList.get(i).setSprintIds(ids);
+                voList.get(i).setSprintNames(names);
+            }
+        }
+    }
+
+    /**
+     * 查询项目看板是否开启了 allowMultipleSprints 配置
+     */
+    private boolean isAllowMultipleSprints(Long projectId) {
+        com.trackflow.board.entity.BoardGeneralConfig config = boardGeneralConfigMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.board.entity.BoardGeneralConfig>()
+                        .eq(com.trackflow.board.entity.BoardGeneralConfig::getProjectId, projectId));
+        return config != null && Boolean.TRUE.equals(config.getAllowMultipleSprints());
     }
 
     /**
@@ -1152,9 +1219,71 @@ public class IssueService {
                 }
                 recordActivity(id, currentUserId, "updated", "sprint", oldSprintId, newSprintId, oldSprintName, newSprintName);
                 // 0 means "clear sprint" → set to null (DB convention: sprint_id IS NULL for Backlog)
-                issue.setSprintId(dto.getSprintId() == 0 ? null : dto.getSprintId());
+                Long newPrimarySprintId = dto.getSprintId() == 0 ? null : dto.getSprintId();
+                issue.setSprintId(newPrimarySprintId);
+                // 同步 issue_sprint 关联表：覆盖模式下替换所有关联
+                issueSprintMapper.deleteByIssueId(id);
+                if (newPrimarySprintId != null) {
+                    IssueSprint relation = new IssueSprint();
+                    relation.setIssueId(id);
+                    relation.setSprintId(newPrimarySprintId);
+                    relation.setCreatedAt(java.time.LocalDateTime.now());
+                    issueSprintMapper.insert(relation);
+                }
                 // 收集迭代变更
                 fieldChanges.put("sprint", new String[]{oldSprintName, newSprintName});
+            }
+        }
+        // 追加 Sprint（多 Sprint 模式）
+        if (dto.getAddToSprintId() != null) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")) {
+                warnings.add("Sprint 追加被跳过：需要 sprint:edit 权限");
+            } else {
+                // 检查项目是否开启了 allowMultipleSprints
+                boolean allowMultiple = isAllowMultipleSprints(issue.getProjectId());
+                if (!allowMultiple) {
+                    warnings.add("Sprint 追加被跳过：项目看板未开启 allowMultipleSprints 配置");
+                } else {
+                    Long addSprintId = dto.getAddToSprintId();
+                    // 校验目标 Sprint 存在且属于同一项目
+                    var targetSprint = sprintMapper.selectById(addSprintId);
+                    if (targetSprint == null || !targetSprint.getProjectId().equals(issue.getProjectId())) {
+                        throw new BusinessException(ErrorCode.BAD_REQUEST, "目标 Sprint 不存在或不属于当前项目");
+                    }
+                    // 检查是否已关联
+                    List<Long> existingSprintIds = issueSprintMapper.selectSprintIdsByIssueId(id);
+                    if (!existingSprintIds.contains(addSprintId)) {
+                        IssueSprint relation = new IssueSprint();
+                        relation.setIssueId(id);
+                        relation.setSprintId(addSprintId);
+                        relation.setCreatedAt(java.time.LocalDateTime.now());
+                        issueSprintMapper.insert(relation);
+                        // 如果主 Sprint 为空，同时设为主 Sprint
+                        if (issue.getSprintId() == null) {
+                            issue.setSprintId(addSprintId);
+                        }
+                        recordActivity(id, currentUserId, "updated", "sprint_added", null, String.valueOf(addSprintId), null, targetSprint.getName());
+                        fieldChanges.put("sprint_added", new String[]{null, targetSprint.getName()});
+                    }
+                }
+            }
+        }
+        // 移除 Sprint 关联（多 Sprint 模式）
+        if (dto.getRemoveFromSprintId() != null) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "sprint:edit")) {
+                warnings.add("Sprint 移除被跳过：需要 sprint:edit 权限");
+            } else {
+                Long removeSprintId = dto.getRemoveFromSprintId();
+                var removedSprint = sprintMapper.selectById(removeSprintId);
+                String removedSprintName = removedSprint != null ? removedSprint.getName() : null;
+                issueSprintMapper.deleteByIssueIdAndSprintId(id, removeSprintId);
+                // 如果移除的是主 Sprint，重新选择一个作为主 Sprint
+                if (removeSprintId.equals(issue.getSprintId())) {
+                    List<Long> remainingSprintIds = issueSprintMapper.selectSprintIdsByIssueId(id);
+                    issue.setSprintId(remainingSprintIds.isEmpty() ? null : remainingSprintIds.get(0));
+                }
+                recordActivity(id, currentUserId, "updated", "sprint_removed", String.valueOf(removeSprintId), null, removedSprintName, null);
+                fieldChanges.put("sprint_removed", new String[]{removedSprintName, null});
             }
         }
         if (dto.getParentId() != null) {
@@ -2410,6 +2539,23 @@ public class IssueService {
         vo.setReporterName(row.getReporterName());
         vo.setSprintId(row.getSprintId() != null ? String.valueOf(row.getSprintId()) : null);
         vo.setSprintName(row.getSprintName());
+        // 多 Sprint 关联信息
+        List<Long> relatedSprintIds = issueSprintMapper.selectSprintIdsByIssueId(id);
+        if (relatedSprintIds.size() > 1) {
+            Map<Long, String> sprintNameMap = sprintMapper.selectBatchIds(relatedSprintIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            com.trackflow.sprint.entity.Sprint::getId,
+                            com.trackflow.sprint.entity.Sprint::getName,
+                            (a, b) -> a));
+            List<String> sIds = new java.util.ArrayList<>();
+            List<String> sNames = new java.util.ArrayList<>();
+            for (Long sid : relatedSprintIds) {
+                sIds.add(String.valueOf(sid));
+                sNames.add(sprintNameMap.getOrDefault(sid, ""));
+            }
+            vo.setSprintIds(sIds);
+            vo.setSprintNames(sNames);
+        }
         vo.setParentId(row.getParentId() != null ? String.valueOf(row.getParentId()) : null);
         vo.setParentKey(row.getParentKey());
 

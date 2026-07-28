@@ -48,6 +48,19 @@ public class UpdateIssueDTO {
     private Boolean forceWip;
 
     /**
+     * 追加 Sprint ID（多 Sprint 模式）。
+     * 与 sprintId 互斥：sprintId 用于覆盖主 Sprint，addToSprintId 用于追加关联。
+     * 需要项目看板配置 allowMultipleSprints=true，否则返回警告。
+     */
+    private Long addToSprintId;
+
+    /**
+     * 从工单移除指定 Sprint 关联（多 Sprint 模式）。
+     * 仅从 issue_sprint 关联表中移除，不影响主 sprint_id。
+     */
+    private Long removeFromSprintId;
+
+    /**
      * 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户）。
      * 传入该字段时必须同时传 visibilityUserIds（restricted 时指定可见用户）。
      */

@@ -60,6 +60,7 @@ public class SprintService {
     private final SprintMapper sprintMapper;
     private final IssueMapper issueMapper;
     private final IssueActivityMapper activityMapper;
+    private final com.trackflow.issue.mapper.IssueSprintMapper issueSprintMapper;
     private final ProjectService projectService;
     private final ProjectActivityService projectActivityService;
     private final ApplicationEventPublisher eventPublisher;
@@ -395,6 +396,16 @@ public class SprintService {
                         .set(Issue::getUpdatedAt, now)
         );
 
+        // 同步 issue_sprint 关联表：旧 Sprint 关联替换为新 Sprint
+        for (Long issueId : openIssueIds) {
+            issueSprintMapper.deleteByIssueIdAndSprintId(issueId, sourceSprint.getId());
+            com.trackflow.issue.entity.IssueSprint rel = new com.trackflow.issue.entity.IssueSprint();
+            rel.setIssueId(issueId);
+            rel.setSprintId(newSprint.getId());
+            rel.setCreatedAt(now);
+            issueSprintMapper.insert(rel);
+        }
+
         // 批量记录活动日志
         String oldId = String.valueOf(sourceSprint.getId());
         String newId = String.valueOf(newSprint.getId());
@@ -719,6 +730,18 @@ public class SprintService {
                             .set(Issue::getUpdatedAt, now)
             );
 
+            // 同步 issue_sprint 关联表
+            for (Long issueId : openIssueIds) {
+                issueSprintMapper.deleteByIssueIdAndSprintId(issueId, sprint.getId());
+                if (newSprintId != null) {
+                    com.trackflow.issue.entity.IssueSprint rel = new com.trackflow.issue.entity.IssueSprint();
+                    rel.setIssueId(issueId);
+                    rel.setSprintId(newSprintId);
+                    rel.setCreatedAt(now);
+                    issueSprintMapper.insert(rel);
+                }
+            }
+
             // 批量记录活动日志：sprint 字段变更
             String oldSprintIdStr = String.valueOf(sprint.getId());
             String newSprintIdStr = newSprintId != null ? String.valueOf(newSprintId) : null;
@@ -977,6 +1000,18 @@ public class SprintService {
                             .set(Issue::getUpdatedBy, currentUserId)
                             .set(Issue::getUpdatedAt, now)
             );
+
+            // 同步 issue_sprint 关联表
+            for (Long issueId : issueIds) {
+                issueSprintMapper.deleteByIssueIdAndSprintId(issueId, sprint.getId());
+                if (newSprintId != null) {
+                    com.trackflow.issue.entity.IssueSprint rel = new com.trackflow.issue.entity.IssueSprint();
+                    rel.setIssueId(issueId);
+                    rel.setSprintId(newSprintId);
+                    rel.setCreatedAt(now);
+                    issueSprintMapper.insert(rel);
+                }
+            }
 
             // 批量记录活动日志：sprint 字段变更
             String oldSprintIdStr = String.valueOf(sprint.getId());

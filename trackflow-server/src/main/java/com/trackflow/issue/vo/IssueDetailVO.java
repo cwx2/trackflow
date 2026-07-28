@@ -28,6 +28,17 @@ public class IssueDetailVO {
     private String reporterName;
     private String sprintId;
     private String sprintName;
+
+    /**
+     * 工单关联的所有 Sprint ID 列表（多 Sprint 模式时非空）。
+     * 包含主 Sprint 及追加的 Sprint。
+     */
+    private List<String> sprintIds;
+
+    /**
+     * 工单关联的所有 Sprint 名称列表（与 sprintIds 顺序对应）。
+     */
+    private List<String> sprintNames;
     private String parentId;
     private String parentKey;
     private LocalDate dueDate;

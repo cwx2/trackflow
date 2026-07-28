@@ -263,6 +263,10 @@ export interface IssueVO {
   reporterName?: string
   sprintId?: string
   sprintName?: string
+  /** 多 Sprint 模式：工单关联的所有 Sprint ID */
+  sprintIds?: string[]
+  /** 多 Sprint 模式：工单关联的所有 Sprint 名称（与 sprintIds 对应） */
+  sprintNames?: string[]
   dueDate?: string
   createdAt: string
   updatedAt: string

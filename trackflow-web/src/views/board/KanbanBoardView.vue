@@ -1625,6 +1625,9 @@ const boardName = ref('')
 /** 看板列标识字段：status=按状态分列, priority=按优先级分列 */
 const boardColumnField = ref<'status' | 'priority'>('status')
 
+/** 是否允许卡片分配到多个 Sprint（对应 Board Settings > Cards > Allow cards to be assigned to multiple sprints） */
+const allowMultipleSprints = ref(false)
+
 /** 当前用户是否有看板编辑权限（来自 board_general_config 动态计算） */
 const canEditBoard = ref(false)
 
@@ -3735,6 +3738,9 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
     case 'sprint':
       if (targetLaneKey === '__no_sprint__' || targetLaneKey === '__uncategorized__') {
         updateData.sprintId = null
+      } else if (allowMultipleSprints.value) {
+        // 多 Sprint 模式：追加而非覆盖
+        updateData.addToSprintId = targetLaneKey
       } else {
         updateData.sprintId = targetLaneKey
       }
@@ -3778,6 +3784,11 @@ async function handleCrossSwimlaneUpdate(issue: BoardIssue, targetLaneKey: strin
   if ('sprintId' in updateData) {
     rollbackData.sprintId = issue.sprintId
     issue.sprintId = updateData.sprintId || undefined
+  }
+  if ('addToSprintId' in updateData) {
+    // 多 Sprint 模式：乐观更新本地显示（让卡片移动到目标泳道）
+    rollbackData.sprintId = issue.sprintId
+    issue.sprintId = updateData.addToSprintId || undefined
   }
   if ('parentId' in updateData) {
     rollbackData.parentId = (issue as any).parentId
@@ -3927,7 +3938,11 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
    */
   async function rollbackSprintAssignment(errorMessage: string | null) {
     try {
-      await issueApi.update(issue.id, { sprintId: null })
+      // 多 Sprint 模式下移除刚追加的关联，否则清空主 Sprint
+      const rollbackPayload = (allowMultipleSprints.value && issue.sprintId)
+        ? { removeFromSprintId: targetSprintId }
+        : { sprintId: null }
+      await issueApi.update(issue.id, rollbackPayload)
     } catch {
       // best-effort rollback，忽略错误
     }
@@ -3960,8 +3975,11 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
   }
 
   try {
-    // Step 1: Assign sprint (always succeeds first)
-    await issueApi.update(issue.id, { sprintId: targetSprintId })
+    // Step 1: Assign sprint — use addToSprintId in multi-sprint mode (preserves existing associations)
+    const sprintPayload = (allowMultipleSprints.value && issue.sprintId)
+      ? { addToSprintId: targetSprintId }
+      : { sprintId: targetSprintId }
+    await issueApi.update(issue.id, sprintPayload)
 
     // Step 2: Transition status (if different from current)
     if (issue.statusId !== targetStatusId) {
@@ -4385,6 +4403,8 @@ async function loadBoardBehavior() {
       canEditBoard.value = res.data.currentUserCanEdit ?? false
       boardName.value = res.data.name || ''
       boardColumnField.value = (res.data.columnField as 'status' | 'priority') || 'status'
+      // 多 Sprint 配置
+      allowMultipleSprints.value = res.data.allowMultipleSprints ?? false
       // Backlog 配置
       backlogViewMode.value = (res.data.backlogViewMode as 'list' | 'tree') || 'list'
       backlogSavedQueryId.value = res.data.backlogSavedQueryId ?? null
@@ -4397,6 +4417,7 @@ async function loadBoardBehavior() {
     boardDoneRetentionDays.value = null
     canEditBoard.value = false
     boardName.value = ''
+    allowMultipleSprints.value = false
     backlogViewMode.value = 'list'
     backlogSavedQueryId.value = null
     boardLinkedProjectIds.value = []
