@@ -443,6 +443,7 @@ async function loadCalendarData() {
 }
 
 // ─── 微件类型映射 ─────────────────────────────────────────
+const widgetTypeMap: Record<string, { icon: string; label: string }> = {
   note: { icon: '📝', label: '快捷笔记' },
   number_card: { icon: '🔢', label: '数字卡片' },
   report_distribution: { icon: '📊', label: '分布图表' },
