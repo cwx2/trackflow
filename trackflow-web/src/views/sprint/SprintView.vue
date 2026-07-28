@@ -145,7 +145,7 @@
               <span class="stat-dot"></span>
               待办 {{ sprint.todoIssues }}
             </span>
-            <span class="stat-item total stat-clickable" @click.stop="viewSprintIssues(sprint)">
+            <span class="stat-item total stat-clickable" @click.stop="openIssueDrawer(sprint)">
               共 {{ sprint.totalIssues }} 个工单
             </span>
             <span class="stat-item overdue stat-clickable" v-if="sprint.overdueIssues > 0" @click.stop="viewOverdueIssues(sprint)">
@@ -177,10 +177,11 @@
           :sprint-id="sprint.id"
           :sprint-name="sprint.name"
           :project-key="selectedProjectKey || sprint.projectKey"
+          @view-issues="(filter: string) => openIssueDrawer(sprint, filter)"
         />
 
         <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
+          <a-button size="mini" type="text" @click="openIssueDrawer(sprint)">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="handleArchiveActiveSprint(sprint)">归档</a-button>
@@ -266,7 +267,7 @@
               <span class="stat-dot"></span>
               待办 {{ sprint.todoIssues }}
             </span>
-            <span class="stat-item total stat-clickable" @click.stop="viewSprintIssues(sprint)">
+            <span class="stat-item total stat-clickable" @click.stop="openIssueDrawer(sprint)">
               共 {{ sprint.totalIssues }} 个工单
             </span>
             <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
@@ -289,10 +290,11 @@
           :sprint-id="sprint.id"
           :sprint-name="sprint.name"
           :project-key="selectedProjectKey || sprint.projectKey"
+          @view-issues="(filter: string) => openIssueDrawer(sprint, filter)"
         />
 
         <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button size="mini" type="text" @click="openIssueDrawer(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip :content="getActivateTooltip(sprint)">
@@ -800,6 +802,16 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- Sprint 内工单快速分配抽屉 -->
+    <SprintIssueDrawer
+      v-model:visible="showIssueDrawer"
+      :sprint-id="drawerSprintId"
+      :sprint-name="drawerSprintName"
+      :project-id="drawerProjectId"
+      :initial-filter="drawerInitialFilter"
+      @assigned="handleDrawerAssigned"
+    />
   </div>
 </template>
 
@@ -816,6 +828,7 @@ import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewV
 import { ERROR_CODES } from '@/api/error-codes'
 import SprintBurndownChart from './SprintBurndownChart.vue'
 import SprintAssigneeDistribution from './SprintAssigneeDistribution.vue'
+import SprintIssueDrawer from './SprintIssueDrawer.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -898,6 +911,13 @@ const createForm = reactive({
 const showOverlapConfirm = ref(false)
 const overlapWarning = ref<SprintOverlapWarning | null>(null)
 const overlapContext = ref<'create' | 'edit'>('create')
+
+// ===== Sprint Issue Drawer（Sprint 内工单快速分配） =====
+const showIssueDrawer = ref(false)
+const drawerSprintId = ref('')
+const drawerSprintName = ref('')
+const drawerProjectId = ref<string | undefined>(undefined)
+const drawerInitialFilter = ref<'unassigned' | string | null>(null)
 
 const activeSprints = computed(() => sprints.value.filter(s => s.status === 'active' || s.status === 'Active'))
 const plannedSprints = computed(() => sprints.value.filter(s => s.status === 'planned' || s.status === 'Planned'))
@@ -1060,18 +1080,8 @@ function viewSprintOnBoard(sprint: SprintVO) {
 }
 
 function viewUnassignedIssues(sprint: SprintVO) {
-  // 跳转到 Issue 列表，筛选该 Sprint + 未分配负责人
-  const currentProject = projects.value.find(p => p.id === selectedProject.value)
-  const projectKey = currentProject?.key || sprint.projectKey
-  const query: Record<string, string> = {
-    sprint: sprint.id,
-    assignee: 'unassigned',
-    label: `${sprint.name} - 未分配工单`
-  }
-  if (projectKey) {
-    query.project = projectKey
-  }
-  router.push({ path: '/issues', query })
+  // 在 Sprint 视图内打开 Drawer，支持就地分配
+  openIssueDrawer(sprint, 'unassigned')
 }
 
 function viewIssuesByCategory(sprint: SprintVO, category: 'done' | 'in_progress' | 'open') {
@@ -1115,6 +1125,22 @@ function toggleCompletedBurndown(sprintId: string) {
     set.add(sprintId)
   }
   expandedCompletedSprints.value = set
+}
+
+// ===== Sprint Issue Drawer =====
+
+function openIssueDrawer(sprint: SprintVO, initialFilter: 'unassigned' | string | null = null) {
+  drawerSprintId.value = sprint.id
+  drawerSprintName.value = sprint.name
+  // 确定 projectId：优先用当前选中项目，其次用 sprint 上附带的 projectId
+  drawerProjectId.value = selectedProject.value || sprint.projectId || undefined
+  drawerInitialFilter.value = initialFilter
+  showIssueDrawer.value = true
+}
+
+function handleDrawerAssigned() {
+  // 分配成功后刷新 Sprint 列表以更新统计数据
+  loadSprints()
 }
 
 // ===== API 调用 =====

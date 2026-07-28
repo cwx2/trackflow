@@ -93,7 +93,6 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { sprintApi } from '@/api'
 import type { SprintAssigneeDistributionVO } from '@/api/types'
 
@@ -103,7 +102,10 @@ const props = defineProps<{
   projectKey?: string
 }>()
 
-const router = useRouter()
+const emit = defineEmits<{
+  (e: 'view-issues', filter: 'unassigned' | string): void
+}>()
+
 const visible = ref(true)
 const expanded = ref(false)
 const loading = ref(false)
@@ -156,20 +158,12 @@ function formatHours(hours: number): string {
 }
 
 function handleClickAssignee(userId: string | null) {
-  // 点击跳转到工单列表，筛选该 Sprint + 该负责人
-  const query: Record<string, string> = {
-    sprint: props.sprintId,
-    label: props.sprintName
-  }
-  if (props.projectKey) {
-    query.project = props.projectKey
-  }
+  // 发出事件，让父组件决定如何展示（Drawer 或路由跳转）
   if (userId === null) {
-    query.assignee = 'unassigned'
+    emit('view-issues', 'unassigned')
   } else {
-    query.assignee = userId
+    emit('view-issues', userId)
   }
-  router.push({ path: '/issues', query })
 }
 </script>
 
