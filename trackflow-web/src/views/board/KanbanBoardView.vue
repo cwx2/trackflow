@@ -1513,6 +1513,11 @@ function toggleMyIssues() {
     assigneeFilter.value = undefined
     localStorage.removeItem(ASSIGNEE_FILTER_KEY)
   } else {
+    // 确保 userId 可用（首次登录时可能尚未从 /me 接口加载）
+    if (!authStore.user?.userId) {
+      Message.warning('正在加载用户信息，请稍候...')
+      return
+    }
     assigneeFilter.value = 'me'
     localStorage.setItem(ASSIGNEE_FILTER_KEY, 'me')
   }
@@ -2883,6 +2888,13 @@ const showAllColumns = ref(false)
 // 当用户切换"显示全部列"时，重新加载工单数据（后端需要返回隐藏列的工单）
 watch(showAllColumns, () => {
   if (selectedProject.value) {
+    loadIssuesWithLoading()
+  }
+})
+
+// 当 userId 变为可用时，如果"仅我的"过滤器已启用，重新加载看板数据
+watch(() => authStore.user?.userId, (newUserId, oldUserId) => {
+  if (newUserId && !oldUserId && assigneeFilter.value === 'me' && selectedProject.value) {
     loadIssuesWithLoading()
   }
 })

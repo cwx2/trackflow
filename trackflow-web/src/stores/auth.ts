@@ -50,9 +50,18 @@ export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.accessToken))
   const refreshToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.refreshToken))
   // 优先从 token 重新解析 user（确保 UTF-8 正确解码），降级使用 localStorage 缓存
-  const user = ref<AuthUser | null>(
-    accessToken.value ? (parseJwtPayload(accessToken.value) ?? restoreUser()) : restoreUser()
-  )
+  // 注意：parseJwtPayload 不含 userId（数据库 ID），需从 localStorage 缓存中恢复
+  const user = ref<AuthUser | null>((() => {
+    if (!accessToken.value) return restoreUser()
+    const jwtUser = parseJwtPayload(accessToken.value)
+    if (!jwtUser) return restoreUser()
+    // 从 localStorage 缓存中恢复 userId（JWT 中不包含此字段）
+    const storedUser = restoreUser()
+    if (storedUser?.userId) {
+      jwtUser.userId = storedUser.userId
+    }
+    return jwtUser
+  })())
   const globalPermissions = ref<Set<string>>(new Set())
   const permissionsLoaded = ref(false)
 
@@ -346,7 +355,12 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await response.json()
       accessToken.value = data.access_token
       refreshToken.value = data.refresh_token
+      // 保留已获取的 userId（JWT 不包含此字段）
+      const existingUserId = user.value?.userId
       user.value = parseJwtPayload(data.access_token)
+      if (user.value && existingUserId) {
+        user.value.userId = existingUserId
+      }
       return true
     } catch {
       return false
@@ -428,7 +442,7 @@ export const useAuthStore = defineStore('auth', () => {
 
         // 同时获取数据库用户 ID（用于资源级权限判断）
         if (user.value && !user.value.userId) {
-          fetchDbUserId()
+          await fetchDbUserId()
         }
       } catch (e) {
         console.warn('[auth] Failed to load global permissions, will retry on next navigation', e)
