@@ -56,12 +56,15 @@
     </select>
 
     <!-- 原子更新 Issue 的 spent_hours（子查询方式，防止并发 lost update，排除 ongoing 记录） -->
+    <!-- 同时更新 updated_at/updated_by，确保工时操作反映为工单修改 -->
     <update id="atomicRefreshSpentHours">
         UPDATE issue
         SET spent_hours = COALESCE(
             (SELECT ROUND(SUM(duration) / 60.0, 2) FROM time_entry WHERE issue_id = #{issueId} AND ongoing = false),
             0
-        )
+        ),
+        updated_at = NOW(),
+        updated_by = #{updatedBy}
         WHERE id = #{issueId}
     </update>
 

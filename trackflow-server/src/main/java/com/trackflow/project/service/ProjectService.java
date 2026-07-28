@@ -2131,7 +2131,7 @@ public class ProjectService {
 
             // 更新工单的 spent_hours
             if (timer.getIssueId() != null) {
-                timeEntryMapper.atomicRefreshSpentHours(timer.getIssueId());
+                timeEntryMapper.atomicRefreshSpentHours(timer.getIssueId(), timer.getUserId());
             }
         }
         log.info("{}，自动停止 {} 个活跃计时器", reason, activeTimers.size());

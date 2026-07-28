@@ -140,8 +140,8 @@ public class TimeEntryService {
         recordActivityWithDetail(dto.getIssueId(), targetUserId, "time_logged", "spent_time",
                 null, newValueStr, timeEntryDetail);
 
-        // 同步更新 issue.spent_hours
-        refreshIssueSpentHours(dto.getIssueId());
+        // 同步更新 issue.spent_hours + updated_at
+        refreshIssueSpentHours(dto.getIssueId(), currentUserId);
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(dto.getIssueId());
@@ -274,10 +274,10 @@ public class TimeEntryService {
                 oldAttrValues, newAttrValues, updatedWorkTypeName);
 
         // 同步更新 issue.spent_hours（仅在工单未删除时）
-        refreshIssueSpentHoursSafe(entry.getIssueId());
+        refreshIssueSpentHoursSafe(entry.getIssueId(), userId);
         // 如果工时记录转移到了其他 Issue，旧 Issue 也需要刷新
         if (dto.getIssueId() != null && !oldIssueId.equals(dto.getIssueId())) {
-            refreshIssueSpentHoursSafe(oldIssueId);
+            refreshIssueSpentHoursSafe(oldIssueId, userId);
             // 旧 Issue 的祖先也需要刷新
             ancestorRefreshService.refreshAncestors(oldIssueId);
         }
@@ -347,7 +347,7 @@ public class TimeEntryService {
         timeEntryMapper.deleteById(id);
 
         // 同步更新 issue.spent_hours（仅在工单未删除时）
-        refreshIssueSpentHoursSafe(issueId);
+        refreshIssueSpentHoursSafe(issueId, userId);
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(issueId);
@@ -789,20 +789,21 @@ public class TimeEntryService {
     /**
      * 原子更新 Issue 的 spent_hours 字段。
      * 使用子查询方式直接在数据库层聚合，防止并发 lost update。
+     * 同时更新 updated_at/updated_by，确保工时变更反映为工单修改。
      */
-    private void refreshIssueSpentHours(Long issueId) {
-        timeEntryMapper.atomicRefreshSpentHours(issueId);
+    private void refreshIssueSpentHours(Long issueId, Long updatedBy) {
+        timeEntryMapper.atomicRefreshSpentHours(issueId, updatedBy);
     }
 
     /**
      * 安全版本：仅在 issue 未被软删除时刷新 spent_hours。
      * 用于工时编辑/删除场景——工单已删除时无需更新其 spent_hours。
      */
-    private void refreshIssueSpentHoursSafe(Long issueId) {
+    private void refreshIssueSpentHoursSafe(Long issueId, Long updatedBy) {
         Issue issue = issueMapper.selectById(issueId);
         if (issue != null) {
             // selectById 受逻辑删除过滤，能查到说明 issue 未删除
-            timeEntryMapper.atomicRefreshSpentHours(issueId);
+            timeEntryMapper.atomicRefreshSpentHours(issueId, updatedBy);
         }
     }
 
@@ -955,8 +956,8 @@ public class TimeEntryService {
         recordActivityWithDetail(entry.getIssueId(), currentUserId, "time_logged", "spent_time",
                 null, newValueStr, timeEntryDetail);
 
-        // 同步更新 issue.spent_hours
-        refreshIssueSpentHours(entry.getIssueId());
+        // 同步更新 issue.spent_hours + updated_at
+        refreshIssueSpentHours(entry.getIssueId(), currentUserId);
 
         // 向上刷新父工单的派生属性
         ancestorRefreshService.refreshAncestors(entry.getIssueId());

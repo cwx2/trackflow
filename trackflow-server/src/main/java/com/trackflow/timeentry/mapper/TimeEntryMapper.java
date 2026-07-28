@@ -18,9 +18,10 @@ public interface TimeEntryMapper extends BaseMapper<TimeEntry> {
     Integer sumDurationByIssueId(@Param("issueId") Long issueId);
 
     /**
-     * 原子更新 Issue 的 spent_hours（子查询方式，防止并发 lost update）
+     * 原子更新 Issue 的 spent_hours（子查询方式，防止并发 lost update）。
+     * 同时更新 updated_at 和 updated_by，确保工时变更反映为工单修改。
      */
-    int atomicRefreshSpentHours(@Param("issueId") Long issueId);
+    int atomicRefreshSpentHours(@Param("issueId") Long issueId, @Param("updatedBy") Long updatedBy);
 
     /**
      * 全量校准所有 issue 的 spent_hours（管理员自愈操作）
