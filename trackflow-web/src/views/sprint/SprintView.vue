@@ -35,17 +35,17 @@
     <!-- Sprint 列表 -->
     <div class="sprint-list" v-if="loadingState === 'success' && sprints.length > 0">
 
-      <!-- 无活跃 Sprint 警告条 -->
-      <div v-if="!hasActiveSprint && plannedSprints.length > 0" class="no-active-sprint-warning">
-        <span class="warning-bar-icon">⚠️</span>
-        <span class="warning-bar-text">{{ noActiveSprintMessage }}</span>
-        <a-tooltip :content="warningBarActivateTooltip">
+      <!-- Sprint 导引横幅：无活跃 Sprint 时为警告，有活跃 Sprint 时为信息提示 -->
+      <div v-if="plannedSprints.length > 0" class="sprint-guidance-banner" :class="{ 'is-warning': !hasActiveSprint, 'is-info': hasActiveSprint }">
+        <span class="warning-bar-icon">{{ hasActiveSprint ? 'ℹ️' : '⚠️' }}</span>
+        <span class="warning-bar-text">{{ sprintGuidanceMessage }}</span>
+        <a-tooltip v-if="!hasActiveSprint" :content="warningBarActivateTooltip">
           <a-button
             size="mini"
             type="primary"
             class="warning-bar-action"
             :disabled="!canEditSprint || !nextStartableSprint"
-            @click="nextStartableSprint && activateSprint(nextStartableSprint.id)"
+            @click="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
           >
             开始迭代
           </a-button>
@@ -298,7 +298,7 @@
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip :content="getActivateTooltip(sprint)">
-            <a-button type="primary" size="mini" :disabled="!canEditSprint || hasActiveSprint || isSprintNotStartable(sprint)" @click="activateSprint(sprint.id)">开始迭代</a-button>
+            <a-button type="primary" size="mini" :disabled="!canEditSprint || isSprintNotStartable(sprint)" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
           <a-button v-if="canEditSprint" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
           <a-button v-if="canDeleteSprint" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
@@ -929,9 +929,14 @@ const nextStartableSprint = computed(() => {
 })
 
 /**
- * 警告栏文本——包含下一个 Sprint 的上下文信息
+ * Sprint 导引横幅文本——根据是否有活跃 Sprint 提供不同引导
  */
-const noActiveSprintMessage = computed(() => {
+const sprintGuidanceMessage = computed(() => {
+  if (hasActiveSprint.value) {
+    const active = activeSprints.value[0]
+    const plannedCount = plannedSprints.value.length
+    return `当前活跃迭代「${active.name}」进行中。还有 ${plannedCount} 个计划中的迭代等待启动。`
+  }
   const next = plannedSprints.value[0]
   if (next?.startDate) {
     return `当前没有活跃的迭代。下一个迭代「${next.name}」计划于 ${formatDate(next.startDate)} 开始。`
@@ -1037,7 +1042,10 @@ function isSprintNotStartable(sprint: SprintVO): boolean {
 
 function getActivateTooltip(sprint: SprintVO): string | undefined {
   if (!canEditSprint.value) return '您的角色不具有迭代管理权限，请联系项目管理员'
-  if (hasActiveSprint.value) return '请先完成当前活跃迭代'
+  if (hasActiveSprint.value) {
+    const active = activeSprints.value[0]
+    return `需要先完成当前活跃迭代「${active.name}」才能激活此迭代`
+  }
   // Check end date expired first (more specific)
   if (sprint.endDate) {
     const end = new Date(sprint.endDate)
@@ -1214,6 +1222,24 @@ async function loadSprints() {
 
 function handleProjectChange() {
   loadSprints()
+}
+
+/**
+ * 处理"开始迭代"点击——如果已有活跃 Sprint，弹出提示引导用户先完成当前迭代；
+ * 否则直接激活。
+ */
+function handleActivateSprint(id: string) {
+  if (hasActiveSprint.value) {
+    const active = activeSprints.value[0]
+    Modal.warning({
+      title: '无法激活迭代',
+      content: `当前项目已有一个活跃的迭代「${active.name}」正在进行中。请先完成该迭代后再激活新的迭代。`,
+      okText: '我知道了',
+      hideCancel: true,
+    })
+    return
+  }
+  activateSprint(id)
 }
 
 async function activateSprint(id: string) {
@@ -2246,15 +2272,21 @@ function syncUrlProjectParam() {
 }
 
 /* ===== 无活跃 Sprint 警告条 ===== */
-.no-active-sprint-warning {
+.sprint-guidance-banner {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: rgba(var(--warning-6), 0.08);
-  border: 1px solid rgba(var(--warning-6), 0.25);
   border-radius: 6px;
   margin-bottom: 4px;
+}
+.sprint-guidance-banner.is-warning {
+  background: rgba(var(--warning-6), 0.08);
+  border: 1px solid rgba(var(--warning-6), 0.25);
+}
+.sprint-guidance-banner.is-info {
+  background: rgba(var(--primary-6), 0.06);
+  border: 1px solid rgba(var(--primary-6), 0.15);
 }
 .warning-bar-icon {
   font-size: 16px;
