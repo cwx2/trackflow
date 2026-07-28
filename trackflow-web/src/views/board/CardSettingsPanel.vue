@@ -9,8 +9,9 @@
       <div class="section-title">显示字段</div>
       <div class="section-desc">选择看板卡片上要展示的信息字段，并为每个字段选择显示格式</div>
       <div class="field-list">
+        <!-- 内置字段 -->
         <div
-          v-for="field in availableFields"
+          v-for="field in builtInFields"
           :key="field.key"
           class="field-item"
           :class="{ 'field-item--checked': selectedFields.has(field.key) }"
@@ -22,6 +23,39 @@
           <span class="field-icon">{{ field.icon }}</span>
           <span class="field-label">{{ field.label }}</span>
           <!-- Display mode toggle (Full name / Initial) — 仅字段已勾选时可操作 -->
+          <div
+            v-if="selectedFields.has(field.key)"
+            class="field-display-mode"
+          >
+            <a-radio-group
+              :model-value="getFieldDisplayMode(field.key)"
+              size="mini"
+              type="button"
+              @change="(val: string) => setFieldDisplayMode(field.key, val as 'full_name' | 'initial')"
+            >
+              <a-radio value="full_name" title="显示完整名称">Full name</a-radio>
+              <a-radio value="initial" title="仅显示首字母缩写">Initial</a-radio>
+            </a-radio-group>
+          </div>
+          <div v-else class="field-display-mode-placeholder"></div>
+        </div>
+        <!-- 自定义字段分隔标题 -->
+        <div v-if="customFieldOptions.length > 0" class="field-group-divider">
+          <span class="field-group-title">Custom fields</span>
+        </div>
+        <!-- 项目自定义字段 -->
+        <div
+          v-for="field in customFieldOptions"
+          :key="field.key"
+          class="field-item"
+          :class="{ 'field-item--checked': selectedFields.has(field.key) }"
+        >
+          <a-checkbox
+            :model-value="selectedFields.has(field.key)"
+            @change="(val: boolean) => toggleField(field.key, val)"
+          />
+          <span class="field-icon">{{ field.icon }}</span>
+          <span class="field-label">{{ field.label }}</span>
           <div
             v-if="selectedFields.has(field.key)"
             class="field-display-mode"
@@ -184,6 +218,10 @@
           <span v-if="selectedFields.has('sprint')" class="preview-tag">🏃 Sprint 3</span>
           <span v-if="selectedFields.has('estimatedHours')" class="preview-tag">⏱ 4h</span>
           <span v-if="selectedCurrentEstimationFieldId" class="preview-tag preview-tag--estimation">⏳ 6h</span>
+          <!-- 自定义字段预览 -->
+          <template v-for="field in customFieldOptions" :key="field.key">
+            <span v-if="selectedFields.has(field.key)" class="preview-tag preview-tag--custom">{{ field.icon }} {{ field.label }}</span>
+          </template>
         </div>
         <div class="preview-footer">
           <span v-if="selectedFields.has('assignee')" class="preview-assignee">
@@ -197,7 +235,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { customFieldApi } from '@/api'
 import type { CustomFieldDefinitionVO } from '@/api/types'
 
@@ -231,7 +269,8 @@ const emit = defineEmits<{
   'update:allowMultipleSprints': [value: boolean]
 }>()
 
-const availableFields: FieldOption[] = [
+/** 内置字段（固定） */
+const builtInFields: FieldOption[] = [
   { key: 'assignee', label: '负责人', icon: '👤' },
   { key: 'priority', label: '优先级', icon: '🔴' },
   { key: 'type', label: '类型', icon: '📋' },
@@ -240,6 +279,36 @@ const availableFields: FieldOption[] = [
   { key: 'sprint', label: 'Sprint', icon: '🏃' },
   { key: 'estimatedHours', label: '预估工时', icon: '⏱' }
 ]
+
+/** 适合在卡片上展示的自定义字段格式（枚举/布尔/用户 等有限值类型） */
+const CARD_VISUAL_FORMATS = new Set(['list', 'user', 'bool', 'date'])
+
+/** 可选字段列表（内置 + 项目自定义字段） */
+const availableFields = computed<FieldOption[]>(() => {
+  return [...builtInFields, ...customFieldOptions.value]
+})
+
+/** 项目自定义字段选项列表（过滤出适合卡片展示的类型） */
+const customFieldOptions = computed<FieldOption[]>(() => {
+  return projectFields.value
+    .filter(f => CARD_VISUAL_FORMATS.has(f.fieldFormat) && !f.isPrivate)
+    .map(f => ({
+      key: `cf.${f.id}`,
+      label: f.name,
+      icon: getCustomFieldIcon(f.fieldFormat)
+    }))
+})
+
+/** 自定义字段格式对应图标 */
+function getCustomFieldIcon(format: string): string {
+  const map: Record<string, string> = {
+    list: '📋',
+    user: '👤',
+    bool: '✅',
+    date: '📅'
+  }
+  return map[format] || '🔖'
+}
 
 const selectedFields = ref<Set<string>>(new Set(props.visibleFields))
 const selectedColorScheme = ref(props.colorScheme)
@@ -441,6 +510,26 @@ const previewColorClass = computed(() => {
 
 .field-item + .field-item {
   border-top: 1px solid var(--color-border-light, var(--color-border));
+}
+
+.field-group-divider {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: var(--color-fill-1);
+  border-top: 1px solid var(--color-border-light, var(--color-border));
+}
+
+.field-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field-group-divider + .field-item {
+  border-top: none;
 }
 
 .field-icon {
@@ -649,6 +738,11 @@ const previewColorClass = computed(() => {
 .preview-tag--estimation {
   color: rgb(var(--success-6));
   background: rgba(var(--success-6), 0.08);
+}
+
+.preview-tag--custom {
+  color: var(--color-text-2);
+  background: var(--color-fill-3);
 }
 
 .preview-footer {

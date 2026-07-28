@@ -467,6 +467,9 @@
                   <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
                   <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
                   <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
+                  <template v-if="isCardFieldVisible('tags') && (issue as any).tags && (issue as any).tags.length > 0">
+                    <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: '#fff' } : {}">{{ tag.name }}</span>
+                  </template>
                 </div>
                 <div class="card-footer">
                   <span v-if="isCardFieldVisible('type')" class="card-type">
@@ -785,6 +788,9 @@
                         <span v-else-if="isCardFieldVisible('dueDate') && issue.dueDate" class="card-meta-tag">📅 {{ issue.dueDate.slice(5) }}</span>
                         <span v-if="isCardFieldVisible('sprint') && issue.sprintId" class="card-meta-tag">🏃 {{ getSprintName(issue.sprintId) }}</span>
                         <span v-if="isCardFieldVisible('estimatedHours') && issue.estimatedHours" class="card-meta-tag">⏱ {{ issue.estimatedHours }}h</span>
+                        <template v-if="isCardFieldVisible('tags') && (issue as any).tags && (issue as any).tags.length > 0">
+                          <span v-for="tag in getVisibleTags(issue)" :key="tag.id" class="card-tag" :style="tag.color ? { background: tag.color, color: '#fff' } : {}">{{ tag.name }}</span>
+                        </template>
                       </div>
                       <div class="card-footer">
                         <span v-if="isCardFieldVisible('type')" class="card-type">
@@ -1338,17 +1344,44 @@ async function onCardSetAssignee(userId: string, issue: BoardIssue) {
   }
 }
 
-/** 检查卡片是否有可见的自定义字段 */
+/** 检查卡片是否有可见的自定义字段（仅考虑在 visibleFields 中配置的 cf.{id} 字段） */
 function hasVisibleCustomFields(issue: BoardIssue): boolean {
-  if (issue.customFieldDetails && issue.customFieldDetails.length > 0) return true
-  return !!((issue as any).customFieldValues && Object.keys((issue as any).customFieldValues).length > 0)
+  if (!issue.customFieldDetails || issue.customFieldDetails.length === 0) return false
+  // 检查 visibleFields 中是否有任何 cf.{id} 配置
+  const hasCfConfig = cardConfig.value.visibleFields.some(f => f.startsWith('cf.'))
+  if (!hasCfConfig) return false
+  // 检查此 issue 是否有匹配的自定义字段值
+  return getVisibleCustomFieldDetails(issue).length > 0
 }
 
-/** 获取卡片可见的自定义字段详情（最多显示 maxFields 个） */
+/** 获取卡片可见的自定义字段详情（仅展示在 visibleFields 中配置的 cf.{id} 字段） */
 function getVisibleCustomFieldDetails(issue: BoardIssue) {
   if (!issue.customFieldDetails) return []
+
+  // 从 visibleFields 中提取已选的自定义字段 ID
+  const selectedCfIds = new Set(
+    cardConfig.value.visibleFields
+      .filter(f => f.startsWith('cf.'))
+      .map(f => f.substring(3))
+  )
+
+  // 如果没有选择任何自定义字段，不展示
+  if (selectedCfIds.size === 0) return []
+
+  // 只返回管理员在卡片设置中选择的自定义字段
   const maxFields = cardSize.value === 'L' ? 4 : 2
-  return issue.customFieldDetails.slice(0, maxFields)
+  return issue.customFieldDetails
+    .filter(d => selectedCfIds.has(d.customFieldId))
+    .slice(0, maxFields)
+}
+
+/** 获取卡片可见的标签列表（根据卡片尺寸限制显示数量） */
+function getVisibleTags(issue: BoardIssue): Array<{ id: string; name: string; color?: string }> {
+  const tags = (issue as any).tags as Array<{ id: string; name: string; color?: string }> | undefined
+  if (!tags || tags.length === 0) return []
+  // M 尺寸最多显示 2 个标签，L/XL 最多 4 个
+  const maxTags = cardSize.value === 'M' ? 2 : 4
+  return tags.slice(0, maxTags)
 }
 
 /** @deprecated 兼容旧数据格式 */
@@ -5659,6 +5692,20 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ===== Card Tags ===== */
+.card-tag {
+  font-size: 10px;
+  color: var(--color-text-2);
+  background: var(--color-fill-3);
+  padding: 1px 6px;
+  border-radius: 3px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 /* ===== Card Size Toggle Group ===== */

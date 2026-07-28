@@ -80,18 +80,18 @@ public class BoardCardConfigService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void saveCardConfig(Long projectId, UpdateBoardCardConfigDTO dto) {
-        // 校验字段名称合法性
+        // 校验字段名称合法性：内置字段 + cf.{id} 格式的自定义字段
         for (String field : dto.getVisibleFields()) {
-            if (!ALLOWED_FIELDS.contains(field)) {
+            if (!isValidCardField(field)) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
-                        "无效的卡片字段: " + field + "，允许的字段: " + ALLOWED_FIELDS);
+                        "无效的卡片字段: " + field + "，允许内置字段 " + ALLOWED_FIELDS + " 或 cf.{id} 格式的自定义字段");
             }
         }
 
         // 校验字段显示模式合法性
         if (dto.getFieldDisplayModes() != null) {
             for (Map.Entry<String, String> entry : dto.getFieldDisplayModes().entrySet()) {
-                if (!ALLOWED_FIELDS.contains(entry.getKey())) {
+                if (!isValidCardField(entry.getKey())) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST,
                             "无效的字段名: " + entry.getKey());
                 }
@@ -178,5 +178,28 @@ public class BoardCardConfigService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 校验卡片字段名是否合法。
+     * 允许内置字段（ALLOWED_FIELDS）和 cf.{数字ID} 格式的自定义字段。
+     */
+    private boolean isValidCardField(String field) {
+        if (ALLOWED_FIELDS.contains(field)) {
+            return true;
+        }
+        // 自定义字段格式: cf.{id}，其中 id 为数字
+        if (field != null && field.startsWith("cf.")) {
+            String idPart = field.substring(3);
+            if (!idPart.isEmpty()) {
+                try {
+                    Long.parseLong(idPart);
+                    return true;
+                } catch (NumberFormatException e) {
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 }
