@@ -468,7 +468,12 @@
       <p class="empty-desc" style="margin-top: 16px;">正在加载迭代列表…</p>
     </div>
 
-    <!-- 错误状态：API 错误 / 网络异常 -->
+    <!-- 错误状态：区分"未选项目加载失败"和"已选项目加载失败" -->
+    <div v-else-if="loadingState === 'error' && !selectedProject" class="empty-state">
+      <div class="empty-icon">🏃</div>
+      <h3 class="empty-title">请选择一个项目</h3>
+      <p class="empty-desc">选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表</p>
+    </div>
     <div v-else-if="loadingState === 'error'" class="empty-state">
       <div class="empty-icon">⚠️</div>
       <h3 class="empty-title">加载失败</h3>
@@ -494,9 +499,9 @@
     <!-- 正常空状态 -->
     <div v-else class="empty-state">
       <div class="empty-icon">🏃</div>
-      <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '暂无迭代数据' }}</h3>
+      <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '请选择一个项目' }}</h3>
       <p class="empty-desc">
-        <template v-if="!selectedProject">当前没有任何活跃或计划中的迭代。选择一个项目来创建迭代。</template>
+        <template v-if="!selectedProject">选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表</template>
         <template v-else-if="canCreateSprint">创建第一个 Sprint 来规划团队工作</template>
         <template v-else>当前项目尚未创建迭代，请联系项目管理员。</template>
       </p>
