@@ -6,6 +6,8 @@
     <resultMap id="sprintWithStatsMap" type="com.trackflow.sprint.vo.SprintVO">
         <id property="id" column="id" javaType="java.lang.String"/>
         <result property="projectId" column="project_id" javaType="java.lang.String"/>
+        <result property="projectName" column="project_name"/>
+        <result property="projectKey" column="project_key"/>
         <result property="name" column="name"/>
         <result property="goal" column="goal"/>
         <result property="status" column="status"/>
@@ -312,6 +314,88 @@
           AND s.status IN ('completed', 'archived')
         ORDER BY s.updated_at DESC, s.end_date DESC
         LIMIT #{limit}
+    </select>
+
+    <!-- 跨项目 Sprint 总数查询（用于分页） -->
+    <select id="countByProjectIds" resultType="long">
+        SELECT COUNT(*)
+        FROM sprint s
+        WHERE 1=1
+        <if test="projectIds != null and projectIds.size() > 0">
+            AND s.project_id IN
+            <foreach item="pid" collection="projectIds" open="(" separator="," close=")">
+                #{pid}
+            </foreach>
+        </if>
+    </select>
+
+    <!-- 跨项目 Sprint 列表（带工单统计 + 项目信息 + 分页） -->
+    <select id="selectSprintsWithStatsMultiProject" resultMap="sprintWithStatsMap">
+        SELECT
+            s.id,
+            s.project_id,
+            p.name AS project_name,
+            p.key AS project_key,
+            s.name,
+            s.goal,
+            s.status,
+            s.start_date,
+            s.end_date,
+            s.created_at,
+            s.started_at,
+            s.start_scope_hours,
+            s.start_scope_issues,
+            COALESCE(stats.total_issues, 0) AS total_issues,
+            COALESCE(stats.done_issues, 0) AS done_issues,
+            COALESCE(stats.in_progress_issues, 0) AS in_progress_issues,
+            COALESCE(stats.todo_issues, 0) AS todo_issues,
+            COALESCE(stats.overdue_issues, 0) AS overdue_issues,
+            COALESCE(stats.unassigned_issues, 0) AS unassigned_issues,
+            COALESCE(stats.total_estimated_hours, 0) AS total_estimated_hours,
+            COALESCE(stats.completed_estimated_hours, 0) AS completed_estimated_hours
+        FROM sprint s
+        JOIN project p ON p.id = s.project_id
+        LEFT JOIN (
+            SELECT
+                i.sprint_id,
+                COUNT(*) AS total_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = true) AS done_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category = 'in_progress') AS in_progress_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND ist.category != 'in_progress') AS todo_issues,
+                COUNT(*) FILTER (WHERE ist.is_closed = false AND i.due_date IS NOT NULL AND i.due_date &lt; CURRENT_DATE) AS overdue_issues,
+                COUNT(*) FILTER (WHERE i.assignee_id IS NULL) AS unassigned_issues,
+                COALESCE(SUM(i.estimated_hours), 0) AS total_estimated_hours,
+                COALESCE(SUM(i.estimated_hours) FILTER (WHERE ist.is_closed = true), 0) AS completed_estimated_hours
+            FROM issue i
+            LEFT JOIN issue_status ist ON ist.id = i.status_id
+            WHERE i.deleted_at IS NULL
+            GROUP BY i.sprint_id
+        ) stats ON stats.sprint_id = s.id
+        WHERE 1=1
+        <if test="projectIds != null and projectIds.size() > 0">
+            AND s.project_id IN
+            <foreach item="pid" collection="projectIds" open="(" separator="," close=")">
+                #{pid}
+            </foreach>
+        </if>
+        ORDER BY
+            CASE s.status
+                WHEN 'active' THEN 1
+                WHEN 'planned' THEN 2
+                WHEN 'completed' THEN 3
+                WHEN 'archived' THEN 4
+            END,
+            p.key ASC,
+            CASE
+                WHEN s.status = 'planned' THEN s.start_date
+                ELSE NULL
+            END ASC NULLS LAST,
+            CASE
+                WHEN s.status != 'planned' THEN s.start_date
+                ELSE NULL
+            END DESC NULLS LAST,
+            s.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
     </select>
 
 </mapper>

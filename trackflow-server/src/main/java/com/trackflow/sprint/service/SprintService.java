@@ -107,6 +107,44 @@ public class SprintService {
     }
 
     /**
+     * 跨项目查询 Sprint 列表（带工单统计 + 项目信息 + 分页）。
+     * 仅查询当前用户有权限访问的项目中的 Sprint。
+     *
+     * @param projectId 可选的项目 ID 过滤（null 表示全部可访问项目）
+     * @param page      页码（从 1 开始）
+     * @param pageSize  每页数量
+     */
+    @Transactional(readOnly = true)
+    public com.trackflow.common.model.PageResult<SprintVO> listAllWithStats(Long projectId, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.min(Math.max(1, pageSize), 200);
+        int offset = (safePage - 1) * safePageSize;
+
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        List<Long> projectIds;
+
+        if (projectId != null) {
+            // 指定了项目 — 返回该项目的 Sprint（权限由 Controller 层校验）
+            projectIds = List.of(projectId);
+        } else {
+            // 获取当前用户可访问的项目 ID 列表
+            projectIds = projectService.getAccessibleProjectIds(currentUserId);
+            // null 表示系统管理员无限制 — 传空列表表示查所有
+            if (projectIds == null) {
+                projectIds = List.of();
+            }
+        }
+
+        long total = sprintMapper.countByProjectIds(projectIds);
+        List<SprintVO> sprints = sprintMapper.selectSprintsWithStatsMultiProject(projectIds, offset, safePageSize);
+        LocalDate today = LocalDate.now();
+        for (SprintVO sprint : sprints) {
+            computeStatusHint(sprint, today);
+        }
+        return new com.trackflow.common.model.PageResult<>(sprints, total, safePage, safePageSize);
+    }
+
+    /**
      * 根据 Sprint 的 status 和日期范围，推导状态是否合理并设置提示信息。
      */
     private void computeStatusHint(SprintVO sprint, LocalDate today) {

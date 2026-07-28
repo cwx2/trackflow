@@ -480,6 +480,10 @@ export interface IssueLinkTypeVO {
 export interface SprintVO {
   id: string
   projectId: string
+  /** 项目名称（跨项目查询时返回） */
+  projectName?: string
+  /** 项目 Key（跨项目查询时返回） */
+  projectKey?: string
   name: string
   goal?: string
   status: string

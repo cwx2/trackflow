@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 public class SprintVO {
     private String id;
     private String projectId;
+    private String projectName;
+    private String projectKey;
     private String name;
     private String goal;
     private String status;

@@ -36,6 +36,20 @@ public class SprintController {
         return R.ok(sprintService.listByProjectWithStatsPage(projectId, page, pageSize));
     }
 
+    /**
+     * 跨项目 Sprint 概览列表。
+     * 返回当前用户有权限访问的所有项目的 Sprint（可选按项目过滤）。
+     * 不要求指定项目 ID，权限通过 getAccessibleProjectIds 在 Service 层内部处理。
+     */
+    @GetMapping("/api/v1/sprints")
+    @PreAuthorize("isAuthenticated()")
+    public R<PageResult<SprintVO>> listAll(
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "pageSize", defaultValue = "50") int pageSize) {
+        return R.ok(sprintService.listAllWithStats(projectId, page, pageSize));
+    }
+
     @PostMapping("/api/v1/projects/{projectId}/sprints")
     @PreAuthorize("@perm.check(#projectId, 'sprint:create')")
     public R<SprintVO> create(@PathVariable("projectId") Long projectId, @Valid @RequestBody CreateSprintDTO dto) {

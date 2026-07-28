@@ -9,6 +9,11 @@ type RequestOptions = AxiosRequestConfig & { _silent403?: boolean }
  * Sprint 模块 API
  */
 export const sprintApi = {
+  /** 跨项目 Sprint 概览列表（默认显示所有可访问项目的 Sprint） */
+  listAll(params?: { projectId?: string; page?: number; pageSize?: number }) {
+    return request.get<any, R<PageResult<SprintVO>>>('/sprints', { params })
+  },
+
   /** 项目的 Sprint 列表（分页，默认 pageSize=200 以兼容不需要分页的场景） */
   listByProject(projectId: string, options?: { page?: number; pageSize?: number } & RequestOptions) {
     const { page = 1, pageSize = 200, ...config } = options || {}

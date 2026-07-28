@@ -9,8 +9,9 @@
           style="width: 200px"
           size="small"
           allow-search
+          allow-clear
           :loading="projectLoadState === 'loading'"
-          @change="loadSprints"
+          @change="handleProjectChange"
         >
           <template v-if="projectLoadState === 'error'" #empty>
             <div class="select-error-state">
@@ -58,6 +59,7 @@
             <span class="sprint-status-badge active" :class="{ overdue: sprint.overdue }">
               {{ sprint.overdue ? '已超期' : '进行中' }}
             </span>
+            <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
             <div class="sprint-name-wrapper" @mouseenter="hoveredSprintId = sprint.id" @mouseleave="hoveredSprintId = null">
               <template v-if="inlineEditingSprintId === sprint.id">
                 <input
@@ -174,7 +176,7 @@
           v-if="sprint.totalIssues > 0"
           :sprint-id="sprint.id"
           :sprint-name="sprint.name"
-          :project-key="selectedProjectKey"
+          :project-key="selectedProjectKey || sprint.projectKey"
         />
 
         <div class="sprint-actions">
@@ -192,6 +194,7 @@
           <div class="sprint-info">
             <span class="sprint-status-badge next" v-if="!hasActiveSprint && sprint.id === nextPlannedSprintId">下一个</span>
             <span class="sprint-status-badge planned" v-else>计划中</span>
+            <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
             <div class="sprint-name-wrapper" @mouseenter="hoveredSprintId = sprint.id" @mouseleave="hoveredSprintId = null">
               <template v-if="inlineEditingSprintId === sprint.id">
                 <input
@@ -285,7 +288,7 @@
           v-if="sprint.totalIssues > 0"
           :sprint-id="sprint.id"
           :sprint-name="sprint.name"
-          :project-key="selectedProjectKey"
+          :project-key="selectedProjectKey || sprint.projectKey"
         />
 
         <div class="sprint-actions">
@@ -312,6 +315,7 @@
         <div class="sprint-header">
           <div class="sprint-info">
             <span class="sprint-status-badge completed">已完成</span>
+            <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
             <h3 class="sprint-name">{{ sprint.name }}</h3>
           </div>
           <div class="sprint-dates">
@@ -395,6 +399,7 @@
             <div class="sprint-header">
               <div class="sprint-info">
                 <span class="sprint-status-badge archived">已归档</span>
+                <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
                 <h3 class="sprint-name">{{ sprint.name }}</h3>
               </div>
               <div class="sprint-dates">
@@ -477,26 +482,19 @@
     </div>
 
     <!-- 项目加载失败 -->
-    <div v-else-if="!selectedProject && projectLoadState === 'error'" class="empty-state">
+    <div v-else-if="projectLoadState === 'error'" class="empty-state">
       <div class="empty-icon">⚠️</div>
       <h3 class="empty-title">项目列表加载失败</h3>
       <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
       <a-button type="primary" size="small" @click="loadProjects">重试</a-button>
     </div>
 
-    <!-- 无可访问项目 -->
-    <div v-else-if="!selectedProject && projectLoadState === 'success' && projects.length === 0" class="empty-state">
-      <div class="empty-icon">📁</div>
-      <h3 class="empty-title">暂无可访问的项目</h3>
-      <p class="empty-desc">您尚未加入任何项目，请联系管理员添加为项目成员</p>
-    </div>
-
     <!-- 正常空状态 -->
     <div v-else class="empty-state">
       <div class="empty-icon">🏃</div>
-      <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '请选择项目' }}</h3>
+      <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '暂无迭代数据' }}</h3>
       <p class="empty-desc">
-        <template v-if="!selectedProject">从上方下拉框选择项目查看迭代</template>
+        <template v-if="!selectedProject">当前没有任何活跃或计划中的迭代。选择一个项目来创建迭代。</template>
         <template v-else-if="canCreateSprint">创建第一个 Sprint 来规划团队工作</template>
         <template v-else>当前项目尚未创建迭代，请联系项目管理员。</template>
       </p>
@@ -1042,9 +1040,10 @@ function getActivateTooltip(sprint: SprintVO): string | undefined {
 function viewSprintIssues(sprint: SprintVO) {
   // 跳转到 Issue 列表，按 Sprint + 项目筛选
   const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const projectKey = currentProject?.key || sprint.projectKey
   const query: Record<string, string> = { sprint: sprint.id, label: sprint.name }
-  if (currentProject) {
-    query.project = currentProject.key
+  if (projectKey) {
+    query.project = projectKey
   }
   router.push({ path: '/issues', query })
 }
@@ -1052,9 +1051,10 @@ function viewSprintIssues(sprint: SprintVO) {
 function viewSprintOnBoard(sprint: SprintVO) {
   // 跳转到看板，自动选中该 Sprint 和当前项目
   const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const projectKey = currentProject?.key || sprint.projectKey
   const query: Record<string, string> = { sprint: sprint.id }
-  if (currentProject) {
-    query.project = currentProject.key
+  if (projectKey) {
+    query.project = projectKey
   }
   router.push({ path: '/boards', query })
 }
@@ -1062,19 +1062,21 @@ function viewSprintOnBoard(sprint: SprintVO) {
 function viewUnassignedIssues(sprint: SprintVO) {
   // 跳转到 Issue 列表，筛选该 Sprint + 未分配负责人
   const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const projectKey = currentProject?.key || sprint.projectKey
   const query: Record<string, string> = {
     sprint: sprint.id,
     assignee: 'unassigned',
     label: `${sprint.name} - 未分配工单`
   }
-  if (currentProject) {
-    query.project = currentProject.key
+  if (projectKey) {
+    query.project = projectKey
   }
   router.push({ path: '/issues', query })
 }
 
 function viewIssuesByCategory(sprint: SprintVO, category: 'done' | 'in_progress' | 'open') {
   const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const projectKey = currentProject?.key || sprint.projectKey
   const categoryLabels: Record<string, string> = {
     done: '已完成',
     in_progress: '进行中',
@@ -1085,21 +1087,22 @@ function viewIssuesByCategory(sprint: SprintVO, category: 'done' | 'in_progress'
     statusCategory: category,
     label: `${sprint.name} - ${categoryLabels[category]}工单`
   }
-  if (currentProject) {
-    query.project = currentProject.key
+  if (projectKey) {
+    query.project = projectKey
   }
   router.push({ path: '/issues', query })
 }
 
 function viewOverdueIssues(sprint: SprintVO) {
   const currentProject = projects.value.find(p => p.id === selectedProject.value)
+  const projectKey = currentProject?.key || sprint.projectKey
   const query: Record<string, string> = {
     sprint: sprint.id,
     overdue: 'true',
     label: `${sprint.name} - 逾期工单`
   }
-  if (currentProject) {
-    query.project = currentProject.key
+  if (projectKey) {
+    query.project = projectKey
   }
   router.push({ path: '/issues', query })
 }
@@ -1161,11 +1164,17 @@ function cancelInlineEdit() {
 }
 
 async function loadSprints() {
-  if (!selectedProject.value) { sprints.value = []; loadingState.value = 'idle'; return }
   loadingState.value = 'loading'
   try {
-    const res = await sprintApi.listByProject(selectedProject.value, { _silent403: true })
-    sprints.value = res.data?.list || []
+    if (selectedProject.value) {
+      // 特定项目模式
+      const res = await sprintApi.listByProject(selectedProject.value, { pageSize: 200, _silent403: true })
+      sprints.value = res.data?.list || []
+    } else {
+      // 跨项目模式 — 显示所有可访问项目的 Sprint
+      const res = await sprintApi.listAll({ pageSize: 200 })
+      sprints.value = res.data?.list || []
+    }
     loadingState.value = 'success'
   } catch (e: any) {
     sprints.value = []
@@ -1175,6 +1184,10 @@ async function loadSprints() {
       loadingState.value = 'error'
     }
   }
+}
+
+function handleProjectChange() {
+  loadSprints()
 }
 
 async function activateSprint(id: string) {
@@ -1523,10 +1536,12 @@ onMounted(async () => {
     }
   }
 
-  // 2. 如果已有选中的项目（从 Store 恢复、URL 恢复或自动选择），自动加载迭代
+  // 2. 始终加载 Sprint 列表（无论有无项目选择）
+  // 如果有选中项目则加载该项目的 Sprint，否则加载所有可访问项目的 Sprint
+  loadSprints()
+
+  // 同步 URL
   if (selectedProject.value) {
-    loadSprints()
-    // 同步 URL（如果 URL 中没有 project 参数）
     syncUrlProjectParam()
   }
 })
@@ -1538,7 +1553,7 @@ watch(selectedProject, (val) => {
   if (val) {
     syncUrlProjectParam()
   } else {
-    // 清除 URL 中的 project 参数
+    // 清除 URL 中的 project 参数（"全部项目"视图）
     const query = { ...route.query }
     delete query.project
     router.replace({ query })
@@ -1644,6 +1659,18 @@ function syncUrlProjectParam() {
   font-size: 14px;
   color: var(--color-text-1);
   font-weight: 500;
+}
+
+/* 项目标识 badge（跨项目视图时显示） */
+.sprint-project-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--color-fill-2);
+  color: var(--color-text-2);
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 /* 活跃 Sprint 名称加粗 */

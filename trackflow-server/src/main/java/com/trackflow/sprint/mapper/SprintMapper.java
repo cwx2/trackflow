@@ -79,4 +79,23 @@ public interface SprintMapper extends BaseMapper<Sprint> {
     List<com.trackflow.sprint.vo.SprintVelocityVO.SprintVelocityItem> selectSprintVelocity(
             @Param("projectId") Long projectId,
             @Param("limit") int limit);
+
+    /**
+     * 跨项目查询 Sprint 列表（带工单统计 + 项目信息 + 分页）。
+     * 仅查询指定项目 ID 列表中的 Sprint。
+     *
+     * @param projectIds 可访问的项目 ID 列表（null 或空表示查所有）
+     * @param offset     偏移量
+     * @param limit      每页数量
+     */
+    List<SprintVO> selectSprintsWithStatsMultiProject(@Param("projectIds") List<Long> projectIds,
+                                                      @Param("offset") int offset,
+                                                      @Param("limit") int limit);
+
+    /**
+     * 跨项目查询 Sprint 总数（用于分页）。
+     *
+     * @param projectIds 可访问的项目 ID 列表（null 或空表示查所有）
+     */
+    long countByProjectIds(@Param("projectIds") List<Long> projectIds);
 }
