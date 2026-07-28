@@ -298,11 +298,15 @@ async function loadGlobalRoles() {
 async function toggleRole(roleId: number) {
   if (!profile.value) return
   const roleIdStr = String(roleId)
+  const role = globalRoles.value.find((r: any) => String(r.id) === roleIdStr)
+  const roleName = role?.name || '角色'
   try {
     if (currentRoleIds.value.includes(roleIdStr)) {
       await userApi.removeRole(userId.value, roleIdStr)
+      Message.success(`已移除全局角色「${roleName}」`)
     } else {
       await userApi.assignRole(userId.value, roleIdStr)
+      Message.success(`已分配全局角色「${roleName}」`)
     }
     // 重新加载档案以刷新角色列表
     await loadProfile()
