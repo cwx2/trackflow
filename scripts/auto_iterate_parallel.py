@@ -62,7 +62,7 @@ MAX_REVIEW_RETRIES = 2      # 审核最多重试轮数
 # 模型配置（None = 使用 kiro-cli 默认模型）
 # 可选值：claude-sonnet-4.6 / claude-opus-4.5 / claude-sonnet-4.5 / auto
 KIRO_MODEL = "claude-sonnet-4.6"            # 默认模型（测试/审核/生产用）
-KIRO_MODEL_FIX = "claude-opus-4.5"          # 修需求用更强模型（分析+写代码）
+KIRO_MODEL_FIX = "claude-opus-4.6"          # 修需求用更强模型（分析+写代码）
 
 # 领取锁
 _claim_lock = threading.Lock()
