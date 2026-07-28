@@ -61,7 +61,8 @@ MAX_REVIEW_RETRIES = 2      # 审核最多重试轮数
 
 # 模型配置（None = 使用 kiro-cli 默认模型）
 # 可选值：claude-sonnet-4.6 / claude-opus-4.5 / claude-sonnet-4.5 / auto
-KIRO_MODEL = "claude-sonnet-4.6"
+KIRO_MODEL = "claude-sonnet-4.6"            # 默认模型（测试/审核/生产用）
+KIRO_MODEL_FIX = "claude-opus-4.5"          # 修需求用更强模型（分析+写代码）
 
 # 领取锁
 _claim_lock = threading.Lock()
@@ -180,10 +181,11 @@ def extract_title(filepath: Path) -> str:
 # ============ Kiro CLI ============
 
 
-def run_kiro(prompt: str, label: str) -> tuple[bool, str]:
+def run_kiro(prompt: str, label: str, model: str | None = None) -> tuple[bool, str]:
     cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools"]
-    if KIRO_MODEL:
-        cmd += ["--model", KIRO_MODEL]
+    effective_model = model or KIRO_MODEL
+    if effective_model:
+        cmd += ["--model", effective_model]
     cmd.append(prompt)
     start = time.time()
     output_lines = []
@@ -269,12 +271,13 @@ def get_current_commit() -> str:
         return None
 
 
-def run_kiro_resume(session_id: str, prompt: str, label: str) -> tuple[bool, str]:
+def run_kiro_resume(session_id: str, prompt: str, label: str, model: str | None = None) -> tuple[bool, str]:
     """恢复指定会话并发送消息"""
     cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools",
            "--resume-id", session_id]
-    if KIRO_MODEL:
-        cmd += ["--model", KIRO_MODEL]
+    effective_model = model or KIRO_MODEL_FIX  # resume 默认用 FIX 模型（回修需求会话）
+    if effective_model:
+        cmd += ["--model", effective_model]
     cmd.append(prompt)
 
     start = time.time()
@@ -519,7 +522,7 @@ def consume_one(worker_id: str) -> str | None:
         f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
         f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
     )
-    success, fix_output = run_kiro(fix_prompt, label)
+    success, fix_output = run_kiro(fix_prompt, label, model=KIRO_MODEL_FIX)
 
     # 检查 FIX_BLOCKED（需求不合理）
     _, blocked, block_reason = parse_fix_result(fix_output)
@@ -598,7 +601,7 @@ def consume_one(worker_id: str) -> str | None:
                     f"继续处理需求 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n"
                     f"```\n{test_summary}\n```"
                 )
-                _, fb_out = run_kiro(fallback_prompt, f"{label}-fix{test_round}")
+                _, fb_out = run_kiro(fallback_prompt, f"{label}-fix{test_round}", model=KIRO_MODEL_FIX)
             # 判断修复是否完成（FIX_DONE），未完成则提前退出测试循环
             fix_done, fix_blocked2, _ = parse_fix_result(fb_out)
             if fix_blocked2:
@@ -660,7 +663,7 @@ def consume_one(worker_id: str) -> str | None:
                     f"继续处理需求 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n"
                     f"```\n{review_summary}\n```"
                 )
-                _, rv_out = run_kiro(fallback_prompt, f"{label}-fixr{review_round}")
+                _, rv_out = run_kiro(fallback_prompt, f"{label}-fixr{review_round}", model=KIRO_MODEL_FIX)
             fix_done2, _, _ = parse_fix_result(rv_out)
             if not fix_done2:
                 log.warning(f"[{label}] 审核反馈修复未输出 FIX_DONE，继续二次审核验证")
@@ -833,7 +836,7 @@ def main():
 
     log.info("=" * 60)
     log.info(f"TrackFlow 并行迭代 | workers={args.workers} | 模式={'仅消费' if args.skip_produce else '完整循环'}")
-    log.info(f"模型: {KIRO_MODEL or 'kiro-cli 默认'}")
+    log.info(f"模型: fix={KIRO_MODEL_FIX or '默认'} | test/review={KIRO_MODEL or '默认'}")
     log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
              f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
     log.info("永不停止，Ctrl+C 手动终止")
