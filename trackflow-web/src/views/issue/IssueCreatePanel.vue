@@ -819,6 +819,46 @@ function clearFieldError(fieldId: string) {
   }
 }
 
+/**
+ * 解析后端返回的自定义字段验证错误消息，映射到具体字段的内联错误。
+ * 后端格式：`自定义字段验证失败: 字段名: 错误消息` 或 `自定义字段验证失败: 字段名1: 错误1; 字段名2: 错误2`
+ * @returns true 如果成功映射到至少一个字段
+ */
+function parseCustomFieldError(message: string): boolean {
+  cfValidationErrors.value = {}
+  // 移除前缀
+  const prefix = '自定义字段验证失败:'
+  const idx = message.indexOf(prefix)
+  if (idx === -1) return false
+
+  const detail = message.slice(idx + prefix.length).trim()
+  if (!detail) return false
+
+  // 分割多个字段错误（以 "; " 或 "；" 分隔）
+  const parts = detail.split(/[;；]\s*/)
+  let mapped = false
+
+  for (const part of parts) {
+    // 格式："字段名: 错误消息" 或 "字段名：错误消息"
+    const colonIdx = part.indexOf(':')
+    const cnColonIdx = part.indexOf('：')
+    const splitIdx = colonIdx >= 0 ? (cnColonIdx >= 0 ? Math.min(colonIdx, cnColonIdx) : colonIdx) : cnColonIdx
+    if (splitIdx < 1) continue
+
+    const fieldName = part.slice(0, splitIdx).trim()
+    const errorText = part.slice(splitIdx + 1).trim() || '验证失败'
+
+    // 按字段名查找匹配的自定义字段
+    const field = customFields.value.find(f => f.name === fieldName)
+    if (field) {
+      cfValidationErrors.value[field.id] = errorText
+      mapped = true
+    }
+  }
+
+  return mapped
+}
+
 const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 
 /**
@@ -1267,7 +1307,18 @@ async function doSubmit(): Promise<boolean> {
     localStorage.setItem('trackflow:quick-create-project', form.projectId!)
     return true
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建失败')
+    const errorMsg: string = e.response?.data?.message || '创建失败'
+    // 解析后端自定义字段验证错误，映射到具体字段的内联提示
+    if (errorMsg.includes('自定义字段验证失败')) {
+      const mapped = parseCustomFieldError(errorMsg)
+      if (mapped) {
+        Message.warning(errorMsg)
+      } else {
+        Message.error(errorMsg)
+      }
+    } else {
+      Message.error(errorMsg)
+    }
     return false
   } finally {
     submitting.value = false
