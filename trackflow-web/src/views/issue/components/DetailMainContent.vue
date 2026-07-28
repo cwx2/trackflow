@@ -59,6 +59,10 @@
                 <template #icon><icon-branch /></template>
                 克隆工单
               </a-doption>
+              <a-doption v-if="!readonly" @click="$emit('create-subtask')">
+                <template #icon><icon-plus /></template>
+                创建子工单
+              </a-doption>
               <a-doption v-if="canMove" @click="$emit('move')">
                 <template #icon><icon-swap /></template>
                 移动到项目...
@@ -198,7 +202,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch } from '@arco-design/web-vue/es/icon'
+import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import RichEditor from './RichEditor.vue'
 import ChildIssuesList from './ChildIssuesList.vue'
@@ -241,6 +245,7 @@ const emit = defineEmits<{
   'delete': []
   'add-time': []
   'find-similar': []
+  'create-subtask': []
 }>()
 
 const editingTitle = ref(false)

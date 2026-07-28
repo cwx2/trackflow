@@ -504,6 +504,12 @@ public class CustomFieldService {
         return valueService.applyDefaultsAndValidate(userProvided, issueType, projectId, applicableFields);
     }
 
+    /** 仅应用默认值不校验必填（用于子工单快速创建），委托给 {@link CustomFieldValueService} */
+    public Map<Long, String> applyDefaultsOnly(Map<Long, String> userProvided, String issueType, Long projectId) {
+        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        return valueService.applyDefaultsOnly(userProvided, issueType, projectId, applicableFields);
+    }
+
     /** 委托给 {@link CustomFieldValueService}，并触发级联清除 */
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {

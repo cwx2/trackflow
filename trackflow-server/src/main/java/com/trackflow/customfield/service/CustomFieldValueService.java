@@ -101,6 +101,42 @@ public class CustomFieldValueService {
     }
 
     /**
+     * 仅应用默认值，不校验必填字段。
+     * 用于子工单创建等场景，允许快速创建而不被必填字段阻塞。
+     */
+    public Map<Long, String> applyDefaultsOnly(Map<Long, String> userProvided, String issueType,
+                                               Long projectId, List<CustomFieldDefinition> applicableFields) {
+        if (applicableFields.isEmpty()) {
+            return userProvided != null ? userProvided : new HashMap<>();
+        }
+
+        Map<Long, CustomFieldProject> projectOverrides = getProjectFieldConditions(projectId);
+
+        Map<Long, String> merged = new HashMap<>();
+        if (userProvided != null) {
+            merged.putAll(userProvided);
+        }
+
+        for (CustomFieldDefinition field : applicableFields) {
+            if (merged.containsKey(field.getId())) {
+                continue;
+            }
+
+            CustomFieldProject mapping = projectOverrides.get(field.getId());
+            if (!isFieldConditionMet(mapping, merged)) {
+                continue;
+            }
+
+            String defaultVal = resolveDefaultValueWithOverride(field, mapping);
+            if (defaultVal != null && !defaultVal.isBlank()) {
+                merged.put(field.getId(), defaultVal);
+            }
+        }
+
+        return merged;
+    }
+
+    /**
      * 保存自定义字段值（默认 FULL 模式，向后兼容）。
      */
     @Transactional(rollbackFor = Exception.class)

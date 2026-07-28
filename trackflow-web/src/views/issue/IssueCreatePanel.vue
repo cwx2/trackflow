@@ -10,7 +10,7 @@
     @cancel="close"
   >
     <template #title>
-      <span class="panel-modal-title">{{ cloneData ? '克隆工单' : draftId ? '继续编辑草稿' : '创建工单' }}</span>
+      <span class="panel-modal-title">{{ cloneData ? '克隆工单' : parentId ? '创建子工单' : draftId ? '继续编辑草稿' : '创建工单' }}</span>
       <a-tooltip v-if="!isFullPage" content="在全屏页面中查看" position="bottom" mini>
         <span class="fullscreen-btn" @click.stop="goFullscreen">
           <icon-fullscreen />
@@ -447,6 +447,7 @@ const props = defineProps<{
   projectId?: string
   sprintId?: string | null
   lockSprint?: boolean
+  parentId?: string | null
   cloneData?: { projectId: string; title: string; description: string; issueType: string; priority: string }
   draftId?: string | null
   /** 是否以全屏页面模式运行（true 时隐藏全屏按钮） */
@@ -1238,6 +1239,7 @@ async function doSubmit(): Promise<boolean> {
       estimatedHours: form.estimatedHours || undefined,
       sprintId: form.sprintId || undefined,
       assigneeId: form.assigneeId || undefined,
+      parentId: props.parentId || undefined,
       tagIds: form.tagIds.length > 0 ? form.tagIds : undefined,
       customFields: getCustomFieldPayload(),
       links: linkedIssues.value.length > 0

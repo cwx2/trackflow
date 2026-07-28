@@ -70,6 +70,7 @@
         @upload-private="triggerUpload(true)"
         @copy-id="onCopyId"
         @clone="onCloneIssue"
+        @create-subtask="onCreateSubtask"
         @move="onMoveIssue"
         @delete="onDeleteIssue"
         @add-time="openTimeDialog"
@@ -127,7 +128,7 @@
     <a-button type="primary" size="small" @click="loadAll">重试</a-button>
   </div>
 
-  <IssueCreatePanel ref="createPanelRef" :visible="showCreatePanel" :project-id="issue?.projectId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" @expand-to-fullscreen="onCreatePanelExpand" />
+  <IssueCreatePanel ref="createPanelRef" :visible="showCreatePanel" :project-id="issue?.projectId" :parent-id="createSubtaskParentId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" @expand-to-fullscreen="onCreatePanelExpand" />
 
   <!-- Move Issue Modal -->
   <MoveIssueModal
@@ -268,6 +269,7 @@ function toggleSidebar() {
 const showCreatePanel = ref(false)
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
+const createSubtaskParentId = ref<string | null>(null)
 const showTimeDialog = ref(false)
 const timeSaving = ref(false)
 
@@ -1065,6 +1067,13 @@ function onCloneIssue() {
   }
 }
 
+function onCreateSubtask() {
+  if (!issue.value) return
+  createSubtaskParentId.value = issue.value.id
+  cloneData.value = undefined
+  showCreatePanel.value = true
+}
+
 // ========== 附件上传 ==========
 
 const pendingPrivateUpload = ref(false)
@@ -1143,12 +1152,16 @@ async function onMoveConfirm(targetProjectId: string) {
 
 function onCreatePanelClose(val: boolean) {
   showCreatePanel.value = val
-  if (!val) cloneData.value = undefined
+  if (!val) {
+    cloneData.value = undefined
+    createSubtaskParentId.value = null
+  }
 }
 
 function onIssueCreated() {
   showCreatePanel.value = false
   cloneData.value = undefined
+  createSubtaskParentId.value = null
 }
 
 /**
