@@ -10,6 +10,9 @@
           @click="current = f.key"
         >{{ f.label }}</button>
       </div>
+      <button v-if="showAddTime" class="add-time-btn" @click="emit('addTime')" title="记录工时">
+        <span class="add-time-icon">⏱</span> 记录工时
+      </button>
       <div class="settings-dropdown-wrap">
         <button class="settings-btn" @click="showSettings = !showSettings">
           活动的设置 ▾
@@ -206,11 +209,13 @@ const props = defineProps<{
   items: ActivityItem[]
   currentUserId?: string
   canManageComments?: boolean
+  showAddTime?: boolean
 }>()
 
 const emit = defineEmits<{
   editComment: [commentId: string, content: string]
   deleteComment: [commentId: string]
+  addTime: []
 }>()
 
 const filters = [
@@ -355,6 +360,17 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 }
 .filter-btn:hover { color: var(--tf-text-primary); }
 .filter-btn.active { background: var(--tf-bg-elevated); color: var(--tf-text-primary); border-color: var(--tf-border); }
+
+.add-time-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 3px 10px; border-radius: 3px;
+  background: none; border: 1px solid var(--tf-accent);
+  color: var(--tf-accent); cursor: pointer;
+  transition: background 150ms, color 150ms;
+  font-weight: 500; white-space: nowrap;
+}
+.add-time-btn:hover { background: var(--tf-accent); color: #fff; }
+.add-time-btn .add-time-icon { font-size: 12px; }
 
 .settings-dropdown-wrap { margin-left: auto; position: relative; }
 .settings-btn {

@@ -79,8 +79,10 @@
             :items="activityItems"
             :current-user-id="currentUserId"
             :can-manage-comments="canManageComments"
+            :show-add-time="projectTimeTrackingEnabled && canLogTime"
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
+            @add-time="openTimeDialog"
           />
           <CommentInput
             v-if="canCommentEffective"
