@@ -1049,51 +1049,15 @@
       </div>
     </transition>
 
-    <!-- 新建卡片对话框（从头部"新建..."按钮触发） -->
-    <a-modal
+    <!-- 新建卡片：复用完整创建面板（支持描述、标签、自定义字段等） -->
+    <IssueCreatePanel
       v-model:visible="newCardModalVisible"
-      title="新建卡片"
-      :width="480"
-      :ok-loading="newCardSubmitting"
-      ok-text="创建"
-      cancel-text="取消"
-      @ok="submitNewCardModal"
-      @cancel="newCardModalVisible = false"
-    >
-      <a-form :model="newCardForm" layout="vertical" size="medium">
-        <a-form-item label="标题" required>
-          <a-input v-model="newCardForm.title" placeholder="输入工单标题" :max-length="200" />
-        </a-form-item>
-        <a-form-item label="类型">
-          <a-select v-model="newCardForm.issueType" placeholder="选择工单类型">
-            <a-option value="Task">任务</a-option>
-            <a-option value="Bug">缺陷</a-option>
-            <a-option value="Feature">需求</a-option>
-            <a-option value="Story">用户故事</a-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="优先级">
-          <a-select v-model="newCardForm.priority" placeholder="选择优先级">
-            <a-option value="Urgent">紧急</a-option>
-            <a-option value="High">高</a-option>
-            <a-option value="Normal">普通</a-option>
-            <a-option value="Low">低</a-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="负责人">
-          <a-select v-model="newCardForm.assigneeId" placeholder="选择负责人" allow-clear>
-            <a-option v-for="m in projectMembers" :key="m.userId" :value="m.userId">
-              {{ m.displayName }}
-            </a-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="Sprint">
-          <a-select v-model="newCardForm.sprintId" placeholder="选择 Sprint" allow-clear>
-            <a-option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</a-option>
-          </a-select>
-        </a-form-item>
-      </a-form>
-    </a-modal>
+      :project-id="selectedProject || undefined"
+      :sprint-id="newCardPrefilledSprintId"
+      :lock-sprint="!!newCardPrefilledSprintId"
+      @created="onNewCardCreated"
+      @expand-to-fullscreen="onNewCardExpandFullscreen"
+    />
 
     <!-- 新建 Sprint 对话框 -->
     <a-modal
@@ -1188,6 +1152,7 @@ import BacklogPanel from './BacklogPanel.vue'
 import BoardChartPanel from './BoardChartPanel.vue'
 import IssuePreviewDrawer from './IssuePreviewDrawer.vue'
 import CloneBoardModal from './CloneBoardModal.vue'
+import IssueCreatePanel from '@/views/issue/IssueCreatePanel.vue'
 import BatchActionToolbar from '@/views/issue/components/BatchActionToolbar.vue'
 import { IconSettings, IconSearch, IconList, IconBarChart, IconPlus, IconFile, IconCalendar, IconUser, IconCopy } from '@arco-design/web-vue/es/icon'
 
@@ -4804,14 +4769,8 @@ async function submitAddCard(statusId: string, swimlaneKey?: string) {
 
 // ===== 头部"新建..."按钮相关 =====
 const newCardModalVisible = ref(false)
-const newCardSubmitting = ref(false)
-const newCardForm = ref({
-  title: '',
-  issueType: 'Task',
-  priority: 'Normal',
-  assigneeId: undefined as string | undefined,
-  sprintId: undefined as string | undefined
-})
+/** 新建卡片时预填的 Sprint ID（来自当前看板 Sprint 选择或活跃 Sprint） */
+const newCardPrefilledSprintId = ref<string | null>(null)
 
 const newSprintModalVisible = ref(false)
 const newSprintSubmitting = ref(false)
@@ -4825,14 +4784,8 @@ const newSprintForm = ref({
 /** "新建..."按钮下拉菜单选择处理 */
 function onNewMenuSelect(value: string | number | Record<string, any> | undefined) {
   if (value === 'card') {
-    // 打开新建卡片对话框，预填当前 Sprint
-    newCardForm.value = {
-      title: '',
-      issueType: 'Task',
-      priority: 'Normal',
-      assigneeId: undefined,
-      sprintId: selectedSprint.value || getActiveSprintId() || undefined
-    }
+    // 打开完整创建面板，预填当前 Sprint
+    newCardPrefilledSprintId.value = selectedSprint.value || getActiveSprintId() || null
     newCardModalVisible.value = true
   } else if (value === 'sprint') {
     newSprintForm.value = { name: '', goal: '', startDate: undefined, endDate: undefined }
@@ -4840,56 +4793,17 @@ function onNewMenuSelect(value: string | number | Record<string, any> | undefine
   }
 }
 
-/** 提交新建卡片对话框 */
-async function submitNewCardModal() {
-  const title = newCardForm.value.title.trim()
-  if (!title || !selectedProject.value) {
-    Message.warning('请输入工单标题')
-    return
-  }
+/** IssueCreatePanel 创建成功后刷新看板 */
+async function onNewCardCreated() {
+  newCardModalVisible.value = false
+  // 重新加载看板工单以包含新创建的工单
+  await loadIssues()
+}
 
-  newCardSubmitting.value = true
-  try {
-    const createData: Record<string, any> = {
-      projectId: selectedProject.value,
-      title,
-      issueType: newCardForm.value.issueType
-    }
-    if (newCardForm.value.priority && newCardForm.value.priority !== 'Normal') {
-      createData.priority = newCardForm.value.priority
-    }
-    if (newCardForm.value.assigneeId) {
-      createData.assigneeId = newCardForm.value.assigneeId
-    }
-    if (newCardForm.value.sprintId) {
-      createData.sprintId = newCardForm.value.sprintId
-    }
-
-    const res = await issueApi.create(createData as any)
-    const newIssue = res.data
-    if (newIssue) {
-      // 构建本地 BoardIssue 添加到看板
-      const issueVO: BoardIssue = {
-        id: newIssue.id,
-        issueKey: newIssue.issueKey,
-        title: newIssue.title,
-        issueType: newIssue.issueType || newCardForm.value.issueType,
-        priority: newIssue.priority || newCardForm.value.priority,
-        statusId: newIssue.statusId,
-        projectId: selectedProject.value!,
-        sprintId: newCardForm.value.sprintId,
-        assigneeId: newIssue.assigneeId || newCardForm.value.assigneeId,
-        assigneeName: newIssue.assigneeName || '',
-      }
-      issues.value.push(issueVO)
-      Message.success(`${newIssue.issueKey} 创建成功`)
-      newCardModalVisible.value = false
-    }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '创建工单失败')
-  } finally {
-    newCardSubmitting.value = false
-  }
+/** IssueCreatePanel 全屏展开：跳转到创建页面 */
+function onNewCardExpandFullscreen(formData: any) {
+  newCardModalVisible.value = false
+  router.push({ name: 'IssueCreate', query: formData?.projectId ? { projectId: formData.projectId } : undefined })
 }
 
 /** 提交新建 Sprint 对话框 */
