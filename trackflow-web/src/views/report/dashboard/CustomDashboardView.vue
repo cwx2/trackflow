@@ -314,6 +314,37 @@
           </a-form-item>
         </template>
 
+        <!-- issue_list 配置 -->
+        <template v-if="editingWidgetType === 'issue_list'">
+          <a-form-item label="查询类型">
+            <a-select v-model="widgetConfigForm.queryType" placeholder="选择查询类型">
+              <a-option value="all">所有工单</a-option>
+              <a-option value="open">未关闭的工单</a-option>
+              <a-option value="closed">已关闭的工单</a-option>
+              <a-option value="my_open">分配给我的未关闭工单</a-option>
+            </a-select>
+            <span class="form-hint">选择工单列表的查询范围</span>
+          </a-form-item>
+          <a-form-item label="项目筛选">
+            <a-select v-model="widgetConfigForm.projectId" placeholder="留空 = 所有项目" allow-clear>
+              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">限定只展示特定项目的工单，留空表示全部</span>
+          </a-form-item>
+          <a-form-item label="显示条数">
+            <a-input-number
+              v-model="widgetConfigForm.issueListPageSize"
+              :min="5"
+              :max="50"
+              placeholder="默认 10"
+              style="width: 100%"
+            />
+            <span class="form-hint">5-50 条，默认显示 10 条</span>
+          </a-form-item>
+        </template>
+
         <!-- report_distribution / report 配置 -->
         <template v-if="editingWidgetType === 'report_distribution' || editingWidgetType === 'report'">
           <a-form-item label="关联报表">
@@ -537,6 +568,8 @@ const widgetConfigForm = ref<{
   sprintId?: string
   projectId?: string
   chartType?: string
+  // Issue List Widget config
+  issueListPageSize?: number
   // Activity Feed Widget config
   activityProjectIds?: string[]
   activityActions?: string[]
@@ -553,6 +586,7 @@ const widgetConfigForm = ref<{
   sprintId: undefined,
   projectId: undefined,
   chartType: 'burndown',
+  issueListPageSize: 10,
   activityProjectIds: [],
   activityActions: [],
   activityUserIds: [],
@@ -950,6 +984,7 @@ function editWidget(widget: DashboardWidgetVO) {
     sprintId: config.sprintId || undefined,
     projectId: config.projectId || undefined,
     chartType: config.chartType || 'burndown',
+    issueListPageSize: config.pageSize ?? 10,
     activityProjectIds: config.projectIds || [],
     activityActions: config.actions || [],
     activityUserIds: config.userIds || [],
@@ -964,6 +999,11 @@ function editWidget(widget: DashboardWidgetVO) {
   // Load sprints/projects if needed for agile widgets
   if (widget.widgetType === 'agile_chart' || widget.widgetType === 'agile_board_status') {
     loadAvailableSprintsAndProjects()
+  }
+
+  // Load projects for issue_list widget
+  if (widget.widgetType === 'issue_list') {
+    loadAvailableProjectsForIssueList()
   }
 
   // Load projects and users for activity feed widget
@@ -1026,6 +1066,16 @@ async function loadAvailableProjectsAndUsers() {
   }
 }
 
+async function loadAvailableProjectsForIssueList() {
+  try {
+    const projectRes = await projectApi.list({ pageSize: 50 })
+    const projects = projectRes.data?.list || []
+    availableProjects.value = projects.map((p: any) => ({ id: p.id, name: p.name }))
+  } catch {
+    availableProjects.value = []
+  }
+}
+
 async function handleWidgetConfigSave() {
   if (!editingWidget.value || !currentDashboard.value) return
   savingWidgetConfig.value = true
@@ -1052,6 +1102,10 @@ async function handleWidgetConfigSave() {
       if (form.activityActions && form.activityActions.length > 0) config.actions = form.activityActions
       if (form.activityUserIds && form.activityUserIds.length > 0) config.userIds = form.activityUserIds
       config.limit = form.activityLimit ?? 10
+    } else if (widget.widgetType === 'issue_list') {
+      if (form.queryType) config.queryType = form.queryType
+      if (form.projectId) config.projectId = form.projectId
+      config.pageSize = form.issueListPageSize ?? 10
     }
     // report_distribution / report: reportId is saved separately
 

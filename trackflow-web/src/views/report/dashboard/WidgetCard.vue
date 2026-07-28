@@ -104,12 +104,16 @@
       <!-- Issue 列表微件 -->
       <template v-else-if="widget.widgetType === 'issue_list'">
         <div v-if="issueListData.length > 0" class="widget-issue-list">
-          <div v-for="issue in issueListData" :key="issue.id" class="issue-item">
+          <div v-for="issue in issueListData" :key="issue.id" class="issue-item" @click="navigateToIssue(issue.id)">
             <span class="issue-key">{{ issue.issueKey }}</span>
             <span class="issue-title">{{ issue.title }}</span>
           </div>
         </div>
-        <div v-else class="widget-configure-hint">
+        <div v-else-if="parsedConfig.queryType && dataLoaded && !loading" class="widget-configure-hint">
+          <icon-check-circle :size="32" class="hint-icon" style="color: var(--tf-text-quaternary)" />
+          <span class="hint-text" style="color: var(--tf-text-tertiary)">暂无匹配的工单</span>
+        </div>
+        <div v-else-if="!parsedConfig.queryType && !loading" class="widget-configure-hint">
           <icon-list :size="32" class="hint-icon" />
           <span class="hint-text">点击「编辑配置」设置查询条件</span>
         </div>
@@ -252,7 +256,7 @@ import {
   IconMore, IconEdit, IconDelete, IconRefresh, IconLink, IconSwap,
   IconExclamationCircleFill, IconBarChart,
   IconList, IconNotification, IconThunderbolt, IconCalendar, IconQuestionCircle,
-  IconLeft, IconRight
+  IconCheckCircle, IconLeft, IconRight
 } from '@arco-design/web-vue/es/icon'
 import { reportApi } from '@/api/report'
 import { reportStatisticsApi } from '@/api/reportStatistics'
@@ -1099,6 +1103,43 @@ async function loadData(force = false) {
     return
   }
 
+  // issue_list: 加载工单列表数据
+  if (widgetType === 'issue_list') {
+    loading.value = true
+    error.value = null
+    try {
+      const params: Record<string, any> = { pageSize: config.pageSize || 10, page: 1 }
+      // 按 queryType 决定筛选条件
+      const queryType = config.queryType as string | undefined
+      if (queryType === 'open') {
+        params.hideResolved = 'true'
+      } else if (queryType === 'closed') {
+        params.onlyResolved = 'true'
+      } else if (queryType === 'my_open') {
+        params.hideResolved = 'true'
+        params.assigneeId = 'me'
+      }
+      // 可选项目筛选
+      if (config.projectId) params.projectId = config.projectId
+      // 排序：默认按更新时间倒序
+      params.sort = config.sort || '-updatedAt'
+
+      const res = await issueApi.list(params)
+      const issues = res.data?.list || []
+      issueListData.value = issues.map(item => ({
+        id: item.id,
+        issueKey: item.issueKey || '',
+        title: item.title || ''
+      }))
+      dataLoaded.value = true
+    } catch (e: any) {
+      error.value = e.response?.data?.message || '加载工单列表失败'
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
   // calendar: 加载月历数据
   if (widgetType === 'calendar') {
     if (!config.projectId) {
@@ -1395,6 +1436,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 4px 6px;
   border-radius: 4px;
+  cursor: pointer;
   transition: background 0.15s;
 }
 

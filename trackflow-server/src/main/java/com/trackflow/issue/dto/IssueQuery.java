@@ -53,6 +53,7 @@ public class IssueQuery extends PageQuery {
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
     private String reportedByMe;  // "true" = reporter_id = current user AND status not done
     private String hideResolved;  // "true" = exclude issues with is_closed=true statuses
+    private String onlyResolved;  // "true" = only show issues with is_closed=true statuses
 
     /**
      * 排除在此日期之前已完成的工单（ISO 日期格式 yyyy-MM-dd）。

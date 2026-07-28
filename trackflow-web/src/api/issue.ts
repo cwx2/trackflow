@@ -16,7 +16,7 @@ export const issueApi = {
     projectId?: string; statusId?: string; priority?: string
     assigneeId?: string; reporterId?: string; sprintId?: string
     issueType?: string; keyword?: string; page?: number; pageSize?: number
-    sort?: string; hideResolved?: string
+    sort?: string; hideResolved?: string; onlyResolved?: string
     statusIdNot?: string; priorityNot?: string; assigneeIdNot?: string
     sprintIdNot?: string; issueTypeNot?: string
     tagId?: string; parentId?: string; hasParent?: string
@@ -44,6 +44,7 @@ export const issueApi = {
     projectId: string; title: string; description?: string
     issueType?: string; priority?: string; statusId?: string
     assigneeId?: string; sprintId?: string; dueDate?: string; estimatedHours?: number
+    parentId?: string
     customFields?: Record<string, string>
     tagIds?: string[]
     links?: Array<{ targetIssueId: string; linkType: string }>

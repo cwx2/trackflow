@@ -196,12 +196,35 @@ public class IssueService {
                 userFieldValues.put(fieldId, entry.getValue());
             }
         }
-        // 应用默认值并校验必填字段（始终执行，无论用户是否传了 customFields）
-        Map<Long, String> mergedFieldValues = customFieldService.applyDefaultsAndValidate(
-                userFieldValues, issue.getIssueType(), issue.getProjectId());
-        if (!mergedFieldValues.isEmpty()) {
-            customFieldService.saveValues(issue.getId(), mergedFieldValues,
-                    issue.getIssueType(), issue.getProjectId());
+        // 子工单继承：若创建子工单且用户未提供某个自定义字段值，从父工单继承
+        boolean isSubIssue = dto.getParentId() != null && dto.getParentId() != 0;
+        if (isSubIssue) {
+            Map<Long, String> parentFieldValues = customFieldService.getValues(dto.getParentId());
+            if (parentFieldValues != null && !parentFieldValues.isEmpty()) {
+                for (Map.Entry<Long, String> entry : parentFieldValues.entrySet()) {
+                    userFieldValues.putIfAbsent(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        // 应用默认值并校验必填字段
+        // 子工单使用 PARTIAL 模式：跳过必填校验（允许快速创建，仅标题必填）
+        // 顶层工单使用 FULL 模式：所有必填字段必须有值
+        if (isSubIssue) {
+            // 子工单：应用默认值但不强制必填，允许快速创建
+            Map<Long, String> mergedFieldValues = customFieldService.applyDefaultsOnly(
+                    userFieldValues, issue.getIssueType(), issue.getProjectId());
+            if (!mergedFieldValues.isEmpty()) {
+                customFieldService.saveValues(issue.getId(), mergedFieldValues,
+                        issue.getIssueType(), issue.getProjectId(), CustomFieldValidateMode.PARTIAL);
+            }
+        } else {
+            // 顶层工单：完整必填校验
+            Map<Long, String> mergedFieldValues = customFieldService.applyDefaultsAndValidate(
+                    userFieldValues, issue.getIssueType(), issue.getProjectId());
+            if (!mergedFieldValues.isEmpty()) {
+                customFieldService.saveValues(issue.getId(), mergedFieldValues,
+                        issue.getIssueType(), issue.getProjectId());
+            }
         }
 
         // 记录活动
@@ -354,6 +377,17 @@ public class IssueService {
             Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
             if (!closedStatusIds.isEmpty()) {
                 wrapper.notIn("status_id", closedStatusIds);
+            }
+        }
+
+        // onlyResolved: only show is_closed=true statuses
+        if ("true".equals(query.getOnlyResolved())) {
+            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+            if (!closedStatusIds.isEmpty()) {
+                wrapper.in("status_id", closedStatusIds);
+            } else {
+                // No closed statuses defined — return nothing
+                wrapper.apply("1 = 0");
             }
         }
 
