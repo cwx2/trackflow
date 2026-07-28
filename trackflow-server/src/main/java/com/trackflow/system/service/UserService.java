@@ -419,6 +419,7 @@ public class UserService {
         UserRole userRole = new UserRole();
         userRole.setUserId(userId);
         userRole.setRoleId(roleId);
+        userRole.setSource(UserRole.SOURCE_MANUAL);
         userRoleMapper.insert(userRole);
         permissionService.invalidateCache(userId);
 

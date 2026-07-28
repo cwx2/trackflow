@@ -206,16 +206,18 @@ public class UserSyncService {
     /**
      * 撤销用户的 system_admin 角色（当 Keycloak 不再包含 tf_admin 时）。
      * 安全保护：确保系统中至少保留一个 system_admin，避免无管理员状态。
+     * 仅撤销来源为 keycloak 的角色分配，保留管理员手动分配的角色。
      */
     private void revokeSystemAdminIfNoLongerInKeycloak(SysUser user) {
-        // 检查本地是否有 system_admin
+        // 仅检查来源为 keycloak 的 system_admin 记录
         Long userAdminCount = userRoleMapper.selectCount(
                 new LambdaQueryWrapper<UserRole>()
                         .eq(UserRole::getUserId, user.getId())
                         .eq(UserRole::getRoleId, SYSTEM_ADMIN_ROLE_ID)
+                        .eq(UserRole::getSource, UserRole.SOURCE_KEYCLOAK)
         );
         if (userAdminCount == 0) {
-            return; // 本地也没有 system_admin，无需操作
+            return; // 没有 keycloak 来源的 system_admin，无需操作（可能有 manual 来源的，保留不动）
         }
 
         // 安全保护：确保不会移除最后一个管理员
@@ -230,17 +232,18 @@ public class UserSyncService {
             return;
         }
 
-        // 执行撤销
+        // 仅撤销 keycloak 来源的角色，保留 manual 来源的
         userRoleMapper.delete(
                 new LambdaQueryWrapper<UserRole>()
                         .eq(UserRole::getUserId, user.getId())
                         .eq(UserRole::getRoleId, SYSTEM_ADMIN_ROLE_ID)
+                        .eq(UserRole::getSource, UserRole.SOURCE_KEYCLOAK)
         );
 
         // 失效权限缓存
         permissionService.invalidateCache(user.getId());
 
-        log.info("Revoked system_admin from user '{}' (Keycloak tf_admin role removed)",
+        log.info("Revoked keycloak-synced system_admin from user '{}' (Keycloak tf_admin role removed, manual assignments preserved)",
                 user.getUsername());
     }
 
@@ -297,7 +300,7 @@ public class UserSyncService {
     }
 
     /**
-     * 如果用户本地没有 system_admin 角色，则分配
+     * 如果用户本地没有 system_admin 角色，则分配（来源标记为 keycloak）
      */
     private void assignSystemAdminIfMissing(SysUser user) {
         Long count = userRoleMapper.selectCount(
@@ -309,10 +312,11 @@ public class UserSyncService {
             UserRole userRole = new UserRole();
             userRole.setUserId(user.getId());
             userRole.setRoleId(SYSTEM_ADMIN_ROLE_ID);
+            userRole.setSource(UserRole.SOURCE_KEYCLOAK);
             userRoleMapper.insert(userRole);
             // 失效权限缓存，确保新角色立即生效
             permissionService.invalidateCache(user.getId());
-            log.info("Assigned system_admin role to user '{}' (synced from Keycloak tf_admin)",
+            log.info("Assigned system_admin role to user '{}' (synced from Keycloak tf_admin, source=keycloak)",
                     user.getUsername());
         }
     }
