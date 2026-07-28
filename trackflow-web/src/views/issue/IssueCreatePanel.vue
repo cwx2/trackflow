@@ -437,6 +437,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
+import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap } from '@/utils/fieldLabels'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
@@ -862,11 +863,45 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 }
 
+/**
+ * 会话过期时自动保存表单数据到 sessionStorage
+ * 登录后可恢复继续编辑，避免用户长时间填写的数据丢失
+ */
+let unsubscribeSessionEvent: (() => void) | null = null
+
+function handleSessionExpiring() {
+  // 仅在面板可见且有实质内容时保存
+  if (!props.visible || !isDirty.value) return
+
+  saveSessionRecoveryDraft({
+    fromPath: window.location.pathname,
+    formData: {
+      title: form.title,
+      description: form.description,
+      projectId: form.projectId || '',
+      issueType: form.issueType,
+      priority: form.priority,
+      statusId: form.statusId || '',
+      sprintId: form.sprintId || '',
+      assigneeId: form.assigneeId || '',
+      tagIds: [...form.tagIds],
+      dueDate: form.dueDate || '',
+      estimatedHours: form.estimatedHours ?? null,
+      customFieldValues: { ...customFieldValues.value }
+    },
+    savedAt: Date.now()
+  })
+}
+
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('keydown', handleKeyDown, true)
   window.removeEventListener('paste', handlePaste)
   if (pasteHintTimer) clearTimeout(pasteHintTimer)
+  if (unsubscribeSessionEvent) {
+    unsubscribeSessionEvent()
+    unsubscribeSessionEvent = null
+  }
 })
 
 // 接收外部传入的 projectId
@@ -885,6 +920,10 @@ watch(() => props.visible, (val) => {
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('paste', handlePaste)
+    // 监听会话过期事件，自动保存表单数据
+    if (!unsubscribeSessionEvent) {
+      unsubscribeSessionEvent = onSessionEvent('session:expiring', handleSessionExpiring)
+    }
     loadProjects()
     loadStatuses()
     // Pre-fill form if clone data is provided
@@ -908,6 +947,10 @@ watch(() => props.visible, (val) => {
     window.removeEventListener('beforeunload', handleBeforeUnload)
     window.removeEventListener('keydown', handleKeyDown, true)
     window.removeEventListener('paste', handlePaste)
+    if (unsubscribeSessionEvent) {
+      unsubscribeSessionEvent()
+      unsubscribeSessionEvent = null
+    }
   }
 })
 
@@ -980,8 +1023,10 @@ function close() {
           projectId: form.projectId || '',
           issueType: form.issueType,
           priority: form.priority,
+          statusId: form.statusId || '',
           sprintId: form.sprintId || '',
           assigneeId: form.assigneeId || '',
+          tagIds: [...form.tagIds],
           dueDate: form.dueDate || '',
           estimatedHours: form.estimatedHours ?? null,
           customFieldValues: { ...customFieldValues.value }
@@ -1039,6 +1084,8 @@ function loadDraftData(draftId: string) {
   form.description = draft.description || ''
   form.issueType = draft.issueType || 'Task'
   form.priority = draft.priority || 'Normal'
+  form.statusId = draft.statusId || undefined
+  form.tagIds = draft.tagIds || []
   form.dueDate = draft.dueDate || ''
   form.estimatedHours = draft.estimatedHours ?? undefined
 

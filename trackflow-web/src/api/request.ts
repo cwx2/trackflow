@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { decodeBase64Url } from '@/utils/jwt'
+import { emitSessionEvent } from '@/utils/sessionEvents'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -63,6 +64,9 @@ let sessionExpiredHandled = false
 function handleSessionExpired() {
   if (sessionExpiredHandled) return
   sessionExpiredHandled = true
+
+  // 通知所有组件保存未持久化的数据（如创建工单表单）
+  emitSessionEvent('session:expiring')
 
   // 动态导入避免循环依赖
   import('@arco-design/web-vue').then(({ Message }) => {

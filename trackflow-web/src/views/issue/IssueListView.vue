@@ -973,6 +973,7 @@ import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, 
 import type { IssueDraft } from './composables'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
+import { consumeSessionRecoveryDraft } from '@/utils/sessionEvents'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
 import RecentIssuesPanel from './components/RecentIssuesPanel.vue'
 import DraggableColumnHeader from './components/DraggableColumnHeader.vue'
@@ -3408,6 +3409,25 @@ function autoSelectDefaultQuery() {
 }
 
 onMounted(async () => {
+  // 检查是否有会话过期时保存的恢复草稿 — 自动保存为正式草稿并打开创建面板
+  const recoveryDraft = consumeSessionRecoveryDraft()
+  if (recoveryDraft && recoveryDraft.formData) {
+    const formData = recoveryDraft.formData
+    // 只有表单有实质内容时才恢复
+    if (formData.title?.trim() || formData.description?.trim()) {
+      // 保存为正式草稿（持久化到 localStorage）
+      const savedId = saveDraft(formData)
+      if (savedId) {
+        activeDraftId.value = savedId
+        // 延迟打开面板（等页面初始化完成）
+        setTimeout(() => {
+          showCreatePanel.value = true
+          Message.success({ content: '已恢复上次会话过期时的工单草稿', duration: 4000 })
+        }, 500)
+      }
+    }
+  }
+
   await loadPanel()
   await loadProjects()
   await loadTags()

@@ -193,6 +193,12 @@ export const useAuthStore = defineStore('auth', () => {
   function showSessionExpiredNotification() {
     if (sessionExpiredNotified) return
     sessionExpiredNotified = true
+
+    // 通知所有组件保存未持久化的数据
+    import('@/utils/sessionEvents').then(({ emitSessionEvent }) => {
+      emitSessionEvent('session:expiring')
+    }).catch(() => { /* ignore */ })
+
     import('@arco-design/web-vue').then(({ Notification: ArcoNotification }) => {
       ArcoNotification.error({
         id: 'session-expired-global',

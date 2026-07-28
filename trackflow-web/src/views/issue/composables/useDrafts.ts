@@ -30,10 +30,14 @@ export interface IssueDraft {
   issueType: string
   /** 优先级 */
   priority: string
+  /** 状态 ID */
+  statusId: string
   /** Sprint ID */
   sprintId: string
   /** 负责人 ID */
   assigneeId: string
+  /** 标签 ID 列表 */
+  tagIds: string[]
   /** 截止日期 */
   dueDate: string
   /** 预估工时 */
@@ -53,8 +57,10 @@ export interface DraftFormData {
   projectId?: string
   issueType?: string
   priority?: string
+  statusId?: string
   sprintId?: string
   assigneeId?: string
+  tagIds?: string[]
   dueDate?: string
   estimatedHours?: number | null
   customFieldValues?: Record<string, string>
@@ -134,8 +140,10 @@ export function useDrafts() {
           projectId: form.projectId || '',
           issueType: form.issueType || 'Task',
           priority: form.priority || 'Normal',
+          statusId: form.statusId || '',
           sprintId: form.sprintId || '',
           assigneeId: form.assigneeId || '',
+          tagIds: form.tagIds || [],
           dueDate: form.dueDate || '',
           estimatedHours: form.estimatedHours ?? null,
           customFieldValues: form.customFieldValues || {},
@@ -154,8 +162,10 @@ export function useDrafts() {
       projectId: form.projectId || '',
       issueType: form.issueType || 'Task',
       priority: form.priority || 'Normal',
+      statusId: form.statusId || '',
       sprintId: form.sprintId || '',
       assigneeId: form.assigneeId || '',
+      tagIds: form.tagIds || [],
       dueDate: form.dueDate || '',
       estimatedHours: form.estimatedHours ?? null,
       customFieldValues: form.customFieldValues || {},
