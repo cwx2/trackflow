@@ -355,27 +355,9 @@ public class SprintService {
      * 将项目当前活跃 Sprint 中的未完成工单批量移入新 Sprint，并记录活动日志。
      */
     private void moveUnresolvedIssuesToNewSprint(Long projectId, Sprint newSprint, Long currentUserId) {
-        // 查找源 Sprint：优先查找活跃 Sprint，若无则查找最近完成的 Sprint
-        // 对标 YouTrack 行为：Sprint 自动完成后工单保留在该 Sprint 中，
-        // 创建新 Sprint 时用户可选择"迁移未完成工单"
-        Sprint sourceSprint = sprintMapper.selectOne(
-                new LambdaQueryWrapper<Sprint>()
-                        .eq(Sprint::getProjectId, projectId)
-                        .eq(Sprint::getStatus, SprintStatus.ACTIVE)
-        );
+        Sprint sourceSprint = findSourceSprintForUnresolved(projectId, newSprint.getId());
         if (sourceSprint == null) {
-            // 无活跃 Sprint，尝试查找最近完成的 Sprint（自动完成后工单仍在其中）
-            sourceSprint = sprintMapper.selectOne(
-                    new LambdaQueryWrapper<Sprint>()
-                            .eq(Sprint::getProjectId, projectId)
-                            .eq(Sprint::getStatus, SprintStatus.COMPLETED)
-                            .ne(Sprint::getId, newSprint.getId())
-                            .orderByDesc(Sprint::getUpdatedAt)
-                            .last("LIMIT 1")
-            );
-        }
-        if (sourceSprint == null) {
-            log.warn("项目 {} 没有活跃或已完成的 Sprint，跳过移入未完成工单", projectId);
+            log.warn("项目 {} 没有含未完成工单的 Sprint，跳过移入未完成工单", projectId);
             return;
         }
 
@@ -452,23 +434,8 @@ public class SprintService {
     public CreationPreviewVO getCreationPreview(Long projectId) {
         CreationPreviewVO vo = new CreationPreviewVO();
 
-        // 查找活跃 Sprint
-        Sprint sourceSprint = sprintMapper.selectOne(
-                new LambdaQueryWrapper<Sprint>()
-                        .eq(Sprint::getProjectId, projectId)
-                        .eq(Sprint::getStatus, SprintStatus.ACTIVE)
-        );
-
-        // 如果无活跃 Sprint，尝试查找最近完成的 Sprint（其中可能有未关闭工单）
-        if (sourceSprint == null) {
-            sourceSprint = sprintMapper.selectOne(
-                    new LambdaQueryWrapper<Sprint>()
-                            .eq(Sprint::getProjectId, projectId)
-                            .eq(Sprint::getStatus, SprintStatus.COMPLETED)
-                            .orderByDesc(Sprint::getUpdatedAt)
-                            .last("LIMIT 1")
-            );
-        }
+        // 查找含未完成工单的源 Sprint（优先级：活跃 > 最近计划中 > 最近完成）
+        Sprint sourceSprint = findSourceSprintForUnresolved(projectId, null);
 
         if (sourceSprint != null) {
             vo.setActiveSprintId(String.valueOf(sourceSprint.getId()));
@@ -488,6 +455,69 @@ public class SprintService {
         }
 
         return vo;
+    }
+
+    /**
+     * 查找项目中应作为"未完成工单迁移源"的 Sprint。
+     * 对标 YouTrack "Add unresolved issues from current sprint" 行为。
+     * <p>
+     * 优先级：
+     * 1. 活跃（ACTIVE）Sprint — 当前正在进行的迭代
+     * 2. 最近的计划中（PLANNED）Sprint — 按开始日期倒序
+     * 3. 最近已完成（COMPLETED）Sprint — 按结束日期倒序
+     * <p>
+     * 每个级别只返回含未完成工单的 Sprint；若该级别的候选 Sprint 无未完成工单则跳过，
+     * 继续检查下一优先级。
+     *
+     * @param projectId    项目 ID
+     * @param excludeSprintId 排除的 Sprint ID（新建 Sprint 时排除自身，可为 null）
+     * @return 含未完成工单的源 Sprint，或 null（无匹配）
+     */
+    private Sprint findSourceSprintForUnresolved(Long projectId, Long excludeSprintId) {
+        // 1. 活跃 Sprint（每个项目最多一个）
+        Sprint active = sprintMapper.selectOne(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId)
+                        .eq(Sprint::getStatus, SprintStatus.ACTIVE)
+        );
+        if (active != null && (excludeSprintId == null || !active.getId().equals(excludeSprintId))) {
+            List<Long> openIds = sprintMapper.selectOpenIssueIds(active.getId());
+            if (!openIds.isEmpty()) {
+                return active;
+            }
+        }
+
+        // 2. 最近的计划中 Sprint（按开始日期倒序，开始日期为空的排最后）
+        List<Sprint> plannedList = sprintMapper.selectList(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId)
+                        .eq(Sprint::getStatus, SprintStatus.PLANNED)
+                        .ne(excludeSprintId != null, Sprint::getId, excludeSprintId)
+                        .orderByDesc(Sprint::getStartDate)
+        );
+        for (Sprint planned : plannedList) {
+            List<Long> openIds = sprintMapper.selectOpenIssueIds(planned.getId());
+            if (!openIds.isEmpty()) {
+                return planned;
+            }
+        }
+
+        // 3. 最近已完成 Sprint（按结束日期倒序，结束日期为空的排最后）
+        List<Sprint> completedList = sprintMapper.selectList(
+                new LambdaQueryWrapper<Sprint>()
+                        .eq(Sprint::getProjectId, projectId)
+                        .eq(Sprint::getStatus, SprintStatus.COMPLETED)
+                        .ne(excludeSprintId != null, Sprint::getId, excludeSprintId)
+                        .orderByDesc(Sprint::getEndDate)
+        );
+        for (Sprint completed : completedList) {
+            List<Long> openIds = sprintMapper.selectOpenIssueIds(completed.getId());
+            if (!openIds.isEmpty()) {
+                return completed;
+            }
+        }
+
+        return null;
     }
 
     @Transactional
