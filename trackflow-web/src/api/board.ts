@@ -16,6 +16,7 @@ export const boardApi = {
     collapsedStatusIds?: string
     swimlaneField?: string
     swimlaneValues?: string
+    showAllColumns?: boolean
   }) {
     return request.get<any, R<BoardDataVO>>('/boards/data', { params })
   },

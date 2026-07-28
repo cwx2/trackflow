@@ -106,9 +106,10 @@ public class BoardDataService {
             columnConfigs = boardColumnService.getColumns(projectId);
         }
 
-        // 3. 确定需要加载工单的列（可见 + 非折叠）
+        // 3. 确定需要加载工单的列（可见 + 非折叠，或全部列）
+        boolean showAll = Boolean.TRUE.equals(query.getShowAllColumns());
         List<BoardColumnVO> visibleColumns = columnConfigs.stream()
-                .filter(BoardColumnVO::getVisible)
+                .filter(col -> showAll || Boolean.TRUE.equals(col.getVisible()))
                 .toList();
 
         // 区分：需要加载工单的列 vs 折叠列（仅需统计）

@@ -2897,6 +2897,13 @@ const hiddenIssueColumns = computed(() => {
 // 临时显示全部列（不修改持久化配置）
 const showAllColumns = ref(false)
 
+// 当用户切换"显示全部列"时，重新加载工单数据（后端需要返回隐藏列的工单）
+watch(showAllColumns, () => {
+  if (selectedProject.value) {
+    loadIssuesWithLoading()
+  }
+})
+
 // 隐藏工单总数
 const hiddenIssueTotalCount = computed(() => {
   return hiddenIssueColumns.value.reduce((sum, c) => sum + (c.issueCount || 0), 0)
@@ -4585,7 +4592,8 @@ async function loadIssues() {
       excludeDoneBefore,
       collapsedStatusIds: collapsedIds || undefined,
       swimlaneField: swimlaneFieldParam,
-      swimlaneValues: swimlaneValuesParam
+      swimlaneValues: swimlaneValuesParam,
+      showAllColumns: showAllColumns.value || undefined
     })
 
     const boardData = res.data

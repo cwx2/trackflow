@@ -48,6 +48,12 @@ public class BoardDataQuery {
     private List<String> swimlaneValues;
 
     /**
+     * 是否显示全部列（含隐藏列）。
+     * 当用户点击"显示全部列"按钮时前端传 true，后端返回所有列的工单而不仅是 visible 的。
+     */
+    private Boolean showAllColumns;
+
+    /**
      * 将 excludeDoneBefore 字符串解析为 LocalDate。
      * 返回 null 表示无此参数或格式无效。
      */
