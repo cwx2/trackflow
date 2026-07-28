@@ -42,7 +42,7 @@
           </span>
         </div>
         <div class="col" style="flex:1">邮箱</div>
-        <div class="col" style="width:140px">全局角色</div>
+        <div class="col" style="width:140px">系统角色</div>
         <div class="col" style="width:80px">状态</div>
         <div class="col" style="width:150px">
           <span class="col-sortable" :class="{ active: sortField === 'lastLoginAt' }" @click="toggleSort('lastLoginAt')">
@@ -187,10 +187,11 @@
           </div>
 
           <template v-else>
-            <!-- 全局角色区域 -->
+            <!-- 系统角色区域 -->
             <div class="role-section">
               <div class="role-section-header">
-                <h4 class="role-section-title">全局角色</h4>
+                <h4 class="role-section-title">系统角色</h4>
+                <span class="role-section-hint">赋予用户系统级管理权限</span>
               </div>
               <div class="role-list">
                 <div v-for="role in globalRoles" :key="role.id" class="role-item">
@@ -203,11 +204,11 @@
               </div>
             </div>
 
-            <!-- 全局项目角色区域 -->
+            <!-- 自动分配的项目角色区域 -->
             <div class="role-section">
               <div class="role-section-header">
-                <h4 class="role-section-title">全局项目角色</h4>
-                <span class="role-section-hint">在所有项目中自动生效（含新建项目）</span>
+                <h4 class="role-section-title">自动分配的项目角色</h4>
+                <span class="role-section-hint">用户将以此角色自动加入所有项目（包括新建项目）</span>
               </div>
 
               <div class="global-project-role-list">
@@ -224,17 +225,17 @@
                   </button>
                 </div>
                 <div v-if="userGlobalMembers.length === 0" class="role-empty-inline">
-                  无全局项目角色
+                  未设置自动分配角色
                 </div>
               </div>
 
-              <!-- 添加全局项目角色 -->
+              <!-- 添加自动分配的项目角色 -->
               <div class="add-global-member-section">
                 <button v-if="!showAddGlobalMember" class="btn-text-sm" @click="showAddGlobalMember = true">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
                     <path d="M8 1a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 018 1z"/>
                   </svg>
-                  添加全局项目角色
+                  添加自动分配角色
                 </button>
                 <div v-else class="add-global-member-form">
                   <select v-model="addGlobalRoleId" class="add-project-select">
@@ -595,9 +596,22 @@ async function toggleRole(roleId: number) {
       userRoleIds.value.push(roleIdStr)
       Message.success(`已分配全局角色「${roleName}」`)
     }
+    // 同步更新用户列表中该用户的 globalRoles 显示
+    syncUserListGlobalRoles(userId)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
   }
+}
+
+/** 将面板中的 userRoleIds 同步到用户列表中对应用户的 globalRoles 字段 */
+function syncUserListGlobalRoles(userId: string) {
+  const userInList = users.value.find((u: any) => String(u.id) === String(userId))
+  if (!userInList) return
+  // 根据当前 userRoleIds 构建完整的 globalRoles 数组
+  userInList.globalRoles = userRoleIds.value
+    .map(rid => globalRoles.value.find((r: any) => String(r.id) === rid))
+    .filter(Boolean)
+    .map((r: any) => ({ id: r.id, name: r.name, code: r.code }))
 }
 
 async function changeProjectRole(pr: UserProfileProjectRoleInfo, newRoleCode: string) {
