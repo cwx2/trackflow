@@ -78,34 +78,33 @@ SKILLS = {
     "code-review": {"path": ".kiro/skills/code-review/SKILL.md"},
 }
 
-# 生产者配置池
+# 生产者配置池 —— MVP 精细化阶段
+# 策略：按角色走完整业务场景，遇到问题才记录需求（不再广撒网）
 PRODUCER_CONFIGS = [
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下工单管理的完整流程，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计工单（Issue）模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下项目管理功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计项目管理模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下Sprint管理功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计 Sprint 模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下看板功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计看板模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下工作流配置功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计工作流引擎模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下用户与角色管理功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计权限与认证模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下报表与仪表盘功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计报表模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下通知系统功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计通知模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下自定义字段功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计自定义字段模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，请用管理员研究一下时间追踪与工时功能，找到需求"},
-    {"skill": "tech-requirement", "prompt": "技术需求：审计时间追踪模块的完整数据流"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个开发人员的使用者，用 wangqiang 账号登录系统，研究工单列表和详情功能，找到需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个开发人员的使用者，用 wangqiang 账号登录系统，研究看板和Sprint功能，找到需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个测试人员的使用者，用 zhaojing 账号登录系统，研究工单状态变更和测试流程，找到需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个产品经理的使用者，用 sunlei 账号登录系统，研究工单创建和Sprint规划功能，找到需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个观察者的使用者，用 huanglei 账号登录系统，研究只读访问和评论功能，找到需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你现在是一个技术负责人的使用者，用 zhangwei 账号登录系统，研究Sprint管理和工单分配功能，找到需求"},
+    # ═══ 产品经理日常工作流 ═══
+    {"skill": "write-requirement", "prompt": "找一下需求，你是产品经理 sunlei，登录系统完成以下场景：创建一个新的 Bug 工单（填写标题、描述、优先级、负责人、Sprint），然后在看板上确认它出现在正确的列中。过程中遇到任何操作不顺畅、报错、缺功能的地方，记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是产品经理 sunlei，登录系统完成以下场景：打开仪表盘查看项目整体进度，确认数字卡片、活动流都能正常显示数据。然后切换到报表页面查看状态分布和趋势图。过程中遇到任何问题记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是产品经理 sunlei，登录系统完成以下场景：创建一个新 Sprint，设置开始和结束日期，然后把几个工单拖进去，最后启动这个 Sprint。过程中遇到任何问题记录为需求"},
+
+    # ═══ 开发人员日常工作流 ═══
+    {"skill": "write-requirement", "prompt": "找一下需求，你是开发人员 wangqiang，登录系统完成以下场景：查看分配给我的工单列表，点开一个工单查看详情，修改状态为 In Progress，添加一条评论说明开始处理，然后记录 2 小时工时。过程中遇到任何问题记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是开发人员 wangqiang，登录系统完成以下场景：打开看板，找到分配给我的卡片，把它从 In Progress 拖到 Code Review，然后打开工单详情确认状态已变更。过程中遇到任何问题记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是开发人员 liuyang，登录系统完成以下场景：使用搜索栏搜索一个关键词找到相关工单，打开详情后给它添加一个标签，然后创建一个子工单（如果有此功能）。过程中遇到任何问题记录为需求"},
+
+    # ═══ 技术负责人日常工作流 ═══
+    {"skill": "write-requirement", "prompt": "找一下需求，你是技术负责人 zhangwei，登录系统完成以下场景：查看当前 Sprint 的进度（燃尽图或进度条），确认哪些工单还未完成，把一个未完成的工单重新分配给其他开发人员。过程中遇到任何问题记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是技术负责人 zhoujie，登录系统完成以下场景：完成当前 Sprint（Complete Sprint），处理未完成的工单（移到下一个 Sprint 或 Backlog），然后查看完成统计。过程中遇到任何问题记录为需求"},
+
+    # ═══ 测试人员日常工作流 ═══
+    {"skill": "write-requirement", "prompt": "找一下需求，你是测试人员 zhaojing，登录系统完成以下场景：查看分配给我待测试的工单（Testing 状态），打开一个工单确认修复内容，然后把状态改为 Done（测试通过）或打回 In Progress（测试不通过并添加评论说明原因）。过程中遇到任何问题记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是测试人员 chenfei，登录系统完成以下场景：使用筛选器找到所有 Bug 类型且优先级为 Critical 的工单，确认列表排序和筛选结果正确。然后打开一个工单查看它的活动历史（谁创建的、谁处理的、什么时候改的状态）。过程中遇到任何问题记录为需求"},
+
+    # ═══ 管理员日常工作流 ═══
+    {"skill": "write-requirement", "prompt": "找一下需求，你是管理员 testuser，登录系统完成以下场景：进入管理后台，查看用户列表，给一个用户修改角色权限，然后检查该用户登录后能否正确看到/看不到对应功能。过程中遇到任何问题记录为需求"},
+    {"skill": "write-requirement", "prompt": "找一下需求，你是管理员 testuser，登录系统完成以下场景：进入工作流配置页面，查看当前状态转换矩阵，尝试添加一个新的转换规则（比如 Testing → Done 只允许测试人员操作）。过程中遇到任何问题记录为需求"},
+
+    # ═══ 观察者（只读用户）场景 ═══
+    {"skill": "write-requirement", "prompt": "找一下需求，你是观察者 huanglei，登录系统完成以下场景：查看工单列表和工单详情，确认能看到内容但不能编辑。尝试添加评论（应该能评论），确认不能修改状态、不能分配负责人。过程中遇到任何权限不对或报错的地方记录为需求"},
 ]
 
 # ============ 日志 ============
