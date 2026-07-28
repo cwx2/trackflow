@@ -93,16 +93,16 @@
 
       <!-- 三栏信息区 -->
       <div class="profile-sections">
-        <!-- 全局角色 -->
+        <!-- 系统角色 -->
         <div class="section-card">
           <div class="section-header">
-            <h2 class="section-title">全局角色</h2>
+            <h2 class="section-title">系统角色</h2>
             <button class="btn-text" @click="showRoleDialog = true">管理</button>
           </div>
           <div class="section-body">
             <div v-if="profile.globalRoles.length === 0" class="empty-hint">
               <span class="empty-icon">👤</span>
-              <span>未分配全局角色</span>
+              <span>未分配系统角色</span>
             </div>
             <div v-else class="role-tags">
               <span v-for="role in profile.globalRoles" :key="role.id" class="role-tag">
@@ -112,10 +112,10 @@
           </div>
         </div>
 
-        <!-- 项目角色分布 -->
+        <!-- 已加入的项目 -->
         <div class="section-card">
           <div class="section-header">
-            <h2 class="section-title">项目角色</h2>
+            <h2 class="section-title">已加入的项目</h2>
             <div class="section-header-right">
               <span class="section-count">{{ profile.projectRoles.length }} 个项目</span>
               <button class="btn-text" @click="openAssignRoleDialog">赋予角色</button>

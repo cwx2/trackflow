@@ -214,11 +214,11 @@
               <div class="global-project-role-list">
                 <div v-for="gm in userGlobalMembers" :key="gm.id" class="global-project-role-item">
                   <div class="global-project-role-info">
-                    <span class="global-tag">全局</span>
+                    <span class="global-tag">自动</span>
                     <span class="global-project-role-name">{{ gm.roleName }}</span>
                     <span class="global-project-role-code">{{ gm.roleCode }}</span>
                   </div>
-                  <button class="btn-icon-sm danger" title="撤销全局分配" @click="revokeGlobalMember(gm)">
+                  <button class="btn-icon-sm danger" title="撤销自动分配" @click="revokeGlobalMember(gm)">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                       <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
                     </svg>
@@ -248,12 +248,13 @@
               </div>
             </div>
 
-            <!-- 项目角色区域 -->
+            <!-- 已加入的项目区域 -->
             <div class="role-section">
               <div class="role-section-header">
-                <h4 class="role-section-title">项目角色</h4>
+                <h4 class="role-section-title">已加入的项目</h4>
                 <span class="role-section-count">{{ userProjectRoles.length }} 个项目</span>
               </div>
+              <div class="role-section-desc">用户在各个具体项目中的成员角色</div>
 
               <div v-if="userProjectRoles.length === 0" class="role-empty">
                 <span class="role-empty-icon">📁</span>
@@ -939,6 +940,7 @@ onMounted(() => {
 
 /* Global Project Role Section */
 .role-section-hint { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.role-section-desc { font-size: 11px; color: var(--text-muted); margin-top: -8px; margin-bottom: 8px; }
 .global-project-role-list { display: flex; flex-direction: column; gap: 4px; }
 .global-project-role-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 150ms; }
 .global-project-role-item:hover { background: var(--bg-hover); }

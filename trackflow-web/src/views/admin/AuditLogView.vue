@@ -16,8 +16,8 @@
             <option value="create_user">创建用户</option>
             <option value="disable_user">禁用用户</option>
             <option value="enable_user">启用用户</option>
-            <option value="assign_global_role">分配全局角色</option>
-            <option value="remove_global_role">移除全局角色</option>
+            <option value="assign_global_role">分配系统角色</option>
+            <option value="remove_global_role">移除系统角色</option>
           </optgroup>
           <optgroup label="用户组">
             <option value="create_group">创建用户组</option>
@@ -189,8 +189,8 @@ const ACTION_LABELS: Record<string, string> = {
   create_user: '创建用户',
   disable_user: '禁用用户',
   enable_user: '启用用户',
-  assign_global_role: '分配全局角色',
-  remove_global_role: '移除全局角色',
+  assign_global_role: '分配系统角色',
+  remove_global_role: '移除系统角色',
   // 用户组
   create_group: '创建用户组',
   update_group: '编辑用户组',
