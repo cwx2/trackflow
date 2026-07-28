@@ -3352,7 +3352,7 @@ function isCardDraggable(issue: BoardIssue): boolean {
   return transitionableSourceStatuses.value.has(issue.statusId)
 }
 
-async function onDragStart(event: DragEvent, issue: BoardIssue) {
+function onDragStart(event: DragEvent, issue: BoardIssue) {
   if (!isCardDraggable(issue)) {
     event.preventDefault()
     Message.warning('该工单当前状态不允许变更')
@@ -3372,15 +3372,29 @@ async function onDragStart(event: DragEvent, issue: BoardIssue) {
     return
   }
 
-  try {
-    const res = await issueApi.getAvailableTransitions(issue.id)
-    const allowed = res.data || []
-    allowedTargetStatuses.value = new Set(allowed.map(s => s.id))
-    requireCommentStatuses.value = new Set(allowed.filter(s => s.requireComment).map(s => s.id))
-  } catch {
-    allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
-    requireCommentStatuses.value = new Set()
-  }
+  // Optimistic: allow all statuses immediately so drag feedback works instantly.
+  // The actual workflow validation happens server-side during the drop (transitStatus API).
+  // We still fetch transitions async to show correct drop-forbidden indicators once loaded.
+  allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
+  requireCommentStatuses.value = new Set()
+
+  // Fetch actual allowed transitions asynchronously (non-blocking).
+  // This refines the visual feedback (green/red indicators) once the API responds,
+  // but does NOT block the drag initiation — fixing Playwright/browser timing issues.
+  issueApi.getAvailableTransitions(issue.id).then(res => {
+    // Only update if this issue is still being dragged (user hasn't dropped yet)
+    if (draggingIssue.value?.id === issue.id) {
+      const allowed = res.data || []
+      allowedTargetStatuses.value = new Set(allowed.map(s => s.id))
+      requireCommentStatuses.value = new Set(allowed.filter(s => s.requireComment).map(s => s.id))
+    }
+  }).catch(() => {
+    // On failure, keep all statuses allowed — backend will reject invalid transitions
+    if (draggingIssue.value?.id === issue.id) {
+      allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
+      requireCommentStatuses.value = new Set()
+    }
+  })
 }
 
 function onDragEnd() {
