@@ -1,6 +1,7 @@
 package com.trackflow.board.vo;
 
 import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.issue.vo.IssueTagVO;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -57,4 +58,9 @@ public class BoardCardVO {
      * 自定义字段结构化详情（仅包含卡片配置中 visibleFields 指定的自定义字段）
      */
     private List<CustomFieldValueVO> customFieldDetails;
+
+    /**
+     * 工单关联的标签列表（当卡片配置 visibleFields 包含 "tags" 时加载）
+     */
+    private List<IssueTagVO> tags;
 }

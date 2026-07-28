@@ -9,9 +9,14 @@ import com.trackflow.board.vo.BoardGeneralConfigVO;
 import com.trackflow.board.vo.BoardCardConfigVO;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
+import com.trackflow.issue.entity.IssueTag;
+import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueManualOrderMapper;
+import com.trackflow.issue.mapper.IssueTagMapper;
+import com.trackflow.issue.mapper.IssueTagRelationMapper;
 import com.trackflow.issue.mapper.result.BoardCardRow;
+import com.trackflow.issue.vo.IssueTagVO;
 import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.entity.SprintStatus;
@@ -60,6 +65,8 @@ public class BoardDataService {
     private final BoardGeneralConfigService boardGeneralConfigService;
     private final BoardCardConfigService boardCardConfigService;
     private final CustomFieldService customFieldService;
+    private final IssueTagRelationMapper issueTagRelationMapper;
+    private final IssueTagMapper issueTagMapper;
     private final SprintMapper sprintMapper;
     private final QueryExecutor queryExecutor;
     private final ObjectMapper objectMapper;
@@ -205,6 +212,9 @@ public class BoardDataService {
         List<BoardCardVO> allCards = convertToCardVOs(cardRows);
         loadCustomFieldsForCards(allCards, cardRows, cardConfig);
 
+        // 5.1 按需加载标签（当 cardConfig.visibleFields 包含 "tags" 时）
+        loadTagsForCards(allCards, cardRows, cardConfig);
+
         // 6. 按列分组
         int columnLimit = query.getColumnLimit() != null && query.getColumnLimit() > 0
                 ? query.getColumnLimit() : DEFAULT_COLUMN_LIMIT;
@@ -320,6 +330,70 @@ public class BoardDataService {
             List<CustomFieldValueVO> details = cfDetailsMap.get(issueId);
             if (details != null && !details.isEmpty()) {
                 cards.get(i).setCustomFieldDetails(details);
+            }
+        }
+    }
+
+    /**
+     * 按需加载标签。
+     * 当 cardConfig.visibleFields 包含 "tags" 时，批量查询工单-标签关联关系，
+     * 然后批量加载标签详情，填充到 BoardCardVO.tags 中。
+     * <p>
+     * 性能：使用 IN 查询避免 N+1 问题，两次 SQL 即可完成所有标签加载。
+     */
+    private void loadTagsForCards(List<BoardCardVO> cards, List<BoardCardRow> rows, BoardCardConfigVO cardConfig) {
+        if (cards.isEmpty()) {
+            return;
+        }
+
+        // 仅当卡片配置了显示 tags 字段时才加载
+        List<String> visibleFields = cardConfig.getVisibleFields();
+        if (visibleFields == null || !visibleFields.contains("tags")) {
+            return;
+        }
+
+        // 批量查询所有工单的标签关联
+        List<Long> issueIds = rows.stream().map(BoardCardRow::getId).toList();
+        List<IssueTagRelation> relations = issueTagRelationMapper.selectList(
+                new LambdaQueryWrapper<IssueTagRelation>()
+                        .in(IssueTagRelation::getIssueId, issueIds)
+        );
+
+        if (relations.isEmpty()) {
+            return;
+        }
+
+        // 收集所有 tagId 并批量查询标签详情
+        List<Long> tagIds = relations.stream()
+                .map(IssueTagRelation::getTagId)
+                .distinct()
+                .toList();
+
+        List<IssueTag> tags = issueTagMapper.selectBatchIds(tagIds);
+        Map<Long, IssueTag> tagMap = tags.stream()
+                .collect(Collectors.toMap(IssueTag::getId, t -> t));
+
+        // 按 issueId 分组关联关系
+        Map<Long, List<IssueTagRelation>> relsByIssue = relations.stream()
+                .collect(Collectors.groupingBy(IssueTagRelation::getIssueId));
+
+        // 填充每张卡片的标签列表
+        for (int i = 0; i < cards.size(); i++) {
+            Long issueId = rows.get(i).getId();
+            List<IssueTagRelation> issueRels = relsByIssue.get(issueId);
+            if (issueRels != null && !issueRels.isEmpty()) {
+                List<IssueTagVO> tagVOs = issueRels.stream()
+                        .map(rel -> tagMap.get(rel.getTagId()))
+                        .filter(Objects::nonNull)
+                        .map(tag -> {
+                            IssueTagVO vo = new IssueTagVO();
+                            vo.setId(String.valueOf(tag.getId()));
+                            vo.setName(tag.getName());
+                            vo.setColor(tag.getColor());
+                            return vo;
+                        })
+                        .toList();
+                cards.get(i).setTags(tagVOs);
             }
         }
     }

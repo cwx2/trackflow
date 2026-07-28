@@ -963,6 +963,8 @@ export interface BoardCardVO {
   /** 父工单标题 */
   parentTitle?: string
   customFieldDetails?: CustomFieldValueVO[]
+  /** 工单关联的标签列表（当卡片配置 visibleFields 包含 "tags" 时返回） */
+  tags?: Array<{ id: string; name: string; color?: string }>
 }
 
 /** 看板聚合数据 — 按列分组的工单 */
