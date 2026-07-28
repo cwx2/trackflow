@@ -63,6 +63,7 @@
         @update-desc="onUpdateDesc"
         @remove-tag="onRemoveTag"
         @add-tag="onAddTag"
+        @add-tags="onAddTags"
         @create-tag="onCreateTag"
         @add-link="() => {}"
         @upload="triggerUpload(false)"
@@ -1180,6 +1181,14 @@ async function onRemoveTag(tagId: string) {
 
 async function onAddTag(tag: { id: string }) {
   try { await issueApi.addTag(issue.value!.id, tag.id); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
+}
+
+async function onAddTags(tags: { id: string }[]) {
+  try {
+    const tagIds = tags.map(t => t.id)
+    await issueApi.addTags(issue.value!.id, tagIds)
+    await loadAll()
+  } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
 }
 
 async function onCreateTag(name: string) {

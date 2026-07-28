@@ -134,6 +134,69 @@ public class IssueTagService {
     }
 
     /**
+     * 批量为 Issue 添加标签
+     *
+     * @param issueId 工单 ID
+     * @param tagIds  标签 ID 列表
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void addTagsToIssue(Long issueId, List<Long> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return;
+        }
+        assertIssueProjectActive(issueId);
+
+        // 批量查标签（一次 DB 调用）
+        List<IssueTag> tags = tagMapper.selectBatchIds(tagIds);
+        if (tags.size() != tagIds.size()) {
+            // 找出不存在的 ID
+            var foundIds = tags.stream().map(IssueTag::getId).collect(java.util.stream.Collectors.toSet());
+            var missingIds = tagIds.stream().filter(id -> !foundIds.contains(id)).toList();
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "标签不存在: " + missingIds);
+        }
+
+        // 查已有关联（避免重复插入）
+        List<IssueTagRelation> existingRelations = tagRelationMapper.selectList(
+                new LambdaQueryWrapper<IssueTagRelation>()
+                        .eq(IssueTagRelation::getIssueId, issueId)
+                        .in(IssueTagRelation::getTagId, tagIds)
+        );
+        var existingTagIds = existingRelations.stream()
+                .map(IssueTagRelation::getTagId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 过滤出需要新增的
+        List<Long> newTagIds = tagIds.stream()
+                .filter(id -> !existingTagIds.contains(id))
+                .toList();
+        if (newTagIds.isEmpty()) {
+            return; // 全部已存在，幂等处理
+        }
+
+        // 批量插入关联
+        LocalDateTime now = LocalDateTime.now();
+        for (Long tagId : newTagIds) {
+            IssueTagRelation relation = new IssueTagRelation();
+            relation.setIssueId(issueId);
+            relation.setTagId(tagId);
+            relation.setCreatedAt(now);
+            tagRelationMapper.insert(relation);
+        }
+
+        // 发送标签变更通知
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue != null) {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            var tagNameMap = tags.stream().collect(java.util.stream.Collectors.toMap(IssueTag::getId, IssueTag::getName));
+            String addedNames = newTagIds.stream()
+                    .map(tagNameMap::get)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            eventPublisher.publishEvent(new IssueNotificationEvent.FieldUpdated(
+                    issue, "tags", null, addedNames, currentUserId));
+        }
+    }
+
+    /**
      * 移除 Issue 上的标签
      */
     @Transactional(rollbackFor = Exception.class)

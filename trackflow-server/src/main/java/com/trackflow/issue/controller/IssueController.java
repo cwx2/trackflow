@@ -441,7 +441,7 @@ public class IssueController {
     @PostMapping("/{id}/tags")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> addTag(@PathVariable("id") Long id, @Valid @RequestBody AddTagDTO dto) {
-        tagService.addTagToIssue(id, dto.getTagId());
+        tagService.addTagsToIssue(id, dto.getEffectiveTagIds());
         return R.ok();
     }
 

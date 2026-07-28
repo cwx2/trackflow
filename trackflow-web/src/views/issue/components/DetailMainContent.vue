@@ -92,15 +92,17 @@
               class="tag-search-input"
               placeholder="搜索或创建标签..."
               @keyup.enter="createNewTag"
-              @keyup.escape="showTagPicker = false"
+              @keyup.escape="cancelTagPicker"
             />
             <div class="tag-picker-list">
               <div
                 v-for="t in filteredAvailableTags"
                 :key="t.id"
                 class="tag-picker-item"
-                @click="selectTag(t)"
+                :class="{ selected: selectedTagIds.has(t.id) }"
+                @click="toggleTagSelection(t)"
               >
+                <span class="tag-picker-check">{{ selectedTagIds.has(t.id) ? '✓' : '' }}</span>
                 <span class="tag-picker-dot" :style="{ background: t.color }"></span>
                 {{ t.name }}
               </div>
@@ -110,6 +112,9 @@
               <div v-if="filteredAvailableTags.length === 0 && !tagSearch" class="tag-picker-empty">
                 暂无可用标签
               </div>
+            </div>
+            <div class="tag-picker-actions" v-if="selectedTagIds.size > 0">
+              <button class="tag-picker-confirm" @click="confirmTagSelection">添加 {{ selectedTagIds.size }} 个标签</button>
             </div>
           </div>
         </div>
@@ -225,6 +230,7 @@ const emit = defineEmits<{
   'update-desc': [val: string]
   'remove-tag': [id: string]
   'add-tag': [tag: TagItem]
+  'add-tags': [tags: TagItem[]]
   'create-tag': [name: string]
   'add-link': []
   'upload': []
@@ -248,6 +254,7 @@ const descHtml = computed(() => renderMarkdown(props.description))
 const showTagPicker = ref(false)
 const tagSearch = ref('')
 const tagSearchRef = ref<HTMLInputElement>()
+const selectedTagIds = ref<Set<string>>(new Set())
 
 const filteredAvailableTags = computed(() => {
   const existingIds = new Set(props.tags.map(t => t.id))
@@ -257,10 +264,44 @@ const filteredAvailableTags = computed(() => {
   return available.filter(t => t.name.toLowerCase().includes(kw))
 })
 
+function toggleTagSelection(tag: TagItem) {
+  if (selectedTagIds.value.has(tag.id)) {
+    selectedTagIds.value.delete(tag.id)
+  } else {
+    selectedTagIds.value.add(tag.id)
+  }
+  // Force reactivity
+  selectedTagIds.value = new Set(selectedTagIds.value)
+}
+
+function confirmTagSelection() {
+  if (selectedTagIds.value.size === 0) {
+    showTagPicker.value = false
+    return
+  }
+  const allAvailable = (props.availableTags || [])
+  const selectedTags = allAvailable.filter(t => selectedTagIds.value.has(t.id))
+  if (selectedTags.length === 1) {
+    emit('add-tag', selectedTags[0])
+  } else if (selectedTags.length > 1) {
+    emit('add-tags', selectedTags)
+  }
+  showTagPicker.value = false
+  tagSearch.value = ''
+  selectedTagIds.value = new Set()
+}
+
+function cancelTagPicker() {
+  showTagPicker.value = false
+  tagSearch.value = ''
+  selectedTagIds.value = new Set()
+}
+
 function selectTag(tag: TagItem) {
   emit('add-tag', tag)
   showTagPicker.value = false
   tagSearch.value = ''
+  selectedTagIds.value = new Set()
 }
 
 function createNewTag() {
@@ -452,9 +493,21 @@ function commitDesc(content: string) {
   transition: background 150ms;
 }
 .tag-picker-item:hover { background: var(--tf-bg-hover); }
+.tag-picker-item.selected { background: var(--tf-bg-active); }
 .tag-picker-item.create { color: var(--tf-accent); font-weight: 500; }
+.tag-picker-check { width: 14px; font-size: 11px; color: var(--tf-accent); font-weight: 600; text-align: center; flex-shrink: 0; }
 .tag-picker-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .tag-picker-empty { padding: 12px; text-align: center; font-size: 11px; color: var(--tf-text-muted); }
+.tag-picker-actions {
+  padding: 6px 8px; border-top: 1px solid var(--tf-border);
+  display: flex; justify-content: flex-end;
+}
+.tag-picker-confirm {
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500;
+  background: var(--tf-accent); color: #fff; border: none; cursor: pointer;
+  transition: opacity 150ms;
+}
+.tag-picker-confirm:hover { opacity: 0.85; }
 
 /* Description */
 .description { min-height: 32px; margin-bottom: 24px; padding: 0; }

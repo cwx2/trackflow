@@ -207,9 +207,14 @@ export const issueApi = {
     return request.get<any, R<IssueTagVO[]>>(`/issues/${issueId}/tags`)
   },
 
-  /** 添加标签 */
+  /** 添加标签（支持单个或批量） */
   addTag(issueId: string, tagId: string) {
-    return request.post<any, R<void>>(`/issues/${issueId}/tags`, { tagId })
+    return request.post<any, R<void>>(`/issues/${issueId}/tags`, { tagIds: [tagId] })
+  },
+
+  /** 批量添加标签 */
+  addTags(issueId: string, tagIds: string[]) {
+    return request.post<any, R<void>>(`/issues/${issueId}/tags`, { tagIds })
   },
 
   /** 移除标签 */
