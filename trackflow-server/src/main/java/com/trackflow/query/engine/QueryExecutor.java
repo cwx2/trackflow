@@ -1,11 +1,14 @@
 package com.trackflow.query.engine;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
+import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.mapper.CustomFieldDefinitionMapper;
 import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -40,6 +43,7 @@ public class QueryExecutor {
     private final IssueMapper issueMapper;
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldSortHelper customFieldSortHelper;
+    private final CustomFieldDefinitionMapper customFieldDefinitionMapper;
 
     /**
      * 允许排序的字段白名单（数据库列名）
@@ -275,7 +279,13 @@ public class QueryExecutor {
                     // 自定义字段筛选（通过 custom_field_value EAV 表）
                     if (field.startsWith("cf.") || field.startsWith("customField.")) {
                         String cfKey = field.contains(".") ? field.substring(field.indexOf('.') + 1) : field;
-                        applyCustomFieldFilter(wrapper, cfKey, operator, values);
+                        // 如果 cfKey 不是纯数字 ID，尝试通过名称或别名查找字段
+                        String resolvedFieldId = resolveCustomFieldId(cfKey);
+                        if (resolvedFieldId != null) {
+                            applyCustomFieldFilter(wrapper, resolvedFieldId, operator, values);
+                        } else {
+                            log.warn("未找到自定义字段（按名称/别名）: {}", cfKey);
+                        }
                     } else {
                         log.warn("未知的筛选字段被忽略: {}", field);
                     }
@@ -635,5 +645,59 @@ public class QueryExecutor {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 解析自定义字段标识符，支持以下格式：
+     * 1. 纯数字 ID：直接返回（如 "1234567890"）
+     * 2. 字段名称：通过 name 匹配
+     * 3. 字段别名：通过 aliases 列中的逗号分隔值匹配
+     *
+     * @param cfKey 字段标识符（ID、名称或别名）
+     * @return 解析后的字段 ID，找不到返回 null
+     */
+    private String resolveCustomFieldId(String cfKey) {
+        if (cfKey == null || cfKey.isBlank()) {
+            return null;
+        }
+
+        // 如果是纯数字，假定是字段 ID，直接返回（符合 CF_KEY_PATTERN 校验）
+        if (cfKey.matches("^\\d+$")) {
+            return cfKey;
+        }
+
+        // 先尝试精确匹配字段名称
+        CustomFieldDefinition byName = customFieldDefinitionMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .eq(CustomFieldDefinition::getName, cfKey)
+                        .last("LIMIT 1")
+        );
+        if (byName != null) {
+            return String.valueOf(byName.getId());
+        }
+
+        // 再尝试匹配别名（aliases 存储为逗号分隔字符串，如 "for,assigned to"）
+        // 使用数据库 LIKE 匹配（考虑性能，这里假设自定义字段数量不会很多）
+        List<CustomFieldDefinition> allFields = customFieldDefinitionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldDefinition>()
+                        .isNotNull(CustomFieldDefinition::getAliases)
+                        .ne(CustomFieldDefinition::getAliases, "")
+        );
+
+        String searchKey = cfKey.toLowerCase().trim();
+        for (CustomFieldDefinition field : allFields) {
+            String aliases = field.getAliases();
+            if (aliases != null && !aliases.isBlank()) {
+                String[] aliasArray = aliases.split(",");
+                for (String alias : aliasArray) {
+                    if (alias.trim().equalsIgnoreCase(searchKey)) {
+                        return String.valueOf(field.getId());
+                    }
+                }
+            }
+        }
+
+        // 找不到匹配的字段
+        return null;
     }
 }
