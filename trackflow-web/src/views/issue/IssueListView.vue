@@ -3470,7 +3470,7 @@ onMounted(async () => {
   }
 
   // Handle dashboard filter params (statusId, statusCode, statusCategory, label, sprint, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
     applyDashboardFilter()
   } else if (!route.query.project && !activeProjectId.value) {
     // Auto-select default saved query (e.g., "分配给我") when no URL params override the view
@@ -3595,6 +3595,17 @@ function applyDashboardFilter() {
     filters.reportedByMe = 'true'
     chips.push({
       fieldKey: 'reporter',
+      operator: 'equals',
+      values: ['me'],
+      valueLabels: ['我']
+    })
+  }
+
+  // assignedToMe: 分配给我的工单
+  if (route.query.assignedToMe) {
+    filters.assignedToMe = 'true'
+    chips.push({
+      fieldKey: 'assignee',
       operator: 'equals',
       values: ['me'],
       valueLabels: ['我']

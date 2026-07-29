@@ -40,6 +40,7 @@ export interface IssueListFilters {
   overdue?: string
   dueSoon?: string
   reportedByMe?: string
+  assignedToMe?: string
   hideResolved?: string
 }
 
@@ -121,6 +122,7 @@ export function useIssueList() {
       if (filters.overdue) params.overdue = filters.overdue
       if (filters.dueSoon) params.dueSoon = filters.dueSoon
       if (filters.reportedByMe) params.reportedByMe = filters.reportedByMe
+      if (filters.assignedToMe) params.assignedToMe = filters.assignedToMe
       if (filters.hideResolved) params.hideResolved = filters.hideResolved
 
       let res

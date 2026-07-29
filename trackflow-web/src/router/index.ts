@@ -279,7 +279,8 @@ router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next({ name: 'Login' })
+    // 保存原始目标 URL，登录成功后跳回
+    next({ name: 'Login', query: { returnUrl: to.fullPath } })
     return
   }
 

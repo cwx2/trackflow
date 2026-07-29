@@ -875,7 +875,10 @@ function emitFilters() {
         if (!isNegative) filters.projectId = chip.values[0]
         break
       case 'assignee':
-        if (!isNegative) filters.assigneeId = chip.values.join(',')
+        if (!isNegative) {
+          if (chip.values.includes('me')) filters.assignedToMe = 'true'
+          else filters.assigneeId = chip.values.join(',')
+        }
         else filters.assigneeIdNot = chip.values.join(',')
         break
       case 'sprint':

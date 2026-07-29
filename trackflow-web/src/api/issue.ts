@@ -25,6 +25,8 @@ export const issueApi = {
     resolvedAfter?: string; resolvedBefore?: string
     dueAfter?: string; dueBefore?: string
     excludeDoneBefore?: string
+    reportedByMe?: string; assignedToMe?: string
+    overdue?: string; dueSoon?: string
   }) {
     return request.get<any, R<PageResult<IssueVO>>>('/issues', { params })
   },

@@ -308,8 +308,10 @@ public class IssueService {
         applyFilter(wrapper, "status_id", query.getStatusId(), true);
         // priority: supports single or comma-separated
         applyFilter(wrapper, "priority", query.getPriority(), false);
-        // assigneeId: supports single or comma-separated
-        applyFilter(wrapper, "assignee_id", query.getAssigneeId(), true);
+        // assigneeId: supports single or comma-separated (skipped when assignedToMe=true, which takes priority)
+        if (!"true".equalsIgnoreCase(query.getAssignedToMe())) {
+            applyFilter(wrapper, "assignee_id", query.getAssigneeId(), true);
+        }
         // assigneeName: lookup by display name (used by report drill-down)
         if (query.getAssigneeName() != null && !query.getAssigneeName().isBlank()) {
             wrapper.apply("assignee_id IN (SELECT id FROM sys_user WHERE display_name = {0})", query.getAssigneeName().trim());
@@ -427,6 +429,11 @@ public class IssueService {
         // reportedByMe: reporter_id = current user
         if ("true".equals(query.getReportedByMe())) {
             wrapper.eq("reporter_id", currentUserId);
+        }
+
+        // assignedToMe: assignee_id = current user
+        if ("true".equalsIgnoreCase(query.getAssignedToMe())) {
+            wrapper.eq("assignee_id", currentUserId);
         }
 
         // excludeDoneBefore: 排除在此日期之前完成的工单（看板"已完成保留天数"服务端过滤）

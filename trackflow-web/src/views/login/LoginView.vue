@@ -16,8 +16,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+const route = useRoute()
 const authStore = useAuthStore()
 const logoutReason = ref<string | null>(null)
 
@@ -27,6 +29,12 @@ onMounted(() => {
   if (reason) {
     logoutReason.value = reason
     sessionStorage.removeItem('tf_logout_reason')
+  }
+
+  // 保存 returnUrl 到 sessionStorage（OAuth 重定向会丢失 query param）
+  const returnUrl = route.query.returnUrl as string | undefined
+  if (returnUrl && returnUrl.startsWith('/')) {
+    sessionStorage.setItem('tf_return_url', returnUrl)
   }
 })
 

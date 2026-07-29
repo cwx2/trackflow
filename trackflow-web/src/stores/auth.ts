@@ -378,6 +378,14 @@ export const useAuthStore = defineStore('auth', () => {
       authApi.notifyLogout().catch(() => { /* ignore - best effort */ })
     }
 
+    // 被动登出（token 过期）：保存当前页面路径，登录后跳回
+    if (reason) {
+      const currentPath = window.location.pathname + window.location.search
+      if (currentPath && currentPath !== '/' && currentPath !== '/login' && !currentPath.startsWith('/auth/')) {
+        sessionStorage.setItem('tf_return_url', currentPath)
+      }
+    }
+
     clearRefreshTimer()
     stopTokenCheckInterval()
     clearStorage()
@@ -401,6 +409,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     // 主动登出：走 Keycloak logout 端点，销毁 SSO session
+    // 清除可能残留的 returnUrl（主动登出不应跳回原页面）
+    sessionStorage.removeItem('tf_return_url')
     const params = new URLSearchParams({
       client_id: KEYCLOAK_CONFIG.clientId,
       post_logout_redirect_uri: KEYCLOAK_CONFIG.logoutUri

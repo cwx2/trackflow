@@ -52,6 +52,7 @@ public class IssueQuery extends PageQuery {
     private String overdue;   // "true" = due_date < today AND status not done
     private String dueSoon;   // "true" = due_date <= today+7 AND status not done
     private String reportedByMe;  // "true" = reporter_id = current user AND status not done
+    private String assignedToMe;  // "true" = assignee_id = current user
     private String hideResolved;  // "true" = exclude issues with is_closed=true statuses
     private String onlyResolved;  // "true" = only show issues with is_closed=true statuses
 

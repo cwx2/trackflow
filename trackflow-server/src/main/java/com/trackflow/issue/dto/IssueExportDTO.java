@@ -53,6 +53,7 @@ public class IssueExportDTO {
     private String overdue;
     private String dueSoon;
     private String reportedByMe;
+    private String assignedToMe;
     private String hideResolved;
     private String dueAfter;   // due_date >= dueAfter (yyyy-MM-dd)
     private String dueBefore;  // due_date <= dueBefore (yyyy-MM-dd)
@@ -82,6 +83,7 @@ public class IssueExportDTO {
         q.setOverdue(this.overdue);
         q.setDueSoon(this.dueSoon);
         q.setReportedByMe(this.reportedByMe);
+        q.setAssignedToMe(this.assignedToMe);
         q.setHideResolved(this.hideResolved);
         // Date range: parse String → LocalDate
         if (this.createdAfter != null && !this.createdAfter.isBlank()) {

@@ -25,7 +25,14 @@ onMounted(async () => {
 
   try {
     await authStore.handleCallback(code, state)
-    router.push('/issues')
+    // 登录成功后跳回原目标页面（如果有保存的 returnUrl）
+    const returnUrl = sessionStorage.getItem('tf_return_url')
+    sessionStorage.removeItem('tf_return_url')
+    if (returnUrl && returnUrl.startsWith('/')) {
+      router.push(returnUrl)
+    } else {
+      router.push('/issues')
+    }
   } catch (error) {
     console.error('Auth callback failed:', error)
     router.push('/login')
