@@ -2,8 +2,10 @@ package com.trackflow.customfield.controller;
 
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
+import com.trackflow.customfield.dto.ConvertFieldTypeDTO;
 import com.trackflow.customfield.dto.CreateCustomFieldDTO;
 import com.trackflow.customfield.dto.CustomFieldQuery;
+import com.trackflow.customfield.dto.ReplaceFieldDTO;
 import com.trackflow.customfield.dto.ReorderCustomFieldDTO;
 import com.trackflow.customfield.dto.ReorderProjectFieldsDTO;
 import com.trackflow.customfield.dto.SetFieldConditionDTO;
@@ -13,13 +15,19 @@ import com.trackflow.customfield.dto.SetFieldVisibilityDTO;
 import com.trackflow.customfield.dto.UpdateCustomFieldDTO;
 import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.customfield.converter.CustomFieldConverter;
+import com.trackflow.customfield.service.CustomFieldReplacementService;
 import com.trackflow.customfield.service.CustomFieldService;
+import com.trackflow.customfield.service.CustomFieldTypeConversionService;
 import com.trackflow.customfield.vo.AvailableColumnVO;
+import com.trackflow.customfield.vo.AvailableConversionsVO;
+import com.trackflow.customfield.vo.ConversionResultVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
 import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import com.trackflow.customfield.vo.OptionUsageItemVO;
 import com.trackflow.customfield.vo.ProjectFieldsVO;
+import com.trackflow.customfield.vo.ReplaceResultVO;
+import com.trackflow.customfield.vo.ReplaceableFieldsVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +45,8 @@ import java.util.List;
 public class CustomFieldController {
 
     private final CustomFieldService customFieldService;
+    private final CustomFieldTypeConversionService typeConversionService;
+    private final CustomFieldReplacementService replacementService;
     private final CustomFieldConverter converter;
 
     // ========== Admin 端点（需要 system:manage_custom_fields 权限）==========
@@ -339,5 +349,76 @@ public class CustomFieldController {
             @Valid @RequestBody SetFieldFilterRulesDTO dto) {
         customFieldService.setFieldFilterRules(projectId, fieldId, dto.getFilterFieldId(), dto.getRules());
         return R.ok();
+    }
+
+    // ========== 类型转换端点（Change Field Type）==========
+
+    /**
+     * 获取字段可用的类型转换选项。
+     * <p>
+     * 返回当前字段可以转换到的目标类型列表，以及是否允许转换（被看板使用的字段不允许）。
+     */
+    @GetMapping("/admin/custom-fields/{id}/conversions")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<AvailableConversionsVO> getAvailableConversions(@PathVariable("id") Long id) {
+        return R.ok(typeConversionService.getAvailableConversions(id));
+    }
+
+    /**
+     * 转换字段类型。
+     * <p>
+     * 将字段从当前类型转换为指定目标类型，同时批量转换所有已有值。
+     * 类型转换是全局操作，影响所有使用该字段的项目。
+     *
+     * @param id  字段 ID
+     * @param dto 包含目标类型和转换选项
+     * @return 转换结果（受影响的 issue 数、转换的值数等）
+     */
+    @PostMapping("/admin/custom-fields/{id}/convert")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<ConversionResultVO> convertFieldType(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody ConvertFieldTypeDTO dto) {
+        return R.ok(typeConversionService.convertFieldType(id, dto.getTargetFormat(), dto.getPeriodUnit()));
+    }
+
+    // ========== 字段替换端点（Replace Custom Field）==========
+
+    /**
+     * 获取可用于替换指定字段的字段列表。
+     * <p>
+     * 只返回与当前字段类型相同（list 类型还需 isMulti 一致）的其他字段。
+     */
+    @GetMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/replacements")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<ReplaceableFieldsVO> getAvailableReplacements(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId) {
+        return R.ok(replacementService.getAvailableReplacements(projectId, fieldId));
+    }
+
+    /**
+     * 用目标字段替换当前字段。
+     * <p>
+     * 替换操作的行为（参照 YouTrack）：
+     * <ul>
+     *   <li>原字段的值集合（仅 list 类型）合并到目标字段</li>
+     *   <li>原字段在本项目 issue 中的值复制到目标字段</li>
+     *   <li>原字段从本项目移除，目标字段附加到本项目</li>
+     *   <li>其他项目的数据不受影响</li>
+     * </ul>
+     *
+     * @param projectId 项目 ID
+     * @param fieldId   要被替换的字段 ID
+     * @param dto       包含目标字段 ID
+     * @return 替换结果
+     */
+    @PostMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/replace")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<ReplaceResultVO> replaceField(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody ReplaceFieldDTO dto) {
+        return R.ok(replacementService.replaceField(projectId, fieldId, dto.getTargetFieldId()));
     }
 }
