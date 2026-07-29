@@ -758,6 +758,14 @@ public class SprintService {
         // 查找未关闭工单（JOIN issue_status 判断 is_closed）
         List<Issue> openIssues = findOpenIssuesInSprint(id);
 
+        // ⚠️ 先统计总工单数（必须在迁移操作之前，否则移走的工单不会被计入）
+        long totalIssuesInSprint = issueMapper.selectCount(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getSprintId, id)
+                        .isNull(Issue::getDeletedAt)
+        );
+        int completedIssues = (int) (totalIssuesInSprint - openIssues.size());
+
         // 有未完成工单时必须传入处理方式
         if (!openIssues.isEmpty()) {
             if (dto == null || dto.getMoveOption() == null || dto.getMoveOption().isBlank()) {
@@ -850,13 +858,8 @@ public class SprintService {
         }
         projectActivityService.log(sprint.getProjectId(), completeUserId, "complete_sprint", null, completeDetail);
 
-        // 通知项目成员 Sprint 已完成（已完成工单数 = 总工单 - 未关闭工单）— 事务提交后触发
-        long totalIssuesInSprint = issueMapper.selectCount(
-                new LambdaQueryWrapper<Issue>()
-                        .eq(Issue::getSprintId, id)
-                        .isNull(Issue::getDeletedAt)
-        );
-        int completedIssues = (int) (totalIssuesInSprint - openIssues.size());
+        // 通知项目成员 Sprint 已完成 — 事务提交后触发
+        // 注意：completedIssues 已在方法开头计算，确保在工单迁移前统计
         eventPublisher.publishEvent(new SprintNotificationEvent.Completed(sprint, Math.max(completedIssues, 0), completeUserId));
 
         // 失效 Dashboard 缓存 — 事务提交后触发
