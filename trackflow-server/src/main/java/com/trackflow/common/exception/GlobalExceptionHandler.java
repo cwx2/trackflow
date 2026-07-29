@@ -1,13 +1,16 @@
 package com.trackflow.common.exception;
 
+import com.trackflow.auth.security.TrackFlowPermissionEvaluator;
 import com.trackflow.common.model.R;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -15,11 +18,15 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -27,19 +34,163 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+
+    private final TrackFlowPermissionEvaluator permissionEvaluator;
+
+    /**
+     * 支持的 @PreAuthorize 表达式模式（用于早期权限检查）
+     */
+    private static final Pattern CHECK_ISSUE_PATTERN = Pattern.compile(
+            "@perm\\.checkIssue\\(#(\\w+),\\s*'([^']+)'\\)");
+    private static final Pattern CHECK_PROJECT_PATTERN = Pattern.compile(
+            "@perm\\.checkProject\\(#(\\w+),\\s*'([^']+)'\\)");
+    private static final Pattern CHECK_PATTERN = Pattern.compile(
+            "@perm\\.check\\(#(\\w+),\\s*'([^']+)'\\)");
+    private static final Pattern CHECK_SPRINT_PATTERN = Pattern.compile(
+            "@perm\\.checkSprint\\(#(\\w+),\\s*'([^']+)'\\)");
+    private static final Pattern CHECK_GLOBAL_PATTERN = Pattern.compile(
+            "@perm\\.checkGlobal\\('([^']+)'\\)");
+    private static final Pattern CHECK_DELETED_ISSUE_PATTERN = Pattern.compile(
+            "@perm\\.checkDeletedIssue\\(#(\\w+),\\s*'([^']+)'\\)");
 
     /**
      * 参数校验异常
+     * <p>
+     * 安全优先原则：当参数校验失败时，先检查当前用户是否有权限执行该操作。
+     * 如果权限不足，返回 403（不暴露接口参数结构）；否则返回 400 和具体错误。
+     * <p>
+     * 参考：https://github.com/spring-projects/spring-boot/issues/10157
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<R<Void>> handleValidationException(MethodArgumentNotValidException ex) {
+    public ResponseEntity<R<Void>> handleValidationException(MethodArgumentNotValidException ex,
+                                                              HttpServletRequest request) {
+        // 安全优先：先检查权限，权限不足则返回 403
+        HandlerMethod handlerMethod = (HandlerMethod) request.getAttribute(
+                HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
+        
+        if (handlerMethod != null) {
+            boolean hasPermission = checkEarlyPermission(request, handlerMethod);
+            if (!hasPermission) {
+                log.info("Validation failed but user has no permission, returning 403 instead of 400: {} {}",
+                        request.getMethod(), request.getRequestURI());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(R.fail(ErrorCode.ACCESS_DENIED, "权限不足，您没有执行此操作的权限"));
+            }
+        }
+
+        // 权限检查通过，返回正常的参数校验错误
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining("; "));
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(R.fail(ErrorCode.VALIDATION_ERROR, message));
+    }
+
+    /**
+     * 早期权限检查：在参数校验失败时检查用户是否有权限
+     * 
+     * @return true 如果有权限或无法确定（保守处理）；false 如果明确无权限
+     */
+    @SuppressWarnings("unchecked")
+    private boolean checkEarlyPermission(HttpServletRequest request, HandlerMethod handlerMethod) {
+        PreAuthorize preAuthorize = handlerMethod.getMethodAnnotation(PreAuthorize.class);
+        if (preAuthorize == null) {
+            return true;
+        }
+
+        String expression = preAuthorize.value();
+        if (expression == null || expression.isBlank()) {
+            return true;
+        }
+
+        Map<String, String> pathVariables = (Map<String, String>) request.getAttribute(
+                HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+
+        try {
+            return evaluatePermissionExpression(expression, pathVariables);
+        } catch (Exception e) {
+            log.debug("Failed to evaluate early permission: {}", e.getMessage());
+            return true; // 保守返回 true
+        }
+    }
+
+    /**
+     * 解析并执行权限表达式
+     */
+    private boolean evaluatePermissionExpression(String expression, Map<String, String> pathVariables) {
+        // 1. checkIssue(#id, 'permission')
+        Matcher matcher = CHECK_ISSUE_PATTERN.matcher(expression);
+        if (matcher.find()) {
+            String varName = matcher.group(1);
+            String permission = matcher.group(2);
+            Long issueId = extractLongVariable(pathVariables, varName);
+            if (issueId == null) return true;
+            return permissionEvaluator.checkIssue(issueId, permission);
+        }
+
+        // 2. checkProject(#identifier, 'permission')
+        matcher = CHECK_PROJECT_PATTERN.matcher(expression);
+        if (matcher.find()) {
+            String varName = matcher.group(1);
+            String permission = matcher.group(2);
+            String identifier = pathVariables != null ? pathVariables.get(varName) : null;
+            if (identifier == null || identifier.isBlank()) return true;
+            return permissionEvaluator.checkProject(identifier, permission);
+        }
+
+        // 3. check(#projectId, 'permission')
+        matcher = CHECK_PATTERN.matcher(expression);
+        if (matcher.find()) {
+            String varName = matcher.group(1);
+            String permission = matcher.group(2);
+            Long projectId = extractLongVariable(pathVariables, varName);
+            if (projectId == null) return true;
+            return permissionEvaluator.check(projectId, permission);
+        }
+
+        // 4. checkSprint(#id, 'permission')
+        matcher = CHECK_SPRINT_PATTERN.matcher(expression);
+        if (matcher.find()) {
+            String varName = matcher.group(1);
+            String permission = matcher.group(2);
+            Long sprintId = extractLongVariable(pathVariables, varName);
+            if (sprintId == null) return true;
+            return permissionEvaluator.checkSprint(sprintId, permission);
+        }
+
+        // 5. checkGlobal('permission')
+        matcher = CHECK_GLOBAL_PATTERN.matcher(expression);
+        if (matcher.find()) {
+            String permission = matcher.group(1);
+            return permissionEvaluator.checkGlobal(permission);
+        }
+
+        // 6. checkDeletedIssue(#id, 'permission')
+        matcher = CHECK_DELETED_ISSUE_PATTERN.matcher(expression);
+        if (matcher.find()) {
+            String varName = matcher.group(1);
+            String permission = matcher.group(2);
+            Long issueId = extractLongVariable(pathVariables, varName);
+            if (issueId == null) return true;
+            return permissionEvaluator.checkDeletedIssue(issueId, permission);
+        }
+
+        // 无法解析的表达式，保守返回 true
+        return true;
+    }
+
+    private Long extractLongVariable(Map<String, String> pathVariables, String varName) {
+        if (pathVariables == null) return null;
+        String value = pathVariables.get(varName);
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
