@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { IconPushpin, IconMore, IconClose, IconMoreVertical, IconList, IconCloseCircle, IconEyeInvisible } from '@arco-design/web-vue/es/icon'
 import { useRecentIssues } from '../composables/useRecentIssues'
 
 const {
