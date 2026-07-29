@@ -46,8 +46,19 @@ export const sprintApi = {
     return request.get<any, R<SprintVO>>(`/sprints/${id}`)
   },
 
-  /** 更新 Sprint */
-  update(id: string, data: { name?: string; goal?: string; startDate?: string; endDate?: string }) {
+  /** 更新 Sprint（支持清空日期恢复为 unscheduled 状态） */
+  update(id: string, data: {
+    name?: string
+    goal?: string
+    startDate?: string
+    endDate?: string
+    /** 清空开始日期（恢复为 unscheduled） */
+    clearStartDate?: boolean
+    /** 清空结束日期 */
+    clearEndDate?: boolean
+    /** 确认日期重叠（跳过重叠检测） */
+    confirmOverlap?: boolean
+  }) {
     return request.put<any, R<SprintVO>>(`/sprints/${id}`, data)
   },
 
