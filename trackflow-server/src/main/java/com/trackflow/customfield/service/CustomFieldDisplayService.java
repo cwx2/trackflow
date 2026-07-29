@@ -552,6 +552,14 @@ public class CustomFieldDisplayService {
                 }
             }
             case "bool" -> "true".equals(rawValue) ? "是" : "否";
+            case "period" -> {
+                try {
+                    long minutes = Long.parseLong(rawValue);
+                    yield CustomFieldValidationEngine.formatMinutesToPeriod(minutes);
+                } catch (NumberFormatException e) {
+                    yield rawValue;
+                }
+            }
             case "string", "text", "int", "float", "date", "datetime" -> rawValue;
             default -> {
                 log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
@@ -586,6 +594,14 @@ public class CustomFieldDisplayService {
                 }
             }
             case "bool" -> { return "true".equals(rawValue) ? "是" : "否"; }
+            case "period" -> {
+                try {
+                    long minutes = Long.parseLong(rawValue);
+                    return CustomFieldValidationEngine.formatMinutesToPeriod(minutes);
+                } catch (NumberFormatException e) {
+                    return rawValue;
+                }
+            }
             case "string", "text", "int", "float", "date", "datetime" -> { return rawValue; }
             default -> {
                 log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",

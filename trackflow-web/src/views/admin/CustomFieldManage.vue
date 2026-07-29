@@ -188,6 +188,10 @@
                   {{ selectedField.isPrivate ? '是（仅授权用户可见）' : '否' }}
                 </span>
               </div>
+              <div v-if="selectedField.aliases" class="detail-row">
+                <span class="detail-label">别名</span>
+                <span class="detail-value">{{ selectedField.aliases }}</span>
+              </div>
               <div v-if="selectedField.isMulti" class="detail-row">
                 <span class="detail-label">多值</span>
                 <span class="detail-value">是</span>
@@ -286,6 +290,16 @@
         <a-form-item label="隐藏于工单列表">
           <a-switch v-model="form.isHiddenInList" />
           <div class="form-help">开启后，此字段默认不出现在工单列表的列选择器中（用户仍可通过个人设置手动添加）</div>
+        </a-form-item>
+
+        <a-form-item label="字段别名">
+          <a-input-tag
+            v-model="form.aliases"
+            placeholder="输入别名后按回车添加"
+            :max-tag-count="10"
+            allow-clear
+          />
+          <div class="form-help">设置一个或多个别名，用户可在搜索和命令中使用别名代替字段名。例如：Assignee 字段的别名可以是 "for"、"分配给"。</div>
         </a-form-item>
 
         <a-form-item label="默认值">
@@ -623,6 +637,7 @@ const form = reactive({
   isForAll: false,
   isMulti: false,
   isHiddenInList: false,
+  aliases: [] as string[],
   defaultValue: '',
   minLength: 0,
   maxLength: 0,
@@ -650,7 +665,8 @@ const fieldTypeOptions = [
   { value: 'datetime', label: '日期时间' },
   { value: 'bool', label: '布尔' },
   { value: 'list', label: '列表(枚举)' },
-  { value: 'user', label: '用户' }
+  { value: 'user', label: '用户' },
+  { value: 'period', label: '时间周期' }
 ]
 
 function formatTypeLabel(format: string) {
@@ -730,6 +746,7 @@ function resetForm() {
   form.isForAll = false
   form.isMulti = false
   form.isHiddenInList = false
+  form.aliases = []
   form.defaultValue = ''
   form.minLength = 0
   form.maxLength = 0
@@ -824,6 +841,8 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.isForAll = record.isForAll
   form.isMulti = record.isMulti || false
   form.isHiddenInList = record.isHiddenInList || false
+  // 解析 aliases：后端存储为逗号分隔字符串，前端转为数组
+  form.aliases = record.aliases ? record.aliases.split(',').map(s => s.trim()).filter(Boolean) : []
   form.defaultValue = record.defaultValue || ''
   form.minLength = record.minLength
   form.maxLength = record.maxLength
@@ -1003,6 +1022,9 @@ async function handleSave() {
     return
   }
 
+  // 将别名数组转换为逗号分隔字符串
+  const aliasesStr = form.aliases.length > 0 ? form.aliases.join(',') : undefined
+
   saving.value = true
   try {
     if (editingId.value) {
@@ -1011,6 +1033,7 @@ async function handleSave() {
         isRequired: form.isRequired,
         isForAll: form.isForAll,
         isHiddenInList: form.isHiddenInList,
+        aliases: aliasesStr,
         defaultValue: form.defaultValue || undefined,
         minLength: form.minLength,
         maxLength: form.maxLength,
@@ -1030,6 +1053,7 @@ async function handleSave() {
         isRequired: form.isRequired,
         isForAll: form.isForAll,
         isHiddenInList: form.isHiddenInList,
+        aliases: aliasesStr,
         defaultValue: form.defaultValue || undefined,
         minLength: form.minLength,
         maxLength: form.maxLength,

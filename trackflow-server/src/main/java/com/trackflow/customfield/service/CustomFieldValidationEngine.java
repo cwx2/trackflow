@@ -35,7 +35,17 @@ public class CustomFieldValidationEngine {
     private final ProjectMemberMapper projectMemberMapper;
 
     public static final Set<String> SUPPORTED_FORMATS = Set.of(
-            "string", "text", "int", "float", "date", "datetime", "bool", "list", "user"
+            "string", "text", "int", "float", "date", "datetime", "bool", "list", "user", "period"
+    );
+
+    /**
+     * period（时间周期）格式的正则表达式
+     * 支持格式: 1w2d3h30m, 2h30m, 1d, 45m, 2h, 1w 等
+     * 也支持纯分钟数（整数）
+     */
+    private static final Pattern PERIOD_PATTERN = Pattern.compile(
+            "^(?:(\\d+)w)?\\s*(?:(\\d+)d)?\\s*(?:(\\d+)h)?\\s*(?:(\\d+)m)?$",
+            Pattern.CASE_INSENSITIVE
     );
 
     /**
@@ -84,6 +94,7 @@ public class CustomFieldValidationEngine {
             case "bool" -> validateBool(field, value, errors);
             case "list" -> validateList(field, value, errors);
             case "user" -> validateUser(field, value, projectId, errors);
+            case "period" -> validatePeriod(field, value, errors);
             default -> {
                 log.error("Unsupported field_format '{}' for field '{}' (id={})",
                         field.getFieldFormat(), field.getName(), field.getId());
@@ -258,6 +269,135 @@ public class CustomFieldValidationEngine {
         } catch (NumberFormatException e) {
             errors.add(new FieldValidationError(field.getName(), "无效的用户"));
         }
+    }
+
+    /**
+     * period（时间周期）类型验证
+     * 支持两种输入格式：
+     * 1. 周期表达式：1w2d3h30m, 2h30m, 1d, 45m 等
+     * 2. 纯分钟数：整数值（如 "150" 表示 2h30m）
+     *
+     * 验证通过后，值会被标准化存储为分钟数字符串
+     */
+    private void validatePeriod(CustomFieldDefinition field, String value, List<FieldValidationError> errors) {
+        // 先尝试作为纯整数（分钟数）解析
+        try {
+            long minutes = Long.parseLong(value);
+            if (minutes < 0) {
+                errors.add(new FieldValidationError(field.getName(), "时间周期不能为负数"));
+            }
+            return; // 纯数字格式有效
+        } catch (NumberFormatException ignored) {
+            // 不是纯数字，继续尝试周期表达式格式
+        }
+
+        // 尝试解析周期表达式
+        Long minutes = parsePeriodToMinutes(value);
+        if (minutes == null) {
+            errors.add(new FieldValidationError(field.getName(),
+                    "时间周期格式不正确，期望如 1w2d3h30m、2h30m、45m 或纯分钟数"));
+        } else if (minutes < 0) {
+            errors.add(new FieldValidationError(field.getName(), "时间周期不能为负数"));
+        }
+    }
+
+    /**
+     * 将周期表达式解析为分钟数
+     *
+     * @param periodStr 周期表达式，如 "1w2d3h30m", "2h30m", "1d", "45m"
+     * @return 总分钟数，解析失败返回 null
+     */
+    public static Long parsePeriodToMinutes(String periodStr) {
+        if (periodStr == null || periodStr.isBlank()) {
+            return null;
+        }
+
+        String trimmed = periodStr.trim().toLowerCase();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        // 先尝试纯数字
+        try {
+            return Long.parseLong(trimmed);
+        } catch (NumberFormatException ignored) {
+        }
+
+        // 解析周期表达式
+        var matcher = PERIOD_PATTERN.matcher(trimmed);
+        if (!matcher.matches()) {
+            return null;
+        }
+
+        long totalMinutes = 0;
+
+        String weeks = matcher.group(1);
+        String days = matcher.group(2);
+        String hours = matcher.group(3);
+        String mins = matcher.group(4);
+
+        // 至少要有一个部分
+        if (weeks == null && days == null && hours == null && mins == null) {
+            return null;
+        }
+
+        if (weeks != null) {
+            totalMinutes += Long.parseLong(weeks) * 7 * 24 * 60; // 1 week = 7 * 24 * 60 minutes
+        }
+        if (days != null) {
+            totalMinutes += Long.parseLong(days) * 24 * 60; // 1 day = 24 * 60 minutes
+        }
+        if (hours != null) {
+            totalMinutes += Long.parseLong(hours) * 60;
+        }
+        if (mins != null) {
+            totalMinutes += Long.parseLong(mins);
+        }
+
+        return totalMinutes;
+    }
+
+    /**
+     * 将分钟数格式化为人可读的周期字符串
+     *
+     * @param minutes 分钟数
+     * @return 格式化字符串，如 "1周 2天 3小时 30分钟"
+     */
+    public static String formatMinutesToPeriod(long minutes) {
+        if (minutes <= 0) {
+            return "0分钟";
+        }
+
+        long remaining = minutes;
+        StringBuilder sb = new StringBuilder();
+
+        // 周 (1 week = 7 * 24 * 60 = 10080 minutes)
+        long weeks = remaining / 10080;
+        if (weeks > 0) {
+            sb.append(weeks).append("周 ");
+            remaining %= 10080;
+        }
+
+        // 天 (1 day = 24 * 60 = 1440 minutes)
+        long days = remaining / 1440;
+        if (days > 0) {
+            sb.append(days).append("天 ");
+            remaining %= 1440;
+        }
+
+        // 小时
+        long hours = remaining / 60;
+        if (hours > 0) {
+            sb.append(hours).append("小时 ");
+            remaining %= 60;
+        }
+
+        // 分钟
+        if (remaining > 0) {
+            sb.append(remaining).append("分钟");
+        }
+
+        return sb.toString().trim();
     }
 
     @Data

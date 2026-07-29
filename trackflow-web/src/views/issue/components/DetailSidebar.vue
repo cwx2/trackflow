@@ -173,6 +173,12 @@
                 <input v-model="inputValue" type="text" class="input-field" :placeholder="field.label" @keyup.enter="commitInput(field)" />
                 <button class="input-btn" @click="commitInput(field)">确定</button>
               </div>
+              <!-- 时间周期输入 -->
+              <div class="dropdown-input period-input" v-if="field.editType === 'period'">
+                <input v-model="inputValue" type="text" class="input-field" placeholder="如: 2h30m, 1d, 1w2d" @keyup.enter="commitPeriodInput(field)" />
+                <button class="input-btn" @click="commitPeriodInput(field)">确定</button>
+                <button v-if="field.rawValue" class="input-btn clear-btn" @click="clearField(field)">清除</button>
+              </div>
             </div>
           </template>
         </a-trigger>
@@ -219,7 +225,7 @@ export interface SidebarField {
   badgeColor?: string
   class?: string
   readonly?: boolean
-  editType?: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'issue-search' | 'text'
+  editType?: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'issue-search' | 'text' | 'period'
   options?: FieldOption[]
   rawValue?: string
   /** 多值字段：当前选中的 ID 列表 */
@@ -381,6 +387,47 @@ function selectOption(field: SidebarField, value: string) {
 
 function commitInput(field: SidebarField) {
   emit('edit-field', field.key, inputValue.value)
+  editingKey.value = null
+}
+
+/**
+ * 提交时间周期输入
+ * 支持格式: 1w2d3h30m, 2h30m, 1d, 45m, 2h, 1w 或纯分钟数
+ * 解析后转换为分钟数提交
+ */
+function commitPeriodInput(field: SidebarField) {
+  const raw = inputValue.value.trim().toLowerCase()
+  if (!raw) {
+    emit('edit-field', field.key, '')
+    editingKey.value = null
+    return
+  }
+
+  // 先尝试纯数字（分钟数）
+  const numMatch = raw.match(/^\d+$/)
+  if (numMatch) {
+    emit('edit-field', field.key, raw)
+    editingKey.value = null
+    return
+  }
+
+  // 解析周期表达式
+  const periodRegex = /^(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$/i
+  const match = raw.match(periodRegex)
+  if (!match || (match[1] === undefined && match[2] === undefined && match[3] === undefined && match[4] === undefined)) {
+    // 格式不正确，显示提示但仍然提交（后端会验证）
+    emit('edit-field', field.key, raw)
+    editingKey.value = null
+    return
+  }
+
+  let totalMinutes = 0
+  if (match[1]) totalMinutes += parseInt(match[1]) * 7 * 24 * 60 // weeks
+  if (match[2]) totalMinutes += parseInt(match[2]) * 24 * 60      // days
+  if (match[3]) totalMinutes += parseInt(match[3]) * 60           // hours
+  if (match[4]) totalMinutes += parseInt(match[4])                 // minutes
+
+  emit('edit-field', field.key, String(totalMinutes))
   editingKey.value = null
 }
 
