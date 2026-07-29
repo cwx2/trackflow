@@ -499,6 +499,49 @@ public class CustomFieldService {
         return optionService.addOptionInline(projectId, fieldId, value, color);
     }
 
+    // ========== 项目级独立选项集管理（Make Independent Copy）==========
+
+    /** 获取字段在项目中的选项集状态，委托给 {@link CustomFieldOptionService} */
+    public com.trackflow.customfield.vo.OptionSetStatusVO getOptionSetStatus(Long projectId, Long fieldId) {
+        return optionService.getOptionSetStatus(projectId, fieldId);
+    }
+
+    /** 创建项目级独立选项副本，委托给 {@link CustomFieldOptionService} */
+    @Transactional(rollbackFor = Exception.class)
+    public List<CustomFieldOption> makeIndependentCopy(Long projectId, Long fieldId, boolean emptyOptions) {
+        return optionService.makeIndependentCopy(projectId, fieldId, emptyOptions);
+    }
+
+    /** 恢复为全局共享选项集，委托给 {@link CustomFieldOptionService} */
+    @Transactional(rollbackFor = Exception.class)
+    public void revertToShared(Long projectId, Long fieldId, boolean confirm) {
+        optionService.revertToShared(projectId, fieldId, confirm);
+    }
+
+    /** 获取项目中字段的有效选项列表，委托给 {@link CustomFieldOptionService} */
+    public List<CustomFieldOption> getEffectiveOptions(Long fieldId, Long projectId) {
+        return optionService.getEffectiveOptions(fieldId, projectId);
+    }
+
+    /** 更新项目独立选项集，委托给 {@link CustomFieldOptionService} */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateProjectOptions(Long projectId, Long fieldId, List<UpdateCustomFieldDTO.OptionItem> options) {
+        // 验证项目使用独立选项集
+        CustomFieldProject mapping = projectMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldProject>()
+                        .eq(CustomFieldProject::getCustomFieldId, fieldId)
+                        .eq(CustomFieldProject::getProjectId, projectId));
+        if (mapping == null || !Boolean.TRUE.equals(mapping.getHasIndependentOptions())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "此项目未使用独立选项集，请先创建独立副本");
+        }
+        optionService.updateListOptions(fieldId, options, projectId);
+    }
+
+    /** 批量获取多个字段在指定项目中的有效选项列表，委托给 {@link CustomFieldOptionService} */
+    public Map<Long, List<CustomFieldOption>> getBatchEffectiveOptions(List<Long> fieldIds, Long projectId) {
+        return optionService.getBatchEffectiveOptions(fieldIds, projectId);
+    }
+
     /** 委托给 {@link CustomFieldValueService} */
     public Map<Long, String> applyDefaultsAndValidate(Map<Long, String> userProvided, String issueType, Long projectId) {
         List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);

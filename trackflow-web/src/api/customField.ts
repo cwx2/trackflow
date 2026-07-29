@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO } from './types'
+import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO, OptionSetStatusVO } from './types'
 
 /**
  * 自定义字段模块 API
@@ -208,5 +208,48 @@ export const customFieldApi = {
   /** 内联添加枚举字段选项值（工单详情页/创建表单快捷入口） */
   addOption(projectId: string, fieldId: string, data: { value: string; color?: string }) {
     return request.post<any, R<CustomFieldOptionVO>>(`/projects/${projectId}/custom-fields/${fieldId}/options`, data)
+  },
+
+  // ========== 项目级独立选项集管理（Make Independent Copy）==========
+
+  /** 获取字段在项目中的选项集状态（共享/独立） */
+  getOptionSetStatus(projectId: string, fieldId: string) {
+    return request.get<any, R<OptionSetStatusVO>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/option-set-status`)
+  },
+
+  /** 创建项目级独立选项副本（Make Independent Copy） */
+  makeIndependentCopy(projectId: string, fieldId: string, emptyOptions = false) {
+    return request.post<any, R<CustomFieldOptionVO[]>>(
+      `/projects/${projectId}/settings/custom-fields/${fieldId}/make-independent`,
+      { emptyOptions }
+    )
+  },
+
+  /** 恢复为全局共享选项集 */
+  revertToShared(projectId: string, fieldId: string, confirm = false) {
+    return request.post<any, R<void>>(
+      `/projects/${projectId}/settings/custom-fields/${fieldId}/revert-to-shared`,
+      null,
+      { params: { confirm } }
+    )
+  },
+
+  /** 获取项目中字段的有效选项列表（支持独立/共享回退） */
+  getProjectFieldOptions(projectId: string, fieldId: string) {
+    return request.get<any, R<CustomFieldOptionVO[]>>(`/projects/${projectId}/custom-fields/${fieldId}/options`)
+  },
+
+  /** 更新项目独立选项集 */
+  updateProjectOptions(projectId: string, fieldId: string, options: Array<{
+    id?: string
+    value: string
+    isDefault?: boolean
+    color?: string
+    description?: string
+  }>) {
+    return request.put<any, R<CustomFieldOptionVO[]>>(
+      `/projects/${projectId}/settings/custom-fields/${fieldId}/options`,
+      { options }
+    )
   }
 }

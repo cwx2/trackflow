@@ -6,6 +6,8 @@ import lombok.Data;
 public class CustomFieldOptionVO {
     private String id;
     private String customFieldId;
+    /** 所属项目 ID，null 表示全局共享选项 */
+    private String projectId;
     private String value;
     private Integer position;
     private Boolean isDefault;

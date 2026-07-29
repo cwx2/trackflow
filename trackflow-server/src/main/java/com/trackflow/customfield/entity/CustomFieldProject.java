@@ -91,4 +91,13 @@ public class CustomFieldProject implements Serializable {
      * 排除时同时清除该项目内所有工单的字段值。
      */
     private Boolean isExcluded;
+
+    /**
+     * 是否已创建项目级独立选项副本（Make Independent Copy）。
+     * <ul>
+     *   <li>false (默认): 使用全局共享选项集</li>
+     *   <li>true: 使用项目独立选项集（custom_field_option.project_id = 本项目）</li>
+     * </ul>
+     */
+    private Boolean hasIndependentOptions;
 }

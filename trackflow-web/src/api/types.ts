@@ -734,6 +734,8 @@ export interface FilterRule {
 export interface CustomFieldOptionVO {
   id: string
   customFieldId: string
+  /** 所属项目 ID，null 表示全局共享选项 */
+  projectId?: string | null
   value: string
   position: number
   isDefault: boolean
@@ -742,6 +744,22 @@ export interface CustomFieldOptionVO {
   color?: string | null
   /** 选项描述，在下拉选择时以 tooltip 形式展示 */
   description?: string | null
+}
+
+/** 选项集状态 VO */
+export interface OptionSetStatusVO {
+  /** 是否为项目独立选项集 */
+  isIndependent: boolean
+  /** 选项集类型：shared / independent */
+  optionSetType: 'shared' | 'independent'
+  /** 共享该选项集的项目数量 */
+  sharedProjectCount: number
+  /** 共享该选项集的项目名称列表 */
+  sharedProjectNames: string[]
+  /** 是否可以创建独立副本 */
+  canMakeIndependent: boolean
+  /** 不能创建独立副本的原因 */
+  cannotMakeIndependentReason?: string | null
 }
 
 export interface CustomFieldUsageVO {

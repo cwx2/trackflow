@@ -10,6 +10,12 @@ import java.time.LocalDateTime;
 
 /**
  * 列表类型自定义字段的可选项
+ * <p>
+ * 支持两种作用域：
+ * <ul>
+ *   <li>projectId = NULL: 全局共享选项集（默认）</li>
+ *   <li>projectId = 具体值: 项目独立副本（Make Independent Copy 后创建）</li>
+ * </ul>
  */
 @Data
 @TableName("custom_field_option")
@@ -19,6 +25,15 @@ public class CustomFieldOption implements Serializable {
     private Long id;
 
     private Long customFieldId;
+
+    /**
+     * 所属项目 ID。
+     * <ul>
+     *   <li>NULL: 全局共享选项集，所有使用该字段的项目共享</li>
+     *   <li>具体值: 项目独立副本，仅对指定项目生效</li>
+     * </ul>
+     */
+    private Long projectId;
 
     private String value;
 

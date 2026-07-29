@@ -276,6 +276,76 @@ public class CustomFieldController {
         return R.ok(converter.toOptionVO(option));
     }
 
+    // ========== 项目级独立选项集管理（Make Independent Copy）==========
+
+    /**
+     * 获取字段在项目中的选项集状态（共享/独立）
+     */
+    @GetMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/option-set-status")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<com.trackflow.customfield.vo.OptionSetStatusVO> getOptionSetStatus(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId) {
+        return R.ok(customFieldService.getOptionSetStatus(projectId, fieldId));
+    }
+
+    /**
+     * 创建项目级独立选项副本（Make Independent Copy）
+     * <p>
+     * 将字段的全局共享选项集复制为项目独立副本，后续该项目可自由编辑选项而不影响其他项目。
+     * 参考 YouTrack "Make independent copy" 功能。
+     */
+    @PostMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/make-independent")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<List<CustomFieldOptionVO>> makeIndependentCopy(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody(required = false) com.trackflow.customfield.dto.MakeIndependentCopyDTO dto) {
+        boolean emptyOptions = dto != null && Boolean.TRUE.equals(dto.getEmptyOptions());
+        List<CustomFieldOption> options = customFieldService.makeIndependentCopy(projectId, fieldId, emptyOptions);
+        return R.ok(converter.toOptionVOList(options));
+    }
+
+    /**
+     * 恢复为全局共享选项集。
+     * 删除项目独立选项，恢复使用全局共享选项集。
+     */
+    @PostMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/revert-to-shared")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<Void> revertToShared(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @RequestParam(defaultValue = "false") boolean confirm) {
+        customFieldService.revertToShared(projectId, fieldId, confirm);
+        return R.ok();
+    }
+
+    /**
+     * 获取项目中字段的有效选项列表（支持独立/共享回退）
+     */
+    @GetMapping("/projects/{projectId}/custom-fields/{fieldId}/options")
+    public R<List<CustomFieldOptionVO>> getProjectFieldOptions(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId) {
+        List<CustomFieldOption> options = customFieldService.getEffectiveOptions(fieldId, projectId);
+        return R.ok(converter.toOptionVOList(options));
+    }
+
+    /**
+     * 更新项目独立选项集。
+     * 仅当项目使用独立选项集时有效。
+     */
+    @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/options")
+    @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
+    public R<List<CustomFieldOptionVO>> updateProjectOptions(
+            @PathVariable("projectId") Long projectId,
+            @PathVariable("fieldId") Long fieldId,
+            @Valid @RequestBody com.trackflow.customfield.dto.UpdateProjectOptionsDTO dto) {
+        customFieldService.updateProjectOptions(projectId, fieldId, dto.getOptions());
+        List<CustomFieldOption> options = customFieldService.getEffectiveOptions(fieldId, projectId);
+        return R.ok(converter.toOptionVOList(options));
+    }
+
     // ========== 条件显示配置端点 ==========
 
     /**
