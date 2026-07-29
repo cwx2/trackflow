@@ -140,8 +140,11 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => response.data,
   async (error) => {
-    // 如果是主动取消的请求（token 刷新失败），不再处理
+    // 如果是主动取消的请求（token 刷新失败），静默处理
+    // 不再向上抛出错误，避免多个并发请求同时 reject 导致级联异常
     if (axios.isCancel(error)) {
+      // 返回一个空的响应结构，让调用方能安全地解构（如 res.data）
+      // 调用方的 try-catch 或空值检查会处理这种情况
       return Promise.reject(error)
     }
 

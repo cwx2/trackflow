@@ -968,6 +968,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
+import axios from 'axios'
 import { projectApi, issueApi, queryApi, sprintApi, tagApi } from '@/api'
 import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValueVO } from '@/api/types'
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
@@ -3327,6 +3328,9 @@ async function loadPanel() {
     const data = res.data || {}
     savedQueries.value = [...(data.pinned || []), ...(data.queries || [])]
   } catch (error: any) {
+    // 会话过期导致的请求取消，静默处理（handleSessionExpired 会处理跳转）
+    if (axios.isCancel(error)) return
+
     panelLoadFailed.value = true
     // Keep previous data if available; only clear if this is the first load
     if (savedQueries.value.length === 0 || savedQueries.value[0]?.id === '1') {
@@ -3341,13 +3345,19 @@ async function loadPanel() {
 }
 async function loadProjects() {
   try { const res = await projectApi.list({ pageSize: 50 }); projectList.value = res.data?.list || [] }
-  catch { projectList.value = [] }
+  catch (e) {
+    // 会话过期导致的请求取消，静默处理
+    if (axios.isCancel(e)) return
+    projectList.value = []
+  }
 }
 async function loadTags() {
   try {
     const res = await tagApi.getFavoritePanel(activeProjectId.value || undefined)
     favoriteTags.value = res.data || []
-  } catch {
+  } catch (e) {
+    // 会话过期导致的请求取消，静默处理
+    if (axios.isCancel(e)) return
     favoriteTags.value = []
   }
 }
@@ -3400,7 +3410,11 @@ async function toggleTagFavorite(tag: AvailableTagVO) {
 }
 async function loadStatuses() {
   try { const res = await issueApi.listStatuses(); statusCache.value = res.data || [] }
-  catch { statusCache.value = [] }
+  catch (e) {
+    // 会话过期导致的请求取消，静默处理
+    if (axios.isCancel(e)) return
+    statusCache.value = []
+  }
 }
 
 /**

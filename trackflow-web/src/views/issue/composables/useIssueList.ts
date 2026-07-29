@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import axios from 'axios'
 import { issueApi, queryApi } from '@/api'
 import type { IssueVO } from '@/api/types'
 
@@ -136,6 +137,9 @@ export function useIssueList() {
       issues.value = res.data?.list || []
       totalIssues.value = res.data?.pagination?.total || 0
     } catch (e) {
+      // 会话过期导致的请求取消，静默处理（handleSessionExpired 会处理跳转）
+      if (axios.isCancel(e)) return
+
       issues.value = []
       totalIssues.value = 0
     } finally {
