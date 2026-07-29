@@ -739,12 +739,15 @@ def run_consume_phase(num_workers: int) -> int:
         # 记录本批次前的快照（消费后不在 develop/ 就是成功消费了）
         prev_in_develop = current_names
 
-        # 启动 min(workers, available) 个并发任务
+        # 启动 min(workers, available) 个并发任务，错开启动时间避免并发冲突
         batch_size = min(num_workers, len(available))
+        STAGGER_SECONDS = 30  # 每个 worker 错开 30 秒启动，避免同时触发 kiro-cli 并发限制
 
         with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="consumer") as executor:
             futures = []
             for i in range(batch_size):
+                if i > 0:
+                    time.sleep(STAGGER_SECONDS)
                 futures.append(executor.submit(consume_one, f"consumer-{i+1}"))
             wait(futures)
 
