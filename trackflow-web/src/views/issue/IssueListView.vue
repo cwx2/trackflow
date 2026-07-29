@@ -664,8 +664,9 @@
         <template #assignee="{ record }">
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="assigneeDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
-              <span class="editable-cell" @click="openAssigneeEdit(record)">
-                {{ record.assigneeName || '\u2014' }}
+              <span class="editable-cell" :class="{ 'unassigned-cell': !record.assigneeName }" @click="openAssigneeEdit(record)">
+                <template v-if="record.assigneeName">{{ record.assigneeName }}</template>
+                <span v-else class="unassigned-label">未分配</span>
                 <icon-loading v-if="isCellEditing(record.id, 'assigneeId')" class="cell-spinner" />
               </span>
               <template #content>
@@ -683,7 +684,10 @@
                 </div>
               </template>
             </a-trigger>
-            <span v-else class="readonly-cell">{{ record.assigneeName || '\u2014' }}</span>
+            <span v-else class="readonly-cell" :class="{ 'unassigned-cell': !record.assigneeName }">
+              <template v-if="record.assigneeName">{{ record.assigneeName }}</template>
+              <span v-else class="unassigned-label">未分配</span>
+            </span>
           </div>
         </template>
         <template #status="{ record }">
@@ -3960,6 +3964,10 @@ onBeforeRouteLeave((_to, _from, next) => {
 .editable-cell { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 3px; transition: background 0.15s; font-size: 12px; color: var(--tf-text-secondary); }
 .editable-cell:hover { background: var(--tf-bg-hover); }
 .readonly-cell { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font-size: 12px; color: var(--tf-text-secondary); cursor: default; }
+/* 未分配工单视觉高亮 */
+.unassigned-cell { color: rgb(var(--warning-6)); }
+.unassigned-cell:hover { background: rgba(var(--warning-6), 0.08); }
+.unassigned-label { font-style: italic; color: rgb(var(--warning-6)); opacity: 0.9; }
 .cell-spinner { font-size: 12px; color: var(--tf-text-tertiary); animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
