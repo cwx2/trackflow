@@ -195,8 +195,15 @@
               </div>
               <div class="role-list">
                 <div v-for="role in globalRoles" :key="role.id" class="role-item">
-                  <label class="role-check">
-                    <input type="checkbox" :checked="userRoleIds.includes(String(role.id))" @change="toggleRole(role.id)" />
+                  <label class="role-check" :class="{ loading: roleToggleLoading.has(String(role.id)) }">
+                    <span v-if="roleToggleLoading.has(String(role.id))" class="checkbox-spinner"></span>
+                    <input 
+                      v-else 
+                      type="checkbox" 
+                      :checked="userRoleIds.includes(String(role.id))" 
+                      :disabled="roleToggleLoading.has(String(role.id))"
+                      @change="toggleRole(role.id)" 
+                    />
                     <span class="role-name">{{ role.name }}</span>
                     <span class="role-code">{{ role.code }}</span>
                   </label>
@@ -371,6 +378,9 @@ const userProjectRoles = ref<UserProfileProjectRoleInfo[]>([])
 const globalRoles = ref<any[]>([])
 const projectRoles = ref<any[]>([])
 const allProjects = ref<any[]>([])
+
+// 角色操作 loading 状态（存储正在处理的角色 ID）
+const roleToggleLoading = ref<Set<string>>(new Set())
 
 // 添加到项目
 const showAddProject = ref(false)
@@ -562,6 +572,8 @@ async function openRoleDialog(user: any) {
   addProjectRoleId.value = ''
   showAddGlobalMember.value = false
   addGlobalRoleId.value = ''
+  // 清理角色操作 loading 状态
+  roleToggleLoading.value.clear()
 
   try {
     const [profileRes, globalMembersRes] = await Promise.all([
@@ -585,22 +597,45 @@ async function toggleRole(roleId: number) {
   const userId = selectedUser.value?.id
   if (!userId) return
   const roleIdStr = String(roleId)
+  
+  // 防止重复点击：如果该角色正在处理中，直接返回
+  if (roleToggleLoading.value.has(roleIdStr)) return
+  
   const role = globalRoles.value.find((r: any) => String(r.id) === roleIdStr)
   const roleName = role?.name || '角色'
+  const wasChecked = userRoleIds.value.includes(roleIdStr)
+  
+  // 设置 loading 状态
+  roleToggleLoading.value.add(roleIdStr)
+  
+  // 乐观更新 UI
+  if (wasChecked) {
+    userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
+  } else {
+    userRoleIds.value.push(roleIdStr)
+  }
+  
   try {
-    if (userRoleIds.value.includes(roleIdStr)) {
+    if (wasChecked) {
       await userApi.removeRole(userId, roleIdStr)
-      userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
       Message.success(`已移除全局角色「${roleName}」`)
     } else {
       await userApi.assignRole(userId, roleIdStr)
-      userRoleIds.value.push(roleIdStr)
       Message.success(`已分配全局角色「${roleName}」`)
     }
     // 同步更新用户列表中该用户的 globalRoles 显示
     syncUserListGlobalRoles(userId)
   } catch (e: any) {
+    // 请求失败，回滚 UI 状态
+    if (wasChecked) {
+      userRoleIds.value.push(roleIdStr)
+    } else {
+      userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
+    }
     Message.error(e.response?.data?.message || '操作失败')
+  } finally {
+    // 清除 loading 状态
+    roleToggleLoading.value.delete(roleIdStr)
   }
 }
 
@@ -886,7 +921,10 @@ onMounted(() => {
 
 .role-item { margin-bottom: 8px; }
 .role-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--font-size-sm); color: var(--text-primary); }
+.role-check.loading { cursor: wait; opacity: 0.7; }
 .role-check input { accent-color: var(--accent-blue); }
+.role-check input:disabled { cursor: wait; }
+.checkbox-spinner { width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
 .role-code { font-size: var(--font-size-xs); color: var(--text-muted); margin-left: auto; }
 
 /* Role Panel */
