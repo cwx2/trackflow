@@ -273,20 +273,35 @@
                   <div class="project-role-info">
                     <span class="project-role-key">{{ pr.projectKey }}</span>
                     <span class="project-role-name">{{ pr.projectName }}</span>
+                    <span v-if="pr.source === 'group'" class="source-tag group" :title="pr.groupName ? `来源: ${pr.groupName}` : '通过用户组继承'">
+                      组继承
+                    </span>
                   </div>
                   <div class="project-role-actions">
                     <select
                       class="project-role-select"
                       :value="pr.roleCode"
+                      :disabled="pr.source === 'group'"
+                      :title="pr.source === 'group' ? '通过用户组继承的角色不可直接修改' : ''"
                       @change="changeProjectRole(pr, ($event.target as HTMLSelectElement).value)"
                     >
                       <option v-for="r in projectRoles" :key="r.id" :value="r.code">{{ r.name }}</option>
                     </select>
-                    <button class="btn-icon-sm danger" title="移除成员" @click="removeFromProject(pr)">
+                    <button
+                      v-if="pr.source !== 'group'"
+                      class="btn-icon-sm danger"
+                      title="移除成员"
+                      @click="removeFromProject(pr)"
+                    >
                       <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
                       </svg>
                     </button>
+                    <span v-else class="btn-icon-sm disabled" title="通过用户组继承的角色不可直接移除">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="opacity: 0.3">
+                        <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13z"/>
+                      </svg>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -951,13 +966,17 @@ onMounted(() => {
 .project-role-info { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .project-role-key { font-size: var(--font-size-xs); font-weight: 500; color: var(--accent-blue); background: rgba(88,166,255,0.08); padding: 2px 6px; border-radius: var(--radius-sm); flex-shrink: 0; }
 .project-role-name { font-size: var(--font-size-sm); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-tag { font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+.source-tag.group { color: #a371f7; background: rgba(163,113,247,0.12); }
 .project-role-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .project-role-select { height: 26px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0 6px; color: var(--text-primary); font-size: var(--font-size-xs); cursor: pointer; outline: none; }
 .project-role-select:focus { border-color: var(--accent-blue); }
+.project-role-select:disabled { opacity: 0.5; cursor: not-allowed; background: var(--bg-secondary); }
 
 .btn-icon-sm { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: none; border: none; border-radius: var(--radius-sm); color: var(--text-muted); cursor: pointer; transition: all 150ms; }
 .btn-icon-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
 .btn-icon-sm.danger:hover { background: rgba(244,67,54,0.1); color: var(--accent-red); }
+.btn-icon-sm.disabled { cursor: not-allowed; opacity: 0.4; }
 
 /* Add to Project */
 .add-project-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); }
