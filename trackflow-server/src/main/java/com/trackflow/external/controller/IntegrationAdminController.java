@@ -1,6 +1,8 @@
 package com.trackflow.external.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.external.dto.IntegrationLogQuery;
@@ -48,7 +50,7 @@ public class IntegrationAdminController {
             @RequestBody Map<String, Boolean> body) {
         Boolean enabled = body.get("enabled");
         if (enabled == null) {
-            return R.fail(40001, "enabled 参数必须提供");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "enabled 参数必须提供");
         }
         integrationAdminService.toggleAdapter(adapterType, enabled);
         return R.ok();

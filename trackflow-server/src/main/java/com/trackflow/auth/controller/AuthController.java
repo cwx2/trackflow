@@ -4,6 +4,7 @@ import com.trackflow.auth.security.ApiKeyAuthenticationToken;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.auth.service.UserSyncService;
 import com.trackflow.auth.vo.UserInfoVO;
+import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
@@ -45,11 +46,11 @@ public class AuthController {
         if (auth instanceof ApiKeyAuthenticationToken) {
             // API Key 认证：从数据库获取用户信息
             if (dbUserId == null) {
-                return R.fail(ErrorCode.AUTH_MISSING);
+                throw new BusinessException(ErrorCode.AUTH_MISSING);
             }
             SysUser user = sysUserMapper.selectById(dbUserId);
             if (user == null) {
-                return R.fail(ErrorCode.AUTH_MISSING);
+                throw new BusinessException(ErrorCode.AUTH_MISSING);
             }
             UserInfoVO userInfo = UserInfoVO.builder()
                     .userId(String.valueOf(user.getId()))
@@ -65,7 +66,7 @@ public class AuthController {
         // JWT 认证（默认）
         Jwt jwt = SecurityUtils.getCurrentJwt();
         if (jwt == null) {
-            return R.fail(ErrorCode.AUTH_MISSING);
+            throw new BusinessException(ErrorCode.AUTH_MISSING);
         }
         String givenName = jwt.getClaimAsString("given_name");
         String familyName = jwt.getClaimAsString("family_name");
@@ -110,7 +111,7 @@ public class AuthController {
     public R<Set<String>> getMyGlobalPermissions() {
         Long userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
-            return R.fail(ErrorCode.AUTH_MISSING);
+            throw new BusinessException(ErrorCode.AUTH_MISSING);
         }
         return R.ok(permissionService.getNavigationPermissions(userId));
     }

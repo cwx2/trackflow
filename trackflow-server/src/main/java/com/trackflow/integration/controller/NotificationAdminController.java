@@ -1,5 +1,7 @@
 package com.trackflow.integration.controller;
 
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.integration.dto.SendTestEmailDTO;
@@ -86,7 +88,7 @@ public class NotificationAdminController {
     public R<Void> sendTestEmail(@Valid @RequestBody SendTestEmailDTO dto) {
         EmailConfigVO config = emailConfigService.getConfig();
         if (!Boolean.TRUE.equals(config.getConfigured())) {
-            return R.fail(40001, "请先完成邮件服务器配置");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成邮件服务器配置");
         }
         try {
             emailSendService.sendTestEmail(dto.getToAddress());
@@ -95,7 +97,7 @@ public class NotificationAdminController {
             log.warn("[NotificationAdmin] 测试邮件发送失败: to={}, error={}",
                     dto.getToAddress(), e.getMessage());
             String errorMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
-            return R.fail(50001, "邮件发送失败: " + errorMsg);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "邮件发送失败: " + errorMsg);
         }
     }
 
@@ -130,7 +132,7 @@ public class NotificationAdminController {
     public R<Void> retryOutboxItem(@PathVariable("id") Long id) {
         boolean success = outboxService.manualRetry(id);
         if (!success) {
-            return R.fail(40400, "记录不存在或状态不是 failed");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "记录不存在或状态不是 failed");
         }
         return R.ok();
     }

@@ -176,7 +176,7 @@ public class IssueController {
                 && !Boolean.TRUE.equals(dto.getForceWip())) {
             String wipWarning = issueService.checkBatchWipLimit(dto.getIssueIds(), dto.getStatusId());
             if (wipWarning != null) {
-                return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, wipWarning);
+                throw new BusinessException(ErrorCode.WIP_LIMIT_EXCEEDED, wipWarning);
             }
         }
 
@@ -224,7 +224,7 @@ public class IssueController {
         };
 
         if (result == null) {
-            return R.fail(ErrorCode.INVALID_BATCH_OPERATION);
+            throw new BusinessException(ErrorCode.INVALID_BATCH_OPERATION);
         }
         return R.ok(result);
     }
@@ -285,13 +285,13 @@ public class IssueController {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
         if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
-            return R.fail(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
+            throw new BusinessException(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
         }
 
         // 强制评论校验：如果转换规则要求必须填写评论
         if (workflowService.isCommentRequired(issue.getStatusId(), dto.getStatusId())) {
             if (dto.getComment() == null || dto.getComment().isBlank()) {
-                return R.fail(ErrorCode.BAD_REQUEST, "此状态转换需要填写理由");
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "此状态转换需要填写理由");
             }
         }
 
@@ -302,10 +302,10 @@ public class IssueController {
                 Boolean.TRUE.equals(dto.getForce()));
 
         if (preCheck.wipWarning() != null) {
-            return R.fail(ErrorCode.WIP_LIMIT_EXCEEDED, preCheck.wipWarning());
+            throw new BusinessException(ErrorCode.WIP_LIMIT_EXCEEDED, preCheck.wipWarning());
         }
         if (preCheck.closeWarning() != null) {
-            return R.fail(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
+            throw new BusinessException(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
         }
 
         // Controller 已完成工作流校验，传入 skipWorkflowCheck=true 避免 Service 重复校验
