@@ -13,6 +13,7 @@ import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
+import com.trackflow.sprint.vo.SprintCompleteResultVO;
 import com.trackflow.sprint.vo.SprintVO;
 import com.trackflow.sprint.vo.SprintVelocityVO;
 import jakarta.validation.Valid;
@@ -88,8 +89,8 @@ public class SprintController {
 
     @PutMapping("/api/v1/sprints/{id}/complete")
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
-    public R<SprintVO> complete(@PathVariable("id") Long id, @RequestBody(required = false) @Valid CompleteSprintDTO dto) {
-        return R.ok(sprintConverter.toVO(sprintService.complete(id, dto)));
+    public R<SprintCompleteResultVO> complete(@PathVariable("id") Long id, @RequestBody(required = false) @Valid CompleteSprintDTO dto) {
+        return R.ok(sprintService.complete(id, dto));
     }
 
     @GetMapping("/api/v1/sprints/{id}/deletion-preview")

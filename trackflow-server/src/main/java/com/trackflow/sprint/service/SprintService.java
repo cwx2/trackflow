@@ -26,6 +26,7 @@ import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
 import com.trackflow.sprint.vo.DeletionPreviewVO;
 import com.trackflow.sprint.vo.SprintAssigneeDistributionVO;
+import com.trackflow.sprint.vo.SprintCompleteResultVO;
 import com.trackflow.sprint.vo.SprintOverlapWarningVO;
 import com.trackflow.sprint.vo.SprintVO;
 import com.trackflow.sprint.vo.SprintVelocityVO;
@@ -64,6 +65,7 @@ public class SprintService {
     private final ProjectService projectService;
     private final ProjectActivityService projectActivityService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.trackflow.sprint.converter.SprintConverter sprintConverter;
 
     /**
      * 查询项目的 Sprint 列表（带工单统计 + 状态推导）。
@@ -746,7 +748,7 @@ public class SprintService {
     }
 
     @Transactional
-    public Sprint complete(Long id, CompleteSprintDTO dto) {
+    public SprintCompleteResultVO complete(Long id, CompleteSprintDTO dto) {
         Sprint sprint = getById(id);
         // 归档项目不允许操作 Sprint
         projectService.assertProjectActive(sprint.getProjectId());
@@ -765,6 +767,11 @@ public class SprintService {
                         .isNull(Issue::getDeletedAt)
         );
         int completedIssues = (int) (totalIssuesInSprint - openIssues.size());
+        int unresolvedIssues = openIssues.size();
+
+        // 用于返回结果的变量
+        String moveOption = null;
+        String targetSprintName = null;
 
         // 有未完成工单时必须传入处理方式
         if (!openIssues.isEmpty()) {
@@ -773,6 +780,7 @@ public class SprintService {
                         "该迭代中仍有 " + openIssues.size() + " 个未完成工单，请选择处理方式");
             }
 
+            moveOption = dto.getMoveOption();
             Long newSprintId = null;
             String newSprintName = null;
             if ("next_sprint".equals(dto.getMoveOption())) {
@@ -791,6 +799,7 @@ public class SprintService {
                 }
                 newSprintId = dto.getTargetSprintId();
                 newSprintName = targetSprint.getName();
+                targetSprintName = newSprintName;
             }
             // "backlog" 时 newSprintId 和 newSprintName 保持 null
 
@@ -865,7 +874,15 @@ public class SprintService {
         // 失效 Dashboard 缓存 — 事务提交后触发
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sprint.getProjectId(), "sprint_completed"));
 
-        return sprint;
+        // 构建并返回完成结果（包含统计信息）
+        return SprintCompleteResultVO.builder()
+                .sprint(sprintConverter.toVO(sprint))
+                .totalIssues((int) totalIssuesInSprint)
+                .completedIssues(Math.max(completedIssues, 0))
+                .unresolvedIssues(unresolvedIssues)
+                .moveOption(moveOption)
+                .targetSprintName(targetSprintName)
+                .build();
     }
 
     /**

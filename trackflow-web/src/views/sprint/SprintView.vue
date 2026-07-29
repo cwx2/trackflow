@@ -44,7 +44,7 @@
             size="mini"
             type="primary"
             class="warning-bar-action"
-            :disabled="!canEditSprint || !nextStartableSprint"
+            :disabled="!nextStartableSprint || (nextStartableSprint && !canEditSprintItem(nextStartableSprint))"
             @click="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
           >
             开始迭代
@@ -74,7 +74,7 @@
               </template>
               <template v-else>
                 <h3 class="sprint-name active-name">{{ sprint.name }}</h3>
-                <a-tooltip content="编辑迭代名称" v-if="canEditSprint && hoveredSprintId === sprint.id">
+                <a-tooltip content="编辑迭代名称" v-if="canEditSprintItem(sprint) && hoveredSprintId === sprint.id">
                   <span class="sprint-name-edit-icon" @click.stop="startInlineEdit(sprint)">
                     <icon-edit />
                   </span>
@@ -183,9 +183,9 @@
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="openIssueDrawer(sprint)">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
-          <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
-          <a-button v-if="canEditSprint" size="mini" type="text" @click="handleArchiveActiveSprint(sprint)">归档</a-button>
-          <a-button v-if="canEditSprint" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="handleArchiveActiveSprint(sprint)">归档</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
         </div>
       </div>
 
@@ -210,7 +210,7 @@
               </template>
               <template v-else>
                 <h3 class="sprint-name">{{ sprint.name }}</h3>
-                <a-tooltip content="编辑迭代名称" v-if="canEditSprint && hoveredSprintId === sprint.id">
+                <a-tooltip content="编辑迭代名称" v-if="canEditSprintItem(sprint) && hoveredSprintId === sprint.id">
                   <span class="sprint-name-edit-icon" @click.stop="startInlineEdit(sprint)">
                     <icon-edit />
                   </span>
@@ -296,12 +296,12 @@
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="openIssueDrawer(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
-          <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip :content="getActivateTooltip(sprint)">
-            <a-button type="primary" size="mini" :disabled="!canEditSprint || isSprintNotStartable(sprint)" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
+            <a-button type="primary" size="mini" :disabled="!canEditSprintItem(sprint) || isSprintNotStartable(sprint)" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
-          <a-button v-if="canEditSprint" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
-          <a-button v-if="canDeleteSprint" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
+          <a-button v-if="canDeleteSprintItem(sprint)" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
         </div>
       </div>
 
@@ -313,7 +313,7 @@
           <span class="completed-section-count">{{ completedSprints.length }}</span>
         </div>
         <template v-if="showCompletedSprints">
-      <div v-for="sprint in completedSprints" :key="sprint.id" class="sprint-card completed">
+      <div v-for="sprint in completedSprints" :key="sprint.id" class="sprint-card completed" :class="{ 'just-completed': sprint.id === justCompletedSprintId }">
         <div class="sprint-header">
           <div class="sprint-info">
             <span class="sprint-status-badge completed">已完成</span>
@@ -366,7 +366,7 @@
         <div class="sprint-actions">
           <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
-          <a-button v-if="canEditSprint" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button
             size="mini"
             type="text"
@@ -375,7 +375,7 @@
           >
             {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
           </a-button>
-          <a-button v-if="canEditSprint" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
+          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
         </div>
 
         <!-- 已完成 Sprint 的燃尽图（展开时显示） -->
@@ -449,7 +449,7 @@
               >
                 {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
               </a-button>
-              <a-button v-if="canEditSprint" size="mini" type="text" @click="restoreSprint(sprint)">恢复</a-button>
+              <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="restoreSprint(sprint)">恢复</a-button>
             </div>
 
             <!-- 已归档 Sprint 的燃尽图（展开时显示） -->
@@ -581,19 +581,19 @@
           <!-- 左侧：归档/恢复 + 删除 -->
           <div class="edit-modal-footer-left">
             <a-button
-              v-if="canEditSprint && editingSprint && editingSprint.status !== 'archived'"
+              v-if="editingSprint && canEditSprintItem(editingSprint) && editingSprint.status !== 'archived'"
               size="small"
               type="secondary"
               @click="handleEditModalArchive"
             >归档</a-button>
             <a-button
-              v-if="canEditSprint && editingSprint && editingSprint.status === 'archived'"
+              v-if="editingSprint && canEditSprintItem(editingSprint) && editingSprint.status === 'archived'"
               size="small"
               type="secondary"
               @click="handleEditModalRestore"
             >恢复</a-button>
             <a-button
-              v-if="canDeleteSprint && editingSprint"
+              v-if="editingSprint && canDeleteSprintItem(editingSprint)"
               size="small"
               status="danger"
               type="secondary"
@@ -827,7 +827,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { IconEdit } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
-import { usePermission } from '@/composables/usePermission'
+import { usePermission, canEditSprintSync, canDeleteSprintSync, preloadPermissions } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
 import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
 import { ERROR_CODES } from '@/api/error-codes'
@@ -845,7 +845,24 @@ const selectedProject = computed({
 })
 
 // 权限控制（必须在 selectedProject 定义之后）
+// 页面级权限控制（用于创建按钮等需要选择项目的场景）
 const { canCreateSprint, canEditSprint, canDeleteSprint } = usePermission(() => selectedProject.value)
+
+/**
+ * 基于 Sprint 自身的 projectId 检查编辑权限
+ * 用于 Sprint 卡片的操作按钮显隐控制
+ */
+function canEditSprintItem(sprint: SprintVO): boolean {
+  return canEditSprintSync(sprint.projectId)
+}
+
+/**
+ * 基于 Sprint 自身的 projectId 检查删除权限
+ */
+function canDeleteSprintItem(sprint: SprintVO): boolean {
+  return canDeleteSprintSync(sprint.projectId)
+}
+
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const sprints = ref<SprintVO[]>([])
 const showCreate = ref(false)
@@ -882,6 +899,8 @@ const completingSprintName = ref<string>('')
 const completionPreview = ref<CompletionPreviewVO | null>(null)
 const moveOption = ref<string>('backlog')
 const targetSprintId = ref<string>('')
+/** 刚完成的 Sprint ID，用于高亮动画 */
+const justCompletedSprintId = ref<string | null>(null)
 
 // ===== 删除迭代相关 =====
 const showDeleteModal = ref(false)
@@ -953,10 +972,12 @@ const sprintGuidanceMessage = computed(() => {
  * 警告栏中「开始迭代」按钮的 tooltip
  */
 const warningBarActivateTooltip = computed<string | undefined>(() => {
-  if (!canEditSprint.value) {
+  const nextSprint = nextStartableSprint.value
+  // 权限检查改为基于 Sprint 自身的 projectId
+  if (nextSprint && !canEditSprintItem(nextSprint)) {
     return '您的角色不具有迭代管理权限，请联系项目管理员'
   }
-  if (!nextStartableSprint.value) {
+  if (!nextSprint) {
     // 所有 planned sprint 都不能启动——告知原因
     const next = plannedSprints.value[0]
     if (next?.startDate) {
@@ -967,7 +988,7 @@ const warningBarActivateTooltip = computed<string | undefined>(() => {
     }
     return '当前没有可启动的迭代'
   }
-  return `启动迭代「${nextStartableSprint.value.name}」`
+  return `启动迭代「${nextSprint.name}」`
 })
 
 const selectedProjectKey = computed(() => {
@@ -1046,7 +1067,8 @@ function isSprintNotStartable(sprint: SprintVO): boolean {
 }
 
 function getActivateTooltip(sprint: SprintVO): string | undefined {
-  if (!canEditSprint.value) return '您的角色不具有迭代管理权限，请联系项目管理员'
+  // 权限检查改为基于 Sprint 自身的 projectId
+  if (!canEditSprintItem(sprint)) return '您的角色不具有迭代管理权限，请联系项目管理员'
   if (hasActiveSprint.value) {
     const active = activeSprints.value[0]
     return `需要先完成当前活跃迭代「${active.name}」才能激活此迭代`
@@ -1215,6 +1237,15 @@ async function loadSprints() {
       sprints.value = res.data?.list || []
     }
     loadingState.value = 'success'
+    
+    // 预加载所有涉及项目的权限，确保 Sprint 卡片能正确显示操作按钮
+    const projectIds = [...new Set(sprints.value.map(s => s.projectId).filter(Boolean))]
+    if (projectIds.length > 0) {
+      await preloadPermissions(projectIds)
+      // 触发响应式更新，让依赖 canEditSprintItem 的模板重新渲染
+      // 通过浅拷贝 sprints 数组强制 Vue 检测到变化
+      sprints.value = [...sprints.value]
+    }
   } catch (e: any) {
     sprints.value = []
     if (e?.response?.status === 403) {
@@ -1298,10 +1329,35 @@ async function confirmCompleteSprint() {
       ? { moveOption: moveOption.value, targetSprintId: moveOption.value === 'next_sprint' ? targetSprintId.value : undefined }
       : undefined
 
-    await sprintApi.complete(completingSprintId.value, body)
-    Message.success('迭代已完成')
+    const res = await sprintApi.complete(completingSprintId.value, body)
+    const result = res.data
+
+    // 构建包含统计信息的 toast 消息
+    let toastMessage = `迭代「${result.sprint.name}」已完成：完成 ${result.completedIssues}/${result.totalIssues} 工单`
+    if (result.unresolvedIssues > 0) {
+      if (result.moveOption === 'backlog') {
+        toastMessage += `，${result.unresolvedIssues} 个工单已移回 Backlog`
+      } else if (result.moveOption === 'next_sprint' && result.targetSprintName) {
+        toastMessage += `，${result.unresolvedIssues} 个工单已移入「${result.targetSprintName}」`
+      }
+    }
+    Message.success(toastMessage)
+
     showCompleteModal.value = false
-    loadSprints()
+
+    // 自动展开「已完成 Sprint」区域
+    showCompletedSprints.value = true
+
+    // 记录刚完成的 Sprint ID，用于高亮动画
+    justCompletedSprintId.value = completingSprintId.value
+
+    // 刷新列表
+    await loadSprints()
+
+    // 3 秒后清除高亮状态
+    setTimeout(() => {
+      justCompletedSprintId.value = null
+    }, 3000)
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
   } finally {
@@ -2417,5 +2473,29 @@ function syncUrlProjectParam() {
 }
 .overlap-warning-hint p {
   margin: 0;
+}
+
+/* ===== 刚完成 Sprint 高亮动画 ===== */
+.sprint-card.just-completed {
+  animation: just-completed-highlight 3s ease-out;
+  position: relative;
+}
+
+@keyframes just-completed-highlight {
+  0% {
+    border-color: rgb(var(--success-6));
+    box-shadow: 0 0 0 3px rgba(var(--success-6), 0.25);
+    background: rgba(var(--success-6), 0.06);
+  }
+  50% {
+    border-color: rgb(var(--success-6));
+    box-shadow: 0 0 0 2px rgba(var(--success-6), 0.15);
+    background: rgba(var(--success-6), 0.04);
+  }
+  100% {
+    border-color: var(--color-border);
+    box-shadow: none;
+    background: var(--color-bg-2);
+  }
 }
 </style>

@@ -1202,6 +1202,21 @@ export interface CompletionPreviewTarget {
   status: string
 }
 
+// ========== Sprint 完成结果（包含统计信息）==========
+export interface SprintCompleteResultVO {
+  sprint: SprintVO
+  /** 该 Sprint 中工单总数 */
+  totalIssues: number
+  /** 已完成工单数 */
+  completedIssues: number
+  /** 未完成工单数（被移走或回 Backlog） */
+  unresolvedIssues: number
+  /** 未完成工单处理方式 */
+  moveOption?: 'backlog' | 'next_sprint'
+  /** 如果移入其他迭代，目标迭代名称 */
+  targetSprintName?: string
+}
+
 // ========== Sprint 删除预览 ==========
 export interface DeletionPreviewVO {
   sprintName: string
