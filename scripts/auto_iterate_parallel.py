@@ -54,7 +54,7 @@ for d in [REVIEW_DIR, DEVELOP_DIR, IMPLEMENT_DIR, REJECTED_DIR, WORKING_DIR]:
 # 阈值
 MIN_DEVELOP_QUEUE = 6       # develop 低于此数时触发生产
 TIMEOUT_SECONDS = 2400      # 单次 kiro-cli 超时（40分钟）
-MAX_RETRIES = 3
+MAX_RETRIES = 5           # 真正的处理失败（非启动失败）才计入，超过5次才放弃
 COOLDOWN_SECONDS = 5
 MAX_TEST_RETRIES = 3        # 测试最多重试轮数
 MAX_REVIEW_RETRIES = 2      # 审核最多重试轮数
@@ -214,6 +214,11 @@ def run_kiro(prompt: str, label: str, model: str | None = None) -> tuple[bool, s
         success = process.returncode == 0
         level = "INFO" if success else "WARNING"
         log.log(logging.getLevelName(level), f"[{label}] {'完成' if success else '失败'} ({elapsed:.0f}s)")
+        # 如果进程在 30 秒内就退出，说明 kiro-cli 启动失败（认证/网络/并发问题）
+        # 返回特殊标记 "STARTUP_FAIL" 让调用方区分处理
+        if not success and elapsed < 30:
+            log.warning(f"[{label}] kiro-cli 启动失败（{elapsed:.0f}s），可能是认证过期或并发限制")
+            return False, "STARTUP_FAIL"
         return success, "\n".join(output_lines)
     except subprocess.TimeoutExpired:
         process.kill()
@@ -522,6 +527,14 @@ def consume_one(worker_id: str) -> str | None:
         f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
     )
     success, fix_output = run_kiro(fix_prompt, label, model=KIRO_MODEL_FIX)
+
+    # kiro-cli 启动失败（<30s 退出）→ 不算需求失败，放回 develop/ 并等待环境恢复
+    if fix_output == "STARTUP_FAIL":
+        if req_file.exists():
+            shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
+        log.warning(f"[{label}] ⚠️ kiro-cli 启动失败，{req_file.name} 放回 develop/，等待 60s 后重试")
+        time.sleep(60)
+        return None  # 返回 None 但不累积重试计数（因为文件放回了 develop/ 而非触发计数）
 
     # 检查 FIX_BLOCKED（需求不合理）
     _, blocked, block_reason = parse_fix_result(fix_output)
