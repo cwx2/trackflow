@@ -127,6 +127,8 @@
 
       <span class="toolbar-stats">
         {{ filteredStatuses.length }} / {{ statuses.length }} 个状态
+        <span class="toolbar-divider">|</span>
+        {{ allowedTransitions.size }} 条转换规则已启用
       </span>
     </div>
 
@@ -1184,6 +1186,11 @@ onBeforeRouteLeave(() => {
   font-size: 12px;
   color: var(--text-muted);
   margin-left: auto;
+}
+
+.toolbar-divider {
+  margin: 0 8px;
+  color: var(--border-color);
 }
 
 .matrix-container {
