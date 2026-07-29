@@ -37,7 +37,7 @@
       </div>
       <QueryInput
         v-model="searchKeyword"
-        :placeholder="activeQueryName ? '追加筛选关键词...' : '输入搜索请求 (如 状态: 未关闭  负责人: 我)'"
+        :placeholder="activeQueryName ? '搜索工单...' : '输入搜索请求 (如 状态: 未关闭  负责人: 我)'"
         :status-list="statusList"
         :project-list="projectList"
         :project-id="projectId"

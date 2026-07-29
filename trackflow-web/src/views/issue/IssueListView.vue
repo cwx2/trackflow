@@ -13,7 +13,7 @@
       </div>
 
       <div class="panel-search">
-        <a-input v-model="panelSearch" placeholder="搜索查询..." size="small" allow-clear>
+        <a-input v-model="panelSearch" placeholder="过滤已保存的查询..." size="small" allow-clear>
           <template #prefix><icon-search /></template>
         </a-input>
       </div>
@@ -414,7 +414,7 @@
         <div class="manage-queries-content">
           <p class="manage-queries-hint">选择要在面板中显示的共享查询。点击星标切换收藏状态。</p>
           <div class="manage-queries-search">
-            <a-input v-model="manageQuerySearch" placeholder="搜索查询..." size="small" allow-clear>
+            <a-input v-model="manageQuerySearch" placeholder="过滤已保存的查询..." size="small" allow-clear>
               <template #prefix><icon-search /></template>
             </a-input>
           </div>
