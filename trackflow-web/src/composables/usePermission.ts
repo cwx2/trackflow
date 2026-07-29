@@ -208,3 +208,62 @@ export function usePermission(
     canLogTime
   }
 }
+
+// ===== 基于项目 ID 的同步权限检查（依赖缓存） =====
+
+/**
+ * 同步检查指定项目的权限（基于缓存）
+ * 如果缓存未命中，返回 false（悲观策略）
+ * 
+ * @param projectId - 项目 ID
+ * @param permission - 权限标识（如 'sprint:edit'）
+ * @returns 是否具有该权限
+ */
+export function checkPermissionSync(projectId: string | undefined, permission: string): boolean {
+  if (!projectId) return false
+  
+  // system:admin 自动拥有所有权限
+  const authStore = useAuthStore()
+  if (authStore.hasGlobalPermission('system:admin')) return true
+  
+  const cached = projectPermissionsCache.get(projectId)
+  if (!cached || !isCacheValid(cached)) {
+    // 缓存未命中，触发异步加载，但本次返回 false
+    loadProjectPermissions(projectId)
+    return false
+  }
+  return cached.permissions.has(permission)
+}
+
+/**
+ * 预加载多个项目的权限到缓存
+ * 用于批量场景，如 Sprint 列表渲染前预加载所有涉及项目的权限
+ * 
+ * @param projectIds - 项目 ID 数组
+ * @returns Promise，所有权限加载完成后 resolve
+ */
+export async function preloadPermissions(projectIds: string[]): Promise<void> {
+  const uniqueIds = [...new Set(projectIds.filter(id => !!id))]
+  await Promise.all(uniqueIds.map(id => loadProjectPermissions(id)))
+}
+
+/**
+ * 基于项目 ID 同步检查 Sprint 编辑权限
+ */
+export function canEditSprintSync(projectId: string | undefined): boolean {
+  return checkPermissionSync(projectId, 'sprint:edit')
+}
+
+/**
+ * 基于项目 ID 同步检查 Sprint 删除权限
+ */
+export function canDeleteSprintSync(projectId: string | undefined): boolean {
+  return checkPermissionSync(projectId, 'sprint:delete')
+}
+
+/**
+ * 基于项目 ID 同步检查 Sprint 创建权限
+ */
+export function canCreateSprintSync(projectId: string | undefined): boolean {
+  return checkPermissionSync(projectId, 'sprint:create')
+}
