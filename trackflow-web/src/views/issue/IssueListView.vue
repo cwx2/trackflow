@@ -396,8 +396,8 @@
         @ok="handleRenameQuery"
         @cancel="showRenameQueryModal = false"
       >
-        <a-form layout="vertical">
-          <a-form-item label="新名称" required>
+        <a-form :model="renameQueryForm" layout="vertical">
+          <a-form-item label="新名称" field="name" :rules="[{ required: true, message: '请输入名称' }]">
             <a-input v-model="renameQueryForm.name" placeholder="输入新名称" :max-length="50" @keyup.enter="handleRenameQuery" />
           </a-form-item>
         </a-form>
