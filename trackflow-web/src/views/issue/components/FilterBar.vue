@@ -185,13 +185,15 @@
                   class="popup-item"
                   :class="{
                     active: valueSuggestionIndex === i,
-                    selected: isValueSelected(opt.id)
+                    selected: isValueSelected(opt.id),
+                    special: opt.isSpecial
                   }"
                   @click="toggleValue(opt)"
                   @mouseenter="valueSuggestionIndex = i"
                 >
                   <span v-if="isMultiSelect" class="check-icon">{{ isValueSelected(opt.id) ? '☑' : '☐' }}</span>
-                  <span v-if="opt.color" class="value-dot" :style="{ background: opt.color }"></span>
+                  <span v-if="opt.isSpecial" class="special-icon">👤</span>
+                  <span v-else-if="opt.color" class="value-dot" :style="{ background: opt.color }"></span>
                   <span class="value-label">{{ opt.label }}</span>
                 </div>
                 <div v-if="filteredValueOptions.length === 0" class="popup-empty">无匹配选项</div>
@@ -235,6 +237,7 @@ interface ValueOption {
   id: string
   label: string
   color?: string
+  isSpecial?: boolean // For special options like "Me (current user)"
 }
 
 interface FilterChip {
@@ -629,16 +632,20 @@ async function loadValueOptions(fieldKey: string) {
         break
 
       case 'assignee': {
+        // "Me (current user)" shortcut option at the top with visual distinction
+        const meOption: ValueOption = { id: 'me', label: '我（当前用户）', isSpecial: true }
+        
         // Load project members (uses project:view permission, accessible to all project members)
         const assigneeProjectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
         const assigneePid = assigneeProjectFilter?.values[0] || props.projectId
         if (assigneePid) {
           const res = await projectApi.listMembers(assigneePid, { _silent403: true })
           const members = res.data || []
-          valueOptions.value = members.map((m: any) => ({
+          const memberOptions = members.map((m: any) => ({
             id: m.userId,
             label: m.displayName || m.username
           }))
+          valueOptions.value = [meOption, ...memberOptions]
         } else {
           // All projects mode — aggregate members from visible projects (deduplicated)
           const allMembers: ValueOption[] = []
@@ -656,7 +663,7 @@ async function loadValueOptions(fieldKey: string) {
               }
             }
           }
-          valueOptions.value = allMembers
+          valueOptions.value = [meOption, ...allMembers]
         }
         break
       }
@@ -829,6 +836,8 @@ function updateChipValueLabel(chip: FilterChip) {
     return
   }
   const labels = chip.values.map(id => {
+    // Special case: "me" shows as "我" in the chip for brevity
+    if (id === 'me') return '我'
     const opt = valueOptions.value.find(o => o.id === id)
     return opt?.label || id
   })
@@ -1443,6 +1452,18 @@ defineExpose({ clearAll, setFilters })
 
 .popup-item.selected {
   color: var(--tf-accent);
+}
+
+.popup-item.special {
+  color: var(--tf-accent);
+  border-bottom: 1px solid var(--tf-border-light);
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.special-icon {
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .popup-options {
