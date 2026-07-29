@@ -123,6 +123,7 @@ public class CustomFieldService {
                     option.setPosition(i);
                     option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
                     option.setColor(opt.getColor());
+                    option.setDescription(opt.getDescription());
                     option.setCreatedAt(LocalDateTime.now());
                     option.setUpdatedAt(LocalDateTime.now());
                     optionMapper.insert(option);

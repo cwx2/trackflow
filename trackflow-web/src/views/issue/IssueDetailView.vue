@@ -865,7 +865,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
 function getFilteredOptions(
   cf: CustomFieldDefinitionVO,
   valuesMap: Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>
-): { value: string; label: string }[] {
+): { value: string; label: string; description?: string }[] {
   // 基础过滤：排除归档选项
   let activeOptions = (cf.options || []).filter(o => !o.isArchived)
 
@@ -894,7 +894,7 @@ function getFilteredOptions(
     }
   }
 
-  return activeOptions.map(o => ({ value: o.id, label: o.value }))
+  return activeOptions.map(o => ({ value: o.id, label: o.value, description: o.description || undefined }))
 }
 
 /**

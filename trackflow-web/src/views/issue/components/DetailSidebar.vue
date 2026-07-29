@@ -83,16 +83,23 @@
               </div>
               <!-- 单选列表 -->
               <div class="dropdown-list" v-if="field.editType === 'select' || field.editType === 'user-select'">
-                <div
+                <a-tooltip
                   v-for="opt in getFilteredOptions(field)"
                   :key="opt.value"
-                  class="dropdown-item"
-                  :class="{ selected: opt.value === (field.rawValue || '') }"
-                  @click="selectOption(field, opt.value)"
+                  :content="opt.description"
+                  :disabled="!opt.description"
+                  position="left"
+                  mini
                 >
-                  <span class="item-text">{{ opt.label }}</span>
-                  <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
-                </div>
+                  <div
+                    class="dropdown-item"
+                    :class="{ selected: opt.value === (field.rawValue || '') }"
+                    @click="selectOption(field, opt.value)"
+                  >
+                    <span class="item-text">{{ opt.label }}</span>
+                    <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
+                  </div>
+                </a-tooltip>
                 <div v-if="getFilteredOptions(field).length === 0 && !addingOption" class="dropdown-empty">无匹配项</div>
                 <!-- 内联添加新选项入口 -->
                 <template v-if="field.canAddOption">
@@ -115,16 +122,23 @@
               </div>
               <!-- 多选列表 -->
               <div class="dropdown-list" v-if="field.editType === 'multi-select'">
-                <div
+                <a-tooltip
                   v-for="opt in getFilteredOptions(field)"
                   :key="opt.value"
-                  class="dropdown-item multi-item"
-                  :class="{ selected: multiSelectedValues.includes(opt.value) }"
-                  @click="toggleMultiOption(field, opt.value)"
+                  :content="opt.description"
+                  :disabled="!opt.description"
+                  position="left"
+                  mini
                 >
-                  <span class="item-check">{{ multiSelectedValues.includes(opt.value) ? '✓' : '' }}</span>
-                  <span class="item-text">{{ opt.label }}</span>
-                </div>
+                  <div
+                    class="dropdown-item multi-item"
+                    :class="{ selected: multiSelectedValues.includes(opt.value) }"
+                    @click="toggleMultiOption(field, opt.value)"
+                  >
+                    <span class="item-check">{{ multiSelectedValues.includes(opt.value) ? '✓' : '' }}</span>
+                    <span class="item-text">{{ opt.label }}</span>
+                  </div>
+                </a-tooltip>
                 <div v-if="getFilteredOptions(field).length === 0 && !addingOption" class="dropdown-empty">无匹配项</div>
                 <!-- 内联添加新选项入口 -->
                 <template v-if="field.canAddOption">
@@ -209,6 +223,8 @@ export interface FieldOption {
   label: string
   badge?: string
   badgeColor?: string
+  /** 选项描述，用于 tooltip 展示 */
+  description?: string
 }
 
 export interface TimeProgress {

@@ -335,7 +335,11 @@
                 multiple
                 allow-clear
               >
-                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
+                  <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                    <span class="cf-option-label">{{ opt.value }}</span>
+                  </a-tooltip>
+                </a-option>
                 <template #footer v-if="canAddFieldOption">
                   <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
                     <span class="add-icon">+</span> 添加新值
@@ -356,7 +360,11 @@
                 allow-clear
                 @change="clearFieldError(cf.id)"
               >
-                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">{{ opt.value }}</a-option>
+                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
+                  <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                    <span class="cf-option-label">{{ opt.value }}</span>
+                  </a-tooltip>
+                </a-option>
                 <template #footer v-if="canAddFieldOption">
                   <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
                     <span class="add-icon">+</span> 添加新值
@@ -747,7 +755,7 @@ async function confirmAddOptionInSelect(cf: CustomFieldDefinitionVO) {
  * - 如果字段配置了 filterFieldId 和 filterRules，根据源字段的当前值过滤选项
  * - 如果未配置或源字段无值，则仅过滤归档选项
  */
-function getFilteredOptionsForField(cf: CustomFieldDefinitionVO) {
+function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; value: string; description?: string | null }[] {
   // 基础过滤：排除归档选项
   let activeOptions = (cf.options || []).filter(o => !o.isArchived)
 
@@ -770,7 +778,7 @@ function getFilteredOptionsForField(cf: CustomFieldDefinitionVO) {
     }
   }
 
-  return activeOptions
+  return activeOptions.map(o => ({ id: o.id, value: o.value, description: o.description }))
 }
 
 /**
@@ -1734,6 +1742,11 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cf-option-label {
+  display: block;
+  width: 100%;
 }
 </style>
 

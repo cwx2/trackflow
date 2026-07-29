@@ -12,4 +12,6 @@ public class CustomFieldOptionVO {
     private Boolean isArchived;
     /** 选项颜色（HEX 格式如 #4CAF50），null 表示无颜色 */
     private String color;
+    /** 选项描述，在下拉选择时以 tooltip 形式展示 */
+    private String description;
 }

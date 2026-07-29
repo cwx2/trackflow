@@ -312,6 +312,8 @@ public class CustomFieldOptionService {
                 if (opt.getColor() != null) {
                     existing.setColor(opt.getColor());
                 }
+                // 更新描述字段（允许清空）
+                existing.setDescription(opt.getDescription());
                 // 如果之前是归档状态，恢复为活跃
                 if (Boolean.TRUE.equals(existing.getIsArchived())) {
                     existing.setIsArchived(false);
@@ -366,6 +368,7 @@ public class CustomFieldOptionService {
             copy.setPosition(i);
             copy.setIsDefault(src.getIsDefault());
             copy.setColor(src.getColor());
+            copy.setDescription(src.getDescription());
             copy.setIsArchived(false);
             copy.setCreatedAt(LocalDateTime.now());
             copy.setUpdatedAt(LocalDateTime.now());
@@ -486,6 +489,7 @@ public class CustomFieldOptionService {
             if (opt.getColor() != null) {
                 activeSameName.setColor(opt.getColor());
             }
+            activeSameName.setDescription(opt.getDescription());
             activeSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(activeSameName);
             return activeSameName.getId();
@@ -506,6 +510,7 @@ public class CustomFieldOptionService {
             if (opt.getColor() != null) {
                 archivedSameName.setColor(opt.getColor());
             }
+            archivedSameName.setDescription(opt.getDescription());
             archivedSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(archivedSameName);
             return archivedSameName.getId();
@@ -518,6 +523,7 @@ public class CustomFieldOptionService {
         newOption.setPosition(position);
         newOption.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
         newOption.setColor(opt.getColor());
+        newOption.setDescription(opt.getDescription());
         newOption.setIsArchived(false);
         newOption.setCreatedAt(LocalDateTime.now());
         newOption.setUpdatedAt(LocalDateTime.now());

@@ -60,5 +60,8 @@ public class CreateCustomFieldDTO {
         /** 选项颜色（HEX 格式如 #4CAF50），null 表示无颜色 */
         @Size(max = 20)
         private String color;
+        /** 选项描述（在下拉选择时展示 tooltip） */
+        @Size(max = 1024, message = "选项描述不能超过1024个字符")
+        private String description;
     }
 }

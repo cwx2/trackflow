@@ -416,85 +416,111 @@
               <div
                 v-for="(opt, idx) in visibleFormOptions"
                 :key="opt.id || `new-${idx}`"
-                class="option-row"
-                :class="{
-                  'option-row--dragging': optionDragIndex === idx,
-                  'option-row--drop-above': optionDropIndex === idx && optionDropPosition === 'above',
-                  'option-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below',
-                  'option-row--archived': opt.isArchived
-                }"
-                :draggable="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1"
-                @dragstart="onOptionDragStart($event, idx)"
-                @dragover="onOptionDragOver($event, idx)"
-                @dragleave="onOptionDragLeave"
-                @drop="onOptionDrop($event, idx)"
-                @dragend="onOptionDragEnd"
+                class="option-item"
               >
-                <span v-if="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
-                <span v-else-if="opt.isArchived" class="option-archived-icon" title="已归档">📦</span>
-                <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" :disabled="opt.isArchived" />
-                <a-trigger v-if="!opt.isArchived" trigger="click" :popup-translate="[0, 4]">
+                <div
+                  class="option-row"
+                  :class="{
+                    'option-row--dragging': optionDragIndex === idx,
+                    'option-row--drop-above': optionDropIndex === idx && optionDropPosition === 'above',
+                    'option-row--drop-below': optionDropIndex === idx && optionDropPosition === 'below',
+                    'option-row--archived': opt.isArchived
+                  }"
+                  :draggable="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1"
+                  @dragstart="onOptionDragStart($event, idx)"
+                  @dragover="onOptionDragOver($event, idx)"
+                  @dragleave="onOptionDragLeave"
+                  @drop="onOptionDrop($event, idx)"
+                  @dragend="onOptionDragEnd"
+                >
+                  <span v-if="!opt.isArchived && form.options.filter(o => !o.isArchived).length > 1" class="option-drag-handle" title="拖拽排序">⠿</span>
+                  <span v-else-if="opt.isArchived" class="option-archived-icon" title="已归档">📦</span>
+                  <a-input v-model="opt.value" placeholder="选项值" size="mini" style="flex:1" :disabled="opt.isArchived" />
+                  <a-trigger v-if="!opt.isArchived" trigger="click" :popup-translate="[0, 4]">
+                    <span
+                      class="color-swatch"
+                      :style="{ background: opt.color || 'transparent', border: opt.color ? 'none' : '1px dashed var(--tf-border)' }"
+                      title="设置颜色"
+                    ></span>
+                    <template #content>
+                      <div class="color-palette">
+                        <span
+                          v-for="c in presetColors"
+                          :key="c"
+                          class="color-palette-item"
+                          :class="{ active: opt.color === c }"
+                          :style="{ background: c }"
+                          @click="opt.color = c"
+                        ></span>
+                        <span
+                          class="color-palette-item color-palette-clear"
+                          :class="{ active: !opt.color }"
+                          @click="opt.color = undefined"
+                          title="无颜色"
+                        >✕</span>
+                      </div>
+                    </template>
+                  </a-trigger>
+                  <!-- 描述按钮 -->
+                  <a-button
+                    v-if="!opt.isArchived"
+                    type="text"
+                    size="mini"
+                    :class="{ 'desc-btn-active': opt.description }"
+                    :title="opt.description ? `描述: ${opt.description}` : '添加描述'"
+                    @click.stop="toggleDescriptionRow(idx)"
+                  >
+                    <icon-info-circle />
+                  </a-button>
+                  <a-checkbox v-if="!opt.isArchived" v-model="opt.isDefault" size="small">默认</a-checkbox>
+                  <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
                   <span
-                    class="color-swatch"
-                    :style="{ background: opt.color || 'transparent', border: opt.color ? 'none' : '1px dashed var(--tf-border)' }"
-                    title="设置颜色"
-                  ></span>
-                  <template #content>
-                    <div class="color-palette">
-                      <span
-                        v-for="c in presetColors"
-                        :key="c"
-                        class="color-palette-item"
-                        :class="{ active: opt.color === c }"
-                        :style="{ background: c }"
-                        @click="opt.color = c"
-                      ></span>
-                      <span
-                        class="color-palette-item color-palette-clear"
-                        :class="{ active: !opt.color }"
-                        @click="opt.color = undefined"
-                        title="无颜色"
-                      >✕</span>
-                    </div>
-                  </template>
-                </a-trigger>
-                <a-checkbox v-if="!opt.isArchived" v-model="opt.isDefault" size="small">默认</a-checkbox>
-                <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
-                <span
-                  v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
-                  class="option-usage-count"
-                  :class="{ 'option-unused': optionUsageMap[opt.id] === 0 }"
-                  :title="optionUsageMap[opt.id] > 0 ? `被 ${optionUsageMap[opt.id]} 个工单引用` : '未被任何工单使用'"
-                >
-                  {{ optionUsageMap[opt.id] > 0 ? optionUsageMap[opt.id] : '未使用' }}
-                </span>
-                <!-- 归档/取消归档按钮 -->
-                <a-button
-                  v-if="editingId && opt.id && !opt.isArchived"
-                  type="text" size="mini"
-                  title="归档（隐藏选项但保留已有数据）"
-                  @click.stop="handleArchiveOption(opt)"
-                >
-                  <icon-eye-invisible />
-                </a-button>
-                <a-button
-                  v-if="editingId && opt.id && opt.isArchived"
-                  type="text" size="mini" status="success"
-                  title="取消归档（恢复选项可选）"
-                  @click.stop="handleUnarchiveOption(opt)"
-                >
-                  <icon-eye />
-                </a-button>
-                <!-- 删除按钮（仅非归档选项显示） -->
-                <a-button
-                  v-if="!opt.isArchived"
-                  type="text" size="mini" status="danger"
-                  :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
-                  :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
-                  @click="handleDeleteOption(opt, idx)"
-                >
-                  <icon-delete />
-                </a-button>
+                    v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
+                    class="option-usage-count"
+                    :class="{ 'option-unused': optionUsageMap[opt.id] === 0 }"
+                    :title="optionUsageMap[opt.id] > 0 ? `被 ${optionUsageMap[opt.id]} 个工单引用` : '未被任何工单使用'"
+                  >
+                    {{ optionUsageMap[opt.id] > 0 ? optionUsageMap[opt.id] : '未使用' }}
+                  </span>
+                  <!-- 归档/取消归档按钮 -->
+                  <a-button
+                    v-if="editingId && opt.id && !opt.isArchived"
+                    type="text" size="mini"
+                    title="归档（隐藏选项但保留已有数据）"
+                    @click.stop="handleArchiveOption(opt)"
+                  >
+                    <icon-eye-invisible />
+                  </a-button>
+                  <a-button
+                    v-if="editingId && opt.id && opt.isArchived"
+                    type="text" size="mini" status="success"
+                    title="取消归档（恢复选项可选）"
+                    @click.stop="handleUnarchiveOption(opt)"
+                  >
+                    <icon-eye />
+                  </a-button>
+                  <!-- 删除按钮（仅非归档选项显示） -->
+                  <a-button
+                    v-if="!opt.isArchived"
+                    type="text" size="mini" status="danger"
+                    :disabled="editingId && opt.id && optionUsageMap[opt.id] !== undefined && optionUsageMap[opt.id] > 0"
+                    :title="editingId && opt.id && optionUsageMap[opt.id] > 0 ? `该选项被 ${optionUsageMap[opt.id]} 个工单使用，无法删除` : '删除选项'"
+                    @click="handleDeleteOption(opt, idx)"
+                  >
+                    <icon-delete />
+                  </a-button>
+                </div>
+                <!-- 描述输入行 -->
+                <div v-if="expandedDescriptionIdx === idx && !opt.isArchived" class="option-desc-row">
+                  <a-textarea
+                    v-model="opt.description"
+                    placeholder="输入选项描述，将在下拉选择时以 tooltip 形式展示"
+                    :auto-size="{ minRows: 1, maxRows: 3 }"
+                    :max-length="1024"
+                    show-word-limit
+                    size="mini"
+                  />
+                </div>
               </div>
               <a-button type="dashed" size="mini" long @click="form.options.push({ value: '', isDefault: false })">
                 <template #icon><icon-plus /></template>
@@ -537,7 +563,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi } from '@/api'
 import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
@@ -596,6 +622,8 @@ const detailUsage = ref<CustomFieldUsageVO | null>(null)
 const fieldsInProjectsRef = ref<InstanceType<typeof FieldsInProjects> | null>(null)
 const showArchivedInDetail = ref(false)
 const showArchivedInDrawer = ref(false)
+/** 当前展开描述输入的选项索引（-1 表示全部收起） */
+const expandedDescriptionIdx = ref(-1)
 
 /** 侧边栏选项过滤 */
 const detailFilteredOptions = computed(() => {
@@ -760,6 +788,7 @@ function resetForm() {
   copyFromFieldId.value = null
   optionUsageMap.value = {}
   showArchivedInDrawer.value = false
+  expandedDescriptionIdx.value = -1
 }
 
 // Reset defaultValue when field format changes during creation
@@ -876,7 +905,16 @@ function openEdit(record: CustomFieldDefinitionVO) {
   drawerVisible.value = true
 }
 
-function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }, idx: number) {
+/** 切换选项描述输入行的展开/收起 */
+function toggleDescriptionRow(idx: number) {
+  if (expandedDescriptionIdx.value === idx) {
+    expandedDescriptionIdx.value = -1
+  } else {
+    expandedDescriptionIdx.value = idx
+  }
+}
+
+function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; description?: string }, idx: number) {
   // 如果选项有 ID 且有引用，阻止删除并提示
   if (editingId.value && opt.id && optionUsageMap.value[opt.id] !== undefined && optionUsageMap.value[opt.id] > 0) {
     Modal.warning({
@@ -895,7 +933,7 @@ function handleDeleteOption(opt: { id?: string; value: string; isDefault: boolea
   }
 }
 
-async function handleArchiveOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }) {
+async function handleArchiveOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; description?: string }) {
   if (!editingId.value || !opt.id) return
   try {
     await customFieldApi.archiveOption(editingId.value, opt.id, true)
@@ -909,7 +947,7 @@ async function handleArchiveOption(opt: { id?: string; value: string; isDefault:
   }
 }
 
-async function handleUnarchiveOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }) {
+async function handleUnarchiveOption(opt: { id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; description?: string }) {
   if (!editingId.value || !opt.id) return
   try {
     await customFieldApi.archiveOption(editingId.value, opt.id, false)
@@ -1657,5 +1695,24 @@ onMounted(() => {
   background: var(--tf-bg-body);
   border-radius: 4px;
   border: 1px solid var(--tf-border);
+}
+
+.option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-desc-row {
+  margin-left: 26px;
+  padding: 4px 4px 4px 0;
+}
+
+.option-desc-row :deep(.arco-textarea) {
+  font-size: 12px;
+}
+
+.desc-btn-active {
+  color: var(--tf-accent) !important;
 }
 </style>

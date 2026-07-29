@@ -740,6 +740,8 @@ export interface CustomFieldOptionVO {
   isArchived?: boolean
   /** 选项颜色（HEX 格式如 #4CAF50），null 表示无颜色 */
   color?: string | null
+  /** 选项描述，在下拉选择时以 tooltip 形式展示 */
+  description?: string | null
 }
 
 export interface CustomFieldUsageVO {
