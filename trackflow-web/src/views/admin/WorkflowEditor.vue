@@ -1,5 +1,22 @@
 <template>
   <div class="workflow-page">
+    <!-- 面包屑导航（从项目设置页跳转过来时显示） -->
+    <div v-if="sourceProjectId" class="breadcrumb-nav">
+      <a-breadcrumb>
+        <a-breadcrumb-item>
+          <router-link :to="`/projects/${sourceProjectKey}/settings?tab=workflow`">
+            <icon-left class="breadcrumb-back-icon" />
+            {{ sourceProjectName }} 的工作流设置
+          </router-link>
+        </a-breadcrumb-item>
+        <a-breadcrumb-item>转换矩阵编辑</a-breadcrumb-item>
+      </a-breadcrumb>
+      <div class="breadcrumb-hint">
+        <icon-info-circle />
+        正在编辑 <strong>{{ sourceProjectName }}</strong> 的工作流规则
+      </div>
+    </div>
+    
     <div class="page-header">
       <h2 class="page-title">工作流编辑器</h2>
       <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
@@ -358,9 +375,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, h } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSettings, IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconExclamationCircle, IconUser, IconUserGroup } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconExclamationCircle, IconUser, IconUserGroup, IconLeft } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
@@ -369,6 +386,9 @@ import WorkflowRulePanel from './WorkflowRulePanel.vue'
 import ScheduledRulePanel from './ScheduledRulePanel.vue'
 import TransitionGuardPanel from './TransitionGuardPanel.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
+
+const route = useRoute()
+const router = useRouter()
 
 const activeMainTab = ref('matrix')
 const activeRuleSubTab = ref('on_change')
@@ -379,6 +399,19 @@ const selectedMode = ref<'normal' | 'author' | 'assignee'>('normal')
 const loading = ref(false)
 const saving = ref(false)
 const showHistory = ref(false)
+
+// 从项目设置页跳转过来时的来源项目信息
+const sourceProjectId = ref<string | null>(null)
+const sourceProjectKey = computed(() => {
+  if (!sourceProjectId.value) return ''
+  const project = projects.value.find(p => p.id === sourceProjectId.value)
+  return project?.key || sourceProjectId.value
+})
+const sourceProjectName = computed(() => {
+  if (!sourceProjectId.value) return ''
+  const project = projects.value.find(p => p.id === sourceProjectId.value)
+  return project?.name || ''
+})
 
 const statuses = ref<IssueStatusVO[]>([])
 const projects = ref<ProjectVO[]>([])
@@ -1093,7 +1126,19 @@ async function saveMatrix() {
 }
 
 onMounted(async () => {
+  // 先加载基础数据（状态、项目、角色、工单类型）
   await Promise.all([loadStatuses(), loadProjects(), loadRoles(), loadIssueTypes()])
+  
+  // 检查是否从项目设置页跳转过来（携带 project query 参数）
+  const projectFromQuery = route.query.project as string | undefined
+  if (projectFromQuery && projectFromQuery !== '0') {
+    // 记录来源项目，用于面包屑导航
+    sourceProjectId.value = projectFromQuery
+    // 自动选择对应项目
+    selectedProject.value = projectFromQuery
+    snapshotFilters()
+  }
+  
   await Promise.all([loadMatrix(), loadActionPaths()])
   snapshotFilters()
 
@@ -1140,6 +1185,44 @@ onBeforeRouteLeave(() => {
   padding: 24px;
   height: 100%;
   overflow-y: auto;
+}
+
+/* 面包屑导航 */
+.breadcrumb-nav {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border-2);
+  border-radius: 6px;
+}
+
+.breadcrumb-nav :deep(.arco-breadcrumb-item a) {
+  color: rgb(var(--arcoblue-6));
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breadcrumb-nav :deep(.arco-breadcrumb-item a:hover) {
+  color: rgb(var(--arcoblue-5));
+}
+
+.breadcrumb-back-icon {
+  font-size: 14px;
+}
+
+.breadcrumb-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+
+.breadcrumb-hint strong {
+  color: var(--color-text-1);
+  font-weight: 500;
 }
 
 .page-header {
