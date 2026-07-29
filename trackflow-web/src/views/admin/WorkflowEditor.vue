@@ -1407,6 +1407,24 @@ onBeforeRouteLeave(() => {
 .empty-state p {
   margin-top: 8px;
   font-size: 13px;
+  text-align: center;
+  max-width: 400px;
+}
+
+.empty-state-error {
+  color: var(--color-danger-6, #f85149);
+}
+
+.empty-state-error h3 {
+  color: var(--color-danger-6, #f85149);
+}
+
+.empty-state-info {
+  color: rgb(var(--arcoblue-6));
+}
+
+.empty-state-info h3 {
+  color: rgb(var(--arcoblue-6));
 }
 
 /* 模式 Tab */
