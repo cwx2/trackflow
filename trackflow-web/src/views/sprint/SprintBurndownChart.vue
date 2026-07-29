@@ -123,8 +123,9 @@ const chartOption = computed(() => {
   const axisColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
   const tooltipBg = isDark ? '#2a2d33' : '#fff'
   const tooltipBorder = isDark ? '#3d4048' : '#e5e7eb'
-  const idealColor = isDark ? '#6b7280' : '#9ca3af'
-  const actualColor = isDark ? '#58a6ff' : '#0969da'
+  // YouTrack 风格配色：理想线=蓝色，实际线=红色
+  const idealColor = isDark ? '#58a6ff' : '#0969da'  // 蓝色
+  const actualColor = isDark ? '#f85149' : '#cf222e' // 红色
   const scopeColor = isDark ? '#d29922' : '#9a6700'
   const todayLineColor = isDark ? '#3fb950' : '#1a7f37'
 
@@ -140,7 +141,7 @@ const chartOption = computed(() => {
       name: '理想进度',
       type: 'line',
       data: idealLine,
-      lineStyle: { width: 2, color: idealColor, type: 'dashed' },
+      lineStyle: { width: 2, color: idealColor, type: 'solid' },  // YouTrack 风格：实线
       itemStyle: { color: idealColor },
       symbol: 'none',
       z: 1
@@ -158,8 +159,8 @@ const chartOption = computed(() => {
         color: {
           type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: isDark ? 'rgba(88, 166, 255, 0.1)' : 'rgba(9, 105, 218, 0.08)' },
-            { offset: 1, color: 'rgba(88, 166, 255, 0)' }
+            { offset: 0, color: isDark ? 'rgba(248, 81, 73, 0.15)' : 'rgba(207, 34, 46, 0.1)' },
+            { offset: 1, color: 'rgba(248, 81, 73, 0)' }
           ]
         }
       },
