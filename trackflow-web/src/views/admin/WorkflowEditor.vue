@@ -37,8 +37,9 @@
 
         <a-select
           v-model="selectedRole"
-          placeholder="角色"
+          placeholder="请选择角色（必填）"
           style="width: 160px"
+          :status="roleLoadingError ? 'error' : undefined"
           @change="onFilterChange"
         >
           <a-option
@@ -46,7 +47,17 @@
             :key="role.id"
             :value="role.id"
           >{{ role.name }}</a-option>
+          <template v-if="roles.length === 0 && !roleLoadingError" #empty>
+            <div style="padding: 8px 12px; text-align: center; color: var(--color-text-3);">
+              暂无角色，请先配置项目角色
+            </div>
+          </template>
         </a-select>
+        <a-tooltip v-if="roleLoadingError" content="角色加载失败，点击重试">
+          <a-button type="text" size="small" @click="retryLoadRoles">
+            <template #icon><icon-refresh /></template>
+          </a-button>
+        </a-tooltip>
 
         <a-button
           :type="isDirty ? 'primary' : 'secondary'"
@@ -237,7 +248,43 @@
         <a-button type="primary" @click="resetFilters">重置筛选</a-button>
       </div>
 
-      <!-- 空状态 -->
+      <!-- 空状态：角色加载失败 -->
+      <div v-else-if="!loading && roleLoadingError" class="empty-state empty-state-error">
+        <icon-exclamation-circle :size="48" />
+        <h3>角色加载失败</h3>
+        <p>无法加载角色列表，可能是网络问题或服务暂时不可用。</p>
+        <a-button type="primary" @click="retryLoadRoles">
+          <template #icon><icon-refresh /></template>
+          重新加载
+        </a-button>
+      </div>
+
+      <!-- 空状态：未选择角色 -->
+      <div v-else-if="!loading && !selectedRole && roles.length > 0" class="empty-state empty-state-info">
+        <icon-user :size="48" />
+        <h3>请选择角色</h3>
+        <p>在上方筛选区域选择一个角色，以加载该角色的转换矩阵。</p>
+      </div>
+
+      <!-- 空状态：角色列表为空 -->
+      <div v-else-if="!loading && roles.length === 0 && !roleLoadingError" class="empty-state empty-state-info">
+        <icon-user-group :size="48" />
+        <h3>暂无可用角色</h3>
+        <p>系统中未定义任何项目角色，请先在角色管理中配置角色。</p>
+      </div>
+
+      <!-- 空状态：状态加载失败 -->
+      <div v-else-if="!loading && statusLoadingError" class="empty-state empty-state-error">
+        <icon-exclamation-circle :size="48" />
+        <h3>状态加载失败</h3>
+        <p>无法加载状态列表，可能是网络问题或服务暂时不可用。</p>
+        <a-button type="primary" @click="retryLoadStatuses">
+          <template #icon><icon-refresh /></template>
+          重新加载
+        </a-button>
+      </div>
+
+      <!-- 空状态：无状态数据 -->
       <div v-else-if="!loading" class="empty-state">
         <icon-settings :size="48" />
         <h3>暂无状态数据</h3>
@@ -311,7 +358,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, h } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconSettings, IconInfoCircle, IconHistory, IconSearch } from '@arco-design/web-vue/es/icon'
+import { IconSettings, IconInfoCircle, IconHistory, IconSearch, IconRefresh, IconExclamationCircle, IconUser, IconUserGroup } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi, workflowApi, transitionActionApi } from '@/api'
 import type { IssueStatusVO, ProjectVO, RoleVO } from '@/api/types'
 import TransitionActionPanel from './TransitionActionPanel.vue'
@@ -335,6 +382,10 @@ const statuses = ref<IssueStatusVO[]>([])
 const projects = ref<ProjectVO[]>([])
 const roles = ref<RoleVO[]>([])
 const issueTypes = ref<string[]>([])
+
+// 角色加载状态
+const roleLoadingError = ref(false)
+const statusLoadingError = ref(false)
 
 // 矩阵工具栏状态
 const searchKeyword = ref('')
@@ -539,11 +590,33 @@ function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   actionPanelVisible.value = true
 }
 
+// 用于保存后自动打开守卫面板的临时存储
+const pendingGuardPanel = reactive<{
+  fromStatus: IssueStatusVO | null
+  toStatus: IssueStatusVO | null
+}>({
+  fromStatus: null,
+  toStatus: null
+})
+
 function openGuardPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   const key = `${fromStatus.id}-${toStatus.id}`
   const tid = transitionIdMap.get(key)
   if (!tid) {
-    Message.warning('请先保存工作流，再配置守卫条件')
+    // 转换尚未保存，弹出 Modal 提示并提供"立即保存"选项
+    Modal.confirm({
+      title: '需要先保存工作流',
+      content: `您需要先保存当前的工作流变更，才能配置「${localizeStatusName(fromStatus.name)} → ${localizeStatusName(toStatus.name)}」的守卫条件。现在保存吗？`,
+      okText: '立即保存',
+      cancelText: '取消',
+      async onOk() {
+        // 记录待打开的守卫面板信息
+        pendingGuardPanel.fromStatus = fromStatus
+        pendingGuardPanel.toStatus = toStatus
+        // 触发保存流程（直接调用内部保存逻辑，不再弹确认框）
+        await doSaveMatrixAndOpenGuard()
+      }
+    })
     return
   }
   // 获取当前守卫条件（从 transitions 数据获取）
@@ -553,6 +626,73 @@ function openGuardPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   guardPanelToName.value = localizeStatusName(toStatus.name)
   guardPanelConditions.value = conditions
   guardPanelVisible.value = true
+}
+
+// 保存工作流并在成功后自动打开守卫面板
+async function doSaveMatrixAndOpenGuard() {
+  const transitions = Array.from(allowedTransitions).map(key => {
+    const [from, to] = key.split('-')
+    return { from: Number(from), to: Number(to), allowed: true }
+  })
+
+  saving.value = true
+  try {
+    const projectId = selectedProject.value || '0'
+    await workflowApi.updateTransitionMatrix(projectId, {
+      issueType: selectedType.value,
+      roleId: Number(selectedRole.value),
+      author: selectedMode.value === 'author' ? true : false,
+      assignee: selectedMode.value === 'assignee' ? true : false,
+      version: matrixVersion.value ?? undefined,
+      transitions
+    })
+    Message.success('工作流已保存')
+    // 保存成功后重新加载以获取最新版本号和 transition id
+    await loadMatrix()
+    
+    // 如果有待打开的守卫面板，现在打开它
+    if (pendingGuardPanel.fromStatus && pendingGuardPanel.toStatus) {
+      const fromStatus = pendingGuardPanel.fromStatus
+      const toStatus = pendingGuardPanel.toStatus
+      const key = `${fromStatus.id}-${toStatus.id}`
+      const tid = transitionIdMap.get(key)
+      
+      // 清除临时存储
+      pendingGuardPanel.fromStatus = null
+      pendingGuardPanel.toStatus = null
+      
+      if (tid) {
+        // 现在可以打开守卫面板了
+        const conditions = getTransitionConditions(key)
+        guardPanelTransitionId.value = tid
+        guardPanelFromName.value = localizeStatusName(fromStatus.name)
+        guardPanelToName.value = localizeStatusName(toStatus.name)
+        guardPanelConditions.value = conditions
+        guardPanelVisible.value = true
+      }
+    }
+  } catch (e: any) {
+    const code = e.response?.data?.code
+    if (code === 40911) {
+      // 乐观锁冲突：工作流已被其他人修改
+      Modal.warning({
+        title: '保存失败',
+        content: '工作流已被其他人修改，请刷新后重试。点击"刷新"获取最新数据。',
+        okText: '刷新',
+        async onOk() {
+          await loadMatrix()
+          Message.info('已刷新为最新数据，请重新编辑后保存')
+        }
+      })
+    } else {
+      Message.error(e.response?.data?.message || '保存失败，请检查权限或重试')
+    }
+    // 清除待打开的守卫面板信息
+    pendingGuardPanel.fromStatus = null
+    pendingGuardPanel.toStatus = null
+  } finally {
+    saving.value = false
+  }
 }
 
 function getTransitionConditions(key: string): string | undefined {
@@ -631,12 +771,25 @@ function onFilterChange() {
 }
 
 async function loadStatuses() {
+  statusLoadingError.value = false
   try {
     const res = await issueApi.listStatuses()
     statuses.value = res.data || []
   } catch {
     statuses.value = []
+    statusLoadingError.value = true
     Message.error('加载状态列表失败')
+  }
+}
+
+async function retryLoadStatuses() {
+  await loadStatuses()
+  if (!statusLoadingError.value) {
+    // 状态加载成功后检查是否可以加载矩阵
+    if (selectedRole.value) {
+      await loadMatrix()
+    }
+    Message.success('状态加载成功')
   }
 }
 
@@ -651,6 +804,7 @@ async function loadProjects() {
 }
 
 async function loadRoles() {
+  roleLoadingError.value = false
   try {
     const res = await workflowApi.listProjectRoles()
     roles.value = res.data || []
@@ -660,7 +814,17 @@ async function loadRoles() {
     }
   } catch {
     roles.value = []
+    roleLoadingError.value = true
     Message.error('加载角色列表失败')
+  }
+}
+
+async function retryLoadRoles() {
+  await loadRoles()
+  if (!roleLoadingError.value && selectedRole.value) {
+    // 角色加载成功后自动加载矩阵
+    await loadMatrix()
+    Message.success('角色加载成功')
   }
 }
 
