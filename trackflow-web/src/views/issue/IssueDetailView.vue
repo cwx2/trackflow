@@ -1215,7 +1215,13 @@ async function onCreateTag(name: string) {
 }
 
 async function onAddComment(content: string, visibleToGroupIds?: string[]) {
-  try { await issueApi.addComment(issue.value!.id, content, visibleToGroupIds); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '评论失败') }
+  try {
+    await issueApi.addComment(issue.value!.id, content, visibleToGroupIds)
+    await loadAll()
+    Message.success('评论已发布')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '评论失败')
+  }
 }
 
 async function onEditComment(commentId: string, content: string) {
