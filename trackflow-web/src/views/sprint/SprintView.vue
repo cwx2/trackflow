@@ -40,15 +40,17 @@
         <span class="warning-bar-icon">{{ hasActiveSprint ? 'ℹ️' : '⚠️' }}</span>
         <span class="warning-bar-text">{{ sprintGuidanceMessage }}</span>
         <a-tooltip v-if="!hasActiveSprint" :content="warningBarActivateTooltip">
-          <a-button
-            size="mini"
-            type="primary"
-            class="warning-bar-action"
-            :disabled="!nextStartableSprint || (nextStartableSprint && !canEditSprintItem(nextStartableSprint))"
-            @click="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
-          >
-            开始迭代
-          </a-button>
+          <span class="tooltip-wrapper">
+            <a-button
+              size="mini"
+              type="primary"
+              class="warning-bar-action"
+              :disabled="!nextStartableSprint || (nextStartableSprint && !canEditSprintItem(nextStartableSprint))"
+              @click="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
+            >
+              开始迭代
+            </a-button>
+          </span>
         </a-tooltip>
       </div>
 
@@ -303,7 +305,9 @@
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip :content="getActivateTooltip(sprint)">
-            <a-button type="primary" size="mini" :disabled="!canEditSprintItem(sprint) || isSprintNotStartable(sprint) || hasActiveSprint" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
+            <span class="tooltip-wrapper">
+              <a-button type="primary" size="mini" :disabled="!canEditSprintItem(sprint) || isSprintNotStartable(sprint) || hasActiveSprint" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
+            </span>
           </a-tooltip>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
           <a-button v-if="canDeleteSprintItem(sprint)" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
@@ -2054,6 +2058,11 @@ function syncUrlProjectParam() {
   margin-top: 12px;
   display: flex;
   gap: 8px;
+}
+
+/* Tooltip wrapper：确保禁用按钮也能显示 tooltip */
+.tooltip-wrapper {
+  display: inline-block;
 }
 
 .edit-modal-footer {
