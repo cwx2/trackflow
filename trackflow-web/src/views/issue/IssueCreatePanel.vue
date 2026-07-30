@@ -24,10 +24,14 @@
         <a-input
           v-model="form.title"
           class="title-input"
-          placeholder="输入标题"
+          :class="{ 'title-error': titleError }"
+          placeholder="输入标题 *"
           :bordered="false"
           size="large"
+          @blur="validateTitleOnBlur"
+          @input="clearTitleError"
         />
+        <span v-if="titleError" class="title-error-msg">{{ titleError }}</span>
       </div>
 
       <!-- 模板选择器 -->
@@ -246,10 +250,12 @@
           <!-- 自定义字段 -->
           <template v-if="customFields.length > 0">
             <div class="prop-section-divider"></div>
-            <div v-for="cf in customFields" :key="cf.id" class="prop-row">
+            <div v-for="cf in customFields" :key="cf.id" class="prop-row" :data-field-id="cf.id">
               <span class="prop-label">
                 {{ cf.name }}
-                <span v-if="cf.effectiveIsRequired ?? cf.isRequired" class="required-mark">*</span>
+                <a-tooltip v-if="cf.effectiveIsRequired ?? cf.isRequired" content="必填字段" position="top" mini>
+                  <span class="required-mark">*</span>
+                </a-tooltip>
               </span>
               <!-- string -->
               <a-input
@@ -260,6 +266,7 @@
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
                 @input="clearFieldError(cf.id)"
+                @blur="validateFieldOnBlur(cf)"
               />
               <!-- text (多行/Markdown) -->
               <a-textarea
@@ -271,6 +278,7 @@
                 :auto-size="{ minRows: 2, maxRows: 6 }"
                 allow-clear
                 @input="clearFieldError(cf.id)"
+                @blur="validateFieldOnBlur(cf)"
               />
               <!-- int -->
               <a-input-number
@@ -283,6 +291,7 @@
                 :precision="0"
                 hide-button
                 style="width: 100%"
+                @blur="validateFieldOnBlur(cf)"
               />
               <!-- float -->
               <a-input-number
@@ -294,6 +303,7 @@
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 hide-button
                 style="width: 100%"
+                @blur="validateFieldOnBlur(cf)"
               />
               <!-- date -->
               <a-date-picker
@@ -303,7 +313,7 @@
                 style="width: 100%"
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
-                @change="clearFieldError(cf.id)"
+                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               />
               <!-- datetime -->
               <a-date-picker
@@ -315,7 +325,7 @@
                 format="YYYY-MM-DDTHH:mm:ss"
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
-                @change="clearFieldError(cf.id)"
+                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               />
               <!-- bool -->
               <a-switch
@@ -334,6 +344,7 @@
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 multiple
                 allow-clear
+                @blur="validateFieldOnBlur(cf)"
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
                   <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
@@ -358,7 +369,7 @@
                 :placeholder="getFieldPlaceholder(cf)"
                 :class="{ 'field-error': cfValidationErrors[cf.id] }"
                 allow-clear
-                @change="clearFieldError(cf.id)"
+                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
                   <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
@@ -385,7 +396,7 @@
                 :disabled="!form.projectId"
                 allow-clear
                 allow-search
-                @change="clearFieldError(cf.id)"
+                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
               </a-select>
@@ -719,6 +730,9 @@ const { fields: customFields, values: customFieldValues, loading: cfLoading, val
 // 自定义字段校验错误（inline 显示）
 const cfValidationErrors = ref<Record<string, string>>({})
 
+// 标题字段校验错误
+const titleError = ref('')
+
 // 内联添加选项功能
 const { hasPermission: hasProjectPerm } = usePermission(() => form.projectId)
 const canAddFieldOption = computed(() => hasProjectPerm('project:manage_custom_fields'))
@@ -819,11 +833,77 @@ function getFieldPlaceholder(cf: CustomFieldDefinitionVO): string {
 }
 
 /**
+ * 标题字段失焦校验
+ */
+function validateTitleOnBlur() {
+  if (!form.title.trim()) {
+    titleError.value = '请输入工单标题'
+  }
+}
+
+/**
+ * 清除标题错误
+ */
+function clearTitleError() {
+  titleError.value = ''
+}
+
+/**
  * 清除指定字段的验证错误
  */
 function clearFieldError(fieldId: string) {
   if (cfValidationErrors.value[fieldId]) {
     delete cfValidationErrors.value[fieldId]
+  }
+}
+
+/**
+ * 字段失焦时立即校验必填字段
+ * 实现即时反馈，不用等到提交时才发现错误
+ */
+function validateFieldOnBlur(cf: CustomFieldDefinitionVO) {
+  const isRequired = cf.effectiveIsRequired ?? cf.isRequired
+  if (!isRequired) return
+
+  const value = customFieldValues.value[cf.id]
+  if (!value || value.trim() === '') {
+    cfValidationErrors.value[cf.id] = '此字段为必填项'
+  } else {
+    // 如果有值，清除之前的错误
+    clearFieldError(cf.id)
+  }
+}
+
+/**
+ * 滚动到第一个错误字段并聚焦
+ * 提交时若有校验错误，自动定位到第一个问题字段
+ */
+function scrollToFirstError() {
+  // 优先检查标题错误（标题在页面顶部）
+  if (titleError.value) {
+    const titleInput = document.querySelector('.title-bar .title-input input') as HTMLElement
+    if (titleInput) {
+      titleInput.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => titleInput.focus?.(), 300)
+      return
+    }
+  }
+
+  // 检查自定义字段错误
+  const errorFieldIds = Object.keys(cfValidationErrors.value)
+  if (errorFieldIds.length === 0) return
+
+  const firstFieldId = errorFieldIds[0]
+  // 通过 data-field-id 属性查找元素
+  const fieldRow = document.querySelector(`.prop-row[data-field-id="${firstFieldId}"]`) as HTMLElement
+  if (fieldRow) {
+    // 滚动到视野中
+    fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // 尝试聚焦输入元素
+    setTimeout(() => {
+      const input = fieldRow.querySelector('input, textarea, .arco-select-view') as HTMLElement
+      input?.focus?.()
+    }, 300)
   }
 }
 
@@ -1123,6 +1203,8 @@ function resetForm() {
   form.dueDate = ''
   form.estimatedHours = undefined
   selectedTemplateId.value = null
+  // 重置校验错误
+  titleError.value = ''
   cfValidationErrors.value = {}
   // 重置附件
   attachmentFiles.value = []
@@ -1272,10 +1354,25 @@ async function submitAndCopy() {
 }
 
 async function doSubmit(): Promise<boolean> {
-  if (!canSubmit.value) return false
+  // 清空之前的错误状态
+  titleError.value = ''
+  cfValidationErrors.value = {}
+
+  // 标题校验
+  if (!form.title.trim()) {
+    titleError.value = '请输入工单标题'
+    Message.warning('请输入工单标题')
+    scrollToFirstError()
+    return false
+  }
+
+  // 项目校验
+  if (!form.projectId) {
+    Message.warning('请选择项目')
+    return false
+  }
 
   // 自定义字段必填校验（inline 显示错误）
-  cfValidationErrors.value = {}
   const cfErrors = validateCustomFields()
   if (cfErrors.length > 0) {
     // 填充 inline 错误
@@ -1286,6 +1383,8 @@ async function doSubmit(): Promise<boolean> {
       }
     }
     Message.warning(cfErrors[0])
+    // 自动滚动到第一个错误字段
+    scrollToFirstError()
     return false
   }
 
@@ -1384,9 +1483,24 @@ onMounted(() => {
   background: var(--color-fill-2, var(--tf-bg-hover));
 }
 
-.title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
+.title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; position: relative; }
 .title-input { font-size: 18px; font-weight: 500; }
 .title-input :deep(.arco-input) { font-size: 18px; font-weight: 500; }
+.title-input.title-error :deep(.arco-input) { 
+  color: #f85149;
+}
+.title-input.title-error :deep(.arco-input)::placeholder { 
+  color: #f85149;
+  opacity: 0.7;
+}
+.title-error-msg {
+  display: block;
+  font-size: 11px;
+  color: #f85149;
+  margin-top: 2px;
+  line-height: 1.3;
+  padding-left: 2px;
+}
 
 .template-bar {
   display: flex;
@@ -1521,7 +1635,13 @@ onMounted(() => {
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
-.required-mark { color: #f85149; margin-left: 2px; }
+.required-mark { 
+  color: #f85149; 
+  margin-left: 2px; 
+  font-weight: 600; 
+  font-size: 14px;
+  cursor: help;
+}
 .tag-color-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; vertical-align: middle; }
 .field-error :deep(.arco-input-wrapper),
 .field-error :deep(.arco-select-view),
