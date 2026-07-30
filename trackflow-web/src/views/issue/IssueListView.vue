@@ -1095,7 +1095,7 @@ async function openManageProjectsModal() {
   manageProjectsLoading.value = true
   try {
     // Load all accessible projects (no pagination limit), and merge favorite status
-    const res = await projectApi.list({ pageSize: 200 })
+    const res = await projectApi.list({ pageSize: 100 })
     const projects = res.data?.list || []
     // Merge favorited status from projectList (which was loaded with populateFavoriteStatus)
     const favoriteIds = new Set(projectList.value.filter(p => p.favorited).map(p => p.id))

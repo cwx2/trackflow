@@ -212,7 +212,7 @@ async function loadData() {
   try {
     // 并行加载：工单列表 + 成员列表
     const [issueRes, memberRes] = await Promise.all([
-      issueApi.list({ sprintId: props.sprintId, pageSize: 200, sort: 'priority' }),
+      issueApi.list({ sprintId: props.sprintId, pageSize: 100, sort: 'priority' }),
       props.projectId ? projectApi.listAssignableMembers(props.projectId) : Promise.resolve({ data: [] as ProjectMemberVO[] })
     ])
     issues.value = issueRes.data?.list || []

@@ -98,7 +98,7 @@ async function loadProjects() {
   loadingProjects.value = true
   try {
     // 加载所有项目（用户能看到的都加载，后端会做最终权限校验）
-    const res = await projectApi.list({ pageSize: 200 })
+    const res = await projectApi.list({ pageSize: 100 })
     if (res.code === 0 && res.data) {
       projects.value = res.data.list || []
     }

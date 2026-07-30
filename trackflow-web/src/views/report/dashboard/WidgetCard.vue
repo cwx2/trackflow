@@ -424,7 +424,7 @@ async function loadCalendarData() {
       projectId: config.projectId,
       dueAfter,
       dueBefore,
-      pageSize: 200,
+      pageSize: 100,
       page: 1
     })
 

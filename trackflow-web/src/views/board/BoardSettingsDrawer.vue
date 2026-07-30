@@ -452,7 +452,7 @@ let projectsLoaded = false
 async function loadProjectsIfNeeded() {
   if (projectsLoaded) return
   try {
-    const res = await projectApi.list({ pageSize: 200 })
+    const res = await projectApi.list({ pageSize: 100 })
     availableProjects.value = res.data?.list || []
     projectsLoaded = true
   } catch {

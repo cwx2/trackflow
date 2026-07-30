@@ -414,7 +414,7 @@ async function loadAttributes() {
 
 async function loadProjects() {
   try {
-    const res = await projectApi.list({ page: 1, pageSize: 200 })
+    const res = await projectApi.list({ page: 1, pageSize: 100 })
     if (res.code === 0 && res.data?.list) {
       allProjects.value = res.data.list.map((p: any) => ({ id: p.id, key: p.key, name: p.name }))
     }

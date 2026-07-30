@@ -318,7 +318,7 @@ function cancelReply() {
 /** 加载项目列表 */
 async function loadProjects() {
   try {
-    const res = await projectApi.list({ page: 1, pageSize: 200 })
+    const res = await projectApi.list({ page: 1, pageSize: 100 })
     if (res.code === 0 && res.data) {
       projects.value = res.data.list.map(p => ({ id: p.id, name: p.name }))
     }
