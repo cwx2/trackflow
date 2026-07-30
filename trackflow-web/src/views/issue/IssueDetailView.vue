@@ -803,12 +803,12 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
   // Sprint 选项（仅在有编辑权限时提供，排除已归档 Sprint）
   const sprintOptions = canSprint ? [
-    { value: '', label: 'Unscheduled' },
+    { value: '', label: '未排期' },
     ...sprints.value.filter(s => s.projectId === i.projectId && s.status !== 'archived' && s.status !== 'Archived').map(s => ({ value: s.id, label: s.name }))
   ] : []
 
   // Sprint 显示值：优先使用 issue 自带的 sprintName，不依赖 sprints 列表
-  const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || 'Unscheduled'
+  const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || '未排期'
 
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true },
