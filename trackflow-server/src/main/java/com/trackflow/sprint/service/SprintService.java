@@ -631,6 +631,17 @@ public class SprintService {
         // 日期合理性校验：如果两个日期都存在，开始必须早于结束
         validateDateRange(sprint.getStartDate(), sprint.getEndDate());
 
+        // 状态-日期一致性校验（REQ-911）：已激活的 Sprint 不允许将开始日期修改为未来日期
+        // 这会造成"进行中但开始日期未到"的状态矛盾
+        if (sprint.getStatus() == SprintStatus.ACTIVE && sprint.getStartDate() != null) {
+            LocalDate today = LocalDate.now();
+            if (sprint.getStartDate().isAfter(today)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "进行中的迭代不能将开始日期修改为未来日期（" + sprint.getStartDate() + "）。" +
+                        "如需调整日期，请先将迭代回退为计划中状态");
+            }
+        }
+
         // 日期重叠检测：仅在日期有变更（设置或清空）且未确认时触发
         boolean dateChanged = startDateCleared || startDateSet || endDateCleared || endDateSet;
         if (dateChanged && !Boolean.TRUE.equals(dto.getConfirmOverlap())) {
