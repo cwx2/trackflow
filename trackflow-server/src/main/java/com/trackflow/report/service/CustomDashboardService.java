@@ -181,8 +181,19 @@ public class CustomDashboardService {
      */
     @Transactional(rollbackFor = Exception.class)
     public DashboardDetailVO create(CreateDashboardDTO dto, Long userId) {
+        // 检查同一用户是否已存在同名仪表盘
+        String trimmedName = dto.getName().trim();
+        Long existingCount = dashboardMapper.selectCount(
+                new LambdaQueryWrapper<Dashboard>()
+                        .eq(Dashboard::getOwnerId, userId)
+                        .eq(Dashboard::getName, trimmedName));
+        if (existingCount > 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, 
+                    "已存在名为「" + trimmedName + "」的仪表盘，请使用其他名称");
+        }
+
         Dashboard dashboard = new Dashboard();
-        dashboard.setName(dto.getName());
+        dashboard.setName(trimmedName);
         dashboard.setDescription(dto.getDescription());
         dashboard.setOwnerId(userId);
         dashboard.setShared(dto.getShared() != null ? dto.getShared() : false);
@@ -226,8 +237,19 @@ public class CustomDashboardService {
             }
         }
 
+        // 修改名称时检查重名（排除自身）
         if (dto.getName() != null) {
-            dashboard.setName(dto.getName());
+            String trimmedName = dto.getName().trim();
+            Long existingCount = dashboardMapper.selectCount(
+                    new LambdaQueryWrapper<Dashboard>()
+                            .eq(Dashboard::getOwnerId, dashboard.getOwnerId())
+                            .eq(Dashboard::getName, trimmedName)
+                            .ne(Dashboard::getId, dashboardId));
+            if (existingCount > 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "已存在名为「" + trimmedName + "」的仪表盘，请使用其他名称");
+            }
+            dashboard.setName(trimmedName);
         }
         if (dto.getDescription() != null) {
             dashboard.setDescription(dto.getDescription());
