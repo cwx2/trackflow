@@ -21,6 +21,7 @@
 
     <DetailTopBar
       :issue-id="issue.id"
+      :project-id="issue.projectId"
       :project-name="projectName"
       :issue-key="issue.issueKey"
       :created-by="createdByName"
@@ -29,19 +30,12 @@
       :updated-ago="timeAgo(issue.updatedAt)"
       :show-create="canCreateIssue"
       :is-restricted="issue.visibility === 'restricted'"
+      :can-quick-actions="!isProjectArchived && canChangeStatusEffective"
       @copy="copyIssue"
       @create="showCreatePanel = true"
       @toggle-sidebar="toggleSidebar"
+      @quick-action-executed="onQuickActionExecuted"
     />
-
-    <!-- 快捷动作栏（需要状态变更权限） -->
-    <div v-if="!isProjectArchived && canChangeStatusEffective" class="quick-action-wrapper">
-      <QuickActionBar
-        :issue-id="issue.id"
-        :project-id="issue.projectId"
-        @executed="onQuickActionExecuted"
-      />
-    </div>
 
     <div class="page-body">
       <DetailMainContent
@@ -233,7 +227,6 @@ import { useRecentIssues } from './composables/useRecentIssues'
 import { useDrafts } from './composables/useDrafts'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
-import QuickActionBar from './components/QuickActionBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
 import ActivityStream from './components/ActivityStream.vue'
@@ -1750,12 +1743,6 @@ onBeforeRouteLeave((_to, _from, next) => {
   flex: 1;
   display: flex;
   overflow: hidden;
-}
-
-.quick-action-wrapper {
-  padding: 0 16px;
-  border-bottom: 1px solid var(--tf-border);
-  flex-shrink: 0;
 }
 
 .loading-page {

@@ -54,21 +54,64 @@
       </div>
       <button class="icon-btn" @click="$emit('copy')" title="复制"><icon-copy :size="16" /></button>
       <button v-if="showCreate" class="icon-btn" @click="$emit('create')" title="创建工单"><icon-plus :size="16" /></button>
-      <button class="icon-btn" @click="$emit('toggle-sidebar')" title="面板"><icon-menu :size="16" /></button>
+
+      <!-- 更多操作下拉菜单（包含快捷动作） -->
+      <a-dropdown trigger="click" position="br">
+        <button class="icon-btn" title="更多操作">
+          <icon-more :size="16" />
+        </button>
+        <template #content>
+          <!-- 快捷动作（工作流动作） -->
+          <template v-if="canQuickActions && quickActions.length > 0">
+            <a-doption
+              v-for="action in quickActions"
+              :key="action.actionKey"
+              :disabled="executingKey === action.actionKey"
+              @click="handleQuickAction(action)"
+            >
+              <template #icon>
+                <icon-thunderbolt :size="14" />
+              </template>
+              {{ action.label }}
+            </a-doption>
+            <a-divider class="dropdown-divider" />
+          </template>
+          <!-- 基础操作 -->
+          <a-doption @click="$emit('toggle-sidebar')">
+            <template #icon>
+              <icon-menu :size="14" />
+            </template>
+            切换属性面板
+          </a-doption>
+        </template>
+      </a-dropdown>
     </div>
+
+    <!-- 快捷动作对话框（form 类型） -->
+    <QuickActionDialog
+      :visible="dialogVisible"
+      :definition="selectedAction"
+      :issue-id="issueId"
+      :project-id="projectId"
+      @update:visible="dialogVisible = $event"
+      @executed="onDialogExecuted"
+    />
   </header>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { IconLeft, IconRight, IconCopy, IconPlus, IconMenu, IconThumbUp, IconStar, IconStarFill, IconLock } from '@arco-design/web-vue/es/icon'
-import { issueVoteApi, issueWatcherApi } from '@/api'
+import { ref, watch, onMounted } from 'vue'
+import { IconLeft, IconRight, IconCopy, IconPlus, IconMore, IconThumbUp, IconStar, IconStarFill, IconLock, IconMenu, IconThunderbolt } from '@arco-design/web-vue/es/icon'
+import { issueVoteApi, issueWatcherApi, quickActionApi } from '@/api'
 import type { IssueVoteStatusVO } from '@/api/issueVote'
 import type { IssueWatcherStatusVO } from '@/api/issueWatcher'
+import type { QuickActionDefinitionVO } from '@/api/quickAction'
 import { Message } from '@arco-design/web-vue'
+import QuickActionDialog from './QuickActionDialog.vue'
 
 const props = defineProps<{
   issueId: string
+  projectId: string
   projectName: string
   issueKey: string
   createdBy: string
@@ -80,15 +123,74 @@ const props = defineProps<{
   showCreate?: boolean
   /** 是否为受限访问工单（显示锁定图标） */
   isRestricted?: boolean
+  /** 是否可以执行快捷动作 */
+  canQuickActions?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   prev: []
   next: []
   copy: []
   create: []
   'toggle-sidebar': []
+  'quick-action-executed': []
 }>()
+
+// ===== 快捷动作 =====
+const quickActions = ref<QuickActionDefinitionVO[]>([])
+const dialogVisible = ref(false)
+const selectedAction = ref<QuickActionDefinitionVO | null>(null)
+const executingKey = ref('')
+
+async function loadQuickActions() {
+  if (!props.issueId || !props.canQuickActions) {
+    quickActions.value = []
+    return
+  }
+  try {
+    const res = await quickActionApi.getAvailableActions(props.issueId)
+    quickActions.value = res.data || []
+  } catch (e) {
+    console.error('加载快捷动作失败', e)
+    quickActions.value = []
+  }
+}
+
+function handleQuickAction(action: QuickActionDefinitionVO) {
+  if (action.actionType === 'rule') {
+    executeRuleAction(action)
+  } else {
+    openDialog(action)
+  }
+}
+
+function openDialog(action: QuickActionDefinitionVO) {
+  selectedAction.value = action
+  dialogVisible.value = true
+}
+
+async function executeRuleAction(action: QuickActionDefinitionVO) {
+  executingKey.value = action.actionKey
+  try {
+    const res = await quickActionApi.executeRule(props.issueId, action.actionKey)
+    if (res.data?.success) {
+      Message.success(`「${action.label}」已执行`)
+    }
+    emit('quick-action-executed')
+    // 重新加载可用动作（状态可能已变化）
+    loadQuickActions()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '执行失败')
+  } finally {
+    executingKey.value = ''
+  }
+}
+
+function onDialogExecuted() {
+  emit('quick-action-executed')
+  // 重新加载可用动作
+  loadQuickActions()
+}
 
 // ===== Vote 状态 =====
 const voteStatus = ref<IssueVoteStatusVO>({ voted: false, voteCount: 0 })
@@ -161,8 +263,13 @@ watch(() => props.issueId, (newId) => {
   if (newId) {
     loadVoteStatus()
     loadWatcherStatus()
+    loadQuickActions()
   }
 }, { immediate: true })
+
+watch(() => props.canQuickActions, () => {
+  loadQuickActions()
+})
 </script>
 
 <style scoped>
@@ -232,5 +339,10 @@ watch(() => props.issueId, (newId) => {
   vertical-align: middle;
   margin-left: 2px;
   cursor: default;
+}
+
+/* 下拉菜单分隔线 */
+.dropdown-divider {
+  margin: 4px 0;
 }
 </style>
