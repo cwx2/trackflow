@@ -1339,7 +1339,17 @@ async function confirmCompleteSprint() {
     const result = res.data
 
     // 构建包含统计信息的 toast 消息
-    let toastMessage = `迭代「${result.sprint.name}」已完成：完成 ${result.completedIssues}/${result.totalIssues} 工单`
+    // 兼容两种响应格式：
+    // - 新格式 SprintCompleteResultVO: { sprint: SprintVO, totalIssues, completedIssues, ... }
+    // - 旧格式 SprintVO（向后兼容）: { id, name, status, ... }
+    const sprintName = result.sprint?.name ?? result.name ?? completingSprintName.value
+    const totalIssueCount = result.totalIssues ?? 0
+    const completedCount = result.completedIssues ?? 0
+    
+    let toastMessage = `迭代「${sprintName}」已完成`
+    if (totalIssueCount > 0) {
+      toastMessage += `：完成 ${completedCount}/${totalIssueCount} 工单`
+    }
     if (result.unresolvedIssues > 0) {
       if (result.moveOption === 'backlog') {
         toastMessage += `，${result.unresolvedIssues} 个工单已移回 Backlog`
