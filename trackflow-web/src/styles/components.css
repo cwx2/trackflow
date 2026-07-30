@@ -41,3 +41,32 @@
     display: block !important;
   }
 }
+
+
+/* ===== Tippy.js 全局样式（用于 Tiptap Mention） ===== */
+
+/* tippy.js 必要的基础样式 */
+.tippy-box {
+  position: relative;
+  border-radius: 6px;
+  outline: 0;
+  transition-property: transform, visibility, opacity;
+}
+
+.tippy-content {
+  position: relative;
+  padding: 0;
+}
+
+/* shift-away 动画 */
+.tippy-box[data-animation='shift-away'][data-state='hidden'] {
+  opacity: 0;
+}
+
+.tippy-box[data-animation='shift-away'][data-state='hidden'][data-placement^='top'] {
+  transform: translateY(8px);
+}
+
+.tippy-box[data-animation='shift-away'][data-state='hidden'][data-placement^='bottom'] {
+  transform: translateY(-8px);
+}

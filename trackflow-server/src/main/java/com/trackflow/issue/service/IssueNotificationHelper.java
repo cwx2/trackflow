@@ -836,20 +836,37 @@ public class IssueNotificationHelper extends AbstractNotificationHelper {
     }
 
     /**
-     * 从 HTML 内容中提取 @username 列表。
-     * 先去除 HTML 标签得到纯文本，再用正则匹配。
+     * 从 HTML 内容中提取被 @ 提及的用户名列表。
+     * <p>
+     * 支持两种格式：
+     * 1. Tiptap Mention 扩展输出的 HTML（优先）：
+     *    {@code <span class="mention" data-mention-id="username">@displayName</span>}
+     * 2. 纯文本 @username 格式（兼容旧数据）
      */
+    private static final Pattern DATA_MENTION_PATTERN = Pattern.compile("data-mention-id=\"([a-zA-Z][a-zA-Z0-9._-]{1,49})\"");
+
     private Set<String> extractMentions(String htmlContent) {
         if (htmlContent == null || htmlContent.isBlank()) {
             return Collections.emptySet();
         }
-        // 去除 HTML 标签，保留纯文本
-        String plainText = htmlContent.replaceAll("<[^>]+>", " ");
+        
         Set<String> usernames = new LinkedHashSet<>();
-        Matcher matcher = MENTION_PATTERN.matcher(plainText);
-        while (matcher.find()) {
-            usernames.add(matcher.group(1));
+        
+        // 1. 优先从 data-mention-id 属性提取（Tiptap Mention 格式）
+        Matcher dataMatcher = DATA_MENTION_PATTERN.matcher(htmlContent);
+        while (dataMatcher.find()) {
+            usernames.add(dataMatcher.group(1));
         }
+        
+        // 2. 如果没有找到 data-mention-id，回退到纯文本 @username 匹配（兼容旧数据）
+        if (usernames.isEmpty()) {
+            String plainText = htmlContent.replaceAll("<[^>]+>", " ");
+            Matcher textMatcher = MENTION_PATTERN.matcher(plainText);
+            while (textMatcher.find()) {
+                usernames.add(textMatcher.group(1));
+            }
+        }
+        
         return usernames;
     }
 

@@ -41,6 +41,7 @@
     </div>
     <div class="editor-footer">
       <div class="footer-actions">
+        <span class="mention-hint">输入 @ 提及成员</span>
         <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
         <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
         <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
@@ -52,15 +53,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
+import Mention from '@tiptap/extension-mention'
 import { groupApi } from '@/api'
 import type { GroupSimpleVO } from '@/api/types'
+import { useMentionSuggestion } from '../composables/useMentionSuggestion'
 
 const props = withDefaults(defineProps<{
+  projectId?: string
   showAddTime?: boolean
   timerRunning?: boolean
   timerIssueMatch?: boolean
@@ -85,6 +89,14 @@ const focused = ref(false)
 const groups = ref<GroupSimpleVO[]>([])
 const selectedGroupIds = ref<string[]>([])
 const showVisibilityDropdown = ref(false)
+
+// Mention suggestion 配置
+const { suggestion, clearCache } = useMentionSuggestion(() => props.projectId)
+
+// 监听 projectId 变化，清空成员缓存
+watch(() => props.projectId, () => {
+  clearCache()
+})
 
 const visibilityLabel = computed(() => {
   if (selectedGroupIds.value.length === 0) return '全部可见'
@@ -123,7 +135,29 @@ const editor = useEditor({
   extensions: [
     StarterKit,
     Link.configure({ openOnClick: false }),
-    Placeholder.configure({ placeholder: '添加评论... 支持 Markdown 语法' }),
+    Placeholder.configure({ placeholder: '添加评论... 支持 Markdown 语法，输入 @ 提及成员' }),
+    Mention.configure({
+      HTMLAttributes: {
+        class: 'mention',
+      },
+      // 后端从 data-mention-id 属性提取 username 进行匹配
+      // node.attrs.id = username（英文，供后端匹配）
+      // node.attrs.label = displayName（可能是中文，供用户查看）
+      renderHTML({ options, node }) {
+        return [
+          'span',
+          { 
+            class: 'mention', 
+            'data-mention-id': node.attrs.id,  // username，后端从这里提取
+            'data-mention-label': node.attrs.label,  // displayName
+            title: `${node.attrs.label} (@${node.attrs.id})`  // hover 提示
+          },
+          // 显示 @displayName 给用户看
+          `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`,
+        ]
+      },
+      suggestion,
+    }),
   ],
   editorProps: { attributes: { class: 'tiptap-comment' } },
   onFocus: () => { focused.value = true },
@@ -241,6 +275,16 @@ onBeforeUnmount(() => { editor.value?.destroy() })
   pointer-events: none; float: left; height: 0;
 }
 
+/* Mention 样式 */
+.editor-area :deep(.mention) {
+  background: var(--tf-accent-subtle, rgba(88, 166, 255, 0.15));
+  color: var(--tf-accent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .editor-footer {
   display: flex; justify-content: space-between; align-items: center;
   height: 40px; padding: 0 8px;
@@ -248,6 +292,11 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 }
 .footer-actions {
   display: flex; align-items: center; gap: 4px;
+}
+.mention-hint {
+  font-size: 11px;
+  color: var(--tf-text-muted);
+  padding: 0 8px;
 }
 .btn-add-time {
   font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
@@ -278,4 +327,16 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 }
 .btn-submit:disabled { opacity: 0.35; cursor: default; }
 .btn-submit:hover:not(:disabled) { background: var(--tf-accent-hover); }
+</style>
+
+<style>
+/* Tippy.js mention 主题（全局样式） */
+.tippy-box[data-theme~='mention'] {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.tippy-box[data-theme~='mention'] .tippy-content {
+  padding: 0;
+}
 </style>
