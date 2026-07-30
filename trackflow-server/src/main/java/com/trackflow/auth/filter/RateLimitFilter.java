@@ -52,6 +52,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
+        // 限流开关关闭时（开发环境）直接放行，不做任何限流检查
+        if (!rateLimitEnabled) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String clientIp = WebUtils.getClientIp(request);
 
         // 第一层：检查认证封禁（认证失败过多触发）
