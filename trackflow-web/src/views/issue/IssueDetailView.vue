@@ -236,7 +236,7 @@ import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap, localizePriority, priorityLabelMap, localizeIssueType } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -812,12 +812,14 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true },
-    { key: 'priority', label: '优先级', value: i.priority, dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: [
-      { value: 'Critical', label: 'Critical' }, { value: 'High', label: 'High' },
-      { value: 'Normal', label: 'Normal' }, { value: 'Low', label: 'Low' },
+    { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: [
+      { value: 'Critical', label: priorityLabelMap['Critical'] || '紧急' },
+      { value: 'High', label: priorityLabelMap['High'] || '高' },
+      { value: 'Normal', label: priorityLabelMap['Normal'] || '普通' },
+      { value: 'Low', label: priorityLabelMap['Low'] || '低' },
     ]},
     { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
-    { key: 'issueType', label: '类型', value: i.issueType, editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: Object.entries(issueTypeLabelMap).map(([value, label]) => ({ value, label })) },
+    { key: 'issueType', label: '类型', value: localizeIssueType(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: Object.entries(issueTypeLabelMap).map(([value, label]) => ({ value, label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
