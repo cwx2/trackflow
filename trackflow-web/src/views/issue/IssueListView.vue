@@ -3487,8 +3487,8 @@ onMounted(async () => {
     }
   }
 
-  // Handle dashboard filter params (statusId, statusCode, statusCategory, label, sprint, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
+  // Handle dashboard filter params (statusId, statusCode, statusCategory, status, label, sprint, etc.)
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
     applyDashboardFilter()
   } else if (!route.query.project && !activeProjectId.value) {
     // Auto-select default saved query (e.g., "分配给我") when no URL params override the view
@@ -3588,6 +3588,27 @@ function applyDashboardFilter() {
         operator: 'any_of',
         values: [matchedStatus.id],
         valueLabels: [matchedStatus.name]
+      })
+    }
+  }
+
+  // status: 通用状态筛选参数（支持英文名、本地化名、状态代码）
+  // 这是最用户友好的参数，如 ?status=Code Review 或 ?status=代码审查
+  if (route.query.status) {
+    const statusParam = String(route.query.status)
+    // 尝试按多种方式匹配状态
+    const matchedStatus = statusCache.value.find(st =>
+      st.name === statusParam ||
+      localizeStatusName(st.name) === statusParam ||
+      st.code === statusParam
+    )
+    if (matchedStatus) {
+      filters.statusId = matchedStatus.id
+      chips.push({
+        fieldKey: 'status',
+        operator: 'any_of',
+        values: [matchedStatus.id],
+        valueLabels: [localizeStatusName(matchedStatus.name)]
       })
     }
   }
