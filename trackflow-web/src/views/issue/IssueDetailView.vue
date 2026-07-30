@@ -1162,9 +1162,15 @@ function onCreatePanelClose(val: boolean) {
 }
 
 function onIssueCreated() {
+  const wasSubtask = !!createSubtaskParentId.value
   showCreatePanel.value = false
   cloneData.value = undefined
   createSubtaskParentId.value = null
+
+  // 如果创建的是子工单，重新加载父工单详情以刷新子任务列表
+  if (wasSubtask) {
+    loadAll()
+  }
 }
 
 /**
