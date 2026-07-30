@@ -198,15 +198,22 @@
         </a-trigger>
 
         <!-- 只读字段（无 editType 或被权限限制） -->
-        <div v-else class="sb-value readonly-value">
-          <TimeProgressIndicator
-            v-if="field.progress && field.progress.estimated > 0"
-            :spent="field.progress.spent"
-            :estimated="field.progress.estimated"
-          />
-          <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
-          <span class="val-text">{{ field.value }}</span>
-        </div>
+        <a-tooltip v-else :content="getReadonlyTooltip(field)" position="left" mini>
+          <div class="sb-value readonly-value" @click="onReadonlyFieldClick(field)">
+            <TimeProgressIndicator
+              v-if="field.progress && field.progress.estimated > 0"
+              :spent="field.progress.spent"
+              :estimated="field.progress.estimated"
+            />
+            <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
+            <span class="val-text">{{ field.value }}</span>
+            <span class="readonly-lock-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M4 4v2h-.25A1.75 1.75 0 002 7.75v5.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0014 13.25v-5.5A1.75 1.75 0 0012.25 6H12V4a4 4 0 10-8 0zm6.5 2V4a2.5 2.5 0 00-5 0v2h5zM12.25 7.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25v-5.5a.25.25 0 01.25-.25h8.5z"/>
+              </svg>
+            </span>
+          </div>
+        </a-tooltip>
       </template>
       <div v-else class="sep-line"></div>
     </div>
@@ -380,6 +387,25 @@ function openEdit(field: SidebarField) {
 
 function cancelEdit() {
   editingKey.value = null
+}
+
+/**
+ * 获取只读字段的 tooltip 提示文本
+ * 根据字段类型返回更具体的说明
+ */
+function getReadonlyTooltip(field: SidebarField): string {
+  // 根据字段类型提供更具体的提示
+  const fieldLabel = field.label || '此字段'
+  return `您没有权限修改${fieldLabel}`
+}
+
+/**
+ * 只读字段点击事件处理
+ * 可用于未来扩展（如显示更详细的权限说明弹窗）
+ */
+function onReadonlyFieldClick(_field: SidebarField) {
+  // 当前仅依靠 tooltip 提示，点击不做额外处理
+  // 未来可扩展为显示详细权限说明弹窗
 }
 
 function getFilteredOptions(field: SidebarField) {
@@ -661,7 +687,31 @@ function confirmAddOption(field: SidebarField) {
 /* 只读字段值 */
 .sb-value.readonly-value {
   cursor: default;
-  color: var(--tf-text-secondary, var(--tf-text-primary));
+  color: var(--tf-text-tertiary);
+  opacity: 0.75;
+}
+
+/* 只读字段 hover 效果 - 提示用户此字段不可编辑 */
+.sb-value.readonly-value:hover {
+  background: var(--tf-bg-hover);
+  border-radius: 3px;
+}
+
+/* 只读字段锁图标 */
+.readonly-lock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tf-text-muted);
+  opacity: 0;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* hover 时显示锁图标 */
+.sb-value.readonly-value:hover .readonly-lock-icon {
+  opacity: 1;
 }
 
 /* ========== 值文本 ========== */
