@@ -385,12 +385,9 @@ def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str |
     start = time.time()
     output_lines = []
 
-    # 确定工作目录：有 worker_id 时使用专属目录（含独立 mcp.json），否则用项目根目录
-    if worker_id:
-        worker_env = WORKSPACE / "scripts" / "worker-envs" / worker_id
-        cwd = str(worker_env) if worker_env.exists() else str(WORKSPACE)
-    else:
-        cwd = str(WORKSPACE)
+    # kiro-cli 始终以项目根目录为 cwd（需要访问源码和 steering 文件）
+    # worker_id 参数保留供将来扩展，当前不影响 cwd
+    cwd = str(WORKSPACE)
 
     # 环境变量：抑制子进程中命令的交互式行为
     env = os.environ.copy()
@@ -654,12 +651,9 @@ def produce_one(worker_id: str) -> bool:
         f"---\n\n{section_content}"
     )
 
-    # 为此 worker 启动独立 Playwright MCP 进程（有独立浏览器，互不干扰）
-    port = start_playwright_for_worker(worker_id)
-    setup_worker_kiro_dir(worker_id, port)
-
-    log.info(f"[{worker_id}] 生产: {workflow_file}（Playwright 端口 {port}）")
-    success, _ = run_kiro(prompt, worker_id, worker_id=worker_id)
+    # 生产阶段串行运行，共享浏览器，直接调用
+    log.info(f"[{worker_id}] 生产: {workflow_file}")
+    success, _ = run_kiro(prompt, worker_id)
     return success
 
 
@@ -705,16 +699,24 @@ def _extract_workflow_section(content: str, section_title: str) -> str:
 
 def run_produce_phase(num_workers: int):
     """
-    生产阶段：并行执行各 worker。
-    每个 worker 有独立的 Playwright MCP 进程（独立浏览器、独立端口），互不干扰。
-    """
-    log.info(f"[生产] 启动 {num_workers} 个 worker 并行找需求（各自独立浏览器）...")
+    生产阶段：串行执行各 worker。
 
-    with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="producer") as executor:
-        futures = []
-        for i in range(num_workers):
-            futures.append(executor.submit(produce_one, f"producer-{i+1}"))
-        wait(futures)
+    kiro-cli 必须以项目根目录（WORKSPACE）为 cwd 才能正常工作，
+    而所有 kiro 进程共享同一个 Playwright MCP server（同一浏览器实例）。
+    并发运行时多个 agent 会互相抢夺浏览器页面导致崩溃。
+
+    生产阶段（"找需求"）对时效性要求不高，串行运行是最稳妥的方式。
+    消费阶段（"修需求"）主要是代码操作，并发安全，仍然并行。
+
+    TODO: 若 kiro-cli 未来支持 --mcp-config 参数指定独立配置文件，
+    可重新启用并行生产（每个 worker 指向各自的 Playwright SSE 端口）。
+    """
+    log.info(f"[生产] 串行启动 {num_workers} 个 worker 找需求...")
+
+    for i in range(num_workers):
+        worker_id = f"producer-{i+1}"
+        log.info(f"[生产] [{worker_id}] 开始 ({i+1}/{num_workers})...")
+        produce_one(worker_id)
 
     new_review = len(list(REVIEW_DIR.glob("requirement-*.md")))
     log.info(f"[生产] 完成，review/ 当前 {new_review} 个")
