@@ -38,13 +38,15 @@ export function useInlineEdit(issues: { value: IssueVO[] }) {
    * @param newValue 新值（用于乐观更新）
    * @param apiCall API 调用函数
    * @param patchFn 可选的自定义 patch 函数（用于更新多个字段）
+   * @param onSuccess 可选的成功回调，用于在编辑成功后执行自定义逻辑（如检查筛选条件）
    */
   async function executeEdit(
     issueId: string,
     field: string,
     newValue: any,
     apiCall: (signal: AbortSignal) => Promise<any>,
-    patchFn?: (issue: IssueVO) => Partial<IssueVO>
+    patchFn?: (issue: IssueVO) => Partial<IssueVO>,
+    onSuccess?: (issue: IssueVO, field: string, newValue: any) => void
   ) {
     // 防止同一单元格重复编辑
     if (isCellEditing(issueId, field)) return
@@ -94,6 +96,9 @@ export function useInlineEdit(issues: { value: IssueVO[] }) {
         // 有警告意味着当前字段被跳过——回滚乐观更新
         ;(issue as any)[field] = previousValue
         res.warnings.forEach((w: string) => Message.warning({ content: w, duration: 5000 }))
+      } else if (onSuccess) {
+        // 编辑成功且无警告，调用成功回调（用于筛选条件检查等）
+        onSuccess(issue, field, newValue)
       }
       editingCell.value = null
     } catch (e: any) {

@@ -164,6 +164,17 @@ export function useIssueList() {
     }
   }
 
+  /**
+   * 从本地列表中移除工单（用于筛选视图中编辑后不满足条件的情况）
+   */
+  function removeLocalIssue(issueId: string) {
+    const idx = issues.value.findIndex(i => i.id === issueId)
+    if (idx !== -1) {
+      issues.value.splice(idx, 1)
+      totalIssues.value = Math.max(0, totalIssues.value - 1)
+    }
+  }
+
   return {
     issues,
     totalIssues,
@@ -175,6 +186,7 @@ export function useIssueList() {
     toggleSort,
     loadIssues,
     goPage,
-    updateLocalIssue
+    updateLocalIssue,
+    removeLocalIssue
   }
 }

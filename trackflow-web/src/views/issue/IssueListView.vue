@@ -1003,7 +1003,7 @@ const route = useRoute()
 // Composables
 const {
   issues, totalIssues, currentPage, pageSize, loading,
-  sortState, loadIssues, goPage, updateLocalIssue
+  sortState, loadIssues, goPage, updateLocalIssue, removeLocalIssue
 } = useIssueList()
 
 const {
@@ -2694,11 +2694,11 @@ function selectStatus(issue: IssueVO, status: IssueStatusVO) {
         return true
       },
       onOk: () => {
-        executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, commentText.trim(), issue.version))
+        executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, commentText.trim(), issue.version), undefined, onInlineEditSuccess)
       }
     })
   } else {
-    executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, undefined, issue.version))
+    executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, undefined, issue.version), undefined, onInlineEditSuccess)
   }
 }
 
@@ -2727,7 +2727,8 @@ function selectAssignee(issue: IssueVO, member: ProjectMemberVO | null) {
   executeEdit(
     issue.id, 'assigneeId', member?.userId || null,
     (_signal) => issueApi.assign(issue.id, member?.userId || ''),
-    () => ({ assigneeId: member?.userId || undefined, assigneeName: member?.displayName || undefined })
+    () => ({ assigneeId: member?.userId || undefined, assigneeName: member?.displayName || undefined }),
+    onInlineEditSuccess
   )
 }
 
@@ -2760,7 +2761,7 @@ function getSprintGroups(projectId: string) {
 }
 function selectSprint(issue: IssueVO, sprint: SprintVO | null) {
   sprintDropdowns[issue.id] = false
-  executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }))
+  executeEdit(issue.id, 'sprintId', sprint?.id || null, (_signal) => issueApi.update(issue.id, { sprintId: sprint?.id || null, version: issue.version }), undefined, onInlineEditSuccess)
 }
 
 // ========== 列表模式 Sprint 内联编辑 ==========
@@ -2786,6 +2787,7 @@ async function onListSprintEdit(issue: IssueVO) {
 }
 
 /**
+/**
  * 列表模式：用户选择了某个 Sprint（或"无 Sprint"）
  */
 function onListSprintSelect(issue: IssueVO, sprint: SprintVO | null) {
@@ -2800,14 +2802,15 @@ function onListSprintSelect(issue: IssueVO, sprint: SprintVO | null) {
     (_iss) => ({
       sprintId: newSprintId ?? undefined,
       sprintName: newSprintName ?? undefined
-    })
+    }),
+    onInlineEditSuccess
   )
 }
 
 // Inline edit - Priority
 function selectPriority(issue: IssueVO, priority: string) {
   priorityDropdowns[issue.id] = false
-  executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority, version: issue.version }))
+  executeEdit(issue.id, 'priority', priority, (_signal) => issueApi.update(issue.id, { priority, version: issue.version }), undefined, onInlineEditSuccess)
 }
 
 // Batch operation handlers
@@ -3093,6 +3096,72 @@ function buildFilters() {
   return filters
 }
 function refreshList() { loadIssues(buildFilters()).then(() => { loadPermissions(); preloadSprintNames() }) }
+
+/**
+ * 检查工单是否仍满足当前筛选条件
+ * 用于行内编辑后决定是否从列表中移除工单
+ */
+function checkIssueMatchesFilter(issue: IssueVO): boolean {
+  const fp = globalFilterParams.value
+
+  // 检查负责人筛选
+  // assigneeId = 'none' 表示筛选"未分配"的工单
+  if (fp.assigneeId === 'none' && issue.assigneeId) {
+    return false // 工单已分配，不满足"未分配"条件
+  }
+  // assigneeId 为具体 ID 时，检查是否匹配
+  if (fp.assigneeId && fp.assigneeId !== 'none' && issue.assigneeId !== fp.assigneeId) {
+    return false
+  }
+
+  // 检查状态筛选
+  if (fp.statusId) {
+    const statusIds = String(fp.statusId).split(',')
+    if (!statusIds.includes(String(issue.statusId))) {
+      return false
+    }
+  }
+
+  // 检查 Sprint 筛选
+  if (fp.sprintId) {
+    if (fp.sprintId === 'none' && issue.sprintId) {
+      return false // 工单已有 Sprint，不满足"无 Sprint"条件
+    }
+    if (fp.sprintId !== 'none' && issue.sprintId !== fp.sprintId) {
+      return false
+    }
+  }
+
+  // 检查优先级筛选
+  if (fp.priority && issue.priority !== fp.priority) {
+    return false
+  }
+
+  // 检查工单类型筛选
+  if (fp.issueType && issue.issueType !== fp.issueType) {
+    return false
+  }
+
+  // 检查隐藏已解决
+  if (fp.hideResolved === 'true' || hideResolved.value) {
+    const status = statusCache.value.find(s => s.id === issue.statusId)
+    if (status?.isClosed) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * 行内编辑成功后的回调
+ * 检查工单是否仍满足筛选条件，不满足则从列表中移除
+ */
+function onInlineEditSuccess(issue: IssueVO, _field: string, _newValue: any) {
+  if (!checkIssueMatchesFilter(issue)) {
+    removeLocalIssue(issue.id)
+  }
+}
 
 function onRefreshForUpdates() {
   hasNewUpdates.value = false
