@@ -45,10 +45,15 @@
             trigger="contextMenu"
             position="br"
           >
-            <div class="query-item draft-item" @click="openDraft(d)">
+            <div
+              class="query-item draft-item"
+              :class="{ 'draft-recovered': recoveredDraftId === d.id }"
+              @click="openDraft(d)"
+            >
               <span class="query-icon">📄</span>
               <span class="query-name draft-name">{{ d.title || '无标题草稿' }}</span>
               <span class="draft-time">{{ formatDraftTime(d.updatedAt) }}</span>
+              <span v-if="recoveredDraftId === d.id" class="draft-recovered-badge">刚恢复</span>
             </div>
             <template #content>
               <a-doption @click="openDraft(d)">
@@ -62,7 +67,7 @@
             </template>
           </a-dropdown>
           <div v-if="draftList.length > 0" class="drafts-actions">
-            <a-link type="text" @click="handleDeleteAllDrafts" class="delete-all-link">删除所有草稿</a-link>
+            <a-link type="text" @click="handleDeleteAllDrafts" class="delete-all-link">删除所有草稿</a-link></a-link>
           </div>
         </div>
       </div>
@@ -1926,6 +1931,8 @@ const quickForm = reactive({
 // Drafts
 const { draftList, draftCount, hasDrafts, saveDraft, deleteDraft, deleteAllDrafts, getDraft } = useDrafts()
 const activeDraftId = ref<string | null>(null)
+// 刚从会话恢复的草稿 ID，用于高亮提示（3 秒后自动清除）
+const recoveredDraftId = ref<string | null>(null)
 
 function formatDraftTime(timestamp: number): string {
   const now = Date.now()
@@ -3509,7 +3516,8 @@ function autoSelectDefaultQuery() {
 }
 
 onMounted(async () => {
-  // 检查是否有会话过期时保存的恢复草稿 — 自动保存为正式草稿并打开创建面板
+  // 检查是否有会话过期时保存的恢复草稿 — 保存为正式草稿但不自动打开模态框
+  // YouTrack 标准行为：草稿列在侧边栏，用户手动点击才打开创建面板
   const recoveryDraft = consumeSessionRecoveryDraft()
   if (recoveryDraft && recoveryDraft.formData) {
     const formData = recoveryDraft.formData
@@ -3518,11 +3526,20 @@ onMounted(async () => {
       // 保存为正式草稿（持久化到 localStorage）
       const savedId = saveDraft(formData)
       if (savedId) {
-        activeDraftId.value = savedId
-        // 延迟打开面板（等页面初始化完成）
+        // 展开草稿分组，让用户看到恢复的草稿
+        expandedGroups.add('drafts')
+        // 设置刚恢复的草稿 ID，用于视觉高亮提示
+        recoveredDraftId.value = savedId
+        // 延迟显示提示（等页面渲染完成）
         setTimeout(() => {
-          showCreatePanel.value = true
-          Message.success({ content: '已恢复上次会话过期时的工单草稿', duration: 4000 })
+          Message.info({
+            content: '已恢复上次会话过期时的工单草稿，点击左侧草稿区继续编辑',
+            duration: 5000
+          })
+          // 高亮效果 3 秒后自动移除
+          setTimeout(() => {
+            recoveredDraftId.value = null
+          }, 3000)
         }, 500)
       }
     }
@@ -3872,6 +3889,26 @@ onBeforeRouteLeave((_to, _from, next) => {
 .draft-item { position: relative; }
 .draft-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .draft-time { font-size: 10px; color: var(--tf-text-quaternary); flex-shrink: 0; margin-left: 4px; }
+
+/* Draft recovered highlight animation */
+.draft-recovered {
+  background: var(--tf-accent-bg) !important;
+  animation: draft-pulse 1.5s ease-in-out infinite;
+}
+@keyframes draft-pulse {
+  0%, 100% { background: var(--tf-accent-bg); }
+  50% { background: var(--tf-bg-hover); }
+}
+.draft-recovered-badge {
+  font-size: 9px;
+  color: var(--tf-accent);
+  background: rgba(var(--accent-rgb, 88,166,255), 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
 .empty-drafts { padding: 12px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .empty-drafts .empty-icon { font-size: 20px; opacity: 0.5; }
 .empty-drafts .empty-text { font-size: 12px; color: var(--tf-text-tertiary); }
