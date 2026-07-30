@@ -109,6 +109,11 @@ export const sprintApi = {
     return request.put<any, R<SprintVO>>(`/sprints/${id}/restore`)
   },
 
+  /** 回退为计划中（active → planned），用于修复状态异常 */
+  revertToPlanned(id: string) {
+    return request.put<any, R<SprintVO>>(`/sprints/${id}/revert-to-planned`)
+  },
+
   /**
    * 获取项目最近已完成 Sprint 的速率统计数据
    * 用于规划页展示历史速率参考（工时完成量/Sprint）

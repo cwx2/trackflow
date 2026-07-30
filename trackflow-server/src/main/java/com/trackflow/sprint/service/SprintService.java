@@ -951,6 +951,48 @@ public class SprintService {
     }
 
     /**
+     * 回退 Sprint：将进行中的 Sprint 回退为计划中状态。
+     * <p>
+     * 用于处理「开始日期尚未到达，但 Sprint 已被激活」的异常数据情况。
+     * 回退后用户可以修改日期或等待正确的开始时间再重新激活。
+     *
+     * @param id Sprint ID
+     * @return 回退后的 Sprint
+     * @throws BusinessException 当 Sprint 不是 active 状态时
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Sprint revertToPlanned(Long id) {
+        Sprint sprint = getById(id);
+        projectService.assertProjectActive(sprint.getProjectId());
+
+        if (sprint.getStatus() != SprintStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "只有进行中的迭代才能回退为计划中");
+        }
+
+        // 清除激活时记录的快照数据
+        sprint.setStartedAt(null);
+        sprint.setStartScopeHours(null);
+        sprint.setStartScopeIssues(null);
+
+        sprint.setStatus(SprintStatus.PLANNED);
+        sprintMapper.updateById(sprint);
+
+        // 记录项目活动日志
+        Long userId = SecurityUtils.getCurrentUserId();
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("sprint_id", sprint.getId());
+        detail.put("sprint_name", sprint.getName());
+        detail.put("reason", "状态异常修复");
+        projectActivityService.log(sprint.getProjectId(), userId, "revert_sprint_to_planned", null, detail);
+
+        // 失效 Dashboard 缓存 — 事务提交后触发
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sprint.getProjectId(), "sprint_reverted"));
+
+        log.info("Sprint 已回退为计划中: id={}, name={}, projectId={}", sprint.getId(), sprint.getName(), sprint.getProjectId());
+        return sprint;
+    }
+
+    /**
      * 获取 Sprint 完成预览信息：未完成工单列表 + 可迁移的目标 Sprint。
      * 使用 readOnly 事务确保未完成工单列表和可迁移目标在同一个快照中获取。
      */

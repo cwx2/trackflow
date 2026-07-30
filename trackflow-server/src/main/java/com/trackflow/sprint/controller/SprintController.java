@@ -125,6 +125,12 @@ public class SprintController {
         return R.ok(sprintConverter.toVO(sprintService.restore(id)));
     }
 
+    @PutMapping("/api/v1/sprints/{id}/revert-to-planned")
+    @PreAuthorize("@perm.checkSprint(#id, 'sprint:edit')")
+    public R<SprintVO> revertToPlanned(@PathVariable("id") Long id) {
+        return R.ok(sprintConverter.toVO(sprintService.revertToPlanned(id)));
+    }
+
     @GetMapping("/api/v1/sprints/{id}/assignee-distribution")
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintAssigneeDistributionVO> assigneeDistribution(@PathVariable("id") Long id) {
