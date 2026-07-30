@@ -104,11 +104,12 @@
           </div>
           <div class="toolbar-right">
             <!-- 任何用户都可以设为自己的默认 -->
-            <a-tooltip :content="isCurrentDefault ? '取消默认' : '设为默认仪表盘'">
+            <a-tooltip :content="isCurrentDefault ? '取消默认仪表盘' : '设为我的默认仪表盘'">
               <a-button
                 size="small"
                 type="text"
                 :class="{ 'default-btn-active': isCurrentDefault }"
+                :aria-label="isCurrentDefault ? '取消默认仪表盘' : '设为我的默认仪表盘'"
                 @click="handleSetDefault"
               >
                 <template #icon><icon-star /></template>
