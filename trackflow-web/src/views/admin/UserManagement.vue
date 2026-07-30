@@ -195,19 +195,24 @@
               </div>
               <div class="role-list">
                 <div v-for="role in globalRoles" :key="role.id" class="role-item">
-                  <label class="role-check" :class="{ loading: roleToggleLoading.has(String(role.id)) }">
-                    <span v-if="roleToggleLoading.has(String(role.id))" class="checkbox-spinner"></span>
+                  <label class="role-check">
                     <input 
-                      v-else 
                       type="checkbox" 
                       :checked="userRoleIds.includes(String(role.id))" 
-                      :disabled="roleToggleLoading.has(String(role.id))"
+                      :disabled="savingRoles"
                       @change="toggleRole(role.id)" 
                     />
                     <span class="role-name">{{ role.name }}</span>
                     <span class="role-code">{{ role.code }}</span>
                   </label>
                 </div>
+              </div>
+              <!-- 批量保存按钮 -->
+              <div v-if="hasRoleChanges" class="role-save-bar">
+                <span class="role-save-hint">系统角色已修改，请保存</span>
+                <button class="btn-sm-action primary" :disabled="savingRoles" @click="saveRoles">
+                  {{ savingRoles ? '保存中...' : '保存角色' }}
+                </button>
               </div>
             </div>
 
@@ -389,6 +394,7 @@ const showRoleDialog = ref(false)
 const roleLoading = ref(false)
 const selectedUser = ref<any>(null)
 const userRoleIds = ref<string[]>([])
+const originalRoleIds = ref<string[]>([])  // 记录初始角色状态，用于批量保存
 const userProjectRoles = ref<UserProfileProjectRoleInfo[]>([])
 const globalRoles = ref<any[]>([])
 const projectRoles = ref<any[]>([])
@@ -396,6 +402,17 @@ const allProjects = ref<any[]>([])
 
 // 角色操作 loading 状态（存储正在处理的角色 ID）
 const roleToggleLoading = ref<Set<string>>(new Set())
+
+// 批量保存角色 loading 状态
+const savingRoles = ref(false)
+
+// 检查系统角色是否有变更
+const hasRoleChanges = computed(() => {
+  if (originalRoleIds.value.length !== userRoleIds.value.length) return true
+  const sortedOriginal = [...originalRoleIds.value].sort()
+  const sortedCurrent = [...userRoleIds.value].sort()
+  return sortedOriginal.some((id, i) => id !== sortedCurrent[i])
+})
 
 // 添加到项目
 const showAddProject = ref(false)
@@ -589,6 +606,7 @@ async function openRoleDialog(user: any) {
   addGlobalRoleId.value = ''
   // 清理角色操作 loading 状态
   roleToggleLoading.value.clear()
+  savingRoles.value = false
 
   try {
     const [profileRes, globalMembersRes] = await Promise.all([
@@ -596,11 +614,14 @@ async function openRoleDialog(user: any) {
       globalMemberApi.listByUser(user.id)
     ])
     const profile = profileRes.data
-    userRoleIds.value = profile?.globalRoles?.map((r: any) => r.id) || []
+    const roleIds = profile?.globalRoles?.map((r: any) => r.id) || []
+    userRoleIds.value = [...roleIds]
+    originalRoleIds.value = [...roleIds]  // 记录初始状态
     userProjectRoles.value = profile?.projectRoles || []
     userGlobalMembers.value = globalMembersRes.data || []
   } catch (e) {
     userRoleIds.value = []
+    originalRoleIds.value = []
     userProjectRoles.value = []
     userGlobalMembers.value = []
   } finally {
@@ -609,48 +630,36 @@ async function openRoleDialog(user: any) {
 }
 
 async function toggleRole(roleId: number) {
-  const userId = selectedUser.value?.id
-  if (!userId) return
   const roleIdStr = String(roleId)
   
-  // 防止重复点击：如果该角色正在处理中，直接返回
-  if (roleToggleLoading.value.has(roleIdStr)) return
-  
-  const role = globalRoles.value.find((r: any) => String(r.id) === roleIdStr)
-  const roleName = role?.name || '角色'
-  const wasChecked = userRoleIds.value.includes(roleIdStr)
-  
-  // 设置 loading 状态
-  roleToggleLoading.value.add(roleIdStr)
-  
-  // 乐观更新 UI
-  if (wasChecked) {
+  // 本地切换角色选中状态（不调用 API）
+  if (userRoleIds.value.includes(roleIdStr)) {
     userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
   } else {
     userRoleIds.value.push(roleIdStr)
   }
+}
+
+/** 批量保存系统角色 */
+async function saveRoles() {
+  const userId = selectedUser.value?.id
+  if (!userId) return
   
+  savingRoles.value = true
   try {
-    if (wasChecked) {
-      await userApi.removeRole(userId, roleIdStr)
-      Message.success(`已移除全局角色「${roleName}」`)
-    } else {
-      await userApi.assignRole(userId, roleIdStr)
-      Message.success(`已分配全局角色「${roleName}」`)
-    }
-    // 同步更新用户列表中该用户的 globalRoles 显示
+    await userApi.replaceRoles(userId, userRoleIds.value)
+    
+    // 更新初始状态为当前状态
+    originalRoleIds.value = [...userRoleIds.value]
+    
+    // 同步更新用户列表显示
     syncUserListGlobalRoles(userId)
+    
+    Message.success('系统角色已保存')
   } catch (e: any) {
-    // 请求失败，回滚 UI 状态
-    if (wasChecked) {
-      userRoleIds.value.push(roleIdStr)
-    } else {
-      userRoleIds.value = userRoleIds.value.filter(id => id !== roleIdStr)
-    }
-    Message.error(e.response?.data?.message || '操作失败')
+    Message.error(e.response?.data?.message || '保存失败')
   } finally {
-    // 清除 loading 状态
-    roleToggleLoading.value.delete(roleIdStr)
+    savingRoles.value = false
   }
 }
 
@@ -998,6 +1007,14 @@ onMounted(() => {
 /* Global Project Role Section */
 .role-section-hint { font-size: 11px; color: var(--text-muted); font-style: italic; }
 .role-section-desc { font-size: 11px; color: var(--text-muted); margin-top: -8px; margin-bottom: 8px; }
+
+/* Role Save Bar */
+.role-save-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 10px 12px; background: rgba(88,166,255,0.08); border-radius: var(--radius-sm); }
+.role-save-hint { font-size: 12px; color: var(--accent-blue); }
+.btn-sm-action.primary { background: var(--accent-blue); color: #fff; font-weight: 500; }
+.btn-sm-action.primary:hover { opacity: 0.9; }
+.btn-sm-action.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .global-project-role-list { display: flex; flex-direction: column; gap: 4px; }
 .global-project-role-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 150ms; }
 .global-project-role-item:hover { background: var(--bg-hover); }

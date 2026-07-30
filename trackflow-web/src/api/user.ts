@@ -39,14 +39,26 @@ export const userApi = {
     return request.put<any, R<void>>(`/users/${id}/enable`)
   },
 
-  /** 分配全局角色 */
+  /** 分配全局角色（单个） */
   assignRole(userId: string, roleId: string) {
     return request.post<any, R<void>>(`/users/${userId}/roles`, { roleId })
   },
 
-  /** 移除全局角色 */
+  /** 移除全局角色（单个） */
   removeRole(userId: string, roleId: string) {
     return request.delete<any, R<void>>(`/users/${userId}/roles/${roleId}`)
+  },
+
+  /**
+   * 批量替换用户的全局角色集合
+   * 语义：传入期望的完整角色 ID 列表，服务端计算差异后执行增删
+   * @param userId 用户 ID
+   * @param roleIds 期望的角色 ID 列表（空数组表示清空所有全局角色）
+   */
+  replaceRoles(userId: string, roleIds: string[]) {
+    return request.put<any, R<void>>(`/users/${userId}/roles`, {
+      roleIds: roleIds.map(id => Number(id))
+    })
   },
 
   /** 导出用户数据（GDPR 数据可携权） */

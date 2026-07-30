@@ -464,6 +464,109 @@ public class UserService {
     }
 
     /**
+     * 批量替换用户的全局角色集合
+     * 
+     * 语义：传入期望的完整角色 ID 列表，计算差异后执行增删
+     * - 已有但不在列表中的角色会被移除
+     * - 不在已有中但在列表中的角色会被添加
+     * - 空列表表示清空所有全局角色（受最后管理员保护）
+     * 
+     * @param userId 用户 ID
+     * @param targetRoleIds 期望的角色 ID 列表
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void replaceGlobalRoles(Long userId, List<Long> targetRoleIds) {
+        // 校验用户存在
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在: " + userId);
+        }
+
+        // 去重并过滤 null
+        List<Long> distinctTargetIds = targetRoleIds == null ? List.of() :
+                targetRoleIds.stream().filter(id -> id != null).distinct().toList();
+
+        // 校验所有目标角色存在且为 global 类型
+        for (Long roleId : distinctTargetIds) {
+            SysRole role = roleMapper.selectById(roleId);
+            if (role == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "角色不存在: " + roleId);
+            }
+            if (!"global".equals(role.getRoleType())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "只有全局角色可以通过此路径分配，「" + role.getName() + "」是项目角色");
+            }
+        }
+
+        // 获取当前全局角色
+        List<Long> currentRoleIds = getUserGlobalRoleIds(userId);
+
+        // 计算差异
+        List<Long> toAdd = distinctTargetIds.stream()
+                .filter(id -> !currentRoleIds.contains(id))
+                .toList();
+        List<Long> toRemove = currentRoleIds.stream()
+                .filter(id -> !distinctTargetIds.contains(id))
+                .toList();
+
+        // 检查是否会移除自己的系统管理员角色
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (toRemove.contains(SYSTEM_ADMIN_ROLE_ID) && userId.equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不能移除自己的系统管理员角色");
+        }
+
+        // 保护最后一个系统管理员
+        if (toRemove.contains(SYSTEM_ADMIN_ROLE_ID) && isLastSystemAdmin(userId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "系统至少需要保留一个活跃管理员");
+        }
+
+        // 执行删除
+        if (!toRemove.isEmpty()) {
+            userRoleMapper.delete(
+                    new LambdaQueryWrapper<UserRole>()
+                            .eq(UserRole::getUserId, userId)
+                            .in(UserRole::getRoleId, toRemove)
+            );
+        }
+
+        // 执行添加
+        for (Long roleId : toAdd) {
+            UserRole userRole = new UserRole();
+            userRole.setUserId(userId);
+            userRole.setRoleId(roleId);
+            userRole.setSource(UserRole.SOURCE_MANUAL);
+            userRoleMapper.insert(userRole);
+        }
+
+        // 刷新权限缓存
+        if (!toAdd.isEmpty() || !toRemove.isEmpty()) {
+            permissionService.invalidateCache(userId);
+        }
+
+        // 审计日志
+        if (!toAdd.isEmpty() || !toRemove.isEmpty()) {
+            List<String> addedNames = toAdd.stream()
+                    .map(id -> {
+                        SysRole r = roleMapper.selectById(id);
+                        return r != null ? r.getName() : String.valueOf(id);
+                    }).toList();
+            List<String> removedNames = toRemove.stream()
+                    .map(id -> {
+                        SysRole r = roleMapper.selectById(id);
+                        return r != null ? r.getName() : String.valueOf(id);
+                    }).toList();
+
+            systemAuditService.log("replace_global_roles", "user", userId,
+                    Map.of(
+                            "username", user.getUsername(),
+                            "addedRoles", addedNames,
+                            "removedRoles", removedNames,
+                            "finalRoleIds", distinctTargetIds
+                    ));
+        }
+    }
+
+    /**
      * 检查用户是否是最后一个系统管理员
      */
     private boolean isLastSystemAdmin(Long userId) {
