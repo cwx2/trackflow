@@ -10,6 +10,7 @@ import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.dto.AssignRoleDTO;
 import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.dto.DisableUserDTO;
+import com.trackflow.system.dto.UpdateUserRolesDTO;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.service.RoleService;
@@ -126,7 +127,7 @@ public class UserController {
         SysRole role = roleService.getById(roleId);
         if (!"global".equals(role.getRoleType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "Only global roles can be assigned here. Project roles are assigned via project membership.");
+                    "此处只能分配全局角色，项目角色请通过项目成员管理进行分配");
         }
 
         userService.assignGlobalRole(id, roleId);
@@ -137,6 +138,24 @@ public class UserController {
     @PreAuthorize("@perm.checkGlobal('system:manage_users')")
     public R<Void> removeRole(@PathVariable("id") Long id, @PathVariable("roleId") Long roleId) {
         userService.removeGlobalRole(id, roleId);
+        return R.ok();
+    }
+
+    /**
+     * 批量替换用户的全局角色集合
+     * 
+     * 语义：传入期望的完整角色 ID 列表，服务端计算差异后执行增删
+     * - 传入 [1, 2] 表示用户最终拥有角色 1 和 2
+     * - 传入 [] 表示清空所有全局角色
+     * 
+     * @param id 用户 ID
+     * @param dto 包含期望角色 ID 列表的 DTO
+     * @return 操作结果
+     */
+    @PutMapping("/{id}/roles")
+    @PreAuthorize("@perm.checkGlobal('system:manage_users')")
+    public R<Void> replaceRoles(@PathVariable("id") Long id, @Valid @RequestBody UpdateUserRolesDTO dto) {
+        userService.replaceGlobalRoles(id, dto.getRoleIds());
         return R.ok();
     }
 
