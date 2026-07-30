@@ -639,9 +639,15 @@
             :key="issue.id"
             class="open-issue-item"
           >
-            <span class="issue-status-dot" :style="{ background: issue.statusColor || '#6b7280' }"></span>
             <span class="issue-key">{{ issue.issueKey }}</span>
             <span class="issue-title">{{ issue.title }}</span>
+            <span 
+              class="issue-status-tag" 
+              :style="{ 
+                background: (issue.statusColor || '#6b7280') + '20',
+                color: issue.statusColor || '#6b7280'
+              }"
+            >{{ issue.statusName || '未知' }}</span>
             <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
           </div>
         </div>
@@ -2105,11 +2111,13 @@ function syncUrlProjectParam() {
 .open-issue-item:last-child {
   border-bottom: none;
 }
-.issue-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.issue-status-tag {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 .issue-key {
   color: var(--color-text-3);
