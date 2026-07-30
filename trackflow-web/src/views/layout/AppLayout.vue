@@ -30,7 +30,6 @@
         <router-link to="/sprints" class="nav-item" :class="{ active: $route.name === 'Sprints' }">
           <span class="nav-icon">🏃</span>
           <span class="nav-label">迭代</span>
-          <span v-if="!canManageSprint && navBadgeLoaded" class="nav-readonly-tag" title="您当前无迭代管理权限">只读</span>
         </router-link>
         <router-link v-if="canViewSprintPlanning" to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
           <span class="nav-icon">📋</span>
@@ -175,7 +174,7 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const timerStore = useTimerStore()
-const { issueBadgeCount, canManageSprint, loaded: navBadgeLoaded, init: initNavBadge } = useNavBadge()
+const { issueBadgeCount, init: initNavBadge } = useNavBadge()
 const { unreadCount, hasUnread, togglePanel: toggleNotificationPanel, init: initNotification } = useNotification()
 
 // TabBar 仅在 Issue 相关路由显示（Issue 列表、Issue 详情）
@@ -434,18 +433,6 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   align-items: center;
   justify-content: center;
   line-height: 1;
-  flex-shrink: 0;
-}
-
-.nav-readonly-tag {
-  margin-left: auto;
-  font-size: 10px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--tf-bg-hover);
-  color: var(--tf-text-muted);
-  font-weight: 500;
-  letter-spacing: 0.3px;
   flex-shrink: 0;
 }
 
