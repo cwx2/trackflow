@@ -78,33 +78,53 @@ SKILLS = {
     "code-review": {"path": ".kiro/skills/code-review/SKILL.md"},
 }
 
-# 生产者配置池 —— MVP 精细化阶段
-# 策略：按角色走完整业务场景，遇到问题才记录需求（不再广撒网）
+# ============ 角色工作流加载 ============
+# 工作流文件位于 scripts/role-workflows/，每个文件描述一个角色的详细日常操作步骤。
+# 运行时动态读取文件内容，嵌入到生产者 prompt 中，让 AI 代理像真实员工一样操作系统。
+
+ROLE_WORKFLOW_DIR = Path(__file__).parent / "role-workflows"
+
+
+def load_workflow(filename: str) -> str:
+    """读取角色工作流文件内容，失败时返回空字符串"""
+    path = ROLE_WORKFLOW_DIR / filename
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception as e:
+        log.warning(f"[workflow] 读取 {filename} 失败: {e}")
+        return ""
+
+
+def make_workflow_prompt(workflow_file: str, workflow_section: str = "", skill: str = "write-requirement") -> dict:
+    """
+    构造一个引用角色工作流的生产者配置。
+    workflow_file: 工作流文件名（如 developer.md）
+    workflow_section: 留空表示使用整个文件内容
+    """
+    return {
+        "skill": skill,
+        "workflow_file": workflow_file,
+        "workflow_section": workflow_section,
+    }
+
+
+# 生产者配置池 —— 按角色工作流驱动
+# 每个配置对应 scripts/role-workflows/ 下一个角色文件。
+# 运行时动态读取工作流文件内容作为 prompt，让 AI 代理像真实员工一样操作系统。
 PRODUCER_CONFIGS = [
-    # ═══ 产品经理日常工作流 ═══
-    {"skill": "write-requirement", "prompt": "找一下需求，你是产品经理 sunlei，登录系统完成以下场景：创建一个新的 Bug 工单（填写标题、描述、优先级、负责人、Sprint），然后在看板上确认它出现在正确的列中。过程中遇到任何操作不顺畅、报错、缺功能的地方，记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是产品经理 sunlei，登录系统完成以下场景：打开仪表盘查看项目整体进度，确认数字卡片、活动流都能正常显示数据。然后切换到报表页面查看状态分布和趋势图。过程中遇到任何问题记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是产品经理 sunlei，登录系统完成以下场景：创建一个新 Sprint，设置开始和结束日期，然后把几个工单拖进去，最后启动这个 Sprint。过程中遇到任何问题记录为需求"},
-
-    # ═══ 开发人员日常工作流 ═══
-    {"skill": "write-requirement", "prompt": "找一下需求，你是开发人员 wangqiang，登录系统完成以下场景：查看分配给我的工单列表，点开一个工单查看详情，修改状态为 In Progress，添加一条评论说明开始处理，然后记录 2 小时工时。过程中遇到任何问题记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是开发人员 wangqiang，登录系统完成以下场景：打开看板，找到分配给我的卡片，把它从 In Progress 拖到 Code Review，然后打开工单详情确认状态已变更。过程中遇到任何问题记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是开发人员 liuyang，登录系统完成以下场景：使用搜索栏搜索一个关键词找到相关工单，打开详情后给它添加一个标签，然后创建一个子工单（如果有此功能）。过程中遇到任何问题记录为需求"},
-
-    # ═══ 技术负责人日常工作流 ═══
-    {"skill": "write-requirement", "prompt": "找一下需求，你是技术负责人 zhangwei，登录系统完成以下场景：查看当前 Sprint 的进度（燃尽图或进度条），确认哪些工单还未完成，把一个未完成的工单重新分配给其他开发人员。过程中遇到任何问题记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是技术负责人 zhoujie，登录系统完成以下场景：完成当前 Sprint（Complete Sprint），处理未完成的工单（移到下一个 Sprint 或 Backlog），然后查看完成统计。过程中遇到任何问题记录为需求"},
-
-    # ═══ 测试人员日常工作流 ═══
-    {"skill": "write-requirement", "prompt": "找一下需求，你是测试人员 zhaojing，登录系统完成以下场景：查看分配给我待测试的工单（Testing 状态），打开一个工单确认修复内容，然后把状态改为 Done（测试通过）或打回 In Progress（测试不通过并添加评论说明原因）。过程中遇到任何问题记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是测试人员 chenfei，登录系统完成以下场景：使用筛选器找到所有 Bug 类型且优先级为 Critical 的工单，确认列表排序和筛选结果正确。然后打开一个工单查看它的活动历史（谁创建的、谁处理的、什么时候改的状态）。过程中遇到任何问题记录为需求"},
-
-    # ═══ 管理员日常工作流 ═══
-    {"skill": "write-requirement", "prompt": "找一下需求，你是管理员 testuser，登录系统完成以下场景：进入管理后台，查看用户列表，给一个用户修改角色权限，然后检查该用户登录后能否正确看到/看不到对应功能。过程中遇到任何问题记录为需求"},
-    {"skill": "write-requirement", "prompt": "找一下需求，你是管理员 testuser，登录系统完成以下场景：进入工作流配置页面，查看当前状态转换矩阵，尝试添加一个新的转换规则（比如 Testing → Done 只允许测试人员操作）。过程中遇到任何问题记录为需求"},
-
-    # ═══ 观察者（只读用户）场景 ═══
-    {"skill": "write-requirement", "prompt": "找一下需求，你是观察者 huanglei，登录系统完成以下场景：查看工单列表和工单详情，确认能看到内容但不能编辑。尝试添加评论（应该能评论），确认不能修改状态、不能分配负责人。过程中遇到任何权限不对或报错的地方记录为需求"},
+    # 每个角色配置多条，同一文件重复出现 = 权重更高（每次随机选账号+情况，不会重复）
+    make_workflow_prompt("developer.md"),
+    make_workflow_prompt("developer.md"),
+    make_workflow_prompt("developer.md"),
+    make_workflow_prompt("tech_lead.md"),
+    make_workflow_prompt("tech_lead.md"),
+    make_workflow_prompt("product_manager.md"),
+    make_workflow_prompt("product_manager.md"),
+    make_workflow_prompt("tester.md"),
+    make_workflow_prompt("tester.md"),
+    make_workflow_prompt("admin.md"),
+    make_workflow_prompt("observer.md"),
+    make_workflow_prompt("observer.md"),
 ]
 
 # ============ 日志 ============
@@ -421,20 +441,79 @@ def parse_review_result(output: str) -> tuple[bool, str]:
 
 
 def produce_one(worker_id: str) -> bool:
-    """单个生产者：随机选配置，找一个需求"""
+    """单个生产者：随机选角色工作流配置，找一个需求"""
     config = random.choice(PRODUCER_CONFIGS)
     skill_name = config["skill"]
     skill_info = SKILLS[skill_name]
+    workflow_file = config["workflow_file"]
+    workflow_section = config.get("workflow_section", "")
+
+    # 动态读取角色工作流文件
+    workflow_content = load_workflow(workflow_file)
+    if not workflow_content:
+        log.warning(f"[{worker_id}] 工作流文件 {workflow_file} 读取失败，跳过")
+        return False
+
+    # 如果指定了 section 则提取，否则使用整个文件
+    if workflow_section:
+        section_content = _extract_workflow_section(workflow_content, workflow_section)
+        if not section_content:
+            log.warning(f"[{worker_id}] 未找到 section「{workflow_section}」，使用完整工作流文件")
+            section_content = workflow_content
+    else:
+        section_content = workflow_content
 
     prompt = (
         f"[使用 skill: {skill_name}] "
         f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
-        f"{config['prompt']}"
+        f"找一下需求。请按照以下角色工作流的步骤操作系统，"
+        f"把操作过程中遇到的任何不合理、不好用、报错、UI 有问题的地方记录为需求。\n\n"
+        f"---\n\n{section_content}"
     )
 
-    log.info(f"[{worker_id}] 生产: {config['prompt'][:50]}...")
+    log.info(f"[{worker_id}] 生产: {workflow_file}")
     success, _ = run_kiro(prompt, worker_id)
     return success
+
+
+def _extract_workflow_section(content: str, section_title: str) -> str:
+    """
+    从工作流文件中提取指定 section 的内容。
+    section_title 支持两种格式：
+      - "工作流 A"（前缀匹配）
+      - "工作流 A：早上开工——查看我的任务"（完整标题）
+
+    提取从该标题行开始，到下一个同级（## 开头）标题之前的所有内容。
+    """
+    lines = content.split("\n")
+    start_idx = None
+    end_idx = len(lines)
+
+    # 提取匹配关键词：取冒号前的部分，或整个标题
+    match_key = section_title.split("：")[0].split(":")[0].strip()
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # 必须是 ## 开头的标题行
+        if not stripped.startswith("##"):
+            continue
+        # 去掉 ## 后的标题内容
+        title_text = stripped.lstrip("#").strip()
+        # 精确包含匹配关键词（如"工作流 A"）
+        if match_key in title_text:
+            start_idx = i
+            break
+
+    if start_idx is None:
+        return ""
+
+    # 找到下一个同级（## 开头但不是 ### ）标题
+    for i in range(start_idx + 1, len(lines)):
+        if lines[i].startswith("## ") and not lines[i].startswith("### "):
+            end_idx = i
+            break
+
+    return "\n".join(lines[start_idx:end_idx]).strip()
 
 
 def run_produce_phase(num_workers: int):
