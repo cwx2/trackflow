@@ -69,4 +69,17 @@ public class ActionConfig {
      */
     @JsonProperty("comment_template")
     private String commentTemplate;
+
+    /**
+     * 是否强制重新分配（strategy = role_based 时使用）。
+     * <p>
+     * 默认 false：如果当前负责人已经是目标角色的成员，保留现有负责人，不执行轮询分配。
+     * 这符合 YouTrack 的行为——轮询自动分配规则仅在没有适合角色的负责人时才触发。
+     * <p>
+     * 设为 true：强制执行轮询分配，即使当前负责人已属于目标角色也会被替换。
+     * <p>
+     * 参考 YouTrack Workflow 的 guard 条件 `!issue.fields.Assignee`。
+     */
+    @JsonProperty("force_reassign")
+    private Boolean forceReassign;
 }

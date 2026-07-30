@@ -37,6 +37,12 @@ public class RoleBasedStrategy implements AssignmentStrategy {
     private static final String REDIS_KEY_PREFIX = "workflow:rr:";
     private static final Duration COUNTER_TTL = Duration.ofDays(30);
 
+    /**
+     * 特殊返回值：表示"保留现有负责人"。
+     * 区别于 null（分配失败），用于向 TransitionActionEngine 传递"跳过分配，保留现有"的语义。
+     */
+    public static final Long KEEP_EXISTING_ASSIGNEE = -1L;
+
     private final ProjectMemberMapper projectMemberMapper;
     private final IssueMapper issueMapper;
     private final IssueStatusMapper issueStatusMapper;
@@ -70,6 +76,19 @@ public class RoleBasedStrategy implements AssignmentStrategy {
         if (candidates.isEmpty()) {
             log.warn("[RoleBasedStrategy] 项目 {} 中角色 {} 无成员，跳过分配", projectId, roleId);
             return null;
+        }
+
+        // 检查是否保留现有负责人（YouTrack 默认行为）
+        // 除非显式设置 force_reassign = true，否则如果当前负责人已属于目标角色，保留不变
+        Long currentAssigneeId = issue.getAssigneeId();
+        if (currentAssigneeId != null && !Boolean.TRUE.equals(config.getForceReassign())) {
+            if (candidates.contains(currentAssigneeId)) {
+                log.info("[RoleBasedStrategy] 当前负责人 {} 已属于目标角色 {}，保留现有分配（issue={}）",
+                        currentAssigneeId, roleId, issue.getId());
+                // 返回特殊标记值 -1L，表示"保留现有负责人"（区别于"分配失败返回 null"）
+                // TransitionActionEngine 会根据此标记决定是否记录 activity
+                return KEEP_EXISTING_ASSIGNEE;
+            }
         }
 
         // 排除报告人（默认行为，除非 exclude_reporter 显式设为 false）

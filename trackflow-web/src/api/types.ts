@@ -903,7 +903,7 @@ export interface ActionExecutionResult {
   /** 动作类型（如 "auto_assign"） */
   actionType?: string
   /** 执行结果 */
-  outcome: 'ASSIGNED' | 'MANUAL_OVERRIDE' | 'STRATEGY_FAILED' | 'NO_ACTIONS' | 'EXECUTION_ERROR'
+  outcome: 'ASSIGNED' | 'MANUAL_OVERRIDE' | 'STRATEGY_FAILED' | 'NO_ACTIONS' | 'EXECUTION_ERROR' | 'COMMENT_ADDED' | 'KEPT_EXISTING'
   /** 分配给了谁的用户 ID */
   newAssigneeId?: string
   /** 分配给了谁的显示名称 */

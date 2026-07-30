@@ -18,6 +18,7 @@ import com.trackflow.workflow.entity.TransitionAction;
 import com.trackflow.workflow.entity.WorkflowActivity;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
 import com.trackflow.workflow.strategy.AssignmentStrategy;
+import com.trackflow.workflow.strategy.RoleBasedStrategy;
 import com.trackflow.workflow.vo.ActionExecutionResult;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -224,6 +225,28 @@ public class TransitionActionEngine {
         // 执行主策略
         Long result = strategy.resolve(issue, config, issue.getProjectId());
 
+        // 处理 KEEP_EXISTING_ASSIGNEE 特殊返回值（当前负责人已属于目标角色，保留不变）
+        if (RoleBasedStrategy.KEEP_EXISTING_ASSIGNEE.equals(result)) {
+            Long currentAssigneeId = issue.getAssigneeId();
+            String currentAssigneeName = getUserDisplayName(currentAssigneeId);
+
+            // 记录 auto_assign_skipped activity
+            IssueActivity activity = new IssueActivity();
+            activity.setIssueId(issue.getId());
+            activity.setUserId(triggeredBy);
+            activity.setAction("auto_assign_skipped");
+            activity.setDetail(String.format(
+                    "{\"reason\":\"existing_assignee_matches_role\",\"assignee_id\":%d,\"role_id\":%s,\"action_id\":%d}",
+                    currentAssigneeId, config.getRoleId(), action.getId()));
+            activity.setCreatedAt(LocalDateTime.now());
+            issueActivityMapper.insert(activity);
+
+            log.info("[TransitionActionEngine] Issue {} 保留现有负责人 {} (已属于目标角色 {})",
+                    issue.getId(), currentAssigneeId, config.getRoleId());
+
+            return ActionExecutionResult.keptExisting(currentAssigneeId, currentAssigneeName, strategyKey);
+        }
+
         // 主策略失败时尝试 fallback
         String usedStrategy = strategyKey;
         if (result == null && config.getFallbackStrategy() != null
@@ -358,12 +381,25 @@ public class TransitionActionEngine {
 
         Long result = strategy.resolve(issue, config, issue.getProjectId());
 
+        // 处理 KEEP_EXISTING_ASSIGNEE 特殊返回值（创建时通常不会触发，但保持一致性）
+        if (RoleBasedStrategy.KEEP_EXISTING_ASSIGNEE.equals(result)) {
+            log.info("[TransitionActionEngine] Issue {} on-create: 保留现有负责人 {} (已属于目标角色 {})",
+                    issue.getId(), issue.getAssigneeId(), config.getRoleId());
+            return true; // 视为成功执行，只是决定保留
+        }
+
         // fallback
         if (result == null && config.getFallbackStrategy() != null
                 && !config.getFallbackStrategy().isBlank()) {
             AssignmentStrategy fallbackStrategy = strategyMap.get(config.getFallbackStrategy());
             if (fallbackStrategy != null) {
                 result = fallbackStrategy.resolve(issue, config, issue.getProjectId());
+                // fallback 也可能返回 KEEP_EXISTING
+                if (RoleBasedStrategy.KEEP_EXISTING_ASSIGNEE.equals(result)) {
+                    log.info("[TransitionActionEngine] Issue {} on-create fallback: 保留现有负责人",
+                            issue.getId());
+                    return true;
+                }
             }
         }
 

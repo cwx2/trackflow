@@ -26,7 +26,9 @@ public class ActionExecutionResult {
         /** 动作执行抛出异常 */
         EXECUTION_ERROR,
         /** 自动添加评论成功 */
-        COMMENT_ADDED
+        COMMENT_ADDED,
+        /** 保留现有负责人（当前负责人已属于目标角色，无需重新分配） */
+        KEPT_EXISTING
     }
 
     /** 是否有动作被成功执行 */
@@ -98,6 +100,17 @@ public class ActionExecutionResult {
         r.setExecuted(true);
         r.setActionType("add_comment");
         r.setOutcome(Outcome.COMMENT_ADDED);
+        return r;
+    }
+
+    public static ActionExecutionResult keptExisting(Long assigneeId, String assigneeName, String strategy) {
+        ActionExecutionResult r = new ActionExecutionResult();
+        r.setExecuted(true);  // 动作"执行"了，只是决定保留现有分配
+        r.setActionType("auto_assign");
+        r.setOutcome(Outcome.KEPT_EXISTING);
+        r.setNewAssigneeId(assigneeId != null ? String.valueOf(assigneeId) : null);
+        r.setNewAssigneeName(assigneeName);
+        r.setStrategyUsed(strategy);
         return r;
     }
 }

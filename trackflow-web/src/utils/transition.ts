@@ -30,6 +30,11 @@ export function showActionFeedback(result: TransitStatusResultVO | null | undefi
         duration: 3000
       })
       break
+    case 'KEPT_EXISTING':
+      // 保留现有负责人，静默处理（不打扰用户）
+      // 如果需要可以添加一个轻提示：
+      // Message.info({ content: `负责人 ${newAssigneeName} 已属于目标角色，保留不变`, duration: 2000 })
+      break
     case 'STRATEGY_FAILED':
       Message.warning({
         content: '自动分配失败，请手动指定负责人',
@@ -42,6 +47,6 @@ export function showActionFeedback(result: TransitStatusResultVO | null | undefi
         duration: 5000
       })
       break
-    // MANUAL_OVERRIDE / NO_ACTIONS — 不需要额外提示
+    // MANUAL_OVERRIDE / NO_ACTIONS / COMMENT_ADDED — 不需要额外提示
   }
 }
