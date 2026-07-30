@@ -1056,8 +1056,16 @@ function clearTemplate() {
   form.priority = 'Normal'
 }
 
+/**
+ * 关闭面板
+ * 当表单有未保存内容时，显示自定义确认弹窗而非触发浏览器原生 beforeunload
+ */
 function close() {
   if (isDirty.value) {
+    // 临时移除 beforeunload 监听器，避免用户主动关闭时触发浏览器原生对话框
+    // 这是用户主动操作，应该由应用内的 Modal.confirm 处理，而不是浏览器
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+
     Modal.confirm({
       title: '保存为草稿？',
       content: '当前表单中有未保存的内容。是否保存为草稿？',
@@ -1084,6 +1092,13 @@ function close() {
       },
       onCancel: () => {
         doClose()
+      },
+      onClose: () => {
+        // 用户点击弹窗外部关闭或按 Escape 关闭确认弹窗时
+        // 恢复 beforeunload 监听器（用户选择继续编辑）
+        if (props.visible) {
+          window.addEventListener('beforeunload', handleBeforeUnload)
+        }
       }
     })
   } else {
