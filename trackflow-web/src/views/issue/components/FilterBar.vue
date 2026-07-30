@@ -1035,7 +1035,21 @@ function setFilters(filters: InitialFilter[]) {
   }
 }
 
-defineExpose({ clearAll, setFilters })
+/**
+ * 程序化设置搜索关键字（供 URL 参数初始化使用）
+ * 设置后会触发 @search 事件
+ */
+function setSearchKeyword(keyword: string) {
+  suppressEmit = true
+  mode.value = 'search'
+  searchKeyword.value = keyword
+  nextTick(() => {
+    suppressEmit = false
+    emit('search', keyword)
+  })
+}
+
+defineExpose({ clearAll, setFilters, setSearchKeyword })
 </script>
 
 <style scoped>

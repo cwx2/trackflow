@@ -973,7 +973,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, h, nextTick } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { IconPlus, IconSearch, IconLoading, IconEdit, IconPenFill, IconShareExternal, IconPushpin, IconDelete, IconLock, IconCheckCircle, IconEye, IconLayout, IconExpand, IconDownload, IconFile, IconCode, IconCopy, IconLink, IconCalendar, IconRight, IconSettings, IconMinusCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
@@ -3573,8 +3573,8 @@ onMounted(async () => {
     }
   }
 
-  // Handle dashboard filter params (statusId, statusCode, statusCategory, status, label, sprint, etc.)
-  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId) {
+  // Handle dashboard filter params (statusId, statusCode, statusCategory, status, label, sprint, keyword, etc.)
+  if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId || route.query.keyword) {
     applyDashboardFilter()
   } else if (!route.query.project && !activeProjectId.value) {
     // Auto-select default saved query (e.g., "分配给我") when no URL params override the view
@@ -3800,6 +3800,17 @@ function applyDashboardFilter() {
       operator: 'equals',
       values: ['none'],
       valueLabels: ['未分配']
+    })
+  }
+
+  // keyword: 关键字搜索（支持 URL 分享和书签）
+  if (route.query.keyword) {
+    const keyword = String(route.query.keyword)
+    searchKeyword.value = keyword
+    // 设置 FilterBar 中的搜索关键字显示
+    // 使用 nextTick 确保 FilterBar 已挂载
+    nextTick(() => {
+      filterBarRef.value?.setSearchKeyword(keyword)
     })
   }
 
