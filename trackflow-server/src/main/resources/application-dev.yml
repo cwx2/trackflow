@@ -61,3 +61,7 @@ trackflow:
     # 启动时检查所有 Controller 端点是否有授权注解
     # false = 仅打印 WARN 日志；true = 缺失注解时阻断启动（生产环境建议 true）
     enforce-authorization-check: false
+  rate-limit:
+    # 开发环境关闭限流，避免自动化测试/脚本触发 429
+    # 生产环境必须设为 true（application-prod.yml 中默认为 true）
+    enabled: false

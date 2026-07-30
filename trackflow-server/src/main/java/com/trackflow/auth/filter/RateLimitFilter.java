@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,8 @@ import java.util.Map;
  *   <li><b>全局 API 频率</b>：同一 IP 每分钟请求超过 200 次返回 429</li>
  * </ol>
  * <p>
+ * 可通过 {@code trackflow.rate-limit.enabled=false} 在开发环境完全禁用限流（默认 true）。
+ * <p>
  * 认证失败计数由 {@link ApiKeyAuthFilter} 和 {@link SecurityConfig} 中的 AuthenticationEntryPoint
  * 在认证失败时主动调用 {@link RateLimitService#recordAuthFailure(String)} 实现。
  * <p>
@@ -40,6 +43,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitService rateLimitService;
     private final SystemAuditService systemAuditService;
+
+    @Value("${trackflow.rate-limit.enabled:true}")
+    private boolean rateLimitEnabled;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -113,6 +119,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        // 限流开关关闭时（开发环境）跳过所有限流检查
+        if (!rateLimitEnabled) {
+            return true;
+        }
         String path = request.getRequestURI();
         // 只对 /api/v1/ 路径启用限流，不拦截静态资源和 actuator
         return !path.startsWith("/api/v1/");

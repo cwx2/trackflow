@@ -33,6 +33,7 @@ import random
 import shutil
 import threading
 import json
+import socket
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
@@ -47,6 +48,10 @@ IMPLEMENT_DIR = REQUIREMENTS_BASE / "implement"
 REJECTED_DIR = REQUIREMENTS_BASE / "rejected"
 WORKING_DIR = REQUIREMENTS_BASE / "working"
 KIRO_CLI = "kiro-cli"
+
+# 每个 worker 专属的 Playwright MCP SSE 端口起始值
+# worker-1 → 9101, worker-2 → 9102, ...
+PLAYWRIGHT_PORT_BASE = 9100
 
 for d in [REVIEW_DIR, DEVELOP_DIR, IMPLEMENT_DIR, REJECTED_DIR, WORKING_DIR]:
     d.mkdir(parents=True, exist_ok=True)
@@ -139,6 +144,177 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ============ Playwright 多实例管理 ============
+
+# 全局注册表：worker_id → subprocess.Popen（Playwright MCP 进程）
+_playwright_processes: dict[str, subprocess.Popen] = {}
+_playwright_lock = threading.Lock()
+
+
+def get_worker_port(worker_id: str) -> int:
+    """根据 worker_id 分配固定端口，如 producer-1→9101, consumer-2→9102"""
+    # 从 worker_id 中提取序号
+    match = re.search(r"(\d+)$", worker_id)
+    index = int(match.group(1)) if match else 1
+    # producer 和 consumer 错开端口段，避免复用时冲突
+    if worker_id.startswith("producer"):
+        return PLAYWRIGHT_PORT_BASE + index
+    elif worker_id.startswith("consumer"):
+        return PLAYWRIGHT_PORT_BASE + 10 + index
+    else:
+        return PLAYWRIGHT_PORT_BASE + 20 + index
+
+
+def start_playwright_for_worker(worker_id: str) -> int:
+    """
+    为指定 worker 启动一个独立的 Playwright MCP SSE 进程。
+    返回分配的端口号。若已存在且仍在运行则直接复用，不重复启动。
+    端口号由 worker_id 固定映射，整个脚本生命周期内不会新增端口。
+    """
+    port = get_worker_port(worker_id)
+    with _playwright_lock:
+        existing = _playwright_processes.get(worker_id)
+        if existing and existing.poll() is None:
+            # 进程仍在运行，直接复用
+            return port
+
+        # 进程不存在或已崩溃，需要（重新）启动
+        if existing is not None:
+            log.warning(f"[playwright] {worker_id} 的 MCP 进程已退出（code={existing.poll()}），重启...")
+            # 等待端口释放，避免 Address already in use
+            time.sleep(2)
+
+        # 启动新进程
+        cmd = [
+            "npx", "@playwright/mcp@latest",
+            "--port", str(port),
+            "--viewport-size=1920x1080",
+            f"--output-dir={WORKSPACE / 'test'}",
+        ]
+        log.info(f"[playwright] 为 {worker_id} 启动独立 MCP，端口 {port}...")
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=str(WORKSPACE),
+        )
+        _playwright_processes[worker_id] = proc
+        # 等待 SSE 服务就绪（最多 15 秒）
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            try:
+                with socket.create_connection(("localhost", port), timeout=1):
+                    log.info(f"[playwright] {worker_id} 端口 {port} 就绪")
+                    return port
+            except OSError:
+                time.sleep(0.5)
+        log.warning(f"[playwright] {worker_id} 端口 {port} 等待超时，继续尝试...")
+        return port
+
+
+def stop_playwright_for_worker(worker_id: str):
+    """停止指定 worker 的 Playwright MCP 进程"""
+    with _playwright_lock:
+        proc = _playwright_processes.pop(worker_id, None)
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            log.info(f"[playwright] {worker_id} 的 MCP 进程已停止")
+
+
+def stop_all_playwright():
+    """停止所有 Playwright MCP 进程（脚本退出时调用）"""
+    with _playwright_lock:
+        for worker_id, proc in list(_playwright_processes.items()):
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+        _playwright_processes.clear()
+    log.info("[playwright] 所有独立 MCP 进程已停止")
+
+
+def make_worker_mcp_config(worker_id: str, port: int) -> dict:
+    """
+    生成 worker 专属的 mcp.json 内容。
+    playwright 改为 SSE url 模式连接独立进程，其他 MCP 沿用主配置。
+    """
+    # 读取主配置
+    main_config_path = WORKSPACE / ".kiro" / "settings" / "mcp.json"
+    with open(main_config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    # 替换 playwright 为 SSE url 模式
+    playwright_autoApprove = config["mcpServers"].get("playwright", {}).get("autoApprove", [])
+    config["mcpServers"]["playwright"] = {
+        "url": f"http://localhost:{port}/sse",
+        "disabled": False,
+        "autoApprove": playwright_autoApprove,
+    }
+    return config
+
+
+def setup_worker_kiro_dir(worker_id: str, port: int) -> Path:
+    """
+    为 worker 创建专属的 .kiro/settings/ 目录，写入专属 mcp.json。
+    返回 worker 的工作目录（kiro-cli 以此为 cwd 运行，会读取其中的 mcp.json）。
+
+    目录结构：
+      scripts/worker-envs/{worker_id}/.kiro/settings/mcp.json  ← 专属配置
+      scripts/worker-envs/{worker_id}/ 的 cwd 就是 WORKSPACE（通过 cwd 参数指定）
+
+    注意：kiro-cli 读取的是 cwd/.kiro/settings/mcp.json，所以我们把专属配置
+    放到一个临时目录，然后把 cwd 指向该临时目录。但 kiro-cli 需要在项目根目录
+    运行（才能访问源码）。
+
+    解决方案：在 WORKSPACE 下创建 .kiro-worker-{worker_id}/ 目录，
+    运行时通过环境变量 KIRO_CONFIG_DIR 覆盖配置路径（如果 kiro-cli 支持的话）。
+    退而求其次：在 WORKSPACE 下动态生成 .kiro/settings/mcp-{worker_id}.json，
+    由 run_kiro_for_worker 在调用前临时换掉 mcp.json（带文件锁）。
+    """
+    worker_env_dir = WORKSPACE / "scripts" / "worker-envs" / worker_id
+    kiro_settings_dir = worker_env_dir / ".kiro" / "settings"
+    kiro_settings_dir.mkdir(parents=True, exist_ok=True)
+
+    # 写入专属 mcp.json
+    mcp_config = make_worker_mcp_config(worker_id, port)
+    mcp_path = kiro_settings_dir / "mcp.json"
+    with open(mcp_path, "w", encoding="utf-8") as f:
+        json.dump(mcp_config, f, indent=2, ensure_ascii=False)
+
+    # 同时复制其他 .kiro/settings/ 文件（steering、skills 等通过 WORKSPACE 软链引用）
+    # kiro-cli 还需要 steering 文件，steering 在 .kiro/steering/ 而非 settings/
+    # 创建软链接或直接复制 steering 目录
+    src_kiro = WORKSPACE / ".kiro"
+    dst_kiro = worker_env_dir / ".kiro"
+
+    for subdir in ["steering", "skills"]:
+        src = src_kiro / subdir
+        dst = dst_kiro / subdir
+        if src.exists() and not dst.exists():
+            try:
+                os.symlink(src, dst)
+            except (OSError, NotImplementedError):
+                # Windows 可能需要管理员权限创建软链接，fallback 到不复制
+                # kiro-cli 会从父目录向上查找，WORKSPACE/.kiro 仍然可见
+                pass
+
+    log.debug(f"[worker-env] {worker_id} 配置目录: {worker_env_dir}")
+    return worker_env_dir
+
+
+def cleanup_worker_envs():
+    """清理所有 worker 环境目录"""
+    env_base = WORKSPACE / "scripts" / "worker-envs"
+    if env_base.exists():
+        shutil.rmtree(env_base, ignore_errors=True)
+        log.info("[worker-env] 已清理所有 worker 环境目录")
+
 # ============ 工具函数 ============
 
 
@@ -200,7 +376,7 @@ def extract_title(filepath: Path) -> str:
 # ============ Kiro CLI ============
 
 
-def run_kiro(prompt: str, label: str, model: str | None = None) -> tuple[bool, str]:
+def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str | None = None) -> tuple[bool, str]:
     cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools"]
     effective_model = model or KIRO_MODEL
     if effective_model:
@@ -208,6 +384,13 @@ def run_kiro(prompt: str, label: str, model: str | None = None) -> tuple[bool, s
     cmd.append(prompt)
     start = time.time()
     output_lines = []
+
+    # 确定工作目录：有 worker_id 时使用专属目录（含独立 mcp.json），否则用项目根目录
+    if worker_id:
+        worker_env = WORKSPACE / "scripts" / "worker-envs" / worker_id
+        cwd = str(worker_env) if worker_env.exists() else str(WORKSPACE)
+    else:
+        cwd = str(WORKSPACE)
 
     # 环境变量：抑制子进程中命令的交互式行为
     env = os.environ.copy()
@@ -222,7 +405,7 @@ def run_kiro(prompt: str, label: str, model: str | None = None) -> tuple[bool, s
     try:
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=str(WORKSPACE), encoding="utf-8", errors="replace",
+            text=True, cwd=cwd, encoding="utf-8", errors="replace",
             env=env,
         )
         for line in process.stdout:
@@ -471,8 +654,12 @@ def produce_one(worker_id: str) -> bool:
         f"---\n\n{section_content}"
     )
 
-    log.info(f"[{worker_id}] 生产: {workflow_file}")
-    success, _ = run_kiro(prompt, worker_id)
+    # 为此 worker 启动独立 Playwright MCP 进程（有独立浏览器，互不干扰）
+    port = start_playwright_for_worker(worker_id)
+    setup_worker_kiro_dir(worker_id, port)
+
+    log.info(f"[{worker_id}] 生产: {workflow_file}（Playwright 端口 {port}）")
+    success, _ = run_kiro(prompt, worker_id, worker_id=worker_id)
     return success
 
 
@@ -517,8 +704,11 @@ def _extract_workflow_section(content: str, section_title: str) -> str:
 
 
 def run_produce_phase(num_workers: int):
-    """并行生产阶段：多个 worker 同时找需求"""
-    log.info(f"[生产] 启动 {num_workers} 个 worker 并行找需求...")
+    """
+    生产阶段：并行执行各 worker。
+    每个 worker 有独立的 Playwright MCP 进程（独立浏览器、独立端口），互不干扰。
+    """
+    log.info(f"[生产] 启动 {num_workers} 个 worker 并行找需求（各自独立浏览器）...")
 
     with ThreadPoolExecutor(max_workers=num_workers, thread_name_prefix="producer") as executor:
         futures = []
@@ -946,3 +1136,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log.info("\n[中断] 用户手动停止")
         cleanup_working()
+        stop_all_playwright()
+        cleanup_worker_envs()
