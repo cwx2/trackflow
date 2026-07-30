@@ -102,6 +102,11 @@
         <div class="sprint-status-warning" v-if="sprint.statusHint">
           <span class="warning-icon">⚠️</span>
           <span class="warning-text">{{ sprint.statusHint }}</span>
+          <!-- 针对"开始日期尚未到达"的异常情况，提供快捷修复操作 -->
+          <div class="warning-actions" v-if="isStartDateNotReachedWarning(sprint.statusHint) && canEditSprintItem(sprint)">
+            <a-button size="mini" type="text" @click="openEditModal(sprint)">修改日期</a-button>
+            <a-button size="mini" type="text" @click="handleRevertToPlanned(sprint)">回退为计划中</a-button>
+          </div>
         </div>
 
         <!-- Sprint 目标 -->
@@ -1294,6 +1299,34 @@ async function activateSprint(id: string) {
   }
 }
 
+/**
+ * 判断是否为"开始日期尚未到达"的警告
+ */
+function isStartDateNotReachedWarning(hint: string | undefined): boolean {
+  return hint?.includes('开始日期尚未到达') ?? false
+}
+
+/**
+ * 处理"回退为计划中"操作——将异常状态的进行中 Sprint 回退为计划中
+ */
+async function handleRevertToPlanned(sprint: SprintVO) {
+  Modal.confirm({
+    title: '回退迭代状态',
+    content: `确定将迭代「${sprint.name}」回退为"计划中"状态？\n\n回退后可以修改日期，并在合适的时间重新激活。`,
+    okText: '确认回退',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await sprintApi.revertToPlanned(sprint.id)
+        Message.success('迭代已回退为计划中')
+        loadSprints()
+      } catch (e: any) {
+        Message.error(e.response?.data?.message || '操作失败')
+      }
+    }
+  })
+}
+
 async function handleCompleteSprint(sprint: SprintVO) {
   completingSprintId.value = sprint.id
   completingSprintName.value = sprint.name
@@ -2237,6 +2270,20 @@ function syncUrlProjectParam() {
 }
 .sprint-status-warning .warning-text {
   flex: 1;
+}
+.sprint-status-warning .warning-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sprint-status-warning .warning-actions .arco-btn-text {
+  color: rgb(var(--danger-6));
+  padding: 2px 8px;
+  height: 24px;
+  font-size: 12px;
+}
+.sprint-status-warning .warning-actions .arco-btn-text:hover {
+  background: rgba(var(--danger-6), 0.1);
 }
 
 .sprint-status-hint {
