@@ -922,7 +922,14 @@ const activityActionLabels: Record<string, string> = {
   time_removed: '删除了工时',
   deleted: '删除了',
   restored: '恢复了',
-  moved_to_project: '移动了项目'
+  moved_to_project: '移动了项目',
+  // Sprint 相关操作
+  create_sprint: '创建了迭代',
+  activate_sprint: '激活了迭代',
+  complete_sprint: '完成了迭代',
+  update_sprint: '更新了迭代',
+  archive_sprint: '归档了迭代',
+  auto_complete_sprint: '自动完成了迭代'
 }
 
 function formatActivityAction(action: string, fieldName?: string): string {

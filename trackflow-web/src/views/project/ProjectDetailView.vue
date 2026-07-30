@@ -891,6 +891,31 @@ function formatActivityAction(activity: ProjectActivityVO): string {
       const newVis = visibilityMap[detail.new_value] || detail.visibility || detail.new_value || ''
       return `将项目可见性变更为「${newVis}」`
     }
+    // Sprint 相关操作
+    case 'create_sprint': {
+      const sprintName = detail.sprint_name || detail.name || ''
+      return sprintName ? `创建了迭代「${sprintName}」` : '创建了迭代'
+    }
+    case 'activate_sprint': {
+      const sprintName = detail.sprint_name || detail.name || ''
+      return sprintName ? `激活了迭代「${sprintName}」` : '激活了迭代'
+    }
+    case 'complete_sprint': {
+      const sprintName = detail.sprint_name || detail.name || ''
+      return sprintName ? `完成了迭代「${sprintName}」` : '完成了迭代'
+    }
+    case 'update_sprint': {
+      const sprintName = detail.sprint_name || detail.name || ''
+      return sprintName ? `更新了迭代「${sprintName}」` : '更新了迭代'
+    }
+    case 'archive_sprint': {
+      const sprintName = detail.sprint_name || detail.name || ''
+      return sprintName ? `归档了迭代「${sprintName}」` : '归档了迭代'
+    }
+    case 'auto_complete_sprint': {
+      const sprintName = detail.sprint_name || detail.name || ''
+      return sprintName ? `自动完成了迭代「${sprintName}」` : '自动完成了迭代'
+    }
     default:
       return action.replace(/_/g, ' ')
   }
