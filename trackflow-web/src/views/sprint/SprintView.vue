@@ -303,7 +303,7 @@
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip :content="getActivateTooltip(sprint)">
-            <a-button type="primary" size="mini" :disabled="!canEditSprintItem(sprint) || isSprintNotStartable(sprint)" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
+            <a-button type="primary" size="mini" :disabled="!canEditSprintItem(sprint) || isSprintNotStartable(sprint) || hasActiveSprint" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
           </a-tooltip>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
           <a-button v-if="canDeleteSprintItem(sprint)" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
