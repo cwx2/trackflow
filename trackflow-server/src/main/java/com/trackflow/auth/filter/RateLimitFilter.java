@@ -23,9 +23,14 @@ import java.util.Map;
  * <p>
  * 在 SecurityFilterChain 中位于 ApiKeyAuthFilter 之前执行，提供两层限流保护：
  * <ol>
- *   <li><b>封禁检查</b>：对已被封禁的 IP 直接返回 429，不执行后续认证逻辑（避免 DB 查询消耗）</li>
- *   <li><b>全局 API 频率</b>：同一 IP 每分钟请求超过 200 次返回 429</li>
+ *   <li><b>认证封禁检查</b>：仅对<b>未携带有效 Token</b>的请求检查。
+ *       携带 Bearer Token 或 API Key 的请求跳过此检查，让后续认证过滤器验证 Token 有效性。
+ *       这确保已登录用户在 IP 被封禁期间仍可正常使用系统。</li>
+ *   <li><b>全局 API 频率</b>：对所有请求（无论是否认证）检查同一 IP 每分钟请求次数</li>
  * </ol>
+ * <p>
+ * 设计理念参考 YouTrack 的 "Throttling by Login" 策略：
+ * 认证封禁只限制登录尝试，不影响已认证用户的业务操作。
  * <p>
  * 可通过 {@code trackflow.rate-limit.enabled=false} 在开发环境完全禁用限流（默认 true）。
  * <p>
@@ -60,16 +65,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String clientIp = WebUtils.getClientIp(request);
 
-        // 第一层：检查认证封禁（认证失败过多触发）
-        if (rateLimitService.isAuthBanned(clientIp)) {
+        // 第一层：认证封禁检查
+        // 核心改进：只对未携带 Token 的请求进行 Auth Ban 检查
+        // 携带 Bearer Token 或 API Key 的请求跳过此检查，让后续过滤器验证 Token 有效性
+        // 这样已登录用户在 IP 被封禁期间仍可正常使用系统（符合 YouTrack 的 "Throttling by Login" 策略）
+        if (!hasAuthorizationToken(request) && rateLimitService.isAuthBanned(clientIp)) {
             long retryAfter = rateLimitService.getBanRemainingSeconds(clientIp);
             writeRateLimitResponse(response, retryAfter,
                     "登录尝试过于频繁，请 " + retryAfter + " 秒后重试");
-            log.debug("Rate limit: blocked banned IP {}", clientIp);
+            log.debug("Rate limit: blocked banned IP {} (no auth token)", clientIp);
             return;
         }
 
-        // 第二层：全局 API 频率检查
+        // 第二层：全局 API 频率检查（对所有请求生效）
         if (rateLimitService.isGlobalApiLimited(clientIp)) {
             long retryAfter = rateLimitService.getGlobalApiWindowSeconds();
             writeRateLimitResponse(response, retryAfter,
@@ -82,6 +90,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 检查请求是否携带认证 Token（Bearer Token 或 API Key）。
+     * <p>
+     * 此方法不验证 Token 有效性（交给后续过滤器），只检查是否存在。
+     * 用于决定是否跳过 Auth Ban 检查。
+     *
+     * @param request HTTP 请求
+     * @return true 表示携带了 Token
+     */
+    private boolean hasAuthorizationToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        return authHeader != null && authHeader.startsWith("Bearer ");
     }
 
     /**
