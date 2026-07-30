@@ -67,7 +67,7 @@
             </template>
           </a-dropdown>
           <div v-if="draftList.length > 0" class="drafts-actions">
-            <a-link type="text" @click="handleDeleteAllDrafts" class="delete-all-link">删除所有草稿</a-link></a-link>
+            <a-link type="text" @click="handleDeleteAllDrafts" class="delete-all-link">删除所有草稿</a-link>
           </div>
         </div>
       </div>
