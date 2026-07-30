@@ -78,26 +78,54 @@
     <template v-else-if="dashboardData">
       <!-- 概览卡片 -->
       <div class="overview-cards">
-        <div class="stat-card stat-card-clickable" @click="drillDownOverview('total')">
-          <div class="stat-value">{{ dashboardData.overview.total }}</div>
-          <div class="stat-label">工单总数</div>
-        </div>
-        <div class="stat-card stat-open stat-card-clickable" @click="drillDownOverview('open')">
-          <div class="stat-value">{{ dashboardData.overview.open }}</div>
-          <div class="stat-label">进行中</div>
-        </div>
-        <div class="stat-card stat-done stat-card-clickable" @click="drillDownOverview('closed')">
-          <div class="stat-value">{{ dashboardData.overview.closed }}</div>
-          <div class="stat-label">已完成</div>
-        </div>
-        <div class="stat-card stat-rate">
-          <div class="stat-value">{{ dashboardData.overview.completionRate }}%</div>
-          <div class="stat-label">完成率</div>
-        </div>
-        <div class="stat-card stat-overdue stat-card-clickable" v-if="dashboardData.overview.overdue > 0" @click="drillDownOverview('overdue')">
-          <div class="stat-value">{{ dashboardData.overview.overdue }}</div>
-          <div class="stat-label">已逾期</div>
-        </div>
+        <a-tooltip content="选定范围内的所有工单" position="bottom">
+          <div class="stat-card stat-card-clickable" @click="drillDownOverview('total')">
+            <div class="stat-value">{{ dashboardData.overview.total }}</div>
+            <div class="stat-label">工单总数</div>
+          </div>
+        </a-tooltip>
+        <a-tooltip position="bottom">
+          <template #content>
+            <div class="stat-tooltip">
+              <div class="stat-tooltip-title">包含所有未关闭状态的工单：</div>
+              <div class="stat-tooltip-list">待处理、进行中、代码审查、测试中、重新打开、待办等</div>
+            </div>
+          </template>
+          <div class="stat-card stat-open stat-card-clickable" @click="drillDownOverview('open')">
+            <div class="stat-value">{{ dashboardData.overview.open }}</div>
+            <div class="stat-label">
+              未完成
+              <icon-info-circle class="stat-info-icon" />
+            </div>
+          </div>
+        </a-tooltip>
+        <a-tooltip position="bottom">
+          <template #content>
+            <div class="stat-tooltip">
+              <div class="stat-tooltip-title">包含所有已关闭状态的工单：</div>
+              <div class="stat-tooltip-list">已完成、已上线、已解决、已关闭、已取消</div>
+            </div>
+          </template>
+          <div class="stat-card stat-done stat-card-clickable" @click="drillDownOverview('closed')">
+            <div class="stat-value">{{ dashboardData.overview.closed }}</div>
+            <div class="stat-label">
+              已关闭
+              <icon-info-circle class="stat-info-icon" />
+            </div>
+          </div>
+        </a-tooltip>
+        <a-tooltip content="已关闭工单数 ÷ 工单总数" position="bottom">
+          <div class="stat-card stat-rate">
+            <div class="stat-value">{{ dashboardData.overview.completionRate }}%</div>
+            <div class="stat-label">完成率</div>
+          </div>
+        </a-tooltip>
+        <a-tooltip content="截止日期已过但未关闭的工单" position="bottom" v-if="dashboardData.overview.overdue > 0">
+          <div class="stat-card stat-overdue stat-card-clickable" @click="drillDownOverview('overdue')">
+            <div class="stat-value">{{ dashboardData.overview.overdue }}</div>
+            <div class="stat-label">已逾期</div>
+          </div>
+        </a-tooltip>
       </div>
 
       <!-- 图表网格 -->
@@ -257,7 +285,7 @@ import {
   ToolboxComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
-import { IconDownload, IconFile, IconPrinter } from '@arco-design/web-vue/es/icon'
+import { IconDownload, IconFile, IconPrinter, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { reportStatisticsApi } from '@/api/reportStatistics'
 import { projectApi, sprintApi } from '@/api'
 import type { DashboardData, ProjectComparisonData, CumulativeFlowData, ResolutionTimeData } from '@/api/reportStatistics'
@@ -1296,6 +1324,34 @@ function printReport() {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.stat-info-icon {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.stat-card:hover .stat-info-icon {
+  opacity: 1;
+}
+
+/* 统计卡片 tooltip 内容 */
+.stat-tooltip {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stat-tooltip-title {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.stat-tooltip-list {
+  color: var(--color-text-3);
 }
 
 .stat-open .stat-value { color: var(--tf-accent); }
