@@ -809,6 +809,8 @@ export interface FieldSummaryVO {
   projectIsRequired: boolean | null
   /** 项目级默认值覆盖（null=继承全局） */
   projectDefaultValue: string | null
+  /** 项目级"是否允许为空"覆盖（null=继承全局，默认允许） */
+  projectCanBeEmpty: boolean | null
   /** 字段在项目中的排序位置 */
   position: number | null
   /** 是否存在项目级覆盖 */

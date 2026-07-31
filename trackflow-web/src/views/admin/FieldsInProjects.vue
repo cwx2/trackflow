@@ -121,6 +121,22 @@
                   </span>
                 </div>
                 <div class="editor-row">
+                  <span class="editor-label">允许为空</span>
+                  <a-select
+                    v-model="editForm.canBeEmpty"
+                    size="small"
+                    style="width: 160px"
+                    placeholder="继承全局设置(允许)"
+                    allow-clear
+                  >
+                    <a-option :value="true">允许为空</a-option>
+                    <a-option :value="false">不允许为空</a-option>
+                  </a-select>
+                  <a-tooltip content="设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）" position="right">
+                    <icon-info-circle class="hint-icon" />
+                  </a-tooltip>
+                </div>
+                <div class="editor-row">
                   <span class="editor-label">默认值</span>
                   <a-input
                     v-model="editForm.defaultValue"
@@ -231,6 +247,22 @@
                     </span>
                   </div>
                   <div class="editor-row">
+                    <span class="editor-label">允许为空</span>
+                    <a-select
+                      v-model="editForm.canBeEmpty"
+                      size="small"
+                      style="width: 160px"
+                      placeholder="继承全局设置(允许)"
+                      allow-clear
+                    >
+                      <a-option :value="true">允许为空</a-option>
+                      <a-option :value="false">不允许为空</a-option>
+                    </a-select>
+                    <a-tooltip content="设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）" position="right">
+                      <icon-info-circle class="hint-icon" />
+                    </a-tooltip>
+                  </div>
+                  <div class="editor-row">
                     <span class="editor-label">默认值</span>
                     <a-input
                       v-model="editForm.defaultValue"
@@ -314,6 +346,22 @@
                     <span class="editor-hint">
                       全局: {{ item.globalIsRequired ? '必填' : '非必填' }}
                     </span>
+                  </div>
+                  <div class="editor-row">
+                    <span class="editor-label">允许为空</span>
+                    <a-select
+                      v-model="editForm.canBeEmpty"
+                      size="small"
+                      style="width: 160px"
+                      placeholder="继承全局设置(允许)"
+                      allow-clear
+                    >
+                      <a-option :value="true">允许为空</a-option>
+                      <a-option :value="false">不允许为空</a-option>
+                    </a-select>
+                    <a-tooltip content="设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）" position="right">
+                      <icon-info-circle class="hint-icon" />
+                    </a-tooltip>
                   </div>
                   <div class="editor-row">
                     <span class="editor-label">默认值</span>
@@ -450,9 +498,10 @@ const projectFieldsData = ref<ProjectFieldsVO[]>([])
 
 // Inline editor state
 const editingKey = ref<string | null>(null) // "projectId:fieldId"
-const editForm = ref<{ isRequired: boolean | null; defaultValue: string | null }>({
+const editForm = ref<{ isRequired: boolean | null; defaultValue: string | null; canBeEmpty: boolean | null }>({
   isRequired: null,
-  defaultValue: null
+  defaultValue: null,
+  canBeEmpty: null
 })
 const saving = ref(false)
 
@@ -555,12 +604,13 @@ function openFieldEditor(projectId: string, field: FieldSummaryVO) {
   editingKey.value = key
   editForm.value = {
     isRequired: field.projectIsRequired ?? null,
-    defaultValue: field.projectDefaultValue ?? null
+    defaultValue: field.projectDefaultValue ?? null,
+    canBeEmpty: field.projectCanBeEmpty ?? null
   }
 }
 
 function openFieldEditorByField(
-  proj: { projectId: string; projectName: string; projectKey: string; hasOverride: boolean; projectIsRequired: boolean | null; projectDefaultValue: string | null },
+  proj: { projectId: string; projectName: string; projectKey: string; hasOverride: boolean; projectIsRequired: boolean | null; projectDefaultValue: string | null; projectCanBeEmpty?: boolean | null },
   item: { fieldId: string; globalIsRequired: boolean }
 ) {
   const key = `${proj.projectId}:${item.fieldId}`
@@ -571,13 +621,14 @@ function openFieldEditorByField(
   editingKey.value = key
   editForm.value = {
     isRequired: proj.projectIsRequired ?? null,
-    defaultValue: proj.projectDefaultValue ?? null
+    defaultValue: proj.projectDefaultValue ?? null,
+    canBeEmpty: proj.projectCanBeEmpty ?? null
   }
 }
 
 function closeFieldEditor() {
   editingKey.value = null
-  editForm.value = { isRequired: null, defaultValue: null }
+  editForm.value = { isRequired: null, defaultValue: null, canBeEmpty: null }
 }
 
 async function saveOverride(projectId: string, fieldId: string) {
@@ -585,7 +636,8 @@ async function saveOverride(projectId: string, fieldId: string) {
   try {
     await customFieldApi.setFieldProjectOverride(projectId, fieldId, {
       isRequired: editForm.value.isRequired,
-      defaultValue: editForm.value.defaultValue || null
+      defaultValue: editForm.value.defaultValue || null,
+      canBeEmpty: editForm.value.canBeEmpty
     })
     Message.success('项目级覆盖已保存')
     closeFieldEditor()
@@ -631,6 +683,7 @@ interface FieldGroupProjectItem {
   hasOverride: boolean
   projectIsRequired: boolean | null
   projectDefaultValue: string | null
+  projectCanBeEmpty: boolean | null
 }
 
 interface FieldGroupItem {
@@ -666,7 +719,8 @@ const filteredByField = computed<FieldGroupItem[]>(() => {
         projectKey: project.projectKey,
         hasOverride: field.hasOverride,
         projectIsRequired: field.projectIsRequired,
-        projectDefaultValue: field.projectDefaultValue
+        projectDefaultValue: field.projectDefaultValue,
+        projectCanBeEmpty: field.projectCanBeEmpty ?? null
       })
       if (field.hasOverride) item.overrideCount++
     }

@@ -39,6 +39,8 @@ public class ProjectFieldsVO {
         private Boolean projectIsRequired;
         /** 项目级默认值覆盖（null=继承全局） */
         private String projectDefaultValue;
+        /** 项目级"是否允许为空"覆盖（null=继承全局，默认允许） */
+        private Boolean projectCanBeEmpty;
         /** 字段在项目中的排序位置 */
         private Integer position;
         /** 是否存在项目级覆盖（便于前端快速判断） */

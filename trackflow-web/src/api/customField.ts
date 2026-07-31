@@ -185,10 +185,13 @@ export const customFieldApi = {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/visibility`, data)
   },
 
-  /** 设置字段的项目级覆盖（必填性 + 默认值） */
+  /** 设置字段的项目级覆盖（必填性 + 默认值 + 是否允许为空）
+   * @param canBeEmpty 是否允许为空。false + 无默认值 = YouTrack "No value (required)" 模式
+   */
   setFieldProjectOverride(projectId: string, fieldId: string, data: {
-    isRequired: boolean | null
-    defaultValue: string | null
+    isRequired?: boolean | null
+    defaultValue?: string | null
+    canBeEmpty?: boolean | null
   }) {
     return request.put<any, R<void>>(`/projects/${projectId}/settings/custom-fields/${fieldId}/override`, data)
   },

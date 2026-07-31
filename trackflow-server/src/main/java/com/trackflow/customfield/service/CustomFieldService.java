@@ -1090,7 +1090,7 @@ public class CustomFieldService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void setFieldProjectOverride(Long projectId, Long fieldId, Boolean isRequired, String defaultValue) {
+    public void setFieldProjectOverride(Long projectId, Long fieldId, Boolean isRequired, String defaultValue, Boolean canBeEmpty) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
@@ -1111,16 +1111,18 @@ public class CustomFieldService {
             mapping.setPosition(0);
             mapping.setIsRequired(isRequired);
             mapping.setDefaultValue(defaultValue);
+            mapping.setCanBeEmpty(canBeEmpty);
             projectMapper.insert(mapping);
         } else {
             projectMapper.update(null, new LambdaUpdateWrapper<CustomFieldProject>()
                     .eq(CustomFieldProject::getId, mapping.getId())
                     .set(CustomFieldProject::getIsRequired, isRequired)
-                    .set(CustomFieldProject::getDefaultValue, defaultValue));
+                    .set(CustomFieldProject::getDefaultValue, defaultValue)
+                    .set(CustomFieldProject::getCanBeEmpty, canBeEmpty));
         }
 
-        log.info("Updated field project override: project={}, field={}, isRequired={}, defaultValue={}",
-                projectId, fieldId, isRequired, defaultValue);
+        log.info("Updated field project override: project={}, field={}, isRequired={}, defaultValue={}, canBeEmpty={}",
+                projectId, fieldId, isRequired, defaultValue, canBeEmpty);
     }
 
     // ========== 值过滤规则配置（Filter values based on）==========
@@ -1702,8 +1704,9 @@ public class CustomFieldService {
         if (mapping != null) {
             vo.setProjectIsRequired(mapping.getIsRequired());
             vo.setProjectDefaultValue(mapping.getDefaultValue());
+            vo.setProjectCanBeEmpty(mapping.getCanBeEmpty());
             vo.setPosition(mapping.getPosition());
-            vo.setHasOverride(mapping.getIsRequired() != null || mapping.getDefaultValue() != null);
+            vo.setHasOverride(mapping.getIsRequired() != null || mapping.getDefaultValue() != null || mapping.getCanBeEmpty() != null);
         } else {
             vo.setHasOverride(false);
         }

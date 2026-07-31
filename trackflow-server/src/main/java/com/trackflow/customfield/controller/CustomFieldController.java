@@ -388,10 +388,12 @@ public class CustomFieldController {
         return R.ok();
     }
 
-    // ========== 项目级覆盖（必填性 + 默认值）端点 ==========
+    // ========== 项目级覆盖（必填性 + 默认值 + 是否允许为空）端点 ==========
 
     /**
-     * 设置字段在项目中的必填性和默认值覆盖。
+     * 设置字段在项目中的必填性、默认值和是否允许为空的覆盖。
+     * <p>
+     * YouTrack 风格的"无默认值但必填"模式通过 canBeEmpty=false + defaultValue=null 实现。
      */
     @PutMapping("/projects/{projectId}/settings/custom-fields/{fieldId}/override")
     @PreAuthorize("@perm.check(#projectId, 'project:manage_custom_fields')")
@@ -399,7 +401,7 @@ public class CustomFieldController {
             @PathVariable("projectId") Long projectId,
             @PathVariable("fieldId") Long fieldId,
             @Valid @RequestBody SetFieldProjectOverrideDTO dto) {
-        customFieldService.setFieldProjectOverride(projectId, fieldId, dto.getIsRequired(), dto.getDefaultValue());
+        customFieldService.setFieldProjectOverride(projectId, fieldId, dto.getIsRequired(), dto.getDefaultValue(), dto.getCanBeEmpty());
         return R.ok();
     }
 
