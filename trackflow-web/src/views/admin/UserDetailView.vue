@@ -73,6 +73,28 @@
           </div>
         </div>
         <div class="actions-section">
+          <!-- Keycloak 编辑提示 -->
+          <div class="keycloak-hint">
+            <div class="keycloak-hint-icon">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8z"/>
+                <path d="M8 6.5a.75.75 0 01.75.75v3a.75.75 0 01-1.5 0v-3A.75.75 0 018 6.5zM8 4.5A.75.75 0 118 6a.75.75 0 010-1.5z"/>
+              </svg>
+            </div>
+            <span class="keycloak-hint-text">用户信息由身份系统管理</span>
+            <a
+              v-if="profile.keycloakId"
+              :href="keycloakUserUrl"
+              target="_blank"
+              class="keycloak-link"
+              title="在 Keycloak 中编辑用户"
+            >
+              在 Keycloak 中编辑
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" class="external-icon">
+                <path fill-rule="evenodd" d="M10.604 1h4.146a.25.25 0 01.25.25v4.146a.25.25 0 01-.427.177L13.03 4.03 9.28 7.78a.75.75 0 01-1.06-1.06l3.75-3.75-1.543-1.543A.25.25 0 0110.604 1zM3.75 2A1.75 1.75 0 002 3.75v8.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0014 12.25v-3.5a.75.75 0 00-1.5 0v3.5a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25v-8.5a.25.25 0 01.25-.25h3.5a.75.75 0 000-1.5h-3.5z"/>
+              </svg>
+            </a>
+          </div>
           <button
             class="btn-secondary"
             @click="handleExportUserData"
@@ -274,6 +296,15 @@ const projectRoles = ref<any[]>([])
 
 const userId = computed(() => route.params.id as string)
 const currentRoleIds = computed(() => profile.value?.globalRoles.map(r => r.id) || [])
+
+// Keycloak 管理后台用户编辑链接
+// 格式: {keycloak-url}/admin/{realm}/console/#/{realm}/users/{keycloak-user-id}/settings
+const KEYCLOAK_BASE_URL = 'http://localhost:8080'
+const KEYCLOAK_REALM = 'trackflow'
+const keycloakUserUrl = computed(() => {
+  if (!profile.value?.keycloakId) return ''
+  return `${KEYCLOAK_BASE_URL}/admin/${KEYCLOAK_REALM}/console/#/${KEYCLOAK_REALM}/users/${profile.value.keycloakId}/settings`
+})
 
 async function loadProfile() {
   loading.value = true
@@ -1100,5 +1131,45 @@ onMounted(() => {
   color: var(--text-muted);
   display: flex;
   gap: 8px;
+}
+
+/* Keycloak hint section */
+.keycloak-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(88, 166, 255, 0.06);
+  border: 1px solid rgba(88, 166, 255, 0.15);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+.keycloak-hint-icon {
+  color: var(--accent-blue);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.keycloak-hint-text {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  flex: 1;
+}
+.keycloak-link {
+  font-size: var(--font-size-xs);
+  color: var(--accent-blue);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: opacity 150ms;
+}
+.keycloak-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+.external-icon {
+  flex-shrink: 0;
 }
 </style>

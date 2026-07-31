@@ -583,6 +583,7 @@ public class UserService {
 
         UserProfileVO profile = new UserProfileVO();
         profile.setId(String.valueOf(user.getId()));
+        profile.setKeycloakId(user.getKeycloakId());
         profile.setUsername(user.getUsername());
         profile.setDisplayName(user.getDisplayName());
         profile.setEmail(user.getEmail());

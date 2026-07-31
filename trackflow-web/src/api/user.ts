@@ -70,6 +70,7 @@ export const userApi = {
 /** 用户档案 VO */
 export interface UserProfileVO {
   id: string
+  keycloakId?: string
   username: string
   displayName: string
   email?: string

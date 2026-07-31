@@ -14,6 +14,7 @@ public class UserProfileVO {
 
     // ===== 基本信息 =====
     private String id;
+    private String keycloakId;
     private String username;
     private String displayName;
     private String email;
