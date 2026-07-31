@@ -176,9 +176,7 @@ def consume_one(worker_id: str) -> str | None:
     test_skill = SKILLS["e2e-test"]
     prev_test_summary = ""
     test_passed = False
-    # kiro-cli 内置 Playwright 的 Chrome 进程退出 + SingletonLock 文件释放需要时间，
-    # 等待不足会导致下一个 kiro-cli 会话启动时看到锁文件而循环等待
-    time.sleep(15)
+    time.sleep(5)  # 等待上一个 kiro-cli 进程完全退出
 
     for test_round in range(1, MAX_TEST_RETRIES + 1):
         log.info(f"[{label}] 测试第 {test_round} 轮...")
@@ -246,7 +244,7 @@ def consume_one(worker_id: str) -> str | None:
         log.warning(f"[{label}] ⚠️ 测试经 {MAX_TEST_RETRIES} 轮仍未通过，继续审核")
 
     # ── 步骤 4：代码审核闭环 ──
-    time.sleep(15)  # 等待上一个 kiro-cli 的 Chrome 进程释放 SingletonLock
+    time.sleep(5)  # 等待上一个 kiro-cli 进程完全退出
     review_skill = SKILLS["code-review"]
     prev_review_summary = ""
     review_passed = False

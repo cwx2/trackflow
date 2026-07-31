@@ -13,11 +13,11 @@ TrackFlow 并行迭代脚本（永不停止）
   - 消费阶段：worker 通过"领取"机制（原子 rename 到 working/）防止重复处理
   - 审核阶段：全局 _review_lock，审核者线程唯一，天然无冲突
   - 重试计数：全局 _retry_counts + _retry_lock，超过 MAX_RETRIES 次移到 rejected/
-  - 浏览器隔离：每个 worker 通过 KIRO_HOME 指向独立 .kiro 目录，独立 Playwright 端口
+  - 浏览器隔离：Playwright MCP 以 --isolated 模式运行，每个连接独立 browser context
 
 模块结构：
   _config.py     — 常量、路径、锁、SKILLS、日志
-  _playwright.py — Playwright 进程管理、KIRO_HOME 隔离
+  _playwright.py — Playwright 残留进程清理
   _kiro.py       — run_kiro / run_kiro_resume / session 管理
   _parsers.py    — 解析各阶段输出、读取需求状态、提取架构问题
   _utils.py      — 需求文件操作、工作流加载、清理函数
