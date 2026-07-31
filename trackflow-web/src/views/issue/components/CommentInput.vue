@@ -46,7 +46,7 @@
         <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
         <span v-if="showAddTime && timerRunning && !timerIssueMatch" class="timer-elsewhere-hint" title="计时器正在其他工单运行">⏱ 计时中...</span>
       </div>
-      <button class="btn-submit" :disabled="isEmpty" @click="submit">提交评论</button>
+      <button class="btn-submit" :disabled="isEmpty || isComposing" @click="submit">提交评论</button>
     </div>
   </div>
 </template>
@@ -129,6 +129,9 @@ onMounted(async () => {
   } catch { /* ignore */ }
 })
 
+// 追踪 IME 组合输入状态，防止在中文输入法未提交时误触发提交
+const isComposing = ref(false)
+
 const editor = useEditor({
   content: '',
   extensions: [
@@ -158,9 +161,20 @@ const editor = useEditor({
       suggestion,
     }),
   ],
-  editorProps: { attributes: { class: 'tiptap-comment' } },
+  editorProps: {
+    attributes: { class: 'tiptap-comment' },
+    handleDOMEvents: {
+      // 追踪 IME 组合输入状态
+      compositionstart: () => { isComposing.value = true; return false },
+      compositionend: () => { isComposing.value = false; return false },
+    }
+  },
   onFocus: () => { focused.value = true },
-  onBlur: () => { focused.value = false },
+  onBlur: () => {
+    focused.value = false
+    // 失焦时重置组合输入状态（防止 compositionend 未触发导致状态残留）
+    isComposing.value = false
+  },
 })
 
 const isEmpty = computed(() => !editor.value || editor.value.isEmpty)
@@ -182,6 +196,9 @@ function insertLink() {
 
 function submit() {
   if (!editor.value || editor.value.isEmpty) return
+  // 防止在 IME 中文输入法组合状态下提交，否则未确认的拼音/假名等会丢失
+  // 例如：输入 @周杰 时若拼音尚未确认就点击提交，会导致用户名丢失，评论末尾只剩 @
+  if (isComposing.value || editor.value.view.composing) return
   const html = editor.value.getHTML()
   const visibleTo = selectedGroupIds.value.length > 0 ? [...selectedGroupIds.value] : undefined
   emit('submit', html, visibleTo)

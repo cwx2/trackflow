@@ -70,7 +70,7 @@
             </div>
             <div class="edit-actions">
               <button class="btn-cancel" @click="cancelEdit">取消</button>
-              <button class="btn-save" :disabled="editEmpty" @click="saveEdit">保存修改</button>
+              <button class="btn-save" :disabled="editEmpty || editComposing" @click="saveEdit">保存修改</button>
             </div>
           </div>
           <!-- Normal display -->
@@ -232,6 +232,8 @@ const hoveredId = ref('')
 
 // Edit state
 const editingCommentId = ref<string | null>(null)
+// 追踪编辑框 IME 组合输入状态
+const editComposing = ref(false)
 
 const editEditor = useEditor({
   content: '',
@@ -240,7 +242,14 @@ const editEditor = useEditor({
     Link.configure({ openOnClick: false }),
     Placeholder.configure({ placeholder: '编辑评论...' }),
   ],
-  editorProps: { attributes: { class: 'tiptap-comment' } },
+  editorProps: {
+    attributes: { class: 'tiptap-comment' },
+    handleDOMEvents: {
+      compositionstart: () => { editComposing.value = true; return false },
+      compositionend: () => { editComposing.value = false; return false },
+    }
+  },
+  onBlur: () => { editComposing.value = false },
 })
 
 const editEmpty = computed(() => !editEditor.value || editEditor.value.isEmpty)
@@ -308,6 +317,8 @@ function cancelEdit() {
 
 function saveEdit() {
   if (!editingCommentId.value || !editEditor.value || editEditor.value.isEmpty) return
+  // 防止在 IME 输入法组合状态下保存，避免末尾内容丢失
+  if (editComposing.value || editEditor.value.view.composing) return
   const html = editEditor.value.getHTML()
   emit('editComment', editingCommentId.value, html)
   editingCommentId.value = null
