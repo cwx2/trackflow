@@ -298,6 +298,18 @@ const OPERATORS_DATE: OperatorDef[] = [
   { key: 'between', label: '在范围内' },
 ]
 
+/**
+ * 截止日期特殊操作符：包含快捷选项（逾期/今天/本周）+ 日期范围
+ */
+const OPERATORS_DUE_DATE: OperatorDef[] = [
+  { key: 'overdue', label: '已逾期' },      // due_date < today AND not closed
+  { key: 'today', label: '今天到期' },       // due_date = today
+  { key: 'this_week', label: '本周到期' },   // due_date in [today, today+7]
+  { key: 'after', label: '晚于' },
+  { key: 'before', label: '早于' },
+  { key: 'between', label: '在范围内' },
+]
+
 const OPERATORS_PARENT: OperatorDef[] = [
   { key: 'is', label: '是' },
   { key: 'has', label: '有父工单' },
@@ -313,6 +325,7 @@ const FILTER_FIELDS: FilterField[] = [
   { key: 'sprint', label: 'Sprint', icon: '🏃', type: 'enum', operators: OPERATORS_ENUM },
   { key: 'tag', label: '标签', icon: '🏷️', type: 'enum', operators: OPERATORS_ENUM },
   { key: 'parent', label: '父工单', icon: '🔗', type: 'text', operators: OPERATORS_PARENT },
+  { key: 'dueDate', label: '截止日期', icon: '⏰', type: 'date', operators: OPERATORS_DUE_DATE },
   { key: 'createdAt', label: '创建时间', icon: '📅', type: 'date', operators: OPERATORS_DATE },
   { key: 'updatedAt', label: '更新时间', icon: '📅', type: 'date', operators: OPERATORS_DATE },
 ]
@@ -546,6 +559,20 @@ function selectOperator(op: OperatorDef) {
     chip.valueLabel = op.key === 'has' ? '是' : '否'
   }
 
+  // For dueDate field shortcuts (overdue/today/this_week), apply immediately (no value needed)
+  if (chip.fieldKey === 'dueDate') {
+    if (op.key === 'overdue') {
+      chip.values = ['_overdue']
+      chip.valueLabel = '已逾期'
+    } else if (op.key === 'today') {
+      chip.values = ['_today']
+      chip.valueLabel = '今天'
+    } else if (op.key === 'this_week') {
+      chip.values = ['_this_week']
+      chip.valueLabel = '本周'
+    }
+  }
+
   showOperatorPopup.value = false
   emitFilters()
 }
@@ -584,7 +611,11 @@ async function openValueSelector(index: number) {
     if (chip.fieldKey === 'parent' && (chip.operator === 'has' || chip.operator === 'has_not')) {
       return
     }
-    dateInputValue.value = chip.values[0] && chip.values[0] !== '_' ? chip.values[0] : ''
+    // For dueDate with shortcut operators (overdue/today/this_week), don't open value popup
+    if (chip.fieldKey === 'dueDate' && ['overdue', 'today', 'this_week'].includes(chip.operator)) {
+      return
+    }
+    dateInputValue.value = chip.values[0] && !chip.values[0].startsWith('_') ? chip.values[0] : ''
     dateInputValue2.value = chip.values[1] || ''
   }
 
@@ -632,8 +663,9 @@ async function loadValueOptions(fieldKey: string) {
         break
 
       case 'assignee': {
-        // "Me (current user)" shortcut option at the top with visual distinction
+        // Special options at the top (with visual distinction)
         const meOption: ValueOption = { id: 'me', label: '我（当前用户）', isSpecial: true }
+        const unassignedOption: ValueOption = { id: 'none', label: '未分配', isSpecial: true }
         
         // Load project members (uses project:view permission, accessible to all project members)
         const assigneeProjectFilter = activeFilters.value.find(f => f.fieldKey === 'project')
@@ -645,7 +677,7 @@ async function loadValueOptions(fieldKey: string) {
             id: m.userId,
             label: m.displayName || m.username
           }))
-          valueOptions.value = [meOption, ...memberOptions]
+          valueOptions.value = [meOption, unassignedOption, ...memberOptions]
         } else {
           // All projects mode — aggregate members from visible projects (deduplicated)
           const allMembers: ValueOption[] = []
@@ -663,7 +695,7 @@ async function loadValueOptions(fieldKey: string) {
               }
             }
           }
-          valueOptions.value = [meOption, ...allMembers]
+          valueOptions.value = [meOption, unassignedOption, ...allMembers]
         }
         break
       }
@@ -732,6 +764,7 @@ async function loadValueOptions(fieldKey: string) {
       case 'parent':
       case 'createdAt':
       case 'updatedAt':
+      case 'dueDate':
         // These use text/date input — no dropdown options needed
         valueOptions.value = []
         valueOptionsLoading.value = false
@@ -836,8 +869,9 @@ function updateChipValueLabel(chip: FilterChip) {
     return
   }
   const labels = chip.values.map(id => {
-    // Special case: "me" shows as "我" in the chip for brevity
+    // Special cases for brief chip display
     if (id === 'me') return '我'
+    if (id === 'none') return '未分配'
     const opt = valueOptions.value.find(o => o.id === id)
     return opt?.label || id
   })
@@ -886,6 +920,7 @@ function emitFilters() {
       case 'assignee':
         if (!isNegative) {
           if (chip.values.includes('me')) filters.assignedToMe = 'true'
+          else if (chip.values.includes('none')) filters.assigneeId = 'none'
           else filters.assigneeId = chip.values.join(',')
         }
         else filters.assigneeIdNot = chip.values.join(',')
@@ -907,6 +942,30 @@ function emitFilters() {
           filters.hasParent = 'true'
         } else if (chip.operator === 'has_not') {
           filters.hasParent = 'false'
+        }
+        break
+      case 'dueDate':
+        // Shortcut operators
+        if (chip.operator === 'overdue') {
+          filters.overdue = 'true'
+        } else if (chip.operator === 'today') {
+          // Today: dueAfter = today, dueBefore = today
+          const today = new Date().toISOString().split('T')[0]
+          filters.dueAfter = today
+          filters.dueBefore = today
+        } else if (chip.operator === 'this_week') {
+          // This week: dueAfter = today, dueBefore = today + 7 days
+          const today = new Date()
+          const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+          filters.dueAfter = today.toISOString().split('T')[0]
+          filters.dueBefore = nextWeek.toISOString().split('T')[0]
+        } else if (chip.operator === 'after' && chip.values[0]) {
+          filters.dueAfter = chip.values[0]
+        } else if (chip.operator === 'before' && chip.values[0]) {
+          filters.dueBefore = chip.values[0]
+        } else if (chip.operator === 'between' && chip.values[0] && chip.values[1]) {
+          filters.dueAfter = chip.values[0]
+          filters.dueBefore = chip.values[1]
         }
         break
       case 'createdAt':
