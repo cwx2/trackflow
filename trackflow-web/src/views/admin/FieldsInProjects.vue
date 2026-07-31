@@ -654,7 +654,8 @@ async function clearOverride(projectId: string, fieldId: string) {
   try {
     await customFieldApi.setFieldProjectOverride(projectId, fieldId, {
       isRequired: null,
-      defaultValue: null
+      defaultValue: null,
+      canBeEmpty: null
     })
     Message.success('已清除项目级覆盖，恢复全局设置')
     closeFieldEditor()
