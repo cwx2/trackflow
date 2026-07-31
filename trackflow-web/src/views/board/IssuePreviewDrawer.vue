@@ -266,6 +266,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { getDueDateInfo } from '@/utils/dueDate'
 import type { DueDateInfo } from '@/utils/dueDate'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
+import { useNavBadge } from '@/composables/useNavBadge'
 
 const props = defineProps<{
   visible: boolean
@@ -384,6 +385,7 @@ async function doTransitStatus(target: IssueStatusVO, comment: string | undefine
     detail.value.version = (detail.value.version || 0) + 1
     Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)
     emit('issue-updated', props.issueId, { statusId: target.id })
+    useNavBadge().refresh() // 状态变更后刷新导航栏 badge
   } catch (e: any) {
     // Rollback
     if (detail.value.status) {

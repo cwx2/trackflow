@@ -220,6 +220,7 @@ import { workItemAttributeApi } from '@/api/timeEntry'
 import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
 import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
+import { useNavBadge } from '@/composables/useNavBadge'
 import { useIssueDetailSubscription } from '@/composables/useWebSocket'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { useTabStore } from '@/stores/tabs'
@@ -1275,12 +1276,14 @@ async function onTransitionConfirm(comment: string) {
 
 /** Execute the actual status transition API call */
 async function executeTransition(target: StatusInfo, comment: string | undefined) {
+  const { refresh: refreshNavBadge } = useNavBadge()
   try {
     const res = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version)
     if (res.code === 0) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
       showActionFeedback(res.data)
+      refreshNavBadge() // 状态变更后刷新导航栏 badge
     } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
       // WIP 超限警告 — 弹确认框
       Modal.warning({
@@ -1296,6 +1299,7 @@ async function executeTransition(target: StatusInfo, comment: string | undefined
               await loadAll()
               Message.success(`状态已变更为 ${target.name}`)
               showActionFeedback(forceRes.data)
+              refreshNavBadge() // 状态变更后刷新导航栏 badge
             } else {
               Message.error(forceRes.message || '变更失败')
             }
@@ -1319,6 +1323,7 @@ async function executeTransition(target: StatusInfo, comment: string | undefined
               await loadAll()
               Message.success(`状态已变更为 ${target.name}`)
               showActionFeedback(forceRes.data)
+              refreshNavBadge() // 状态变更后刷新导航栏 badge
             } else {
               Message.error(forceRes.message || '变更失败')
             }

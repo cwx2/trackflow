@@ -1154,6 +1154,7 @@ import { ERROR_CODES } from '@/api/error-codes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/composables/usePermission'
+import { useNavBadge } from '@/composables/useNavBadge'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
@@ -3644,6 +3645,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
             if (newVersion != null) issue.version = newVersion
             else issue.version = (issue.version || 0) + 1
             showActionFeedback(res.data)
+            useNavBadge().refresh() // 状态变更后刷新导航栏 badge
             pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
             // ★ Cross-swimlane field update after comment-required transition
             await handleCrossSwimlaneUpdate(issue, targetLaneKey)
@@ -3693,6 +3695,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
               if (newVersion != null) issue.version = newVersion
               else issue.version = (issue.version || 0) + 1
               showActionFeedback(forceRes.data)
+              useNavBadge().refresh() // 状态变更后刷新导航栏 badge
               pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
               // ★ Cross-swimlane field update after WIP force transition
               await handleCrossSwimlaneUpdate(issue, targetLaneKey)
@@ -3730,6 +3733,7 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
 
     // 显示自动分配反馈
     showActionFeedback(res.data)
+    useNavBadge().refresh() // 状态变更后刷新导航栏 badge
 
     pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
 
@@ -4024,6 +4028,7 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
     const extracted = extractVersion(res.data)
     const newVersion = extracted != null ? extracted : (issue.version || 0) + 2
     showActionFeedback(res.data)
+    useNavBadge().refresh() // 状态变更后刷新导航栏 badge
 
     // Remove from backlog panel
     backlogPanelRef.value?.removeIssue(issue.id)

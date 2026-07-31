@@ -987,6 +987,7 @@ import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabel
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
 import type { IssueDraft } from './composables'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
+import { useNavBadge } from '@/composables/useNavBadge'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { consumeSessionRecoveryDraft } from '@/utils/sessionEvents'
 import BatchActionToolbar from './components/BatchActionToolbar.vue'
@@ -2489,6 +2490,7 @@ async function ctxSetStatus(st: IssueStatusVO) {
     await issueApi.transitStatus(issue.id, st.id, undefined, issue.version)
     Message.success(`状态已更新为 ${localizeStatusName(st.name)}`)
     await refreshList()
+    useNavBadge().refresh() // 状态变更后刷新导航栏 badge
   } catch (e: any) {
     Message.error(e?.response?.data?.message || '状态变更失败')
   }
@@ -2829,6 +2831,7 @@ async function onBatchState(statusId: string) {
         updateLocalIssue(issue.id, { statusId })
       }
     })
+    useNavBadge().refresh() // 批量状态变更后刷新导航栏 badge
   }
   clearSelection()
 }
@@ -3163,10 +3166,15 @@ function checkIssueMatchesFilter(issue: IssueVO): boolean {
 /**
  * 行内编辑成功后的回调
  * 检查工单是否仍满足筛选条件，不满足则从列表中移除
+ * 如果是状态变更，还会刷新导航栏 badge
  */
-function onInlineEditSuccess(issue: IssueVO, _field: string, _newValue: any) {
+function onInlineEditSuccess(issue: IssueVO, field: string, _newValue: any) {
   if (!checkIssueMatchesFilter(issue)) {
     removeLocalIssue(issue.id)
+  }
+  // 状态变更后刷新导航栏 badge（更新待测试工单数等）
+  if (field === 'statusId') {
+    useNavBadge().refresh()
   }
 }
 
