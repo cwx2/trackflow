@@ -153,17 +153,24 @@ def consume_one(worker_id: str) -> str | None:
         log.warning(f"[{label}] ❌ {req_file.name} 修需求失败，放回 develop/")
         return None
 
-    # ── 步骤 2：获取 session_id ──
+    # ── 步骤 2：获取 session_id（懒加载，只在需要 resume 时才查） ──
     commit_after = get_current_commit()
     diff_range = f"{commit_before}..HEAD" if commit_before and commit_before != commit_after else "HEAD~1"
     log.info(f"[{label}] 代码变更范围: {diff_range}")
 
-    time.sleep(2)
-    session_id = get_latest_session_id(req_file.stem, worker_id=worker_id)
-    if session_id:
-        log.info(f"[{label}] 绑定 session: {session_id[:8]}...")
-    else:
-        log.warning(f"[{label}] 未获取到 session_id，后续反馈将开新会话")
+    session_id: str | None = None  # 延迟到第一次需要 resume 时再查，避免每次调用耗时 30s+ 的 --list-sessions
+
+    def get_session_id_lazy() -> str | None:
+        """第一次调用时查询并缓存 session_id"""
+        nonlocal session_id
+        if session_id is None:
+            time.sleep(2)
+            session_id = get_latest_session_id(req_file.stem, worker_id=worker_id)
+            if session_id:
+                log.info(f"[{label}] 绑定 session: {session_id[:8]}...")
+            else:
+                log.warning(f"[{label}] 未获取到 session_id，后续反馈将开新会话")
+        return session_id
 
     # ── 步骤 3：测试闭环 ──
     test_skill = SKILLS["e2e-test"]
@@ -217,8 +224,8 @@ def consume_one(worker_id: str) -> str | None:
                 f"端到端测试失败（第 {test_round} 轮），请根据失败信息修复代码：\n\n"
                 f"{prev_test_summary}\n\n修复完成后请输出 FIX_DONE。"
             )
-            if session_id:
-                _, fb_out = run_kiro_resume(session_id, feedback_prompt,
+            if get_session_id_lazy():
+                _, fb_out = run_kiro_resume(get_session_id_lazy(), feedback_prompt,
                                             f"{label}-fix{test_round}", worker_id=worker_id)
             else:
                 fallback = (
@@ -290,8 +297,8 @@ def consume_one(worker_id: str) -> str | None:
                 f"代码审核发现 MUST 级问题（第 {review_round} 轮），请修复后重新 commit：\n\n"
                 f"```\n{prev_review_summary}\n```\n\n修复完成后请输出 FIX_DONE。"
             )
-            if session_id:
-                _, rv_out = run_kiro_resume(session_id, feedback_prompt,
+            if get_session_id_lazy():
+                _, rv_out = run_kiro_resume(get_session_id_lazy(), feedback_prompt,
                                             f"{label}-fixr{review_round}", worker_id=worker_id)
             else:
                 fallback = (
