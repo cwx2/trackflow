@@ -42,6 +42,8 @@ export { issueVoteApi } from './issueVote'
 export { apiKeyApi } from './apiKey'
 export { organizationApi } from './organization'
 export { linkTypeApi } from './linkType'
+export { automationApi } from './automation'
+export type * from './automation'
 
 // 类型导出
 export type * from './types'

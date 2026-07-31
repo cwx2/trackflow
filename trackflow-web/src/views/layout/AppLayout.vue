@@ -43,6 +43,10 @@
           <span class="nav-icon">📈</span>
           <span class="nav-label">报表</span>
         </router-link>
+        <router-link v-if="isAdmin" to="/automation" class="nav-item" :class="{ active: $route.path.startsWith('/automation') }">
+          <span class="nav-icon">🤖</span>
+          <span class="nav-label">自动化</span>
+        </router-link>
         <router-link v-if="canManageWorkflow" to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
           <span class="nav-icon">🔄</span>
           <span class="nav-label">工作流</span>

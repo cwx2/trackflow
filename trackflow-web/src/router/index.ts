@@ -97,6 +97,18 @@ const routes = [
         component: () => import('@/views/timesheet/TimesheetView.vue')
       },
       {
+        path: 'automation',
+        name: 'Automation',
+        component: () => import('@/views/automation/AutomationListView.vue'),
+        meta: { requiresAdmin: true }
+      },
+      {
+        path: 'automation/:id',
+        name: 'AutomationEditor',
+        component: () => import('@/views/automation/WorkflowEditorView.vue'),
+        meta: { requiresAdmin: true }
+      },
+      {
         path: 'reports',
         component: () => import('@/views/report/ReportContainerView.vue'),
         meta: { requiresReport: true },
