@@ -1784,6 +1784,10 @@ public class CustomFieldService {
                             .eq(CustomFieldOption::getIsDefault, true)
                             .eq(CustomFieldOption::getIsArchived, false));
             if (!defaultOptions.isEmpty()) {
+                if (defaultOptions.size() > 1) {
+                    log.warn("自定义字段 {} 有 {} 个默认选项（数据异常），取第一个: {}",
+                            field.getId(), defaultOptions.size(), defaultOptions.get(0).getId());
+                }
                 // 有默认选项 → effectiveDefault 设置为选项 ID
                 effectiveDefault = String.valueOf(defaultOptions.get(0).getId());
             }
