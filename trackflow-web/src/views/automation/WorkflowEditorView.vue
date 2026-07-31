@@ -77,6 +77,9 @@
           <template #node-variables="nodeProps">
             <VariablesNode :data="nodeProps.data" :selected="nodeProps.selected" />
           </template>
+          <template #node-condition="nodeProps">
+            <ConditionNode :data="nodeProps.data" :selected="nodeProps.selected" />
+          </template>
           <Background pattern-color="var(--tf-border)" :gap="20" />
           <Controls position="bottom-left" />
           <MiniMap position="bottom-right" />
@@ -99,6 +102,11 @@
           <!-- 变量设置节点配置 -->
           <template v-else-if="selectedNode.type === 'variables'">
             <VariablesConfig v-model:data="selectedNode.data" />
+          </template>
+          
+          <!-- 条件判断节点配置 -->
+          <template v-else-if="selectedNode.type === 'condition'">
+            <ConditionConfig v-model:data="selectedNode.data" />
           </template>
         </template>
         
@@ -125,8 +133,10 @@ import { MiniMap } from '@vue-flow/minimap'
 import { automationApi, type WorkflowDefinition, type WorkflowNode, type WorkflowEdge } from '@/api'
 import CliAgentNode from './components/CliAgentNode.vue'
 import VariablesNode from './components/VariablesNode.vue'
+import ConditionNode from './components/ConditionNode.vue'
 import CliAgentConfig from './components/CliAgentConfig.vue'
 import VariablesConfig from './components/VariablesConfig.vue'
+import ConditionConfig from './components/ConditionConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 
 // Vue Flow 样式
@@ -156,11 +166,11 @@ const selectedNode = ref<any>(null)
 // 节点模板
 const basicNodes = [
   { type: 'cli-agent', label: 'CLI Agent', icon: '🤖' },
-  { type: 'variables', label: '变量设置', icon: '📝' }
+  { type: 'variables', label: '变量设置', icon: '📝' },
+  { type: 'condition', label: '条件判断', icon: '🔀' }
 ]
 
 const comingSoonNodes = [
-  { type: 'condition', label: '条件判断', icon: '🔀' },
   { type: 'loop', label: '重试循环', icon: '🔄' },
   { type: 'file-input', label: '文件输入', icon: '📁' },
   { type: 'delay', label: '延时等待', icon: '⏱' }
@@ -321,6 +331,13 @@ function getDefaultNodeData(type: string, label: string): Record<string, unknown
       return {
         label,
         vars: [{ key: 'workspace', value: '/project/YT' }]
+      }
+    case 'condition':
+      return {
+        label,
+        variable: '{output}',
+        operator: 'contains',
+        value: ''
       }
     default:
       return { label }
