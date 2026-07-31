@@ -1,6 +1,6 @@
 package com.trackflow.automation.controller;
 
-import com.trackflow.automation.converter.WorkflowConverter;
+import com.trackflow.automation.converter.AutomationWorkflowConverter;
 import com.trackflow.automation.dto.CreateWorkflowDTO;
 import com.trackflow.automation.dto.UpdateWorkflowDTO;
 import com.trackflow.automation.entity.AutomationWorkflow;
@@ -24,7 +24,7 @@ import java.util.List;
 public class AutomationWorkflowController {
 
     private final AutomationWorkflowService workflowService;
-    private final WorkflowConverter workflowConverter;
+    private final AutomationWorkflowConverter workflowConverter;
 
     /**
      * 获取工作流列表

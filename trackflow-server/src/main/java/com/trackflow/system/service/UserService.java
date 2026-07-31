@@ -479,7 +479,7 @@ public class UserService {
         // 校验用户存在
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在: " + userId);
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId);
         }
 
         // 去重并过滤 null

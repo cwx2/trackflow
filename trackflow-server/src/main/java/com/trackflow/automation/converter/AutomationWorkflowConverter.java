@@ -13,7 +13,7 @@ import java.util.List;
  * 工作流 Converter
  */
 @Mapper(componentModel = "spring")
-public interface WorkflowConverter extends BaseConverter {
+public interface AutomationWorkflowConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "createdBy", expression = "java(longToString(entity.getCreatedBy()))")

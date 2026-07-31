@@ -1,71 +1,133 @@
 -- V213__restrict_tester_testing_transitions_to_assignee.sql
 -- 限制 tester 角色的 Testing → Done 和 Testing → In Progress 转换仅 assignee 可执行
 --
--- 问题：当前 tester 角色对 Testing 状态工单的 Done/In Progress 转换是基础规则（assignee=false），
--- 意味着任何 tester 都可以操作任意 Testing 状态的工单，即使该工单不是分配给他的。
--- 修复：将这些规则改为 assignee=true，使只有工单的负责人才能执行这些转换。
--- project_admin 和 product_manager 的规则保持不变（不受此限制）。
+-- 魔法数字说明：
+--   role_id=4 (tester), old_status_id=4 (Testing)
+--   new_status_id=5 (Done), new_status_id=2 (In Progress)
+--
+-- 使用幂等方式：先删除冲突的旧记录（同组已有 assignee=true 的情况下），再 UPDATE 其余。
+-- 注：所有处理范围限定在 author=false 规则，不影响 author=true 的规则。
 
 -- ============================================================
--- 1. 修改全局规则（project_id IS NULL）
+-- 1. 处理全局规则（project_id IS NULL）
 -- ============================================================
 
--- Testing → Done: 将 tester 基础规则改为 assignee-only
+-- 删除全局 Testing → Done (role_id=4, old=4, new=5): assignee=false 记录（若同组已有 assignee=true 记录）
+DELETE FROM workflow_transition wt
+WHERE wt.project_id IS NULL
+  AND wt.role_id = 4        -- tester
+  AND wt.old_status_id = 4  -- Testing
+  AND wt.new_status_id = 5  -- Done
+  AND wt.author = false
+  AND wt.assignee = false
+  AND EXISTS (
+    SELECT 1 FROM workflow_transition wt2
+    WHERE wt2.project_id IS NULL
+      AND wt2.issue_type = wt.issue_type
+      AND wt2.role_id = 4
+      AND wt2.old_status_id = 4
+      AND wt2.new_status_id = 5
+      AND wt2.author = false
+      AND wt2.assignee = true
+  );
+
+-- 将剩余全局 Testing → Done: tester 基础规则改为 assignee-only
 UPDATE workflow_transition
 SET assignee = true
 WHERE project_id IS NULL
   AND role_id = 4        -- tester
   AND old_status_id = 4  -- Testing
   AND new_status_id = 5  -- Done
+  AND author = false
   AND assignee = false;
 
--- Testing → In Progress（打回）: 将 tester 基础规则改为 assignee-only
+-- 删除全局 Testing → In Progress (role_id=4, old=4, new=2): assignee=false 记录（若同组已有 assignee=true 记录）
+DELETE FROM workflow_transition wt
+WHERE wt.project_id IS NULL
+  AND wt.role_id = 4        -- tester
+  AND wt.old_status_id = 4  -- Testing
+  AND wt.new_status_id = 2  -- In Progress
+  AND wt.author = false
+  AND wt.assignee = false
+  AND EXISTS (
+    SELECT 1 FROM workflow_transition wt2
+    WHERE wt2.project_id IS NULL
+      AND wt2.issue_type = wt.issue_type
+      AND wt2.role_id = 4
+      AND wt2.old_status_id = 4
+      AND wt2.new_status_id = 2
+      AND wt2.author = false
+      AND wt2.assignee = true
+  );
+
+-- 将剩余全局 Testing → In Progress: tester 基础规则改为 assignee-only
 UPDATE workflow_transition
 SET assignee = true
 WHERE project_id IS NULL
   AND role_id = 4        -- tester
   AND old_status_id = 4  -- Testing
   AND new_status_id = 2  -- In Progress
+  AND author = false
   AND assignee = false;
 
 -- ============================================================
--- 2. 修改所有项目级规则
+-- 2. 处理项目级规则
 -- ============================================================
 
--- Testing → Done: 项目级 tester 基础规则改为 assignee-only
+-- 删除项目级 Testing → Done: assignee=false 记录（若同 project/issue_type 组已有 assignee=true）
+DELETE FROM workflow_transition wt
+WHERE wt.project_id IS NOT NULL
+  AND wt.role_id = 4        -- tester
+  AND wt.old_status_id = 4  -- Testing
+  AND wt.new_status_id = 5  -- Done
+  AND wt.author = false
+  AND wt.assignee = false
+  AND EXISTS (
+    SELECT 1 FROM workflow_transition wt2
+    WHERE wt2.project_id = wt.project_id
+      AND wt2.issue_type = wt.issue_type
+      AND wt2.role_id = 4
+      AND wt2.old_status_id = 4
+      AND wt2.new_status_id = 5
+      AND wt2.author = false
+      AND wt2.assignee = true
+  );
+
+-- 将剩余项目级 Testing → Done: tester 基础规则改为 assignee-only
 UPDATE workflow_transition
 SET assignee = true
 WHERE project_id IS NOT NULL
   AND role_id = 4        -- tester
   AND old_status_id = 4  -- Testing
   AND new_status_id = 5  -- Done
+  AND author = false
   AND assignee = false;
 
--- Testing → In Progress: 项目级 tester 基础规则改为 assignee-only
+-- 删除项目级 Testing → In Progress: assignee=false 记录（若同 project/issue_type 组已有 assignee=true）
+DELETE FROM workflow_transition wt
+WHERE wt.project_id IS NOT NULL
+  AND wt.role_id = 4        -- tester
+  AND wt.old_status_id = 4  -- Testing
+  AND wt.new_status_id = 2  -- In Progress
+  AND wt.author = false
+  AND wt.assignee = false
+  AND EXISTS (
+    SELECT 1 FROM workflow_transition wt2
+    WHERE wt2.project_id = wt.project_id
+      AND wt2.issue_type = wt.issue_type
+      AND wt2.role_id = 4
+      AND wt2.old_status_id = 4
+      AND wt2.new_status_id = 2
+      AND wt2.author = false
+      AND wt2.assignee = true
+  );
+
+-- 将剩余项目级 Testing → In Progress: tester 基础规则改为 assignee-only
 UPDATE workflow_transition
 SET assignee = true
 WHERE project_id IS NOT NULL
   AND role_id = 4        -- tester
   AND old_status_id = 4  -- Testing
   AND new_status_id = 2  -- In Progress
+  AND author = false
   AND assignee = false;
-
--- ============================================================
--- 3. 清理冗余规则（去重）
--- ============================================================
--- 修改后可能存在同一 (project_id, issue_type, role_id, old_status_id, new_status_id, assignee=true)
--- 的多条记录。保留 ID 最小的那条，删除其余。
-
-DELETE FROM workflow_transition wt1
-USING workflow_transition wt2
-WHERE wt1.project_id IS NOT DISTINCT FROM wt2.project_id
-  AND wt1.issue_type = wt2.issue_type
-  AND wt1.role_id = wt2.role_id
-  AND wt1.old_status_id = wt2.old_status_id
-  AND wt1.new_status_id = wt2.new_status_id
-  AND wt1.author = wt2.author
-  AND wt1.assignee = wt2.assignee
-  AND wt1.role_id = 4       -- tester
-  AND wt1.old_status_id = 4 -- Testing
-  AND wt1.assignee = true
-  AND wt1.id > wt2.id;

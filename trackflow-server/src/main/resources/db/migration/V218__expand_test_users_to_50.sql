@@ -74,8 +74,7 @@ SELECT '移动端开发', 'MO1', 'TrackFlow 移动端 App（iOS/Android）', 'ac
 WHERE NOT EXISTS (SELECT 1 FROM project WHERE key = 'MO1');
 
 -- ============================================================
--- 第三步：分配项目成员
--- 使用 DO 块动态查 user_id，避免硬编码 ID
+-- 第三步：分配项目成员（使用 DO 块动态查 user_id）
 -- ============================================================
 DO $$
 DECLARE
@@ -84,22 +83,74 @@ DECLARE
   v_mo1_id  BIGINT;
   v_uid     BIGINT;
 
-  -- 辅助过程：按 username 查 user_id，若不存在则跳过
-  PROCEDURE assign(p_project_id BIGINT, p_username TEXT, p_role_id INT) AS $$
-  DECLARE
-    v_uid BIGINT;
-  BEGIN
-    SELECT id INTO v_uid FROM sys_user WHERE username = p_username;
-    IF v_uid IS NULL THEN
-      RAISE NOTICE 'User % not found, skipping', p_username;
-      RETURN;
-    END IF;
-    INSERT INTO project_member (project_id, user_id, role_id, joined_at)
-    VALUES (p_project_id, v_uid, p_role_id, NOW())
-    ON CONFLICT (project_id, user_id) DO UPDATE SET role_id = p_role_id;
-  END;
-  $$ LANGUAGE plpgsql;
-
+  -- 待分配的成员列表：(username, project_key, role_id)
+  member_list TEXT[][] := ARRAY[
+    -- DE4 原有成员
+    ARRAY['testuser',  'DE4', '2'],
+    ARRAY['lina',      'DE4', '2'],
+    ARRAY['zhangwei',  'DE4', '7'],
+    ARRAY['zhoujie',   'DE4', '7'],
+    ARRAY['wangqiang', 'DE4', '3'],
+    ARRAY['liuyang',   'DE4', '3'],
+    ARRAY['sunlei',    'DE4', '6'],
+    ARRAY['yangmin',   'DE4', '6'],
+    ARRAY['zhaojing',  'DE4', '4'],
+    ARRAY['chenfei',   'DE4', '4'],
+    ARRAY['huanglei',  'DE4', '5'],
+    ARRAY['wumin',     'DE4', '5'],
+    -- DE4 新增8人
+    ARRAY['chengang',  'DE4', '3'],
+    ARRAY['lixia',     'DE4', '3'],
+    ARRAY['wangfang',  'DE4', '3'],
+    ARRAY['zhangjie',  'DE4', '7'],
+    ARRAY['liwei',     'DE4', '4'],
+    ARRAY['gaopeng',   'DE4', '4'],
+    ARRAY['songna',    'DE4', '5'],
+    ARRAY['xujun',     'DE4', '6'],
+    -- FE1 原有7人
+    ARRAY['testuser',  'FE1', '2'],
+    ARRAY['liuyang',   'FE1', '7'],
+    ARRAY['zhangwei',  'FE1', '3'],
+    ARRAY['wangqiang', 'FE1', '3'],
+    ARRAY['sunlei',    'FE1', '6'],
+    ARRAY['zhaojing',  'FE1', '4'],
+    ARRAY['huanglei',  'FE1', '5'],
+    -- FE1 新增11人
+    ARRAY['gaoxin',    'FE1', '2'],
+    ARRAY['panyu',     'FE1', '7'],
+    ARRAY['dingchao',  'FE1', '3'],
+    ARRAY['helin',     'FE1', '3'],
+    ARRAY['majing',    'FE1', '3'],
+    ARRAY['tanfei',    'FE1', '3'],
+    ARRAY['jiangnan',  'FE1', '4'],
+    ARRAY['caiyun',    'FE1', '4'],
+    ARRAY['luoming',   'FE1', '6'],
+    ARRAY['fenghao',   'FE1', '5'],
+    ARRAY['shixin',    'FE1', '5'],
+    ARRAY['niurui',    'FE1', '5'],
+    -- MO1 全新19人团队
+    ARRAY['gaoxin',    'MO1', '2'],
+    ARRAY['linbo',     'MO1', '7'],
+    ARRAY['tangwei',   'MO1', '7'],
+    ARRAY['yuxin',     'MO1', '3'],
+    ARRAY['qiubo',     'MO1', '3'],
+    ARRAY['guoyan',    'MO1', '3'],
+    ARRAY['huangfei',  'MO1', '3'],
+    ARRAY['zenglong',  'MO1', '3'],
+    ARRAY['peixuan',   'MO1', '3'],
+    ARRAY['wugang',    'MO1', '3'],
+    ARRAY['shaoli',    'MO1', '6'],
+    ARRAY['kongjian',  'MO1', '6'],
+    ARRAY['miaomiao',  'MO1', '4'],
+    ARRAY['bailong',   'MO1', '4'],
+    ARRAY['xionghui',  'MO1', '4'],
+    ARRAY['sunyue',    'MO1', '4'],
+    ARRAY['mengqi',    'MO1', '5'],
+    ARRAY['fanyong',   'MO1', '5'],
+    ARRAY['chengru',   'MO1', '5']
+  ];
+  rec TEXT[];
+  v_project_id BIGINT;
 BEGIN
   SELECT id INTO v_de4_id FROM project WHERE key = 'DE4';
   SELECT id INTO v_fe1_id FROM project WHERE key = 'FE1';
@@ -109,81 +160,28 @@ BEGIN
   IF v_fe1_id IS NULL THEN RAISE EXCEPTION 'Project FE1 not found'; END IF;
   IF v_mo1_id IS NULL THEN RAISE EXCEPTION 'Project MO1 not found'; END IF;
 
-  -- ──────────────────────────────────────────
-  -- DE4 后端开发（20人）
-  -- 保持原有12人角色不变，新增8人
-  -- ──────────────────────────────────────────
-  -- 原有成员（幂等 upsert，确保角色正确）
-  CALL assign(v_de4_id, 'testuser',  2); -- project_admin
-  CALL assign(v_de4_id, 'lina',      2); -- project_admin
-  CALL assign(v_de4_id, 'zhangwei',  7); -- tech_lead
-  CALL assign(v_de4_id, 'zhoujie',   7); -- tech_lead
-  CALL assign(v_de4_id, 'wangqiang', 3); -- developer
-  CALL assign(v_de4_id, 'liuyang',   3); -- developer
-  CALL assign(v_de4_id, 'sunlei',    6); -- product_manager
-  CALL assign(v_de4_id, 'yangmin',   6); -- product_manager
-  CALL assign(v_de4_id, 'zhaojing',  4); -- tester
-  CALL assign(v_de4_id, 'chenfei',   4); -- tester
-  CALL assign(v_de4_id, 'huanglei',  5); -- observer
-  CALL assign(v_de4_id, 'wumin',     5); -- observer
-  -- 新增8人
-  CALL assign(v_de4_id, 'chengang',  3); -- developer
-  CALL assign(v_de4_id, 'lixia',     3); -- developer
-  CALL assign(v_de4_id, 'wangfang',  3); -- developer
-  CALL assign(v_de4_id, 'zhangjie',  7); -- tech_lead（新增一个TL）
-  CALL assign(v_de4_id, 'liwei',     4); -- tester
-  CALL assign(v_de4_id, 'gaopeng',   4); -- tester
-  CALL assign(v_de4_id, 'songna',    5); -- observer
-  CALL assign(v_de4_id, 'xujun',     6); -- product_manager
+  FOREACH rec SLICE 1 IN ARRAY member_list LOOP
+    -- 查找用户
+    SELECT id INTO v_uid FROM sys_user WHERE username = rec[1];
+    IF v_uid IS NULL THEN
+      RAISE NOTICE 'User % not found, skipping', rec[1];
+      CONTINUE;
+    END IF;
 
-  -- ──────────────────────────────────────────
-  -- FE1 前端开发（18人）
-  -- 原有7人 + 新增11人
-  -- ──────────────────────────────────────────
-  -- 原有成员
-  CALL assign(v_fe1_id, 'testuser',  2); -- project_admin
-  CALL assign(v_fe1_id, 'liuyang',   7); -- tech_lead
-  CALL assign(v_fe1_id, 'zhangwei',  3); -- developer（注意：DE4是TL，FE1是DEV）
-  CALL assign(v_fe1_id, 'wangqiang', 3); -- developer
-  CALL assign(v_fe1_id, 'sunlei',    6); -- product_manager
-  CALL assign(v_fe1_id, 'zhaojing',  4); -- tester
-  CALL assign(v_fe1_id, 'huanglei',  5); -- observer
-  -- 新增11人
-  CALL assign(v_fe1_id, 'gaoxin',    2); -- project_admin（新项目管理员）
-  CALL assign(v_fe1_id, 'panyu',     7); -- tech_lead
-  CALL assign(v_fe1_id, 'dingchao',  3); -- developer
-  CALL assign(v_fe1_id, 'helin',     3); -- developer
-  CALL assign(v_fe1_id, 'majing',    3); -- developer
-  CALL assign(v_fe1_id, 'tanfei',    3); -- developer
-  CALL assign(v_fe1_id, 'jiangnan',  4); -- tester
-  CALL assign(v_fe1_id, 'caiyun',    4); -- tester
-  CALL assign(v_fe1_id, 'luoming',   6); -- product_manager
-  CALL assign(v_fe1_id, 'fenghao',   5); -- observer
-  CALL assign(v_fe1_id, 'shixin',    5); -- observer
-  CALL assign(v_fe1_id, 'niurui',    5); -- observer
+    -- 确定项目 ID
+    IF rec[2] = 'DE4' THEN
+      v_project_id := v_de4_id;
+    ELSIF rec[2] = 'FE1' THEN
+      v_project_id := v_fe1_id;
+    ELSE
+      v_project_id := v_mo1_id;
+    END IF;
 
-  -- ──────────────────────────────────────────
-  -- MO1 移动端（19人，全新团队）
-  -- ──────────────────────────────────────────
-  CALL assign(v_mo1_id, 'gaoxin',    2); -- project_admin（跨项目管理员）
-  CALL assign(v_mo1_id, 'linbo',     7); -- tech_lead
-  CALL assign(v_mo1_id, 'tangwei',   7); -- tech_lead
-  CALL assign(v_mo1_id, 'yuxin',     3); -- developer
-  CALL assign(v_mo1_id, 'qiubo',     3); -- developer
-  CALL assign(v_mo1_id, 'guoyan',    3); -- developer
-  CALL assign(v_mo1_id, 'huangfei',  3); -- developer
-  CALL assign(v_mo1_id, 'zenglong',  3); -- developer
-  CALL assign(v_mo1_id, 'peixuan',   3); -- developer
-  CALL assign(v_mo1_id, 'wugang',    3); -- developer
-  CALL assign(v_mo1_id, 'shaoli',    6); -- product_manager
-  CALL assign(v_mo1_id, 'kongjian',  6); -- product_manager
-  CALL assign(v_mo1_id, 'miaomiao',  4); -- tester
-  CALL assign(v_mo1_id, 'bailong',   4); -- tester
-  CALL assign(v_mo1_id, 'xionghui',  4); -- tester
-  CALL assign(v_mo1_id, 'sunyue',    4); -- tester
-  CALL assign(v_mo1_id, 'mengqi',    5); -- observer
-  CALL assign(v_mo1_id, 'fanyong',   5); -- observer
-  CALL assign(v_mo1_id, 'chengru',   5); -- observer
+    -- 插入项目成员（已存在则跳过，避免覆盖现有角色）
+    INSERT INTO project_member (project_id, user_id, role_id, joined_at)
+    VALUES (v_project_id, v_uid, rec[3]::INT, NOW())
+    ON CONFLICT (project_id, user_id, role_id) DO NOTHING;
+  END LOOP;
 
   RAISE NOTICE 'Expanded to 50 users: DE4(20) + FE1(18) + MO1(19)';
 END $$;

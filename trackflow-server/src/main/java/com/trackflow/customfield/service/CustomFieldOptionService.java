@@ -784,8 +784,7 @@ public class CustomFieldOptionService {
                     .map(CustomFieldProject::getProjectId)
                     .toList();
             
-            LambdaQueryWrapper<Project> projWrapper = new LambdaQueryWrapper<Project>()
-                    .eq(Project::getIsDeleted, false);
+            LambdaQueryWrapper<Project> projWrapper = new LambdaQueryWrapper<Project>();
             if (!excludedProjectIds.isEmpty()) {
                 projWrapper.notIn(Project::getId, excludedProjectIds);
             }
