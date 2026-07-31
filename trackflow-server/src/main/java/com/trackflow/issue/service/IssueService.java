@@ -1002,6 +1002,11 @@ public class IssueService {
 
     private void applyNegativeFilter(QueryWrapper<Issue> wrapper, String column, String value, boolean isNumeric) {
         if (value == null || value.isBlank()) return;
+        // "none" means IS NOT NULL (e.g. assigneeIdNot=none → issues with assignee)
+        if ("none".equalsIgnoreCase(value.trim())) {
+            wrapper.isNotNull(column);
+            return;
+        }
         List<?> values = isNumeric
                 ? java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(Long::parseLong).toList()
                 : java.util.Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
