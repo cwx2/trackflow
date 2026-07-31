@@ -80,6 +80,9 @@
           <template #node-condition="nodeProps">
             <ConditionNode :data="nodeProps.data" :selected="nodeProps.selected" />
           </template>
+          <template #node-loop="nodeProps">
+            <LoopNode :data="nodeProps.data" :selected="nodeProps.selected" />
+          </template>
           <Background pattern-color="var(--tf-border)" :gap="20" />
           <Controls position="bottom-left" />
           <MiniMap position="bottom-right" />
@@ -108,6 +111,11 @@
           <template v-else-if="selectedNode.type === 'condition'">
             <ConditionConfig v-model:data="selectedNode.data" />
           </template>
+          
+          <!-- 重试循环节点配置 -->
+          <template v-else-if="selectedNode.type === 'loop'">
+            <LoopConfig v-model:data="selectedNode.data" />
+          </template>
         </template>
         
         <!-- 未选中节点时显示全局变量 -->
@@ -134,9 +142,11 @@ import { automationApi, type WorkflowDefinition, type WorkflowNode, type Workflo
 import CliAgentNode from './components/CliAgentNode.vue'
 import VariablesNode from './components/VariablesNode.vue'
 import ConditionNode from './components/ConditionNode.vue'
+import LoopNode from './components/LoopNode.vue'
 import CliAgentConfig from './components/CliAgentConfig.vue'
 import VariablesConfig from './components/VariablesConfig.vue'
 import ConditionConfig from './components/ConditionConfig.vue'
+import LoopConfig from './components/LoopConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 
 // Vue Flow 样式
@@ -167,11 +177,11 @@ const selectedNode = ref<any>(null)
 const basicNodes = [
   { type: 'cli-agent', label: 'CLI Agent', icon: '🤖' },
   { type: 'variables', label: '变量设置', icon: '📝' },
-  { type: 'condition', label: '条件判断', icon: '🔀' }
+  { type: 'condition', label: '条件判断', icon: '🔀' },
+  { type: 'loop', label: '重试循环', icon: '🔄' }
 ]
 
 const comingSoonNodes = [
-  { type: 'loop', label: '重试循环', icon: '🔄' },
   { type: 'file-input', label: '文件输入', icon: '📁' },
   { type: 'delay', label: '延时等待', icon: '⏱' }
 ]
@@ -338,6 +348,15 @@ function getDefaultNodeData(type: string, label: string): Record<string, unknown
         variable: '{output}',
         operator: 'contains',
         value: ''
+      }
+    case 'loop':
+      return {
+        label,
+        maxRetries: 3,
+        interval: 5,
+        exitVariable: '{output}',
+        exitOperator: 'contains',
+        exitValue: 'PASS'
       }
     default:
       return { label }
