@@ -1265,10 +1265,11 @@ function doClose() {
   resetForm()
   emit('update:visible', false)
   // 延迟清理可能残留的遮罩层（防御性措施）
-  // 虽然现在我们在 onClose 回调后才关闭外层 modal，但仍保留此清理作为保险
-  nextTick(() => {
+  // 需要等待外层 <a-modal> 的关闭动画完成（约 200-300ms）后再执行清理
+  // 使用 setTimeout 而非 nextTick，因为 nextTick 可能在动画完成前执行
+  setTimeout(() => {
     cleanupOrphanedModals()
-  })
+  }, 350)
 }
 
 /**
@@ -1277,43 +1278,56 @@ function doClose() {
  * 可能会残留 .arco-modal-mask 或 .arco-overlay-modal 元素
  */
 function cleanupOrphanedModals() {
-  // 查找所有可能残留的 modal 容器（Arco 程序式 Modal 会在 body 下创建这些）
-  const containers = document.querySelectorAll('body > .arco-modal-container')
-  containers.forEach(container => {
-    // 检查容器内是否有可见的 modal（wrapper 存在且没有 display: none）
+  // 1. 清理 Modal.confirm 创建的程序式 modal 容器（类名为 arco-overlay arco-overlay-modal）
+  const overlayContainers = document.querySelectorAll('body > .arco-overlay-modal')
+  overlayContainers.forEach(container => {
+    // 检查容器内是否有可见的 modal
     const wrapper = container.querySelector('.arco-modal-wrapper')
-    const isHidden = !wrapper || 
-                     wrapper.getAttribute('style')?.includes('display: none') ||
-                     (wrapper as HTMLElement).style.display === 'none'
+    const modal = container.querySelector('.arco-modal')
+    const isHidden = !wrapper || !modal ||
+                     window.getComputedStyle(wrapper).display === 'none' ||
+                     window.getComputedStyle(modal).opacity === '0'
     if (isHidden) {
-      // 没有可见的 modal，这个容器是残留的
       container.remove()
     }
   })
 
-  // 清理可能直接挂载在 body 下的孤立遮罩
-  // 这些遮罩层应该在对应的 modal 关闭后被移除，但有时会残留
-  const orphanedMasks = document.querySelectorAll('body > .arco-modal-mask, body > .arco-overlay-modal')
+  // 2. 清理 <a-modal> 组件的 Teleport 容器（类名为 arco-modal-container）
+  const modalContainers = document.querySelectorAll('body > .arco-modal-container')
+  modalContainers.forEach(container => {
+    const wrapper = container.querySelector('.arco-modal-wrapper')
+    const modal = container.querySelector('.arco-modal')
+    const isHidden = !wrapper || !modal ||
+                     window.getComputedStyle(wrapper).display === 'none' ||
+                     window.getComputedStyle(modal).opacity === '0'
+    if (isHidden) {
+      container.remove()
+    }
+  })
+
+  // 3. 清理可能直接挂载在 body 下的孤立遮罩层
+  // 这些通常不应该存在，但作为防御性措施
+  const orphanedMasks = document.querySelectorAll('body > .arco-modal-mask')
   orphanedMasks.forEach(mask => {
-    // 检查这个遮罩是否有对应的可见 modal
-    // 如果没有可见的 modal 在使用这个遮罩，就移除它
-    const hasVisibleModal = Array.from(document.querySelectorAll('.arco-modal-wrapper')).some(wrapper => {
-      const style = (wrapper as HTMLElement).style
-      return style.display !== 'none' && wrapper.querySelector('.arco-modal')
-    })
-    if (!hasVisibleModal) {
+    // 如果遮罩的父元素是 body（而不是某个 container），它是孤立的
+    if (mask.parentElement === document.body) {
       mask.remove()
     }
   })
 
-  // 额外检查：清理 z-index 异常高但不可见的遮罩层
-  // 这种情况可能发生在快速连续操作时
+  // 4. 清理透明度为 0 的遮罩层（动画残留）
   document.querySelectorAll('.arco-modal-mask').forEach(mask => {
     const style = window.getComputedStyle(mask)
     const opacity = parseFloat(style.opacity)
     // 如果遮罩透明度为 0 或接近 0，说明它应该被移除但残留了
     if (opacity < 0.01) {
-      mask.remove()
+      // 找到并移除整个容器
+      const container = mask.closest('.arco-modal-container, .arco-overlay-modal')
+      if (container && container.parentElement === document.body) {
+        container.remove()
+      } else {
+        mask.remove()
+      }
     }
   })
 }
@@ -1446,9 +1460,10 @@ function discardDraft() {
       isDiscarding.value = false
       if (shouldDiscard) {
         emit('update:visible', false)
-        nextTick(() => {
+        // 使用 setTimeout 等待外层 modal 关闭动画完成后再清理
+        setTimeout(() => {
           cleanupOrphanedModals()
-        })
+        }, 350)
       }
       // 如果 shouldDiscard 为 false，用户选择继续编辑，不做任何事
     }
