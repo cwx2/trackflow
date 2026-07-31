@@ -60,7 +60,8 @@ def start_playwright_for_worker(worker_id: str) -> int:
         cmd = [
             "npx.cmd", "@playwright/mcp@latest",
             "--port", str(port),
-            "--isolated",
+            # --user-data-dir 为每个 worker 指定独立的 Chrome 数据目录，实现浏览器进程隔离。
+            # 注意：--isolated 与 --user-data-dir 不能同时使用（isolated 模式不支持外部目录）。
             "--user-data-dir", str(user_data_dir),
             "--viewport-size=1920x1080",
             f"--output-dir={WORKSPACE / 'test'}",
