@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ArcoVue from '@arco-design/web-vue'
+import ArcoVueIcon from '@arco-design/web-vue/es/icon'
 import axios from 'axios'
 import '@arco-design/web-vue/dist/arco.css'
 import './styles/variables.css'
@@ -52,6 +53,7 @@ window.addEventListener('unhandledrejection', (event) => {
 app.use(createPinia())
 app.use(router)
 app.use(ArcoVue)
+app.use(ArcoVueIcon)
 app.directive('permission', vPermission)
 
 app.mount('#app')
