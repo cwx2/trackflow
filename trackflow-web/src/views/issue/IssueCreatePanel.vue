@@ -247,16 +247,28 @@
             </a-input-number>
           </div>
 
-          <!-- 自定义字段 -->
+          <!-- 自定义字段（可折叠区域） -->
           <template v-if="customFields.length > 0">
-            <div class="prop-section-divider"></div>
-            <div v-for="cf in customFields" :key="cf.id" class="prop-row" :data-field-id="cf.id">
-              <span class="prop-label">
-                {{ cf.name }}
-                <a-tooltip v-if="cf.effectiveIsRequired ?? cf.isRequired" content="必填字段" position="top" mini>
-                  <span class="required-mark">*</span>
-                </a-tooltip>
+            <div class="prop-section-header" @click="toggleCustomFieldsSection">
+              <span class="section-title">
+                更多字段
+                <span v-if="requiredCustomFieldsCount > 0" class="section-required-hint">
+                  ({{ requiredCustomFieldsCount }} 个必填)
+                </span>
               </span>
+              <span class="section-toggle">
+                <icon-down v-if="!showCustomFields" />
+                <icon-up v-else />
+              </span>
+            </div>
+            <template v-if="showCustomFields">
+              <div v-for="cf in customFields" :key="cf.id" class="prop-row" :data-field-id="cf.id">
+                <span class="prop-label">
+                  {{ cf.name }}
+                  <a-tooltip v-if="cf.effectiveIsRequired ?? cf.isRequired" content="必填字段" position="top" mini>
+                    <span class="required-mark">*</span>
+                  </a-tooltip>
+                </span>
               <!-- string -->
               <a-input
                 v-if="cf.fieldFormat === 'string'"
@@ -403,6 +415,7 @@
               <!-- inline error message -->
               <span v-if="cfValidationErrors[cf.id]" class="field-error-msg">{{ cfValidationErrors[cf.id] }}</span>
             </div>
+            </template>
           </template>
         </div>
       </div>
@@ -485,6 +498,9 @@ const router = useRouter()
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+
+// 自定义字段区域折叠状态
+const showCustomFields = ref(false)
 
 // ========== 附件管理 ==========
 const attachmentAreaRef = ref<HTMLElement | null>(null)
@@ -883,18 +899,24 @@ function scrollToFirstError() {
   const errorFieldIds = Object.keys(cfValidationErrors.value)
   if (errorFieldIds.length === 0) return
 
+  // 如果有自定义字段错误，先展开折叠区域
+  expandCustomFieldsSection()
+
   const firstFieldId = errorFieldIds[0]
-  // 通过 data-field-id 属性查找元素
-  const fieldRow = document.querySelector(`.prop-row[data-field-id="${firstFieldId}"]`) as HTMLElement
-  if (fieldRow) {
-    // 滚动到视野中
-    fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    // 尝试聚焦输入元素
-    setTimeout(() => {
-      const input = fieldRow.querySelector('input, textarea, .arco-select-view') as HTMLElement
-      input?.focus?.()
-    }, 300)
-  }
+  // 需要等待 DOM 更新后再查找元素
+  setTimeout(() => {
+    // 通过 data-field-id 属性查找元素
+    const fieldRow = document.querySelector(`.prop-row[data-field-id="${firstFieldId}"]`) as HTMLElement
+    if (fieldRow) {
+      // 滚动到视野中
+      fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // 尝试聚焦输入元素
+      setTimeout(() => {
+        const input = fieldRow.querySelector('input, textarea, .arco-select-view') as HTMLElement
+        input?.focus?.()
+      }, 300)
+    }
+  }, 50)
 }
 
 /**
@@ -938,6 +960,27 @@ function parseCustomFieldError(message: string): boolean {
 }
 
 const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
+
+/**
+ * 计算自定义字段中的必填字段数量
+ */
+const requiredCustomFieldsCount = computed(() => {
+  return customFields.value.filter(cf => cf.effectiveIsRequired ?? cf.isRequired).length
+})
+
+/**
+ * 切换自定义字段区域的折叠状态
+ */
+function toggleCustomFieldsSection() {
+  showCustomFields.value = !showCustomFields.value
+}
+
+/**
+ * 展开自定义字段区域（供校验失败时调用）
+ */
+function expandCustomFieldsSection() {
+  showCustomFields.value = true
+}
 
 /**
  * 表单脏数据检测
@@ -1625,6 +1668,44 @@ onMounted(() => {
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
 
 .prop-section-divider { height: 1px; background: var(--color-border); margin: 8px 0 12px; }
+
+/* 自定义字段折叠区域头部 */
+.prop-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+  transition: color 150ms;
+}
+.prop-section-header:hover {
+  color: var(--tf-accent, rgb(var(--primary-6)));
+}
+.section-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.section-required-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: #f85149;
+}
+.section-toggle {
+  font-size: 12px;
+  color: var(--color-text-3);
+  transition: transform 200ms, color 150ms;
+}
+.prop-section-header:hover .section-toggle {
+  color: var(--tf-accent, rgb(var(--primary-6)));
+}
+
 .required-mark { 
   color: #f85149; 
   margin-left: 2px; 
