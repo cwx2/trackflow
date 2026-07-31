@@ -41,7 +41,6 @@
     </div>
     <div class="editor-footer">
       <div class="footer-actions">
-        <span class="mention-hint">输入 @ 提及成员</span>
         <button v-if="showAddTime" class="btn-add-time" @click="emit('addTime')" title="添加花费的时间">⏱ 添加花费的时间</button>
         <button v-if="showAddTime && !timerRunning" class="btn-start-timer" @click="emit('startTimer')" title="开始计时">▶ 开始计时</button>
         <button v-if="showAddTime && timerRunning && timerIssueMatch" class="btn-stop-timer" @click="emit('stopTimer')" title="停止计时">⏹ 停止计时 ({{ timerElapsed }})</button>
@@ -292,11 +291,6 @@ onBeforeUnmount(() => { editor.value?.destroy() })
 }
 .footer-actions {
   display: flex; align-items: center; gap: 4px;
-}
-.mention-hint {
-  font-size: 11px;
-  color: var(--tf-text-muted);
-  padding: 0 8px;
 }
 .btn-add-time {
   font-size: 12px; padding: 4px 12px; border-radius: 3px; border: none;
