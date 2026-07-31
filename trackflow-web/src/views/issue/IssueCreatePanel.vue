@@ -249,8 +249,9 @@
 
           <!-- 自定义字段（可折叠区域） -->
           <template v-if="customFields.length > 0">
-            <div class="prop-section-header" @click="toggleCustomFieldsSection">
+            <div class="prop-section-header" :class="{ 'has-required': requiredCustomFieldsCount > 0 }" @click="toggleCustomFieldsSection">
               <span class="section-title">
+                <span v-if="requiredCustomFieldsCount > 0" class="required-indicator"></span>
                 更多字段
                 <span v-if="requiredCustomFieldsCount > 0" class="section-required-hint">
                   ({{ requiredCustomFieldsCount }} 个必填)
@@ -500,6 +501,7 @@ const submitting = ref(false)
 const splitMenuVisible = ref(false)
 
 // 自定义字段区域折叠状态
+// 当有必填字段时会自动展开（见 watch customFields）
 const showCustomFields = ref(false)
 
 // ========== 附件管理 ==========
@@ -967,6 +969,16 @@ const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 const requiredCustomFieldsCount = computed(() => {
   return customFields.value.filter(cf => cf.effectiveIsRequired ?? cf.isRequired).length
 })
+
+/**
+ * 当自定义字段加载完成且包含必填项时，自动展开折叠区域
+ * 这样用户可以立即看到需要填写的必填字段，避免提交失败后才发现
+ */
+watch(requiredCustomFieldsCount, (count) => {
+  if (count > 0) {
+    showCustomFields.value = true
+  }
+}, { immediate: true })
 
 /**
  * 切换自定义字段区域的折叠状态
@@ -1824,9 +1836,22 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
 }
+/* 必填字段红色圆点指示器 */
+.required-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #f85149;
+  flex-shrink: 0;
+}
+/* 当有必填字段时，整个区域头部更醒目 */
+.prop-section-header.has-required .section-title {
+  color: var(--color-text-1);
+}
 .section-required-hint {
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   color: #f85149;
 }
 .section-toggle {
