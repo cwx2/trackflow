@@ -228,33 +228,6 @@ public class CustomFieldOptionService {
     }
 
     /**
-     * 获取字段选项列表（兼容旧代码，等同于 getGlobalOptions）
-     */
-    public List<CustomFieldOption> getOptions(Long fieldId) {
-        return getGlobalOptions(fieldId);
-    }
-
-    /**
-     * 批量获取多个字段的全局选项列表。
-     *
-     * @return Map<fieldId, List<CustomFieldOption>>（按 position 排序）
-     */
-    public Map<Long, List<CustomFieldOption>> getBatchOptions(List<Long> fieldIds) {
-        if (fieldIds == null || fieldIds.isEmpty()) return Map.of();
-        List<CustomFieldOption> allOptions = optionMapper.selectList(
-                new LambdaQueryWrapper<CustomFieldOption>()
-                        .in(CustomFieldOption::getCustomFieldId, fieldIds)
-                        .isNull(CustomFieldOption::getProjectId)
-                        .orderByAsc(CustomFieldOption::getPosition));
-        return allOptions.stream()
-                .collect(Collectors.groupingBy(CustomFieldOption::getCustomFieldId))
-                .entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> filterSupersededArchivedOptions(e.getValue())));
-    }
-
-    /**
      * 批量获取多个字段在指定项目中的有效选项列表。
      *
      * @param fieldIds  字段 ID 列表
