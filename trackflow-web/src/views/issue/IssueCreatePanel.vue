@@ -460,7 +460,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen } from '@arco-design/web-vue/es/icon'
@@ -1225,10 +1225,17 @@ function close() {
           estimatedHours: form.estimatedHours ?? null,
           customFieldValues: { ...customFieldValues.value }
         })
-        doClose()
+        // 延迟关闭外层 modal，确保 Modal.confirm 的遮罩层先完成卸载
+        // 使用 setTimeout 等待 Arco Modal 的关闭动画完成（约 200ms）
+        setTimeout(() => {
+          doClose()
+        }, 50)
       },
       onCancel: () => {
-        doClose()
+        // 延迟关闭外层 modal，确保 Modal.confirm 的遮罩层先完成卸载
+        setTimeout(() => {
+          doClose()
+        }, 50)
       },
       onClose: () => {
         // 用户点击弹窗外部关闭或按 Escape 关闭确认弹窗时
@@ -1247,6 +1254,35 @@ function close() {
 function doClose() {
   resetForm()
   emit('update:visible', false)
+  // 延迟清理可能残留的 Modal.confirm 遮罩层
+  // 这是一个防御性措施，确保嵌套的程序式 Modal 遮罩不会阻塞页面
+  setTimeout(() => {
+    cleanupOrphanedModals()
+  }, 300)
+}
+
+/**
+ * 清理孤立的 Modal 遮罩层
+ * 当嵌套的 Modal.confirm 与外层 a-modal 的关闭时序冲突时，
+ * 可能会残留 .arco-modal-mask 或 .arco-overlay-modal 元素
+ */
+function cleanupOrphanedModals() {
+  // 查找所有可能残留的 modal 容器（Arco 程序式 Modal 会在 body 下创建这些）
+  const containers = document.querySelectorAll('body > .arco-modal-container')
+  containers.forEach(container => {
+    // 检查容器内是否有可见的 modal（wrapper 存在且没有 display: none）
+    const wrapper = container.querySelector('.arco-modal-wrapper')
+    if (!wrapper || wrapper.getAttribute('style')?.includes('display: none')) {
+      // 没有可见的 modal，这个容器是残留的
+      container.remove()
+    }
+  })
+
+  // 清理可能直接挂载在 body 下的孤立遮罩
+  const orphanedMasks = document.querySelectorAll('body > .arco-modal-mask, body > .arco-overlay-modal')
+  orphanedMasks.forEach(mask => {
+    mask.remove()
+  })
 }
 
 /** 重置表单到初始状态 */
@@ -1362,7 +1398,14 @@ function discardDraft() {
     onOk: () => {
       resetForm()
       isDiscarding.value = false
-      emit('update:visible', false)
+      // 延迟关闭外层 modal，确保 Modal.confirm 的遮罩层先完成卸载
+      setTimeout(() => {
+        emit('update:visible', false)
+        // 再延迟清理可能残留的遮罩层
+        setTimeout(() => {
+          cleanupOrphanedModals()
+        }, 300)
+      }, 50)
     },
     onCancel: () => {
       // 用户取消丢弃，重置标志位，恢复正常的路由守卫检查
