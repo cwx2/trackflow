@@ -1017,8 +1017,14 @@ function resumeBeforeUnload() {
   }
 }
 
-// 暴露 isDirty 和 beforeunload 控制方法供父组件使用
-defineExpose({ isDirty, suspendBeforeUnload, resumeBeforeUnload })
+/**
+ * 标志位：用户已触发丢弃流程（弹出了丢弃确认框）
+ * 用于防止路由守卫在丢弃确认期间重复弹出「未保存更改」对话框
+ */
+const isDiscarding = ref(false)
+
+// 暴露 isDirty、isDiscarding 和 beforeunload 控制方法供父组件使用
+defineExpose({ isDirty, isDiscarding, suspendBeforeUnload, resumeBeforeUnload })
 
 // 检测 macOS 以显示正确的修饰键提示
 const isMac = navigator.platform.toUpperCase().includes('MAC')
@@ -1342,6 +1348,10 @@ function executeDefaultAction() {
 
 /** 丢弃草稿：不保存直接关闭 */
 function discardDraft() {
+  // 设置标志位，告知父组件用户已进入丢弃确认流程
+  // 这会阻止路由守卫在此期间弹出重复的「未保存更改」对话框
+  isDiscarding.value = true
+
   Modal.confirm({
     title: '丢弃草稿',
     content: '确定要丢弃当前内容吗？此操作不可恢复。',
@@ -1351,7 +1361,17 @@ function discardDraft() {
     simple: false,
     onOk: () => {
       resetForm()
+      isDiscarding.value = false
       emit('update:visible', false)
+    },
+    onCancel: () => {
+      // 用户取消丢弃，重置标志位，恢复正常的路由守卫检查
+      isDiscarding.value = false
+    },
+    onClose: () => {
+      // 用户点击弹窗外部或按 Escape 关闭确认弹窗时
+      // 重置标志位，恢复正常的路由守卫检查
+      isDiscarding.value = false
     }
   })
 }

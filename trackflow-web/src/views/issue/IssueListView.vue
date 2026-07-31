@@ -3852,6 +3852,12 @@ function applyDashboardFilter() {
 // 路由守卫：离开时检查创建面板是否有未保存数据
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
+  // 如果用户已经在处理丢弃流程（isDiscarding 为 true），直接放行
+  // 避免在丢弃确认框显示期间重复弹出「未保存更改」对话框
+  if (panel?.isDiscarding) {
+    next()
+    return
+  }
   if (showCreatePanel.value && panel && panel.isDirty) {
     // 先暂停 beforeunload 监听器，避免 SPA 内部导航时触发浏览器级别的空内容弹窗
     // 让应用内的 Modal.confirm 独占处理用户确认
