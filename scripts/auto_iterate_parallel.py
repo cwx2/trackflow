@@ -57,6 +57,8 @@ KIRO_CLI = "kiro-cli"
 # worker-1 → 9101, worker-2 → 9102, ...
 PLAYWRIGHT_PORT_BASE = 9100
 
+SCREENSHOT_DIR = WORKSPACE / "test"   # Playwright 截图输出目录
+
 for d in [REVIEW_DIR, DEVELOP_DIR, IMPLEMENT_DIR, REJECTED_DIR, WORKING_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
@@ -1139,6 +1141,21 @@ def consume_one(worker_id: str) -> str | None:
 # ============ 清理 ============
 
 
+def cleanup_screenshots(keep_count: int = 200) -> None:
+    """清理 test/ 目录，只保留最新的 keep_count 张截图。
+
+    每次脚本启动时调用一次，防止长期运行后目录无限膨胀。
+    """
+    if not SCREENSHOT_DIR.exists():
+        return
+    files = sorted(SCREENSHOT_DIR.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)
+    to_delete = [f for f in files if f.is_file()][keep_count:]
+    for f in to_delete:
+        f.unlink(missing_ok=True)
+    if to_delete:
+        log.info(f"[截图清理] 删除 {len(to_delete)} 个旧截图，保留最新 {keep_count} 张")
+
+
 def cleanup_working():
     """清理 working/ 残留文件"""
     for worker_dir in WORKING_DIR.iterdir():
@@ -1386,6 +1403,7 @@ def main():
     log.info("永不停止，Ctrl+C 手动终止")
     log.info("=" * 60)
 
+    cleanup_screenshots()   # 清理超过 3 天的截图，防止 test/ 无限膨胀
     cleanup_working()
     main_loop(num_producers, num_consumers, args.skip_produce)
 

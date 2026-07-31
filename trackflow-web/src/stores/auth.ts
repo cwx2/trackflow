@@ -350,7 +350,12 @@ export const useAuthStore = defineStore('auth', () => {
         }
       )
 
-      if (!response.ok) return false
+      if (!response.ok) {
+        // 记录失败原因，方便排查（invalid_grant = refresh_token 已失效/被吊销）
+        const errBody = await response.json().catch(() => ({}))
+        console.warn('[auth] Token refresh failed:', response.status, errBody.error, errBody.error_description)
+        return false
+      }
 
       const data = await response.json()
       accessToken.value = data.access_token
@@ -362,7 +367,8 @@ export const useAuthStore = defineStore('auth', () => {
         user.value.userId = existingUserId
       }
       return true
-    } catch {
+    } catch (e) {
+      console.warn('[auth] Token refresh exception:', e)
       return false
     }
   }
