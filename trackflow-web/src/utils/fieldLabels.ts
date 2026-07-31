@@ -250,6 +250,46 @@ export function localizeActionShort(action?: string | null): string {
 }
 
 /**
+ * 关联类型英文值 → 中文映射
+ * 覆盖 issue_link_type 表中的所有预置类型及其反向关系
+ * 
+ * 关联类型分为正向（outward）和反向（inward）两种视角：
+ * - blocks / blocked_by: 阻塞关系
+ * - duplicates / duplicated_by: 重复关系
+ * - relates_to: 相关（双向对称）
+ * - parent_of / child_of: 父子关系
+ */
+export const linkTypeLabelMap: Record<string, string> = {
+  // 阻塞关系
+  blocks: '阻塞',
+  blocked_by: '被阻塞',
+  is_blocked_by: '被阻塞', // 兼容可能的 snake_case 变体
+  
+  // 重复关系
+  duplicates: '重复',
+  duplicated_by: '被重复',
+  is_duplicated_by: '被重复', // 兼容可能的变体
+  
+  // 相关关系（双向对称）
+  relates_to: '相关',
+  
+  // 父子关系
+  parent_of: '父工单',
+  child_of: '子工单',
+  subtask_of: '子工单', // 兼容别名
+}
+
+/**
+ * 本地化关联类型名称
+ * @param linkType 英文关联类型值（如 "relates_to"、"blocks"、"blocked_by"）
+ * @returns 中文关联类型名（如 "相关"、"阻塞"、"被阻塞"），未匹配时返回原值
+ */
+export function localizeLinkType(linkType?: string | null): string {
+  if (!linkType) return '未知'
+  return linkTypeLabelMap[linkType] || linkType
+}
+
+/**
  * 查询字段的中文→英文反向映射（用于 queryTextToFilters 解析）
  * 从 fieldLabelMap 中提取筛选相关字段的反向映射
  */

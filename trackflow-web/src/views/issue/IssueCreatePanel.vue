@@ -458,7 +458,7 @@ import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
-import { issueTypeLabelMap } from '@/utils/fieldLabels'
+import { issueTypeLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{
@@ -594,18 +594,8 @@ const linkSearchLoading = ref(false)
 const linkSearchResults = ref<any[]>([])
 const linkedIssues = ref<Array<{ targetIssueId: string; linkType: string; issueKey: string; title: string }>>([])
 
-const linkTypeLabels: Record<string, string> = {
-  relates_to: 'relates to',
-  blocks: 'blocks',
-  blocked_by: 'is blocked by',
-  duplicates: 'duplicates',
-  duplicated_by: 'is duplicated by',
-  parent_of: 'parent of',
-  child_of: 'subtask of'
-}
-
 function getLinkTypeLabel(type: string): string {
-  return linkTypeLabels[type] || type
+  return localizeLinkType(type)
 }
 
 let linkSearchTimer: any = null

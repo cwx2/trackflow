@@ -350,7 +350,7 @@ import { IconSwap, IconUser, IconSearch, IconCalendar, IconFire, IconDelete, Ico
 import { Modal, Message } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import { localizeStatusName, linkTypeLabelMap } from '@/utils/fieldLabels'
 
 const props = defineProps<{
   selectedCount: number
@@ -736,13 +736,14 @@ const linkTargetLoading = ref(false)
 const linkTargetResults = ref<IssueVO[]>([])
 const selectedLinkType = ref('')
 
+// 使用统一的映射表生成下拉选项，保持双语格式便于用户理解
 const linkTypeOptions = [
-  { value: 'relates_to', label: '关联（relates to）' },
-  { value: 'blocks', label: '阻塞（blocks）' },
-  { value: 'blocked_by', label: '被阻塞（blocked by）' },
-  { value: 'duplicates', label: '重复（duplicates）' },
-  { value: 'parent_of', label: '父工单（parent of）' },
-  { value: 'child_of', label: '子工单（child of）' }
+  { value: 'relates_to', label: `${linkTypeLabelMap.relates_to}（relates to）` },
+  { value: 'blocks', label: `${linkTypeLabelMap.blocks}（blocks）` },
+  { value: 'blocked_by', label: `${linkTypeLabelMap.blocked_by}（blocked by）` },
+  { value: 'duplicates', label: `${linkTypeLabelMap.duplicates}（duplicates）` },
+  { value: 'parent_of', label: `${linkTypeLabelMap.parent_of}（parent of）` },
+  { value: 'child_of', label: `${linkTypeLabelMap.child_of}（child of）` }
 ]
 
 function handleSelectLinkType(linkType: string) {

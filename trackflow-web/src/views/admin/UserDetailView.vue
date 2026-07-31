@@ -252,7 +252,7 @@ import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
 import request from '@/api/request'
-import { localizeActionShort, fieldLabelMap } from '@/utils/fieldLabels'
+import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -455,17 +455,33 @@ function formatRelativeTime(dt: string) {
   return formatDate(dt)
 }
 
+/**
+ * 本地化关联活动的值（格式："{linkType} {issueKey}"）
+ * 例如："relates_to DE4-1060" → "相关 DE4-1060"
+ */
+function localizeLinkValue(value: string): string {
+  const parts = value.split(' ')
+  if (parts.length >= 2) {
+    const linkType = parts[0]
+    const issueKey = parts.slice(1).join(' ')
+    return `${localizeLinkType(linkType)} ${issueKey}`
+  }
+  return value
+}
+
 function formatAction(activity: { action: string; fieldName?: string; oldValue?: string; newValue?: string }) {
   // 特殊 action：移动到项目
   if (activity.action === 'moved_to_project') {
     return activity.newValue ? `移动到项目 ${activity.newValue}` : '移动到其他项目'
   }
-  // 特殊 action：关联操作
+  // 特殊 action：关联操作（本地化关联类型）
   if (activity.action === 'link_added') {
-    return activity.newValue ? `添加了关联 ${activity.newValue}` : '添加了关联'
+    const value = activity.newValue ? localizeLinkValue(activity.newValue) : ''
+    return value ? `添加了关联 ${value}` : '添加了关联'
   }
   if (activity.action === 'link_removed') {
-    return activity.oldValue ? `移除了关联 ${activity.oldValue}` : '移除了关联'
+    const value = activity.oldValue ? localizeLinkValue(activity.oldValue) : ''
+    return value ? `移除了关联 ${value}` : '移除了关联'
   }
   // 通用 update：拼接字段中文名
   if ((activity.action === 'update' || activity.action === 'updated' || activity.action === 'field_changed') && activity.fieldName) {

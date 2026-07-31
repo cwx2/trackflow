@@ -237,7 +237,7 @@ import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap, localizePriority, priorityLabelMap, localizeIssueType } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap, localizePriority, priorityLabelMap, localizeIssueType, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -742,7 +742,7 @@ const projectTags = computed(() => projectTagList.value)
 const issueLinks = computed(() => {
   return links.value.map(l => ({
     ...l,
-    typeLabel: l.linkType,
+    typeLabel: localizeLinkType(l.linkType),
     statusName: localizeStatusName(l.issueStatus?.name),
     statusColor: l.issueStatus?.color || '',
     isUnresolvedBlocker: l.linkType === 'blocked_by' && l.issueStatus && !l.issueStatus.isClosed

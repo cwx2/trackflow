@@ -140,10 +140,10 @@
                 移动到项目：<span class="val-old">{{ item.from || '未知' }}</span> → <span class="val-new">{{ item.to || '未知' }}</span>
               </template>
               <template v-else-if="item.action === 'link_added'">
-                添加了关联: <span class="val-new">{{ item.to }}</span>
+                添加了关联: <span class="val-new">{{ localizeLinkValue(item.to) }}</span>
               </template>
               <template v-else-if="item.action === 'link_removed'">
-                移除了关联: <span class="val-old">{{ item.from }}</span>
+                移除了关联: <span class="val-old">{{ localizeLinkValue(item.from) }}</span>
               </template>
               <template v-else-if="item.field">
                 修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
@@ -179,7 +179,7 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
-import { localizeAction } from '@/utils/fieldLabels'
+import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
 
 export interface ActivityItem {
   id: string
@@ -261,6 +261,21 @@ const sorted = computed(() => {
   arr.sort((a, b) => ascending.value ? a.ts - b.ts : b.ts - a.ts)
   return arr
 })
+
+/**
+ * 本地化关联活动的值（格式："{linkType} {issueKey}"）
+ * 例如："relates_to DE4-1060" → "相关 DE4-1060"
+ */
+function localizeLinkValue(value?: string): string {
+  if (!value) return ''
+  const parts = value.split(' ')
+  if (parts.length >= 2) {
+    const linkType = parts[0]
+    const issueKey = parts.slice(1).join(' ')
+    return `${localizeLinkType(linkType)} ${issueKey}`
+  }
+  return value
+}
 
 function canModifyComment(item: ActivityItem): boolean {
   if (!props.currentUserId) return false
