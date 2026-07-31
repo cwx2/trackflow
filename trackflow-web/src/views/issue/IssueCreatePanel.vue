@@ -1203,16 +1203,21 @@ function close() {
     // 这是用户主动操作，应该由应用内的 Modal.confirm 处理，而不是浏览器
     window.removeEventListener('beforeunload', handleBeforeUnload)
 
-    // 保存 Modal.confirm 返回的引用，以便主动关闭
-    const modalInstance = Modal.confirm({
+    // 用于追踪用户选择的操作（保存草稿/放弃更改/取消）
+    // 只有用户点击确定或取消按钮时才关闭外层 modal，点击遮罩或 Escape 则恢复编辑
+    let userAction: 'save' | 'discard' | 'cancel' = 'cancel'
+    let formDataToSave: any = null
+
+    Modal.confirm({
       title: '保存为草稿？',
       content: '当前表单中有未保存的内容。是否保存为草稿？',
       okText: '保存草稿',
       cancelText: '放弃更改',
       simple: false,
       onOk: () => {
-        // 发送表单数据给父组件保存为草稿
-        emit('cancel-with-data', {
+        // 记录用户选择保存草稿，并准备表单数据
+        userAction = 'save'
+        formDataToSave = {
           title: form.title,
           description: form.description,
           projectId: form.projectId || '',
@@ -1225,27 +1230,28 @@ function close() {
           dueDate: form.dueDate || '',
           estimatedHours: form.estimatedHours ?? null,
           customFieldValues: { ...customFieldValues.value }
-        })
-        // 主动关闭确认弹窗，确保其遮罩层开始卸载
-        modalInstance.close()
-        // 等待 Arco Modal 的关闭动画完成（约 200ms）后再关闭外层 modal
-        setTimeout(() => {
-          doClose()
-        }, 250)
+        }
+        // Arco Modal 会自动触发关闭动画，无需手动调用 close()
       },
       onCancel: () => {
-        // 主动关闭确认弹窗
-        modalInstance.close()
-        // 等待关闭动画完成后再关闭外层 modal
-        setTimeout(() => {
-          doClose()
-        }, 250)
+        // 用户选择放弃更改
+        userAction = 'discard'
+        // Arco Modal 会自动触发关闭动画
       },
       onClose: () => {
-        // 用户点击弹窗外部关闭或按 Escape 关闭确认弹窗时
-        // 恢复 beforeunload 监听器（用户选择继续编辑）
-        if (props.visible) {
-          window.addEventListener('beforeunload', handleBeforeUnload)
+        // Modal 完全关闭后（动画结束、DOM 已清理）才执行后续逻辑
+        // 这样可以避免嵌套 Modal 的关闭时序冲突
+        if (userAction === 'save' && formDataToSave) {
+          emit('cancel-with-data', formDataToSave)
+          doClose()
+        } else if (userAction === 'discard') {
+          doClose()
+        } else {
+          // userAction === 'cancel'：用户点击遮罩或按 Escape 取消
+          // 恢复 beforeunload 监听器，让用户继续编辑
+          if (props.visible) {
+            window.addEventListener('beforeunload', handleBeforeUnload)
+          }
         }
       }
     })
@@ -1258,11 +1264,11 @@ function close() {
 function doClose() {
   resetForm()
   emit('update:visible', false)
-  // 延迟清理可能残留的 Modal.confirm 遮罩层
-  // 这是一个防御性措施，确保嵌套的程序式 Modal 遮罩不会阻塞页面
-  setTimeout(() => {
+  // 延迟清理可能残留的遮罩层（防御性措施）
+  // 虽然现在我们在 onClose 回调后才关闭外层 modal，但仍保留此清理作为保险
+  nextTick(() => {
     cleanupOrphanedModals()
-  }, 300)
+  })
 }
 
 /**
@@ -1415,8 +1421,10 @@ function discardDraft() {
   // 这会阻止路由守卫在此期间弹出重复的「未保存更改」对话框
   isDiscarding.value = true
 
-  // 保存 Modal.confirm 返回的引用，以便主动关闭
-  const modalInstance = Modal.confirm({
+  // 追踪用户选择
+  let shouldDiscard = false
+
+  Modal.confirm({
     title: '丢弃草稿',
     content: '确定要丢弃当前内容吗？此操作不可恢复。',
     okText: '丢弃',
@@ -1424,27 +1432,25 @@ function discardDraft() {
     okButtonProps: { status: 'danger' },
     simple: false,
     onOk: () => {
+      // 用户确认丢弃
+      shouldDiscard = true
       resetForm()
-      isDiscarding.value = false
-      // 主动关闭确认弹窗，确保其遮罩层开始卸载
-      modalInstance.close()
-      // 等待 Arco Modal 的关闭动画完成（约 200ms）后再关闭外层 modal
-      setTimeout(() => {
-        emit('update:visible', false)
-        // 再延迟清理可能残留的遮罩层
-        setTimeout(() => {
-          cleanupOrphanedModals()
-        }, 300)
-      }, 250)
+      // Arco Modal 会自动触发关闭动画
     },
     onCancel: () => {
-      // 用户取消丢弃，重置标志位，恢复正常的路由守卫检查
-      isDiscarding.value = false
+      // 用户取消丢弃
+      shouldDiscard = false
     },
     onClose: () => {
-      // 用户点击弹窗外部或按 Escape 关闭确认弹窗时
-      // 重置标志位，恢复正常的路由守卫检查
+      // Modal 完全关闭后执行后续逻辑
       isDiscarding.value = false
+      if (shouldDiscard) {
+        emit('update:visible', false)
+        nextTick(() => {
+          cleanupOrphanedModals()
+        })
+      }
+      // 如果 shouldDiscard 为 false，用户选择继续编辑，不做任何事
     }
   })
 }
