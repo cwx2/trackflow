@@ -109,7 +109,7 @@
           </div>
           <div class="timer-popover-footer">
             <button class="timer-stop-btn" :disabled="timerStore.loading" @click="handleStopTimer">
-              <icon-record-stop /> 停止计时
+              <icon-minus-circle /> 停止计时
             </button>
           </div>
         </div>
