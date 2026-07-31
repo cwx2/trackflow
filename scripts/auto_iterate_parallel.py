@@ -1,26 +1,32 @@
 """
 TrackFlow 并行迭代脚本（永不停止）
 
-多个 worker 并行找需求 + 并行消费需求，审核单线程保证去重。
-脚本永远运行，只能通过 Ctrl+C 手动停止。
+三类线程完全解耦并行运行，通过文件目录队列通信：
+  生产者 → review/ → 审核者 → develop/ → 消费者 → implement/
 
-流程循环（无限）：
-  1. develop/ 队列不足 → 多代理并行找需求（生产）
-  2. review/ 有文件 → 单代理审核（串行，保证去重）
-  3. develop/ 有文件 → 多代理并行消费（修需求）
-  4. 失败的需求重试 3 次后跳过（移到 rejected/），继续下一个
-  5. 全部消费完 → 回到 1 继续生产
+线程角色：
+  生产者（N）：找需求 → 写到 review/，develop 充足时休眠
+  审核者（1）：监听 review/ → 分批审核（每批 5 个，每批新会话）→ 写到 develop/
+  消费者（M）：从 develop/ 领取需求 → 修需求+测试+代码审核 → 归档到 implement/
 
-防冲突：
+防冲突机制：
   - 消费阶段：worker 通过"领取"机制（原子 rename 到 working/）防止重复处理
-  - 生产阶段：各 worker 随机选不同配置，产出的需求文件编号由 MCP 工具保证唯一
-  - 审核阶段：单线程，天然无冲突
+  - 审核阶段：全局 _review_lock，审核者线程唯一，天然无冲突
+  - 重试计数：全局 _retry_counts + _retry_lock，超过 MAX_RETRIES 次移到 rejected/
+  - 浏览器隔离：每个 worker 通过 KIRO_HOME 指向独立 .kiro 目录，独立 Playwright 端口
+
+worker 分配规则（--workers N 自动分配，审核者不占配额）：
+  workers=2 → 1 生产者 + 1 消费者 + 1 审核者
+  workers=3 → 1 生产者 + 2 消费者 + 1 审核者
+  workers=4 → 1 生产者 + 3 消费者 + 1 审核者
+  workers=6 → 2 生产者 + 4 消费者 + 1 审核者
+  workers=8 → 2 生产者 + 6 消费者 + 1 审核者
 
 用法：
-  python scripts/auto_iterate_parallel.py                # 2 worker 并行，永不停止
-  python scripts/auto_iterate_parallel.py --workers 3    # 3 worker 并行
-  python scripts/auto_iterate_parallel.py --skip-produce # 只消费不生产
-  python scripts/auto_iterate_parallel.py --workers 2 --skip-produce  # 只消费不生产
+  python scripts/auto_iterate_parallel.py                              # 2 worker（1+1），永不停止
+  python scripts/auto_iterate_parallel.py --workers 4                  # 自动分配：1 生产者 + 3 消费者
+  python scripts/auto_iterate_parallel.py --producers 1 --consumers 3  # 手动指定
+  python scripts/auto_iterate_parallel.py --skip-produce               # 只跑消费者，不生产不审核
 """
 
 import subprocess
@@ -35,8 +41,6 @@ import threading
 import json
 import socket
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, wait
-from datetime import datetime
 
 # ============ 配置 ============
 
@@ -295,21 +299,15 @@ def make_worker_mcp_config(worker_id: str, port: int) -> dict:
 
 def setup_worker_kiro_dir(worker_id: str, port: int) -> Path:
     """
-    为 worker 创建专属的 .kiro/settings/ 目录，写入专属 mcp.json。
-    返回 worker 的工作目录（kiro-cli 以此为 cwd 运行，会读取其中的 mcp.json）。
+    为 worker 创建专属的 .kiro 目录，写入指向独立 Playwright 端口的 mcp.json。
+    通过 KIRO_HOME 环境变量让 kiro-cli 使用此目录代替默认的 ~/.kiro。
 
     目录结构：
-      scripts/worker-envs/{worker_id}/.kiro/settings/mcp.json  ← 专属配置
-      scripts/worker-envs/{worker_id}/ 的 cwd 就是 WORKSPACE（通过 cwd 参数指定）
+      scripts/worker-envs/{worker_id}/.kiro/settings/mcp.json  ← playwright 指向专属端口
+      scripts/worker-envs/{worker_id}/.kiro/steering/          ← 软链接到主配置
+      scripts/worker-envs/{worker_id}/.kiro/skills/            ← 软链接到主配置
 
-    注意：kiro-cli 读取的是 cwd/.kiro/settings/mcp.json，所以我们把专属配置
-    放到一个临时目录，然后把 cwd 指向该临时目录。但 kiro-cli 需要在项目根目录
-    运行（才能访问源码）。
-
-    解决方案：在 WORKSPACE 下创建 .kiro-worker-{worker_id}/ 目录，
-    运行时通过环境变量 KIRO_CONFIG_DIR 覆盖配置路径（如果 kiro-cli 支持的话）。
-    退而求其次：在 WORKSPACE 下动态生成 .kiro/settings/mcp-{worker_id}.json，
-    由 run_kiro_for_worker 在调用前临时换掉 mcp.json（带文件锁）。
+    多次调用幂等：mcp.json 每次覆盖写入（端口不变则内容相同），软链接已存在则跳过。
     """
     worker_env_dir = WORKSPACE / "scripts" / "worker-envs" / worker_id
     kiro_settings_dir = worker_env_dir / ".kiro" / "settings"
@@ -411,6 +409,17 @@ def extract_title(filepath: Path) -> str:
 
 
 def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str | None = None) -> tuple[bool, str]:
+    """
+    启动一个新的 kiro-cli 会话执行 prompt。
+
+    label: 日志前缀（如 consumer-1、consumer-1-test1）
+    model: 指定模型，None 时使用 KIRO_MODEL 默认值
+    worker_id: 消费者 worker ID，传入时为该 worker 启动独立 Playwright 进程并设置 KIRO_HOME，
+               生产者/审核者不传，共享默认浏览器
+
+    返回 (success, output)，output 为完整 stdout 文本。
+    特殊返回值：output="STARTUP_FAIL" 表示 kiro-cli 在 30 秒内异常退出（认证/并发问题）
+    """
     cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools"]
     effective_model = model or KIRO_MODEL
     if effective_model:
@@ -420,7 +429,6 @@ def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str |
     output_lines = []
 
     # kiro-cli 始终以项目根目录为 cwd（需要访问源码和 steering 文件）
-    # worker_id 参数保留供将来扩展，当前不影响 cwd
     cwd = str(WORKSPACE)
 
     # 环境变量：抑制子进程中命令的交互式行为
@@ -435,6 +443,13 @@ def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str |
     env["NO_COLOR"] = "1"                # 禁用颜色输出（ANSI 转义码）
     env["FORCE_COLOR"] = "0"             # 强制关闭颜色（部分工具识别此变量）
     env["KIRO_LOG_NO_COLOR"] = "1"       # kiro-cli 专属禁色变量
+
+    # 为 worker 设置独立的 KIRO_HOME（独立 Playwright 端口，避免多 worker 共享浏览器）
+    if worker_id:
+        port = start_playwright_for_worker(worker_id)
+        worker_kiro_dir = setup_worker_kiro_dir(worker_id, port)
+        env["KIRO_HOME"] = str(worker_kiro_dir / ".kiro")
+        log.debug(f"[{worker_id}] KIRO_HOME={env['KIRO_HOME']} playwright_port={port}")
 
     try:
         process = subprocess.Popen(
@@ -516,7 +531,7 @@ def get_latest_session_id(req_stem: str | None = None) -> str | None:
         return None
 
 
-def run_kiro_resume(session_id: str, prompt: str, label: str, model: str | None = None) -> tuple[bool, str]:
+def run_kiro_resume(session_id: str, prompt: str, label: str, model: str | None = None, worker_id: str | None = None) -> tuple[bool, str]:
     """恢复指定会话并发送消息"""
     cmd = [KIRO_CLI, "chat", "--no-interactive", "--trust-all-tools",
            "--resume-id", session_id]
@@ -532,6 +547,13 @@ def run_kiro_resume(session_id: str, prompt: str, label: str, model: str | None 
                  "EDITOR": "true", "VISUAL": "true", "CI": "true",
                  "NPM_CONFIG_YES": "true", "DEBIAN_FRONTEND": "noninteractive",
                  "NO_COLOR": "1", "FORCE_COLOR": "0", "KIRO_LOG_NO_COLOR": "1"})
+
+    # resume 时沿用同一 worker 的独立 KIRO_HOME（保证使用同一 Playwright 进程）
+    if worker_id:
+        port = start_playwright_for_worker(worker_id)
+        worker_kiro_dir = setup_worker_kiro_dir(worker_id, port)
+        env["KIRO_HOME"] = str(worker_kiro_dir / ".kiro")
+        log.debug(f"[{worker_id}] resume KIRO_HOME={env['KIRO_HOME']}")
     try:
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -563,7 +585,8 @@ def parse_fix_result(output: str) -> tuple[bool, bool, str]:
     - done=True: 输出了 FIX_DONE
     - blocked=True: 输出了 FIX_BLOCKED
     """
-    lines = output.strip().split("\n")
+    clean = strip_ansi(output)
+    lines = clean.strip().split("\n")
     for line in reversed(lines):
         line = line.strip()
         if line == "FIX_DONE":
@@ -575,18 +598,60 @@ def parse_fix_result(output: str) -> tuple[bool, bool, str]:
     return False, False, "\n".join(lines[-10:])
 
 
+def read_req_status(req_file: Path) -> dict[str, str]:
+    """
+    读取需求文件中 ## 自动化状态 区块的字段。
+    返回字典，key 为字段名，value 为字段值（字符串）。
+    如果区块不存在，返回空字典。
+
+    格式示例：
+      ## 自动化状态
+
+      fix_status: DONE
+      fix_commit: abc1234
+      fix_round: 1
+      test_status: PASS
+      test_round: 2
+      review_status: PENDING
+      review_round: 0
+    """
+    status: dict[str, str] = {}
+    try:
+        content = req_file.read_text(encoding="utf-8")
+    except Exception:
+        return status
+
+    # 找到 ## 自动化状态 区块
+    in_block = False
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if stripped == "## 自动化状态":
+            in_block = True
+            continue
+        if in_block:
+            # 遇到下一个 ## 标题则停止
+            if stripped.startswith("## ") and stripped != "## 自动化状态":
+                break
+            # 解析 key: value 行
+            if ":" in stripped and not stripped.startswith("#"):
+                key, _, val = stripped.partition(":")
+                status[key.strip()] = val.strip()
+    return status
+
+
 def parse_test_result(output: str) -> tuple[bool, str]:
     """
-    解析 e2e-test 的输出。
+    解析 e2e-test 的输出（兜底方案，优先使用 read_req_status）。
     返回 (all_passed, failure_summary)
 
     优先识别结构化标记：
     - TEST_RESULT: PASS/FAIL（最后一行）
     - TEST_FAILURES_BEGIN...TEST_FAILURES_END（失败摘要块）
 
-    降级时用内容关键词兼容旧格式。
+    降级时仅凭「测试报告结构 + 无 ❌ 失败标记」判断，避免 console 错误描述中的 ❌ 误判。
     """
-    lines = output.strip().split("\n")
+    clean = strip_ansi(output)
+    lines = clean.strip().split("\n")
 
     # 1. 检查 TEST_RESULT 标记（最后 15 行内，覆盖 kiro-cli 尾部追加的 Time/空行）
     result_line = None
@@ -612,33 +677,44 @@ def parse_test_result(output: str) -> tuple[bool, str]:
     if failure_lines:
         failures_summary = "\n".join(failure_lines)
 
-    # 3. 根据标记返回
+    # 3. 根据标记返回（最可靠路径）
     if result_line == "TEST_RESULT: PASS":
         return True, ""
     if result_line == "TEST_RESULT: FAIL":
         summary = failures_summary if failures_summary else "\n".join(lines[-30:])
         return False, summary
 
-    # 4. 降级：关键词检测（兼容旧格式/无标记）
-    in_test_report = "测试报告" in output or "TrackFlow 测试报告" in output or "## 测试结果" in output
-    has_fail = ("❌" in output and "FAIL" in output) or ("❌" in output and "失败" in output and in_test_report)
-    has_pass = ("✅" in output and "PASS" in output) or (in_test_report and "✅" in output and not has_fail)
+    # 4. 降级：必须同时满足「有测试报告结构」才用关键词判断
+    #    不再单独依赖 ❌ 关键词，避免 console 错误描述误触发
+    in_test_report = "测试报告" in clean or "TrackFlow 测试报告" in clean or "## 测试结果" in clean
+    if not in_test_report:
+        # 没有测试报告结构，无法可靠判断，默认失败让脚本重试
+        return False, "\n".join(lines[-20:])
 
-    if has_fail:
+    # 有测试报告结构时，看是否有明确的失败标记行（❌ FAIL 或 ❌ 失败，且在测试结果表格中）
+    # 只有 TEST_FAILURES_BEGIN 块或报告表格里出现 ❌ 才算真失败
+    has_structured_fail = bool(failures_summary)  # 有 TEST_FAILURES 块
+    has_table_fail = any(
+        "❌" in line and ("|" in line or line.strip().startswith("-"))
+        for line in lines
+    )
+
+    if has_structured_fail or has_table_fail:
         summary = failures_summary if failures_summary else "\n".join(lines[-30:])
         return False, summary
-    if has_pass:
-        return True, ""
-    return False, "\n".join(lines[-20:])
+
+    # 有报告结构但没有明确失败标记 → PASS
+    return True, ""
 
 
 def parse_review_result(output: str) -> tuple[bool, str]:
     """
-    解析 code-review 的输出。
+    解析 code-review 的输出（兜底方案，优先使用 read_req_status）。
     返回 (can_merge, summary)
     优先识别机器标记 REVIEW_RESULT: PASS/FAIL，降级时用内容关键词。
     """
-    lines = output.strip().split("\n")
+    clean = strip_ansi(output)
+    lines = clean.strip().split("\n")
     # 优先检查最后几行的机器标记（最后 15 行，覆盖 kiro-cli 尾部追加的 Time/空行）
     for line in reversed(lines[-15:]):
         line = line.strip()
@@ -647,15 +723,15 @@ def parse_review_result(output: str) -> tuple[bool, str]:
         if line == "REVIEW_RESULT: FAIL":
             return False, "\n".join(lines[-40:])
 
-    # 降级：关键词检测
-    can_merge = "🟢" in output or "可以合并" in output
-    has_must = "MUST" in output and "❌" in output
+    # 降级：关键词检测（ANSI 已清除，emoji 可靠匹配）
+    can_merge = "🟢" in clean or "可以合并" in clean
+    has_must = "MUST" in clean and "❌" in clean
     summary = "\n".join(lines[-40:])
     if has_must:
         return False, summary
     if can_merge:
         return True, summary
-    if "🟡" in output or "修改后合并" in output:
+    if "🟡" in clean or "修改后合并" in clean:
         return True, summary
     return False, summary
 
@@ -740,43 +816,24 @@ def _extract_workflow_section(content: str, section_title: str) -> str:
     return "\n".join(lines[start_idx:end_idx]).strip()
 
 
-def run_produce_phase(num_workers: int):
+
+# ============ 阶段二：审核 ============
+
+REVIEW_BATCH_SIZE = 5  # 每次审核最多处理的需求数量
+
+
+def run_review_phase(batch: list[Path] | None = None):
     """
-    生产阶段：串行执行各 worker。
-
-    kiro-cli 必须以项目根目录（WORKSPACE）为 cwd 才能正常工作，
-    而所有 kiro 进程共享同一个 Playwright MCP server（同一浏览器实例）。
-    并发运行时多个 agent 会互相抢夺浏览器页面导致崩溃。
-
-    生产阶段（"找需求"）对时效性要求不高，串行运行是最稳妥的方式。
-    消费阶段（"修需求"）主要是代码操作，并发安全，仍然并行。
-
-    TODO: 若 kiro-cli 未来支持 --mcp-config 参数指定独立配置文件，
-    可重新启用并行生产（每个 worker 指向各自的 Playwright SSE 端口）。
+    审核一批需求文件（每批最多 REVIEW_BATCH_SIZE 个，一个新会话处理）。
+    batch: 指定审核的文件列表；为 None 时自动从 review/ 取前 REVIEW_BATCH_SIZE 个。
     """
-    log.info(f"[生产] 串行启动 {num_workers} 个 worker 找需求...")
-
-    for i in range(num_workers):
-        worker_id = f"producer-{i+1}"
-        log.info(f"[生产] [{worker_id}] 开始 ({i+1}/{num_workers})...")
-        produce_one(worker_id)
-
-    new_review = len(list(REVIEW_DIR.glob("requirement-*.md")))
-    log.info(f"[生产] 完成，review/ 当前 {new_review} 个")
-
-
-# ============ 阶段二：串行审核 ============
-
-
-def run_review_phase():
-    """单线程审核：保证去重一致性"""
-    review_files = sorted(REVIEW_DIR.glob("requirement-*.md"))
-    if not review_files:
-        log.info("[审核] review/ 为空，跳过")
+    if batch is None:
+        batch = sorted(REVIEW_DIR.glob("requirement-*.md"))[:REVIEW_BATCH_SIZE]
+    if not batch:
         return
 
     skill_info = SKILLS["review-requirement"]
-    req_list = ", ".join([f.name for f in review_files])
+    req_list = ", ".join([f.name for f in batch])
 
     prompt = (
         f"[使用 skill: review-requirement] "
@@ -785,7 +842,7 @@ def run_review_phase():
         f"文件路径格式为 requirements/review/requirement-XX.md。"
     )
 
-    log.info(f"[审核] 审核 {len(review_files)} 个需求（串行）...")
+    log.info(f"[审核] 审核 {len(batch)} 个需求：{req_list}")
     run_kiro(prompt, "reviewer")
     log.info(f"[审核] 完成，develop/ 当前 {count_develop()} 个")
 
@@ -840,7 +897,7 @@ def consume_one(worker_id: str) -> str | None:
         f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
         f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
     )
-    success, fix_output = run_kiro(fix_prompt, label, model=KIRO_MODEL_FIX)
+    success, fix_output = run_kiro(fix_prompt, label, model=KIRO_MODEL_FIX, worker_id=worker_id)
 
     # kiro-cli 启动失败（<30s 退出）→ 不算需求失败，放回 develop/ 并等待环境恢复
     if fix_output == "STARTUP_FAIL":
@@ -906,34 +963,47 @@ def consume_one(worker_id: str) -> str | None:
                 f"请仅验证上轮失败的用例，并回归已通过的用例。"
             )
 
-        _, test_output = run_kiro(test_prompt, f"{label}-test{test_round}")
-        test_passed, test_summary = parse_test_result(test_output)
+        _, test_output = run_kiro(test_prompt, f"{label}-test{test_round}", worker_id=worker_id)
 
-        if test_passed:
-            log.info(f"[{label}] ✅ 测试通过（第 {test_round} 轮）")
+        # ── 优先从需求文件状态区块读取结果（更可靠）──
+        req_status = read_req_status(req_file)
+        file_test_status = req_status.get("test_status", "")
+        if file_test_status == "PASS":
+            log.info(f"[{label}] ✅ 测试通过（第 {test_round} 轮，来源：文件状态）")
+            test_passed = True
             break
-
-        log.warning(f"[{label}] ❌ 测试失败（第 {test_round} 轮），反馈给修需求会话...")
-        prev_test_summary = test_summary
+        elif file_test_status == "FAIL":
+            log.warning(f"[{label}] ❌ 测试失败（第 {test_round} 轮，来源：文件状态）")
+            test_passed = False
+            # 从 stdout 提取失败摘要（用于给 fix 会话的反馈）
+            _, prev_test_summary = parse_test_result(test_output)
+        else:
+            # 文件状态未更新（agent 未写入或格式不对）→ 降级到 stdout 解析
+            log.warning(f"[{label}] ⚠️ 需求文件中未找到 test_status，降级到 stdout 解析")
+            test_passed, prev_test_summary = parse_test_result(test_output)
+            if test_passed:
+                log.info(f"[{label}] ✅ 测试通过（第 {test_round} 轮，来源：stdout 解析）")
+                break
+            log.warning(f"[{label}] ❌ 测试失败（第 {test_round} 轮，来源：stdout 解析）")
 
         if test_round < MAX_TEST_RETRIES:
             # resume 原会话，把测试失败结果反馈给它
             feedback_prompt = (
                 f"端到端测试失败（第 {test_round} 轮），以下用例未通过，请根据失败信息修复代码：\n\n"
-                f"{test_summary}\n\n"
+                f"{prev_test_summary}\n\n"
                 f"修复完成后请输出 FIX_DONE。"
             )
             if session_id:
-                _, fb_out = run_kiro_resume(session_id, feedback_prompt, f"{label}-fix{test_round}")
+                _, fb_out = run_kiro_resume(session_id, feedback_prompt, f"{label}-fix{test_round}", worker_id=worker_id)
             else:
                 # 无 session_id 降级为新会话
                 fallback_prompt = (
                     f"[使用 skill: fix-requirement-auto] "
                     f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
                     f"继续处理需求 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n"
-                    f"```\n{test_summary}\n```"
+                    f"```\n{prev_test_summary}\n```"
                 )
-                _, fb_out = run_kiro(fallback_prompt, f"{label}-fix{test_round}", model=KIRO_MODEL_FIX)
+                _, fb_out = run_kiro(fallback_prompt, f"{label}-fix{test_round}", model=KIRO_MODEL_FIX, worker_id=worker_id)
             # 判断修复是否完成（FIX_DONE），未完成则提前退出测试循环
             fix_done, fix_blocked2, _ = parse_fix_result(fb_out)
             if fix_blocked2:
@@ -973,32 +1043,44 @@ def consume_one(worker_id: str) -> str | None:
                 f"请验证 MUST 问题是否已修复，无需重新做完整审核。"
             )
 
-        _, review_output = run_kiro(review_prompt, f"{label}-review{review_round}")
-        review_passed, review_summary = parse_review_result(review_output)
+        _, review_output = run_kiro(review_prompt, f"{label}-review{review_round}", worker_id=worker_id)
 
-        if review_passed:
-            log.info(f"[{label}] ✅ 审核通过（第 {review_round} 轮）")
+        # ── 优先从需求文件状态区块读取结果（更可靠）──
+        req_status = read_req_status(req_file)
+        file_review_status = req_status.get("review_status", "")
+        if file_review_status == "PASS":
+            log.info(f"[{label}] ✅ 审核通过（第 {review_round} 轮，来源：文件状态）")
+            review_passed = True
             break
-
-        log.warning(f"[{label}] ❌ 审核有 MUST 问题（第 {review_round} 轮），反馈给修需求会话...")
-        prev_review_summary = review_summary
+        elif file_review_status == "FAIL":
+            log.warning(f"[{label}] ❌ 审核有 MUST 问题（第 {review_round} 轮，来源：文件状态），反馈给修需求会话...")
+            review_passed = False
+            _, prev_review_summary = parse_review_result(review_output)
+        else:
+            # 文件状态未更新 → 降级到 stdout 解析
+            log.warning(f"[{label}] ⚠️ 需求文件中未找到 review_status，降级到 stdout 解析")
+            review_passed, prev_review_summary = parse_review_result(review_output)
+            if review_passed:
+                log.info(f"[{label}] ✅ 审核通过（第 {review_round} 轮，来源：stdout 解析）")
+                break
+            log.warning(f"[{label}] ❌ 审核有 MUST 问题（第 {review_round} 轮，来源：stdout 解析），反馈给修需求会话...")
 
         if review_round < MAX_REVIEW_RETRIES:
             feedback_prompt = (
                 f"代码审核发现 MUST 级问题（第 {review_round} 轮），请修复以下问题后重新 commit：\n\n"
-                f"```\n{review_summary}\n```\n\n"
+                f"```\n{prev_review_summary}\n```\n\n"
                 f"修复完成后请输出 FIX_DONE。"
             )
             if session_id:
-                _, rv_out = run_kiro_resume(session_id, feedback_prompt, f"{label}-fixr{review_round}")
+                _, rv_out = run_kiro_resume(session_id, feedback_prompt, f"{label}-fixr{review_round}", worker_id=worker_id)
             else:
                 fallback_prompt = (
                     f"[使用 skill: fix-requirement-auto] "
                     f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
                     f"继续处理需求 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n"
-                    f"```\n{review_summary}\n```"
+                    f"```\n{prev_review_summary}\n```"
                 )
-                _, rv_out = run_kiro(fallback_prompt, f"{label}-fixr{review_round}", model=KIRO_MODEL_FIX)
+                _, rv_out = run_kiro(fallback_prompt, f"{label}-fixr{review_round}", model=KIRO_MODEL_FIX, worker_id=worker_id)
             fix_done2, _, _ = parse_fix_result(rv_out)
             if not fix_done2:
                 log.warning(f"[{label}] 审核反馈修复未输出 FIX_DONE，继续二次审核验证")
@@ -1054,73 +1136,6 @@ def consume_one(worker_id: str) -> str | None:
     return req_file.name
 
 
-def run_consume_phase(num_workers: int) -> int:
-    """
-    并行消费阶段：多个 worker 同时处理需求，直到 develop/ 空。
-    失败的需求（kiro-cli 进程本身崩溃）会被放回 develop/，重试 MAX_RETRIES 次后移到 rejected/。
-    """
-    total_done = 0
-    retry_counts: dict[str, int] = {}  # filename -> 连续失败次数
-    prev_in_develop: set[str] = set()  # 上一批次在 develop/ 的文件名快照
-
-    while True:
-        available = list_available(DEVELOP_DIR)
-        if not available:
-            break
-
-        current_names = {f.name for f in available}
-
-        # 对比快照：上轮就在 develop/ 且本轮还在 → 没被消费，说明本轮有 worker 失败放回
-        for name in current_names:
-            if name in prev_in_develop:
-                retry_counts[name] = retry_counts.get(name, 0) + 1
-            else:
-                # 新出现的文件（刚生产或从 working 放回）从 0 开始
-                retry_counts.setdefault(name, 0)
-
-        # 清理不在 develop/ 的过期计数
-        for name in list(retry_counts.keys()):
-            if name not in current_names:
-                del retry_counts[name]
-
-        # 检查队首文件是否已多次失败，是则跳过
-        first = available[0]
-        if retry_counts.get(first.name, 0) >= MAX_RETRIES:
-            log.warning(f"[消费] {first.name} 已失败 {retry_counts[first.name]} 次，移到 rejected/")
-            shutil.move(str(first), str(REJECTED_DIR / first.name))
-            del retry_counts[first.name]
-            prev_in_develop.discard(first.name)
-            continue
-
-        # 记录本批次前的快照（消费后不在 develop/ 就是成功消费了）
-        prev_in_develop = current_names
-
-        # 启动 min(workers, available) 个并发任务，错开启动时间避免并发冲突
-        batch_size = min(num_workers, len(available))
-        STAGGER_SECONDS = 30  # 每个 worker 错开 30 秒启动，避免同时触发 kiro-cli 并发限制
-
-        with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="consumer") as executor:
-            futures = []
-            for i in range(batch_size):
-                if i > 0:
-                    time.sleep(STAGGER_SECONDS)
-                futures.append(executor.submit(consume_one, f"consumer-{i+1}"))
-            wait(futures)
-
-            for f in futures:
-                try:
-                    result = f.result()
-                    if result:
-                        total_done += 1
-                        retry_counts.pop(result, None)
-                except Exception:
-                    pass
-
-        time.sleep(COOLDOWN_SECONDS)
-
-    return total_done
-
-
 # ============ 清理 ============
 
 
@@ -1149,49 +1164,188 @@ def archive_decomposed_parents():
 
 # ============ 主循环 ============
 
+# 审核全局锁：防止多个生产者同时审核 review/ 造成重复处理
+_review_lock = threading.Lock()
 
-def main_loop(num_workers: int, skip_produce: bool):
-    """
-    主循环：永远不停。
-      develop 不够 → 并行生产 → 串行审核 → 并行消费 → 循环
-      失败的需求重试 3 次后跳过（rejected），继续下一个
-    """
-    round_num = 0
-    total_consumed = 0
+# 消费重试计数：跨轮次记录每个需求文件的失败次数
+_retry_counts: dict[str, int] = {}
+_retry_lock = threading.Lock()
 
+
+def producer_loop(worker_id: str):
+    """
+    生产者线程：持续找需求，写到 review/，由专职审核线程处理。
+    只在 develop 队列不足时才生产，避免过度堆积。
+    """
+    log.info(f"[{worker_id}] 生产者启动")
     while True:
-        round_num += 1
-        log.info(f"\n{'='*60}")
-        log.info(f"第 {round_num} 轮 | develop={count_develop()} review={len(list(REVIEW_DIR.glob('*.md')))}")
-        log.info(f"{'='*60}")
-
-        # 归档已拆解父需求
-        archive_decomposed_parents()
-
-        # 生产补货（develop 不够时）
-        if not skip_produce and count_develop() < MIN_DEVELOP_QUEUE:
-            # 先审核 review/ 中已有的
-            run_review_phase()
-
-            # 还不够？并行生产 + 审核，循环直到够
-            while count_develop() < MIN_DEVELOP_QUEUE:
-                run_produce_phase(num_workers)
-                run_review_phase()
-                time.sleep(COOLDOWN_SECONDS)
-
-        # 消费阶段
-        if count_develop() > 0:
-            consumed = run_consume_phase(num_workers)
-            total_consumed += consumed
-            log.info(f"[消费] 本轮完成 {consumed} 个，累计 {total_consumed} 个")
-        else:
-            if skip_produce:
-                log.info("[消费] develop/ 为空，等待中（--skip-produce 模式，不会自动补货）")
-                time.sleep(30)  # skip-produce 模式下等待更长，避免日志刷屏
+        try:
+            archive_decomposed_parents()
+            if count_develop() < MIN_DEVELOP_QUEUE:
+                log.info(f"[{worker_id}] develop={count_develop()} < {MIN_DEVELOP_QUEUE}，开始生产...")
+                produce_one(worker_id)
             else:
-                log.info("[消费] develop/ 为空，等待后继续...")
+                log.debug(f"[{worker_id}] develop 充足（{count_develop()}），跳过生产")
+        except Exception as e:
+            log.error(f"[{worker_id}] 生产者异常: {e}", exc_info=True)
 
         time.sleep(COOLDOWN_SECONDS)
+
+
+def reviewer_loop():
+    """
+    专职审核线程（唯一）：持续监听 review/，有文件立即按批审核。
+    每批最多 REVIEW_BATCH_SIZE 个需求，一个新会话处理，避免 context 过长。
+    review/ 为空时每 30 秒轮询一次，每 5 分钟打一条 INFO。
+    """
+    log.info("[reviewer] 审核线程启动")
+    idle_rounds = 0
+    while True:
+        try:
+            review_files = sorted(REVIEW_DIR.glob("requirement-*.md"))
+            if review_files:
+                idle_rounds = 0
+                # 分批处理，每批一个新会话
+                batches = [
+                    review_files[i:i + REVIEW_BATCH_SIZE]
+                    for i in range(0, len(review_files), REVIEW_BATCH_SIZE)
+                ]
+                log.info(f"[reviewer] {len(review_files)} 个待审需求，分 {len(batches)} 批处理")
+                with _review_lock:
+                    for idx, batch in enumerate(batches, 1):
+                        log.info(f"[reviewer] 第 {idx}/{len(batches)} 批（{len(batch)} 个）...")
+                        run_review_phase(batch)
+            else:
+                idle_rounds += 1
+                if idle_rounds % 10 == 1:
+                    log.info("[reviewer] review/ 为空，等待生产者...")
+                time.sleep(30)
+        except Exception as e:
+            log.error(f"[reviewer] 审核线程异常: {e}", exc_info=True)
+            time.sleep(COOLDOWN_SECONDS)
+
+
+def consumer_loop(worker_id: str):
+    """
+    消费者线程：持续从 develop/ 领取需求并完整处理（修+测+审）。
+    失败超过 MAX_RETRIES 次的需求移到 rejected/。
+    develop/ 为空时每 30 秒轮询一次，每 5 分钟打一条 INFO 日志。
+    """
+    log.info(f"[{worker_id}] 消费者启动")
+    idle_rounds = 0
+    while True:
+        try:
+            available = list_available(DEVELOP_DIR)
+            if not available:
+                idle_rounds += 1
+                if idle_rounds % 10 == 1:  # 首次 + 每 5 分钟打一条
+                    log.info(f"[{worker_id}] develop/ 为空，等待生产者补货...")
+                time.sleep(30)
+                continue
+
+            idle_rounds = 0  # 有需求了，重置空闲计数
+
+            # 检查队首是否超过重试上限
+            first = available[0]
+            with _retry_lock:
+                count = _retry_counts.get(first.name, 0)
+            if count >= MAX_RETRIES:
+                log.warning(f"[{worker_id}] {first.name} 已失败 {count} 次，移到 rejected/")
+                shutil.move(str(first), str(REJECTED_DIR / first.name))
+                with _retry_lock:
+                    _retry_counts.pop(first.name, None)
+                continue
+
+            # 领取并处理
+            result = consume_one(worker_id)
+
+            if result is None:
+                # 处理失败（放回 develop/）或队列为空，累计重试次数
+                # 只对确实存在于 develop/ 的文件计数
+                for f in list_available(DEVELOP_DIR):
+                    with _retry_lock:
+                        if f.name == first.name:
+                            _retry_counts[f.name] = _retry_counts.get(f.name, 0) + 1
+                time.sleep(COOLDOWN_SECONDS)
+            else:
+                # 成功，清理计数
+                with _retry_lock:
+                    _retry_counts.pop(result, None)
+                log.info(f"[{worker_id}] ✅ 累计完成 {sum(1 for _ in IMPLEMENT_DIR.glob('*.md'))} 个")
+
+        except Exception as e:
+            log.error(f"[{worker_id}] 消费者异常: {e}", exc_info=True)
+            time.sleep(COOLDOWN_SECONDS)
+
+
+def main_loop(num_producers: int, num_consumers: int, skip_produce: bool):
+    """
+    主循环：启动三类线程，永不停止。
+
+    生产者（N）：找需求 → 写到 review/
+    审核者（1）：监听 review/ → 分批审核 → 写到 develop/
+    消费者（M）：从 develop/ 领取需求 → 修+测+审 → 归档
+
+    三类线程通过文件目录队列通信，完全解耦。
+    """
+    threads: list[threading.Thread] = []
+
+    # 启动专职审核线程（固定 1 个，不占 workers 配额）
+    if not skip_produce:
+        t = threading.Thread(target=reviewer_loop, name="reviewer", daemon=True)
+        t.start()
+        threads.append(t)
+        log.info("[主] 审核线程已启动")
+        time.sleep(2)
+
+    # 启动生产者线程
+    if not skip_produce:
+        for i in range(num_producers):
+            worker_id = f"producer-{i+1}"
+            t = threading.Thread(
+                target=producer_loop,
+                args=(worker_id,),
+                name=worker_id,
+                daemon=True,
+            )
+            t.start()
+            threads.append(t)
+            log.info(f"[主] 生产者 {worker_id} 已启动")
+            time.sleep(5)  # 错开启动
+    else:
+        log.info("[主] --skip-produce 模式，不启动生产者和审核线程")
+
+    # 启动消费者线程（错开 30 秒，避免同时触发 kiro-cli 并发限制）
+    STAGGER_SECONDS = 30
+    for i in range(num_consumers):
+        worker_id = f"consumer-{i+1}"
+        t = threading.Thread(
+            target=consumer_loop,
+            args=(worker_id,),
+            name=worker_id,
+            daemon=True,
+        )
+        t.start()
+        threads.append(t)
+        log.info(f"[主] 消费者 {worker_id} 已启动")
+        if i < num_consumers - 1:
+            time.sleep(STAGGER_SECONDS)
+
+    log.info(
+        f"[主] 全部线程已启动：1 审核者 + {num_producers} 生产者 + {num_consumers} 消费者"
+        if not skip_produce else
+        f"[主] 全部线程已启动：{num_consumers} 消费者（仅消费模式）"
+    )
+
+    # 主线程定期打印状态，永不退出
+    while True:
+        time.sleep(60)
+        log.info(
+            f"[状态] review={len(list(REVIEW_DIR.glob('*.md')))} "
+            f"develop={count_develop()} "
+            f"implement={len(list(IMPLEMENT_DIR.glob('*.md')))} "
+            f"rejected={len(list(REJECTED_DIR.glob('*.md')))}"
+        )
 
 
 # ============ 入口 ============
@@ -1200,21 +1354,40 @@ def main_loop(num_workers: int, skip_produce: bool):
 def main():
     parser = argparse.ArgumentParser(description="TrackFlow 并行迭代脚本（永不停止）")
     parser.add_argument("--workers", type=int, default=2,
-                        help="并行 worker 数量（默认 2）")
+                        help="总 worker 数量（默认 2）。自动按 1:3 比例分配生产者和消费者")
+    parser.add_argument("--producers", type=int, default=None,
+                        help="手动指定生产者数量（覆盖自动分配）")
+    parser.add_argument("--consumers", type=int, default=None,
+                        help="手动指定消费者数量（覆盖自动分配）")
     parser.add_argument("--skip-produce", action="store_true",
-                        help="跳过生产阶段，只消费 develop/ 中的现有需求（consume 完也会继续等待）")
+                        help="跳过生产阶段，只消费 develop/ 中的现有需求")
     args = parser.parse_args()
 
+    # 计算生产者/消费者数量
+    if args.producers is not None or args.consumers is not None:
+        # 手动指定
+        num_producers = args.producers if args.producers is not None else 1
+        num_consumers = args.consumers if args.consumers is not None else max(1, args.workers - num_producers)
+    else:
+        # 自动分配：workers 越多，消费者比例越高
+        # 2→(1,1)  3→(1,2)  4→(1,3)  5→(1,4)  6→(2,4)  8→(2,6)
+        num_producers = max(1, args.workers // 4) if args.workers >= 4 else 1
+        num_consumers = max(1, args.workers - num_producers)
+
+    if args.skip_produce:
+        num_producers = 0
+        num_consumers = args.workers
+
     log.info("=" * 60)
-    log.info(f"TrackFlow 并行迭代 | workers={args.workers} | 模式={'仅消费' if args.skip_produce else '完整循环'}")
-    log.info(f"模型: fix={KIRO_MODEL_FIX or '默认'} | test/review={KIRO_MODEL or '默认'}")
+    log.info(f"TrackFlow 并行迭代 | 生产者={num_producers} 消费者={num_consumers}")
+    log.info(f"模型: fix={KIRO_MODEL_FIX or '默认'} | test/review/produce={KIRO_MODEL or '默认'}")
     log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
              f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
     log.info("永不停止，Ctrl+C 手动终止")
     log.info("=" * 60)
 
     cleanup_working()
-    main_loop(args.workers, args.skip_produce)
+    main_loop(num_producers, num_consumers, args.skip_produce)
 
 
 if __name__ == "__main__":
