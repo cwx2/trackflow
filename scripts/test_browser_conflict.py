@@ -1,14 +1,16 @@
 """
-浏览器冲突 Bug 复现与验证脚本（轻量版）
+浏览器冲突 Bug 并发复现与验证脚本
 
-不依赖 kiro-cli，直接调用 Playwright MCP 的 HTTP API。
-MCP SSE 接口是 JSON-RPC over SSE，我们用 requests 简单模拟。
+复现真实场景：
+  场景A（同 worker 连续）：同一个 MCP 进程，上一会话刚退出，下一个立刻连接
+  场景B（跨 worker 并发）：两个 worker 的 MCP 进程同时运行，互不干扰
 
 用法：
-  python scripts/test_browser_conflict.py --reproduce   # 复现：legacy 模式不重启
-  python scripts/test_browser_conflict.py --fixed       # 验证：legacy + 重启 MCP
-  python scripts/test_browser_conflict.py --isolated    # 验证：--isolated 模式
-  python scripts/test_browser_conflict.py               # 三种场景全跑
+  python scripts/test_browser_conflict.py                     # 全跑
+  python scripts/test_browser_conflict.py --scenario A        # 只跑场景A（同worker连续）
+  python scripts/test_browser_conflict.py --scenario B        # 只跑场景B（跨worker并发）
+  python scripts/test_browser_conflict.py --mode legacy       # 强制用旧模式
+  python scripts/test_browser_conflict.py --mode isolated     # 强制用新模式
 """
 
 import argparse
@@ -26,22 +28,56 @@ try:
     import requests
 except ImportError:
     print("需要安装 requests: pip install requests")
-    raise
+    sys.exit(1)
 
 WORKSPACE = Path(__file__).parent.parent
-WORKER_ID = "test-worker-1"
-PORT_A = 9151  # 第一个 MCP 进程
-PORT_B = 9152  # 第二个 MCP 进程（--isolated 对比测试用）
+
+# 测试专用端口，不与正常 worker 冲突
+PORT_W1 = 9151   # worker-1 的 MCP
+PORT_W2 = 9152   # worker-2 的 MCP
+
+# 全局日志锁，防止并发输出乱序
+_log_lock = threading.Lock()
+
+
+def log(tag: str, msg: str, level: str = "INFO") -> None:
+    ts = time.strftime("%H:%M:%S")
+    icons = {"INFO": "  ", "OK": "✅", "FAIL": "❌", "WARN": "⚠️", "BUG": "🐛", "FIX": "🔧"}
+    icon = icons.get(level, "  ")
+    with _log_lock:
+        print(f"[{ts}] {icon} [{tag}] {msg}", flush=True)
 
 
 # ── MCP 进程管理 ──────────────────────────────────────────────────────────────
 
-def start_mcp(port: int, mode: str, worker_id: str = WORKER_ID) -> subprocess.Popen:
+def kill_port_process(port: int) -> None:
+    """杀掉占用指定端口的进程（场景切换时清理残留）"""
+    try:
+        import psutil
+        for conn in psutil.net_connections(kind="tcp"):
+            if conn.laddr.port == port and conn.status == "LISTEN":
+                try:
+                    proc = psutil.Process(conn.pid)
+                    for child in proc.children(recursive=True):
+                        child.kill()
+                    proc.kill()
+                    log("Cleanup", f"杀掉占用端口 {port} 的残留进程 PID={conn.pid}", "WARN")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+    except ImportError:
+        pass  # psutil 未安装，跳过
+
+
+def start_mcp(worker_id: str, port: int, mode: str) -> subprocess.Popen | None:
     """
-    启动 Playwright MCP 进程。
-    mode: 'legacy'（--user-data-dir）或 'isolated'（--isolated）
+    启动一个 Playwright MCP 进程。
+    mode: 'legacy'（--user-data-dir，旧行为）或 'isolated'（新行为）
     """
     chrome_data = WORKSPACE / "scripts" / "worker-envs" / worker_id / "chrome-data"
+
+    # 先清理可能残留的同端口进程
+    kill_port_process(port)
+    time.sleep(0.5)
 
     if mode == "legacy":
         cmd = [
@@ -50,7 +86,7 @@ def start_mcp(port: int, mode: str, worker_id: str = WORKER_ID) -> subprocess.Po
             "--user-data-dir", str(chrome_data),
             "--viewport-size=1280x720",
         ]
-        print(f"[MCP:{port}] legacy 模式，chrome-data={chrome_data.name}")
+        log(f"MCP:{port}", f"启动 legacy 模式 (--user-data-dir={chrome_data})")
     else:
         cmd = [
             "npx.cmd", "@playwright/mcp@latest",
@@ -58,67 +94,84 @@ def start_mcp(port: int, mode: str, worker_id: str = WORKER_ID) -> subprocess.Po
             "--isolated",
             "--viewport-size=1280x720",
         ]
-        print(f"[MCP:{port}] isolated 模式")
+        log(f"MCP:{port}", f"启动 isolated 模式")
 
     proc = subprocess.Popen(
         cmd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,  # 捕获 stderr 以检测冲突错误
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         cwd=str(WORKSPACE),
     )
 
+    # 等待端口就绪（最多 20s）
     deadline = time.time() + 20
     while time.time() < deadline:
         try:
             with socket.create_connection(("localhost", port), timeout=1):
-                print(f"[MCP:{port}] 就绪 PID={proc.pid}")
+                log(f"MCP:{port}", f"就绪 PID={proc.pid}", "OK")
                 return proc
         except OSError:
-            time.sleep(0.5)
+            time.sleep(0.3)
 
-    print(f"[MCP:{port}] ⚠️ 超时未就绪")
-    return proc
-
-
-def stop_mcp(proc: subprocess.Popen, port: int) -> None:
-    if proc and proc.poll() is None:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-    print(f"[MCP:{port}] 已停止")
+    log(f"MCP:{port}", "启动超时，端口未就绪", "FAIL")
+    proc.kill()
+    return None
 
 
-def read_stderr_async(proc: subprocess.Popen, results: list) -> None:
-    """异步读取 MCP 进程的 stderr，收集错误信息"""
+def stop_mcp(proc: subprocess.Popen, port: int, tag: str = "") -> None:
+    """停止 MCP 进程，递归杀子进程（Chrome），并等待端口释放"""
+    if proc is None:
+        return
+
+    stderr_output = []
     try:
-        for line in proc.stderr:
-            line = line.decode("utf-8", errors="replace").strip()
-            if line:
-                results.append(line)
+        # 递归杀掉整个进程树（npx → node → Chrome）
+        try:
+            import psutil
+            parent = psutil.Process(proc.pid)
+            for child in parent.children(recursive=True):
+                try:
+                    child.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            parent.kill()
+        except Exception:
+            proc.terminate()
+
+        _, err = proc.communicate(timeout=5)
+        if err:
+            stderr_output = err.decode("utf-8", errors="replace").splitlines()
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
     except Exception:
         pass
 
+    # 等待端口真正释放（最多 8s），避免下一个场景 EADDRINUSE
+    deadline = time.time() + 8
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("localhost", port), timeout=0.5):
+                time.sleep(0.3)
+        except OSError:
+            break
 
-# ── 直接调用 MCP 工具 ─────────────────────────────────────────────────────────
+    log(f"MCP:{port}", f"已停止{' ' + tag if tag else ''}")
 
-def call_mcp_tool(port: int, tool_name: str, args: dict,
-                  session_token: str | None = None) -> dict:
-    """
-    通过 MCP HTTP API 调用 Playwright 工具。
-    MCP SSE 模式需要 Accept: application/json, text/event-stream
-    """
+    # 打印 stderr 中的关键行
+    conflict_keywords = ["already in use", "SingletonLock", "Profile is already",
+                         "main-console", "Error", "error"]
+    for line in stderr_output:
+        if any(k.lower() in line.lower() for k in conflict_keywords):
+            log(f"MCP:{port}", f"  stderr: {line.strip()}", "WARN")
+
+
+# ── MCP HTTP 调用 ─────────────────────────────────────────────────────────────
+
+def mcp_request(port: int, method: str, params: dict,
+                session_token: str | None = None) -> tuple[dict, str | None]:
+    """发送 MCP JSON-RPC 请求，返回 (result_dict, new_session_token)"""
     url = f"http://localhost:{port}/message"
-    payload = {
-        "jsonrpc": "2.0",
-        "id": str(uuid.uuid4()),
-        "method": "tools/call",
-        "params": {
-            "name": tool_name,
-            "arguments": args
-        }
-    }
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
@@ -126,9 +179,18 @@ def call_mcp_tool(port: int, tool_name: str, args: dict,
     if session_token:
         headers["mcp-session-id"] = session_token
 
+    payload = {
+        "jsonrpc": "2.0",
+        "id": str(uuid.uuid4()),
+        "method": method,
+        "params": params,
+    }
+
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        # SSE 响应：逐行解析 data: {...} 格式
+        new_token = resp.headers.get("mcp-session-id", session_token)
+
+        # 解析 SSE 响应
         for line in resp.text.splitlines():
             line = line.strip()
             if line.startswith("data:"):
@@ -137,196 +199,405 @@ def call_mcp_tool(port: int, tool_name: str, args: dict,
                     try:
                         data = json.loads(data_str)
                         if "error" in data:
-                            return {"error": data["error"]}
+                            return {"error": data["error"]}, new_token
                         if "result" in data:
-                            return data["result"]
+                            return data["result"], new_token
                     except json.JSONDecodeError:
                         pass
-        return {"raw": resp.text[:200]}
+
+        return {"raw": resp.text[:100]}, new_token
+    except requests.exceptions.ConnectionError as e:
+        return {"error": f"连接失败: {e}"}, session_token
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"请求异常: {e}"}, session_token
 
 
-def init_mcp_session(port: int) -> str | None:
-    """初始化 MCP 会话，返回 session token"""
-    url = f"http://localhost:{port}/message"
-    payload = {
-        "jsonrpc": "2.0",
-        "id": "init-1",
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "test-client", "version": "1.0"}
-        }
+def mcp_session_navigate_screenshot(
+    port: int, worker_id: str, session_idx: int, url: str
+) -> dict:
+    """
+    完整模拟一次 kiro-cli 的浏览器操作：
+    1. initialize（建立新 session）
+    2. browser_navigate
+    3. browser_snapshot（获取页面状态）
+    4. browser_take_screenshot
+    返回包含各步结果的 dict
+    """
+    tag = f"{worker_id}:sess{session_idx}"
+    result = {
+        "worker_id": worker_id,
+        "session_idx": session_idx,
+        "port": port,
+        "steps": {},
+        "conflict": False,
+        "success": False,
+        "error": "",
     }
-    try:
-        resp = requests.post(url, json=payload,
-                             headers={
-                                 "Content-Type": "application/json",
-                                 "Accept": "application/json, text/event-stream",
-                             }, timeout=10)
-        token = resp.headers.get("mcp-session-id")
-        return token
-    except Exception as e:
-        print(f"  init 失败: {e}")
-        return None
+
+    log(tag, f"=== 开始会话 {session_idx} ===")
+
+    # Step 1: initialize
+    log(tag, "Step1: initialize MCP 会话")
+    r, token = mcp_request(port, "initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": f"test-{worker_id}-{session_idx}", "version": "1.0"},
+    })
+    result["steps"]["init"] = {"ok": "error" not in r, "token": token}
+    if "error" in r:
+        result["error"] = str(r["error"])
+        log(tag, f"Step1 失败: {r['error']}", "FAIL")
+        return result
+    log(tag, f"Step1 OK, token={token}")
+
+    # Step 2: browser_navigate
+    log(tag, f"Step2: 导航到 {url}")
+    r, token = mcp_request(port, "tools/call", {
+        "name": "browser_navigate",
+        "arguments": {"url": url},
+    }, token)
+    nav_ok = "error" not in r and "error" not in str(r.get("raw", ""))
+    result["steps"]["navigate"] = {"ok": nav_ok, "raw": str(r)[:200]}
+
+    # 检查是否包含冲突错误
+    conflict_markers = ["already in use", "SingletonLock", "Profile is already",
+                        "main-console", "被其他进程", "data-dir"]
+    r_str = str(r)
+    if any(m.lower() in r_str.lower() for m in conflict_markers):
+        result["conflict"] = True
+        result["error"] = f"浏览器冲突: {r_str[:200]}"
+        log(tag, f"Step2 检测到浏览器冲突！{r_str[:300]}", "BUG")
+        return result
+
+    if not nav_ok:
+        result["error"] = str(r.get("error", r))[:200]
+        log(tag, f"Step2 失败: {result['error']}", "FAIL")
+        return result
+    log(tag, "Step2 OK", "OK")
+
+    # Step 3: browser_snapshot（验证页面状态是干净的，不是上一个会话的残留）
+    log(tag, "Step3: 获取页面快照")
+    r, token = mcp_request(port, "tools/call", {
+        "name": "browser_snapshot",
+        "arguments": {"depth": 2},
+    }, token)
+    snap_ok = "error" not in r
+    result["steps"]["snapshot"] = {"ok": snap_ok}
+    if snap_ok:
+        # 检查 snapshot 是否包含上一个会话留下的状态标记
+        snap_str = str(r)[:500]
+        log(tag, f"Step3 OK, snapshot 片段: {snap_str[:150]}", "OK")
+    else:
+        log(tag, f"Step3 失败: {r}", "WARN")
+
+    # Step 4: 截图
+    log(tag, "Step4: 截图")
+    fname = f"conflict-test-{worker_id}-{session_idx}.png"
+    r, token = mcp_request(port, "tools/call", {
+        "name": "browser_take_screenshot",
+        "arguments": {"type": "png", "scale": "css", "filename": fname},
+    }, token)
+    shot_ok = "error" not in r
+    result["steps"]["screenshot"] = {"ok": shot_ok}
+    if shot_ok:
+        log(tag, f"Step4 截图成功: {fname}", "OK")
+    else:
+        log(tag, f"Step4 截图失败: {r}", "WARN")
+
+    result["success"] = nav_ok and snap_ok
+    log(tag, f"=== 会话 {session_idx} {'成功 ✅' if result['success'] else '失败 ❌'} ===")
+    return result
 
 
-def simulate_browser_session(port: int, session_name: str,
-                              url: str = "http://localhost:3000") -> tuple[bool, str]:
+# ── 场景 A：同 worker 连续会话（复现旧 bug） ──────────────────────────────────
+
+def scenario_a_sequential(mode: str) -> dict:
     """
-    模拟一次浏览器会话：初始化 → 导航 → 截图
-    返回 (success, error_message)
+    场景A：同一个 worker，连续两个会话共享一个 MCP 进程。
+    不重启 MCP = 旧行为（容易出现残留 context）
+    重启 MCP = restart 修复
+
+    返回 {session1: ..., session2: ..., conflict_detected: bool}
     """
-    print(f"  [{session_name}] 初始化 MCP 会话...")
+    tag = "ScenarioA"
+    log(tag, f"{'='*50}")
+    log(tag, f"场景A：同 worker 连续会话（mode={mode}）")
+    log(tag, f"模拟: fix 会话结束 → [不重启MCP] → test 会话启动")
+    log(tag, f"{'='*50}")
 
-    # 先初始化
-    token = init_mcp_session(port)
-
-    # 导航
-    print(f"  [{session_name}] 导航到 {url}...")
-    result = call_mcp_tool(port, "browser_navigate", {"url": url}, token)
-
-    error_msg = ""
-    if "error" in result:
-        error_msg = str(result["error"])
-        print(f"  [{session_name}] ❌ 导航失败: {error_msg}")
-        return False, error_msg
-
-    # 截图
-    result2 = call_mcp_tool(port, "browser_take_screenshot",
-                             {"type": "png", "scale": "css",
-                              "filename": f"conflict-test-{session_name}.png"}, token)
-    if "error" in result2:
-        error_msg = str(result2["error"])
-        print(f"  [{session_name}] ❌ 截图失败: {error_msg}")
-        return False, error_msg
-
-    print(f"  [{session_name}] ✅ 完成")
-    return True, ""
-
-
-# ── 测试场景 ──────────────────────────────────────────────────────────────────
-
-def test_scenario(mcp_mode: str, restart_between: bool) -> dict:
-    """
-    运行完整测试场景，返回结果字典。
-    """
-    print(f"\n{'='*60}")
-    print(f"场景: mode={mcp_mode}, restart={restart_between}")
-    print(f"{'='*60}")
-
+    worker_id = "test-worker-seq"
     # 清理旧 chrome-data
-    chrome_data = WORKSPACE / "scripts" / "worker-envs" / WORKER_ID / "chrome-data"
+    chrome_data = WORKSPACE / "scripts" / "worker-envs" / worker_id / "chrome-data"
+    if chrome_data.exists():
+        shutil.rmtree(chrome_data, ignore_errors=True)
+        log(tag, f"清理旧 chrome-data")
+
+    proc = start_mcp(worker_id, PORT_W1, mode)
+    if not proc:
+        return {"error": "MCP 启动失败"}
+
+    try:
+        # 会话 1（fix 阶段）
+        log(tag, "--- 会话1（模拟 fix 阶段）---")
+        r1 = mcp_session_navigate_screenshot(PORT_W1, worker_id, 1, "http://localhost:3000")
+
+        # 模拟 kiro-cli 退出后的短暂等待（不重启 MCP）
+        log(tag, "fix 会话结束，等待 3s（不重启 MCP，模拟旧行为）")
+        time.sleep(3)
+
+        # 会话 2（test 阶段）
+        log(tag, "--- 会话2（模拟 test 阶段）---")
+        r2 = mcp_session_navigate_screenshot(PORT_W1, worker_id, 2, "http://localhost:3000/issues")
+
+        conflict = r1.get("conflict") or r2.get("conflict")
+        return {"session1": r1, "session2": r2, "conflict_detected": conflict}
+
+    finally:
+        stop_mcp(proc, PORT_W1, "(场景A结束)")
+
+
+def scenario_a_with_restart(mode: str) -> dict:
+    """场景A变体：重启 MCP 之后再起第二个会话（验证 restart 修复）"""
+    tag = "ScenarioA-Restart"
+    log(tag, f"{'='*50}")
+    log(tag, f"场景A+重启：fix结束 → 重启MCP → test启动（mode={mode}）")
+    log(tag, f"{'='*50}")
+
+    worker_id = "test-worker-seq-restart"
+    chrome_data = WORKSPACE / "scripts" / "worker-envs" / worker_id / "chrome-data"
     if chrome_data.exists():
         shutil.rmtree(chrome_data, ignore_errors=True)
 
-    stderr_lines: list[str] = []
-    proc = start_mcp(PORT_A, mcp_mode)
+    proc = start_mcp(worker_id, PORT_W1, mode)
+    if not proc:
+        return {"error": "MCP 启动失败"}
 
-    # 启动 stderr 监听线程
-    t = threading.Thread(target=read_stderr_async, args=(proc, stderr_lines), daemon=True)
-    t.start()
-    time.sleep(1)
-
-    results = {}
     try:
-        # 会话 1（模拟 fix 阶段）
-        print("\n[阶段1] 模拟 fix 会话...")
-        ok1, err1 = simulate_browser_session(PORT_A, "session1-fix")
-        results["session1"] = {"ok": ok1, "error": err1}
+        log(tag, "--- 会话1（fix 阶段）---")
+        r1 = mcp_session_navigate_screenshot(PORT_W1, worker_id, 1, "http://localhost:3000")
 
-        if restart_between:
-            print("\n[重置] 停止并重启 MCP 进程...")
-            stop_mcp(proc, PORT_A)
-            time.sleep(2)
-            proc = start_mcp(PORT_A, mcp_mode)
-            t2 = threading.Thread(target=read_stderr_async, args=(proc, stderr_lines), daemon=True)
-            t2.start()
-            time.sleep(1)
-        else:
-            print("\n[等待] 模拟上一个 kiro-cli 退出后的短暂等待（3s）...")
-            time.sleep(3)
+        # 重启 MCP（模拟 restart_playwright_for_worker）
+        log(tag, "fix 会话结束，重启 MCP（模拟 restart_playwright_for_worker）", "FIX")
+        stop_mcp(proc, PORT_W1)
+        time.sleep(2)
+        proc = start_mcp(worker_id, PORT_W1, mode)
+        if not proc:
+            return {"session1": r1, "error": "MCP 重启失败"}
 
-        # 会话 2（模拟 test 阶段）
-        print("\n[阶段2] 模拟 test 会话...")
-        ok2, err2 = simulate_browser_session(PORT_A, "session2-test")
-        results["session2"] = {"ok": ok2, "error": err2}
+        log(tag, "--- 会话2（test 阶段）---")
+        r2 = mcp_session_navigate_screenshot(PORT_W1, worker_id, 2, "http://localhost:3000/issues")
+
+        conflict = r1.get("conflict") or r2.get("conflict")
+        return {"session1": r1, "session2": r2, "conflict_detected": conflict}
 
     finally:
-        stop_mcp(proc, PORT_A)
-        time.sleep(1)
+        stop_mcp(proc, PORT_W1, "(场景A+重启结束)")
 
-    # 分析冲突
-    conflict_keywords = ["already in use", "SingletonLock", "Profile is already",
-                         "main-console", "data-dir conflict"]
-    conflict_in_stderr = any(
-        any(k in line for k in conflict_keywords)
-        for line in stderr_lines
+
+# ── 场景 B：跨 worker 并发（两个 worker 同时操作） ───────────────────────────
+
+def scenario_b_concurrent(mode: str) -> dict:
+    """
+    场景B：两个 worker 同时运行，各自有独立的 MCP 进程和 chrome-data。
+    在并发执行期间，两个 worker 各自跑 3 个连续会话。
+    验证：互相不干扰。
+    """
+    tag = "ScenarioB"
+    log(tag, f"{'='*50}")
+    log(tag, f"场景B：两个 worker 并发（mode={mode}）")
+    log(tag, f"各自 3 个连续会话，验证互不干扰")
+    log(tag, f"{'='*50}")
+
+    worker1_id = "test-worker-concurrent-1"
+    worker2_id = "test-worker-concurrent-2"
+
+    # 清理
+    for wid in [worker1_id, worker2_id]:
+        cd = WORKSPACE / "scripts" / "worker-envs" / wid / "chrome-data"
+        if cd.exists():
+            shutil.rmtree(cd, ignore_errors=True)
+
+    proc1 = start_mcp(worker1_id, PORT_W1, mode)
+    proc2 = start_mcp(worker2_id, PORT_W2, mode)
+
+    if not proc1 or not proc2:
+        log(tag, "MCP 启动失败", "FAIL")
+        return {"error": "MCP 启动失败"}
+
+    results = {
+        "worker1": [],
+        "worker2": [],
+        "conflicts": [],
+    }
+
+    def run_worker(worker_id: str, port: int, sessions: list, urls: list) -> None:
+        """单个 worker 连续跑多个会话"""
+        for i, url in enumerate(urls, 1):
+            log(f"WORKER:{worker_id}", f"开始第 {i}/{len(urls)} 个会话")
+            r = mcp_session_navigate_screenshot(port, worker_id, i, url)
+            sessions.append(r)
+            if r.get("conflict"):
+                with _log_lock:
+                    results["conflicts"].append({
+                        "worker": worker_id,
+                        "session": i,
+                        "error": r["error"],
+                    })
+            # 模拟会话间短暂等待（不重启 MCP）
+            if i < len(urls):
+                log(f"WORKER:{worker_id}", f"会话 {i} 结束，等待 2s...")
+                time.sleep(2)
+
+    # worker1 访问的 URL 序列
+    urls_w1 = [
+        "http://localhost:3000",
+        "http://localhost:3000/issues",
+        "http://localhost:3000",
+    ]
+    # worker2 访问的 URL 序列（故意交叉，模拟真实并发）
+    urls_w2 = [
+        "http://localhost:3000/issues",
+        "http://localhost:3000",
+        "http://localhost:3000/issues",
+    ]
+
+    t1 = threading.Thread(
+        target=run_worker,
+        args=(worker1_id, PORT_W1, results["worker1"], urls_w1),
+        name="worker1",
     )
-    conflict_in_errors = any(
-        any(k in (r.get("error", "")) for k in conflict_keywords)
-        for r in results.values()
+    t2 = threading.Thread(
+        target=run_worker,
+        args=(worker2_id, PORT_W2, results["worker2"], urls_w2),
+        name="worker2",
     )
 
-    conflict_detected = conflict_in_stderr or conflict_in_errors
-    results["conflict_detected"] = conflict_detected
-    results["stderr_sample"] = stderr_lines[:10]
+    log(tag, "并发启动两个 worker...")
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    log(tag, "两个 worker 全部完成")
 
-    # 打印结论
-    print(f"\n{'─'*40}")
-    print(f"结论:")
-    print(f"  会话1: {'✅ 正常' if results['session1']['ok'] else '❌ 失败'}")
-    print(f"  会话2: {'✅ 正常' if results['session2']['ok'] else '❌ 失败'}")
-    if conflict_detected:
-        print(f"  ⚠️  检测到浏览器冲突（Bug 复现成功）")
-    elif results["session2"]["ok"]:
-        print(f"  ✅  无冲突，修复验证通过")
-    else:
-        print(f"  ❓  会话2失败，但未检测到标准冲突关键词")
-        if results["session2"]["error"]:
-            print(f"      错误: {results['session2']['error'][:200]}")
-    if stderr_lines:
-        print(f"\n  MCP stderr（前5行）:")
-        for line in stderr_lines[:5]:
-            print(f"    {line}")
-    print(f"{'─'*40}")
+    stop_mcp(proc1, PORT_W1, "(worker1)")
+    stop_mcp(proc2, PORT_W2, "(worker2)")
 
+    results["conflict_detected"] = len(results["conflicts"]) > 0
     return results
+
+
+# ── 打印汇总 ──────────────────────────────────────────────────────────────────
+
+def print_summary(label: str, results: dict) -> None:
+    print(f"\n{'─'*60}")
+    print(f"📊 {label} 汇总")
+    print(f"{'─'*60}")
+
+    if "error" in results and not isinstance(results.get("session1"), dict):
+        print(f"  ❌ 运行失败: {results['error']}")
+        return
+
+    # 场景A格式
+    if "session1" in results:
+        s1 = results["session1"]
+        s2 = results.get("session2", {})
+        print(f"  会话1: {'✅ 成功' if s1.get('success') else '❌ 失败'} "
+              f"{'⚠️ 冲突' if s1.get('conflict') else ''}")
+        if s1.get("error"):
+            print(f"         错误: {s1['error'][:150]}")
+        print(f"  会话2: {'✅ 成功' if s2.get('success') else '❌ 失败'} "
+              f"{'⚠️ 冲突' if s2.get('conflict') else ''}")
+        if s2.get("error"):
+            print(f"         错误: {s2['error'][:150]}")
+        conflict = results.get("conflict_detected", False)
+        print(f"\n  {'🐛 检测到浏览器冲突！（Bug 已复现）' if conflict else '✅ 无冲突，运行正常'}")
+
+    # 场景B格式
+    elif "worker1" in results:
+        w1 = results["worker1"]
+        w2 = results["worker2"]
+        w1_ok = sum(1 for r in w1 if r.get("success"))
+        w2_ok = sum(1 for r in w2 if r.get("success"))
+        print(f"  worker1: {w1_ok}/{len(w1)} 个会话成功")
+        print(f"  worker2: {w2_ok}/{len(w2)} 个会话成功")
+        conflicts = results.get("conflicts", [])
+        if conflicts:
+            print(f"\n  🐛 检测到 {len(conflicts)} 个冲突:")
+            for c in conflicts:
+                print(f"     - {c['worker']} 会话{c['session']}: {c['error'][:100]}")
+        else:
+            print(f"\n  ✅ 无跨 worker 冲突，隔离正常")
+
+    print(f"{'─'*60}")
 
 
 # ── 主入口 ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--reproduce", action="store_true",
-                       help="复现 Bug（legacy + 不重启，预期出现冲突）")
-    group.add_argument("--fixed", action="store_true",
-                       help="验证 restart 修复（legacy + 重启，预期无冲突）")
-    group.add_argument("--isolated", action="store_true",
-                       help="验证 --isolated 修复（不重启，预期无冲突）")
+    parser = argparse.ArgumentParser(description="浏览器冲突并发复现与验证")
+    parser.add_argument("--scenario", choices=["A", "B", "A-restart"],
+                        help="指定场景（默认全跑）")
+    parser.add_argument("--mode", choices=["legacy", "isolated"],
+                        help="强制指定 MCP 模式（默认：先 legacy 后 isolated 对比）")
     args = parser.parse_args()
 
-    if args.reproduce:
-        r = test_scenario(mcp_mode="legacy", restart_between=False)
-        sys.exit(0 if not r["conflict_detected"] else 1)
-    elif args.fixed:
-        r = test_scenario(mcp_mode="legacy", restart_between=True)
-        sys.exit(0 if r["session2"]["ok"] else 1)
-    elif args.isolated:
-        r = test_scenario(mcp_mode="isolated", restart_between=False)
-        sys.exit(0 if r["session2"]["ok"] else 1)
-    else:
-        print("运行全部三个场景\n")
-        r1 = test_scenario("legacy",   restart_between=False)  # 应复现 bug
-        r2 = test_scenario("legacy",   restart_between=True)   # 应修复
-        r3 = test_scenario("isolated", restart_between=False)  # 应修复
+    modes_to_test = [args.mode] if args.mode else ["legacy", "isolated"]
 
+    if args.scenario == "A":
+        for m in modes_to_test:
+            r = scenario_a_sequential(m)
+            print_summary(f"场景A 连续会话 [{m}]", r)
+
+    elif args.scenario == "A-restart":
+        for m in modes_to_test:
+            r = scenario_a_with_restart(m)
+            print_summary(f"场景A+重启 [{m}]", r)
+
+    elif args.scenario == "B":
+        for m in modes_to_test:
+            r = scenario_b_concurrent(m)
+            print_summary(f"场景B 并发 [{m}]", r)
+
+    else:
+        # 全跑：对比 legacy 和 isolated 的差异
+        print("\n" + "="*60)
+        print("完整测试：legacy vs isolated 对比")
+        print("="*60)
+
+        # 场景A：同 worker 连续（不重启 MCP）
+        print("\n【1】场景A：同worker连续，不重启MCP")
+        r_a_legacy   = scenario_a_sequential("legacy")
+        r_a_isolated = scenario_a_sequential("isolated")
+        print_summary("场景A [legacy]",   r_a_legacy)
+        print_summary("场景A [isolated]", r_a_isolated)
+
+        # 场景A+重启
+        print("\n【2】场景A+重启：legacy + restart_playwright_for_worker")
+        r_a_restart = scenario_a_with_restart("legacy")
+        print_summary("场景A+重启 [legacy]", r_a_restart)
+
+        # 场景B：跨worker并发
+        print("\n【3】场景B：两个worker并发")
+        r_b_legacy   = scenario_b_concurrent("legacy")
+        r_b_isolated = scenario_b_concurrent("isolated")
+        print_summary("场景B [legacy]",   r_b_legacy)
+        print_summary("场景B [isolated]", r_b_isolated)
+
+        # 最终汇总
         print(f"\n{'='*60}")
-        print("总结:")
-        print(f"  1. legacy + 不重启:  {'⚠️  Bug 已复现' if r1['conflict_detected'] else '未复现（可能环境差异）'}")
-        print(f"  2. legacy + 重启:    {'✅ 修复有效' if r2['session2']['ok'] else '❌ 仍有问题'}")
-        print(f"  3. isolated + 不重启: {'✅ 修复有效' if r3['session2']['ok'] else '❌ 仍有问题'}")
-        print(f"{'='*60}")
+        print("最终汇总：")
+        all_results = [
+            ("场景A legacy 连续",      r_a_legacy.get("conflict_detected")),
+            ("场景A isolated 连续",    r_a_isolated.get("conflict_detected")),
+            ("场景A+restart legacy",   r_a_restart.get("conflict_detected")),
+            ("场景B legacy 并发",       r_b_legacy.get("conflict_detected")),
+            ("场景B isolated 并发",    r_b_isolated.get("conflict_detected")),
+        ]
+        for name, conflict in all_results:
+            if conflict:
+                print(f"  🐛 {name}: 冲突已复现")
+            elif conflict is False:
+                print(f"  ✅ {name}: 无冲突")
+            else:
+                print(f"  ❓ {name}: 未知（运行出错）")
+        print("="*60)

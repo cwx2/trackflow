@@ -125,11 +125,11 @@ def stop_all_playwright() -> None:
     with _playwright_lock:
         for worker_id, proc in list(_playwright_processes.items()):
             if proc.poll() is None:
-                proc.terminate()
+                _kill_proc_tree(proc.pid)
                 try:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    proc.kill()
+                    pass
         _playwright_processes.clear()
     log.info("[playwright] 所有独立 MCP 进程已停止")
 
@@ -185,22 +185,58 @@ def setup_worker_kiro_dir(worker_id: str, port: int) -> Path:
     return worker_env_dir
 
 
+def _kill_proc_tree(pid: int) -> None:
+    """递归杀掉进程及其所有子进程（处理 npx → node → Chrome 的进程树）"""
+    try:
+        import psutil
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        parent.kill()
+    except Exception:
+        pass  # psutil 未安装或进程已不存在
+
+
+def _wait_port_free(port: int, timeout: float = 10.0) -> bool:
+    """等待端口被释放，返回 True 表示端口已空闲"""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("localhost", port), timeout=0.5):
+                time.sleep(0.5)  # 端口仍被占用，继续等
+        except OSError:
+            return True  # 连不上 = 端口已释放
+    return False
+
+
 def restart_playwright_for_worker(worker_id: str) -> None:
     """
     重置指定 worker 的 Playwright MCP 进程（不影响其他 worker）。
 
     每次 kiro-cli 会话结束后调用，确保下一轮会话拿到干净的 browser context。
-    只操作 worker_id 对应的进程条目，其他 worker 的进程不受影响。
+    - 递归杀掉 npx 及其子进程（Chrome），彻底释放端口
+    - 等待端口真正释放后才返回，避免下一次 start 时 EADDRINUSE
     """
+    port = get_worker_port(worker_id)
     with _playwright_lock:
         proc = _playwright_processes.pop(worker_id, None)
         if proc and proc.poll() is None:
-            proc.terminate()
+            _kill_proc_tree(proc.pid)
             try:
-                proc.wait(timeout=5)
+                proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
-                proc.kill()
-            log.debug(f"[playwright] {worker_id} MCP 进程已重置，下次调用时重启")
+                pass
+
+    # 锁外等待端口释放（最多 10s），避免下次 start 时 EADDRINUSE
+    freed = _wait_port_free(port, timeout=10.0)
+    if freed:
+        log.debug(f"[playwright] {worker_id} MCP 进程已重置，端口 {port} 已释放")
+    else:
+        log.warning(f"[playwright] {worker_id} 端口 {port} 10s 内未释放，可能影响下次启动")
 
 
 def cleanup_worker_envs() -> None:
