@@ -1,5 +1,10 @@
 # === 忽略参考源码 ===
-openproject
+# === Scripts 运行时生成 ===
+scripts/worker-envs/     # 各 worker 独立 KIRO_HOME（运行时生成，含独立 mcp.json）
+scripts/log/             # 运行日志
+scripts/count_rejected.py  # 临时统计脚本
+
+
 requirements
 
 # === Kiro / 文档 ===
