@@ -134,15 +134,49 @@ PRODUCER_CONFIGS = [
 
 # ============ 日志 ============
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(WORKSPACE / "scripts" / "auto_iterate_parallel.log", encoding="utf-8"),
-    ]
+from logging.handlers import TimedRotatingFileHandler
+
+_LOG_DIR = WORKSPACE / "scripts" / "log"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+_log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s")
+
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)   # 控制台只显示 INFO 及以上
+_console_handler.setFormatter(_log_formatter)
+
+# 按天轮转，文件名格式：auto_iterate_parallel.2026-07-31.log
+_file_handler = TimedRotatingFileHandler(
+    _LOG_DIR / "auto_iterate_parallel.log",
+    when="midnight",        # 每天 0 点滚动
+    interval=1,
+    backupCount=30,         # 保留最近 30 天
+    encoding="utf-8",
+    utc=False,
 )
+_file_handler.suffix = "%Y-%m-%d"          # 轮转后文件名后缀：.2026-07-31
+_file_handler.setLevel(logging.DEBUG)      # 文件记录所有会话输出行（DEBUG）
+_file_handler.setFormatter(_log_formatter)
+
+logging.basicConfig(level=logging.DEBUG, handlers=[_console_handler, _file_handler])
 log = logging.getLogger(__name__)
+
+# 确保 root logger 级别和 handler 生效（basicConfig 在已有 handler 时不覆盖）
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.DEBUG)
+if not any(isinstance(h, TimedRotatingFileHandler) for h in _root_logger.handlers):
+    _root_logger.addHandler(_file_handler)
+if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, TimedRotatingFileHandler)
+           for h in _root_logger.handlers):
+    _root_logger.addHandler(_console_handler)
+
+# ANSI 转义码过滤（日志文件写入前清除颜色控制字符）
+import re as _re
+_ANSI_RE = _re.compile(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[()][A-B0-2]')
+
+def strip_ansi(text: str) -> str:
+    """移除字符串中所有 ANSI 转义码"""
+    return _ANSI_RE.sub('', text)
 
 # ============ Playwright 多实例管理 ============
 
@@ -398,6 +432,9 @@ def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str |
     env["CI"] = "true"                   # 很多工具检测 CI 环境跳过交互
     env["NPM_CONFIG_YES"] = "true"       # npm 自动 yes
     env["DEBIAN_FRONTEND"] = "noninteractive"  # apt 等不提问
+    env["NO_COLOR"] = "1"                # 禁用颜色输出（ANSI 转义码）
+    env["FORCE_COLOR"] = "0"             # 强制关闭颜色（部分工具识别此变量）
+    env["KIRO_LOG_NO_COLOR"] = "1"       # kiro-cli 专属禁色变量
 
     try:
         process = subprocess.Popen(
@@ -408,6 +445,7 @@ def run_kiro(prompt: str, label: str, model: str | None = None, worker_id: str |
         for line in process.stdout:
             line_stripped = line.rstrip("\n")
             print(f"  [{label}] {line_stripped}")
+            log.debug(f"[{label}] {strip_ansi(line_stripped)}")
             output_lines.append(line_stripped)
         process.wait(timeout=TIMEOUT_SECONDS)
         elapsed = time.time() - start
@@ -440,6 +478,9 @@ def get_current_commit() -> str:
         return result.stdout.strip() if result.returncode == 0 else ""
     except Exception:
         return ""
+
+
+def get_latest_session_id(req_stem: str | None = None) -> str | None:
     """
     获取最新的 session ID。
     req_stem: 需求文件的 stem（如 'requirement-123'），用于精确匹配本需求的会话。
@@ -489,7 +530,8 @@ def run_kiro_resume(session_id: str, prompt: str, label: str, model: str | None 
     env = os.environ.copy()
     env.update({"GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true",
                  "EDITOR": "true", "VISUAL": "true", "CI": "true",
-                 "NPM_CONFIG_YES": "true", "DEBIAN_FRONTEND": "noninteractive"})
+                 "NPM_CONFIG_YES": "true", "DEBIAN_FRONTEND": "noninteractive",
+                 "NO_COLOR": "1", "FORCE_COLOR": "0", "KIRO_LOG_NO_COLOR": "1"})
     try:
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -498,6 +540,7 @@ def run_kiro_resume(session_id: str, prompt: str, label: str, model: str | None 
         for line in process.stdout:
             line_stripped = line.rstrip("\n")
             print(f"  [{label}] {line_stripped}")
+            log.debug(f"[{label}] {strip_ansi(line_stripped)}")
             output_lines.append(line_stripped)
         process.wait(timeout=TIMEOUT_SECONDS)
         elapsed = time.time() - start
@@ -545,9 +588,9 @@ def parse_test_result(output: str) -> tuple[bool, str]:
     """
     lines = output.strip().split("\n")
 
-    # 1. 检查 TEST_RESULT 标记（最后 5 行内）
+    # 1. 检查 TEST_RESULT 标记（最后 15 行内，覆盖 kiro-cli 尾部追加的 Time/空行）
     result_line = None
-    for line in reversed(lines[-5:]):
+    for line in reversed(lines[-15:]):
         stripped = line.strip()
         if stripped in ("TEST_RESULT: PASS", "TEST_RESULT: FAIL"):
             result_line = stripped
@@ -596,8 +639,8 @@ def parse_review_result(output: str) -> tuple[bool, str]:
     优先识别机器标记 REVIEW_RESULT: PASS/FAIL，降级时用内容关键词。
     """
     lines = output.strip().split("\n")
-    # 优先检查最后几行的机器标记
-    for line in reversed(lines[-5:]):
+    # 优先检查最后几行的机器标记（最后 15 行，覆盖 kiro-cli 尾部追加的 Time/空行）
+    for line in reversed(lines[-15:]):
         line = line.strip()
         if line == "REVIEW_RESULT: PASS":
             return True, "\n".join(lines[-10:])
@@ -839,6 +882,9 @@ def consume_one(worker_id: str) -> str | None:
     prev_test_summary = ""
     test_passed = False
 
+    # 等待 playwright MCP server 就绪（修需求会话可能占用了 MCP，稍等再发起测试）
+    time.sleep(5)
+
     for test_round in range(1, MAX_TEST_RETRIES + 1):
         log.info(f"[{label}] 测试第 {test_round} 轮...")
 
@@ -846,13 +892,16 @@ def consume_one(worker_id: str) -> str | None:
             test_prompt = (
                 f"[使用 skill: e2e-test] "
                 f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
-                f"测试需求 {req_file.stem}，验证其验收标准。需求文件位于 {actual_path}"
+                f"测试需求 {req_file.stem}，验证其验收标准。需求文件位于 {actual_path}\n\n"
+                f"⚠️ 开始测试前必须先读取需求文件 {actual_path}，"
+                f"提取验收标准和「Agent 交接上下文」章节中的测试重点。"
             )
         else:
             test_prompt = (
                 f"[使用 skill: e2e-test] "
                 f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
-                f"重测需求 {req_file.stem}（第 {test_round} 轮）。\n\n"
+                f"重测需求 {req_file.stem}（第 {test_round} 轮）。需求文件位于 {actual_path}\n\n"
+                f"⚠️ 开始测试前必须先读取需求文件 {actual_path}，确认最新的「Agent 交接上下文」。\n\n"
                 f"上轮失败摘要：\n{prev_test_summary}\n\n"
                 f"请仅验证上轮失败的用例，并回归已通过的用例。"
             )
@@ -908,7 +957,9 @@ def consume_one(worker_id: str) -> str | None:
             review_prompt = (
                 f"[使用 skill: code-review] "
                 f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
-                f"审核需求 {req_file.stem} 的本次代码变更。\n"
+                f"审核需求 {req_file.stem} 的本次代码变更。需求文件位于 {actual_path}\n\n"
+                f"⚠️ 开始审核前必须先读取需求文件 {actual_path}，"
+                f"提取「Agent 交接上下文」中的变更文件清单和审核重点。\n\n"
                 f"变更范围：git diff {diff_range}\n"
                 f"请审核这个范围内的所有改动（可能包含多个 commit）。"
             )
@@ -916,7 +967,8 @@ def consume_one(worker_id: str) -> str | None:
             review_prompt = (
                 f"[使用 skill: code-review] "
                 f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
-                f"二次审核需求 {req_file.stem}（第 {review_round} 轮）。\n\n"
+                f"二次审核需求 {req_file.stem}（第 {review_round} 轮）。需求文件位于 {actual_path}\n\n"
+                f"⚠️ 开始审核前必须先读取需求文件 {actual_path}，确认最新的「Agent 交接上下文」。\n\n"
                 f"上轮 MUST 问题：\n{prev_review_summary}\n\n"
                 f"请验证 MUST 问题是否已修复，无需重新做完整审核。"
             )
@@ -951,20 +1003,53 @@ def consume_one(worker_id: str) -> str | None:
             if not fix_done2:
                 log.warning(f"[{label}] 审核反馈修复未输出 FIX_DONE，继续二次审核验证")
 
-    # ── 步骤 5：归档 ──
+    # ── 步骤 5：归档与推送 ──
+    # 只有测试和审核全部通过，才执行 git push 和归档
+    # 任何一个没通过 → 放回 develop/ 等待下一轮重试
     overall_success = test_passed and review_passed
-    if req_file.exists():
-        shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
 
     if overall_success:
-        log.info(f"[{label}] ✅ {req_file.name} 全流程完成")
+        # push 前打印本次变更文件清单（多进程并发时方便追踪）
+        try:
+            files_result = subprocess.run(
+                ["git", "diff", diff_range, "--name-only"],
+                capture_output=True, text=True,
+                cwd=str(WORKSPACE), timeout=15
+            )
+            changed_files = files_result.stdout.strip()
+            log.info(f"[{label}] 本次推送文件清单（{diff_range}）:\n{changed_files}")
+        except Exception as e:
+            log.warning(f"[{label}] 获取文件清单失败: {e}")
+
+        # git push（所有验证通过后才推送）
+        try:
+            push_result = subprocess.run(
+                ["git", "push"],
+                capture_output=True, text=True,
+                cwd=str(WORKSPACE), timeout=60
+            )
+            if push_result.returncode == 0:
+                log.info(f"[{label}] ✅ git push 成功")
+            else:
+                log.warning(f"[{label}] ⚠️ git push 失败: {push_result.stderr.strip()}")
+        except Exception as e:
+            log.warning(f"[{label}] ⚠️ git push 异常: {e}")
+
+        # 归档需求文件到 implement/
+        if req_file.exists():
+            shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
+        log.info(f"[{label}] ✅ {req_file.name} 全流程完成，已归档")
     else:
+        # 验证未通过 → 放回 develop/ 重试
         status = []
         if not test_passed:
             status.append(f"测试未全通({MAX_TEST_RETRIES}轮)")
         if not review_passed:
             status.append(f"审核未全通({MAX_REVIEW_RETRIES}轮)")
-        log.warning(f"[{label}] ⚠️ {req_file.name} 已归档但存在问题: {', '.join(status)}")
+        log.warning(f"[{label}] ❌ {req_file.name} 未通过验证（{', '.join(status)}），放回 develop/ 等待重试")
+        if req_file.exists():
+            shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
+        return None  # 不计入完成数，等待重试
 
     return req_file.name
 
