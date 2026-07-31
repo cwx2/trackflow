@@ -65,8 +65,8 @@
       "username": "testuser",
       "enabled": true,
       "emailVerified": true,
-      "firstName": "Test",
-      "lastName": "User",
+      "firstName": "管理员",
+      "lastName": "系统",
       "email": "test@trackflow.dev",
       "credentials": [{ "type": "password", "value": "test123", "temporary": false }],
       "realmRoles": ["default-roles-trackflow", "tf_admin", "tf_user"]
