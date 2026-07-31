@@ -9,68 +9,68 @@
 
       <nav class="sidebar-nav">
         <router-link to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
-          <span class="nav-icon">📊</span>
+          <icon-dashboard class="nav-icon" />
           <span class="nav-label">仪表盘</span>
         </router-link>
         <router-link to="/issues" class="nav-item" :class="{ active: $route.name === 'Issues' }">
-          <span class="nav-icon">📋</span>
+          <icon-unordered-list class="nav-icon" />
           <span class="nav-label">问题</span>
           <span v-if="issueBadgeCount > 0" class="nav-badge" :title="`${issueBadgeCount} 个待测试工单`">
             {{ issueBadgeCount > 99 ? '99+' : issueBadgeCount }}
           </span>
         </router-link>
         <router-link to="/projects" class="nav-item" :class="{ active: $route.name === 'Projects' }">
-          <span class="nav-icon">📁</span>
+          <icon-layers class="nav-icon" />
           <span class="nav-label">项目</span>
         </router-link>
         <router-link to="/boards" class="nav-item" :class="{ active: $route.name === 'Boards' }">
-          <span class="nav-icon">📊</span>
+          <icon-apps class="nav-icon" />
           <span class="nav-label">看板</span>
         </router-link>
         <router-link to="/sprints" class="nav-item" :class="{ active: $route.name === 'Sprints' }">
-          <span class="nav-icon">🏃</span>
+          <icon-thunderbolt class="nav-icon" />
           <span class="nav-label">迭代</span>
         </router-link>
         <router-link v-if="canViewSprintPlanning" to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
-          <span class="nav-icon">📋</span>
+          <icon-calendar class="nav-icon" />
           <span class="nav-label">规划</span>
         </router-link>
         <router-link to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
-          <span class="nav-icon">⏱</span>
+          <icon-clock-circle class="nav-icon" />
           <span class="nav-label">时间表</span>
         </router-link>
         <router-link v-if="canViewReport" to="/reports" class="nav-item" :class="{ active: $route.path.startsWith('/reports') }">
-          <span class="nav-icon">📈</span>
+          <icon-bar-chart class="nav-icon" />
           <span class="nav-label">报表</span>
         </router-link>
         <router-link v-if="isAdmin" to="/automation" class="nav-item" :class="{ active: $route.path.startsWith('/automation') }">
-          <span class="nav-icon">🤖</span>
+          <icon-robot class="nav-icon" />
           <span class="nav-label">自动化</span>
         </router-link>
         <router-link v-if="canManageWorkflow" to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
-          <span class="nav-icon">🔄</span>
+          <icon-share-alt class="nav-icon" />
           <span class="nav-label">工作流</span>
         </router-link>
         <router-link v-if="isAdmin" to="/admin" class="nav-item" :class="{ active: isAdminRoute }">
-          <span class="nav-icon">⚙️</span>
+          <icon-settings class="nav-icon" />
           <span class="nav-label">管理</span>
         </router-link>
         <router-link v-if="canViewTrash" to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
-          <span class="nav-icon">🗑️</span>
+          <icon-delete class="nav-icon" />
           <span class="nav-label">回收站</span>
         </router-link>
       </nav>
 
       <div class="sidebar-footer">
         <router-link v-if="canCreateIssue" to="/issues/create" class="footer-item">
-          <span class="nav-icon">➕</span>
+          <icon-plus-circle class="nav-icon" />
           <span class="nav-label">创建</span>
         </router-link>
 
         <!-- 通知铃铛 -->
         <div class="footer-item notification-trigger" @click="toggleNotificationPanel">
           <span class="nav-icon notification-icon-wrap">
-            🔔
+            <icon-notification />
             <span v-if="hasUnread" class="notification-badge">
               {{ unreadCount > 99 ? '99+' : unreadCount }}
             </span>
@@ -86,7 +86,7 @@
           @click="showTimerPopover = !showTimerPopover"
         >
           <span class="nav-icon timer-icon-wrap">
-            ⏱
+            <icon-clock-circle />
             <span class="timer-pulse"></span>
           </span>
           <span class="nav-label timer-badge-label">
@@ -97,7 +97,7 @@
         <!-- 计时器快捷面板 -->
         <div v-if="showTimerPopover && timerStore.isRunning" class="timer-popover">
           <div class="timer-popover-header">
-            <span class="timer-popover-icon">⏱</span>
+            <icon-clock-circle class="timer-popover-icon" />
             <span class="timer-popover-title">正在计时</span>
           </div>
           <div class="timer-popover-body">
@@ -109,14 +109,14 @@
           </div>
           <div class="timer-popover-footer">
             <button class="timer-stop-btn" :disabled="timerStore.loading" @click="handleStopTimer">
-              ⏹ 停止计时
+              <icon-record-stop /> 停止计时
             </button>
           </div>
         </div>
 
         <!-- 主题切换 -->
         <div class="footer-item theme-switcher" @click="cycleTheme">
-          <span class="nav-icon">{{ themeIcon }}</span>
+          <component :is="themeIconComponent" class="nav-icon" />
           <span class="nav-label">{{ themeLabel }}</span>
         </div>
 
@@ -134,16 +134,16 @@
           </div>
           <div class="user-menu-divider"></div>
           <div class="user-menu-item" @click="goProfile">
-            <span class="menu-item-icon">👤</span>
+            <icon-user class="menu-item-icon" />
             <span>个人设置</span>
           </div>
           <div class="user-menu-item" @click="goNotifications">
-            <span class="menu-item-icon">🔔</span>
+            <icon-notification class="menu-item-icon" />
             <span>通知偏好</span>
           </div>
           <div class="user-menu-divider"></div>
           <div class="user-menu-item danger" @click="handleLogout">
-            <span class="menu-item-icon">🚪</span>
+            <icon-export class="menu-item-icon" />
             <span>退出登录</span>
           </div>
         </div>
@@ -171,6 +171,7 @@ import { useTimerStore } from '@/stores/timer'
 import { useTheme } from '@/composables/useTheme'
 import { useNavBadge } from '@/composables/useNavBadge'
 import { useNotification } from '@/composables/useNotification'
+import { IconMoon, IconSun, IconCommon } from '@arco-design/web-vue/es/icon'
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
 
@@ -261,8 +262,8 @@ const canCreateIssue = computed(() => {
 
 const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 
-const themeIcon = computed(() => {
-  return theme.value === 'dark' ? '🌙' : theme.value === 'light' ? '☀️' : '🌿'
+const themeIconComponent = computed(() => {
+  return theme.value === 'dark' ? IconMoon : theme.value === 'light' ? IconSun : IconCommon
 })
 const themeLabel = computed(() => {
   return theme.value === 'dark' ? '暗色' : theme.value === 'light' ? '亮色' : '护眼'
@@ -411,10 +412,11 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 }
 
 .nav-icon {
-  font-size: 14px;
+  font-size: 18px;
   width: 20px;
   text-align: center;
   flex-shrink: 0;
+  color: inherit;
 }
 
 .nav-label {
@@ -593,9 +595,11 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 }
 
 .menu-item-icon {
-  font-size: 14px;
+  font-size: 16px;
   width: 18px;
   text-align: center;
+  color: inherit;
+  flex-shrink: 0;
 }
 
 /* ===== 右侧主内容区 ===== */
@@ -720,7 +724,8 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 }
 
 .timer-popover-icon {
-  font-size: 14px;
+  font-size: 16px;
+  color: inherit;
 }
 
 .timer-popover-title {
