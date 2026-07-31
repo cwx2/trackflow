@@ -272,6 +272,41 @@ def stop_playwright_for_worker(worker_id: str):
             log.info(f"[playwright] {worker_id} 的 MCP 进程已停止")
 
 
+def kill_stale_playwright_processes() -> None:
+    """
+    脚本启动时调用：扫描并杀掉所有占用 worker 端口的残留 Playwright MCP 进程。
+
+    重启脚本后 _playwright_processes 字典是空的，但上一次的进程可能仍在运行，
+    导致新进程无法绑定端口，kiro-cli 连上的是没有 --user-data-dir 的旧进程。
+    通过 psutil 按端口找到残留进程并强制终止，确保新配置生效。
+    """
+    try:
+        import psutil
+    except ImportError:
+        # psutil 不可用时退化为按进程名匹配（可能误杀前端 dev server 等，谨慎）
+        log.warning("[playwright] psutil 未安装，跳过残留进程清理（pip install psutil 可启用）")
+        return
+
+    # worker 端口范围：9101-9130（生产者/消费者/审核者）
+    worker_ports = set(range(PLAYWRIGHT_PORT_BASE + 1, PLAYWRIGHT_PORT_BASE + 31))
+    killed = 0
+    for conn in psutil.net_connections(kind="tcp"):
+        if conn.laddr.port in worker_ports and conn.status == "LISTEN":
+            try:
+                proc = psutil.Process(conn.pid)
+                # 只杀 playwright MCP 进程，避免误杀其他服务
+                cmdline = " ".join(proc.cmdline())
+                if "@playwright/mcp" in cmdline or "playwright\\mcp" in cmdline:
+                    log.info(f"[playwright] 杀掉残留进程 PID={conn.pid} 端口={conn.laddr.port}")
+                    proc.kill()
+                    killed += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+    if killed:
+        log.info(f"[playwright] 清理完成，共杀掉 {killed} 个残留进程")
+        time.sleep(1)   # 等待端口释放
+
+
 def stop_all_playwright():
     """停止所有 Playwright MCP 进程（脚本退出时调用）"""
     with _playwright_lock:
@@ -1410,7 +1445,8 @@ def main():
     log.info("永不停止，Ctrl+C 手动终止")
     log.info("=" * 60)
 
-    cleanup_screenshots()   # 清理超过 3 天的截图，防止 test/ 无限膨胀
+    kill_stale_playwright_processes()   # 杀掉上次残留的 Playwright MCP 进程，避免复用无 --user-data-dir 的旧进程
+    cleanup_screenshots()   # 清理超过 200 张的截图，防止 test/ 无限膨胀
     cleanup_working()
     main_loop(num_producers, num_consumers, args.skip_produce)
 
