@@ -225,9 +225,13 @@ def start_playwright_for_worker(worker_id: str) -> int:
             time.sleep(2)
 
         # 启动新进程
+        # Windows 上 npx 是 .ps1 脚本，subprocess 无法直接调用，需用 npx.cmd
+        # --isolated：每个 worker 使用独立的浏览器进程和用户数据目录，
+        #             防止多 worker 共享同一 Chrome 实例互相干扰页面状态
         cmd = [
-            "npx", "@playwright/mcp@latest",
+            "npx.cmd", "@playwright/mcp@latest",
             "--port", str(port),
+            "--isolated",
             "--viewport-size=1920x1080",
             f"--output-dir={WORKSPACE / 'test'}",
         ]
@@ -845,7 +849,7 @@ def run_review_phase(batch: list[Path] | None = None):
     )
 
     log.info(f"[审核] 审核 {len(batch)} 个需求：{req_list}")
-    run_kiro(prompt, "reviewer")
+    run_kiro(prompt, "reviewer", worker_id="reviewer")
     log.info(f"[审核] 完成，develop/ 当前 {count_develop()} 个")
 
 
