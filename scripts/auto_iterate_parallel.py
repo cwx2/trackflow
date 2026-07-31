@@ -226,12 +226,15 @@ def start_playwright_for_worker(worker_id: str) -> int:
 
         # 启动新进程
         # Windows 上 npx 是 .ps1 脚本，subprocess 无法直接调用，需用 npx.cmd
-        # --isolated：每个 worker 使用独立的浏览器进程和用户数据目录，
-        #             防止多 worker 共享同一 Chrome 实例互相干扰页面状态
+        # --user-data-dir：每个 worker 使用独立的 Chrome 用户数据目录，
+        #   彻底隔离浏览器实例，防止多 worker 争抢同一 Chrome 进程（"Browser is already in use"）
+        # --isolated 在内存中保持 profile，与 --user-data-dir 配合确保完全隔离
+        user_data_dir = WORKSPACE / "scripts" / "worker-envs" / worker_id / "chrome-data"
         cmd = [
             "npx.cmd", "@playwright/mcp@latest",
             "--port", str(port),
             "--isolated",
+            "--user-data-dir", str(user_data_dir),
             "--viewport-size=1920x1080",
             f"--output-dir={WORKSPACE / 'test'}",
         ]
