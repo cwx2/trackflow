@@ -1769,9 +1769,25 @@ public class CustomFieldService {
                 ? mapping.getIsRequired() : field.getIsRequired());
         
         // 计算有效默认值
+        // 1. 优先使用项目级配置的默认值
+        // 2. 如果项目级没有配置，使用字段级默认值
+        // 3. 对于 list 类型字段，还需要检查选项表中 isDefault=true 的选项
         String effectiveDefault = (mapping != null && mapping.getDefaultValue() != null)
                 ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
                 : field.getDefaultValue();
+        
+        // 对于 list 类型字段，如果没有显式默认值，检查选项表中是否有 isDefault=true 的选项
+        if ((effectiveDefault == null || effectiveDefault.isBlank()) && "list".equals(field.getFieldFormat())) {
+            List<CustomFieldOption> defaultOptions = optionMapper.selectList(
+                    new LambdaQueryWrapper<CustomFieldOption>()
+                            .eq(CustomFieldOption::getCustomFieldId, field.getId())
+                            .eq(CustomFieldOption::getIsDefault, true)
+                            .eq(CustomFieldOption::getIsArchived, false));
+            if (!defaultOptions.isEmpty()) {
+                // 有默认选项 → effectiveDefault 设置为选项 ID
+                effectiveDefault = String.valueOf(defaultOptions.get(0).getId());
+            }
+        }
         vo.setEffectiveDefaultValue(effectiveDefault);
         
         // 计算"是否允许为空"的有效值
@@ -1786,7 +1802,7 @@ public class CustomFieldService {
         }
         
         // 判断是否为"无默认值但必填"模式
-        // 条件：canBeEmpty=false 且 没有有效默认值
+        // 条件：canBeEmpty=false 且 没有有效默认值（包括无选项默认值）
         // 此模式下前端应显示 "Set value" 提示
         boolean requiresExplicitSelection = Boolean.FALSE.equals(effectiveCanBeEmpty) 
                 && (effectiveDefault == null || effectiveDefault.isBlank());
