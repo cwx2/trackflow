@@ -178,7 +178,7 @@ def get_latest_session_id(req_stem: str | None = None, worker_id: str | None = N
         result = subprocess.run(
             [KIRO_CLI, "chat", "--list-sessions", "--format", "json"],
             capture_output=True, text=True,
-            cwd=str(WORKSPACE), env=env, encoding="utf-8", errors="replace", timeout=15
+            cwd=str(WORKSPACE), env=env, encoding="utf-8", errors="replace", timeout=60
         )
         raw = result.stdout + result.stderr
         start = raw.find("[")
@@ -188,9 +188,16 @@ def get_latest_session_id(req_stem: str | None = None, worker_id: str | None = N
         if not sessions:
             return None
 
-        # 按更新时间倒序，只看最新 10 个
+        # 按更新时间倒序，只看最近 10 个；另外过滤 2 小时内的，避免遍历几百条历史
         sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
-        recent = sessions[:10]
+        from datetime import datetime, timezone, timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+        recent = [
+            s for s in sessions[:50]
+            if s.get("updatedAt", "") >= cutoff.strftime("%Y-%m-%dT%H:%M")
+        ][:10]
+        if not recent:
+            recent = sessions[:10]  # 如果过滤后为空（冷启动），fallback 到最新 10 个
 
         # 优先匹配 req_stem（kiro 有时会把文件名写入 title）
         if req_stem:

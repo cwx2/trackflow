@@ -59,14 +59,14 @@
           :popup-visible="editingKey === field.key"
           @update:popup-visible="v => v ? openEdit(field) : cancelEdit()"
         >
-          <div class="sb-value clickable">
+          <div class="sb-value clickable" :class="{ 'set-value-prompt': field.isSetValuePrompt }">
             <TimeProgressIndicator
               v-if="field.progress && field.progress.estimated > 0"
               :spent="field.progress.spent"
               :estimated="field.progress.estimated"
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
-            <span class="val-text editable">{{ field.value }}</span>
+            <span class="val-text editable" :class="{ 'prompt-text': field.isSetValuePrompt }">{{ field.value }}</span>
             <span class="val-chevron" aria-hidden="true">‹</span>
           </div>
           <template #content>
@@ -259,6 +259,11 @@ export interface SidebarField {
   canAddOption?: boolean
   /** 自定义字段 ID（用于添加选项 API） */
   customFieldId?: string
+  /**
+   * 是否为"设置值"提示状态（无默认值但必填字段，当前无值）。
+   * 参考 YouTrack "Set value" 提示行为。当此值为 true 时，前端应显示醒目的提示样式。
+   */
+  isSetValuePrompt?: boolean
 }
 
 export interface StatusInfo {
@@ -732,6 +737,20 @@ function confirmAddOption(field: SidebarField) {
 /* 可编辑文本用强调色标识 */
 .val-text.editable {
   color: var(--tf-accent);
+}
+
+/* "设置值"提示样式 — 无默认值但必填字段的醒目提示 */
+.sb-value.set-value-prompt {
+  background: rgba(var(--tf-warning-rgb, 210, 153, 34), 0.1);
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+
+.val-text.prompt-text {
+  color: var(--tf-warning, #d29922);
+  font-style: italic;
+  font-size: 11px;
 }
 
 /* 下拉箭头指示器（仅可编辑字段） */

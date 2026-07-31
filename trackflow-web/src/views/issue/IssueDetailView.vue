@@ -934,9 +934,27 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
     const isMulti = cf.isMulti || stored?.isMulti
     const rawValue = stored?.value || ''
     const rawValues = stored?.values || []
-    const displayValue = isMulti && stored?.displayValues?.length
-      ? stored.displayValues.join(', ')
-      : stored?.displayValue || ((cf.effectiveIsRequired ?? cf.isRequired) ? '设置值' : '-')
+    
+    // 确定显示值：
+    // 1. 有多个值时显示逗号分隔
+    // 2. 有单值时显示 displayValue
+    // 3. 无值时：
+    //    - requiresExplicitSelection=true（无默认值但必填）→ 显示"设置值"提示
+    //    - 其他情况 → 显示"-"
+    let displayValue: string
+    if (isMulti && stored?.displayValues?.length) {
+      displayValue = stored.displayValues.join(', ')
+    } else if (stored?.displayValue) {
+      displayValue = stored.displayValue
+    } else if (cf.requiresExplicitSelection) {
+      // 无默认值但必填模式：显示醒目的"设置值"提示
+      displayValue = '设置值'
+    } else {
+      displayValue = '-'
+    }
+    
+    // 标记是否为"设置值"提示状态（用于前端样式区分）
+    const isSetValuePrompt = !stored?.displayValue && !stored?.value && cf.requiresExplicitSelection
 
     // 根据字段类型确定 editType
     let editType: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | 'period' | undefined
@@ -1001,7 +1019,8 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       readonly: !canEdit || cf.editable === false,
       options,
       canAddOption: cf.fieldFormat === 'list' && canManageCustomFieldsComputed.value,
-      customFieldId: cf.id
+      customFieldId: cf.id,
+      isSetValuePrompt
     }
   })
 }

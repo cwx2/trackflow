@@ -1760,16 +1760,37 @@ public class CustomFieldService {
         if (mapping != null) {
             vo.setProjectIsRequired(mapping.getIsRequired());
             vo.setProjectDefaultValue(mapping.getDefaultValue());
+            vo.setProjectCanBeEmpty(mapping.getCanBeEmpty());
         }
     }
 
     private void enrichEffectiveValues(CustomFieldDefinitionVO vo, CustomFieldDefinition field, CustomFieldProject mapping) {
         vo.setEffectiveIsRequired(mapping != null && mapping.getIsRequired() != null
                 ? mapping.getIsRequired() : field.getIsRequired());
+        
+        // 计算有效默认值
         String effectiveDefault = (mapping != null && mapping.getDefaultValue() != null)
                 ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
                 : field.getDefaultValue();
         vo.setEffectiveDefaultValue(effectiveDefault);
+        
+        // 计算"是否允许为空"的有效值
+        // canBeEmpty 默认为 true（可以为空）
+        Boolean effectiveCanBeEmpty = (mapping != null && mapping.getCanBeEmpty() != null)
+                ? mapping.getCanBeEmpty() : true;
+        vo.setEffectiveCanBeEmpty(effectiveCanBeEmpty);
+        
+        // 如果 canBeEmpty=false，则字段必填（补充设置 effectiveIsRequired）
+        if (Boolean.FALSE.equals(effectiveCanBeEmpty)) {
+            vo.setEffectiveIsRequired(true);
+        }
+        
+        // 判断是否为"无默认值但必填"模式
+        // 条件：canBeEmpty=false 且 没有有效默认值
+        // 此模式下前端应显示 "Set value" 提示
+        boolean requiresExplicitSelection = Boolean.FALSE.equals(effectiveCanBeEmpty) 
+                && (effectiveDefault == null || effectiveDefault.isBlank());
+        vo.setRequiresExplicitSelection(requiresExplicitSelection);
     }
 
     // ========== JSON 辅助 ==========

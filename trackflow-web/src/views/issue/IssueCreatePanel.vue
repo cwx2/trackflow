@@ -263,10 +263,13 @@
               </span>
             </div>
             <template v-if="showCustomFields">
-              <div v-for="cf in customFields" :key="cf.id" class="prop-row" :data-field-id="cf.id">
+              <div v-for="cf in customFields" :key="cf.id" class="prop-row" :class="{ 'requires-explicit-selection': cf.requiresExplicitSelection && !customFieldValues[cf.id] }" :data-field-id="cf.id">
                 <span class="prop-label">
                   {{ cf.name }}
-                  <a-tooltip v-if="cf.effectiveIsRequired ?? cf.isRequired" content="必填字段" position="top" mini>
+                  <a-tooltip v-if="cf.requiresExplicitSelection" content="此字段必须主动选择，没有默认值" position="top" mini>
+                    <span class="required-mark set-value-mark">*</span>
+                  </a-tooltip>
+                  <a-tooltip v-else-if="cf.effectiveIsRequired ?? cf.isRequired" content="必填字段" position="top" mini>
                     <span class="required-mark">*</span>
                   </a-tooltip>
                 </span>
@@ -806,8 +809,14 @@ function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; 
 /**
  * 根据字段类型和配置生成占位文字
  * 优先使用 effectiveDefaultValue 作为引导提示（类似 YouTrack Empty Value Name）
+ * 对于 requiresExplicitSelection=true 的字段，显示"设置值"提示（参考 YouTrack "Set value"）
  */
 function getFieldPlaceholder(cf: CustomFieldDefinitionVO): string {
+  // 如果是"无默认值但必填"模式，显示"设置值"提示
+  if (cf.requiresExplicitSelection) {
+    return '设置值'
+  }
+  
   // 如果有项目级/全局默认值配置且字段无值，用作占位提示
   const hint = cf.effectiveDefaultValue ?? cf.defaultValue
   if (hint && cf.fieldFormat !== 'bool') {
@@ -1870,6 +1879,20 @@ onMounted(() => {
   font-size: 14px;
   cursor: help;
 }
+
+/* "设置值"标记 — 无默认值但必填字段的醒目提示 */
+.required-mark.set-value-mark {
+  color: var(--tf-warning, #d29922);
+}
+
+/* 需要用户主动选择的字段行：未填写时的高亮提示 */
+.prop-row.requires-explicit-selection {
+  background: rgba(var(--tf-warning-rgb, 210, 153, 34), 0.08);
+  border-radius: 4px;
+  margin: -2px -4px;
+  padding: 2px 4px;
+}
+
 .tag-color-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; vertical-align: middle; }
 .field-error :deep(.arco-input-wrapper),
 .field-error :deep(.arco-select-view),

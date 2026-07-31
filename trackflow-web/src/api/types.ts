@@ -718,6 +718,16 @@ export interface CustomFieldDefinitionVO {
    * 每条规则描述：当源字段值为 whenValue 时，只显示 showOnly 中的选项 ID。
    */
   filterRules?: string | null
+  /** 项目级"是否允许为空"覆盖（null = 默认可以为空） */
+  projectCanBeEmpty?: boolean | null
+  /** 有效"是否允许为空"（考虑项目覆盖后的实际值）*/
+  effectiveCanBeEmpty?: boolean
+  /**
+   * 是否为"无默认值但必填"模式。
+   * 当 effectiveCanBeEmpty=false 且 effectiveDefaultValue=null 时为 true。
+   * 此模式下前端应显示 "Set value" 提示，且不自动预填默认选项。
+   */
+  requiresExplicitSelection?: boolean
 }
 
 /**
