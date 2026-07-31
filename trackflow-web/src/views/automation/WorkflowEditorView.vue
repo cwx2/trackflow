@@ -44,7 +44,7 @@
             <span class="node-label">{{ node.label }}</span>
           </div>
         </div>
-        <div class="panel-section">
+        <div v-if="comingSoonNodes.length > 0" class="panel-section">
           <div class="section-title">即将推出</div>
           <div
             v-for="node in comingSoonNodes"
@@ -83,6 +83,9 @@
           <template #node-loop="nodeProps">
             <LoopNode :data="nodeProps.data" :selected="nodeProps.selected" />
           </template>
+          <template #node-file-input="nodeProps">
+            <FileInputNode :data="nodeProps.data" :selected="nodeProps.selected" />
+          </template>
           <Background pattern-color="var(--tf-border)" :gap="20" />
           <Controls position="bottom-left" />
           <MiniMap position="bottom-right" />
@@ -116,6 +119,11 @@
           <template v-else-if="selectedNode.type === 'loop'">
             <LoopConfig v-model:data="selectedNode.data" />
           </template>
+          
+          <!-- 文件输入节点配置 -->
+          <template v-else-if="selectedNode.type === 'file-input'">
+            <FileInputConfig v-model:data="selectedNode.data" />
+          </template>
         </template>
         
         <!-- 未选中节点时显示全局变量 -->
@@ -143,10 +151,12 @@ import CliAgentNode from './components/CliAgentNode.vue'
 import VariablesNode from './components/VariablesNode.vue'
 import ConditionNode from './components/ConditionNode.vue'
 import LoopNode from './components/LoopNode.vue'
+import FileInputNode from './components/FileInputNode.vue'
 import CliAgentConfig from './components/CliAgentConfig.vue'
 import VariablesConfig from './components/VariablesConfig.vue'
 import ConditionConfig from './components/ConditionConfig.vue'
 import LoopConfig from './components/LoopConfig.vue'
+import FileInputConfig from './components/FileInputConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 
 // Vue Flow 样式
@@ -178,12 +188,13 @@ const basicNodes = [
   { type: 'cli-agent', label: 'CLI Agent', icon: '🤖' },
   { type: 'variables', label: '变量设置', icon: '📝' },
   { type: 'condition', label: '条件判断', icon: '🔀' },
-  { type: 'loop', label: '重试循环', icon: '🔄' }
-]
-
-const comingSoonNodes = [
+  { type: 'loop', label: '重试循环', icon: '🔄' },
   { type: 'file-input', label: '文件输入', icon: '📁' },
   { type: 'delay', label: '延时等待', icon: '⏱' }
+]
+
+const comingSoonNodes: Array<{ type: string; label: string; icon: string }> = [
+  // 暂无即将推出的节点
 ]
 
 // 节点 ID 生成器
@@ -358,6 +369,14 @@ function getDefaultNodeData(type: string, label: string): Record<string, unknown
         exitOperator: 'contains',
         exitValue: 'PASS'
       }
+    case 'file-input':
+      return {
+        label,
+        filePath: '{workspace}/',
+        readMode: 'full',
+        encoding: 'utf-8',
+        outputVar: 'file_content'
+      }
     default:
       return { label }
   }
@@ -402,7 +421,6 @@ function getNodeTitle(type: string): string {
     case 'condition': return '条件判断'
     case 'loop': return '重试循环'
     case 'file-input': return '文件输入'
-    case 'delay': return '延时等待'
     default: return '节点'
   }
 }
