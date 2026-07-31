@@ -66,38 +66,47 @@
           </div>
         </div>
 
-        <!-- 筛选区 -->
-        <div class="backlog-filters">
-          <a-input
-            v-model="backlogSearch"
-            placeholder="搜索..."
-            size="mini"
-            allow-clear
-            style="margin-bottom: 6px"
-            @input="onBacklogSearchInput"
-            @clear="loadBacklog"
-          >
-            <template #prefix><icon-search /></template>
-          </a-input>
-          <div class="filter-row">
-            <a-select v-model="backlogFilterType" placeholder="类型" size="mini" allow-clear style="flex:1" @change="loadBacklog">
-              <a-option value="Task">任务</a-option>
-              <a-option value="Bug">缺陷</a-option>
-              <a-option value="Feature">需求</a-option>
-              <a-option value="Story">故事</a-option>
-            </a-select>
-            <a-select v-model="backlogFilterPriority" placeholder="优先级" size="mini" allow-clear style="flex:1" @change="loadBacklog">
-              <a-option value="Critical">紧急</a-option>
-              <a-option value="High">高</a-option>
-              <a-option value="Normal">普通</a-option>
-              <a-option value="Low">低</a-option>
-            </a-select>
-            <a-select v-model="backlogFilterAssignee" placeholder="负责人" size="mini" allow-clear style="flex:1" @change="loadBacklog">
-              <a-option value="unassigned">未分配</a-option>
-              <a-option v-for="m in projectMembers" :key="m.userId" :value="m.userId">
-                {{ m.displayName }}
-              </a-option>
-            </a-select>
+        <!-- 筛选区（可折叠） -->
+        <div class="backlog-filters-wrapper">
+          <div class="backlog-filters-toggle" @click="backlogFiltersExpanded = !backlogFiltersExpanded">
+            <icon-filter class="filter-toggle-icon" />
+            <span class="filter-toggle-text">筛选</span>
+            <span v-if="activeFilterCount > 0" class="filter-active-badge">{{ activeFilterCount }}</span>
+            <icon-down v-if="!backlogFiltersExpanded" class="filter-toggle-arrow" />
+            <icon-up v-else class="filter-toggle-arrow" />
+          </div>
+          <div v-show="backlogFiltersExpanded" class="backlog-filters">
+            <a-input
+              v-model="backlogSearch"
+              placeholder="搜索..."
+              size="mini"
+              allow-clear
+              style="margin-bottom: 6px"
+              @input="onBacklogSearchInput"
+              @clear="loadBacklog"
+            >
+              <template #prefix><icon-search /></template>
+            </a-input>
+            <div class="filter-row">
+              <a-select v-model="backlogFilterType" placeholder="类型" size="mini" allow-clear style="flex:1" @change="loadBacklog">
+                <a-option value="Task">任务</a-option>
+                <a-option value="Bug">缺陷</a-option>
+                <a-option value="Feature">需求</a-option>
+                <a-option value="Story">故事</a-option>
+              </a-select>
+              <a-select v-model="backlogFilterPriority" placeholder="优先级" size="mini" allow-clear style="flex:1" @change="loadBacklog">
+                <a-option value="Critical">紧急</a-option>
+                <a-option value="High">高</a-option>
+                <a-option value="Normal">普通</a-option>
+                <a-option value="Low">低</a-option>
+              </a-select>
+              <a-select v-model="backlogFilterAssignee" placeholder="负责人" size="mini" allow-clear style="flex:1" @change="loadBacklog">
+                <a-option value="unassigned">未分配</a-option>
+                <a-option v-for="m in projectMembers" :key="m.userId" :value="m.userId">
+                  {{ m.displayName }}
+                </a-option>
+              </a-select>
+            </div>
           </div>
         </div>
 
@@ -392,7 +401,7 @@
 import { ref, computed, watch, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconSearch, IconPlus, IconList } from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus, IconList, IconFilter, IconDown, IconUp } from '@arco-design/web-vue/es/icon'
 import { issueApi, sprintApi, projectApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { useProjectList } from '@/composables/useProjectList'
@@ -426,6 +435,7 @@ const sprintsLoading = ref(false)
 const velocityData = ref<SprintVelocityVO | null>(null)
 
 // ===== Filters =====
+const backlogFiltersExpanded = ref(false)
 const backlogSearch = ref('')
 const backlogFilterType = ref<string | undefined>(undefined)
 const backlogFilterPriority = ref<string | undefined>(undefined)
@@ -466,6 +476,16 @@ const targetSprints = computed(() =>
 )
 
 const selectedCount = computed(() => selectedIds.value.size)
+
+// 激活的筛选条件数量（用于徽标显示）
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (backlogSearch.value) count++
+  if (backlogFilterType.value) count++
+  if (backlogFilterPriority.value) count++
+  if (backlogFilterAssignee.value) count++
+  return count
+})
 
 // ===== Methods =====
 
@@ -1170,9 +1190,51 @@ onMounted(async () => {
   background: var(--color-bg-1);
   overflow: hidden;
 }
+
+/* ===== Backlog Filters Toggle ===== */
+.backlog-filters-wrapper {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.backlog-filters-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--tf-text-secondary);
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.backlog-filters-toggle:hover {
+  background: var(--tf-bg-hover);
+}
+.filter-toggle-icon {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+.filter-toggle-text {
+  flex: 1;
+}
+.filter-active-badge {
+  background: var(--color-primary-light-1);
+  color: var(--color-primary-6);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+.filter-toggle-arrow {
+  font-size: 10px;
+  color: var(--tf-text-tertiary);
+  transition: transform 0.15s;
+}
 .backlog-filters {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 .filter-row {
