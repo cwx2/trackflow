@@ -780,6 +780,49 @@ def parse_review_result(output: str) -> tuple[bool, str]:
     return False, summary
 
 
+def extract_arch_issues(req_file: Path) -> tuple[list[str], str]:
+    """
+    从需求文件中检测 code-review 写入的架构问题标记。
+
+    code-review SKILL 在发现系统性架构问题时会在需求文件末尾写入：
+
+        ## 🏗️ 架构问题（ARCH_ISSUES_DETECTED）
+
+        ARCH_KEYWORDS: Sprint管理, 状态流转
+
+        ### 详情
+        1. xxx
+        2. xxx
+
+    返回 (keywords_list, detail_text)。
+    未检测到标记时返回 ([], "")。
+    """
+    if not req_file.exists():
+        return [], ""
+    content = req_file.read_text(encoding="utf-8", errors="ignore")
+    if "ARCH_ISSUES_DETECTED" not in content:
+        return [], ""
+
+    keywords: list[str] = []
+    detail_lines: list[str] = []
+    in_detail = False
+
+    for line in content.split("\n"):
+        if line.startswith("ARCH_KEYWORDS:"):
+            raw = line.split(":", 1)[1].strip()
+            keywords = [k.strip() for k in raw.split(",") if k.strip()]
+        elif line.strip().startswith("### 详情"):
+            in_detail = True
+        elif in_detail:
+            # 遇到下一个 ## 标题时停止
+            if line.startswith("## "):
+                break
+            detail_lines.append(line)
+
+    detail = "\n".join(detail_lines).strip()
+    return keywords, detail
+
+
 # ============ 阶段一：并行生产 ============
 
 
@@ -1165,6 +1208,29 @@ def consume_one(worker_id: str) -> str | None:
         if req_file.exists():
             shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
         log.info(f"[{label}] ✅ {req_file.name} 全流程完成，已归档")
+
+        # ── 步骤 6：检测并触发架构审计（可选）──
+        # code-review 若发现系统性架构问题，会在需求文件中写入 ARCH_ISSUES_DETECTED 标记
+        # 检测到后开启新的 tech-requirement 会话深入分析，自动写入技术需求到 review/
+        arch_req_file = IMPLEMENT_DIR / req_file.name  # 文件已移到 implement/
+        arch_keywords, arch_detail = extract_arch_issues(arch_req_file)
+        if arch_keywords:
+            log.info(f"[{label}] 🏗️ 发现架构问题，触发 tech-requirement 审计：{arch_keywords}")
+            tech_skill = SKILLS.get("tech-requirement", {})
+            tech_prompt = (
+                f"[使用 skill: tech-requirement] "
+                f"(skill 文件: {tech_skill.get('path', '.kiro/skills/tech-requirement/SKILL.md')}，"
+                f"请严格按照该 skill 的规则执行)\n\n"
+                f"在审核需求 {req_file.stem} 的代码变更时，code-review 发现了以下系统性架构问题，"
+                f"请以此为切入点进行技术审计，找出根因并写成技术需求文档：\n\n"
+                f"**涉及模块**：{', '.join(arch_keywords)}\n\n"
+                f"**问题详情**：\n{arch_detail}\n\n"
+                f"请按照 tech-requirement SKILL 的完整审计流程执行，"
+                f"从 YouTrack 文档建立业务基线，追踪 TrackFlow 全链路数据流，"
+                f"将发现的问题写入 review/ 目录。"
+            )
+            run_kiro(tech_prompt, f"{label}-arch", worker_id=worker_id)
+            log.info(f"[{label}] 🏗️ 架构审计会话结束")
     else:
         # 验证未通过 → 放回 develop/ 重试
         status = []
