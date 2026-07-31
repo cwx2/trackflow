@@ -86,7 +86,14 @@ public class UserSyncService {
                     log.info("Matched existing user by username '{}', updating keycloakId from '{}' to '{}'",
                             username, user.getKeycloakId(), keycloakId);
                     user.setKeycloakId(keycloakId);
-                    user.setDisplayName(displayName != null ? displayName : user.getDisplayName());
+                    // 保护规则：如果数据库中已有 CJK 姓名，不要被 JWT 中的非 CJK 名覆盖
+                    if (displayName != null) {
+                        boolean dbHasCjk = containsCjk(user.getDisplayName());
+                        boolean jwtHasCjk = containsCjk(displayName);
+                        if (jwtHasCjk || !dbHasCjk) {
+                            user.setDisplayName(displayName);
+                        }
+                    }
                     user.setEmail(email != null ? email : user.getEmail());
                     user.setLastLoginAt(LocalDateTime.now());
                     userMapper.updateById(user);
@@ -129,8 +136,18 @@ public class UserSyncService {
             // 由于 Filter 层 syncCache 机制，此方法现在仅在缓存过期时被调用（约每 5 分钟一次/用户）。
             // 因此每次调用都执行 UPDATE 是可接受的（频率已从 ~2500/min 降至 ~50/min）。
             // 仅在 displayName/email 实际变化时更新对应字段。
+            // 保护规则：如果数据库中已有 CJK 姓名，不要被 JWT 中的非 CJK 名覆盖
+            // （处理 Keycloak 内部数据库与 realm JSON 不同步的情况）
             if (displayName != null && !displayName.equals(user.getDisplayName())) {
-                user.setDisplayName(displayName);
+                boolean dbHasCjk = containsCjk(user.getDisplayName());
+                boolean jwtHasCjk = containsCjk(displayName);
+                // 只在以下情况更新：JWT 是 CJK 名，或数据库不是 CJK 名
+                if (jwtHasCjk || !dbHasCjk) {
+                    user.setDisplayName(displayName);
+                } else {
+                    log.debug("Preserving CJK display_name '{}' for user '{}', ignoring JWT name '{}'",
+                            user.getDisplayName(), user.getUsername(), displayName);
+                }
             }
             if (email != null && !email.equals(user.getEmail())) {
                 user.setEmail(email);
