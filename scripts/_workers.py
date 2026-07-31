@@ -159,7 +159,7 @@ def consume_one(worker_id: str) -> str | None:
     log.info(f"[{label}] 代码变更范围: {diff_range}")
 
     time.sleep(2)
-    session_id = get_latest_session_id(req_file.stem)
+    session_id = get_latest_session_id(req_file.stem, worker_id=worker_id)
     if session_id:
         log.info(f"[{label}] 绑定 session: {session_id[:8]}...")
     else:

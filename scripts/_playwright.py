@@ -57,12 +57,13 @@ def start_playwright_for_worker(worker_id: str) -> int:
 
         # 每个 worker 独立的 Chrome 用户数据目录
         user_data_dir = WORKSPACE / "scripts" / "worker-envs" / worker_id / "chrome-data"
+        # --isolated 模式：每次 kiro-cli 连接使用独立的 browser context，
+        # 连接断开后自动清理，不依赖 user-data-dir，彻底避免与 Kiro IDE 的
+        # Chrome 实例争抢资源（main-console data-dir 冲突问题的根本解决方案）。
         cmd = [
             "npx.cmd", "@playwright/mcp@latest",
             "--port", str(port),
-            # --user-data-dir 为每个 worker 指定独立的 Chrome 数据目录，实现浏览器进程隔离。
-            # 注意：--isolated 与 --user-data-dir 不能同时使用（isolated 模式不支持外部目录）。
-            "--user-data-dir", str(user_data_dir),
+            "--isolated",
             "--viewport-size=1920x1080",
             f"--output-dir={WORKSPACE / 'test'}",
         ]
@@ -182,6 +183,24 @@ def setup_worker_kiro_dir(worker_id: str, port: int) -> Path:
 
     log.debug(f"[worker-env] {worker_id} 配置目录: {worker_env_dir}")
     return worker_env_dir
+
+
+def restart_playwright_for_worker(worker_id: str) -> None:
+    """
+    重置指定 worker 的 Playwright MCP 进程（不影响其他 worker）。
+
+    每次 kiro-cli 会话结束后调用，确保下一轮会话拿到干净的 browser context。
+    只操作 worker_id 对应的进程条目，其他 worker 的进程不受影响。
+    """
+    with _playwright_lock:
+        proc = _playwright_processes.pop(worker_id, None)
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            log.debug(f"[playwright] {worker_id} MCP 进程已重置，下次调用时重启")
 
 
 def cleanup_worker_envs() -> None:

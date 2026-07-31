@@ -13,7 +13,7 @@ from _config import (
     WORKSPACE, KIRO_CLI, KIRO_MODEL, KIRO_MODEL_FIX,
     TIMEOUT_SECONDS, log, strip_ansi,
 )
-from _playwright import start_playwright_for_worker, setup_worker_kiro_dir
+from _playwright import start_playwright_for_worker, setup_worker_kiro_dir, restart_playwright_for_worker
 
 # 构建 kiro-cli 所需的环境变量（抑制交互式行为）
 _BASE_ENV = {
@@ -84,6 +84,9 @@ def run_kiro(prompt: str, label: str,
             logging.INFO if success else logging.WARNING,
             f"[{label}] {'完成' if success else '失败'} ({elapsed:.0f}s)"
         )
+        # 会话结束后重置该 worker 的 Playwright MCP 进程，确保下轮会话拿到干净的 browser context
+        if worker_id:
+            restart_playwright_for_worker(worker_id)
         # 30 秒内退出 → 启动失败（认证/网络/并发问题），与需求本身无关
         if not success and elapsed < 30:
             log.warning(f"[{label}] kiro-cli 启动失败（{elapsed:.0f}s）")
@@ -129,6 +132,9 @@ def run_kiro_resume(session_id: str, prompt: str, label: str,
         elapsed = time.time() - start
         success = process.returncode == 0
         log.info(f"[{label}] resume {'完成' if success else '失败'} ({elapsed:.0f}s)")
+        # 会话结束后重置该 worker 的 Playwright MCP 进程
+        if worker_id:
+            restart_playwright_for_worker(worker_id)
         return success, "\n".join(output_lines)
     except subprocess.TimeoutExpired:
         process.kill()
@@ -152,17 +158,27 @@ def get_current_commit() -> str:
         return ""
 
 
-def get_latest_session_id(req_stem: str | None = None) -> str | None:
+def get_latest_session_id(req_stem: str | None = None, worker_id: str | None = None) -> str | None:
     """
     获取最新的 kiro-cli session ID。
-    req_stem: 需求文件 stem（如 'requirement-123'），用于精确匹配本需求的会话。
-    多 worker 并发时通过 req_stem 避免拿到别的 worker 的 session。
+
+    策略：
+    1. 取最新 10 个 session
+    2. 优先在 title 中匹配 req_stem（kiro 有时会把需求文件名写入 title）
+    3. 匹配不上则直接返回最新一个（每个 worker 有独立 KIRO_HOME，列表只有自己的 session）
+
+    worker_id: 用于定位该 worker 的 KIRO_HOME，确保不拿到其他 worker 的 session。
     """
     try:
+        env = os.environ.copy()
+        if worker_id:
+            worker_kiro_home = WORKSPACE / "scripts" / "worker-envs" / worker_id / ".kiro"
+            env["KIRO_HOME"] = str(worker_kiro_home)
+
         result = subprocess.run(
             [KIRO_CLI, "chat", "--list-sessions", "--format", "json"],
             capture_output=True, text=True,
-            cwd=str(WORKSPACE), encoding="utf-8", errors="replace", timeout=15
+            cwd=str(WORKSPACE), env=env, encoding="utf-8", errors="replace", timeout=15
         )
         raw = result.stdout + result.stderr
         start = raw.find("[")
@@ -171,12 +187,23 @@ def get_latest_session_id(req_stem: str | None = None) -> str | None:
         sessions = json.loads(raw[start:])
         if not sessions:
             return None
+
+        # 按更新时间倒序，只看最新 10 个
         sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
+        recent = sessions[:10]
+
+        # 优先匹配 req_stem（kiro 有时会把文件名写入 title）
         if req_stem:
-            for s in sessions:
+            for s in recent:
                 if req_stem in s.get("title", ""):
+                    log.debug(f"[session] 精确匹配 {req_stem} → {s.get('sessionId', '')[:8]}...")
                     return s.get("sessionId")
-        return sessions[0].get("sessionId")
+
+        # fallback：返回最新一个（KIRO_HOME 隔离保证不会拿到其他 worker 的 session）
+        session_id = recent[0].get("sessionId")
+        log.debug(f"[session] req_stem 未匹配，使用最新 session → {(session_id or '')[:8]}...")
+        return session_id
+
     except Exception as e:
         log.warning(f"[session] 获取 session_id 失败: {e}")
         return None
