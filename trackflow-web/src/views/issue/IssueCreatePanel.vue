@@ -1203,7 +1203,8 @@ function close() {
     // 这是用户主动操作，应该由应用内的 Modal.confirm 处理，而不是浏览器
     window.removeEventListener('beforeunload', handleBeforeUnload)
 
-    Modal.confirm({
+    // 保存 Modal.confirm 返回的引用，以便主动关闭
+    const modalInstance = Modal.confirm({
       title: '保存为草稿？',
       content: '当前表单中有未保存的内容。是否保存为草稿？',
       okText: '保存草稿',
@@ -1225,17 +1226,20 @@ function close() {
           estimatedHours: form.estimatedHours ?? null,
           customFieldValues: { ...customFieldValues.value }
         })
-        // 延迟关闭外层 modal，确保 Modal.confirm 的遮罩层先完成卸载
-        // 使用 setTimeout 等待 Arco Modal 的关闭动画完成（约 200ms）
+        // 主动关闭确认弹窗，确保其遮罩层开始卸载
+        modalInstance.close()
+        // 等待 Arco Modal 的关闭动画完成（约 200ms）后再关闭外层 modal
         setTimeout(() => {
           doClose()
-        }, 50)
+        }, 250)
       },
       onCancel: () => {
-        // 延迟关闭外层 modal，确保 Modal.confirm 的遮罩层先完成卸载
+        // 主动关闭确认弹窗
+        modalInstance.close()
+        // 等待关闭动画完成后再关闭外层 modal
         setTimeout(() => {
           doClose()
-        }, 50)
+        }, 250)
       },
       onClose: () => {
         // 用户点击弹窗外部关闭或按 Escape 关闭确认弹窗时
@@ -1272,16 +1276,39 @@ function cleanupOrphanedModals() {
   containers.forEach(container => {
     // 检查容器内是否有可见的 modal（wrapper 存在且没有 display: none）
     const wrapper = container.querySelector('.arco-modal-wrapper')
-    if (!wrapper || wrapper.getAttribute('style')?.includes('display: none')) {
+    const isHidden = !wrapper || 
+                     wrapper.getAttribute('style')?.includes('display: none') ||
+                     (wrapper as HTMLElement).style.display === 'none'
+    if (isHidden) {
       // 没有可见的 modal，这个容器是残留的
       container.remove()
     }
   })
 
   // 清理可能直接挂载在 body 下的孤立遮罩
+  // 这些遮罩层应该在对应的 modal 关闭后被移除，但有时会残留
   const orphanedMasks = document.querySelectorAll('body > .arco-modal-mask, body > .arco-overlay-modal')
   orphanedMasks.forEach(mask => {
-    mask.remove()
+    // 检查这个遮罩是否有对应的可见 modal
+    // 如果没有可见的 modal 在使用这个遮罩，就移除它
+    const hasVisibleModal = Array.from(document.querySelectorAll('.arco-modal-wrapper')).some(wrapper => {
+      const style = (wrapper as HTMLElement).style
+      return style.display !== 'none' && wrapper.querySelector('.arco-modal')
+    })
+    if (!hasVisibleModal) {
+      mask.remove()
+    }
+  })
+
+  // 额外检查：清理 z-index 异常高但不可见的遮罩层
+  // 这种情况可能发生在快速连续操作时
+  document.querySelectorAll('.arco-modal-mask').forEach(mask => {
+    const style = window.getComputedStyle(mask)
+    const opacity = parseFloat(style.opacity)
+    // 如果遮罩透明度为 0 或接近 0，说明它应该被移除但残留了
+    if (opacity < 0.01) {
+      mask.remove()
+    }
   })
 }
 
@@ -1388,7 +1415,8 @@ function discardDraft() {
   // 这会阻止路由守卫在此期间弹出重复的「未保存更改」对话框
   isDiscarding.value = true
 
-  Modal.confirm({
+  // 保存 Modal.confirm 返回的引用，以便主动关闭
+  const modalInstance = Modal.confirm({
     title: '丢弃草稿',
     content: '确定要丢弃当前内容吗？此操作不可恢复。',
     okText: '丢弃',
@@ -1398,14 +1426,16 @@ function discardDraft() {
     onOk: () => {
       resetForm()
       isDiscarding.value = false
-      // 延迟关闭外层 modal，确保 Modal.confirm 的遮罩层先完成卸载
+      // 主动关闭确认弹窗，确保其遮罩层开始卸载
+      modalInstance.close()
+      // 等待 Arco Modal 的关闭动画完成（约 200ms）后再关闭外层 modal
       setTimeout(() => {
         emit('update:visible', false)
         // 再延迟清理可能残留的遮罩层
         setTimeout(() => {
           cleanupOrphanedModals()
         }, 300)
-      }, 50)
+      }, 250)
     },
     onCancel: () => {
       // 用户取消丢弃，重置标志位，恢复正常的路由守卫检查
