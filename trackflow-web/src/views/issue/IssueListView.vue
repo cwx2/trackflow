@@ -3367,6 +3367,9 @@ function selectAllProjects() {
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
+  // Clear FilterBar UI (has its own internal searchKeyword state)
+  filterBarRef.value?.clearAll()
+
   // Persist user's preference to show all issues
   localStorage.setItem('tf_last_active_query_all', 'true')
   localStorage.removeItem('tf_last_active_query_id')
