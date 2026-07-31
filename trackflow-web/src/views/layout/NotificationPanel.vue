@@ -207,7 +207,7 @@
 
           <!-- 面板底部 -->
           <div v-if="notifications.length > 0" class="panel-footer">
-            <span class="footer-count">共 {{ totalCount }} 条通知</span>
+            <span class="footer-count">{{ unreadCount }} 条未读</span>
             <button class="footer-link" @click="openFullPage">查看全部 →</button>
           </div>
         </div>

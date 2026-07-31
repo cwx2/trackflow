@@ -4,7 +4,7 @@
     <div class="page-header">
       <div class="header-left">
         <h1 class="page-title">通知中心</h1>
-        <span class="page-subtitle">{{ totalCount }} 条通知</span>
+        <span class="page-subtitle">{{ unreadCount }} 条未读</span>
       </div>
       <div class="header-actions">
         <!-- 项目筛选 -->
