@@ -3362,8 +3362,8 @@ function selectQuery(q: any) {
   refreshList()
 }
 function selectAllProjects() {
-  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null) return // Already showing all
-  activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; globalFilterParams.value = {}; currentPage.value = 1
+  if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '') return // Already showing all
+  activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 
@@ -3850,6 +3850,10 @@ function applyDashboardFilter() {
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
   if (showCreatePanel.value && panel && panel.isDirty) {
+    // 先暂停 beforeunload 监听器，避免 SPA 内部导航时触发浏览器级别的空内容弹窗
+    // 让应用内的 Modal.confirm 独占处理用户确认
+    panel.suspendBeforeUnload?.()
+
     Modal.confirm({
       title: '有未保存的更改',
       content: '创建工单表单中有未保存的内容，确定要离开吗？',
@@ -3857,7 +3861,11 @@ onBeforeRouteLeave((_to, _from, next) => {
       cancelText: '继续编辑',
       simple: false,
       onOk: () => { next() },
-      onCancel: () => { next(false) }
+      onCancel: () => {
+        // 用户取消导航，恢复 beforeunload 监听器（仍需防止浏览器关闭/刷新丢失数据）
+        panel.resumeBeforeUnload?.()
+        next(false)
+      }
     })
   } else {
     next()

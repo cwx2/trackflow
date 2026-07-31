@@ -999,8 +999,26 @@ const isDirty = computed(() => {
   return false
 })
 
-// 暴露 isDirty 供父组件路由守卫使用
-defineExpose({ isDirty })
+/**
+ * 暂停 beforeunload 监听器
+ * 供父组件在 Vue Router 导航前调用，避免 SPA 内部导航触发浏览器级别弹窗
+ */
+function suspendBeforeUnload() {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+}
+
+/**
+ * 恢复 beforeunload 监听器
+ * 供父组件在用户取消导航后调用
+ */
+function resumeBeforeUnload() {
+  if (props.visible && isDirty.value) {
+    window.addEventListener('beforeunload', handleBeforeUnload)
+  }
+}
+
+// 暴露 isDirty 和 beforeunload 控制方法供父组件使用
+defineExpose({ isDirty, suspendBeforeUnload, resumeBeforeUnload })
 
 // 检测 macOS 以显示正确的修饰键提示
 const isMac = navigator.platform.toUpperCase().includes('MAC')
