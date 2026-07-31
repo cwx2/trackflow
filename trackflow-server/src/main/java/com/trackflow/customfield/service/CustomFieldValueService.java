@@ -770,12 +770,25 @@ public class CustomFieldValueService {
             String projectDefault = projectMapping.getDefaultValue();
             return projectDefault.isEmpty() ? null : projectDefault;
         }
+        
+        // 检查"无默认值但必填"模式（canBeEmpty=false 且无项目级默认值）
+        // 此模式下不自动应用选项表的 isDefault=true 选项
+        if (projectMapping != null && Boolean.FALSE.equals(projectMapping.getCanBeEmpty())) {
+            // 如果项目配置了 canBeEmpty=false 但没有设置 defaultValue，
+            // 说明是"无默认值但必填"模式，返回 null 让用户主动选择
+            return null;
+        }
+        
         return resolveDefaultValue(field);
     }
 
     private boolean isFieldRequired(CustomFieldDefinition field, CustomFieldProject projectMapping) {
         if (projectMapping != null && projectMapping.getIsRequired() != null) {
             return projectMapping.getIsRequired();
+        }
+        // 如果项目配置了 canBeEmpty=false，则该字段也是必填的
+        if (projectMapping != null && Boolean.FALSE.equals(projectMapping.getCanBeEmpty())) {
+            return true;
         }
         return Boolean.TRUE.equals(field.getIsRequired());
     }

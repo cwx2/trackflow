@@ -92,6 +92,25 @@ public class CustomFieldDefinitionVO {
      */
     private String effectiveDefaultValue;
 
+    /**
+     * 项目级"是否允许为空"覆盖。
+     * null = 默认可以为空，false = Cannot be empty。
+     */
+    private Boolean projectCanBeEmpty;
+
+    /**
+     * 计算后的"是否允许为空"（考虑项目覆盖后的实际值）。
+     * true = 可以为空，false = 不能为空。
+     */
+    private Boolean effectiveCanBeEmpty;
+
+    /**
+     * 是否为"无默认值但必填"模式。
+     * 当 effectiveCanBeEmpty=false 且 effectiveDefaultValue=null 时为 true。
+     * 此模式下前端应显示 "Set value" 提示，且不自动预填默认选项。
+     */
+    private Boolean requiresExplicitSelection;
+
     // ===== 值依赖过滤（项目级别） =====
 
     /**

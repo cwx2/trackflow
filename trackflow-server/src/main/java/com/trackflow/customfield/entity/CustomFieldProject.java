@@ -100,4 +100,16 @@ public class CustomFieldProject implements Serializable {
      * </ul>
      */
     private Boolean hasIndependentOptions;
+
+    /**
+     * 是否允许字段为空（项目级覆盖）。
+     * <ul>
+     *   <li>true (默认): 字段可以为空</li>
+     *   <li>false: 字段不能为空（Empty Value = "Cannot be empty"）</li>
+     * </ul>
+     * <p>
+     * 当 canBeEmpty=false 且 defaultValue=null 时，表示"无默认值但必填"（YouTrack "No value (required)"）。
+     * 此模式下系统不自动应用选项表的 isDefault=true，用户必须主动选择。
+     */
+    private Boolean canBeEmpty;
 }
