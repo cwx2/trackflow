@@ -163,33 +163,41 @@
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
         <!-- 2. 注释（添加注释节点） -->
-        <button class="toolbar-icon-btn" title="注释" @click="addCommentNode">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-        </button>
+        <a-tooltip content="注释" position="top" mini>
+          <button class="toolbar-icon-btn" @click="addCommentNode">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+        </a-tooltip>
         <!-- 3. 优化布局 -->
-        <button class="toolbar-icon-btn" title="优化布局" @click="autoLayout">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-          </svg>
-        </button>
+        <a-tooltip content="优化布局" position="top" mini>
+          <button class="toolbar-icon-btn" @click="autoLayout">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+          </button>
+        </a-tooltip>
         <!-- 4. 导出为图片 -->
-        <button class="toolbar-icon-btn" title="导出为图片" @click="exportImage">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-        </button>
+        <a-tooltip content="导出为图片" position="top" mini>
+          <button class="toolbar-icon-btn" @click="exportImage">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+        </a-tooltip>
         <!-- 5. 缩略图 -->
-        <button class="toolbar-icon-btn" :class="{ active: minimapOpen }" title="缩略图" @click="toggleMinimap">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="7" width="20" height="15" rx="2"/>
-            <path d="M16 2l4 5H4l4-5z" fill="currentColor" stroke="none" opacity="0.4"/>
-            <rect x="5" y="10" width="6" height="5" rx="1" opacity="0.6"/>
-          </svg>
-        </button>
+        <a-tooltip content="缩略图" position="top" mini>
+          <button class="toolbar-icon-btn" :class="{ active: minimapOpen }" @click="toggleMinimap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="20" height="15" rx="2"/>
+              <path d="M16 2l4 5H4l4-5z" fill="currentColor" stroke="none" opacity="0.4"/>
+              <rect x="5" y="10" width="6" height="5" rx="1" opacity="0.6"/>
+            </svg>
+          </button>
+        </a-tooltip>
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
         <!-- 6. + 添加节点 -->
@@ -200,12 +208,14 @@
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
         <!-- 7. 调试 -->
-        <button class="toolbar-icon-btn" :class="{ active: debugMode }" title="调试" @click="toggleDebugMode">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
-            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-        </button>
+        <a-tooltip content="调试" position="top" mini>
+          <button class="toolbar-icon-btn" :class="{ active: debugMode }" @click="toggleDebugMode">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+              <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </button>
+        </a-tooltip>
         <!-- 8. 试运行 -->
         <button class="toolbar-run-btn" :class="{ running: isRunning }" @click="handleRun">
           <span class="run-icon">▶</span>
