@@ -1152,9 +1152,11 @@ onBeforeUnmount(() => {
 
 function handleBeforeUnload(e: BeforeUnloadEvent) {
   if (isDirty.value) {
+    // 推荐方式：调用 preventDefault() 触发浏览器标准的离开确认对话框
+    // 现代浏览器不支持自定义消息，会显示浏览器默认的"离开此网站？"提示
     e.preventDefault()
-    // 现代浏览器不再显示自定义消息，但需要设置 returnValue
-    e.returnValue = ''
+    // 兼容旧版浏览器（Chrome/Edge < 119）
+    e.returnValue = true
   }
 }
 
