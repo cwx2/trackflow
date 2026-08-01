@@ -142,37 +142,37 @@
 
       <!-- 底部中央悬浮工具条（Coze 风格） -->
       <div class="bottom-toolbar">
-        <!-- 撤销次数 -->
-        <div class="toolbar-item toolbar-select">
-          <span class="toolbar-icon">↩</span>
-          <span class="toolbar-text">0</span>
+        <!-- 撤销区 -->
+        <div class="toolbar-undo" @click="handleUndo" title="撤销">
+          <span class="toolbar-undo-icon">↩</span>
+          <span class="toolbar-undo-count">{{ undoCount }}</span>
           <span class="toolbar-arrow">∨</span>
         </div>
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
-        <!-- 缩放 -->
-        <div class="toolbar-item toolbar-select" @click="fitCanvas">
-          <span class="toolbar-text">{{ zoomPercent }}%</span>
+        <!-- 缩放下拉 -->
+        <div class="toolbar-zoom" @click="zoomMenuOpen = !zoomMenuOpen" ref="zoomBtnRef">
+          <span class="toolbar-zoom-val">{{ zoomPercent }}%</span>
           <span class="toolbar-arrow">∨</span>
+          <!-- 下拉菜单 -->
+          <div v-if="zoomMenuOpen" class="zoom-dropdown" @click.stop>
+            <button class="zoom-menu-item" @click="zoomOut(); zoomMenuOpen=false">缩小</button>
+            <button class="zoom-menu-item" @click="zoomIn(); zoomMenuOpen=false">放大</button>
+            <button class="zoom-menu-item" @click="fitCanvas(); zoomMenuOpen=false">自适应</button>
+            <div class="zoom-menu-divider" />
+            <button v-for="p in [50,100,150,200]" :key="p"
+              class="zoom-menu-item"
+              :class="{ active: zoomPercent === p }"
+              @click="zoomTo(p); zoomMenuOpen=false">
+              缩放到 {{ p }}%
+            </button>
+          </div>
         </div>
-        <!-- 分隔线 -->
-        <div class="toolbar-divider" />
-        <!-- 快捷操作图标组 -->
-        <button class="toolbar-icon-btn" title="适应画布" @click="fitCanvas">⊡</button>
-        <button class="toolbar-icon-btn" title="缩小" @click="zoomOut">－</button>
-        <button class="toolbar-icon-btn" title="放大" @click="zoomIn">＋</button>
-        <button class="toolbar-icon-btn" title="全屏预览">⤢</button>
-        <!-- 分隔线 -->
-        <div class="toolbar-divider" />
-        <!-- 添加节点 -->
-        <button class="toolbar-add-btn" @click="leftPanelOpen = true">
-          <span>＋</span> 添加节点
-        </button>
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
         <!-- 执行日志 -->
         <button class="toolbar-icon-btn" :class="{ active: executionPanelOpen }" title="执行日志" @click="executionPanelOpen = !executionPanelOpen">
-          <span>📋</span>
+          <span style="font-size:14px;">☰</span>
         </button>
         <!-- 试运行 -->
         <button class="toolbar-run-btn" :class="{ running: isRunning }" @click="handleRun">
@@ -258,16 +258,19 @@ const currentExecutionId = ref<string | null>(null)
 // 底部工具栏
 const executionPanelOpen = ref(false)
 const zoomPercent = ref(100)
+const zoomMenuOpen = ref(false)
+const zoomBtnRef = ref<HTMLElement | null>(null)
+const undoCount = ref(0)
 
 function fitCanvas() {
   lf?.fitView()
-  // fitView 后同步缩放值
   nextTick(() => {
     const transform = (lf as any)?.graphModel?.transformModel
     if (transform) {
       zoomPercent.value = Math.round(transform.SCALE_X * 100)
     }
   })
+  zoomMenuOpen.value = false
 }
 
 function zoomIn() {
@@ -276,6 +279,23 @@ function zoomIn() {
 
 function zoomOut() {
   lf?.zoom(false)
+}
+
+function zoomTo(percent: number) {
+  const scale = percent / 100
+  lf?.zoom(scale)
+  zoomPercent.value = percent
+}
+
+function handleUndo() {
+  lf?.undo()
+}
+
+// 点击工具条外部关闭缩放菜单
+function handleOutsideClick(e: MouseEvent) {
+  if (zoomBtnRef.value && !zoomBtnRef.value.contains(e.target as Node)) {
+    zoomMenuOpen.value = false
+  }
 }
 
 // 节点面板：从注册表驱动，不再硬编码
@@ -592,6 +612,11 @@ function initLogicFlow() {
     }
   })
 
+  // 同步撤销次数（历史记录变化时更新）
+  lf.on('history:change', ({ data }: any) => {
+    undoCount.value = data?.undos?.length ?? 0
+  })
+
   // 加载数据
   loadWorkflow()
 }
@@ -872,14 +897,15 @@ function getNodeTitle(type: string): string {
 }
 
 onMounted(() => {
-  // 用 setTimeout 让 LogicFlow 初始化完全脱离 Vue 的响应式调度周期
   setTimeout(() => {
     initLogicFlow()
   }, 0)
+  document.addEventListener('click', handleOutsideClick)
 })
 
 onUnmounted(() => {
   lf = null
+  document.removeEventListener('click', handleOutsideClick)
 })
 </script>
 
@@ -1029,22 +1055,78 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* 可点击项：撤销区、缩放区 */
-.toolbar-item {
+/* 撤销区 */
+.toolbar-undo {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 4px 10px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 12px;
   color: var(--wf-toolbar-text);
   transition: background 150ms;
 }
-.toolbar-item:hover { background: var(--wf-toolbar-hover); }
+.toolbar-undo:hover { background: var(--wf-toolbar-hover); }
+.toolbar-undo-icon  { font-size: 13px; }
+.toolbar-undo-count { font-weight: 500; min-width: 8px; text-align: center; }
 
-.toolbar-text  { font-size: 12px; font-weight: 500; }
+/* 缩放区（含下拉） */
+.toolbar-zoom {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--wf-toolbar-text);
+  transition: background 150ms;
+}
+.toolbar-zoom:hover { background: var(--wf-toolbar-hover); }
+.toolbar-zoom-val   { font-weight: 500; min-width: 32px; text-align: right; }
+
+/* 缩放下拉菜单 */
+.zoom-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--wf-card-bg);
+  border: 1px solid var(--wf-card-border);
+  border-radius: 10px;
+  padding: 4px 0;
+  min-width: 130px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 50;
+}
+.zoom-menu-item {
+  display: block;
+  width: 100%;
+  padding: 7px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--wf-toolbar-text);
+  cursor: pointer;
+  transition: background 150ms;
+  border-radius: 0;
+}
+.zoom-menu-item:hover { background: var(--wf-toolbar-hover); }
+.zoom-menu-item.active {
+  color: #79b8ff;
+  font-weight: 600;
+}
+.zoom-menu-divider {
+  height: 1px;
+  background: var(--wf-card-border);
+  margin: 4px 0;
+}
+
 .toolbar-arrow { font-size: 9px; color: var(--wf-toolbar-muted); margin-left: 1px; }
+.toolbar-text  { font-size: 12px; font-weight: 500; }
 
 /* 图标按钮：缩小、放大、适应、全屏 */
 .toolbar-icon-btn {
