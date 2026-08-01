@@ -11,7 +11,7 @@ export const variablesDefinition: NodeDefinition = {
   },
   inputPorts: [],
   outputPorts: [
-    { name: 'vars', valueType: 'object', description: '所有已定义变量的集合' },
+    { name: 'vars', label: '变量集合', valueType: 'object', description: '所有已定义变量的集合' },
   ],
   configFields: [
     {

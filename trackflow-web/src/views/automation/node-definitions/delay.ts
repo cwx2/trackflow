@@ -10,10 +10,10 @@ export const delayDefinition: NodeDefinition = {
     category: '控制流',
   },
   inputPorts: [
-    { name: 'duration', valueType: 'number', required: false, description: '等待秒数，覆盖配置项' },
+    { name: 'duration', label: '等待秒数', valueType: 'number', required: false, description: '等待秒数，覆盖配置项' },
   ],
   outputPorts: [
-    { name: 'done', valueType: 'boolean', description: '等待完成，值恒为 true' },
+    { name: 'done', label: '完成', valueType: 'boolean', description: '等待完成，值恒为 true' },
   ],
   configFields: [
     { key: 'seconds', label: '等待秒数', type: 'number', defaultValue: 5 },

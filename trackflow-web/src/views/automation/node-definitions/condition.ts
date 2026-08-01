@@ -10,11 +10,11 @@ export const conditionDefinition: NodeDefinition = {
     category: '控制流',
   },
   inputPorts: [
-    { name: 'value', valueType: 'string', required: true, description: '待判断的值' },
+    { name: 'value', label: '判断值', valueType: 'string', required: true, description: '待判断的值' },
   ],
   outputPorts: [
-    { name: 'true',  valueType: 'boolean', description: '条件成立时流转此路径' },
-    { name: 'false', valueType: 'boolean', description: '条件不成立时流转此路径' },
+    { name: 'true',  label: '成立',   valueType: 'boolean', description: '条件成立时流转此路径' },
+    { name: 'false', label: '不成立', valueType: 'boolean', description: '条件不成立时流转此路径' },
   ],
   configFields: [
     {

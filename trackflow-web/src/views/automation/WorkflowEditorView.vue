@@ -182,12 +182,12 @@ function initLogicFlow() {
       visible: true,
       type: 'dot',
       config: {
-        color: 'var(--tf-border)',
-        thickness: 1
+        color: '#252a3d',
+        thickness: 2
       }
     },
     background: {
-      backgroundColor: 'var(--tf-bg-body)'
+      backgroundColor: '#131623'
     },
     keyboard: {
       enabled: true
@@ -264,15 +264,19 @@ function initLogicFlow() {
           const pulse = status === 'running'
             ? 'animation:pulse 1.2s infinite;' : ''
 
+          const TYPE_LABEL: Record<string, string> = {
+            string: '文本', number: '数字', boolean: '布尔',
+            object: '对象', array: '数组',
+          }
           const portRow = (p: any, side: 'in'|'out') => `
             <div style="display:flex;align-items:center;gap:6px;height:${PORT_ROW_H}px;
               padding:0 10px;${side==='out'?'justify-content:flex-end;':''}">
               ${side==='in' ? `<div style="width:8px;height:8px;border-radius:50%;
                 background:#3b82f6;flex-shrink:0;"></div>` : ''}
-              <span style="font-size:10px;color:#94a3b8;flex:1;
+              <span style="font-size:11px;color:#94a3b8;flex:1;
                 ${side==='out'?'text-align:right;':''}
                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${p.name}<span style="color:#475569;margin-left:4px;">${p.valueType||''}</span>
+                ${p.label || p.name}<span style="color:#4b5568;margin-left:4px;font-size:10px;">${TYPE_LABEL[p.valueType] || p.valueType || ''}</span>
               </span>
               ${side==='out' ? `<div style="width:8px;height:8px;border-radius:50%;
                 background:#f59e0b;flex-shrink:0;"></div>` : ''}
@@ -790,7 +794,8 @@ onUnmounted(() => {
 .canvas-container {
   width: 100%;
   height: 100%;
-  background: var(--tf-bg-body);
+  /* 编辑器固定深色背景，不跟随主题（节点卡片硬编码深色） */
+  background-color: #131623;
 }
 
 /* 悬浮面板公共样式 */

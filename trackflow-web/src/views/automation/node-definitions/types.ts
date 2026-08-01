@@ -5,6 +5,8 @@ import type { ValueType, InputValue } from '@/api/automation'
 /** 输入端口定义（描述层，不含实际值） */
 export interface InputPortDef {
   name: string
+  /** 显示标签（中文），不填则回退到 name */
+  label?: string
   valueType: ValueType
   required: boolean
   description?: string
@@ -15,6 +17,8 @@ export interface InputPortDef {
 /** 输出端口定义 */
 export interface OutputPortDef {
   name: string
+  /** 显示标签（中文），不填则回退到 name */
+  label?: string
   valueType: ValueType
   description?: string
 }

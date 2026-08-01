@@ -10,14 +10,14 @@ export const loopDefinition: NodeDefinition = {
     category: '控制流',
   },
   inputPorts: [
-    { name: 'input', valueType: 'string', required: false, description: '循环输入值' },
+    { name: 'input', label: '循环输入', valueType: 'string', required: false, description: '循环输入值' },
   ],
   outputPorts: [
-    { name: 'output',    valueType: 'string', description: '循环完成后的最终输出' },
-    { name: 'iteration', valueType: 'number', description: '实际执行的循环次数' },
+    { name: 'output',    label: '最终输出', valueType: 'string', description: '循环完成后的最终输出' },
+    { name: 'iteration', label: '执行次数', valueType: 'number', description: '实际执行的循环次数' },
   ],
   configFields: [
-    { key: 'maxRetries',   label: '最大重试次数', type: 'number', defaultValue: 3 },
+    { key: 'maxRetries',   label: '最大重试次数',   type: 'number', defaultValue: 3 },
     { key: 'interval',     label: '重试间隔（秒）', type: 'number', defaultValue: 5 },
     {
       key: 'exitOperator',

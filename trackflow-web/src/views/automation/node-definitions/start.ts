@@ -9,9 +9,9 @@ export const startDefinition: NodeDefinition = {
     description: '工作流的起点，定义触发参数',
     category: '特殊节点',
   },
-  inputPorts: [],  // 开始节点无输入
+  inputPorts: [],
   outputPorts: [
-    { name: 'trigger', valueType: 'object', description: '触发参数（包含所有输入字段）' },
+    { name: 'trigger', label: '触发参数', valueType: 'object', description: '触发参数（包含所有输入字段）' },
   ],
   configFields: [
     {

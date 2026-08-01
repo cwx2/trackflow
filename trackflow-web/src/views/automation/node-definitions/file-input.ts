@@ -10,11 +10,11 @@ export const fileInputDefinition: NodeDefinition = {
     category: '数据处理',
   },
   inputPorts: [
-    { name: 'filePath', valueType: 'string', required: true, description: '文件路径，支持变量引用' },
+    { name: 'filePath', label: '文件路径', valueType: 'string', required: true, description: '文件路径，支持变量引用' },
   ],
   outputPorts: [
-    { name: 'content', valueType: 'string', description: '文件内容' },
-    { name: 'size',    valueType: 'number', description: '文件大小（字节）' },
+    { name: 'content', label: '文件内容', valueType: 'string', description: '文件内容' },
+    { name: 'size',    label: '文件大小', valueType: 'number', description: '文件大小（字节）' },
   ],
   configFields: [
     {
