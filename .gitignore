@@ -1,7 +1,7 @@
 # === 忽略参考源码 ===
 # === Scripts 运行时生成 ===
-scripts/worker-envs/     # 各 worker 独立 KIRO_HOME（运行时生成，含独立 mcp.json）
-scripts/log/             # 运行日志
+scripts/worker-envs/
+scripts/log/
 scripts/worker-envs/
 youtrack-docs
 

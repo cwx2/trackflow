@@ -13,8 +13,8 @@ export default defineConfig({
     }
   },
   resolve: {
-    alias: {
-      '@': '/src'
-    }
+    alias: [
+      { find: '@', replacement: '/src' }
+    ]
   }
 })
