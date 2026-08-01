@@ -157,6 +157,7 @@ function onNodeClick() {
 .node-card {
   width: 280px;
   min-height: 80px;
+  height: 100%;           /* 填满 foreignObject */
   border-radius: 10px;
   background: var(--wf-node-bg);
   border: 1.5px solid var(--wf-node-border);
@@ -165,8 +166,8 @@ function onNodeClick() {
   cursor: pointer;
   transition: border-color 150ms, box-shadow 150ms;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  /* 防止 foreignObject 裁剪阴影 */
   position: relative;
+  box-sizing: border-box;
 }
 
 .node-card:hover {
@@ -302,7 +303,9 @@ function onNodeClick() {
 .compact-view.hidden {
   max-height: 0;
   opacity: 0;
+  overflow: hidden;
   pointer-events: none;
+  padding: 0;
 }
 
 /* ── 展开态 ── */
