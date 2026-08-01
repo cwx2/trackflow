@@ -211,17 +211,22 @@ function onNodeClick() {
 .node-card {
   width: 280px;
   min-height: 80px;
-  height: fit-content;    /* 内容多高就多高，不撑满 foreignObject */
+  height: fit-content;
   border-radius: 10px;
   background: var(--wf-node-bg);
   border: 1.5px solid var(--wf-node-border);
   box-shadow: var(--wf-node-shadow);
-  overflow: hidden;
+  overflow: hidden;       /* 让 border-radius 裁切子元素 */
   cursor: pointer;
   transition: border-color 150ms, box-shadow 150ms;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   position: relative;
   box-sizing: border-box;
+}
+
+/* 头部需要圆角（overflow:visible 后头部自己负责顶部圆角） */
+.node-header {
+  border-radius: 8px 8px 0 0;
 }
 
 .node-card:hover {

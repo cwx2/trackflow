@@ -60,8 +60,12 @@ export abstract class BaseNodeView extends HtmlNode {
     if (!this._mounted) {
       // 首次：挂载
       this._mounted = true
+
+      // 让 foreignObject 不裁切内容（圆角/阴影可见）
+      rootEl.style.overflow = 'visible'
+
       const container = document.createElement('div')
-      container.style.cssText = 'width:100%;height:fit-content;'
+      container.style.cssText = 'width:100%;height:fit-content;overflow:visible;'
       rootEl.appendChild(container)
       this._app!.mount(container)
     } else {
