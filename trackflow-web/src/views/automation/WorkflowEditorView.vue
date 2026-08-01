@@ -158,10 +158,12 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import LogicFlow, { HtmlNode, HtmlNodeModel } from '@logicflow/core'
+import LogicFlow from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
 import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable } from '@/api'
-import { NODE_DEFINITIONS, DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
+import { DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
+import { FlowEdge } from './graph/edges/FlowEdge'
+import { registerAllNodes } from './graph/nodes/index'
 import CliAgentConfig from './components/CliAgentConfig.vue'
 import VariablesConfig from './components/VariablesConfig.vue'
 import ConditionConfig from './components/ConditionConfig.vue'
@@ -179,11 +181,6 @@ import EditorTopbar from './components/EditorTopbar.vue'
 // LogicFlow 样式
 import '@logicflow/core/dist/index.css'
 import '@logicflow/extension/lib/style/index.css'
-
-/** 简单封装，让 migrateDefinition 可以调用注册表 */
-function useNodeDefinitions() {
-  return { getNodeDefinition }
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -456,7 +453,7 @@ function initLogicFlow() {
       }
     },
     background: {
-      backgroundColor: '#131623'
+      backgroundColor: 'var(--wf-canvas-bg)'
     },
     keyboard: {
       enabled: true
@@ -491,229 +488,9 @@ function initLogicFlow() {
   })
   resetTracking()
 
-  // ── 注册所有自定义节点（Dify 风格卡片 + 具名锚点）──────────────────
-  const PORT_ROW_H = 28  // 每个端口行高度（px）
-  const CARD_TOP   = 44  // 卡片顶部标题区高度
-  const CARD_PAD   = 12  // 上下内边距
-
-  function calcNodeHeight(inputCount: number, outputCount: number) {
-    const rows = Math.max(inputCount, 1) + Math.max(outputCount, 1)
-    return CARD_TOP + rows * PORT_ROW_H + CARD_PAD * 2
-  }
-
-  // 辅助：根据节点 properties 或注册表取 inputPorts / outputPorts
-  function getPortsFromProps(props: any, nodeType: string) {
-    const def = getNodeDefinition(nodeType)
-    const inputs  = props?.inputs  || def?.inputPorts  || []
-    const outputs = props?.outputs || def?.outputPorts || []
-    return { inputs, outputs }
-  }
-
-  // ── 通用普通节点注册（cli-agent / variables / condition / loop / file-input / delay）
-  Object.values(NODE_DEFINITIONS)
-    .filter(def => def.type !== 'start' && def.type !== 'end')
-    .forEach(nodeDef => {
-      const { type: nodeType, meta } = nodeDef
-
-      class NodeView extends HtmlNode {
-        getText() { return null }
-        setHtml(rootEl: SVGForeignObjectElement) {
-          const model  = (this as any).props?.model
-          const props  = model?.properties || {}
-          const status = props.runStatus || 'idle'
-          const { inputs, outputs } = getPortsFromProps(props, nodeType)
-          const title  = props.nodeMeta?.title || meta.title
-          const color  = props.nodeMeta?.color  || meta.color
-          const icon   = props.nodeMeta?.icon   || meta.icon
-
-          const borderColor =
-            status === 'running' ? '#3b82f6' :
-            status === 'success' ? '#10b981' :
-            status === 'failed'  ? '#ef4444' : '#2d3148'
-          const pulse = status === 'running'
-            ? 'animation:pulse 1.2s infinite;' : ''
-
-          const TYPE_LABEL: Record<string, string> = {
-            string: '文本', number: '数字', boolean: '布尔',
-            object: '对象', array: '数组',
-          }
-          const portRow = (p: any, side: 'in'|'out') => `
-            <div style="display:flex;align-items:center;gap:6px;height:${PORT_ROW_H}px;
-              padding:0 10px;${side==='out'?'justify-content:flex-end;':''}">
-              ${side==='in' ? `<div style="width:8px;height:8px;border-radius:50%;
-                background:#3b82f6;flex-shrink:0;"></div>` : ''}
-              <span style="font-size:11px;color:#94a3b8;flex:1;
-                ${side==='out'?'text-align:right;':''}
-                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${p.label || p.name}<span style="color:#4b5568;margin-left:4px;font-size:10px;">${TYPE_LABEL[p.valueType] || p.valueType || ''}</span>
-              </span>
-              ${side==='out' ? `<div style="width:8px;height:8px;border-radius:50%;
-                background:#f59e0b;flex-shrink:0;"></div>` : ''}
-            </div>`
-
-          rootEl.innerHTML = `
-            <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}</style>
-            <div style="width:260px;border-radius:10px;background:#1e2130;
-              border:1.5px solid ${borderColor};${pulse}
-              box-shadow:0 2px 12px rgba(0,0,0,.3);overflow:hidden;">
-              <div style="display:flex;align-items:center;gap:8px;padding:10px 12px 8px;
-                border-bottom:1px solid #2d3148;">
-                <div style="width:4px;height:26px;border-radius:2px;background:${color};flex-shrink:0;"></div>
-                <div style="width:26px;height:26px;border-radius:7px;flex-shrink:0;
-                  background:${color}33;display:flex;align-items:center;
-                  justify-content:center;font-size:14px;">${icon}</div>
-                <span style="font-size:13px;font-weight:600;color:#e2e8f0;
-                  flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${title}</span>
-                ${status==='success'?'<span style="color:#10b981;font-size:12px;">✓</span>':''}
-                ${status==='failed' ?'<span style="color:#ef4444;font-size:12px;">✗</span>':''}
-              </div>
-              ${inputs.length  ? `<div style="border-bottom:1px solid #2d3148;">${inputs.map((p:any)=>portRow(p,'in')).join('')}</div>` : ''}
-              ${outputs.length ? `<div>${outputs.map((p:any)=>portRow(p,'out')).join('')}</div>` : ''}
-            </div>`
-        }
-      }
-
-      class NodeModel extends HtmlNodeModel {
-        initNodeData(data: any) {
-          super.initNodeData(data)
-          const def2 = getNodeDefinition(nodeType)
-          const inputs  = data.properties?.inputs  || def2?.inputPorts  || []
-          const outputs = data.properties?.outputs || def2?.outputPorts || []
-          this.width  = 260
-          this.height = calcNodeHeight(inputs.length, outputs.length)
-          const textStr = typeof data.text === 'string' ? data.text : (data.text?.value || '')
-          this.text = { value: textStr, x: 0, y: 0, draggable: false, editable: false }
-        }
-
-        // 具名锚点：输入端口左侧，输出端口右侧
-        getDefaultAnchor() {
-          const { x, y, width, height, id, properties } = this
-          const def2 = getNodeDefinition(nodeType)
-          const inputs  = (properties as any)?.inputs  || def2?.inputPorts  || []
-          const outputs = (properties as any)?.outputs || def2?.outputPorts || []
-          const anchors: any[] = []
-          const startY = y - height / 2 + CARD_TOP + CARD_PAD + PORT_ROW_H / 2
-
-          inputs.forEach((p: any, i: number) => {
-            anchors.push({
-              id: `${id}-input-${p.name}`,
-              x: x - width / 2,
-              y: startY + i * PORT_ROW_H,
-              type: 'input',
-              edgeAddable: true,
-              connectable: true,
-            })
-          })
-          const outStartY = startY + inputs.length * PORT_ROW_H
-          outputs.forEach((p: any, i: number) => {
-            anchors.push({
-              id: `${id}-output-${p.name}`,
-              x: x + width / 2,
-              y: outStartY + i * PORT_ROW_H,
-              type: 'output',
-              edgeAddable: true,
-              connectable: true,
-            })
-          })
-          return anchors
-        }
-      }
-
-      lf!.register({ type: nodeType, view: NodeView, model: NodeModel })
-    })
-
-  // ── Start 节点（绿色圆形，只有输出端口）
-  ;(() => {
-    class StartView extends HtmlNode {
-      getText() { return null }
-      setHtml(rootEl: SVGForeignObjectElement) {
-        rootEl.innerHTML = `
-          <div style="width:80px;height:80px;border-radius:50%;
-            background:#064e3b;border:2.5px solid #10b981;
-            display:flex;flex-direction:column;align-items:center;
-            justify-content:center;box-shadow:0 0 16px #10b98140;">
-            <span style="font-size:20px;">▶</span>
-            <span style="font-size:10px;color:#6ee7b7;margin-top:2px;">开始</span>
-          </div>`
-      }
-    }
-    class StartModel extends HtmlNodeModel {
-      initNodeData(data: any) {
-        super.initNodeData(data)
-        this.width = 80; this.height = 80
-        this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
-      }
-      getDefaultAnchor() {
-        return [{ id: `${this.id}-output-trigger`, x: this.x + 40, y: this.y, type: 'output', edgeAddable: true, connectable: true }]
-      }
-    }
-    lf!.register({ type: 'start', view: StartView, model: StartModel })
-  })()
-
-  // ── End 节点（红色圆形，只有输入端口）
-  ;(() => {
-    class EndView extends HtmlNode {
-      getText() { return null }
-      setHtml(rootEl: SVGForeignObjectElement) {
-        rootEl.innerHTML = `
-          <div style="width:80px;height:80px;border-radius:50%;
-            background:#450a0a;border:2.5px solid #ef4444;
-            display:flex;flex-direction:column;align-items:center;
-            justify-content:center;box-shadow:0 0 16px #ef444440;">
-            <span style="font-size:20px;">⏹</span>
-            <span style="font-size:10px;color:#fca5a5;margin-top:2px;">结束</span>
-          </div>`
-      }
-    }
-    class EndModel extends HtmlNodeModel {
-      initNodeData(data: any) {
-        super.initNodeData(data)
-        this.width = 80; this.height = 80
-        this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
-      }
-      getDefaultAnchor() {
-        return [{ id: `${this.id}-input-result`, x: this.x - 40, y: this.y, type: 'input', edgeAddable: true, connectable: true }]
-      }
-    }
-    lf!.register({ type: 'end', view: EndView, model: EndModel })
-  })()
-
-  // ── Comment 注释节点（黄色便利贴风格）
-  ;(() => {
-    class CommentView extends HtmlNode {
-      getText() { return null }
-      setHtml(rootEl: SVGForeignObjectElement) {
-        const model = (this as any).props?.model
-        const text = model?.properties?.text || '注释...'
-        rootEl.innerHTML = `
-          <div style="width:200px;min-height:80px;background:#2d2a1a;border:1.5px solid #d97706;
-            border-radius:8px;padding:12px 14px;position:relative;
-            box-shadow:0 2px 12px rgba(217,119,6,0.2);">
-            <div style="font-size:10px;color:#d97706;font-weight:600;
-              margin-bottom:6px;letter-spacing:0.5px;">注释</div>
-            <div contenteditable="true"
-              style="font-size:12px;color:#fde68a;line-height:1.6;
-                min-height:40px;outline:none;white-space:pre-wrap;word-break:break-word;"
-              onblur="this.dispatchEvent(new CustomEvent('comment-blur',{bubbles:true,detail:{text:this.innerText}}))"
-            >${text}</div>
-          </div>`
-        // 监听编辑
-        rootEl.querySelector('[contenteditable]')?.addEventListener('blur', (e: any) => {
-          model?.setProperties({ ...model.properties, text: e.target.innerText })
-        })
-      }
-    }
-    class CommentModel extends HtmlNodeModel {
-      initNodeData(data: any) {
-        super.initNodeData(data)
-        this.width = 200
-        this.height = 100
-        this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
-      }
-      getDefaultAnchor() { return [] }  // 注释节点不连线
-    }
-    lf!.register({ type: 'comment', view: CommentView, model: CommentModel })
-  })()
+  // ── 注册所有节点和边（新架构：graph/ 目录） ──────────────────────────
+  lf.register(FlowEdge)
+  registerAllNodes(lf)
 
   // 监听节点点击
   lf.on('node:click', ({ data }) => {
@@ -803,7 +580,6 @@ function migrateDefinition(raw: any): WorkflowDefinition {
   if (raw.globalVariables !== undefined) return raw as WorkflowDefinition
 
   // 旧格式迁移
-  const { getNodeDefinition } = useNodeDefinitions()
   return {
     globalVariables: Object.fromEntries(
       Object.entries(raw.variables || {}).map(([k, v]) => [k, { type: 'string' as const, defaultValue: v }])
@@ -1037,8 +813,7 @@ onUnmounted(() => {
 .canvas-container {
   width: 100%;
   height: 100%;
-  /* 编辑器固定深色背景，不跟随主题（节点卡片硬编码深色） */
-  background-color: #131623;
+  background-color: var(--wf-canvas-bg);
 }
 
 /*

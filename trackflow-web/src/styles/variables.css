@@ -208,3 +208,127 @@ body {
 
 a { color: var(--tf-text-link); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* ===================================================
+ *  工作流编辑器专用变量（跟随主题）
+ *  所有 graph/ 目录下的组件必须使用这些变量
+ * =================================================== */
+
+/* 深色主题工作流变量 */
+:root,
+[data-theme="dark"] {
+  /* 画布 */
+  --wf-canvas-bg:        #131623;
+  --wf-grid-dot:         #252a3d;
+
+  /* 节点卡片 */
+  --wf-node-bg:          #1e2130;
+  --wf-node-bg-hover:    #242840;
+  --wf-node-border:      #2d3148;
+  --wf-node-border-hover:#3d4468;
+  --wf-node-shadow:      0 2px 12px rgba(0,0,0,0.4);
+  --wf-node-shadow-hover:0 4px 20px rgba(0,0,0,0.6);
+  --wf-node-title:       #e2e8f0;
+  --wf-node-subtitle:    #8892a4;
+  --wf-node-header-border: #2d3148;
+
+  /* 端口 */
+  --wf-port-in:          #3b82f6;
+  --wf-port-out:         #f59e0b;
+  --wf-port-label:       #94a3b8;
+  --wf-port-type:        #4b5568;
+
+  /* 运行状态 */
+  --wf-status-running:   #3b82f6;
+  --wf-status-success:   #10b981;
+  --wf-status-failed:    #ef4444;
+  --wf-status-idle:      #2d3148;
+
+  /* 运行态 glow */
+  --wf-glow-running:     0 0 0 2px #3b82f6, 0 0 20px rgba(59,130,246,0.4);
+  --wf-glow-success:     0 0 0 2px #10b981, 0 0 16px rgba(16,185,129,0.3);
+  --wf-glow-failed:      0 0 0 2px #ef4444, 0 0 16px rgba(239,68,68,0.3);
+
+  /* 边 */
+  --wf-edge-color:       #3b82f6;
+  --wf-edge-color-hover: #60a5fa;
+  --wf-edge-width:       2;
+
+  /* 数据流动画粒子 */
+  --wf-flow-particle:    #ffffff;
+  --wf-flow-particle-glow: rgba(255,255,255,0.6);
+}
+
+/* 亮色主题工作流变量 */
+[data-theme="light"] {
+  --wf-canvas-bg:        #f0f2f5;
+  --wf-grid-dot:         #d0d7de;
+
+  --wf-node-bg:          #ffffff;
+  --wf-node-bg-hover:    #f8f9fa;
+  --wf-node-border:      #d0d7de;
+  --wf-node-border-hover:#a0aab5;
+  --wf-node-shadow:      0 1px 4px rgba(0,0,0,0.1);
+  --wf-node-shadow-hover:0 4px 16px rgba(0,0,0,0.15);
+  --wf-node-title:       #1f2328;
+  --wf-node-subtitle:    #57606a;
+  --wf-node-header-border: #d0d7de;
+
+  --wf-port-in:          #2563eb;
+  --wf-port-out:         #d97706;
+  --wf-port-label:       #57606a;
+  --wf-port-type:        #8b949e;
+
+  --wf-status-running:   #2563eb;
+  --wf-status-success:   #1a7f37;
+  --wf-status-failed:    #cf222e;
+  --wf-status-idle:      #d0d7de;
+
+  --wf-glow-running:     0 0 0 2px #2563eb, 0 0 16px rgba(37,99,235,0.25);
+  --wf-glow-success:     0 0 0 2px #1a7f37, 0 0 12px rgba(26,127,55,0.2);
+  --wf-glow-failed:      0 0 0 2px #cf222e, 0 0 12px rgba(207,34,46,0.2);
+
+  --wf-edge-color:       #2563eb;
+  --wf-edge-color-hover: #1d4ed8;
+  --wf-edge-width:       2;
+
+  --wf-flow-particle:    #2563eb;
+  --wf-flow-particle-glow: rgba(37,99,235,0.4);
+}
+
+/* 护眼主题工作流变量 */
+[data-theme="green"] {
+  --wf-canvas-bg:        #161f16;
+  --wf-grid-dot:         #2b3f2b;
+
+  --wf-node-bg:          #1e2a1e;
+  --wf-node-bg-hover:    #243024;
+  --wf-node-border:      #3a5239;
+  --wf-node-border-hover:#4e6e4c;
+  --wf-node-shadow:      0 2px 12px rgba(0,0,0,0.35);
+  --wf-node-shadow-hover:0 4px 20px rgba(0,0,0,0.5);
+  --wf-node-title:       #d4e7d0;
+  --wf-node-subtitle:    #7a9e75;
+  --wf-node-header-border: #3a5239;
+
+  --wf-port-in:          #7dcea0;
+  --wf-port-out:         #d4a94e;
+  --wf-port-label:       #7a9e75;
+  --wf-port-type:        #5a7a56;
+
+  --wf-status-running:   #7dcea0;
+  --wf-status-success:   #6bcf7f;
+  --wf-status-failed:    #e06060;
+  --wf-status-idle:      #3a5239;
+
+  --wf-glow-running:     0 0 0 2px #7dcea0, 0 0 20px rgba(125,206,160,0.35);
+  --wf-glow-success:     0 0 0 2px #6bcf7f, 0 0 16px rgba(107,207,127,0.3);
+  --wf-glow-failed:      0 0 0 2px #e06060, 0 0 16px rgba(224,96,96,0.3);
+
+  --wf-edge-color:       #7dcea0;
+  --wf-edge-color-hover: #9eddb9;
+  --wf-edge-width:       2;
+
+  --wf-flow-particle:    #a3ffcc;
+  --wf-flow-particle-glow: rgba(163,255,204,0.5);
+}
