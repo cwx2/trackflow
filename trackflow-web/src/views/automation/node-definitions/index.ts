@@ -10,6 +10,9 @@ import { delayDefinition }       from './delay'
 import { codeDefinition }        from './code'
 import { httpRequestDefinition } from './http-request'
 import { subWorkflowDefinition } from './sub-workflow'
+import { roleAgentDefinition } from './role-agent'
+import { approvalDefinition } from './approval'
+import { issueGetDefinition, issueSearchDefinition, issueTransitionDefinition, issueCommentDefinition } from './trackflow-nodes'
 
 export type { NodeDefinition, InputPortDef, OutputPortDef, ConfigFieldDef, NodeMetaDef } from './types'
 
@@ -26,6 +29,12 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
   'code':         codeDefinition,
   'http-request': httpRequestDefinition,
   'sub-workflow': subWorkflowDefinition,
+  'role-agent': roleAgentDefinition,
+  'approval': approvalDefinition,
+  'trackflow-issue-get': issueGetDefinition,
+  'trackflow-issue-search': issueSearchDefinition,
+  'trackflow-issue-transition': issueTransitionDefinition,
+  'trackflow-issue-comment': issueCommentDefinition,
 }
 
 /** 根据节点类型获取定义，不存在时返回 undefined */
@@ -35,6 +44,11 @@ export function getNodeDefinition(type: string): NodeDefinition | undefined {
 
 /** 左侧面板可拖拽的节点列表（排除 start/end 特殊节点） */
 export const DRAGGABLE_NODES: NodeDefinition[] = [
+  issueSearchDefinition,
+  issueGetDefinition,
+  issueTransitionDefinition,
+  issueCommentDefinition,
+  roleAgentDefinition,
   cliAgentDefinition,
   codeDefinition,
   httpRequestDefinition,
@@ -44,4 +58,5 @@ export const DRAGGABLE_NODES: NodeDefinition[] = [
   loopDefinition,
   fileInputDefinition,
   delayDefinition,
+  approvalDefinition,
 ]

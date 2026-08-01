@@ -13,13 +13,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ExecutionContext {
     private final Map<String, Map<String, Object>> nodeOutputs = new ConcurrentHashMap<>();
     private final Map<String, Object> globalVars;
+    private final Map<String, Object> triggerInputs;
+    private final Long actorUserId;
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
     private SseNotifier sseNotifier;
     private Long executionId;
 
-    public ExecutionContext(Map<String, Object> triggerInputs, Map<String, Object> globalVars) {
-        this.globalVars = globalVars != null ? globalVars : new HashMap<>();
-        if (triggerInputs != null) nodeOutputs.put("__trigger__", triggerInputs);
+    public ExecutionContext(Map<String, Object> triggerInputs, Map<String, Object> globalVars,
+                            Long actorUserId) {
+        this.globalVars = globalVars != null ? new HashMap<>(globalVars) : new HashMap<>();
+        this.triggerInputs = triggerInputs != null ? new HashMap<>(triggerInputs) : new HashMap<>();
+        this.actorUserId = actorUserId;
+        nodeOutputs.put("__trigger__", this.triggerInputs);
     }
 
     public void setNodeOutputs(String nodeId, Map<String, Object> outputs) {
@@ -67,4 +72,18 @@ public class ExecutionContext {
     }
 
     public Map<String, Object> getGlobalVars() { return globalVars; }
+    public Map<String, Object> getTriggerInputs() { return Map.copyOf(triggerInputs); }
+    public Long getActorUserId() { return actorUserId; }
+
+    public Map<String, Map<String, Object>> snapshotNodeOutputs() {
+        Map<String, Map<String, Object>> snapshot = new HashMap<>();
+        nodeOutputs.forEach((nodeId, outputs) -> snapshot.put(nodeId, new HashMap<>(outputs)));
+        return snapshot;
+    }
+
+    public void restoreNodeOutputs(Map<String, Map<String, Object>> outputs) {
+        if (outputs == null) return;
+        outputs.forEach((nodeId, values) ->
+                nodeOutputs.put(nodeId, values != null ? new ConcurrentHashMap<>(values) : new ConcurrentHashMap<>()));
+    }
 }

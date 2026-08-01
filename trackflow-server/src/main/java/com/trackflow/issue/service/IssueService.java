@@ -44,6 +44,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
 import com.trackflow.common.event.WorkflowRuleEvent;
+import com.trackflow.automation.execution.AutomationActorRunner;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -2287,7 +2288,7 @@ public class IssueService {
         comment.setIssueId(issueId);
         comment.setUserId(currentUserId);
         comment.setContent(content);
-        comment.setSource("web");
+        comment.setSource(AutomationActorRunner.isAutomationExecution() ? "automation" : "web");
         // 设置可见性：空列表视为 null（全体可见）
         if (visibleToGroupIds != null && !visibleToGroupIds.isEmpty()) {
             comment.setVisibleToGroupIds(visibleToGroupIds);
@@ -3243,6 +3244,9 @@ public class IssueService {
         activity.setNewValue(newValue);
         activity.setOldDisplayValue(oldDisplayValue);
         activity.setNewDisplayValue(newDisplayValue);
+        if (AutomationActorRunner.isAutomationExecution()) {
+            activity.setSource("automation");
+        }
         activity.setCreatedAt(LocalDateTime.now());
         activityMapper.insert(activity);
     }

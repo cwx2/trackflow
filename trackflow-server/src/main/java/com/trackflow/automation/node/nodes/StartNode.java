@@ -25,6 +25,6 @@ public class StartNode implements NodeDefinition, NodeExecutor {
     }
     @Override
     public Map<String, Object> execute(Map<String, Object> inputs, WorkflowNodeModel node, ExecutionContext ctx) {
-        return Map.of("trigger", inputs.isEmpty() ? Map.of() : inputs);
+        return Map.of("trigger", ctx.getTriggerInputs());
     }
 }

@@ -85,7 +85,9 @@ public class SecurityConfig {
                     "/api/v1/auth/backchannel-logout",
                     "/ws/**",
                     // 邮件静音 token 端点：通过 token 机制保证安全，无需 JWT 认证
-                    "/api/v1/notifications/mute-via-email"
+                    "/api/v1/notifications/mute-via-email",
+                    // 自动化 Webhook：由工作流级 token + 幂等键鉴权
+                    "/api/v1/automation/webhooks/**"
                 ).permitAll()
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().denyAll()

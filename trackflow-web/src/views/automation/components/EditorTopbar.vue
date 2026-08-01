@@ -24,6 +24,12 @@
     </div>
 
     <div class="toolbar-right">
+      <a-tag :color="status === 'published' ? 'green' : status === 'disabled' ? 'gray' : 'orange'">
+        {{ status === 'published' ? '已发布' : status === 'disabled' ? '已停用' : '草稿' }}
+      </a-tag>
+      <a-button @click="emit('settings')">运行设置</a-button>
+      <a-button v-if="status === 'published'" status="warning" @click="emit('disable')">停用</a-button>
+      <a-button v-else :loading="publishing" @click="emit('publish')">发布</a-button>
       <a-button type="primary" :loading="saving" @click="emit('save')">保存</a-button>
     </div>
   </div>
@@ -35,12 +41,17 @@ import { ref, nextTick } from 'vue'
 defineProps<{
   name: string
   saving: boolean
+  publishing: boolean
+  status: 'draft' | 'published' | 'disabled'
 }>()
 
 const emit = defineEmits<{
   'back': []
   'save': []
   'update:name': [value: string]
+  'settings': []
+  'publish': []
+  'disable': []
 }>()
 
 const editing = ref(false)

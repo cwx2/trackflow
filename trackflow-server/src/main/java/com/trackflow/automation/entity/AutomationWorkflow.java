@@ -27,6 +27,19 @@ public class AutomationWorkflow implements Serializable {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String definition;
 
+    private Long projectId;
+    private String status;
+    private Integer version;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String publishedDefinition;
+    private String triggerType;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String triggerConfig;
+    private String concurrencyMode;
+    private Integer maxConcurrent;
+    private Long actorUserId;
+    private LocalDateTime publishedAt;
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
 

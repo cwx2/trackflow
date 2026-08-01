@@ -10,21 +10,39 @@ export interface WorkflowVO {
   createdBy: string
   createdAt: string
   updatedAt: string
+  status?: 'draft' | 'published' | 'disabled'
+  version?: number
+  triggerType?: string
 }
 
 export interface WorkflowDetailVO extends WorkflowVO {
   definition: string // JSON string of WorkflowDefinition
+  projectId?: number
+  publishedDefinition?: string
+  triggerConfig?: string
+  concurrencyMode?: 'queue' | 'skip' | 'parallel'
+  maxConcurrent?: number
+  actorUserId?: number
+  publishedAt?: string
 }
 
 export interface CreateWorkflowDTO {
   name: string
   description?: string
+  projectId?: number
 }
 
 export interface UpdateAutomationDTO {
   name?: string
   description?: string
   definition?: string // JSON string of WorkflowDefinition
+  version?: number
+  projectId?: number
+  triggerType?: string
+  triggerConfig?: string
+  concurrencyMode?: string
+  maxConcurrent?: number
+  actorUserId?: number
 }
 
 // ====== 新 Schema：变量类型系统 ======
@@ -84,6 +102,15 @@ export type NodeType =
   | 'loop'
   | 'file-input'
   | 'delay'
+  | 'code'
+  | 'http-request'
+  | 'sub-workflow'
+  | 'role-agent'
+  | 'approval'
+  | 'trackflow-issue-get'
+  | 'trackflow-issue-search'
+  | 'trackflow-issue-transition'
+  | 'trackflow-issue-comment'
 
 /** 工作流节点（新结构，替代旧的 data: Record<string,any>） */
 export interface WorkflowNode {
@@ -128,7 +155,8 @@ export interface WorkflowDefinition {
 export interface ExecutionVO {
   id: string
   automationId: string
-  status: 'running' | 'success' | 'failed' | 'cancelled'
+  status: 'queued' | 'running' | 'waiting_timer' | 'waiting_event' | 'waiting_approval'
+    | 'retrying' | 'paused' | 'success' | 'failed' | 'cancelled'
   startedAt: string
   finishedAt?: string
   durationMs?: number
@@ -140,7 +168,8 @@ export interface NodeExecutionVO {
   nodeId: string
   nodeType: string
   nodeName?: string
-  status: 'running' | 'success' | 'failed' | 'skipped'
+  status: 'pending' | 'ready' | 'running' | 'waiting' | 'retrying'
+    | 'success' | 'failed' | 'skipped' | 'cancelled'
   input?: unknown
   output?: unknown
   errorInfo?: string
@@ -187,6 +216,50 @@ export const automationApi = {
     return request.put<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}`, data)
   },
 
+  publish(id: string) {
+    return request.post<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}/publish`)
+  },
+
+  disable(id: string) {
+    return request.post<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}/disable`)
+  },
+
+  listRoles() {
+    return request.get<any, R<AutomationRoleProfile[]>>('/automation/roles')
+  },
+
+  createRole(data: AutomationRoleProfileDTO) {
+    return request.post<any, R<AutomationRoleProfile>>('/automation/roles', data)
+  },
+
+  updateRole(id: string, data: AutomationRoleProfileDTO) {
+    return request.put<any, R<AutomationRoleProfile>>(`/automation/roles/${id}`, data)
+  },
+
+  deleteRole(id: string) {
+    return request.delete<any, R<void>>(`/automation/roles/${id}`)
+  },
+
+  listApprovals() {
+    return request.get<any, R<AutomationApproval[]>>('/automation/approvals')
+  },
+
+  decideApproval(id: string, decision: 'approved' | 'rejected', comment?: string) {
+    return request.post<any, R<AutomationApproval>>(`/automation/approvals/${id}/decision`, { decision, comment })
+  },
+
+  listWorkItems(state?: string) {
+    return request.get<any, R<AutomationWorkItem[]>>('/automation/work-items', { params: { state, limit: 200 } })
+  },
+
+  retryWorkItem(id: string) {
+    return request.post<any, R<void>>(`/automation/work-items/${id}/retry`)
+  },
+
+  cancelWorkItem(id: string) {
+    return request.post<any, R<void>>(`/automation/work-items/${id}/cancel`)
+  },
+
   /**
    * 删除工作流
    */
@@ -213,5 +286,61 @@ export const automationApi = {
    */
   getExecution(executionId: string) {
     return request.get<any, R<ExecutionDetailVO>>(`/automation/executions/${executionId}`)
+  },
+
+  /** 取消正在运行或等待中的工作流 */
+  cancelExecution(executionId: string) {
+    return request.post<any, R<void>>(`/automation/executions/${executionId}/cancel`)
   }
+}
+
+export interface AutomationRoleProfile {
+  id: string
+  name: string
+  description?: string
+  providerType: 'cli' | 'http' | 'openai_compatible'
+  model?: string
+  enabled: boolean
+  systemPrompt?: string
+  toolPolicy?: string
+  outputSchema?: string
+  workspacePolicy?: string
+}
+
+export interface AutomationRoleProfileDTO {
+  name: string
+  description?: string
+  providerType: 'cli' | 'http' | 'openai_compatible'
+  model?: string
+  systemPrompt?: string
+  toolPolicy?: string
+  outputSchema?: string
+  workspacePolicy?: string
+  enabled?: boolean
+}
+
+export interface AutomationApproval {
+  id: string
+  executionId: string
+  nodeId: string
+  title: string
+  description?: string
+  riskLevel: 'low' | 'medium' | 'high' | 'critical'
+  requestPayload?: string
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
+  createdAt: string
+  expiresAt?: string
+}
+
+export interface AutomationWorkItem {
+  id: string
+  automationId: string
+  issueId?: string
+  correlationId: string
+  state: 'queued' | 'leased' | 'running' | 'completed' | 'failed' | 'dead_letter' | 'cancelled'
+  attempt: number
+  maxAttempts: number
+  executionId?: string
+  lastError?: string
+  createdAt: string
 }

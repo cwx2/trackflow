@@ -2,10 +2,13 @@
   <div class="automation-list-view">
     <div class="page-header">
       <h1 class="page-title">自动化工作流</h1>
-      <a-button v-if="workflows.length > 0" type="primary" @click="showCreateModal = true">
-        <template #icon><span class="btn-icon">➕</span></template>
-        新建工作流
-      </a-button>
+      <div class="header-actions">
+        <a-button @click="router.push('/automation-operations')">角色与审批</a-button>
+        <a-button v-if="workflows.length > 0" type="primary" @click="showCreateModal = true">
+          <template #icon><span class="btn-icon">➕</span></template>
+          新建工作流
+        </a-button>
+      </div>
     </div>
 
     <div class="page-content">

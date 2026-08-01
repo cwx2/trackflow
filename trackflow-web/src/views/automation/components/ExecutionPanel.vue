@@ -25,7 +25,7 @@
           @click="selectNode(item)"
         >
           <span class="node-status-icon">
-            {{ item.status === 'running' ? '⏳' : item.status === 'success' ? '✓' : item.status === 'failed' ? '✗' : '○' }}
+            {{ statusIcon(item.status) }}
           </span>
           <span class="node-name">{{ item.nodeName || item.nodeId }}</span>
           <span class="node-duration">{{ item.durationMs ? item.durationMs + 'ms' : '' }}</span>
@@ -65,7 +65,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 interface NodeEntry {
   nodeId: string
   nodeName?: string
-  status: 'idle' | 'running' | 'success' | 'failed'
+  status: 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
   durationMs?: number
   input?: unknown
   output?: unknown
@@ -73,7 +73,7 @@ interface NodeEntry {
 }
 
 const props = defineProps<{
-  nodeStatusMap: Record<string, 'idle' | 'running' | 'success' | 'failed'>
+  nodeStatusMap: Record<string, 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'>
   streamingOutput: Record<string, string>
   isRunning: boolean
 }>()
@@ -101,8 +101,9 @@ const selectedDetail = computed(() =>
 const currentStatus = computed(() => {
   if (props.isRunning) return 'running'
   if (Object.values(props.nodeStatusMap).some(s => s === 'failed')) return 'failed'
+  if (Object.values(props.nodeStatusMap).some(s => s === 'cancelled')) return 'cancelled'
   if (Object.values(props.nodeStatusMap).length > 0 &&
-      Object.values(props.nodeStatusMap).every(s => s === 'success')) return 'success'
+      Object.values(props.nodeStatusMap).every(s => s === 'success' || s === 'skipped')) return 'success'
   return null
 })
 
@@ -111,12 +112,20 @@ const statusLabel = computed(() => {
     running: '运行中...',
     success: '成功',
     failed:  '失败',
+    cancelled: '已取消',
   }
   return currentStatus.value ? (map[currentStatus.value] || '') : ''
 })
 
 function selectNode(item: NodeEntry) {
   selectedNodeId.value = item.nodeId
+}
+
+function statusIcon(status: NodeEntry['status']) {
+  const icons: Record<NodeEntry['status'], string> = {
+    idle: '○', running: '⏳', success: '✓', failed: '✗', skipped: '−', cancelled: '■',
+  }
+  return icons[status]
 }
 
 function formatJson(val: unknown) {
@@ -184,6 +193,7 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
 .status-badge.running { background: #1e3a5f; color: #93c5fd; }
 .status-badge.success { background: #064e3b; color: #6ee7b7; }
 .status-badge.failed  { background: #450a0a; color: #fca5a5; }
+.status-badge.cancelled { background: var(--tf-bg-elevated); color: var(--tf-text-secondary); }
 
 .panel-body {
   display: flex;
@@ -214,6 +224,8 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
 .node-row.running .node-status-icon { color: #3b82f6; }
 .node-row.success .node-status-icon { color: #10b981; }
 .node-row.failed  .node-status-icon { color: #ef4444; }
+.node-row.skipped .node-status-icon,
+.node-row.cancelled .node-status-icon { color: var(--tf-text-tertiary); }
 
 .node-status-icon { font-size: 11px; width: 14px; flex-shrink: 0; }
 .node-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

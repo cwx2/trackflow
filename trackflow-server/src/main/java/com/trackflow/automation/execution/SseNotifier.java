@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,6 +56,9 @@ public class SseNotifier {
     public static Map<String, Object> nodeFailed(String nodeId, String error, long ms) {
         return Map.of("type", "node_failed", "nodeId", nodeId, "error", error, "durationMs", ms);
     }
+    public static Map<String, Object> nodeSkipped(String nodeId) {
+        return Map.of("type", "node_skipped", "nodeId", nodeId, "reason", "branch_not_selected");
+    }
     public static Map<String, Object> nodeStreaming(String nodeId, String chunk) {
         return Map.of("type", "node_streaming_output", "nodeId", nodeId, "chunk", chunk);
     }
@@ -62,6 +66,21 @@ public class SseNotifier {
         return Map.of("type", "workflow_success", "output", output != null ? output : Map.of(), "totalDurationMs", ms);
     }
     public static Map<String, Object> workflowFailed(String error) {
-        return Map.of("type", "workflow_failed", "error", error);
+        return Map.of("type", "workflow_failed", "error", error != null ? error : "工作流执行失败");
+    }
+    public static Map<String, Object> workflowCancelled() {
+        return Map.of("type", "workflow_cancelled");
+    }
+    public static Map<String, Object> workflowWaitingTimer(String nodeId, LocalDateTime wakeUpAt) {
+        return Map.of(
+                "type", "workflow_waiting_timer",
+                "nodeId", nodeId,
+                "wakeUpAt", wakeUpAt.toString()
+        );
+    }
+
+    public static Map<String, Object> workflowWaitingApproval(String nodeId, Long approvalId) {
+        return Map.of("type", "workflow_waiting_approval", "nodeId", nodeId,
+                "approvalId", String.valueOf(approvalId));
     }
 }

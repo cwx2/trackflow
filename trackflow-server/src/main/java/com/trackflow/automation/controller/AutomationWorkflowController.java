@@ -66,6 +66,18 @@ public class AutomationWorkflowController {
         return R.ok(workflowConverter.toDetailVO(workflow));
     }
 
+    @PostMapping("/{id}/publish")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<WorkflowDetailVO> publish(@PathVariable("id") Long id) {
+        return R.ok(workflowConverter.toDetailVO(workflowService.publish(id)));
+    }
+
+    @PostMapping("/{id}/disable")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<WorkflowDetailVO> disable(@PathVariable("id") Long id) {
+        return R.ok(workflowConverter.toDetailVO(workflowService.disable(id)));
+    }
+
     /**
      * 删除工作流
      */

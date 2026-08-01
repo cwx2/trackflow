@@ -88,9 +88,14 @@
     </a-tooltip>
 
     <!-- 8. 试运行 -->
-    <button class="toolbar-run-btn" :class="{ running: isRunning }" @click="emit('run')">
-      <span class="run-icon">▶</span>
-      <span>{{ isRunning ? '运行中...' : '试运行' }}</span>
+    <button
+      class="toolbar-run-btn"
+      :class="{ running: isRunning }"
+      :aria-label="isRunning ? '取消当前执行' : '试运行工作流'"
+      @click="onRunButtonClick"
+    >
+      <span class="run-icon">{{ isRunning ? '■' : '▶' }}</span>
+      <span>{{ isRunning ? '停止运行' : '试运行' }}</span>
     </button>
   </div>
 </template>
@@ -98,7 +103,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   zoomPercent: number
   minimapOpen: boolean
   debugMode: boolean
@@ -117,10 +122,16 @@ const emit = defineEmits<{
   'toggle-node-panel': []
   'toggle-debug': []
   'run': []
+  'cancel': []
 }>()
 
 const zoomMenuOpen = ref(false)
 const zoomBtnRef = ref<HTMLElement | null>(null)
+
+function onRunButtonClick() {
+  if (props.isRunning) emit('cancel')
+  else emit('run')
+}
 
 function handleOutsideClick(e: MouseEvent) {
   if (zoomBtnRef.value && !zoomBtnRef.value.contains(e.target as Node)) {

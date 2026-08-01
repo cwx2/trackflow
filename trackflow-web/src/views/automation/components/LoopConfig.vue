@@ -16,6 +16,11 @@
         />
         <div class="form-hint">达到最大次数后自动退出循环（1-20）</div>
       </a-form-item>
+
+      <a-form-item label="循环子工作流 ID">
+        <a-input v-model="localData.workflowId" placeholder="选择一个已发布工作流的 ID" />
+        <div class="form-hint">每轮执行该子工作流；循环本身不会在画布 DAG 中制造回边</div>
+      </a-form-item>
       
       <a-form-item label="重试间隔（秒）">
         <a-input-number
@@ -103,6 +108,7 @@ const localData = ref({ ...props.data })
 onMounted(() => {
   if (!localData.value.label) localData.value.label = '重试循环'
   if (localData.value.maxRetries === undefined) localData.value.maxRetries = 3
+  if (localData.value.workflowId === undefined) localData.value.workflowId = ''
   if (localData.value.interval === undefined) localData.value.interval = 5
   if (!localData.value.exitVariable) localData.value.exitVariable = '{output}'
   if (!localData.value.exitOperator) localData.value.exitOperator = 'contains'

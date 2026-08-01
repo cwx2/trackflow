@@ -15,6 +15,7 @@ export const subWorkflowDefinition: NodeDefinition = {
   outputPorts: [
     { name: 'output', label: '输出结果', valueType: 'object', description: '子工作流的输出结果' },
     { name: 'status', label: '执行状态', valueType: 'string', description: 'success 或 failed' },
+    { name: 'success', label: '成功', valueType: 'boolean', description: '子工作流成功完成' },
   ],
   configFields: [
     {

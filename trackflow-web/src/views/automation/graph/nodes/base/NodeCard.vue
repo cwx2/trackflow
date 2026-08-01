@@ -25,6 +25,8 @@
         <span v-if="runStatus === 'running'" class="status-dot running" />
         <span v-else-if="runStatus === 'success'" class="status-icon success">✓</span>
         <span v-else-if="runStatus === 'failed'"  class="status-icon failed">✗</span>
+        <span v-else-if="runStatus === 'skipped'" class="status-icon skipped">−</span>
+        <span v-else-if="runStatus === 'cancelled'" class="status-icon cancelled">■</span>
 
         <!-- hover 时浮出的操作按钮 -->
         <div class="hover-actions">
@@ -238,6 +240,8 @@ function onNodeClick() {
 .node-card.status-running { box-shadow: var(--wf-glow-running); border-color: var(--wf-status-running); }
 .node-card.status-success  { box-shadow: var(--wf-glow-success); border-color: var(--wf-status-success); }
 .node-card.status-failed   { box-shadow: var(--wf-glow-failed);  border-color: var(--wf-status-failed); }
+.node-card.status-skipped  { opacity: 0.58; border-style: dashed; }
+.node-card.status-cancelled { opacity: 0.72; border-style: dashed; }
 
 /* ── 标题区（sticky，展开时头部不动） ── */
 .node-header {
@@ -415,6 +419,8 @@ function onNodeClick() {
 }
 .status-icon.success { color: var(--wf-status-success); }
 .status-icon.failed  { color: var(--wf-status-failed); }
+.status-icon.skipped,
+.status-icon.cancelled { color: var(--wf-port-type); }
 
 .expand-btn {
   display: flex;

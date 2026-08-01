@@ -4,8 +4,13 @@
     <EditorTopbar
       v-model:name="workflowName"
       :saving="saving"
+      :publishing="publishing"
+      :status="workflowStatus"
       @back="goBack"
       @save="handleSave"
+      @settings="settingsOpen = true"
+      @publish="handlePublish"
+      @disable="handleDisable"
     />
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
@@ -129,6 +134,11 @@
             <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" v-model:data="selectedNode.properties" />
             <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" v-model:data="selectedNode.properties" />
             <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" v-model:data="selectedNode.properties" />
+            <GenericNodeConfig
+              v-else
+              v-model:data="selectedNode.properties"
+              :definition="getNodeDefinition(selectedNode.properties?.nodeType)"
+            />
           </template>
           <template v-else>
             <div class="panel-header">
@@ -156,6 +166,7 @@
         @toggle-node-panel="toggleAddNodePanel"
         @toggle-debug="toggleDebugMode"
         @run="handleRun"
+        @cancel="handleCancelRun"
       />
 
       <!-- 执行日志浮层（可折叠） -->
@@ -168,11 +179,62 @@
         />
       </div>
     </div>
+
+    <a-modal v-model:visible="settingsOpen" title="自动运行设置" :width="520" @ok="saveSettings">
+      <a-form :model="settingsModel" layout="vertical">
+        <a-form-item label="所属项目 ID">
+          <a-input-number v-model="workflowProjectId" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="执行身份（用户 ID）">
+          <a-input-number v-model="workflowActorUserId" :min="1" style="width: 100%" />
+          <div class="settings-hint">所有 TrackFlow 写操作都按该用户的真实权限与状态机执行。</div>
+        </a-form-item>
+        <a-form-item label="触发方式">
+          <a-select v-model="workflowTriggerType">
+            <a-option value="manual">手动</a-option>
+            <a-option value="schedule">定时</a-option>
+            <a-option value="issue_created">需求创建</a-option>
+            <a-option value="issue_changed">需求字段变化</a-option>
+            <a-option value="webhook">Webhook</a-option>
+          </a-select>
+        </a-form-item>
+        <template v-if="workflowTriggerType === 'schedule'">
+          <a-form-item label="Cron 表达式">
+            <a-input v-model="triggerCron" placeholder="0 0 9 * * * 或 hourly/daily/weekly" />
+          </a-form-item>
+          <a-form-item label="时区">
+            <a-input v-model="triggerTimezone" placeholder="Asia/Shanghai" />
+          </a-form-item>
+        </template>
+        <a-form-item v-if="workflowTriggerType === 'issue_changed'" label="监听字段">
+          <a-input v-model="triggerFields" placeholder="status_id,priority,assignee" />
+          <div class="settings-hint">多个字段用英文逗号分隔；留空表示监听所有字段。</div>
+        </a-form-item>
+        <a-form-item v-if="workflowTriggerType === 'issue_changed'" label="允许自动化再次触发">
+          <a-switch v-model="allowAutomationEvents" />
+          <div class="settings-hint">默认关闭，防止状态变更工作流递归触发自身。</div>
+        </a-form-item>
+        <a-form-item v-if="workflowTriggerType === 'webhook'" label="Token SHA-256">
+          <a-input v-model="triggerWebhookTokenSha256" placeholder="64 位十六进制 SHA-256" />
+          <div class="settings-hint">调用方传原始 Token 到 X-TrackFlow-Webhook-Token，并提供 X-Idempotency-Key。</div>
+        </a-form-item>
+        <a-form-item label="并发策略">
+          <a-select v-model="workflowConcurrencyMode">
+            <a-option value="queue">排队</a-option>
+            <a-option value="skip">已有执行时跳过</a-option>
+            <a-option value="parallel">允许并行</a-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="最大并发数">
+          <a-input-number v-model="workflowMaxConcurrent" :min="1" :max="50" style="width: 100%" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -191,6 +253,7 @@ import DelayConfig from './components/DelayConfig.vue'
 import CodeConfig from './components/CodeConfig.vue'
 import HttpRequestConfig from './components/HttpRequestConfig.vue'
 import SubWorkflowConfig from './components/SubWorkflowConfig.vue'
+import GenericNodeConfig from './components/GenericNodeConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
 import BottomToolbar from './components/BottomToolbar.vue'
@@ -220,17 +283,44 @@ const workflowId = ref('')
 const workflowName = ref('加载中...')
 const loading = ref(false)
 const saving = ref(false)
+const publishing = ref(false)
+const workflowStatus = ref<'draft' | 'published' | 'disabled'>('draft')
+const workflowVersion = ref(1)
+const workflowProjectId = ref<number>()
+const workflowActorUserId = ref<number>()
+const workflowTriggerType = ref('manual')
+const workflowConcurrencyMode = ref<'queue' | 'skip' | 'parallel'>('queue')
+const workflowMaxConcurrent = ref(1)
+const triggerCron = ref('0 0 9 * * *')
+const triggerTimezone = ref('Asia/Shanghai')
+const triggerFields = ref('')
+const allowAutomationEvents = ref(false)
+const triggerWebhookTokenSha256 = ref('')
+const settingsOpen = ref(false)
+const settingsModel = computed(() => ({
+  projectId: workflowProjectId.value,
+  actorUserId: workflowActorUserId.value,
+  triggerType: workflowTriggerType.value,
+  concurrencyMode: workflowConcurrencyMode.value,
+  maxConcurrent: workflowMaxConcurrent.value,
+}))
 
 // 全局变量和选中节点
 const globalVariables = ref<Record<string, GlobalVariable>>({})
 const selectedNode = ref<any>(null)
+
+watch(selectedNode, value => {
+  if (!lf || !value?.id || !value.properties) return
+  lf.setProperties(value.id, JSON.parse(JSON.stringify(value.properties)))
+}, { deep: true })
 
 // 面板开关
 const leftPanelOpen = ref(true)
 const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
 
 // 执行状态
-const nodeStatusMap = ref<Record<string, 'idle'|'running'|'success'|'failed'>>({})
+type CanvasNodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
+const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
 const streamingOutput = ref<Record<string, string>>({})
 const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
@@ -581,6 +671,21 @@ async function loadWorkflow() {
     const res = await automationApi.getById(id)
     if (res.code === 0) {
       workflowName.value = res.data.name
+      workflowStatus.value = res.data.status || 'draft'
+      workflowVersion.value = res.data.version || 1
+      workflowProjectId.value = res.data.projectId
+      workflowActorUserId.value = res.data.actorUserId
+      workflowTriggerType.value = res.data.triggerType || 'manual'
+      workflowConcurrencyMode.value = res.data.concurrencyMode || 'queue'
+      workflowMaxConcurrent.value = res.data.maxConcurrent || 1
+      try {
+        const trigger = JSON.parse(res.data.triggerConfig || '{}')
+        triggerCron.value = trigger.cron || '0 0 9 * * *'
+        triggerTimezone.value = trigger.timezone || 'Asia/Shanghai'
+        triggerFields.value = Array.isArray(trigger.fields) ? trigger.fields.join(',') : ''
+        allowAutomationEvents.value = Boolean(trigger.allowAutomationEvents)
+        triggerWebhookTokenSha256.value = trigger.tokenSha256 || ''
+      } catch { /* 服务端发布时会再次校验 */ }
       const raw = JSON.parse(res.data.definition || '{}')
 
       // ── 兼容旧格式（variables/nodes[].data/edges[].source）和新格式（globalVariables/nodes[].inputs/edges[].sourceNodeId）
@@ -595,7 +700,7 @@ async function loadWorkflow() {
           x: n.position.x + 100,
           y: n.position.y + 30,
           text: n.nodeMeta?.title || n.type,
-          properties: { ...n.config, nodeType: n.type, inputs: n.inputs, outputs: n.outputs, nodeMeta: n.nodeMeta }
+          properties: { ...n.config, config: n.config || {}, nodeType: n.type, inputs: n.inputs, outputs: n.outputs, nodeMeta: n.nodeMeta }
         })),
         edges: (def.edges || []).map(e => ({
           id: e.id,
@@ -670,7 +775,7 @@ function migrateDefinition(raw: any): WorkflowDefinition {
 
 // 保存工作流
 async function handleSave() {
-  if (!lf) return
+  if (!lf) return false
   saving.value = true
   
   try {
@@ -690,7 +795,7 @@ async function handleSave() {
         },
         inputs:  n.properties?.inputs  || [],
         outputs: n.properties?.outputs || [],
-        config:  n.properties?.config  || {},
+        config:  extractNodeConfig(n.properties || {}),
       })),
       edges: graphData.edges.map((e: any) => ({
         id: e.id,
@@ -703,19 +808,89 @@ async function handleSave() {
     
     const res = await automationApi.update(workflowId.value, {
       name: workflowName.value,
-      definition: JSON.stringify(definition)
+      definition: JSON.stringify(definition),
+      version: workflowVersion.value,
+      projectId: workflowProjectId.value,
+      actorUserId: workflowActorUserId.value,
+      triggerType: workflowTriggerType.value,
+      triggerConfig: JSON.stringify(buildTriggerConfig()),
+      concurrencyMode: workflowConcurrencyMode.value,
+      maxConcurrent: workflowMaxConcurrent.value,
     })
     
     if (res.code === 0) {
+      workflowVersion.value = res.data.version || workflowVersion.value + 1
       Message.success('保存成功')
+      return true
     } else {
       Message.error(res.message || '保存失败')
+      return false
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '保存失败')
+    return false
   } finally {
     saving.value = false
   }
+}
+
+function buildTriggerConfig() {
+  if (workflowTriggerType.value === 'schedule') {
+    return { cron: triggerCron.value, timezone: triggerTimezone.value }
+  }
+  if (workflowTriggerType.value === 'issue_changed') {
+    return {
+      fields: triggerFields.value.split(',').map(value => value.trim()).filter(Boolean),
+      allowAutomationEvents: allowAutomationEvents.value,
+    }
+  }
+  if (workflowTriggerType.value === 'webhook') {
+    return { tokenSha256: triggerWebhookTokenSha256.value }
+  }
+  return {}
+}
+
+async function saveSettings() {
+  settingsOpen.value = false
+  await handleSave()
+}
+
+async function handlePublish() {
+  if (!(await handleSave())) return
+  publishing.value = true
+  try {
+    const res = await automationApi.publish(workflowId.value)
+    if (res.code === 0) {
+      workflowStatus.value = 'published'
+      workflowVersion.value = res.data.version || workflowVersion.value + 1
+      Message.success('工作流已发布，自动触发开始生效')
+    } else Message.error(res.message || '发布失败')
+  } catch (error: any) {
+    Message.error(error.response?.data?.message || '发布失败')
+  } finally {
+    publishing.value = false
+  }
+}
+
+async function handleDisable() {
+  try {
+    const res = await automationApi.disable(workflowId.value)
+    if (res.code === 0) {
+      workflowStatus.value = 'disabled'
+      workflowVersion.value = res.data.version || workflowVersion.value + 1
+      Message.success('工作流已停用，新事件不会再入队')
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.message || '停用失败')
+  }
+}
+
+function extractNodeConfig(properties: Record<string, any>) {
+  const reserved = new Set(['nodeType', 'nodeMeta', 'inputs', 'outputs', 'runStatus', 'label'])
+  const legacyConfig = Object.fromEntries(
+    Object.entries(properties).filter(([key]) => !reserved.has(key) && key !== 'config')
+  )
+  return { ...legacyConfig, ...(properties.config || {}) }
 }
 
 // 返回列表
@@ -752,7 +927,7 @@ function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: 
 // ── 试运行 ────────────────────────────────────────────────
 async function handleRun() {
   if (isRunning.value || !lf) return
-  await handleSave()  // 先保存
+  if (!(await handleSave())) return
   isRunning.value = true
   nodeStatusMap.value = {}
   streamingOutput.value = {}
@@ -785,6 +960,9 @@ async function handleRun() {
           nodeStatusMap.value = { ...nodeStatusMap.value, [event.nodeId]: 'failed' }
           lf?.setProperties(event.nodeId, { runStatus: 'failed' })
           Message.error(`节点 ${event.nodeId} 执行失败: ${event.error}`)
+        } else if (event.type === 'node_skipped') {
+          nodeStatusMap.value = { ...nodeStatusMap.value, [event.nodeId]: 'skipped' }
+          lf?.setProperties(event.nodeId, { runStatus: 'skipped' })
         } else if (event.type === 'node_streaming_output') {
           streamingOutput.value = {
             ...streamingOutput.value,
@@ -798,6 +976,10 @@ async function handleRun() {
           Message.error(`工作流执行失败: ${event.error}`)
           evtSource.close()
           isRunning.value = false
+        } else if (event.type === 'workflow_cancelled') {
+          Message.info('工作流执行已取消')
+          evtSource.close()
+          isRunning.value = false
         }
       } catch (_) {}
     })
@@ -809,6 +991,16 @@ async function handleRun() {
   } catch (e: any) {
     Message.error(e.response?.data?.message || '执行失败')
     isRunning.value = false
+  }
+}
+
+async function handleCancelRun() {
+  if (!currentExecutionId.value || !isRunning.value) return
+  try {
+    await automationApi.cancelExecution(currentExecutionId.value)
+    Message.info('正在取消工作流执行...')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '取消执行失败')
   }
 }
 

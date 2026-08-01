@@ -17,4 +17,12 @@ public class UpdateWorkflowDTO {
 
     /** 工作流画布定义（JSON 字符串） */
     private String definition;
+
+    private Integer version;
+    private Long projectId;
+    private String triggerType;
+    private String triggerConfig;
+    private String concurrencyMode;
+    private Integer maxConcurrent;
+    private Long actorUserId;
 }

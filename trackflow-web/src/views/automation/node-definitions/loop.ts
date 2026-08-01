@@ -13,10 +13,13 @@ export const loopDefinition: NodeDefinition = {
     { name: 'input', label: '循环输入', valueType: 'string', required: false, description: '循环输入值' },
   ],
   outputPorts: [
-    { name: 'output',    label: '最终输出', valueType: 'string', description: '循环完成后的最终输出' },
+    { name: 'output',    label: '最终输出', valueType: 'object', description: '循环完成后的最终输出' },
     { name: 'iteration', label: '执行次数', valueType: 'number', description: '实际执行的循环次数' },
+    { name: 'success', label: '满足条件', valueType: 'boolean', description: '退出条件已满足' },
+    { name: 'exhausted', label: '次数耗尽', valueType: 'boolean', description: '达到最大次数仍未满足条件' },
   ],
   configFields: [
+    { key: 'workflowId', label: '循环子工作流 ID', type: 'string', defaultValue: '' },
     { key: 'maxRetries',   label: '最大重试次数',   type: 'number', defaultValue: 3 },
     { key: 'interval',     label: '重试间隔（秒）', type: 'number', defaultValue: 5 },
     {

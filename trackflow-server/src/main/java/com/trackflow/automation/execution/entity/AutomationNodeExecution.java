@@ -3,10 +3,12 @@ package com.trackflow.automation.execution.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.trackflow.common.handler.JsonbTypeHandler;
 
 import java.time.LocalDateTime;
 
-@TableName("automation_node_execution")
+@TableName(value = "automation_node_execution", autoResultMap = true)
 public class AutomationNodeExecution {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -15,12 +17,19 @@ public class AutomationNodeExecution {
     private String nodeType;
     private String nodeName;
     private String status;
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String input;
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String output;
     private String errorInfo;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
     private Long durationMs;
+    private Integer attempt;
+    private String outcome;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String selectedPorts;
+    private Boolean retryable;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -46,4 +55,12 @@ public class AutomationNodeExecution {
     public void setFinishedAt(LocalDateTime finishedAt) { this.finishedAt = finishedAt; }
     public Long getDurationMs() { return durationMs; }
     public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
+    public Integer getAttempt() { return attempt; }
+    public void setAttempt(Integer attempt) { this.attempt = attempt; }
+    public String getOutcome() { return outcome; }
+    public void setOutcome(String outcome) { this.outcome = outcome; }
+    public String getSelectedPorts() { return selectedPorts; }
+    public void setSelectedPorts(String selectedPorts) { this.selectedPorts = selectedPorts; }
+    public Boolean getRetryable() { return retryable; }
+    public void setRetryable(Boolean retryable) { this.retryable = retryable; }
 }

@@ -18,7 +18,7 @@ export interface PortDef {
 }
 
 /** 节点运行状态 */
-export type NodeRunStatus = 'idle' | 'running' | 'success' | 'failed'
+export type NodeRunStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped' | 'cancelled'
 
 /** 节点元信息 */
 export interface NodeMeta {

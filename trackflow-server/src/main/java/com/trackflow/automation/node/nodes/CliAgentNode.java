@@ -52,7 +52,7 @@ public class CliAgentNode implements NodeDefinition, NodeExecutor {
                                        ExecutionContext ctx) throws NodeExecutionException {
         Map<String, Object> config  = node.config() != null ? node.config() : Map.of();
         String command  = String.valueOf(config.getOrDefault("command", "kiro-cli"));
-        String args     = String.valueOf(config.getOrDefault("args",    "--no-interactive --trust-all-tools"));
+        String args     = String.valueOf(config.getOrDefault("args",    "--no-interactive"));
         int    timeout  = ((Number) config.getOrDefault("timeout", 2400)).intValue();
         String prompt   = String.valueOf(inputs.getOrDefault("prompt",  ""));
         String workDir  = String.valueOf(inputs.getOrDefault("workDir", System.getProperty("user.dir")));

@@ -16,4 +16,6 @@ public class CreateWorkflowDTO {
 
     @Size(max = 2000, message = "描述不能超过2000字")
     private String description;
+
+    private Long projectId;
 }
