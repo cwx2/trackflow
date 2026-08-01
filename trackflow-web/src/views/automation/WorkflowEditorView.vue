@@ -834,7 +834,7 @@ onUnmounted(() => {
   text-stroke: 1.5px var(--wf-canvas-watermark);
   pointer-events: none;
   user-select: none;
-  z-index: 1;
+  z-index: -1;
   white-space: nowrap;
   line-height: 1;
 }
