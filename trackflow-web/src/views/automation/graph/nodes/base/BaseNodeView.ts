@@ -61,7 +61,7 @@ export abstract class BaseNodeView extends HtmlNode {
       // 首次：挂载
       this._mounted = true
       const container = document.createElement('div')
-      container.style.cssText = 'width:100%;height:100%;'
+      container.style.cssText = 'width:100%;height:fit-content;'
       rootEl.appendChild(container)
       this._app!.mount(container)
     } else {

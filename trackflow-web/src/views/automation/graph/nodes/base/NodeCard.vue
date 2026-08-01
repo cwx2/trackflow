@@ -211,7 +211,7 @@ function onNodeClick() {
 .node-card {
   width: 280px;
   min-height: 80px;
-  height: 100%;           /* 填满 foreignObject */
+  height: fit-content;    /* 内容多高就多高，不撑满 foreignObject */
   border-radius: 10px;
   background: var(--wf-node-bg);
   border: 1.5px solid var(--wf-node-border);
