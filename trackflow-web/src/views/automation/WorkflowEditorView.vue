@@ -840,36 +840,25 @@ onUnmounted(() => {
  * ────────────────────────────────────────────────────────────
  */
 .editor-content {
-  /* 画布底色 */
-  --wf-canvas-bg:         #131623;
-  /* 水印大 Logo */
-  --wf-canvas-watermark:  rgba(255, 255, 255, 0.035);
-  /* 节点卡片 */
-  --wf-card-bg:        #1e2130;
-  --wf-card-border:    #2d3148;
-  /* 工具条 */
-  --wf-toolbar-bg:     #1e2130;
-  --wf-toolbar-border: #2d3148;
-  --wf-toolbar-text:   #c9d1d9;
-  --wf-toolbar-muted:  #6b7280;
-  --wf-toolbar-hover:  #2a2d3d;
-  --wf-toolbar-active: rgba(56,139,253,0.15);
-  --wf-toolbar-active-text: #58a6ff;
-  /* 网格点 */
-  --wf-grid-dot:       #252a3d;
-  /* 状态色（固定，不随主题） */
-  --wf-running:        #3b82f6;
-  --wf-success:        #10b981;
-  --wf-failed:         #ef4444;
-  /* 连线 */
-  --wf-edge:           #3b82f6;
-  /* 输入端口蓝点 / 输出端口橙点 */
-  --wf-port-in:        #3b82f6;
-  --wf-port-out:       #f59e0b;
-  /* 试运行按钮 */
-  --wf-run-bg:         #16a34a;
-  --wf-run-hover:      #15803d;
-  --wf-run-running:    #2563eb;
+  /*
+   * 不再在这里硬编码颜色——所有 --wf-* 变量已在 styles/variables.css 里
+   * 按 dark/light/green 三套主题定义，会自动跟随全局 data-theme 切换。
+   *
+   * 只保留工具条的局部别名（复用节点卡片变量）以及语义固定色：
+   */
+  --wf-toolbar-bg:          var(--wf-node-bg);
+  --wf-toolbar-border:      var(--wf-node-border);
+  --wf-toolbar-text:        var(--wf-node-title);
+  --wf-toolbar-muted:       var(--wf-node-subtitle);
+  --wf-toolbar-hover:       var(--wf-node-bg-hover);
+  --wf-toolbar-active:      rgba(56, 139, 253, 0.15);
+  --wf-toolbar-active-text: var(--wf-edge-color);
+  --wf-card-bg:             var(--wf-node-bg);
+  --wf-card-border:         var(--wf-node-border);
+  /* 试运行按钮（语义色，与主题无关） */
+  --wf-run-bg:              #16a34a;
+  --wf-run-hover:           #15803d;
+  --wf-run-running:         #2563eb;
 }
 
 /* 执行日志浮层 */
