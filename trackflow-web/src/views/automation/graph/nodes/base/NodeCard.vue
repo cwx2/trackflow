@@ -20,11 +20,40 @@
         <span v-if="nodeMeta.description" class="node-desc">{{ nodeMeta.description }}</span>
       </div>
 
-      <!-- 右侧：运行状态图标 + 展开/折叠按钮 -->
+      <!-- 右侧：hover 操作 + 运行状态 + 展开/折叠 -->
       <div class="node-header-actions">
         <span v-if="runStatus === 'running'" class="status-dot running" />
         <span v-else-if="runStatus === 'success'" class="status-icon success">✓</span>
         <span v-else-if="runStatus === 'failed'"  class="status-icon failed">✗</span>
+
+        <!-- hover 时浮出的操作按钮 -->
+        <div class="hover-actions">
+          <!-- 运行 -->
+          <button class="hover-btn" title="运行此节点" @click.stop="emit('run-node')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+          </button>
+          <!-- 更多菜单 -->
+          <div class="hover-more-wrap" ref="moreMenuRef">
+            <button class="hover-btn" title="更多操作" @click.stop="moreMenuOpen = !moreMenuOpen">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
+              </svg>
+            </button>
+            <!-- 下拉菜单 -->
+            <div v-if="moreMenuOpen" class="more-menu" @click.stop>
+              <button class="more-menu-item" @click="onMenuAction('rename')">重命名</button>
+              <button class="more-menu-item" @click="onMenuAction('duplicate')">创建副本</button>
+              <button class="more-menu-item danger" @click="onMenuAction('delete')">删除</button>
+              <div class="more-menu-divider" />
+              <button class="more-menu-item" @click="onMenuAction('help')">
+                帮助文档
+                <span class="help-icon">?</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- 展开/折叠按钮 -->
         <button
@@ -117,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { PortDef, NodeMeta, NodeRunStatus } from './BaseNodeModel'
 
 const props = defineProps<{
@@ -127,13 +156,38 @@ const props = defineProps<{
   onNodeClick?: () => void
 }>()
 
-const expanded  = computed(() => props.properties?.expanded ?? false)
-const runStatus = computed<NodeRunStatus>(() => props.properties?.runStatus ?? 'idle')
-const inputs    = computed<PortDef[]>(() => props.properties?.inputs  ?? [])
-const outputs   = computed<PortDef[]>(() => props.properties?.outputs ?? [])
-const nodeMeta  = computed<NodeMeta>(() => props.properties?.nodeMeta ?? {
+const emit = defineEmits<{
+  'run-node': []
+  'menu-action': [action: string, nodeId: string]
+}>()
+
+const expanded    = computed(() => props.properties?.expanded ?? false)
+const runStatus   = computed<NodeRunStatus>(() => props.properties?.runStatus ?? 'idle')
+const inputs      = computed<PortDef[]>(() => props.properties?.inputs  ?? [])
+const outputs     = computed<PortDef[]>(() => props.properties?.outputs ?? [])
+const nodeMeta    = computed<NodeMeta>(() => props.properties?.nodeMeta ?? {
   title: '节点', icon: '⬡', color: '#6366f1', description: '',
 })
+
+// 更多菜单
+const moreMenuOpen = ref(false)
+const moreMenuRef  = ref<HTMLElement | null>(null)
+
+function onMenuAction(action: string) {
+  moreMenuOpen.value = false
+  emit('menu-action', action, props.nodeId)
+  // 内置处理：onNodeClick 对应的操作通知外部
+  props.onNodeClick?.()
+}
+
+function handleDocClick(e: MouseEvent) {
+  if (moreMenuRef.value && !moreMenuRef.value.contains(e.target as Node)) {
+    moreMenuOpen.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleDocClick))
+onUnmounted(() => document.removeEventListener('click', handleDocClick))
 
 const TYPE_LABELS: Record<string, string> = {
   string: '文本', number: '数字', boolean: '布尔',
@@ -247,7 +301,96 @@ function onNodeClick() {
   padding-right: 6px;
 }
 
-/* 运行状态指示 */
+/* ── hover 操作区（默认隐藏，hover 卡片时显示） ── */
+.hover-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+}
+
+.node-card:hover .hover-actions {
+  opacity: 1;
+}
+
+.hover-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: var(--wf-node-border);
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--wf-port-label);
+  transition: background 150ms, color 150ms;
+  flex-shrink: 0;
+}
+.hover-btn:hover {
+  background: var(--wf-node-border-hover);
+  color: var(--wf-node-title);
+}
+
+/* 更多菜单容器 */
+.hover-more-wrap {
+  position: relative;
+}
+
+/* 下拉菜单 */
+.more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--wf-node-bg);
+  border: 1px solid var(--wf-node-border);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 120px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 100;
+  white-space: nowrap;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--wf-node-title);
+  cursor: pointer;
+  transition: background 150ms;
+}
+.more-menu-item:hover      { background: var(--wf-node-border); }
+.more-menu-item.danger     { color: var(--wf-status-failed); }
+.more-menu-item.danger:hover { background: rgba(239,68,68,0.1); }
+
+.more-menu-divider {
+  height: 1px;
+  background: var(--wf-node-border);
+  margin: 4px 0;
+}
+
+.help-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--wf-port-label);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--wf-port-label);
+}
+
+/* ── 运行状态指示 ── */
 .status-dot.running {
   width: 8px;
   height: 8px;
