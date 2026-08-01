@@ -109,6 +109,12 @@ const routes = [
         meta: { requiresAdmin: true }
       },
       {
+        path: 'automation/:id/executions',
+        name: 'AutomationExecutionHistory',
+        component: () => import('@/views/automation/ExecutionHistoryView.vue'),
+        meta: { requiresAdmin: true }
+      },
+      {
         path: 'reports',
         component: () => import('@/views/report/ReportContainerView.vue'),
         meta: { requiresReport: true },

@@ -40,21 +40,71 @@
         </button>
 
         <div class="panel-inner">
-          <div class="panel-section">
-            <div class="section-title">基础节点</div>
-            <div
-              v-for="node in basicNodes"
-              :key="node.type"
-              class="node-item"
-              :style="{ '--node-color': node.color }"
-              @mousedown="(e) => onDragStart(e, node)"
+          <!-- 搜索框 -->
+          <div class="node-search-wrap">
+            <a-input
+              v-model="nodeSearchKeyword"
+              placeholder="搜索节点..."
+              size="small"
+              allow-clear
+              class="node-search-input"
             >
-              <div class="node-item-icon">{{ node.icon }}</div>
-              <div class="node-item-body">
-                <div class="node-item-name">{{ node.label }}</div>
-                <div class="node-item-desc">{{ node.desc }}</div>
+              <template #prefix><span class="search-icon">🔍</span></template>
+            </a-input>
+          </div>
+
+          <!-- 按分类展示 -->
+          <div class="panel-scroll">
+            <template v-if="nodeSearchKeyword">
+              <!-- 搜索结果 -->
+              <div class="panel-section">
+                <div v-if="filteredNodes.length === 0" class="no-search-result">无匹配节点</div>
+                <div
+                  v-for="node in filteredNodes"
+                  :key="node.type"
+                  class="node-item"
+                  :style="{ '--node-color': node.color }"
+                  @mousedown="(e) => onDragStart(e, node)"
+                >
+                  <div class="node-item-icon">{{ node.icon }}</div>
+                  <div class="node-item-body">
+                    <div class="node-item-name">{{ node.label }}</div>
+                    <div class="node-item-desc">{{ node.desc }}</div>
+                  </div>
+                </div>
               </div>
-            </div>
+            </template>
+            <template v-else>
+              <!-- 按分类分组 -->
+              <div
+                v-for="category in nodeCategories"
+                :key="category.name"
+                class="panel-section"
+              >
+                <div
+                  class="section-title section-title-clickable"
+                  @click="toggleCategory(category.name)"
+                >
+                  <span>{{ category.name }}</span>
+                  <span class="category-arrow">{{ collapsedCategories.has(category.name) ? '▶' : '▼' }}</span>
+                </div>
+                <template v-if="!collapsedCategories.has(category.name)">
+                  <div
+                    v-for="node in category.nodes"
+                    :key="node.type"
+                    class="node-item"
+                    :style="{ '--node-color': node.color }"
+                    @mousedown="(e) => onDragStart(e, node)"
+                  >
+                    <div class="node-item-icon">{{ node.icon }}</div>
+                    <div class="node-item-body">
+                      <div class="node-item-name">{{ node.label }}</div>
+                      <div class="node-item-desc">{{ node.desc }}</div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -78,6 +128,9 @@
             <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" v-model:data="selectedNode.properties" />
             <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" v-model:data="selectedNode.properties" />
             <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" v-model:data="selectedNode.properties" />
+            <CodeConfig v-else-if="selectedNode.properties?.nodeType === 'code'" v-model:data="selectedNode.properties" />
+            <HttpRequestConfig v-else-if="selectedNode.properties?.nodeType === 'http-request'" v-model:data="selectedNode.properties" />
+            <SubWorkflowConfig v-else-if="selectedNode.properties?.nodeType === 'sub-workflow'" v-model:data="selectedNode.properties" />
           </template>
           <template v-else>
             <div class="panel-header">
@@ -99,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
@@ -113,6 +166,9 @@ import ConditionConfig from './components/ConditionConfig.vue'
 import LoopConfig from './components/LoopConfig.vue'
 import FileInputConfig from './components/FileInputConfig.vue'
 import DelayConfig from './components/DelayConfig.vue'
+import CodeConfig from './components/CodeConfig.vue'
+import HttpRequestConfig from './components/HttpRequestConfig.vue'
+import SubWorkflowConfig from './components/SubWorkflowConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
 
@@ -163,7 +219,43 @@ const basicNodes = DRAGGABLE_NODES.map(def => ({
   icon: def.meta.icon,
   color: def.meta.color,
   desc: def.meta.description,
+  category: def.meta.category,
 }))
+
+// 节点搜索
+const nodeSearchKeyword = ref('')
+const filteredNodes = computed(() => {
+  const kw = nodeSearchKeyword.value.trim().toLowerCase()
+  if (!kw) return basicNodes
+  return basicNodes.filter(n =>
+    n.label.toLowerCase().includes(kw) ||
+    n.desc.toLowerCase().includes(kw) ||
+    n.category.toLowerCase().includes(kw)
+  )
+})
+
+// 按分类分组
+const nodeCategories = computed(() => {
+  const map = new Map<string, typeof basicNodes>()
+  for (const node of basicNodes) {
+    const cat = node.category || '其他'
+    if (!map.has(cat)) map.set(cat, [])
+    map.get(cat)!.push(node)
+  }
+  return Array.from(map.entries()).map(([name, nodes]) => ({ name, nodes }))
+})
+
+// 折叠的分类 set
+const collapsedCategories = ref(new Set<string>())
+function toggleCategory(name: string) {
+  if (collapsedCategories.value.has(name)) {
+    collapsedCategories.value.delete(name)
+  } else {
+    collapsedCategories.value.add(name)
+  }
+  // 触发响应式更新
+  collapsedCategories.value = new Set(collapsedCategories.value)
+}
 
 // 初始化 LogicFlow
 function initLogicFlow() {
@@ -838,12 +930,14 @@ onUnmounted(() => {
 
 /* 面板内容区 */
 .panel-inner {
-  width: 200px;
+  width: 220px;
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 8px;
-  overflow-y: auto;
+  overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
 }
 
 .config-panel .panel-inner {
@@ -897,6 +991,42 @@ onUnmounted(() => {
   letter-spacing: 0.8px;
   margin-bottom: 6px;
   padding: 0 6px;
+}
+
+/* 搜索框 */
+.node-search-wrap {
+  padding: 10px 10px 6px;
+  border-bottom: 1px solid var(--tf-border);
+  flex-shrink: 0;
+}
+
+.search-icon { font-size: 11px; }
+
+/* 滚动区 */
+.panel-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 分类标题可点击 */
+.section-title-clickable {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background 150ms;
+}
+.section-title-clickable:hover { background: var(--tf-bg-hover); }
+.category-arrow { font-size: 9px; color: var(--tf-text-tertiary); }
+
+/* 无搜索结果 */
+.no-search-result {
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+  padding: 20px 10px;
+  text-align: center;
 }
 
 .node-item {

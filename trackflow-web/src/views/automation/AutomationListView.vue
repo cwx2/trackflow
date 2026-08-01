@@ -42,6 +42,7 @@
           <template #actions="{ record }">
             <div class="action-buttons">
               <a-button type="text" size="small" @click="goToEditor(record.id)">编辑</a-button>
+              <a-button type="text" size="small" @click="goToHistory(record.id)">执行历史</a-button>
               <a-button type="text" size="small" status="danger" @click="confirmDelete(record)">删除</a-button>
             </div>
           </template>
@@ -89,7 +90,7 @@ const columns = [
   { title: '名称', dataIndex: 'name', slotName: 'name', width: 300 },
   { title: '描述', dataIndex: 'description', slotName: 'description' },
   { title: '更新时间', dataIndex: 'updatedAt', slotName: 'updatedAt', width: 180 },
-  { title: '操作', slotName: 'actions', width: 150 }
+  { title: '操作', slotName: 'actions', width: 220 }
 ]
 
 // 加载工作流列表
@@ -142,6 +143,11 @@ function resetCreateForm() {
 // 跳转到编辑器
 function goToEditor(id: string) {
   router.push(`/automation/${id}`)
+}
+
+// 跳转到执行历史
+function goToHistory(id: string) {
+  router.push(`/automation/${id}/executions`)
 }
 
 // 确认删除
