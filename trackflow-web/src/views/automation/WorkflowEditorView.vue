@@ -10,10 +10,26 @@
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
     <div class="editor-content">
+      <!-- 世界坐标水印：复用 LogicFlow 的变换矩阵，跟随画布平移和缩放 -->
+      <div
+        v-if="watermarkReady"
+        class="canvas-world-layer"
+        :style="{ transform: canvasWorldTransform }"
+        aria-hidden="true"
+      >
+        <div
+          class="canvas-world-watermark-anchor"
+          :style="{
+            left: `${watermarkCanvasPosition.x}px`,
+            top: `${watermarkCanvasPosition.y}px`,
+            transform: `scale(${watermarkCounterScale})`
+          }"
+        >
+          <div class="canvas-world-watermark">TrackFlow</div>
+        </div>
+      </div>
       <!-- 画布（全屏） -->
       <div ref="containerRef" class="canvas-container"></div>
-      <!-- 画布水印（在 SVG 上层，pointer-events:none 不影响交互） -->
-      <div class="canvas-watermark" aria-hidden="true">TrackFlow</div>
       <!-- 左侧悬浮：节点面板 -->
       <div class="node-panel" :class="{ collapsed: !leftPanelOpen }">
         <!-- 收起/展开 tab -->
@@ -190,6 +206,12 @@ const router = useRouter()
 // DOM 引用
 const containerRef = ref<HTMLElement | null>(null)
 
+// 水印使用画布世界坐标，并与 LogicFlow 共用同一组平移/缩放矩阵
+const watermarkReady = ref(false)
+const watermarkCanvasPosition = ref({ x: 0, y: 0 })
+const canvasWorldTransform = ref('matrix(1, 0, 0, 1, 0, 0)')
+const watermarkCounterScale = ref(1)
+
 // LogicFlow 实例
 let lf: LogicFlow | null = null
 
@@ -220,6 +242,25 @@ const zoomPercent = ref(100)
 // 新增：minimap / 调试 / 添加节点面板 状态
 const minimapOpen = ref(false)
 const debugMode = ref(false)
+
+function syncCanvasWorldTransform() {
+  const transform = (lf as any)?.graphModel?.transformModel
+  if (!transform) return
+
+  canvasWorldTransform.value = `matrix(${[
+    transform.SCALE_X,
+    transform.SKEW_Y,
+    transform.SKEW_X,
+    transform.SCALE_Y,
+    transform.TRANSLATE_X,
+    transform.TRANSLATE_Y
+  ].join(', ')})`
+
+  // 抵消大部分画布缩放，只保留轻微的动态增减（约 82%～118%）
+  const graphScale = Math.max(transform.SCALE_X, 0.01)
+  const adaptiveVisualScale = Math.min(1.18, Math.max(0.82, Math.pow(graphScale, 0.12)))
+  watermarkCounterScale.value = adaptiveVisualScale / graphScale
+}
 
 function fitCanvas() {
   lf?.fitView()
@@ -450,12 +491,9 @@ function initLogicFlow() {
       visible: true,
       type: 'dot',
       config: {
-        color: '#252a3d',
+        color: 'var(--wf-grid-dot)',
         thickness: 2
       }
-    },
-    background: {
-      backgroundColor: 'var(--wf-canvas-bg)'
     },
     keyboard: {
       enabled: true
@@ -490,6 +528,14 @@ function initLogicFlow() {
   })
   resetTracking()
 
+  // 初始时把水印刻在当前画布世界坐标的中心；后续随画布矩阵一起移动和缩放
+  watermarkCanvasPosition.value = {
+    x: containerRef.value.clientWidth / 2,
+    y: containerRef.value.clientHeight / 2
+  }
+  syncCanvasWorldTransform()
+  watermarkReady.value = true
+
   // ── 注册所有节点和边（新架构：graph/ 目录） ──────────────────────────
   lf.register(FlowEdge)
   registerAllNodes(lf)
@@ -517,6 +563,7 @@ function initLogicFlow() {
     if (transform) {
       zoomPercent.value = Math.round(transform.SCALE_X * 100)
     }
+    syncCanvasWorldTransform()
   })
 
   // 加载数据
@@ -809,34 +856,49 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
+  background: var(--wf-canvas-bg);
 }
 
 /* 画布全屏 */
 .canvas-container {
   width: 100%;
   height: 100%;
-  background-color: var(--wf-canvas-bg);
+  background-color: transparent;
   position: relative;
+  z-index: 1;
 }
 
-/* 画布背景水印大 Logo — 居中蚀刻感 */
-.canvas-watermark {
+/* 世界坐标背景层：矩阵与 LogicFlow 节点层完全同步 */
+.canvas-world-layer {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 120px;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: transparent;
-  -webkit-text-stroke: 1.5px var(--wf-canvas-watermark);
-  text-stroke: 1.5px var(--wf-canvas-watermark);
+  inset: 0;
+  z-index: 0;
+  transform-origin: 0 0;
   pointer-events: none;
   user-select: none;
-  z-index: -1;
+  will-change: transform;
+}
+
+.canvas-world-watermark-anchor {
+  position: absolute;
+  transform-origin: 0 0;
+}
+
+.canvas-world-watermark {
+  transform: translate(-50%, -50%);
   white-space: nowrap;
+  font-size: clamp(160px, 12vw, 220px);
   line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  /* 字体主体与画布同色，只让槽口边缘显形 */
+  color: var(--wf-canvas-bg);
+  -webkit-text-stroke: 1.25px var(--wf-canvas-watermark-edge);
+  text-shadow:
+    -3px -3px 2px var(--wf-canvas-watermark-shadow),
+    3px 3px 2px var(--wf-canvas-watermark-highlight),
+    -1px -1px 0 var(--wf-canvas-watermark-shadow),
+    1px 1px 0 var(--wf-canvas-watermark-highlight);
 }
 
 /*
@@ -1118,7 +1180,9 @@ onUnmounted(() => {
 
 /* LogicFlow 主题覆盖 */
 :deep(.lf-graph) {
-  background: var(--tf-bg-body) !important;
+  background: transparent !important;
+  position: relative;
+  overflow: hidden;
 }
 
 :deep(.lf-control) {

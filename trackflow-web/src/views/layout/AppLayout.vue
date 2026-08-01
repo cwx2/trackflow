@@ -3,8 +3,7 @@
     <!-- 左侧导航栏（全高） -->
     <aside class="sidebar">
       <div class="sidebar-logo" @click="$router.push('/')">
-        <span class="logo-icon">T</span>
-        <span class="logo-text">TrackFlow</span>
+        <img class="logo-image" :src="trackflowLogoUrl" alt="TrackFlow" />
       </div>
 
       <nav class="sidebar-nav">
@@ -174,6 +173,7 @@ import { useNotification } from '@/composables/useNotification'
 import { IconMoon, IconSun, IconCommon } from '@arco-design/web-vue/es/icon'
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
+import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
 
 const router = useRouter()
 const route = useRoute()
@@ -360,24 +360,12 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   cursor: pointer;
 }
 
-.logo-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, var(--tf-accent), var(--tf-purple));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.logo-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  letter-spacing: -0.3px;
+.logo-image {
+  display: block;
+  width: 132px;
+  height: 34px;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .sidebar-nav {

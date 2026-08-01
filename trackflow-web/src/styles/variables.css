@@ -219,9 +219,12 @@ a:hover { text-decoration: underline; }
 [data-theme="dark"] {
   /* 画布 */
   --wf-canvas-bg:        #131623;
-  --wf-grid-dot:         #252a3d;
+  --wf-grid-dot:         #46516d;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(255, 255, 255, 0.08);
+  --wf-canvas-watermark: rgba(255, 255, 255, 0.07);
+  --wf-canvas-watermark-edge: rgba(0, 0, 0, 0.16);
+  --wf-canvas-watermark-shadow: rgba(0, 0, 0, 0.28);
+  --wf-canvas-watermark-highlight: rgba(255, 255, 255, 0.16);
 
   /* 节点卡片 */
   --wf-node-bg:          #1e2130;
@@ -264,9 +267,12 @@ a:hover { text-decoration: underline; }
 /* 亮色主题工作流变量 */
 [data-theme="light"] {
   --wf-canvas-bg:        #f0f2f5;
-  --wf-grid-dot:         #d0d7de;
+  --wf-grid-dot:         #344054;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(0, 0, 0, 0.18);
+  --wf-canvas-watermark: rgba(82, 94, 106, 0.14);
+  --wf-canvas-watermark-edge: rgba(60, 71, 82, 0.14);
+  --wf-canvas-watermark-shadow: rgba(55, 65, 75, 0.25);
+  --wf-canvas-watermark-highlight: rgba(255, 255, 255, 0.78);
 
   --wf-node-bg:          #ffffff;
   --wf-node-bg-hover:    #f8f9fa;
@@ -303,9 +309,12 @@ a:hover { text-decoration: underline; }
 /* 护眼主题工作流变量 */
 [data-theme="green"] {
   --wf-canvas-bg:        #161f16;
-  --wf-grid-dot:         #2b3f2b;
+  --wf-grid-dot:         #49664b;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(255, 255, 255, 0.07);
+  --wf-canvas-watermark: rgba(255, 255, 255, 0.06);
+  --wf-canvas-watermark-edge: rgba(0, 0, 0, 0.14);
+  --wf-canvas-watermark-shadow: rgba(0, 0, 0, 0.26);
+  --wf-canvas-watermark-highlight: rgba(255, 255, 255, 0.14);
 
   --wf-node-bg:          #1e2a1e;
   --wf-node-bg-hover:    #243024;
