@@ -142,14 +142,6 @@
 
       <!-- 底部中央悬浮工具条（Coze 风格） -->
       <div class="bottom-toolbar">
-        <!-- 撤销区 -->
-        <div class="toolbar-undo" @click="handleUndo" title="撤销">
-          <span class="toolbar-undo-icon">↩</span>
-          <span class="toolbar-undo-count">{{ undoCount }}</span>
-          <span class="toolbar-arrow">∨</span>
-        </div>
-        <!-- 分隔线 -->
-        <div class="toolbar-divider" />
         <!-- 缩放下拉 -->
         <div class="toolbar-zoom" @click="zoomMenuOpen = !zoomMenuOpen" ref="zoomBtnRef">
           <span class="toolbar-zoom-val">{{ zoomPercent }}%</span>
@@ -260,7 +252,6 @@ const executionPanelOpen = ref(false)
 const zoomPercent = ref(100)
 const zoomMenuOpen = ref(false)
 const zoomBtnRef = ref<HTMLElement | null>(null)
-const undoCount = ref(0)
 
 function fitCanvas() {
   lf?.fitView()
@@ -285,10 +276,6 @@ function zoomTo(percent: number) {
   const scale = percent / 100
   lf?.zoom(scale)
   zoomPercent.value = percent
-}
-
-function handleUndo() {
-  lf?.undo()
 }
 
 // 点击工具条外部关闭缩放菜单
@@ -610,11 +597,6 @@ function initLogicFlow() {
     if (transform) {
       zoomPercent.value = Math.round(transform.SCALE_X * 100)
     }
-  })
-
-  // 同步撤销次数（历史记录变化时更新）
-  lf.on('history:change', ({ data }: any) => {
-    undoCount.value = data?.undos?.length ?? 0
   })
 
   // 加载数据
@@ -1054,22 +1036,6 @@ onUnmounted(() => {
   margin: 0 6px;
   flex-shrink: 0;
 }
-
-/* 撤销区 */
-.toolbar-undo {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--wf-toolbar-text);
-  transition: background 150ms;
-}
-.toolbar-undo:hover { background: var(--wf-toolbar-hover); }
-.toolbar-undo-icon  { font-size: 13px; }
-.toolbar-undo-count { font-weight: 500; min-width: 8px; text-align: center; }
 
 /* 缩放区（含下拉） */
 .toolbar-zoom {
