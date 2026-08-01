@@ -40,7 +40,7 @@ export interface NodeMetaDef {
   icon: string
   color: string
   description: string
-  category: '基础节点' | '控制流' | '数据处理' | '特殊节点'
+  category: '基础节点' | '控制流' | '数据处理' | '特殊节点' | '业务逻辑'
 }
 
 /** 节点完整定义（前端注册表核心） */
