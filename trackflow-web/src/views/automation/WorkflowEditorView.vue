@@ -1,31 +1,12 @@
 <template>
   <div class="workflow-editor-view">
     <!-- 顶部工具栏 -->
-    <div class="editor-toolbar">
-      <div class="toolbar-left">
-        <a-button type="text" @click="goBack">
-          <span class="back-icon">←</span> 返回
-        </a-button>
-      </div>
-      <div class="toolbar-center">
-        <div class="workflow-name-wrap" @click="startEditName">
-          <span v-if="!editingName" class="workflow-name">{{ workflowName }}</span>
-          <a-input
-            v-else
-            ref="nameInputRef"
-            v-model="workflowName"
-            size="small"
-            class="name-input"
-            @blur="finishEditName"
-            @keyup.enter="finishEditName"
-          />
-          <span v-if="!editingName" class="edit-hint">✏️</span>
-        </div>
-      </div>
-      <div class="toolbar-right">
-        <a-button type="primary" :loading="saving" @click="handleSave">保存</a-button>
-      </div>
-    </div>
+    <EditorTopbar
+      v-model:name="workflowName"
+      :saving="saving"
+      @back="goBack"
+      @save="handleSave"
+    />
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
     <div class="editor-content">
@@ -193,6 +174,7 @@ import SubWorkflowConfig from './components/SubWorkflowConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 import ExecutionPanel from './components/ExecutionPanel.vue'
 import BottomToolbar from './components/BottomToolbar.vue'
+import EditorTopbar from './components/EditorTopbar.vue'
 
 // LogicFlow 样式
 import '@logicflow/core/dist/index.css'
@@ -217,8 +199,6 @@ const workflowId = ref('')
 const workflowName = ref('加载中...')
 const loading = ref(false)
 const saving = ref(false)
-const editingName = ref(false)
-const nameInputRef = ref<HTMLInputElement | null>(null)
 
 // 全局变量和选中节点
 const globalVariables = ref<Record<string, GlobalVariable>>({})
@@ -918,18 +898,6 @@ function goBack() {
   router.push('/automation')
 }
 
-// 编辑名称
-function startEditName() {
-  editingName.value = true
-  nextTick(() => {
-    nameInputRef.value?.focus()
-  })
-}
-
-function finishEditName() {
-  editingName.value = false
-}
-
 // 拖拽添加节点
 function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: string; color: string }) {
   if (!lf) return
@@ -1056,63 +1024,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: var(--tf-bg-body);
-}
-
-/* 顶部工具栏 */
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 48px;
-  padding: 0 16px;
-  background: var(--tf-bg-surface);
-  border-bottom: 1px solid var(--tf-border);
-}
-
-.toolbar-left,
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.toolbar-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-
-.back-icon {
-  margin-right: 4px;
-}
-
-.workflow-name-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.workflow-name-wrap:hover {
-  background: var(--tf-bg-hover);
-}
-
-.workflow-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-}
-
-.edit-hint {
-  font-size: 12px;
-  opacity: 0.5;
-}
-
-.name-input {
-  width: 240px;
-  text-align: center;
 }
 
 /* 编辑器主体：画布全屏 + 悬浮面板 */
