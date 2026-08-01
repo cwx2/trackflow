@@ -221,7 +221,7 @@ a:hover { text-decoration: underline; }
   --wf-canvas-bg:        #131623;
   --wf-grid-dot:         #252a3d;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(255, 255, 255, 0.035);
+  --wf-canvas-watermark: rgba(255, 255, 255, 0.08);
 
   /* 节点卡片 */
   --wf-node-bg:          #1e2130;
@@ -266,7 +266,7 @@ a:hover { text-decoration: underline; }
   --wf-canvas-bg:        #f0f2f5;
   --wf-grid-dot:         #d0d7de;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(0, 0, 0, 0.1);
+  --wf-canvas-watermark: rgba(0, 0, 0, 0.18);
 
   --wf-node-bg:          #ffffff;
   --wf-node-bg-hover:    #f8f9fa;
@@ -305,7 +305,7 @@ a:hover { text-decoration: underline; }
   --wf-canvas-bg:        #161f16;
   --wf-grid-dot:         #2b3f2b;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(255, 255, 255, 0.03);
+  --wf-canvas-watermark: rgba(255, 255, 255, 0.07);
 
   --wf-node-bg:          #1e2a1e;
   --wf-node-bg-hover:    #243024;

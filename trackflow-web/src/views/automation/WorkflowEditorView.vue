@@ -819,15 +819,19 @@ onUnmounted(() => {
   position: relative;
 }
 
-/* 画布背景水印大 Logo */
+/* 画布背景水印大 Logo — 居中蚀刻感 */
 .canvas-watermark {
   position: absolute;
-  bottom: 10%;
-  right: 6%;
-  font-size: 96px;
-  font-weight: 800;
-  letter-spacing: -2px;
-  color: var(--wf-canvas-watermark);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 120px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--wf-canvas-watermark);
+  text-stroke: 1.5px var(--wf-canvas-watermark);
   pointer-events: none;
   user-select: none;
   z-index: 1;
