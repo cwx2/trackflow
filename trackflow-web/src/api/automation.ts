@@ -1,7 +1,7 @@
 import request from './request'
-import type { R } from './types'
+import type { R, PageResult } from './types'
 
-// ====== 工作流类型定义 ======
+// ====== 工作流 VO / DTO ======
 
 export interface WorkflowVO {
   id: string
@@ -13,7 +13,7 @@ export interface WorkflowVO {
 }
 
 export interface WorkflowDetailVO extends WorkflowVO {
-  definition: string // JSON string
+  definition: string // JSON string of WorkflowDefinition
 }
 
 export interface CreateWorkflowDTO {
@@ -24,47 +24,136 @@ export interface CreateWorkflowDTO {
 export interface UpdateAutomationDTO {
   name?: string
   description?: string
-  definition?: string // JSON string
+  definition?: string // JSON string of WorkflowDefinition
 }
 
-// ====== 工作流画布数据结构（前端解析 definition） ======
+// ====== 新 Schema：变量类型系统 ======
 
+/** 变量数据类型 */
+export type ValueType = 'string' | 'number' | 'boolean' | 'array' | 'object'
+
+/** 字面值（直接填写的固定值） */
+export interface LiteralValue {
+  type: 'literal'
+  value: string | number | boolean
+}
+
+/** 变量引用（来自某个节点的某个输出端口） */
+export interface VariableRef {
+  type: 'ref'
+  nodeId: string       // 来源节点 ID
+  outputName: string   // 来源输出端口名称
+}
+
+/** 输入参数的值：字面值、变量引用、或未填写 */
+export type InputValue = LiteralValue | VariableRef | null
+
+/** 输入参数定义（节点配置时的一个输入槽） */
+export interface InputParameter {
+  name: string
+  valueType: ValueType
+  required: boolean
+  description?: string
+  value: InputValue
+}
+
+/** 输出端口声明（该节点执行后会产出什么） */
+export interface OutputPort {
+  name: string
+  valueType: ValueType
+  description?: string
+}
+
+/** 节点元数据（展示信息） */
+export interface NodeMeta {
+  title: string
+  icon: string
+  description: string
+  color: string
+}
+
+// ====== 新 Schema：节点和连线 ======
+
+/** 所有支持的节点类型 */
+export type NodeType =
+  | 'start'
+  | 'end'
+  | 'cli-agent'
+  | 'variables'
+  | 'condition'
+  | 'loop'
+  | 'file-input'
+  | 'delay'
+
+/** 工作流节点（新结构，替代旧的 data: Record<string,any>） */
 export interface WorkflowNode {
   id: string
-  type: 'cli-agent' | 'variables' | 'condition' | 'loop' | 'file-input' | 'delay'
-  label: string
+  type: NodeType
   position: { x: number; y: number }
-  data: Record<string, unknown>
+  /** 节点展示信息 */
+  nodeMeta: NodeMeta
+  /** 结构化输入参数列表 */
+  inputs: InputParameter[]
+  /** 声明会输出的端口列表（前端变量选择器用） */
+  outputs: OutputPort[]
+  /** 节点特有配置（不参与数据流，只是执行参数，如 timeout/command/args） */
+  config: Record<string, unknown>
 }
 
+/** 有向边（端口到端口连线） */
 export interface WorkflowEdge {
   id: string
-  source: string
-  target: string
-  sourceHandle?: string
-  targetHandle?: string
+  sourceNodeId: string
+  sourcePortName: string   // 从哪个输出端口出发
+  targetNodeId: string
+  targetPortName: string   // 连到哪个输入端口
 }
 
+/** 全局变量定义 */
+export interface GlobalVariable {
+  type: ValueType
+  defaultValue?: unknown
+}
+
+/** 工作流完整定义（新结构） */
 export interface WorkflowDefinition {
-  variables: Record<string, string>
+  /** 全局变量（整个工作流可见） */
+  globalVariables: Record<string, GlobalVariable>
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
 }
 
-// CLI Agent 节点配置
-export interface CliAgentNodeData {
-  command: string // kiro-cli / codex / claude / custom
-  args: string // 固定参数
-  prompt_template: string // 支持 {变量名} 占位符
-  model?: string // claude-opus-4.5 / claude-sonnet-4.6
-  timeout: number // 秒
-  work_dir: string // 工作目录
-  output_var: string // 输出变量名
+// ====== 执行记录 VO ======
+
+export interface ExecutionVO {
+  id: string
+  automationId: string
+  status: 'running' | 'success' | 'failed' | 'cancelled'
+  startedAt: string
+  finishedAt?: string
+  durationMs?: number
+  createdBy?: string
 }
 
-// 变量设置节点配置
-export interface VariablesNodeData {
-  vars: Array<{ key: string; value: string }>
+export interface NodeExecutionVO {
+  id: string
+  nodeId: string
+  nodeType: string
+  nodeName?: string
+  status: 'running' | 'success' | 'failed' | 'skipped'
+  input?: unknown
+  output?: unknown
+  errorInfo?: string
+  startedAt: string
+  finishedAt?: string
+  durationMs?: number
+}
+
+export interface ExecutionDetailVO extends ExecutionVO {
+  input?: unknown
+  output?: unknown
+  errorMessage?: string
+  nodeExecutions: NodeExecutionVO[]
 }
 
 // ====== API 函数 ======
@@ -103,5 +192,26 @@ export const automationApi = {
    */
   delete(id: string) {
     return request.delete<any, R<void>>(`/automation/workflows/${id}`)
+  },
+
+  /**
+   * 触发执行工作流，返回 executionId
+   */
+  execute(id: string, inputs: Record<string, unknown>) {
+    return request.post<any, R<{ executionId: string }>>(`/automation/workflows/${id}/execute`, { inputs })
+  },
+
+  /**
+   * 查询执行历史列表
+   */
+  listExecutions(id: string, params?: { page?: number; pageSize?: number }) {
+    return request.get<any, R<PageResult<ExecutionVO>>>(`/automation/workflows/${id}/executions`, { params })
+  },
+
+  /**
+   * 查询执行详情（含节点执行记录）
+   */
+  getExecution(executionId: string) {
+    return request.get<any, R<ExecutionDetailVO>>(`/automation/executions/${executionId}`)
   }
 }

@@ -51,12 +51,23 @@ function removeVar(key: string) {
   localVars.value = { ...localVars.value }
 }
 
+// 内部变量变化时同步到父组件（防止循环：只有深度序列化后不同才emit）
+let _emitting = false
 watch(localVars, (val) => {
+  if (_emitting) return
+  _emitting = true
   emit('update:variables', { ...val })
+  _emitting = false
 }, { deep: true })
 
+// 父组件传入变量变化时同步到本地（防止循环：只有深度序列化后不同才赋值）
 watch(() => props.variables, (val) => {
-  localVars.value = { ...val }
+  if (_emitting) return
+  const newStr = JSON.stringify(val)
+  const oldStr = JSON.stringify(localVars.value)
+  if (newStr !== oldStr) {
+    localVars.value = { ...val }
+  }
 }, { deep: true })
 </script>
 
