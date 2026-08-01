@@ -814,6 +814,23 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   background-color: var(--wf-canvas-bg);
+  position: relative;
+}
+
+/* 画布背景水印大 Logo */
+.canvas-container::before {
+  content: 'TrackFlow';
+  position: absolute;
+  bottom: 10%;
+  right: 6%;
+  font-size: 96px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  color: var(--wf-canvas-watermark);
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  white-space: nowrap;
 }
 
 /*
@@ -824,7 +841,9 @@ onUnmounted(() => {
  */
 .editor-content {
   /* 画布底色 */
-  --wf-canvas-bg:      #131623;
+  --wf-canvas-bg:         #131623;
+  /* 水印大 Logo */
+  --wf-canvas-watermark:  rgba(255, 255, 255, 0.035);
   /* 节点卡片 */
   --wf-card-bg:        #1e2130;
   --wf-card-border:    #2d3148;
