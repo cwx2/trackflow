@@ -179,7 +179,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow, { HtmlNode, HtmlNodeModel } from '@logicflow/core'
 import { Control, MiniMap, Snapshot } from '@logicflow/extension'
-import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable } from '@/api'
+import { automationApi, type WorkflowDefinition, type NodeType, type GlobalVariable } from '@/api'
 import { NODE_DEFINITIONS, DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
 import CliAgentConfig from './components/CliAgentConfig.vue'
 import VariablesConfig from './components/VariablesConfig.vue'
@@ -250,7 +250,6 @@ function fitCanvas() {
       zoomPercent.value = Math.round(transform.SCALE_X * 100)
     }
   })
-  zoomMenuOpen.value = false
 }
 
 function zoomIn() {

@@ -106,11 +106,14 @@ const currentStatus = computed(() => {
   return null
 })
 
-const statusLabel = computed(() => ({
-  running: '运行中...',
-  success: '成功',
-  failed:  '失败',
-}[currentStatus.value || ''] || ''))
+const statusLabel = computed(() => {
+  const map: Record<string, string> = {
+    running: '运行中...',
+    success: '成功',
+    failed:  '失败',
+  }
+  return currentStatus.value ? (map[currentStatus.value] || '') : ''
+})
 
 function selectNode(item: NodeEntry) {
   selectedNodeId.value = item.nodeId

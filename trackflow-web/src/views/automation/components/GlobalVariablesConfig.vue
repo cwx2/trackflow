@@ -5,7 +5,7 @@
     </div>
 
     <div class="var-list">
-      <div v-for="(val, key) in localVars" :key="key" class="var-row">
+      <div v-for="(_val, key) in localVars" :key="key" class="var-row">
         <span class="var-key">{{ key }}</span>
         <span class="var-eq">=</span>
         <a-input v-model="localVars[key]" size="small" class="var-value-input" placeholder="默认值" />

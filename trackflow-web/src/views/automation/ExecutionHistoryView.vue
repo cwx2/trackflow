@@ -134,7 +134,7 @@ async function loadExecutions() {
     const res = await automationApi.listExecutions(workflowId.value, { page: page.value, pageSize: pageSize.value })
     if (res.code === 0 && res.data) {
       executions.value = res.data.list || []
-      total.value = res.data.total || 0
+      total.value = res.data.pagination?.total || 0
     }
   } catch (e: any) {
     Message.error('加载执行历史失败')

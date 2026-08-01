@@ -41,7 +41,7 @@
               <div class="node-item-info">
                 <div class="node-item-name">{{ ne.nodeName || ne.nodeType }}</div>
                 <div class="node-item-meta">
-                  <a-tag :color="statusColor(ne.status)" size="mini">{{ statusLabel(ne.status) }}</a-tag>
+                  <a-tag :color="statusColor(ne.status)" size="small">{{ statusLabel(ne.status) }}</a-tag>
                   <span v-if="ne.durationMs" class="node-duration">{{ formatDuration(ne.durationMs) }}</span>
                 </div>
               </div>
