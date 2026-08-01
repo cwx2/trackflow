@@ -159,8 +159,8 @@
         <div class="toolbar-divider" />
         <!-- 快捷操作图标组 -->
         <button class="toolbar-icon-btn" title="适应画布" @click="fitCanvas">⊡</button>
-        <button class="toolbar-icon-btn" title="缩小" @click="lf?.zoom(false)">－</button>
-        <button class="toolbar-icon-btn" title="放大" @click="lf?.zoom(true)">＋</button>
+        <button class="toolbar-icon-btn" title="缩小" @click="zoomOut">－</button>
+        <button class="toolbar-icon-btn" title="放大" @click="zoomIn">＋</button>
         <button class="toolbar-icon-btn" title="全屏预览">⤢</button>
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
@@ -261,7 +261,21 @@ const zoomPercent = ref(100)
 
 function fitCanvas() {
   lf?.fitView()
-  zoomPercent.value = 100
+  // fitView 后同步缩放值
+  nextTick(() => {
+    const transform = (lf as any)?.graphModel?.transformModel
+    if (transform) {
+      zoomPercent.value = Math.round(transform.SCALE_X * 100)
+    }
+  })
+}
+
+function zoomIn() {
+  lf?.zoom(true)
+}
+
+function zoomOut() {
+  lf?.zoom(false)
 }
 
 // 节点面板：从注册表驱动，不再硬编码
@@ -559,18 +573,25 @@ function initLogicFlow() {
     selectedNode.value = JSON.parse(JSON.stringify(data))
     rightPanelOpen.value = true  // 点击节点自动展开右侧面板
   })
-  
+
   // 监听空白点击
   lf.on('blank:click', () => {
     selectedNode.value = null
-    // 不自动收起，用户可以手动收起
   })
-  
+
   // 监听节点删除
   lf.on('node:delete', () => {
     selectedNode.value = null
   })
-  
+
+  // 同步缩放比例到底部工具条
+  lf.on('graph:transform', () => {
+    const transform = (lf as any).graphModel?.transformModel
+    if (transform) {
+      zoomPercent.value = Math.round(transform.SCALE_X * 100)
+    }
+  })
+
   // 加载数据
   loadWorkflow()
 }
@@ -942,7 +963,44 @@ onUnmounted(() => {
   background-color: #131623;
 }
 
-/* ── 底部悬浮工具条（Coze 风格） ── */
+/*
+ * ────────────────────────────────────────────────────────────
+ *  工作流编辑器专用深色调色板
+ *  所有编辑器内部颜色统一在此声明，不允许在其他地方硬编码
+ * ────────────────────────────────────────────────────────────
+ */
+.editor-content {
+  /* 画布底色 */
+  --wf-canvas-bg:      #131623;
+  /* 节点卡片 */
+  --wf-card-bg:        #1e2130;
+  --wf-card-border:    #2d3148;
+  /* 工具条 */
+  --wf-toolbar-bg:     #1e2130;
+  --wf-toolbar-border: #2d3148;
+  --wf-toolbar-text:   #c9d1d9;
+  --wf-toolbar-muted:  #6b7280;
+  --wf-toolbar-hover:  #2a2d3d;
+  --wf-toolbar-active: rgba(56,139,253,0.15);
+  --wf-toolbar-active-text: #58a6ff;
+  /* 网格点 */
+  --wf-grid-dot:       #252a3d;
+  /* 状态色（固定，不随主题） */
+  --wf-running:        #3b82f6;
+  --wf-success:        #10b981;
+  --wf-failed:         #ef4444;
+  /* 连线 */
+  --wf-edge:           #3b82f6;
+  /* 输入端口蓝点 / 输出端口橙点 */
+  --wf-port-in:        #3b82f6;
+  --wf-port-out:       #f59e0b;
+  /* 试运行按钮 */
+  --wf-run-bg:         #16a34a;
+  --wf-run-hover:      #15803d;
+  --wf-run-running:    #2563eb;
+}
+
+/* ── 底部悬浮工具条 ── */
 .bottom-toolbar {
   position: absolute;
   bottom: 20px;
@@ -951,44 +1009,44 @@ onUnmounted(() => {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: #fff;
-  border: 1px solid #e4e7ed;
+  gap: 2px;
+  background: var(--wf-toolbar-bg);
+  border: 1px solid var(--wf-toolbar-border);
   border-radius: 24px;
-  padding: 6px 12px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 5px 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   white-space: nowrap;
   pointer-events: all;
-  /* 亮色工具条，对比深色画布 */
-  color: #1f2937;
+  color: var(--wf-toolbar-text);
+  user-select: none;
 }
 
 .toolbar-divider {
   width: 1px;
-  height: 18px;
-  background: #e4e7ed;
-  margin: 0 4px;
+  height: 16px;
+  background: var(--wf-toolbar-border);
+  margin: 0 6px;
   flex-shrink: 0;
 }
 
+/* 可点击项：撤销区、缩放区 */
 .toolbar-item {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
-  color: #374151;
-  user-select: none;
+  font-size: 12px;
+  color: var(--wf-toolbar-text);
   transition: background 150ms;
 }
-.toolbar-item:hover { background: #f3f4f6; }
+.toolbar-item:hover { background: var(--wf-toolbar-hover); }
 
-.toolbar-text   { font-size: 13px; font-weight: 500; }
-.toolbar-arrow  { font-size: 10px; color: #9ca3af; }
-.toolbar-icon   { font-size: 13px; }
+.toolbar-text  { font-size: 12px; font-weight: 500; }
+.toolbar-arrow { font-size: 9px; color: var(--wf-toolbar-muted); margin-left: 1px; }
 
+/* 图标按钮：缩小、放大、适应、全屏 */
 .toolbar-icon-btn {
   display: flex;
   align-items: center;
@@ -997,42 +1055,44 @@ onUnmounted(() => {
   height: 28px;
   border: none;
   background: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
-  font-size: 14px;
-  color: #374151;
-  transition: background 150ms;
+  font-size: 13px;
+  color: var(--wf-toolbar-text);
+  transition: background 150ms, color 150ms;
   flex-shrink: 0;
 }
-.toolbar-icon-btn:hover   { background: #f3f4f6; }
-.toolbar-icon-btn.active  { background: #eff6ff; color: #2563eb; }
+.toolbar-icon-btn:hover  { background: var(--wf-toolbar-hover); }
+.toolbar-icon-btn.active { background: var(--wf-toolbar-active); color: var(--wf-toolbar-active-text); }
 
+/* 添加节点按钮 */
 .toolbar-add-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 5px 14px;
-  border: 1.5px dashed #d1d5db;
+  border: 1.5px dashed var(--wf-toolbar-border);
   background: none;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: #374151;
-  transition: all 150ms;
+  color: var(--wf-toolbar-text);
+  transition: border-color 150ms, color 150ms, background 150ms;
 }
 .toolbar-add-btn:hover {
-  border-color: #3b82f6;
-  color: #2563eb;
-  background: #eff6ff;
+  border-color: var(--wf-running);
+  color: #79b8ff;
+  background: var(--wf-toolbar-active);
 }
 
+/* 试运行按钮 */
 .toolbar-run-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px 16px;
-  background: #16a34a;
+  background: var(--wf-run-bg);
   color: #fff;
   border: none;
   border-radius: 16px;
@@ -1042,10 +1102,10 @@ onUnmounted(() => {
   transition: background 150ms;
   flex-shrink: 0;
 }
-.toolbar-run-btn:hover   { background: #15803d; }
-.toolbar-run-btn.running { background: #2563eb; }
+.toolbar-run-btn:hover   { background: var(--wf-run-hover); }
+.toolbar-run-btn.running { background: var(--wf-run-running); }
 
-.run-icon { font-size: 12px; }
+.run-icon { font-size: 11px; }
 
 /* 执行日志浮层 */
 .execution-overlay {
@@ -1055,10 +1115,10 @@ onUnmounted(() => {
   transform: translateX(-50%);
   z-index: 25;
   width: min(640px, 90%);
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border);
+  background: #1a1d28;
+  border: 1px solid var(--wf-card-border);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   overflow: hidden;
   pointer-events: all;
   max-height: 360px;
