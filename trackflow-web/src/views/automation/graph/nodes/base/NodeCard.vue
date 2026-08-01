@@ -40,33 +40,32 @@
       </div>
     </div>
 
-    <!-- ── 端口区（紧凑态：仅显示端口名） ── -->
-    <template v-if="!expanded">
-      <!-- 输入端口 -->
-      <div v-if="inputs.length" class="port-section">
-        <div v-for="port in inputs" :key="port.name" class="port-row port-in">
-          <div class="port-dot in" />
-          <span class="port-label">{{ port.label || port.name }}</span>
-          <span class="port-type">{{ typeLabel(port.valueType) }}</span>
+    <!-- ── 可展开内容区（统一容器，用 max-height 做过渡） ── -->
+    <div class="node-body">
+      <!-- 紧凑态：端口行 -->
+      <div class="compact-view" :class="{ hidden: expanded }">
+        <!-- 输入端口 -->
+        <div v-if="inputs.length" class="port-section">
+          <div v-for="port in inputs" :key="port.name" class="port-row port-in">
+            <div class="port-dot in" />
+            <span class="port-label">{{ port.label || port.name }}</span>
+            <span class="port-type">{{ typeLabel(port.valueType) }}</span>
+          </div>
+        </div>
+        <!-- 分隔线 -->
+        <div v-if="inputs.length && outputs.length" class="port-divider" />
+        <!-- 输出端口 -->
+        <div v-if="outputs.length" class="port-section">
+          <div v-for="port in outputs" :key="port.name" class="port-row port-out">
+            <span class="port-type">{{ typeLabel(port.valueType) }}</span>
+            <span class="port-label">{{ port.label || port.name }}</span>
+            <div class="port-dot out" />
+          </div>
         </div>
       </div>
 
-      <!-- 分隔线 -->
-      <div v-if="inputs.length && outputs.length" class="port-divider" />
-
-      <!-- 输出端口 -->
-      <div v-if="outputs.length" class="port-section">
-        <div v-for="port in outputs" :key="port.name" class="port-row port-out">
-          <span class="port-type">{{ typeLabel(port.valueType) }}</span>
-          <span class="port-label">{{ port.label || port.name }}</span>
-          <div class="port-dot out" />
-        </div>
-      </div>
-    </template>
-
-    <!-- ── 展开态：完整配置 ── -->
-    <template v-else>
-      <div class="expanded-body">
+      <!-- 展开态：完整配置 -->
+      <div class="expanded-view" :class="{ visible: expanded }">
         <!-- 输入参数 -->
         <section v-if="inputs.length" class="param-section">
           <div class="param-section-header">
@@ -89,10 +88,8 @@
             </div>
           </div>
         </section>
-
         <!-- 分隔 -->
         <div class="section-divider" />
-
         <!-- 输出参数 -->
         <section v-if="outputs.length" class="param-section">
           <div class="param-section-header">
@@ -115,7 +112,7 @@
           </div>
         </section>
       </div>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -182,13 +179,19 @@ function onNodeClick() {
 .node-card.status-success  { box-shadow: var(--wf-glow-success); border-color: var(--wf-status-success); }
 .node-card.status-failed   { box-shadow: var(--wf-glow-failed);  border-color: var(--wf-status-failed); }
 
-/* ── 标题区 ── */
+/* ── 标题区（sticky，展开时头部不动） ── */
 .node-header {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 10px 10px 0;
   border-bottom: 1px solid var(--wf-node-header-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--wf-node-bg);
+  /* 确保圆角不被遮住 */
+  border-radius: 10px 10px 0 0;
 }
 
 .color-bar {
@@ -282,7 +285,43 @@ function onNodeClick() {
   color: var(--wf-node-title);
 }
 
-/* ── 端口行（紧凑态） ── */
+/* ── 内容区（统一容器，overflow hidden 支持动画） ── */
+.node-body {
+  overflow: hidden;
+}
+
+/* ── 紧凑态 ── */
+.compact-view {
+  max-height: 300px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 280ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity    200ms ease;
+}
+
+.compact-view.hidden {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── 展开态 ── */
+.expanded-view {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity    220ms ease 60ms;  /* 稍微延迟淡入，等收起先完成 */
+}
+
+.expanded-view.visible {
+  max-height: 480px;
+  opacity: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* ── 端口区（紧凑态） ── */
 .port-section {
   padding: 4px 0;
 }
@@ -331,12 +370,7 @@ function onNodeClick() {
   flex-shrink: 0;
 }
 
-/* ── 展开态 ── */
-.expanded-body {
-  max-height: 420px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
+/* ── 展开态参数块 ── */
 
 .param-section {
   padding: 10px 12px;
