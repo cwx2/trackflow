@@ -1,24 +1,70 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useAuthStore } from './auth'
 
-const STORAGE_KEY = 'tf_selected_project'
+/**
+ * 生成用户特定的 localStorage 键名
+ * 格式：tf_selected_project_{userId}
+ * 若无用户 ID（如登录前），返回临时键名（不实际使用）
+ */
+function getStorageKey(userId?: string): string {
+  if (!userId) return 'tf_selected_project_anonymous'
+  return `tf_selected_project_${userId}`
+}
 
 /**
  * 项目选择状态管理
  * 在看板、迭代等需要选择项目的页面之间共享选中状态，
  * 并持久化到 localStorage 以支持刷新页面后恢复。
+ * 
+ * 重要：偏好按用户 ID 隔离存储，避免多用户共享同一台设备时互相干扰。
  */
 export const useProjectStore = defineStore('project', () => {
-  // 从 localStorage 恢复上次选中的项目
-  const stored = localStorage.getItem(STORAGE_KEY)
-  const selectedProjectId = ref<string | undefined>(stored || undefined)
+  const authStore = useAuthStore()
 
-  // 监听变化，持久化到 localStorage
+  /**
+   * 当前用户的存储键名
+   * 优先使用数据库用户 ID（确保持久化一致性），降级使用 Keycloak sub
+   */
+  const currentStorageKey = computed(() => {
+    const userId = authStore.user?.userId || authStore.user?.id
+    return getStorageKey(userId)
+  })
+
+  /**
+   * 初始化时从 localStorage 恢复状态
+   * 若用户已登录，使用用户特定键；否则不恢复（避免读取其他用户的数据）
+   */
+  function loadFromStorage(): string | undefined {
+    const userId = authStore.user?.userId || authStore.user?.id
+    if (!userId) return undefined
+    const stored = localStorage.getItem(getStorageKey(userId))
+    return stored || undefined
+  }
+
+  const selectedProjectId = ref<string | undefined>(loadFromStorage())
+
+  /**
+   * 监听存储键变化（用户登录/登出时），重新加载偏好
+   */
+  watch(currentStorageKey, (newKey, oldKey) => {
+    if (newKey === oldKey) return
+    // 用户变化时，从新用户的 storage 恢复或清空
+    selectedProjectId.value = loadFromStorage()
+  })
+
+  /**
+   * 监听 selectedProjectId 变化，持久化到 localStorage（仅当用户已登录时）
+   */
   watch(selectedProjectId, (val) => {
+    const userId = authStore.user?.userId || authStore.user?.id
+    if (!userId) return // 未登录不写入
+
+    const key = getStorageKey(userId)
     if (val) {
-      localStorage.setItem(STORAGE_KEY, val)
+      localStorage.setItem(key, val)
     } else {
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(key)
     }
   })
 
@@ -49,6 +95,7 @@ export const useProjectStore = defineStore('project', () => {
     }
 
     // 多个项目但上次选的不在列表里了，清除
+    // 这涵盖了"存储的项目 ID 对应用户无权限访问的项目"的情况
     if (selectedProjectId.value && !projectIds.includes(selectedProjectId.value)) {
       selectedProjectId.value = undefined
     }
@@ -56,9 +103,21 @@ export const useProjectStore = defineStore('project', () => {
     return false
   }
 
+  /**
+   * 清除当前用户的项目偏好（用于登出时调用）
+   */
+  function clearPreference() {
+    const userId = authStore.user?.userId || authStore.user?.id
+    if (userId) {
+      localStorage.removeItem(getStorageKey(userId))
+    }
+    selectedProjectId.value = undefined
+  }
+
   return {
     selectedProjectId,
     selectProject,
-    autoSelectIfNeeded
+    autoSelectIfNeeded,
+    clearPreference
   }
 })

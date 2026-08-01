@@ -406,6 +406,13 @@ export const useAuthStore = defineStore('auth', () => {
       invalidateProjectPermissions()
     }).catch(() => { /* ignore if module not loaded */ })
 
+    // 清除项目选择偏好的内存状态（localStorage 中的持久化数据保留，因为按用户隔离）
+    // 使用动态 import 避免循环依赖（project store 依赖 auth store）
+    import('./project').then(({ useProjectStore }) => {
+      const projectStore = useProjectStore()
+      projectStore.selectProject(undefined)
+    }).catch(() => { /* ignore */ })
+
     if (reason) {
       // 被动登出（token 过期）：直接跳本地登录页，不走 Keycloak logout
       // 因为 token 已过期，Keycloak session 大概率也已失效，走 logout 会显示多余的确认页
