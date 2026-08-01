@@ -49,7 +49,7 @@
       <a-form-item label="描述（可选）">
         <a-textarea
           v-model="localData.description"
-          placeholder="说明这段等待的用途，如"等待后端服务启动""
+          placeholder="说明这段等待的用途，如：等待后端服务启动"
           :auto-size="{ minRows: 2, maxRows: 4 }"
         />
       </a-form-item>
@@ -70,7 +70,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:data', value: Record<string, any>): void
+  (e: 'update:data', _value: Record<string, any>): void
 }>()
 
 const localData = ref({ ...props.data })

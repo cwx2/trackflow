@@ -21,7 +21,7 @@ export interface CreateWorkflowDTO {
   description?: string
 }
 
-export interface UpdateWorkflowDTO {
+export interface UpdateAutomationDTO {
   name?: string
   description?: string
   definition?: string // JSON string
@@ -94,7 +94,7 @@ export const automationApi = {
   /**
    * 更新工作流（包括保存画布）
    */
-  update(id: string, data: UpdateWorkflowDTO) {
+  update(id: string, data: UpdateAutomationDTO) {
     return request.put<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}`, data)
   },
 

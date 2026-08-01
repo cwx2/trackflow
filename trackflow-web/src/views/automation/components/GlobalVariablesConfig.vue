@@ -5,7 +5,7 @@
     </div>
     
     <div class="var-list">
-      <div v-for="(value, key) in localVars" :key="key" class="var-row">
+      <div v-for="(_value, key) in localVars" :key="key" class="var-row">
         <span class="var-key">{{ key }}</span>
         <span class="var-eq">=</span>
         <a-input v-model="localVars[key]" size="small" class="var-value-input" />
@@ -28,9 +28,7 @@ const props = defineProps<{
   variables: Record<string, string>
 }>()
 
-const emit = defineEmits<{
-  (e: 'update:variables', value: Record<string, string>): void
-}>()
+const emit = defineEmits(['update:variables'])
 
 const localVars = ref<Record<string, string>>({})
 const newKey = ref('')

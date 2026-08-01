@@ -38,19 +38,7 @@
             :key="node.type"
             class="node-item"
             draggable="true"
-            @dragstart="(e) => onDragStart(e, node)"
-          >
-            <span class="node-icon">{{ node.icon }}</span>
-            <span class="node-label">{{ node.label }}</span>
-          </div>
-        </div>
-        <div v-if="comingSoonNodes.length > 0" class="panel-section">
-          <div class="section-title">即将推出</div>
-          <div
-            v-for="node in comingSoonNodes"
-            :key="node.type"
-            class="node-item disabled"
-            @click="showComingSoon"
+            @mousedown="(e) => onDragStart(e, node)"
           >
             <span class="node-icon">{{ node.icon }}</span>
             <span class="node-label">{{ node.label }}</span>
@@ -59,71 +47,23 @@
       </div>
 
       <!-- 中间：工作流画布 -->
-      <div class="canvas-container" @drop="onDrop" @dragover.prevent>
-        <VueFlow
-          v-model:nodes="nodes"
-          v-model:edges="edges"
-          :default-viewport="{ zoom: 1, x: 0, y: 0 }"
-          :min-zoom="0.2"
-          :max-zoom="2"
-          fit-view-on-init
-          @node-click="onNodeClick"
-          @pane-click="onPaneClick"
-          @connect="onConnect"
-        >
-          <template #node-cli-agent="nodeProps">
-            <CliAgentNode :data="nodeProps.data" :selected="nodeProps.selected" />
-          </template>
-          <template #node-variables="nodeProps">
-            <VariablesNode :data="nodeProps.data" :selected="nodeProps.selected" />
-          </template>
-          <template #node-condition="nodeProps">
-            <ConditionNode :data="nodeProps.data" :selected="nodeProps.selected" />
-          </template>
-          <template #node-loop="nodeProps">
-            <LoopNode :data="nodeProps.data" :selected="nodeProps.selected" />
-          </template>
-          <template #node-file-input="nodeProps">
-            <FileInputNode :data="nodeProps.data" :selected="nodeProps.selected" />
-          </template>
-          <Background pattern-color="var(--tf-border)" :gap="20" />
-          <Controls position="bottom-left" />
-          <MiniMap position="bottom-right" />
-        </VueFlow>
-      </div>
+      <div ref="containerRef" class="canvas-container"></div>
 
       <!-- 右侧：配置面板 -->
       <div class="config-panel">
         <template v-if="selectedNode">
           <div class="panel-header">
-            <span class="panel-title">{{ getNodeTitle(selectedNode.type) }}</span>
+            <span class="panel-title">{{ getNodeTitle(selectedNode.properties?.nodeType) }}</span>
             <a-button type="text" size="small" status="danger" @click="deleteSelectedNode">删除</a-button>
           </div>
           
           <!-- CLI Agent 节点配置 -->
-          <template v-if="selectedNode.type === 'cli-agent'">
-            <CliAgentConfig v-model:data="selectedNode.data" />
-          </template>
-          
-          <!-- 变量设置节点配置 -->
-          <template v-else-if="selectedNode.type === 'variables'">
-            <VariablesConfig v-model:data="selectedNode.data" />
-          </template>
-          
-          <!-- 条件判断节点配置 -->
-          <template v-else-if="selectedNode.type === 'condition'">
-            <ConditionConfig v-model:data="selectedNode.data" />
-          </template>
-          
-          <!-- 重试循环节点配置 -->
-          <template v-else-if="selectedNode.type === 'loop'">
-            <LoopConfig v-model:data="selectedNode.data" />
-          </template>
-          
-          <!-- 文件输入节点配置 -->
-          <template v-else-if="selectedNode.type === 'file-input'">
-            <FileInputConfig v-model:data="selectedNode.data" />
-          </template>
+          <CliAgentConfig v-if="selectedNode.properties?.nodeType === 'cli-agent'" v-model:data="selectedNode.properties" />
+          <VariablesConfig v-else-if="selectedNode.properties?.nodeType === 'variables'" v-model:data="selectedNode.properties" />
+          <ConditionConfig v-else-if="selectedNode.properties?.nodeType === 'condition'" v-model:data="selectedNode.properties" />
+          <LoopConfig v-else-if="selectedNode.properties?.nodeType === 'loop'" v-model:data="selectedNode.properties" />
+          <FileInputConfig v-else-if="selectedNode.properties?.nodeType === 'file-input'" v-model:data="selectedNode.properties" />
+          <DelayConfig v-else-if="selectedNode.properties?.nodeType === 'delay'" v-model:data="selectedNode.properties" />
         </template>
         
         <!-- 未选中节点时显示全局变量 -->
@@ -139,35 +79,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, markRaw } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
-import { automationApi, type WorkflowDefinition, type WorkflowNode, type WorkflowEdge } from '@/api'
-import CliAgentNode from './components/CliAgentNode.vue'
-import VariablesNode from './components/VariablesNode.vue'
-import ConditionNode from './components/ConditionNode.vue'
-import LoopNode from './components/LoopNode.vue'
-import FileInputNode from './components/FileInputNode.vue'
+import LogicFlow from '@logicflow/core'
+import { Control, MiniMap } from '@logicflow/extension'
+import { automationApi, type WorkflowDefinition, type WorkflowNode } from '@/api'
 import CliAgentConfig from './components/CliAgentConfig.vue'
 import VariablesConfig from './components/VariablesConfig.vue'
 import ConditionConfig from './components/ConditionConfig.vue'
 import LoopConfig from './components/LoopConfig.vue'
 import FileInputConfig from './components/FileInputConfig.vue'
+import DelayConfig from './components/DelayConfig.vue'
 import GlobalVariablesConfig from './components/GlobalVariablesConfig.vue'
 
-// Vue Flow 样式
-import '@vue-flow/core/dist/style.css'
-import '@vue-flow/core/dist/theme-default.css'
-import '@vue-flow/controls/dist/style.css'
-import '@vue-flow/minimap/dist/style.css'
+// LogicFlow 样式
+import '@logicflow/core/dist/index.css'
+import '@logicflow/extension/lib/style/index.css'
 
 const route = useRoute()
 const router = useRouter()
-const { addNodes, addEdges, project } = useVueFlow()
+
+// DOM 引用
+const containerRef = ref<HTMLElement | null>(null)
+
+// LogicFlow 实例
+let lf: LogicFlow | null = null
 
 // 工作流数据
 const workflowId = ref('')
@@ -177,9 +115,7 @@ const saving = ref(false)
 const editingName = ref(false)
 const nameInputRef = ref<HTMLInputElement | null>(null)
 
-// Vue Flow 数据
-const nodes = ref<any[]>([])
-const edges = ref<any[]>([])
+// 全局变量和选中节点
 const globalVariables = ref<Record<string, string>>({})
 const selectedNode = ref<any>(null)
 
@@ -193,14 +129,80 @@ const basicNodes = [
   { type: 'delay', label: '延时等待', icon: '⏱' }
 ]
 
-const comingSoonNodes: Array<{ type: string; label: string; icon: string }> = [
-  // 暂无即将推出的节点
-]
+// 初始化 LogicFlow
+function initLogicFlow() {
+  if (!containerRef.value) return
+  
+  // 使用插件
+  LogicFlow.use(Control)
+  LogicFlow.use(MiniMap)
+  
+  // LogicFlow 初始化时暂停 Vue 响应式追踪
+  pauseTracking()
+  lf = new LogicFlow({
+    container: containerRef.value,
+    grid: {
+      size: 20,
+      visible: true,
+      type: 'dot',
+      config: {
+        color: 'var(--tf-border)',
+        thickness: 1
+      }
+    },
+    background: {
+      backgroundColor: 'var(--tf-bg-body)'
+    },
+    keyboard: {
+      enabled: true
+    },
+    style: {
+      rect: {
+        fill: 'var(--tf-bg-elevated)',
+        stroke: 'var(--tf-border)',
+        strokeWidth: 1,
+        radius: 6
+      },
+      nodeText: {
+        color: 'var(--tf-text-primary)',
+        fontSize: 13
+      },
+      edgeText: {
+        textWidth: 100,
+        color: 'var(--tf-text-secondary)',
+        fontSize: 12
+      },
+      polyline: {
+        stroke: 'var(--tf-border)',
+        strokeWidth: 2
+      },
+      anchor: {
+        fill: 'var(--tf-accent)',
+        stroke: 'var(--tf-bg-surface)',
+        strokeWidth: 2,
+        r: 5
+      }
+    }
+  })
+  resetTracking()
 
-// 节点 ID 生成器
-let nodeIdCounter = 1
-function generateNodeId(): string {
-  return `node-${Date.now()}-${nodeIdCounter++}`
+  // 监听节点点击
+  lf.on('node:click', ({ data }) => {
+    selectedNode.value = data
+  })
+  
+  // 监听空白点击
+  lf.on('blank:click', () => {
+    selectedNode.value = null
+  })
+  
+  // 监听节点删除
+  lf.on('node:delete', () => {
+    selectedNode.value = null
+  })
+  
+  // 加载数据
+  loadWorkflow()
 }
 
 // 加载工作流
@@ -214,25 +216,30 @@ async function loadWorkflow() {
     const res = await automationApi.getById(id)
     if (res.code === 0) {
       workflowName.value = res.data.name
-      // 解析 definition
       const def: WorkflowDefinition = JSON.parse(res.data.definition || '{}')
       globalVariables.value = def.variables || {}
       
-      // 转换节点（添加 Vue Flow 所需的类型和位置）
-      nodes.value = (def.nodes || []).map(n => ({
-        id: n.id,
-        type: n.type,
-        position: n.position,
-        data: { ...n.data, label: n.label }
-      }))
+      // 转换为 LogicFlow 数据格式
+      const graphData = {
+        nodes: (def.nodes || []).map(n => ({
+          id: n.id,
+          type: 'rect',  // LogicFlow 内置类型
+          x: n.position.x + 80, // LogicFlow 用中心点
+          y: n.position.y + 20,
+          text: n.label,
+          properties: { ...n.data, nodeType: n.type }  // 保存原始类型
+        })),
+        edges: (def.edges || []).map(e => ({
+          id: e.id,
+          type: 'polyline',
+          sourceNodeId: e.source,
+          targetNodeId: e.target
+        }))
+      }
       
-      edges.value = (def.edges || []).map(e => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle
-      }))
+      pauseTracking()
+      lf?.render(graphData)
+      resetTracking()
     } else {
       Message.error(res.message || '加载失败')
     }
@@ -245,24 +252,25 @@ async function loadWorkflow() {
 
 // 保存工作流
 async function handleSave() {
+  if (!lf) return
   saving.value = true
+  
   try {
-    // 构建 definition
+    const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
+    
     const definition: WorkflowDefinition = {
       variables: globalVariables.value,
-      nodes: nodes.value.map(n => ({
+      nodes: graphData.nodes.map((n: any) => ({
         id: n.id,
-        type: n.type,
-        label: n.data?.label || getNodeTitle(n.type),
-        position: n.position,
-        data: { ...n.data }
+        type: (n.properties?.nodeType || 'rect') as WorkflowNode['type'],
+        label: n.text?.value || n.text || getNodeTitle(n.properties?.nodeType),
+        position: { x: n.x - 80, y: n.y - 20 },
+        data: n.properties || {}
       })),
-      edges: edges.value.map(e => ({
+      edges: graphData.edges.map((e: any) => ({
         id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle
+        source: e.sourceNodeId,
+        target: e.targetNodeId
       }))
     }
     
@@ -301,37 +309,17 @@ function finishEditName() {
 }
 
 // 拖拽添加节点
-function onDragStart(event: DragEvent, node: { type: string; label: string; icon: string }) {
-  if (event.dataTransfer) {
-    event.dataTransfer.setData('application/vueflow', JSON.stringify(node))
-    event.dataTransfer.effectAllowed = 'move'
-  }
-}
-
-function onDrop(event: DragEvent) {
-  const data = event.dataTransfer?.getData('application/vueflow')
-  if (!data) return
+function onDragStart(_e: MouseEvent, node: { type: string; label: string; icon: string }) {
+  if (!lf) return
   
-  const nodeInfo = JSON.parse(data)
-  
-  // 计算画布中的位置
-  const canvasRect = (event.target as HTMLElement).closest('.canvas-container')?.getBoundingClientRect()
-  if (!canvasRect) return
-  
-  const position = project({
-    x: event.clientX - canvasRect.left,
-    y: event.clientY - canvasRect.top
+  lf.dnd.startDrag({
+    type: 'rect',  // 使用内置 rect 类型
+    text: node.label,
+    properties: {
+      ...getDefaultNodeData(node.type, node.label),
+      nodeType: node.type  // 保存原始类型用于配置面板
+    }
   })
-  
-  // 创建新节点
-  const newNode: any = {
-    id: generateNodeId(),
-    type: nodeInfo.type,
-    position,
-    data: getDefaultNodeData(nodeInfo.type, nodeInfo.label)
-  }
-  
-  addNodes([newNode])
 }
 
 // 获取默认节点数据
@@ -382,34 +370,10 @@ function getDefaultNodeData(type: string, label: string): Record<string, unknown
   }
 }
 
-// 节点点击
-function onNodeClick({ node }: { node: any }) {
-  selectedNode.value = node
-}
-
-// 画布点击（取消选中）
-function onPaneClick() {
-  selectedNode.value = null
-}
-
-// 连线
-function onConnect(connection: any) {
-  const edgeId = `e-${connection.source}-${connection.target}`
-  addEdges([{
-    id: edgeId,
-    source: connection.source,
-    target: connection.target,
-    sourceHandle: connection.sourceHandle,
-    targetHandle: connection.targetHandle
-  }])
-}
-
 // 删除选中节点
 function deleteSelectedNode() {
-  if (!selectedNode.value) return
-  const nodeId = selectedNode.value.id
-  nodes.value = nodes.value.filter(n => n.id !== nodeId)
-  edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
+  if (!selectedNode.value || !lf) return
+  lf.deleteNode(selectedNode.value.id)
   selectedNode.value = null
 }
 
@@ -421,28 +385,21 @@ function getNodeTitle(type: string): string {
     case 'condition': return '条件判断'
     case 'loop': return '重试循环'
     case 'file-input': return '文件输入'
+    case 'delay': return '延时等待'
     default: return '节点'
   }
 }
 
-// 即将推出提示
-function showComingSoon() {
-  Message.info('此节点类型即将推出')
-}
-
 onMounted(() => {
-  loadWorkflow()
+  // 用 setTimeout 让 LogicFlow 初始化完全脱离 Vue 的响应式调度周期
+  setTimeout(() => {
+    initLogicFlow()
+  }, 0)
 })
 
-// 监听节点数据变化，同步到 selectedNode
-watch(nodes, (newNodes) => {
-  if (selectedNode.value) {
-    const found = newNodes.find(n => n.id === selectedNode.value.id)
-    if (found) {
-      selectedNode.value = found
-    }
-  }
-}, { deep: true })
+onUnmounted(() => {
+  lf = null
+})
 </script>
 
 <style scoped>
@@ -551,6 +508,7 @@ watch(nodes, (newNodes) => {
   margin-bottom: 4px;
   background: var(--tf-bg-elevated);
   border: 1px solid var(--tf-border);
+  user-select: none;
 }
 
 .node-item:hover {
@@ -559,11 +517,6 @@ watch(nodes, (newNodes) => {
 
 .node-item:active {
   cursor: grabbing;
-}
-
-.node-item.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .node-icon {
@@ -604,51 +557,21 @@ watch(nodes, (newNodes) => {
   color: var(--tf-text-primary);
 }
 
-/* Vue Flow 主题覆盖 */
-:deep(.vue-flow) {
-  background: var(--tf-bg-body);
+/* LogicFlow 主题覆盖 */
+:deep(.lf-graph) {
+  background: var(--tf-bg-body) !important;
 }
 
-:deep(.vue-flow__background) {
-  background: var(--tf-bg-body);
-}
-
-:deep(.vue-flow__controls) {
+:deep(.lf-control) {
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
   box-shadow: none;
 }
 
-:deep(.vue-flow__controls-button) {
-  background: var(--tf-bg-surface);
-  border-bottom: 1px solid var(--tf-border);
-  color: var(--tf-text-primary);
-}
-
-:deep(.vue-flow__controls-button:hover) {
-  background: var(--tf-bg-hover);
-}
-
-:deep(.vue-flow__minimap) {
+:deep(.lf-mini-map) {
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 6px;
-}
-
-:deep(.vue-flow__edge-path) {
-  stroke: var(--tf-border);
-  stroke-width: 2;
-}
-
-:deep(.vue-flow__edge.selected .vue-flow__edge-path) {
-  stroke: var(--tf-accent);
-}
-
-:deep(.vue-flow__handle) {
-  background: var(--tf-accent);
-  border: 2px solid var(--tf-bg-surface);
-  width: 10px;
-  height: 10px;
 }
 </style>

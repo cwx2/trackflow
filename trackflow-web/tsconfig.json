@@ -6,12 +6,17 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
 
-    /* Module Resolution - Modern Style */
+    /* Module Resolution */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+
+    /* Path Aliases - TypeScript 6.0+ 方式：不需要 baseUrl，paths 使用完整相对路径 */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     /* JSX */
     "jsx": "preserve",
