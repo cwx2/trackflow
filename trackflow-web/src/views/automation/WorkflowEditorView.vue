@@ -142,7 +142,7 @@
 
       <!-- 底部中央悬浮工具条（Coze 风格） -->
       <div class="bottom-toolbar">
-        <!-- 缩放下拉 -->
+        <!-- 1. 缩放下拉 -->
         <div class="toolbar-zoom" @click="zoomMenuOpen = !zoomMenuOpen" ref="zoomBtnRef">
           <span class="toolbar-zoom-val">{{ zoomPercent }}%</span>
           <span class="toolbar-arrow">∨</span>
@@ -152,7 +152,7 @@
             <button class="zoom-menu-item" @click="zoomIn(); zoomMenuOpen=false">放大</button>
             <button class="zoom-menu-item" @click="fitCanvas(); zoomMenuOpen=false">自适应</button>
             <div class="zoom-menu-divider" />
-            <button v-for="p in [50,100,150,200]" :key="p"
+            <button v-for="p in [50,75,100,125,150,200]" :key="p"
               class="zoom-menu-item"
               :class="{ active: zoomPercent === p }"
               @click="zoomTo(p); zoomMenuOpen=false">
@@ -162,11 +162,51 @@
         </div>
         <!-- 分隔线 -->
         <div class="toolbar-divider" />
-        <!-- 执行日志 -->
-        <button class="toolbar-icon-btn" :class="{ active: executionPanelOpen }" title="执行日志" @click="executionPanelOpen = !executionPanelOpen">
-          <span style="font-size:14px;">☰</span>
+        <!-- 2. 注释（添加注释节点） -->
+        <button class="toolbar-icon-btn" title="注释" @click="addCommentNode">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
         </button>
-        <!-- 试运行 -->
+        <!-- 3. 优化布局 -->
+        <button class="toolbar-icon-btn" title="优化布局" @click="autoLayout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+          </svg>
+        </button>
+        <!-- 4. 导出为图片 -->
+        <button class="toolbar-icon-btn" title="导出为图片" @click="exportImage">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </button>
+        <!-- 5. 缩略图 -->
+        <button class="toolbar-icon-btn" :class="{ active: minimapOpen }" title="缩略图" @click="toggleMinimap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="15" rx="2"/>
+            <path d="M16 2l4 5H4l4-5z" fill="currentColor" stroke="none" opacity="0.4"/>
+            <rect x="5" y="10" width="6" height="5" rx="1" opacity="0.6"/>
+          </svg>
+        </button>
+        <!-- 分隔线 -->
+        <div class="toolbar-divider" />
+        <!-- 6. + 添加节点 -->
+        <button class="toolbar-add-btn" @click="toggleAddNodePanel">
+          <span style="font-size:14px;line-height:1;">+</span>
+          <span>添加节点</span>
+        </button>
+        <!-- 分隔线 -->
+        <div class="toolbar-divider" />
+        <!-- 7. 调试 -->
+        <button class="toolbar-icon-btn" :class="{ active: debugMode }" title="调试" @click="toggleDebugMode">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </button>
+        <!-- 8. 试运行 -->
         <button class="toolbar-run-btn" :class="{ running: isRunning }" @click="handleRun">
           <span class="run-icon">▶</span>
           <span>{{ isRunning ? '运行中...' : '试运行' }}</span>
@@ -192,7 +232,7 @@ import { pauseTracking, resetTracking } from '@vue/reactivity'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import LogicFlow, { HtmlNode, HtmlNodeModel } from '@logicflow/core'
-import { Control, MiniMap } from '@logicflow/extension'
+import { Control, MiniMap, Snapshot } from '@logicflow/extension'
 import { automationApi, type WorkflowDefinition, type WorkflowNode, type NodeType, type GlobalVariable } from '@/api'
 import { NODE_DEFINITIONS, DRAGGABLE_NODES, getNodeDefinition } from './node-definitions'
 import CliAgentConfig from './components/CliAgentConfig.vue'
@@ -253,6 +293,11 @@ const zoomPercent = ref(100)
 const zoomMenuOpen = ref(false)
 const zoomBtnRef = ref<HTMLElement | null>(null)
 
+// 新增：minimap / 调试 / 添加节点面板 状态
+const minimapOpen = ref(false)
+const debugMode = ref(false)
+const addNodePanelOpen = ref(false)  // 控制左侧节点面板（从底部工具条触发）
+
 function fitCanvas() {
   lf?.fitView()
   nextTick(() => {
@@ -282,6 +327,148 @@ function zoomTo(percent: number) {
 function handleOutsideClick(e: MouseEvent) {
   if (zoomBtnRef.value && !zoomBtnRef.value.contains(e.target as Node)) {
     zoomMenuOpen.value = false
+  }
+}
+
+// ── 工具条功能函数 ─────────────────────────────────────────
+
+/** 2. 添加注释节点（放置在画布中央可见区域） */
+function addCommentNode() {
+  if (!lf) return
+  const graphModel = (lf as any).graphModel
+  // 获取当前视口中心
+  const { width, height } = graphModel
+  const transform = graphModel.transformModel
+  const centerX = (width / 2 - transform.translateX) / transform.SCALE_X
+  const centerY = (height / 2 - transform.translateY) / transform.SCALE_Y
+
+  lf.addNode({
+    type: 'comment',
+    x: centerX,
+    y: centerY,
+    properties: {
+      nodeType: 'comment',
+      text: '在这里写注释...',
+    },
+  })
+  Message.success('注释节点已添加')
+}
+
+/** 3. 优化布局：对齐 + 均匀间距（从左到右拓扑排序） */
+function autoLayout() {
+  if (!lf) return
+  const graphData = lf.getGraphData() as { nodes: any[]; edges: any[] }
+  if (!graphData.nodes.length) {
+    Message.warning('画布中没有节点')
+    return
+  }
+
+  // 构建邻接表
+  const inDegree = new Map<string, number>()
+  const adj = new Map<string, string[]>()
+  for (const n of graphData.nodes) {
+    inDegree.set(n.id, 0)
+    adj.set(n.id, [])
+  }
+  for (const e of graphData.edges) {
+    adj.get(e.sourceNodeId)?.push(e.targetNodeId)
+    inDegree.set(e.targetNodeId, (inDegree.get(e.targetNodeId) || 0) + 1)
+  }
+
+  // Kahn 拓扑排序 -> 分层
+  const queue: string[] = []
+  for (const [id, deg] of inDegree) {
+    if (deg === 0) queue.push(id)
+  }
+  const layers: string[][] = []
+  while (queue.length) {
+    layers.push([...queue])
+    const next: string[] = []
+    for (const id of queue) {
+      for (const nb of (adj.get(id) || [])) {
+        const deg = (inDegree.get(nb) || 1) - 1
+        inDegree.set(nb, deg)
+        if (deg === 0) next.push(nb)
+      }
+    }
+    queue.length = 0
+    queue.push(...next)
+  }
+
+  // 有环节点放最后一层
+  const placed = new Set(layers.flat())
+  const remaining = graphData.nodes.map(n => n.id).filter(id => !placed.has(id))
+  if (remaining.length) layers.push(remaining)
+
+  // 布局：水平分层，每层内垂直居中
+  const COL_GAP = 280   // 列间距
+  const ROW_GAP = 140   // 行间距
+  const START_X = 100
+  const START_Y = 100
+
+  const updates: { id: string; x: number; y: number }[] = []
+  layers.forEach((layer, li) => {
+    const totalH = layer.length * ROW_GAP
+    layer.forEach((id, ri) => {
+      updates.push({
+        id,
+        x: START_X + li * COL_GAP,
+        y: START_Y + ri * ROW_GAP - totalH / 2 + ROW_GAP / 2,
+      })
+    })
+  })
+
+  // 批量移动节点
+  for (const { id, x, y } of updates) {
+    lf.moveNode(id, x, y)
+  }
+
+  lf.fitView()
+  Message.success('布局已优化')
+}
+
+/** 4. 导出为图片（PNG）*/
+function exportImage() {
+  if (!lf) return
+  const snapshot = (lf as any).extension?.snapshot
+  if (!snapshot) {
+    Message.error('截图插件未初始化')
+    return
+  }
+  Message.loading({ content: '正在生成图片...', duration: 2000 })
+  snapshot.getSnapshot(`workflow-${workflowId.value || 'export'}`, {
+    fileType: 'png',
+    backgroundColor: '#131623',
+    padding: 40,
+  })
+}
+
+/** 5. 缩略图 toggle */
+function toggleMinimap() {
+  if (!lf) return
+  const minimap = (lf as any).extension?.miniMap
+  if (!minimap) return
+  minimapOpen.value = !minimapOpen.value
+  if (minimapOpen.value) {
+    minimap.show()
+  } else {
+    minimap.hide()
+  }
+}
+
+/** 6. + 添加节点面板（复用左侧面板） */
+function toggleAddNodePanel() {
+  leftPanelOpen.value = !leftPanelOpen.value
+}
+
+/** 7. 调试模式 */
+function toggleDebugMode() {
+  debugMode.value = !debugMode.value
+  if (debugMode.value) {
+    executionPanelOpen.value = true
+    Message.info('调试模式已开启，可逐步查看节点执行日志')
+  } else {
+    Message.info('调试模式已关闭')
   }
 }
 
@@ -337,6 +524,7 @@ function initLogicFlow() {
   // 使用插件
   LogicFlow.use(Control)
   LogicFlow.use(MiniMap)
+  LogicFlow.use(Snapshot)
   
   // LogicFlow 初始化时暂停 Vue 响应式追踪
   pauseTracking()
@@ -572,6 +760,43 @@ function initLogicFlow() {
       }
     }
     lf!.register({ type: 'end', view: EndView, model: EndModel })
+  })()
+
+  // ── Comment 注释节点（黄色便利贴风格）
+  ;(() => {
+    class CommentView extends HtmlNode {
+      getText() { return null }
+      setHtml(rootEl: SVGForeignObjectElement) {
+        const model = (this as any).props?.model
+        const text = model?.properties?.text || '注释...'
+        rootEl.innerHTML = `
+          <div style="width:200px;min-height:80px;background:#2d2a1a;border:1.5px solid #d97706;
+            border-radius:8px;padding:12px 14px;position:relative;
+            box-shadow:0 2px 12px rgba(217,119,6,0.2);">
+            <div style="font-size:10px;color:#d97706;font-weight:600;
+              margin-bottom:6px;letter-spacing:0.5px;">注释</div>
+            <div contenteditable="true"
+              style="font-size:12px;color:#fde68a;line-height:1.6;
+                min-height:40px;outline:none;white-space:pre-wrap;word-break:break-word;"
+              onblur="this.dispatchEvent(new CustomEvent('comment-blur',{bubbles:true,detail:{text:this.innerText}}))"
+            >${text}</div>
+          </div>`
+        // 监听编辑
+        rootEl.querySelector('[contenteditable]')?.addEventListener('blur', (e: any) => {
+          model?.setProperties({ ...model.properties, text: e.target.innerText })
+        })
+      }
+    }
+    class CommentModel extends HtmlNodeModel {
+      initNodeData(data: any) {
+        super.initNodeData(data)
+        this.width = 200
+        this.height = 100
+        this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
+      }
+      getDefaultAnchor() { return [] }  // 注释节点不连线
+    }
+    lf!.register({ type: 'comment', view: CommentView, model: CommentModel })
   })()
 
   // 监听节点点击
@@ -1113,25 +1338,25 @@ onUnmounted(() => {
 .toolbar-icon-btn:hover  { background: var(--wf-toolbar-hover); }
 .toolbar-icon-btn.active { background: var(--wf-toolbar-active); color: var(--wf-toolbar-active-text); }
 
-/* 添加节点按钮 */
+/* 添加节点按钮（Coze 紫色高亮胶囊） */
 .toolbar-add-btn {
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 5px 14px;
-  border: 1.5px dashed var(--wf-toolbar-border);
-  background: none;
+  border: none;
+  background: rgba(139, 92, 246, 0.18);
   border-radius: 10px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--wf-toolbar-text);
-  transition: border-color 150ms, color 150ms, background 150ms;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a78bfa;
+  transition: background 150ms, color 150ms;
+  white-space: nowrap;
 }
 .toolbar-add-btn:hover {
-  border-color: var(--wf-running);
-  color: #79b8ff;
-  background: var(--wf-toolbar-active);
+  background: rgba(139, 92, 246, 0.32);
+  color: #c4b5fd;
 }
 
 /* 试运行按钮 */
