@@ -8,7 +8,10 @@
           {{ statusLabel }}
         </span>
       </span>
-      <span class="toggle-icon">{{ collapsed ? '▲' : '▼' }}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="toggle-icon">{{ collapsed ? '▲' : '▼' }}</span>
+        <button class="close-btn" @click.stop="emit('close')" title="关闭">✕</button>
+      </div>
     </div>
 
     <!-- 展开内容 -->
@@ -73,6 +76,10 @@ const props = defineProps<{
   nodeStatusMap: Record<string, 'idle' | 'running' | 'success' | 'failed'>
   streamingOutput: Record<string, string>
   isRunning: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'close'): void
 }>()
 
 const collapsed    = ref(false)
@@ -153,6 +160,17 @@ watch(() => props.streamingOutput[selectedNodeId.value || ''], () => {
   gap: 8px;
 }
 .toggle-icon { font-size: 10px; color: var(--tf-text-tertiary); }
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--tf-text-tertiary);
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.close-btn:hover { color: var(--tf-text-primary); }
 
 .status-badge {
   font-size: 10px;

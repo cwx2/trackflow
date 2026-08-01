@@ -23,7 +23,6 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <a-button :loading="isRunning" @click="handleRun">▶ 试运行</a-button>
         <a-button type="primary" :loading="saving" @click="handleSave">保存</a-button>
       </div>
     </div>
@@ -140,14 +139,58 @@
           </template>
         </div>
       </div>
-    </div>
 
-    <!-- 底部执行日志面板 -->
-    <ExecutionPanel
-      :node-status-map="nodeStatusMap"
-      :streaming-output="streamingOutput"
-      :is-running="isRunning"
-    />
+      <!-- 底部中央悬浮工具条（Coze 风格） -->
+      <div class="bottom-toolbar">
+        <!-- 撤销次数 -->
+        <div class="toolbar-item toolbar-select">
+          <span class="toolbar-icon">↩</span>
+          <span class="toolbar-text">0</span>
+          <span class="toolbar-arrow">∨</span>
+        </div>
+        <!-- 分隔线 -->
+        <div class="toolbar-divider" />
+        <!-- 缩放 -->
+        <div class="toolbar-item toolbar-select" @click="fitCanvas">
+          <span class="toolbar-text">{{ zoomPercent }}%</span>
+          <span class="toolbar-arrow">∨</span>
+        </div>
+        <!-- 分隔线 -->
+        <div class="toolbar-divider" />
+        <!-- 快捷操作图标组 -->
+        <button class="toolbar-icon-btn" title="适应画布" @click="fitCanvas">⊡</button>
+        <button class="toolbar-icon-btn" title="缩小" @click="lf?.zoom(false)">－</button>
+        <button class="toolbar-icon-btn" title="放大" @click="lf?.zoom(true)">＋</button>
+        <button class="toolbar-icon-btn" title="全屏预览">⤢</button>
+        <!-- 分隔线 -->
+        <div class="toolbar-divider" />
+        <!-- 添加节点 -->
+        <button class="toolbar-add-btn" @click="leftPanelOpen = true">
+          <span>＋</span> 添加节点
+        </button>
+        <!-- 分隔线 -->
+        <div class="toolbar-divider" />
+        <!-- 执行日志 -->
+        <button class="toolbar-icon-btn" :class="{ active: executionPanelOpen }" title="执行日志" @click="executionPanelOpen = !executionPanelOpen">
+          <span>📋</span>
+        </button>
+        <!-- 试运行 -->
+        <button class="toolbar-run-btn" :class="{ running: isRunning }" @click="handleRun">
+          <span class="run-icon">▶</span>
+          <span>{{ isRunning ? '运行中...' : '试运行' }}</span>
+        </button>
+      </div>
+
+      <!-- 执行日志浮层（可折叠） -->
+      <div v-if="executionPanelOpen" class="execution-overlay">
+        <ExecutionPanel
+          :node-status-map="nodeStatusMap"
+          :streaming-output="streamingOutput"
+          :is-running="isRunning"
+          @close="executionPanelOpen = false"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -211,6 +254,15 @@ const nodeStatusMap = ref<Record<string, 'idle'|'running'|'success'|'failed'>>({
 const streamingOutput = ref<Record<string, string>>({})
 const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
+
+// 底部工具栏
+const executionPanelOpen = ref(false)
+const zoomPercent = ref(100)
+
+function fitCanvas() {
+  lf?.fitView()
+  zoomPercent.value = 100
+}
 
 // 节点面板：从注册表驱动，不再硬编码
 const basicNodes = DRAGGABLE_NODES.map(def => ({
@@ -888,6 +940,130 @@ onUnmounted(() => {
   height: 100%;
   /* 编辑器固定深色背景，不跟随主题（节点卡片硬编码深色） */
   background-color: #131623;
+}
+
+/* ── 底部悬浮工具条（Coze 风格） ── */
+.bottom-toolbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 24px;
+  padding: 6px 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  white-space: nowrap;
+  pointer-events: all;
+  /* 亮色工具条，对比深色画布 */
+  color: #1f2937;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: #e4e7ed;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.toolbar-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  user-select: none;
+  transition: background 150ms;
+}
+.toolbar-item:hover { background: #f3f4f6; }
+
+.toolbar-text   { font-size: 13px; font-weight: 500; }
+.toolbar-arrow  { font-size: 10px; color: #9ca3af; }
+.toolbar-icon   { font-size: 13px; }
+
+.toolbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: background 150ms;
+  flex-shrink: 0;
+}
+.toolbar-icon-btn:hover   { background: #f3f4f6; }
+.toolbar-icon-btn.active  { background: #eff6ff; color: #2563eb; }
+
+.toolbar-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 14px;
+  border: 1.5px dashed #d1d5db;
+  background: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 150ms;
+}
+.toolbar-add-btn:hover {
+  border-color: #3b82f6;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.toolbar-run-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 150ms;
+  flex-shrink: 0;
+}
+.toolbar-run-btn:hover   { background: #15803d; }
+.toolbar-run-btn.running { background: #2563eb; }
+
+.run-icon { font-size: 12px; }
+
+/* 执行日志浮层 */
+.execution-overlay {
+  position: absolute;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  width: min(640px, 90%);
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  overflow: hidden;
+  pointer-events: all;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 悬浮面板公共样式 */
