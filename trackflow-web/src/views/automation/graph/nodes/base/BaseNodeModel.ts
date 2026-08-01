@@ -73,14 +73,16 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     const inputs: PortDef[]  = props?.inputs  || []
     const outputs: PortDef[] = props?.outputs || []
 
-    if (!expanded) {
-      // 紧凑态：只显示端口行，不显示配置
-      const rows = Math.max(inputs.length, 1) + Math.max(outputs.length, 1)
-      return HEADER_H + rows * PORT_ROW_H + PADDING_V * 2
-    }
+    // 基础高度 = 标题区 + 输入端口行 + 输出端口行（永远显示）
+    const portRows = inputs.length + outputs.length
+    const baseHeight = HEADER_H + Math.max(portRows, 1) * PORT_ROW_H + PADDING_V * 2
 
-    // 展开态：固定高度（NodeCard.vue 内部滚动）
-    return 480
+    if (!expanded) return baseHeight
+
+    // 展开时：基础高度 + 配置区（每个参数一行 + section header）
+    const configRows = (inputs.length + outputs.length) * 2 + 6  // 粗估
+    const configHeight = Math.min(configRows * PORT_ROW_H + 60, 400)
+    return baseHeight + configHeight
   }
 
   /** 动态生成具名锚点（输入端口左侧，输出端口右侧） */

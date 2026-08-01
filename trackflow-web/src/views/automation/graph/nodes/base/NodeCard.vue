@@ -40,77 +40,77 @@
       </div>
     </div>
 
-    <!-- ── 可展开内容区（统一容器，用 max-height 做过渡） ── -->
+    <!-- ── 端口区（永远显示） ── -->
     <div class="node-body">
-      <!-- 紧凑态：端口行 -->
-      <div class="compact-view" :class="{ hidden: expanded }">
-        <!-- 输入端口 -->
-        <div v-if="inputs.length" class="port-section">
-          <div v-for="port in inputs" :key="port.name" class="port-row port-in">
-            <div class="port-dot in" />
-            <span class="port-label">{{ port.label || port.name }}</span>
-            <span class="port-type">{{ typeLabel(port.valueType) }}</span>
-          </div>
+      <!-- 输入端口 -->
+      <div v-if="inputs.length" class="port-section">
+        <div v-for="port in inputs" :key="port.name" class="port-row port-in">
+          <div class="port-dot in" />
+          <span class="port-label">{{ port.label || port.name }}</span>
+          <span class="port-type">{{ typeLabel(port.valueType) }}</span>
         </div>
-        <!-- 分隔线 -->
-        <div v-if="inputs.length && outputs.length" class="port-divider" />
-        <!-- 输出端口 -->
-        <div v-if="outputs.length" class="port-section">
-          <div v-for="port in outputs" :key="port.name" class="port-row port-out">
-            <span class="port-type">{{ typeLabel(port.valueType) }}</span>
-            <span class="port-label">{{ port.label || port.name }}</span>
-            <div class="port-dot out" />
-          </div>
+      </div>
+      <!-- 分隔线 -->
+      <div v-if="inputs.length && outputs.length" class="port-divider" />
+      <!-- 输出端口 -->
+      <div v-if="outputs.length" class="port-section">
+        <div v-for="port in outputs" :key="port.name" class="port-row port-out">
+          <span class="port-type">{{ typeLabel(port.valueType) }}</span>
+          <span class="port-label">{{ port.label || port.name }}</span>
+          <div class="port-dot out" />
         </div>
       </div>
 
-      <!-- 展开态：完整配置 -->
-      <div class="expanded-view" :class="{ visible: expanded }">
-        <!-- 输入参数 -->
-        <section v-if="inputs.length" class="param-section">
-          <div class="param-section-header">
-            <span class="param-section-title">输入参数</span>
-            <button class="add-param-btn" title="添加参数">+</button>
-          </div>
-          <div class="param-table-head">
-            <span>参数名称</span>
-            <span>参数值</span>
-          </div>
-          <div v-for="port in inputs" :key="port.name" class="param-row">
-            <div class="param-name">
-              <div class="port-dot in small" />
-              <span>{{ port.name }}</span>
-              <span v-if="port.required" class="required-badge">必填</span>
+      <!-- ── 展开追加区（端口下方滑入） ── -->
+      <div class="expand-extra" :class="{ visible: expanded }">
+        <div class="expand-extra-inner">
+          <!-- 输入参数详情 -->
+          <section v-if="inputs.length" class="param-section">
+            <div class="param-section-header">
+              <span class="param-section-title">输入参数</span>
+              <button class="add-param-btn">+</button>
             </div>
-            <div class="param-value">
-              <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
-              <button class="param-more">···</button>
+            <div class="param-table-head">
+              <span>参数名称</span>
+              <span>参数值</span>
             </div>
-          </div>
-        </section>
-        <!-- 分隔 -->
-        <div class="section-divider" />
-        <!-- 输出参数 -->
-        <section v-if="outputs.length" class="param-section">
-          <div class="param-section-header">
-            <span class="param-section-title">输出参数</span>
-            <button class="add-param-btn" title="添加参数">+</button>
-          </div>
-          <div class="param-table-head">
-            <span>参数名称</span>
-            <span>参数类型</span>
-          </div>
-          <div v-for="port in outputs" :key="port.name" class="param-row">
-            <div class="param-name">
-              <div class="port-dot out small" />
-              <span>{{ port.name }}</span>
+            <div v-for="port in inputs" :key="port.name" class="param-row">
+              <div class="param-name">
+                <div class="port-dot in small" />
+                <span>{{ port.name }}</span>
+                <span v-if="port.required" class="required-badge">必填</span>
+              </div>
+              <div class="param-value">
+                <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
+                <button class="param-more">···</button>
+              </div>
             </div>
-            <div class="param-value">
-              <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
-              <button class="param-more">···</button>
+          </section>
+
+          <div class="section-divider" />
+
+          <!-- 输出参数详情 -->
+          <section v-if="outputs.length" class="param-section">
+            <div class="param-section-header">
+              <span class="param-section-title">输出参数</span>
+              <button class="add-param-btn">+</button>
             </div>
-          </div>
-        </section>
+            <div class="param-table-head">
+              <span>参数名称</span>
+              <span>参数类型</span>
+            </div>
+            <div v-for="port in outputs" :key="port.name" class="param-row">
+              <div class="param-name">
+                <div class="port-dot out small" />
+                <span>{{ port.name }}</span>
+              </div>
+              <div class="param-value">
+                <span class="param-type-tag">{{ typeLabel(port.valueType) }}</span>
+                <button class="param-more">···</button>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   </div>
@@ -286,45 +286,33 @@ function onNodeClick() {
   color: var(--wf-node-title);
 }
 
-/* ── 内容区（统一容器，overflow hidden 支持动画） ── */
+/* ── 内容区 ── */
 .node-body {
   overflow: hidden;
 }
 
-/* ── 紧凑态 ── */
-.compact-view {
-  max-height: 300px;
-  opacity: 1;
-  overflow: hidden;
-  transition: max-height 280ms cubic-bezier(0.4, 0, 0.2, 1),
-              opacity    200ms ease;
-}
-
-.compact-view.hidden {
+/* ── 展开追加区（端口下方滑入） ── */
+.expand-extra {
   max-height: 0;
   opacity: 0;
   overflow: hidden;
-  pointer-events: none;
-  padding: 0;
+  transition:
+    max-height 300ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity    200ms ease 50ms;
 }
 
-/* ── 展开态 ── */
-.expanded-view {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-height 320ms cubic-bezier(0.4, 0, 0.2, 1),
-              opacity    220ms ease 60ms;  /* 稍微延迟淡入，等收起先完成 */
-}
-
-.expanded-view.visible {
+.expand-extra.visible {
   max-height: 480px;
   opacity: 1;
+}
+
+.expand-extra-inner {
   overflow-y: auto;
+  max-height: 480px;
   scrollbar-width: thin;
 }
 
-/* ── 端口区（紧凑态） ── */
+/* ── 端口区（永远显示） ── */
 .port-section {
   padding: 4px 0;
 }
