@@ -45,6 +45,10 @@ public class SavedQueryService {
      * 如果用户没有任何收藏记录（首次使用），自动收藏默认查询
      */
     public QueryPanelVO getPanel(Long userId, Long projectId) {
+        return getPanel(userId, projectId, false);
+    }
+
+    public QueryPanelVO getPanel(Long userId, Long projectId, boolean hideResolved) {
         // 确保用户有收藏记录（首次使用时自动初始化）
         ensureDefaultFavorites(userId);
 
@@ -95,7 +99,7 @@ public class SavedQueryService {
             boolean isFavorited = favoriteQueryIds.contains(q.getId());
             if (!isOwn && !isFavorited) continue;
 
-            long count = countForQueryWithProjectFilter(q, countProjectIds);
+            long count = countForQueryWithProjectFilter(q, countProjectIds, hideResolved);
             QueryPanelItemVO item = QueryPanelItemVO.builder()
                     .id(String.valueOf(q.getId()))
                     .name(q.getName())
@@ -444,9 +448,13 @@ public class SavedQueryService {
     }
 
     private long countForQueryWithProjectFilter(SavedQuery query, List<Long> accessibleProjectIds) {
+        return countForQueryWithProjectFilter(query, accessibleProjectIds, false);
+    }
+
+    private long countForQueryWithProjectFilter(SavedQuery query, List<Long> accessibleProjectIds, boolean hideResolved) {
         try {
             List<Map<String, Object>> filters = parseFilters(query.getFilters());
-            return queryExecutor.countWithProjectFilter(filters, accessibleProjectIds);
+            return queryExecutor.countWithProjectFilter(filters, accessibleProjectIds, hideResolved);
         } catch (Exception e) {
             log.warn("Failed to count for query {}: {}", query.getId(), e.getMessage());
             return 0;

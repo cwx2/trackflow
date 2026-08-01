@@ -1867,6 +1867,7 @@ function toggleHideResolved() {
   localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved.value))
   currentPage.value = 1
   refreshList()
+  loadPanel() // 刷新面板计数以匹配 hideResolved 状态
 }
 
 function onGlobalSearch(keyword: string) {
@@ -3415,7 +3416,7 @@ const panelLoadFailed = ref(false)
 async function loadPanel() {
   try {
     panelLoadFailed.value = false
-    const res = await queryApi.getPanel(activeProjectId.value || undefined)
+    const res = await queryApi.getPanel(activeProjectId.value || undefined, hideResolved.value)
     const data = res.data || {}
     savedQueries.value = [...(data.pinned || []), ...(data.queries || [])]
   } catch (error: any) {

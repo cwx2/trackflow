@@ -138,12 +138,26 @@ public class QueryExecutor {
      * 计数查询（带项目成员过滤）
      */
     public long countWithProjectFilter(List<Map<String, Object>> filters, List<Long> accessibleProjectIds) {
+        return countWithProjectFilter(filters, accessibleProjectIds, false);
+    }
+
+    /**
+     * 计数查询（带项目成员过滤 + 隐藏已解决）
+     */
+    public long countWithProjectFilter(List<Map<String, Object>> filters, List<Long> accessibleProjectIds, boolean hideResolved) {
         QueryWrapper<Issue> wrapper = buildWrapper(filters);
         if (accessibleProjectIds != null) {
             if (accessibleProjectIds.isEmpty()) {
                 return 0;
             }
             wrapper.in("project_id", accessibleProjectIds);
+        }
+        // 隐藏已解决工单
+        if (hideResolved) {
+            Set<Long> closedStatusIds = statusCacheHelper.getClosedStatusIds();
+            if (!closedStatusIds.isEmpty()) {
+                wrapper.notIn("status_id", closedStatusIds);
+            }
         }
         return issueMapper.selectCount(wrapper);
     }

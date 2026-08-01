@@ -6,9 +6,12 @@ import type { R, PageResult, IssueVO, SavedQueryVO } from './types'
  */
 export const queryApi = {
   /** 获取查询面板数据（仅返回自己创建的 + 收藏的） */
-  getPanel(projectId?: string) {
+  getPanel(projectId?: string, hideResolved?: boolean) {
+    const params: Record<string, string> = {}
+    if (projectId) params.projectId = projectId
+    if (hideResolved) params.hideResolved = 'true'
     return request.get<any, R<{ pinned: any[]; queries: any[] }>>('/queries/panel', {
-      params: projectId ? { projectId } : undefined
+      params: Object.keys(params).length > 0 ? params : undefined
     })
   },
 

@@ -50,12 +50,14 @@ public class SavedQueryController {
      * 只返回用户自己创建的 + 用户收藏的共享查询
      */
     @GetMapping("/panel")
-    public R<QueryPanelVO> getPanel(@RequestParam(value = "projectId", required = false) Long projectId) {
+    public R<QueryPanelVO> getPanel(
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "hideResolved", required = false, defaultValue = "false") boolean hideResolved) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (projectId != null) {
             projectService.assertProjectAccessible(userId, projectId);
         }
-        return R.ok(savedQueryService.getPanel(userId, projectId));
+        return R.ok(savedQueryService.getPanel(userId, projectId, hideResolved));
     }
 
     /**
