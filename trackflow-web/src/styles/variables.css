@@ -266,7 +266,7 @@ a:hover { text-decoration: underline; }
   --wf-canvas-bg:        #f0f2f5;
   --wf-grid-dot:         #d0d7de;
   /* 水印大 Logo */
-  --wf-canvas-watermark: rgba(0, 0, 0, 0.055);
+  --wf-canvas-watermark: rgba(0, 0, 0, 0.1);
 
   --wf-node-bg:          #ffffff;
   --wf-node-bg-hover:    #f8f9fa;

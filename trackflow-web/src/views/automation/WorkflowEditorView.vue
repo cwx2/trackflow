@@ -12,6 +12,8 @@
     <div class="editor-content">
       <!-- 画布（全屏） -->
       <div ref="containerRef" class="canvas-container"></div>
+      <!-- 画布水印（在 SVG 上层，pointer-events:none 不影响交互） -->
+      <div class="canvas-watermark" aria-hidden="true">TrackFlow</div>
       <!-- 左侧悬浮：节点面板 -->
       <div class="node-panel" :class="{ collapsed: !leftPanelOpen }">
         <!-- 收起/展开 tab -->
@@ -818,8 +820,7 @@ onUnmounted(() => {
 }
 
 /* 画布背景水印大 Logo */
-.canvas-container::before {
-  content: 'TrackFlow';
+.canvas-watermark {
   position: absolute;
   bottom: 10%;
   right: 6%;
@@ -829,8 +830,9 @@ onUnmounted(() => {
   color: var(--wf-canvas-watermark);
   pointer-events: none;
   user-select: none;
-  z-index: 0;
+  z-index: 1;
   white-space: nowrap;
+  line-height: 1;
 }
 
 /*
