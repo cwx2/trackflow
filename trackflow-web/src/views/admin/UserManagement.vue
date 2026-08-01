@@ -53,7 +53,7 @@
         <div class="col" style="width:120px">操作</div>
       </div>
       <div class="table-body">
-        <div v-for="user in users" :key="user.id" class="table-row">
+        <div v-for="user in users" :key="user.id" class="table-row clickable-row" @click="navigateToUser(user, $event)">
           <div class="col user-col" style="width:240px">
             <span class="user-avatar" :style="{ background: getAvatarColor(user.displayName || user.username) }">
               {{ getInitial(user.displayName || user.username) }}
@@ -344,6 +344,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, h } from 'vue'
+import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
 import { userApi, projectApi, globalMemberApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
@@ -352,6 +353,7 @@ import request from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const currentUserId = computed(() => authStore.user?.userId)
 
 const users = ref<any[]>([])
@@ -376,6 +378,16 @@ function toggleSort(field: string) {
   }
   page.value = 1
   loadUsers()
+}
+
+/** 点击行跳转用户详情（排除按钮和链接的点击） */
+function navigateToUser(user: any, event: MouseEvent) {
+  const target = event.target as HTMLElement
+  // 排除点击按钮、链接、下拉框的情况，这些元素有自己的交互行为
+  if (target.closest('button') || target.closest('a') || target.closest('select')) {
+    return
+  }
+  router.push(`/admin/users/${user.id}`)
 }
 
 // 创建用户
@@ -893,6 +905,9 @@ onMounted(() => {
 .table-row { display: flex; padding: 10px 12px; border-bottom: 1px solid var(--border-light); align-items: center; }
 .table-row:hover { background: var(--bg-hover); }
 .table-row:last-child { border-bottom: none; }
+.table-row.clickable-row { cursor: pointer; transition: background 150ms ease; }
+.table-row.clickable-row:hover { background: var(--bg-hover); }
+.table-row.clickable-row:active { background: var(--bg-active, var(--bg-hover)); }
 .col { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
 
 .username-link { color: var(--accent-blue); font-weight: 500; text-decoration: none; }
