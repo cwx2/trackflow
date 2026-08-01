@@ -47,11 +47,23 @@ export abstract class BaseNodeModel extends HtmlNodeModel {
     this.text = { value: '', x: 0, y: 0, draggable: false, editable: false }
   }
 
-  /** 属性变化时重新计算高度（展开/收起切换） */
+  /** 属性变化时重新计算高度（展开/收起切换）
+   *
+   * 关键：节点 y 是中心点，高度变化会上下均等撑开导致头部移位。
+   * 解决方案：记录旧高度，展开时把 y 往下移 delta/2，
+   * 使顶部边缘位置不变（头部固定）。
+   */
   setProperty(key: string, val: any) {
     super.setProperty(key, val)
     if (key === 'expanded' || key === 'inputs' || key === 'outputs') {
-      this.height = this._calcHeight(this.properties)
+      const oldHeight = this.height
+      const newHeight = this._calcHeight(this.properties)
+      if (newHeight !== oldHeight) {
+        const delta = newHeight - oldHeight
+        this.height = newHeight
+        // 向下偏移，保持顶部不动
+        this.y = this.y + delta / 2
+      }
     }
   }
 
