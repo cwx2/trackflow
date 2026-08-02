@@ -17,7 +17,7 @@
     />
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
-    <div class="editor-content" @mousedown="addNodePanelOpen = false">
+    <div class="editor-content">
       <!-- 世界坐标水印：复用 LogicFlow 的变换矩阵，跟随画布平移和缩放 -->
       <div
         v-if="watermarkReady"
@@ -38,65 +38,6 @@
       </div>
       <!-- 画布（全屏） -->
       <div ref="containerRef" class="canvas-container"></div>
-      <!-- 添加节点弹层（从底部工具栏向上弹出） -->
-      <Transition name="node-popover">
-        <div
-          v-if="addNodePanelOpen"
-          class="add-node-popover"
-          @mousedown.stop
-        >
-          <!-- 搜索框 -->
-          <div class="node-search-wrap">
-            <a-input
-              v-model="nodeSearchKeyword"
-              placeholder="搜索节点、插件、工作流"
-              size="small"
-              allow-clear
-              class="node-search-input"
-            >
-              <template #prefix><span class="search-icon">🔍</span></template>
-            </a-input>
-          </div>
-
-          <!-- 节点列表（搜索 or 分类） -->
-          <div class="panel-scroll">
-            <template v-if="nodeSearchKeyword">
-              <div class="panel-section">
-                <div v-if="filteredNodes.length === 0" class="no-search-result">无匹配节点</div>
-                <div
-                  v-for="node in filteredNodes"
-                  :key="node.type"
-                  class="node-list-item"
-                  :style="{ '--node-color': node.color }"
-                  @mousedown="(e) => { addNodePanelOpen = false; onDragStart(e, node) }"
-                >
-                  <div class="node-list-icon">{{ node.icon }}</div>
-                  <div class="node-list-name">{{ node.label }}</div>
-                </div>
-              </div>
-            </template>
-            <template v-else>
-              <div
-                v-for="category in nodeCategories"
-                :key="category.name"
-                class="panel-section"
-              >
-                <div class="section-title">{{ category.name }}</div>
-                <div
-                  v-for="node in category.nodes"
-                  :key="node.type"
-                  class="node-list-item"
-                  :style="{ '--node-color': node.color }"
-                  @mousedown="(e) => { addNodePanelOpen = false; onDragStart(e, node) }"
-                >
-                  <div class="node-list-icon">{{ node.icon }}</div>
-                  <div class="node-list-name">{{ node.label }}</div>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-      </Transition>
 
       <!-- 右侧悬浮：配置面板 -->
       <div class="config-panel" :class="{ collapsed: !rightPanelOpen }">
@@ -141,6 +82,8 @@
         :minimap-open="minimapOpen"
         :debug-mode="debugMode"
         :is-running="isRunning"
+        :node-categories="nodeCategories"
+        :all-nodes="basicNodes"
         @zoom-in="zoomIn"
         @zoom-out="zoomOut"
         @fit="fitCanvas"
@@ -149,7 +92,7 @@
         @auto-layout="autoLayout"
         @export-image="exportImage"
         @toggle-minimap="toggleMinimap"
-        @toggle-node-panel="toggleAddNodePanel"
+        @drag-start="onDragStart"
         @toggle-debug="toggleDebugMode"
         @run="handleRun"
         @cancel="handleCancelRun"
@@ -270,7 +213,6 @@ let lf: LogicFlow | null = null
 // 工作流数据
 const workflowId = ref('')
 const workflowName = ref('加载中...')
-const loading = ref(false)
 const saving = ref(false)
 const publishing = ref(false)
 const runtimeChanging = ref(false)
@@ -306,7 +248,6 @@ watch(selectedNode, value => {
 }, { deep: true })
 
 // 面板开关
-const addNodePanelOpen = ref(false)
 const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
 
 // 执行状态
@@ -493,14 +434,6 @@ function toggleMinimap() {
   }
 }
 
-/** 6. + 添加节点面板（底部弹出） */
-function toggleAddNodePanel() {
-  addNodePanelOpen.value = !addNodePanelOpen.value
-  if (addNodePanelOpen.value) {
-    nodeSearchKeyword.value = ''
-  }
-}
-
 /** 7. 调试模式 */
 function toggleDebugMode() {
   debugMode.value = !debugMode.value
@@ -522,19 +455,7 @@ const basicNodes = DRAGGABLE_NODES.map(def => ({
   category: def.meta.category,
 }))
 
-// 节点搜索
-const nodeSearchKeyword = ref('')
-const filteredNodes = computed(() => {
-  const kw = nodeSearchKeyword.value.trim().toLowerCase()
-  if (!kw) return basicNodes
-  return basicNodes.filter(n =>
-    n.label.toLowerCase().includes(kw) ||
-    n.desc.toLowerCase().includes(kw) ||
-    n.category.toLowerCase().includes(kw)
-  )
-})
-
-// 按分类分组
+// 按分类分组（传给 BottomToolbar）
 const nodeCategories = computed(() => {
   const map = new Map<string, typeof basicNodes>()
   for (const node of basicNodes) {
@@ -544,18 +465,6 @@ const nodeCategories = computed(() => {
   }
   return Array.from(map.entries()).map(([name, nodes]) => ({ name, nodes }))
 })
-
-// 折叠的分类 set
-const collapsedCategories = ref(new Set<string>())
-function toggleCategory(name: string) {
-  if (collapsedCategories.value.has(name)) {
-    collapsedCategories.value.delete(name)
-  } else {
-    collapsedCategories.value.add(name)
-  }
-  // 触发响应式更新
-  collapsedCategories.value = new Set(collapsedCategories.value)
-}
 
 // 初始化 LogicFlow
 function initLogicFlow() {
@@ -659,7 +568,6 @@ async function loadWorkflow() {
   const id = route.params.id as string
   if (!id) return
   workflowId.value = id
-  loading.value = true
   
   try {
     const res = await automationApi.getById(id)
@@ -714,8 +622,6 @@ async function loadWorkflow() {
     }
   } catch (e: any) {
     Message.error(e.response?.data?.message || '加载失败')
-  } finally {
-    loading.value = false
   }
 }
 
@@ -1155,93 +1061,6 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-/* ── 添加节点弹层（底部弹出） ── */
-.add-node-popover {
-  position: absolute;
-  bottom: 72px; /* 底部工具栏高度 + 间距 */
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 25;
-  width: 360px;
-  max-height: 480px;
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  pointer-events: all;
-}
-
-/* 弹出动画 */
-.node-popover-enter-active,
-.node-popover-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.node-popover-enter-from,
-.node-popover-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px);
-}
-.node-popover-enter-to,
-.node-popover-leave-from {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-/* 弹层内节点列表项 */
-.node-list-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  border-radius: 7px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.12s;
-  position: relative;
-}
-
-.node-list-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
-  background: var(--node-color, #6366f1);
-  border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.node-list-item:hover {
-  background: var(--tf-bg-hover);
-}
-
-.node-list-item:hover::before {
-  opacity: 1;
-}
-
-.node-list-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  background: color-mix(in srgb, var(--node-color, #6366f1) 15%, transparent);
-  flex-shrink: 0;
-}
-
-.node-list-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-}
-
 /* 悬浮面板公共样式 */
 .config-panel {
   position: absolute;
@@ -1311,190 +1130,6 @@ onUnmounted(() => {
 .panel-toggle-right {
   margin-right: 4px;
   order: 1;
-}
-
-/* 节点面板内部 */
-.panel-section {
-  padding: 8px 8px;
-}
-
-.section-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--tf-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 6px;
-  padding: 0 6px;
-}
-
-/* 搜索框 */
-.node-search-wrap {
-  padding: 10px 10px 6px;
-  border-bottom: 1px solid var(--tf-border);
-  flex-shrink: 0;
-}
-
-.search-icon { font-size: 11px; }
-
-/* 滚动区 */
-.panel-scroll {
-  overflow-y: auto;
-  flex: 1;
-}
-
-/* 分类标题可点击 */
-.section-title-clickable {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: background 150ms;
-}
-.section-title-clickable:hover { background: var(--tf-bg-hover); }
-.category-arrow { font-size: 9px; color: var(--tf-text-tertiary); }
-
-/* 无搜索结果 */
-.no-search-result {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  padding: 20px 10px;
-  text-align: center;
-}
-
-.node-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  cursor: grab;
-  transition: background 0.15s, transform 0.1s;
-  margin-bottom: 4px;
-  background: var(--tf-bg-elevated);
-  border: 1px solid var(--tf-border);
-  user-select: none;
-  position: relative;
-  overflow: hidden;
-}
-
-/* 左侧彩色条 */
-.node-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--node-color, #6366f1);
-  border-radius: 8px 0 0 8px;
-}
-
-.node-item:hover {
-  background: var(--tf-bg-hover);
-  transform: translateX(2px);
-}
-
-.node-item:active {
-  cursor: grabbing;
-  transform: scale(0.97);
-}
-
-.node-item-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  background: color-mix(in srgb, var(--node-color, #6366f1) 15%, transparent);
-  flex-shrink: 0;
-}
-
-.node-item-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.node-item-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  line-height: 1.3;
-}
-
-.node-item-desc {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  line-height: 1.3;
-  margin-top: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── 图标网格（扣子风格） ── */
-.node-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  padding: 4px 0 8px;
-}
-
-.node-grid-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 4px 6px;
-  border-radius: 8px;
-  cursor: grab;
-  user-select: none;
-  transition: background 0.15s, transform 0.1s;
-  position: relative;
-}
-
-.node-grid-item:hover {
-  background: var(--tf-bg-hover);
-  transform: translateY(-1px);
-}
-
-.node-grid-item:active {
-  cursor: grabbing;
-  transform: scale(0.94);
-}
-
-.node-grid-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  background: color-mix(in srgb, var(--node-color, #6366f1) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--node-color, #6366f1) 30%, transparent);
-  flex-shrink: 0;
-  transition: background 0.15s, transform 0.1s;
-}
-
-.node-grid-item:hover .node-grid-icon {
-  background: color-mix(in srgb, var(--node-color, #6366f1) 28%, transparent);
-}
-
-.node-grid-label {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-  line-height: 1.2;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
 }
 
 /* 配置面板头部 */
