@@ -242,7 +242,7 @@ public class UserService {
     public SysUser getById(Long id) {
         SysUser user = userMapper.selectById(id);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "User not found");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
         return user;
     }

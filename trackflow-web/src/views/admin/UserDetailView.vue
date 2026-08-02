@@ -19,7 +19,10 @@
       <div class="error-icon">⚠️</div>
       <h3>加载失败</h3>
       <p>{{ error }}</p>
-      <button class="btn-primary" @click="loadProfile">重试</button>
+      <div class="error-actions">
+        <button class="btn-secondary" @click="router.push('/admin/users')">返回用户列表</button>
+        <button class="btn-primary" @click="loadProfile">重试</button>
+      </div>
     </div>
 
     <!-- 用户档案内容 -->
@@ -691,6 +694,11 @@ onMounted(() => {
 .error-icon { font-size: 32px; margin-bottom: 12px; }
 .error-state h3 { color: var(--text-primary); margin-bottom: 8px; font-size: 16px; }
 .error-state p { margin-bottom: 16px; font-size: var(--font-size-sm); }
+.error-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
 
 /* 用户头部卡片 */
 .profile-header {
