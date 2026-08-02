@@ -35,6 +35,13 @@ _RUNTIME_GUARD = """自动化运行约束：
 - 只有完成了实际验证，才能输出阶段成功标记；无法验证时必须明确报告失败或阻塞原因。
 """
 
+_TRANSIENT_OUTPUT_MARKERS = (
+    "dispatch failure",
+    "failed to send the request",
+    "error sending request for url",
+    "kiro is having trouble responding right now",
+)
+
 
 def _build_env(worker_id: str | None = None) -> dict:
     """构建完整的环境变量字典"""
@@ -100,6 +107,12 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
         return False, "PROCESS_ERROR"
 
     elapsed = time.time() - start
+    output = "\n".join(output_lines)
+    normalized_output = output.lower()
+    if any(marker in normalized_output for marker in _TRANSIENT_OUTPUT_MARKERS):
+        log.warning(f"[{label}] Kiro 服务暂时不可用，按环境故障处理")
+        return False, "STARTUP_FAIL"
+
     success = process.returncode == 0
     log.log(
         logging.INFO if success else logging.WARNING,
@@ -108,7 +121,7 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
     if not success and elapsed < 30:
         log.warning(f"[{label}] kiro-cli 启动失败（{elapsed:.0f}s）")
         return False, "STARTUP_FAIL"
-    return success, "\n".join(output_lines)
+    return success, output
 
 
 def run_kiro(prompt: str, label: str,

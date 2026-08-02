@@ -35,8 +35,10 @@ MAX_REVIEW_RETRIES = 2      # 审核最多重试轮数
 REVIEW_BATCH_SIZE  = 5      # 每批审核需求数
 
 # 模型（None = kiro-cli 默认）
-KIRO_MODEL     = "claude-sonnet-4.6"   # 测试/审核/生产
-KIRO_MODEL_FIX = "claude-opus-4.5"    # 修需求（更强）
+# 当前 Kiro CLI 账户只暴露 auto；显式写入 auto，避免传入不存在的模型名导致
+# 测试/审核阶段在启动后立即失败并反复重试。
+KIRO_MODEL     = "auto"               # 测试/审核/生产
+KIRO_MODEL_FIX = "auto"               # 修需求
 
 # ============ Playwright ============
 

@@ -112,6 +112,33 @@ def _build_diff_range(commit_before: str, commit_after: str) -> tuple[str, list[
         log.warning(f"[git] 获取变更范围失败: {e}")
         files = []
     return diff_range, files
+
+
+def _existing_fix_diff(fix_commit: str) -> tuple[str, list[str]]:
+    """读取需求文件已记录的修复提交，支持恢复中断后继续测试/审核。"""
+    if not fix_commit or any(char.isspace() for char in fix_commit):
+        return "", []
+
+    try:
+        verify = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{fix_commit}^{{commit}}"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15,
+        )
+        if verify.returncode != 0:
+            return "", []
+
+        diff_range = f"{fix_commit}^..{fix_commit}"
+        result = subprocess.run(
+            ["git", "diff", diff_range, "--name-only"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15,
+        )
+        files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        return diff_range, files
+    except Exception as e:
+        log.warning(f"[git] 读取已记录修复提交 {fix_commit} 失败: {e}")
+        return "", []
 from _utils import (
     list_available, count_develop, extract_title,
     load_workflow, _extract_workflow_section, archive_decomposed_parents,
@@ -229,13 +256,31 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
     log.info(f"[{label}] 消费: {req_file.name} ({extract_title(req_file)})")
 
     # ── 步骤 1：修需求（新会话）──
-    commit_before = get_current_commit()
-    fix_prompt = (
-        f"[使用 skill: fix-requirement-auto] "
-        f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
-        f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
-    )
-    success, fix_output = run_kiro(fix_prompt, label, model=KIRO_MODEL_FIX, worker_id=worker_id)
+    # 需求可能在上次进程中已经提交成功，但随后在测试/审核阶段中断；
+    # 这时必须复用 fix_commit，不能强迫 Kiro 再制造一个空提交。
+    req_status = read_req_status(req_file)
+    existing_diff_range, existing_changed_files = _existing_fix_diff(
+        req_status.get("fix_commit", "")
+    ) if req_status.get("fix_status") == "DONE" else ("", [])
+
+    if existing_diff_range and existing_changed_files:
+        diff_range = existing_diff_range
+        changed_files = existing_changed_files
+        success, fix_output = True, "FIX_DONE"
+        log.info(
+            f"[{label}] 复用已完成修复提交 {req_status.get('fix_commit')}，"
+            "跳过重复修复，继续测试/审核"
+        )
+    else:
+        commit_before = get_current_commit()
+        fix_prompt = (
+            f"[使用 skill: fix-requirement-auto] "
+            f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+            f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
+        )
+        success, fix_output = run_kiro(
+            fix_prompt, label, model=KIRO_MODEL_FIX, worker_id=worker_id
+        )
 
     # 启动失败（<30s 退出）→ 放回 develop/，等待环境恢复，不累积重试次数
     if fix_output == "STARTUP_FAIL":
@@ -260,8 +305,9 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
         return ConsumeOutcome(None, transient=_is_transient_cli_output(fix_output))
 
     # ── 步骤 2：获取 session_id（懒加载，只在需要 resume 时才查） ──
-    commit_after = get_current_commit()
-    diff_range, changed_files = _build_diff_range(commit_before, commit_after)
+    if not existing_diff_range:
+        commit_after = get_current_commit()
+        diff_range, changed_files = _build_diff_range(commit_before, commit_after)
     log.info(f"[{label}] 代码变更范围: {diff_range}")
     if not changed_files:
         _move_back_to_develop(req_file)
@@ -605,6 +651,8 @@ def consumer_loop(worker_id: str) -> None:
             if outcome.requirement_name is None:
                 if outcome.transient:
                     log.info(f"[{worker_id}] 环境故障，{first.name} 不计入失败次数")
+                    # 外部服务故障不消耗需求重试次数，但也不能立即重试造成请求风暴。
+                    time.sleep(30)
                     continue
                 # 处理失败，累计重试次数
                 for f in list_available(DEVELOP_DIR):

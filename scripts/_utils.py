@@ -206,17 +206,30 @@ class AutomationInstanceLock:
                 ) from exc
 
             try:
-                os.kill(owner_pid, 0)
-            except ProcessLookupError:
+                import psutil
+                owner_alive = psutil.pid_exists(owner_pid)
+            except ImportError:
+                try:
+                    os.kill(owner_pid, 0)
+                    owner_alive = True
+                except ProcessLookupError:
+                    owner_alive = False
+                except OSError as exc:
+                    # Windows 上 os.kill(pid, 0) 可能返回 WinError 87，
+                    # 该错误只表示该 PID 不存在/不支持此探测方式。
+                    if getattr(exc, "winerror", None) == 87:
+                        owner_alive = False
+                    else:
+                        raise RuntimeError(
+                            f"无法确认自动化实例 PID={owner_pid} 是否仍在运行"
+                        ) from exc
+
+            if not owner_alive:
                 self.path.unlink(missing_ok=True)
                 with self.path.open("x", encoding="utf-8") as lock_file:
                     lock_file.write(str(os.getpid()))
                 self._owns_lock = True
                 return self
-            except PermissionError as exc:
-                raise RuntimeError(
-                    f"无法确认自动化实例 PID={owner_pid} 是否仍在运行，安全起见不启动新实例"
-                ) from exc
             raise RuntimeError(
                 f"自动化脚本已经运行（PID={owner_pid}），请先停止已有实例"
             )
