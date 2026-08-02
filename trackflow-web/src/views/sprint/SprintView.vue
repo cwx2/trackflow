@@ -188,7 +188,7 @@
         />
 
         <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="openIssueDrawer(sprint)">查看工单</a-button>
+          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="handleArchiveActiveSprint(sprint)">归档</a-button>
@@ -301,7 +301,7 @@
         />
 
         <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="openIssueDrawer(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
+          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
           <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
           <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
           <a-tooltip :content="getActivateTooltip(sprint)">
