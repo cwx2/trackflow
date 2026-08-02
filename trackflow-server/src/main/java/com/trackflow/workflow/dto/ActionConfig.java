@@ -123,13 +123,6 @@ public class ActionConfig {
     }
 
     /**
-     * 获取原始值（用于调试）。
-     */
-    public Object getRequiredFieldIdRaw() {
-        return requiredFieldIdRaw;
-    }
-
-    /**
      * 必填字段名称（可选，用于显示警告消息）。
      * 如果不填，将自动从 custom_field_definition 获取。
      */

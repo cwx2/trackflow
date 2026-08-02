@@ -299,6 +299,9 @@ public class TransitionActionEngine {
                 return executeAutoAssignAction(action, issue, triggeredBy, oldStatusId, newStatusId);
             case "add_comment":
                 return executeAddCommentAction(action, issue, triggeredBy, oldStatusId, newStatusId);
+            case "require_field":
+                // require_field 只在 validatePreTransition() 中执行，后置动作阶段无需再次执行。
+                return null;
             default:
                 log.debug("[TransitionActionEngine] 跳过未支持的动作类型: type={}, action_id={}",
                         actionType, action.getId());

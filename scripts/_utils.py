@@ -4,6 +4,7 @@
 
 import re
 import shutil
+import os
 from pathlib import Path
 
 from _config import (
@@ -119,7 +120,10 @@ def _extract_workflow_section(content: str, section_title: str) -> str:
 # ============ 清理 ============
 
 def cleanup_screenshots(keep_count: int = 200) -> None:
-    """只保留最新 keep_count 张截图，防止 test/ 无限膨胀"""
+    """保守清理截图；默认不删除测试证据，避免需求引用的截图被误删。"""
+    if os.environ.get("TRACKFLOW_CLEANUP_SCREENSHOTS") != "1":
+        log.debug("[截图清理] 默认保留全部测试证据；设置 TRACKFLOW_CLEANUP_SCREENSHOTS=1 才启用清理")
+        return
     if not SCREENSHOT_DIR.exists():
         return
     files = sorted(SCREENSHOT_DIR.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)
@@ -137,12 +141,90 @@ def cleanup_working() -> None:
     for worker_dir in WORKING_DIR.iterdir():
         if worker_dir.is_dir():
             for f in worker_dir.glob("requirement-*.md"):
-                shutil.move(str(f), str(DEVELOP_DIR / f.name))
+                destination = DEVELOP_DIR / f.name
+                if destination.exists():
+                    log.error(f"[清理] 跳过 {f.name}：develop/ 已存在同名文件，避免覆盖")
+                    continue
+                shutil.move(str(f), str(destination))
                 log.info(f"[清理] {f.name} → develop/")
             try:
                 worker_dir.rmdir()
             except OSError:
                 pass
+
+
+class AutomationInstanceLock:
+    """防止两个自动化主进程同时操作同一个 Git 工作区。"""
+
+    def __init__(self) -> None:
+        self.path = WORKSPACE / "scripts" / ".auto_iterate_parallel.lock"
+        self._owns_lock = False
+
+    def __enter__(self) -> "AutomationInstanceLock":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 兼容旧版本实例：旧版本没有 lock 文件，先通过进程命令行阻止重复启动。
+        try:
+            import psutil
+            for process in psutil.process_iter(["pid", "name", "cmdline"]):
+                if process.info["pid"] == os.getpid():
+                    continue
+                process_name = (process.info.get("name") or "").lower()
+                if process_name not in {"python", "python.exe", "pythonw.exe"}:
+                    continue
+                command_args = process.info.get("cmdline") or []
+                is_automation_script = any(
+                    Path(str(argument).strip('"')).name.lower() == "auto_iterate_parallel.py"
+                    for argument in command_args
+                )
+                if is_automation_script:
+                    raise RuntimeError(
+                        f"自动化脚本已经运行（PID={process.info['pid']}），请先停止已有实例"
+                    )
+        except ImportError:
+            pass
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+        try:
+            with self.path.open("x", encoding="utf-8") as lock_file:
+                lock_file.write(str(os.getpid()))
+            self._owns_lock = True
+            return self
+        except FileExistsError:
+            try:
+                owner_pid = int(self.path.read_text(encoding="utf-8").strip())
+            except FileNotFoundError:
+                self.path.unlink(missing_ok=True)
+                with self.path.open("x", encoding="utf-8") as lock_file:
+                    lock_file.write(str(os.getpid()))
+                self._owns_lock = True
+                return self
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"自动化锁文件内容无效：{self.path}，请确认没有其它实例后手动处理"
+                ) from exc
+
+            try:
+                os.kill(owner_pid, 0)
+            except ProcessLookupError:
+                self.path.unlink(missing_ok=True)
+                with self.path.open("x", encoding="utf-8") as lock_file:
+                    lock_file.write(str(os.getpid()))
+                self._owns_lock = True
+                return self
+            except PermissionError as exc:
+                raise RuntimeError(
+                    f"无法确认自动化实例 PID={owner_pid} 是否仍在运行，安全起见不启动新实例"
+                ) from exc
+            raise RuntimeError(
+                f"自动化脚本已经运行（PID={owner_pid}），请先停止已有实例"
+            )
+
+    def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        if self._owns_lock:
+            self.path.unlink(missing_ok=True)
+            self._owns_lock = False
 
 
 def archive_decomposed_parents() -> None:

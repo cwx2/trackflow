@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -28,12 +29,86 @@ _BASE_ENV = {
     "KIRO_LOG_NO_COLOR": "1",
 }
 
+_RUNTIME_GUARD = """自动化运行约束：
+- 当前工作目录已经是项目根目录；Windows PowerShell 不要使用 `cd ... && ...` 或 Unix shell 语法。
+- PostgreSQL 查询工具只提交一条不带 SQL 注释、不混入外部输入、不带末尾分号的 SELECT 查询；禁止把注释或多条语句放进 query 参数。
+- 只有完成了实际验证，才能输出阶段成功标记；无法验证时必须明确报告失败或阻塞原因。
+"""
+
 
 def _build_env(worker_id: str | None = None) -> dict:
     """构建完整的环境变量字典"""
     env = os.environ.copy()
     env.update(_BASE_ENV)
+    if worker_id:
+        env["TRACKFLOW_AUTOMATION_WORKER"] = worker_id
     return env
+
+
+def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[bool, str]:
+    """运行 Kiro CLI，并保证 stdout 卡住时超时能够真正回收。"""
+    start = time.time()
+    output_lines: list[str] = []
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace",
+            env=_build_env(worker_id),
+        )
+    except Exception as e:
+        log.error(f"[{label}] 启动异常: {e}")
+        return False, "STARTUP_FAIL"
+
+    def read_output() -> None:
+        try:
+            if process.stdout is None:
+                return
+            for line in process.stdout:
+                line_stripped = line.rstrip("\r\n")
+                print(f"  [{label}] {line_stripped}")
+                log.debug(f"[{label}] {strip_ansi(line_stripped)}")
+                output_lines.append(line_stripped)
+        except Exception as e:
+            log.warning(f"[{label}] 读取输出异常: {e}")
+
+    reader = threading.Thread(target=read_output, name=f"{label}-stdout", daemon=True)
+    reader.start()
+
+    try:
+        reader.join(TIMEOUT_SECONDS)
+        if reader.is_alive():
+            log.error(f"[{label}] 超时（{TIMEOUT_SECONDS}s），终止 kiro-cli")
+            process.kill()
+            reader.join(10)
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                log.error(f"[{label}] kiro-cli 进程未能及时退出")
+            return False, "TIMEOUT"
+
+        process.wait(timeout=10)
+    except Exception as e:
+        log.error(f"[{label}] 进程等待异常: {e}")
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except Exception:
+            pass
+        return False, "PROCESS_ERROR"
+
+    elapsed = time.time() - start
+    success = process.returncode == 0
+    log.log(
+        logging.INFO if success else logging.WARNING,
+        f"[{label}] {'完成' if success else '失败'} ({elapsed:.0f}s)"
+    )
+    if not success and elapsed < 30:
+        log.warning(f"[{label}] kiro-cli 启动失败（{elapsed:.0f}s）")
+        return False, "STARTUP_FAIL"
+    return success, "\n".join(output_lines)
 
 
 def run_kiro(prompt: str, label: str,
@@ -53,43 +128,8 @@ def run_kiro(prompt: str, label: str,
     effective_model = model or KIRO_MODEL
     if effective_model:
         cmd += ["--model", effective_model]
-    cmd.append(prompt)
-
-    start = time.time()
-    output_lines: list[str] = []
-
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=str(WORKSPACE),
-            encoding="utf-8", errors="replace",
-            env=_build_env(),
-        )
-        for line in process.stdout:
-            line_stripped = line.rstrip("\n")
-            print(f"  [{label}] {line_stripped}")
-            log.debug(f"[{label}] {strip_ansi(line_stripped)}")
-            output_lines.append(line_stripped)
-        process.wait(timeout=TIMEOUT_SECONDS)
-        elapsed = time.time() - start
-        success = process.returncode == 0
-        log.log(
-            logging.INFO if success else logging.WARNING,
-            f"[{label}] {'完成' if success else '失败'} ({elapsed:.0f}s)"
-        )
-        # 30 秒内退出 → 启动失败（认证/网络/并发问题），与需求本身无关
-        if not success and elapsed < 30:
-            log.warning(f"[{label}] kiro-cli 启动失败（{elapsed:.0f}s）")
-            return False, "STARTUP_FAIL"
-        return success, "\n".join(output_lines)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        log.error(f"[{label}] 超时")
-        return False, "TIMEOUT"
-    except Exception as e:
-        log.error(f"[{label}] 异常: {e}")
-        return False, str(e)
+    cmd.append(f"{_RUNTIME_GUARD}\n\n{prompt}")
+    return _run_cli(cmd, label, worker_id)
 
 
 def run_kiro_resume(session_id: str, prompt: str, label: str,
@@ -101,36 +141,8 @@ def run_kiro_resume(session_id: str, prompt: str, label: str,
     effective_model = model or KIRO_MODEL_FIX
     if effective_model:
         cmd += ["--model", effective_model]
-    cmd.append(prompt)
-
-    start = time.time()
-    output_lines: list[str] = []
-
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=str(WORKSPACE),
-            encoding="utf-8", errors="replace",
-            env=_build_env(),
-        )
-        for line in process.stdout:
-            line_stripped = line.rstrip("\n")
-            print(f"  [{label}] {line_stripped}")
-            log.debug(f"[{label}] {strip_ansi(line_stripped)}")
-            output_lines.append(line_stripped)
-        process.wait(timeout=TIMEOUT_SECONDS)
-        elapsed = time.time() - start
-        success = process.returncode == 0
-        log.info(f"[{label}] resume {'完成' if success else '失败'} ({elapsed:.0f}s)")
-        return success, "\n".join(output_lines)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        log.error(f"[{label}] resume 超时")
-        return False, "TIMEOUT"
-    except Exception as e:
-        log.error(f"[{label}] resume 异常: {e}")
-        return False, str(e)
+    cmd.append(f"{_RUNTIME_GUARD}\n\n{prompt}")
+    return _run_cli(cmd, label, worker_id)
 
 
 def get_current_commit() -> str:

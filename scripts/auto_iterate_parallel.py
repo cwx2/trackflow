@@ -35,7 +35,7 @@ import argparse
 from _config import (
     KIRO_MODEL, KIRO_MODEL_FIX, REVIEW_DIR, IMPLEMENT_DIR, log,
 )
-from _utils import count_develop, cleanup_screenshots, cleanup_working
+from _utils import count_develop, cleanup_screenshots, cleanup_working, AutomationInstanceLock
 from _playwright import kill_stale_playwright_processes, stop_all_playwright, cleanup_worker_envs
 from _workers import main_loop
 
@@ -73,10 +73,14 @@ def main() -> None:
     log.info("永不停止，Ctrl+C 手动终止")
     log.info("=" * 60)
 
-    kill_stale_playwright_processes()  # 杀掉残留的旧 Playwright 进程，确保新配置生效
-    cleanup_screenshots()              # 只保留最新 200 张截图
-    cleanup_working()                  # 将 working/ 残留文件放回 develop/
-    main_loop(num_producers, num_consumers, args.skip_produce)
+    try:
+        with AutomationInstanceLock():
+            kill_stale_playwright_processes()  # 杀掉残留的旧 Playwright 进程，确保新配置生效
+            cleanup_screenshots()              # 只保留最新 200 张截图
+            cleanup_working()                  # 将 working/ 残留文件放回 develop/
+            main_loop(num_producers, num_consumers, args.skip_produce)
+    except RuntimeError as e:
+        log.error(f"[启动失败] {e}")
 
 
 if __name__ == "__main__":

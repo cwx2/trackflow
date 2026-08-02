@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from _config import (
@@ -14,14 +15,103 @@ from _config import (
     REVIEW_DIR, SKILLS, PRODUCER_CONFIGS,
     MIN_DEVELOP_QUEUE, MAX_RETRIES, MAX_TEST_RETRIES, MAX_REVIEW_RETRIES,
     REVIEW_BATCH_SIZE, KIRO_MODEL_FIX, COOLDOWN_SECONDS,
-    _claim_lock, _review_lock, _retry_lock, _retry_counts,
+    _claim_lock, _review_lock, _consumer_lock, _retry_lock, _retry_counts,
     log,
 )
 from _kiro import run_kiro, run_kiro_resume, get_current_commit, get_latest_session_id
 from _parsers import (
     parse_fix_result, parse_test_result, parse_review_result,
-    read_req_status, extract_arch_issues,
+    read_req_status, reset_req_status, is_test_environment_failure, extract_arch_issues,
 )
+
+
+@dataclass(frozen=True)
+class ConsumeOutcome:
+    """单个需求的处理结果；transient=True 表示环境故障，不应消耗重试次数。"""
+
+    requirement_name: str | None
+    transient: bool = False
+
+
+def _is_transient_cli_output(output: str) -> bool:
+    return output in {"STARTUP_FAIL", "TIMEOUT", "PROCESS_ERROR"}
+
+
+def _move_back_to_develop(req_file: Path) -> None:
+    if not req_file.exists():
+        return
+    destination = DEVELOP_DIR / req_file.name
+    if destination.exists():
+        log.error(f"[队列] 无法回滚 {req_file.name}：develop/ 已存在同名文件，保留 working/ 原文件")
+        return
+    shutil.move(str(req_file), str(destination))
+
+
+def _git_has_unrelated_changes() -> bool:
+    """检测共享工作区中是否存在非队列文件改动，避免污染其他需求。"""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15,
+        )
+    except Exception as e:
+        log.warning(f"[git] 无法检查工作区状态: {e}")
+        return True
+
+    if result.returncode != 0:
+        log.warning(f"[git] 工作区状态检查失败: {result.stderr.strip()}")
+        return True
+
+    ignored_prefixes = (
+        "requirements/", "test/", "scripts/log/", "scripts/.auto_iterate_parallel.lock"
+    )
+    automation_files = {
+        "scripts/_config.py",
+        "scripts/_kiro.py",
+        "scripts/_parsers.py",
+        "scripts/_playwright.py",
+        "scripts/_utils.py",
+        "scripts/_workers.py",
+        "scripts/auto_iterate_parallel.py",
+    }
+    changed = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path_text = line[3:].strip().replace('\\', '/')
+        paths = [part.strip() for part in path_text.split(" -> ")]
+        if any(
+            path not in automation_files and not path.startswith(ignored_prefixes)
+            for path in paths
+        ):
+            changed.extend(paths)
+
+    if changed:
+        log.warning(f"[git] 共享工作区存在非队列改动，暂停消费者：{', '.join(changed[:10])}")
+        return True
+    return False
+
+
+def _build_diff_range(commit_before: str, commit_after: str) -> tuple[str, list[str]]:
+    """返回安全的变更范围，不再用 HEAD~1 猜测其它需求的提交。"""
+    if commit_before and commit_after and commit_before != commit_after:
+        diff_range = f"{commit_before}..{commit_after}"
+        command = ["git", "diff", diff_range, "--name-only"]
+    else:
+        diff_range = "WORKTREE"
+        command = ["git", "diff", "--name-only"]
+
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15,
+        )
+        files = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except Exception as e:
+        log.warning(f"[git] 获取变更范围失败: {e}")
+        files = []
+    return diff_range, files
 from _utils import (
     list_available, count_develop, extract_title,
     load_workflow, _extract_workflow_section, archive_decomposed_parents,
@@ -59,13 +149,15 @@ def produce_one(worker_id: str) -> bool:
         f"---\n\n{section_content}"
     )
     log.info(f"[{worker_id}] 生产: {workflow_file}")
-    success, _ = run_kiro(prompt, worker_id)
+    # 生产者同样可能被 Kiro 改动工作区；与消费者共用互斥锁，避免并行写 Git。
+    with _consumer_lock:
+        success, _ = run_kiro(prompt, worker_id)
     return success
 
 
 # ============ 阶段二：审核 ============
 
-def run_review_phase(batch: list[Path] | None = None) -> None:
+def run_review_phase(batch: list[Path] | None = None) -> bool:
     """
     审核一批需求文件（每批一个新 kiro-cli 会话，避免 context 过长）。
     batch 为 None 时自动取 review/ 前 REVIEW_BATCH_SIZE 个。
@@ -73,7 +165,7 @@ def run_review_phase(batch: list[Path] | None = None) -> None:
     if batch is None:
         batch = sorted(REVIEW_DIR.glob("requirement-*.md"))[:REVIEW_BATCH_SIZE]
     if not batch:
-        return
+        return True
 
     skill_info = SKILLS["review-requirement"]
     req_list = ", ".join(f.name for f in batch)
@@ -84,8 +176,22 @@ def run_review_phase(batch: list[Path] | None = None) -> None:
         f"文件路径格式为 requirements/review/requirement-XX.md。"
     )
     log.info(f"[审核] 审核 {len(batch)} 个需求：{req_list}")
-    run_kiro(prompt, "reviewer", worker_id="reviewer")
+    # 审核会话可能会改写需求文件，必须与其它 Kiro 会话串行访问共享工作区。
+    with _consumer_lock:
+        success, output = run_kiro(prompt, "reviewer", worker_id="reviewer")
+    if _is_transient_cli_output(output):
+        log.warning("[审核] Kiro 启动/超时故障，需求保留在 review/，稍后重试")
+        return False
+
+    remaining = [path.name for path in batch if path.exists()]
+    if not success or remaining:
+        log.warning(
+            f"[审核] 会话未完成队列迁移，仍在 review/：{', '.join(remaining) or '未知'}"
+        )
+        return False
+
     log.info(f"[审核] 完成，develop/ 当前 {count_develop()} 个")
+    return True
 
 
 # ============ 阶段三：消费 ============
@@ -107,15 +213,15 @@ def claim_requirement(worker_id: str) -> Path | None:
             return None
 
 
-def consume_one(worker_id: str) -> str | None:
+def consume_one(worker_id: str) -> ConsumeOutcome:
     """
     完整处理一个需求：修需求 → 测试闭环 → 代码审核闭环 → 归档推送。
 
-    返回 req_file.name（成功）或 None（失败/放回 develop/）。
+    返回需求名（成功/拦截）或 None（失败/放回 develop/）。
     """
     req_file = claim_requirement(worker_id)
     if req_file is None:
-        return None
+        return ConsumeOutcome(None)
 
     skill_info = SKILLS["fix-requirement-auto"]
     actual_path = f"requirements/working/{worker_id}/{req_file.name}"
@@ -133,30 +239,38 @@ def consume_one(worker_id: str) -> str | None:
 
     # 启动失败（<30s 退出）→ 放回 develop/，等待环境恢复，不累积重试次数
     if fix_output == "STARTUP_FAIL":
-        if req_file.exists():
-            shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
+        _move_back_to_develop(req_file)
         log.warning(f"[{label}] kiro-cli 启动失败，{req_file.name} 放回 develop/，等待 60s")
         time.sleep(60)
-        return None
+        return ConsumeOutcome(None, transient=True)
 
     # 需求本身不合理（FIX_BLOCKED）→ 移到 rejected/
-    _, blocked, block_reason = parse_fix_result(fix_output)
+    fix_done, blocked, block_reason = parse_fix_result(fix_output)
     if blocked:
         log.warning(f"[{label}] ⛔ {req_file.name} 被拦截: {block_reason}")
         if req_file.exists():
             shutil.move(str(req_file), str(REJECTED_DIR / req_file.name))
-        return req_file.name
+        return ConsumeOutcome(req_file.name)
 
-    if not success:
-        if req_file.exists():
-            shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
-        log.warning(f"[{label}] ❌ {req_file.name} 修需求失败，放回 develop/")
-        return None
+    if not success or not fix_done:
+        _move_back_to_develop(req_file)
+        log.warning(
+            f"[{label}] ❌ {req_file.name} 修需求未完成（缺少 FIX_DONE），放回 develop/"
+        )
+        return ConsumeOutcome(None, transient=_is_transient_cli_output(fix_output))
 
     # ── 步骤 2：获取 session_id（懒加载，只在需要 resume 时才查） ──
     commit_after = get_current_commit()
-    diff_range = f"{commit_before}..HEAD" if commit_before and commit_before != commit_after else "HEAD~1"
+    diff_range, changed_files = _build_diff_range(commit_before, commit_after)
     log.info(f"[{label}] 代码变更范围: {diff_range}")
+    if not changed_files:
+        _move_back_to_develop(req_file)
+        log.warning(f"[{label}] 修需求没有产生可审核的 Git 变更，放回 develop/")
+        return ConsumeOutcome(None)
+    if diff_range == "WORKTREE":
+        _move_back_to_develop(req_file)
+        log.warning(f"[{label}] 代码变更未提交，拒绝继续测试/推送，放回 develop/")
+        return ConsumeOutcome(None, transient=True)
 
     session_id: str | None = None  # 延迟到第一次需要 resume 时再查，避免每次调用耗时 30s+ 的 --list-sessions
 
@@ -180,6 +294,7 @@ def consume_one(worker_id: str) -> str | None:
 
     for test_round in range(1, MAX_TEST_RETRIES + 1):
         log.info(f"[{label}] 测试第 {test_round} 轮...")
+        reset_req_status(req_file, "test_status")
 
         if test_round == 1:
             test_prompt = (
@@ -187,7 +302,9 @@ def consume_one(worker_id: str) -> str | None:
                 f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
                 f"测试需求 {req_file.stem}，验证其验收标准。需求文件位于 {actual_path}\n\n"
                 f"⚠️ 开始测试前必须先读取需求文件 {actual_path}，"
-                f"提取验收标准和「Agent 交接上下文」章节中的测试重点。"
+                f"提取验收标准和「Agent 交接上下文」章节中的测试重点。\n"
+                f"如果前端、后端、Keycloak 或测试工具不可用，必须输出 TEST_ENVIRONMENT_FAILURE，"
+                f"不要把环境故障判定为需求缺陷。"
             )
         else:
             test_prompt = (
@@ -195,10 +312,19 @@ def consume_one(worker_id: str) -> str | None:
                 f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
                 f"重测需求 {req_file.stem}（第 {test_round} 轮）。需求文件位于 {actual_path}\n\n"
                 f"上轮失败摘要：\n{prev_test_summary}\n\n"
-                f"请仅验证上轮失败的用例，并回归已通过的用例。"
+                f"请仅验证上轮失败的用例，并回归已通过的用例；如果环境不可用，输出 "
+                f"TEST_ENVIRONMENT_FAILURE。"
             )
 
         _, test_output = run_kiro(test_prompt, f"{label}-test{test_round}", worker_id=worker_id)
+        if _is_transient_cli_output(test_output):
+            _move_back_to_develop(req_file)
+            log.warning(f"[{label}] 测试环境故障（{test_output}），不消耗需求重试次数")
+            return ConsumeOutcome(None, transient=True)
+        if is_test_environment_failure(test_output):
+            _move_back_to_develop(req_file)
+            log.warning(f"[{label}] 测试前置环境不可用，不消耗需求重试次数")
+            return ConsumeOutcome(None, transient=True)
 
         req_status = read_req_status(req_file)
         file_test_status = req_status.get("test_status", "")
@@ -233,6 +359,10 @@ def consume_one(worker_id: str) -> str | None:
                 )
                 _, fb_out = run_kiro(fallback, f"{label}-fix{test_round}",
                                      model=KIRO_MODEL_FIX, worker_id=worker_id)
+            if _is_transient_cli_output(fb_out):
+                _move_back_to_develop(req_file)
+                log.warning(f"[{label}] 测试修复环境故障（{fb_out}），不消耗需求重试次数")
+                return ConsumeOutcome(None, transient=True)
             fix_done, fix_blocked2, _ = parse_fix_result(fb_out)
             if fix_blocked2:
                 log.warning(f"[{label}] 修复被拦截，停止测试循环")
@@ -251,6 +381,7 @@ def consume_one(worker_id: str) -> str | None:
 
     for review_round in range(1, MAX_REVIEW_RETRIES + 1):
         log.info(f"[{label}] 审核第 {review_round} 轮...")
+        reset_req_status(req_file, "review_status")
 
         if review_round == 1:
             review_prompt = (
@@ -259,7 +390,7 @@ def consume_one(worker_id: str) -> str | None:
                 f"审核需求 {req_file.stem} 的本次代码变更。需求文件位于 {actual_path}\n\n"
                 f"⚠️ 开始审核前必须先读取需求文件 {actual_path}，"
                 f"提取「Agent 交接上下文」中的变更文件清单和审核重点。\n\n"
-                f"变更范围：git diff {diff_range}\n"
+                f"变更范围：{('git diff ' + diff_range) if diff_range != 'WORKTREE' else 'git diff'}\n"
                 f"请审核这个范围内的所有改动（可能包含多个 commit）。"
             )
         else:
@@ -272,6 +403,10 @@ def consume_one(worker_id: str) -> str | None:
             )
 
         _, review_output = run_kiro(review_prompt, f"{label}-review{review_round}", worker_id=worker_id)
+        if _is_transient_cli_output(review_output):
+            _move_back_to_develop(req_file)
+            log.warning(f"[{label}] 审核环境故障（{review_output}），不消耗需求重试次数")
+            return ConsumeOutcome(None, transient=True)
 
         req_status = read_req_status(req_file)
         file_review_status = req_status.get("review_status", "")
@@ -306,6 +441,10 @@ def consume_one(worker_id: str) -> str | None:
                 )
                 _, rv_out = run_kiro(fallback, f"{label}-fixr{review_round}",
                                      model=KIRO_MODEL_FIX, worker_id=worker_id)
+            if _is_transient_cli_output(rv_out):
+                _move_back_to_develop(req_file)
+                log.warning(f"[{label}] 审核修复环境故障（{rv_out}），不消耗需求重试次数")
+                return ConsumeOutcome(None, transient=True)
             fix_done2, _, _ = parse_fix_result(rv_out)
             if not fix_done2:
                 log.warning(f"[{label}] 审核反馈修复未输出 FIX_DONE，继续二次审核验证")
@@ -315,8 +454,9 @@ def consume_one(worker_id: str) -> str | None:
 
     if overall_success:
         try:
+            diff_command = ["git", "diff", diff_range, "--name-only"]
             files_result = subprocess.run(
-                ["git", "diff", diff_range, "--name-only"],
+                diff_command,
                 capture_output=True, text=True, cwd=str(WORKSPACE), timeout=15
             )
             log.info(f"[{label}] 本次推送文件清单（{diff_range}）:\n{files_result.stdout.strip()}")
@@ -332,8 +472,12 @@ def consume_one(worker_id: str) -> str | None:
                 log.info(f"[{label}] ✅ git push 成功")
             else:
                 log.warning(f"[{label}] ⚠️ git push 失败: {push_result.stderr.strip()}")
+                _move_back_to_develop(req_file)
+                return ConsumeOutcome(None, transient=True)
         except Exception as e:
             log.warning(f"[{label}] ⚠️ git push 异常: {e}")
+            _move_back_to_develop(req_file)
+            return ConsumeOutcome(None, transient=True)
 
         if req_file.exists():
             shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
@@ -367,9 +511,9 @@ def consume_one(worker_id: str) -> str | None:
         log.warning(f"[{label}] ❌ {req_file.name} 未通过（{', '.join(status)}），放回 develop/")
         if req_file.exists():
             shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
-        return None
+        return ConsumeOutcome(None)
 
-    return req_file.name
+    return ConsumeOutcome(req_file.name)
 
 
 # ============ 主循环（三类线程） ============
@@ -410,7 +554,8 @@ def reviewer_loop() -> None:
                 with _review_lock:
                     for idx, batch in enumerate(batches, 1):
                         log.info(f"[reviewer] 第 {idx}/{len(batches)} 批（{len(batch)} 个）...")
-                        run_review_phase(batch)
+                        if not run_review_phase(batch):
+                            time.sleep(COOLDOWN_SECONDS)
             else:
                 idle_rounds += 1
                 if idle_rounds % 10 == 1:
@@ -439,6 +584,9 @@ def consumer_loop(worker_id: str) -> None:
                 continue
 
             idle_rounds = 0
+            if _git_has_unrelated_changes():
+                time.sleep(30)
+                continue
             first = available[0]
 
             # 超过重试上限 → 移到 rejected/
@@ -451,9 +599,13 @@ def consumer_loop(worker_id: str) -> None:
                     _retry_counts.pop(first.name, None)
                 continue
 
-            result = consume_one(worker_id)
+            with _consumer_lock:
+                outcome = consume_one(worker_id)
 
-            if result is None:
+            if outcome.requirement_name is None:
+                if outcome.transient:
+                    log.info(f"[{worker_id}] 环境故障，{first.name} 不计入失败次数")
+                    continue
                 # 处理失败，累计重试次数
                 for f in list_available(DEVELOP_DIR):
                     with _retry_lock:
@@ -462,11 +614,15 @@ def consumer_loop(worker_id: str) -> None:
                 time.sleep(COOLDOWN_SECONDS)
             else:
                 with _retry_lock:
-                    _retry_counts.pop(result, None)
+                    _retry_counts.pop(outcome.requirement_name, None)
                 log.info(f"[{worker_id}] ✅ 累计完成 {sum(1 for _ in IMPLEMENT_DIR.glob('*.md'))} 个")
 
         except Exception as e:
             log.error(f"[{worker_id}] 消费者异常: {e}", exc_info=True)
+            if 'first' in locals():
+                stranded = WORKING_DIR / worker_id / first.name
+                if stranded.exists():
+                    _move_back_to_develop(stranded)
             time.sleep(COOLDOWN_SECONDS)
 
 

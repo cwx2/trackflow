@@ -86,6 +86,7 @@ PRODUCER_CONFIGS: list[dict] = [
 
 _claim_lock   = threading.Lock()   # 原子领取需求
 _review_lock  = threading.Lock()   # 防止并发审核
+_consumer_lock = threading.Lock()  # 共享 Git 工作区，消费者流水线必须串行
 _retry_lock   = threading.Lock()   # 保护 _retry_counts
 _retry_counts: dict[str, int] = {} # 需求失败次数
 

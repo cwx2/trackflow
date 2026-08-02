@@ -9,6 +9,7 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.workflow.service.WorkflowService;
+import com.trackflow.workflow.vo.ActionExecutionResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -66,7 +67,16 @@ public class AutomationIssueFacade {
         if (preCheck.closeWarning() != null) {
             throw new BusinessException(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
         }
-        issueService.transitStatus(issueId, statusId, comment, null, false, expectedVersion, true);
+        ActionExecutionResult transitResult = issueService.transitStatus(
+                issueId, statusId, comment, null, false, expectedVersion, true);
+        if (transitResult != null
+                && transitResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
+            String warningMessage = transitResult.getWarningMessage();
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    warningMessage != null && !warningMessage.isBlank()
+                            ? warningMessage
+                            : "字段校验失败，无法完成状态转换");
+        }
         return toMap(issueService.getById(issueId));
     }
 

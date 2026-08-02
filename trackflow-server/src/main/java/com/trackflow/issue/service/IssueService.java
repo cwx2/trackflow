@@ -1998,7 +1998,15 @@ public class IssueService {
                 return "工作流不允许此状态转换";
             }
             Integer expectedVersion = versions != null ? versions.get(issue.getId()) : null;
-            transitStatus(issue.getId(), statusId, comment, null, false, expectedVersion, true);
+            ActionExecutionResult transitResult = transitStatus(
+                    issue.getId(), statusId, comment, null, false, expectedVersion, true);
+            if (transitResult != null
+                    && transitResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
+                String warningMessage = transitResult.getWarningMessage();
+                return warningMessage != null && !warningMessage.isBlank()
+                        ? warningMessage
+                        : "字段校验失败，无法完成状态转换";
+            }
             return null;
         }, "状态转换", silent);
     }

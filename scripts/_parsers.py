@@ -7,6 +7,51 @@ from pathlib import Path
 from _config import strip_ansi, log
 
 
+def reset_req_status(req_file: Path, *keys: str) -> bool:
+    """将自动化状态字段重置为 PENDING，避免复用上一次运行的结果。"""
+    if not keys or not req_file.exists():
+        return False
+
+    try:
+        content = req_file.read_text(encoding="utf-8")
+    except Exception as e:
+        log.warning(f"[status] 读取 {req_file.name} 失败: {e}")
+        return False
+
+    wanted = set(keys)
+    lines = content.splitlines(keepends=True)
+    in_block = False
+    changed = False
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "## 自动化状态":
+            in_block = True
+            continue
+        if in_block and stripped.startswith("## "):
+            break
+        if not in_block or ":" not in stripped:
+            continue
+
+        key, _, _ = stripped.partition(":")
+        if key.strip() not in wanted:
+            continue
+
+        newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+        lines[index] = f"{key.strip()}: PENDING{newline}"
+        changed = True
+
+    if not changed:
+        return False
+
+    try:
+        req_file.write_text("".join(lines), encoding="utf-8")
+        return True
+    except Exception as e:
+        log.warning(f"[status] 更新 {req_file.name} 失败: {e}")
+        return False
+
+
 def parse_fix_result(output: str) -> tuple[bool, bool, str]:
     """
     解析 fix-requirement-auto 的输出。
@@ -112,6 +157,25 @@ def parse_test_result(output: str) -> tuple[bool, str]:
     if has_structured_fail or has_table_fail:
         return False, failures_summary or "\n".join(lines[-30:])
     return True, ""
+
+
+def is_test_environment_failure(output: str) -> bool:
+    """识别测试无法执行的环境故障，避免把它当成需求缺陷反复重试。"""
+    clean = strip_ansi(output)
+    if "TEST_ENVIRONMENT_FAILURE" in clean or "TEST_ENV_BLOCKED" in clean:
+        return True
+
+    environment_markers = (
+        "前端服务不可用",
+        "后端服务不可用",
+        "Keycloak 无响应",
+        "连接被拒绝",
+        "localhost:3000 无响应",
+        "localhost:8090 无响应",
+    )
+    return "TEST_FAILURES_BEGIN" in clean and any(
+        marker in clean for marker in environment_markers
+    )
 
 
 def parse_review_result(output: str) -> tuple[bool, str]:
