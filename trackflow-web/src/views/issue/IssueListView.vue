@@ -3827,17 +3827,15 @@ function applyDashboardFilter() {
   }
 
   // project (key) or projectId: 项目筛选（从 Sprint/报表页面跳转时带入）
-  if (route.query.project) {
-    const queryProject = String(route.query.project)
+  // 两个参数都支持项目 Key 和数字 ID 两种格式
+  const projectParam = route.query.project || route.query.projectId
+  if (projectParam) {
+    const queryProject = String(projectParam)
     const matched = projectList.value.find(p => p.key === queryProject || p.id === queryProject)
     if (matched) {
       filterProject.value = matched.id
       activeProjectId.value = matched.id
     }
-  } else if (route.query.projectId) {
-    const pid = String(route.query.projectId)
-    filterProject.value = pid
-    activeProjectId.value = pid
   }
 
   // Set display label
