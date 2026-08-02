@@ -27,8 +27,8 @@ export const issueApi = {
     excludeDoneBefore?: string
     reportedByMe?: string; assignedToMe?: string
     overdue?: string; dueSoon?: string
-  }) {
-    return request.get<any, R<PageResult<IssueVO>>>('/issues', { params })
+  }, signal?: AbortSignal) {
+    return request.get<any, R<PageResult<IssueVO>>>('/issues', { params, signal })
   },
 
   /** Issue 详情 */

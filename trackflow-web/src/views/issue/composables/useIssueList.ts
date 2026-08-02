@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import { issueApi, queryApi } from '@/api'
 import type { IssueVO } from '@/api/types'
@@ -53,6 +53,9 @@ export function useIssueList() {
   const loading = ref(false)
   const sortState = ref<SortState>({ field: null, direction: null })
 
+  // 请求取消控制器：用于取消前一个请求，避免竞态条件
+  let abortController: AbortController | null = null
+
   /**
    * 三态排序切换: null → asc → desc → null
    */
@@ -83,8 +86,17 @@ export function useIssueList() {
 
   /**
    * 加载 Issue 列表
+   * 支持请求取消：当快速切换筛选时，取消前一个请求，避免竞态条件导致计数与列表不一致
    */
   async function loadIssues(filters: IssueListFilters = {}) {
+    // 取消前一个正在进行的请求
+    if (abortController) {
+      abortController.abort()
+    }
+    // 创建新的取消控制器
+    abortController = new AbortController()
+    const currentAbortController = abortController
+
     loading.value = true
     try {
       const params: Record<string, any> = {
@@ -129,21 +141,34 @@ export function useIssueList() {
       let res
       if (filters.queryId) {
         // 通过已保存查询执行
-        res = await queryApi.executeById(String(filters.queryId), params)
+        res = await queryApi.executeById(String(filters.queryId), params, currentAbortController.signal)
       } else {
-        res = await issueApi.list(params)
+        res = await issueApi.list(params, currentAbortController.signal)
+      }
+
+      // 检查是否被取消（可能在等待响应期间发起了新请求）
+      if (currentAbortController.signal.aborted) {
+        return
       }
 
       issues.value = res.data?.list || []
       totalIssues.value = res.data?.pagination?.total || 0
     } catch (e) {
-      // 会话过期导致的请求取消，静默处理（handleSessionExpired 会处理跳转）
-      if (axios.isCancel(e)) return
+      // 请求被取消（无论是 AbortController 还是会话过期），静默处理
+      if (axios.isCancel(e) || (e instanceof DOMException && e.name === 'AbortError')) {
+        return
+      }
 
-      issues.value = []
-      totalIssues.value = 0
+      // 只有当前请求未被取消时才更新状态，避免覆盖新请求的结果
+      if (!currentAbortController.signal.aborted) {
+        issues.value = []
+        totalIssues.value = 0
+      }
     } finally {
-      loading.value = false
+      // 只有当前请求未被取消时才取消 loading 状态
+      if (!currentAbortController.signal.aborted) {
+        loading.value = false
+      }
     }
   }
 
@@ -174,6 +199,22 @@ export function useIssueList() {
       totalIssues.value = Math.max(0, totalIssues.value - 1)
     }
   }
+
+  /**
+   * 清理：取消正在进行的请求
+   * 组件销毁时应调用此函数
+   */
+  function cleanup() {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+  }
+
+  // 组件卸载时自动清理
+  onUnmounted(() => {
+    cleanup()
+  })
 
   return {
     issues,
