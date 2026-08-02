@@ -89,7 +89,7 @@
                 仅当「{{ getFieldName(field.conditionFieldId) }}」为指定值时显示
               </span>
               <span v-else-if="field.effectiveDefaultValue" class="field-default">
-                默认值: {{ field.effectiveDefaultValue }}{{ field.projectDefaultValue != null ? ' (项目)' : '' }}
+                默认值: {{ formatDefaultValue(field) }}{{ field.projectDefaultValue != null ? ' (项目)' : '' }}
               </span>
               <span v-if="field.options && field.options.length > 0" class="field-options-count">
                 {{ field.options.length }} 个选项
@@ -225,7 +225,7 @@
                   size="small"
                   @change="onOverrideChange"
                 >
-                  <a-option value="inherit">继承全局设置{{ selectedField?.defaultValue ? ` (${selectedField.defaultValue})` : '' }}</a-option>
+                  <a-option value="inherit">继承全局设置{{ selectedField?.defaultValue ? ` (${formatDefaultValue(selectedField, true)})` : '' }}</a-option>
                   <a-option value="custom">本项目自定义</a-option>
                   <a-option value="none">本项目无默认值</a-option>
                 </a-select>
@@ -303,7 +303,7 @@
                   {{ selectedField.effectiveIsRequired ? '必填' : '非必填' }}
                 </span>
                 <span v-if="selectedField.effectiveDefaultValue" class="effective-default">
-                  · 默认: {{ selectedField.effectiveDefaultValue }}
+                  · 默认: {{ formatDefaultValue(selectedField) }}
                 </span>
               </div>
 
@@ -550,6 +550,37 @@ function formatFieldType(format: string): string {
 function getFieldName(fieldId: string): string {
   const field = fieldList.value.find(f => f.id === fieldId)
   return field?.name || '未知字段'
+}
+
+/**
+ * 格式化默认值显示。
+ * 对于列表类型字段，将选项 ID 转换为选项名称。
+ * 对于布尔类型字段，将 true/false 转换为 是/否。
+ * @param field 字段定义
+ * @param useGlobalDefault 是否使用全局默认值（而非有效默认值）
+ * @returns 格式化后的默认值显示文本
+ */
+function formatDefaultValue(field: CustomFieldDefinitionVO, useGlobalDefault = false): string {
+  const defaultValue = useGlobalDefault ? field.defaultValue : field.effectiveDefaultValue
+  if (!defaultValue) return ''
+
+  // 列表类型：从 options 中查找选项名称
+  if (field.fieldFormat === 'list' && field.options && field.options.length > 0) {
+    const option = field.options.find(opt => opt.id === defaultValue)
+    if (option) {
+      return option.value
+    }
+    // 如果找不到对应选项，返回原始值（可能是旧数据或已删除的选项）
+    return defaultValue
+  }
+
+  // 布尔类型：转换为中文
+  if (field.fieldFormat === 'bool') {
+    return defaultValue === 'true' ? '是' : '否'
+  }
+
+  // 其他类型：直接返回
+  return defaultValue
 }
 
 /**
