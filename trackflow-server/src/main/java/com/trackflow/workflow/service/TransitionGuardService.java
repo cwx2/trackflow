@@ -119,6 +119,7 @@ public class TransitionGuardService {
             case "due_date", "dueDate" ->
                     issue.getDueDate() != null ? issue.getDueDate().toString() : null;
             case "title" -> issue.getTitle();
+            case "description" -> issue.getDescription();
             default -> {
                 log.debug("[TransitionGuard] 未知字段: {}", field);
                 yield null;

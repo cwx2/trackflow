@@ -295,17 +295,21 @@ public class IssueController {
             }
         }
 
-        // WIP 限制 + 关闭前置检查（业务逻辑在 Service 层）
+        // WIP 限制 + 关闭前置检查 + 描述为空检查（业务逻辑在 Service 层）
         IssueService.TransitPreCheckResult preCheck = issueService.checkTransitPreConditions(
                 issue, dto.getStatusId(),
                 Boolean.TRUE.equals(dto.getForceWip()),
-                Boolean.TRUE.equals(dto.getForce()));
+                Boolean.TRUE.equals(dto.getForce()),
+                Boolean.TRUE.equals(dto.getForceDescEmpty()));
 
         if (preCheck.wipWarning() != null) {
             throw new BusinessException(ErrorCode.WIP_LIMIT_EXCEEDED, preCheck.wipWarning());
         }
         if (preCheck.closeWarning() != null) {
             throw new BusinessException(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
+        }
+        if (preCheck.descEmptyWarning() != null) {
+            throw new BusinessException(ErrorCode.DESCRIPTION_EMPTY_WARNING, preCheck.descEmptyWarning());
         }
 
         // Controller 已完成工作流校验，传入 skipWorkflowCheck=true 避免 Service 重复校验

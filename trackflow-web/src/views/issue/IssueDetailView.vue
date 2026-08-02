@@ -1425,6 +1425,30 @@ async function executeTransition(target: StatusInfo, comment: string | undefined
           }
         }
       })
+    } else if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
+      // 描述为空警告 — 转换到 Testing 状态时如果描述为空
+      Modal.warning({
+        title: '工单描述为空',
+        content: res.message,
+        okText: '继续变更',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: async () => {
+          try {
+            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version, undefined, undefined, true)
+            if (forceRes.code === 0) {
+              await loadAll()
+              Message.success(`状态已变更为 ${target.name}`)
+              showActionFeedback(forceRes.data)
+              refreshNavBadge() // 状态变更后刷新导航栏 badge
+            } else {
+              Message.error(forceRes.message || '变更失败')
+            }
+          } catch (e2: any) {
+            handleUpdateError(e2, '变更失败')
+          }
+        }
+      })
     } else {
       Message.error(res.message || '变更失败')
     }

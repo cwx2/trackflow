@@ -102,8 +102,8 @@ export const issueApi = {
   // ========== 状态 ==========
 
   /** 状态流转（返回版本号 + 动作执行结果） */
-  transitStatus(id: string, statusId: string, comment?: string, version?: number, force?: boolean, forceWip?: boolean) {
-    return request.post<any, R<TransitStatusResultVO>>(`/issues/${id}/transitions`, { statusId, comment, version, force, forceWip })
+  transitStatus(id: string, statusId: string, comment?: string, version?: number, force?: boolean, forceWip?: boolean, forceDescEmpty?: boolean) {
+    return request.post<any, R<TransitStatusResultVO>>(`/issues/${id}/transitions`, { statusId, comment, version, force, forceWip, forceDescEmpty })
   },
 
   /** 撤销状态流转（限 30 秒内、仅本人操作可撤销，返回版本号 + 动作执行结果） */

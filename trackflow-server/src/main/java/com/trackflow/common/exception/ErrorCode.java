@@ -55,6 +55,7 @@ public enum ErrorCode {
     CLOSE_CONFIRMATION_REQUIRED(40910, 409, "关闭前需要用户确认"),
     SPRINT_DATE_OVERLAP(40913, 409, "Sprint 日期与已有迭代重叠"),
     WIP_LIMIT_EXCEEDED(40914, 409, "目标列已达到 WIP 上限"),
+    DESCRIPTION_EMPTY_WARNING(40915, 409, "工单描述为空，测试人员无法确认验收内容"),
     WORKFLOW_VERSION_CONFLICT(40911, 409, "工作流已被其他人修改，请刷新后重试"),
     BOARD_CONFIG_VERSION_CONFLICT(40912, 409, "看板配置已被其他人修改，请刷新后重试"),
 

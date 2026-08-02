@@ -35,6 +35,12 @@ public class TransitStatusDTO {
     private Boolean forceWip;
 
     /**
+     * 是否强制允许描述为空时转换到测试状态。
+     * 当工单描述为空但用户确认要继续转换到 Testing 状态时设为 true。
+     */
+    private Boolean forceDescEmpty;
+
+    /**
      * 乐观锁版本号（前端传入，用于并发控制）。
      */
     private Integer version;

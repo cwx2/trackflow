@@ -874,18 +874,25 @@ public class IssueService {
     }
 
     /**
-     * 状态转换前置校验（WIP 限制 + 关闭前置检查）。
+     * 状态转换前置校验（WIP 限制 + 关闭前置检查 + 描述为空检查）。
      * Controller 调用此方法获取警告信息，由 Controller 决定返回给前端让用户确认。
      *
      * @return 警告信息列表（空表示无需确认，可直接转换）
      */
-    public record TransitPreCheckResult(String wipWarning, String closeWarning) {
+    public record TransitPreCheckResult(String wipWarning, String closeWarning, String descEmptyWarning) {
         public boolean hasWarnings() {
-            return wipWarning != null || closeWarning != null;
+            return wipWarning != null || closeWarning != null || descEmptyWarning != null;
         }
     }
 
-    public TransitPreCheckResult checkTransitPreConditions(Issue issue, Long targetStatusId, boolean forceWip, boolean forceClose) {
+    /**
+     * Testing 相关状态名称集合（用于描述为空警告检查）
+     */
+    private static final Set<String> TESTING_STATUS_NAMES = Set.of("Testing", "测试中");
+
+    public TransitPreCheckResult checkTransitPreConditions(Issue issue, Long targetStatusId,
+                                                           boolean forceWip, boolean forceClose,
+                                                           boolean forceDescEmpty) {
         // WIP 限制校验
         String wipWarning = null;
         if (!forceWip) {
@@ -894,8 +901,8 @@ public class IssueService {
 
         // 关闭状态前置检查
         String closeWarning = null;
+        IssueStatus targetStatus = statusMapper.selectById(targetStatusId);
         if (!forceClose) {
-            IssueStatus targetStatus = statusMapper.selectById(targetStatusId);
             if (targetStatus != null && targetStatus.getIsClosed()) {
                 List<String> warnings = closePreCheckChain.execute(issue);
                 if (!warnings.isEmpty()) {
@@ -904,7 +911,25 @@ public class IssueService {
             }
         }
 
-        return new TransitPreCheckResult(wipWarning, closeWarning);
+        // 描述为空检查 — 转换到 Testing 状态时，如果描述为空，给出警告
+        String descEmptyWarning = null;
+        if (!forceDescEmpty && targetStatus != null) {
+            if (TESTING_STATUS_NAMES.contains(targetStatus.getName())) {
+                if (issue.getDescription() == null || issue.getDescription().isBlank()) {
+                    descEmptyWarning = "工单描述为空，测试人员将无法确认验收内容。是否仍要变更状态为 " + targetStatus.getLocalizedName() + "？";
+                }
+            }
+        }
+
+        return new TransitPreCheckResult(wipWarning, closeWarning, descEmptyWarning);
+    }
+
+    /**
+     * 兼容旧调用（不检查描述为空）
+     */
+    public TransitPreCheckResult checkTransitPreConditions(Issue issue, Long targetStatusId,
+                                                           boolean forceWip, boolean forceClose) {
+        return checkTransitPreConditions(issue, targetStatusId, forceWip, forceClose, false);
     }
 
     /**

@@ -3714,6 +3714,46 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       return
     }
 
+    if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
+      // 描述为空警告：回滚乐观更新，弹确认框
+      issue.statusId = oldStatusId
+      transitioningIssueIds.value.delete(issue.id)
+      Modal.warning({
+        title: '工单描述为空',
+        content: res.message,
+        okText: '继续变更',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: async () => {
+          // 用户确认后重试（带 forceDescEmpty）
+          issue.statusId = targetStatusId
+          transitioningIssueIds.value.add(issue.id)
+          try {
+            const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, undefined, undefined, true)
+            if (forceRes.code === 0) {
+              const newVersion = extractVersion(forceRes.data)
+              if (newVersion != null) issue.version = newVersion
+              else issue.version = (issue.version || 0) + 1
+              showActionFeedback(forceRes.data)
+              useNavBadge().refresh() // 状态变更后刷新导航栏 badge
+              pushUndoNotification(issue, oldStatusId, targetStatusId, targetStatus)
+              // ★ Cross-swimlane field update after description empty force transition
+              await handleCrossSwimlaneUpdate(issue, targetLaneKey)
+            } else {
+              issue.statusId = oldStatusId
+              Message.error(forceRes.message || '状态变更失败')
+            }
+          } catch (e2: any) {
+            issue.statusId = oldStatusId
+            Message.error(e2.response?.data?.message || '状态变更失败')
+          } finally {
+            transitioningIssueIds.value.delete(issue.id)
+          }
+        }
+      })
+      return
+    }
+
     if (res.code !== 0) {
       // 其他非成功响应
       issue.statusId = oldStatusId

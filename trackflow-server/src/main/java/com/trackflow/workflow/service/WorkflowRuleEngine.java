@@ -284,6 +284,7 @@ public class WorkflowRuleEngine {
         if ("sprint".equals(field) || "sprint_id".equals(field)) return issue.getSprintId() != null ? String.valueOf(issue.getSprintId()) : null;
         if ("due_date".equals(field) || "dueDate".equals(field)) return issue.getDueDate() != null ? issue.getDueDate().toString() : null;
         if ("title".equals(field)) return issue.getTitle();
+        if ("description".equals(field)) return issue.getDescription();
         return null;
     }
 

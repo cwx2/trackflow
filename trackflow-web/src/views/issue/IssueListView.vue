@@ -984,6 +984,8 @@ import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
 import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
+import { extractVersion, showActionFeedback } from '@/utils/transition'
+import { ERROR_CODES } from '@/api/error-codes'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
 import type { IssueDraft } from './composables'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
@@ -2704,11 +2706,77 @@ function selectStatus(issue: IssueVO, status: IssueStatusVO) {
         return true
       },
       onOk: () => {
-        executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, commentText.trim(), issue.version), undefined, onInlineEditSuccess)
+        performStatusTransition(issue, status, commentText.trim())
       }
     })
   } else {
-    executeEdit(issue.id, 'statusId', status.id, (_signal) => issueApi.transitStatus(issue.id, status.id, undefined, issue.version), undefined, onInlineEditSuccess)
+    performStatusTransition(issue, status, undefined)
+  }
+}
+
+/** 执行状态转换，处理各种警告（描述为空、WIP 超限、关闭确认） */
+async function performStatusTransition(issue: IssueVO, status: IssueStatusVO, comment?: string, forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean }) {
+  const oldStatusId = issue.statusId
+  // 乐观更新
+  issue.statusId = status.id
+
+  try {
+    const res = await issueApi.transitStatus(issue.id, status.id, comment, issue.version, forceFlags?.force, forceFlags?.forceWip, forceFlags?.forceDescEmpty)
+
+    if (res.code === 0) {
+      // 成功：同步版本号
+      if (res.data != null) {
+        const version = extractVersion(res.data)
+        if (version != null) {
+          issue.version = version
+        } else {
+          issue.version = (issue.version || 0) + 1
+        }
+        showActionFeedback(res.data)
+      }
+      onInlineEditSuccess(issue, 'statusId', status.id)
+      return
+    }
+
+    // 错误码处理
+    issue.statusId = oldStatusId // 回滚
+
+    if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
+      // 描述为空警告
+      Modal.warning({
+        title: '工单描述为空',
+        content: res.message,
+        okText: '继续变更',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceDescEmpty: true })
+      })
+    } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+      // WIP 超限
+      Modal.warning({
+        title: 'WIP 限制',
+        content: res.message,
+        okText: '继续移入',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, forceWip: true })
+      })
+    } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
+      // 关闭确认
+      Modal.warning({
+        title: '确认关闭',
+        content: res.message,
+        okText: '强制关闭',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => performStatusTransition(issue, status, comment, { ...forceFlags, force: true })
+      })
+    } else {
+      Message.error({ content: res.message || '状态变更失败', duration: 3000 })
+    }
+  } catch (e: any) {
+    issue.statusId = oldStatusId
+    Message.error({ content: e.response?.data?.message || '状态变更失败', duration: 3000 })
   }
 }
 

@@ -273,6 +273,7 @@ import { getDueDateInfo } from '@/utils/dueDate'
 import type { DueDateInfo } from '@/utils/dueDate'
 import { IconShareExternal } from '@arco-design/web-vue/es/icon'
 import { useNavBadge } from '@/composables/useNavBadge'
+import { ERROR_CODES } from '@/api/error-codes'
 
 const props = defineProps<{
   visible: boolean
@@ -377,28 +378,68 @@ async function selectStatus(target: IssueStatusVO) {
   await doTransitStatus(target, undefined)
 }
 
-async function doTransitStatus(target: IssueStatusVO, comment: string | undefined) {
+async function doTransitStatus(target: IssueStatusVO, comment: string | undefined, forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean }) {
   if (!props.issueId || !detail.value) return
 
   const oldStatusId = detail.value.statusId
+  const oldStatus = detail.value.status
   // Optimistic update
   detail.value.status = { ...detail.value.status!, id: target.id, name: target.name, color: target.color }
   detail.value.statusId = target.id
 
   try {
-    await issueApi.transitStatus(props.issueId, target.id, comment, detail.value.version)
-    // Bump local version
-    detail.value.version = (detail.value.version || 0) + 1
-    Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)
-    emit('issue-updated', props.issueId, { statusId: target.id })
-    useNavBadge().refresh() // 状态变更后刷新导航栏 badge
+    const res = await issueApi.transitStatus(props.issueId, target.id, comment, detail.value.version, forceFlags?.force, forceFlags?.forceWip, forceFlags?.forceDescEmpty)
+
+    if (res.code === 0) {
+      // 成功：同步版本号
+      detail.value.version = (detail.value.version || 0) + 1
+      Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)
+      emit('issue-updated', props.issueId, { statusId: target.id })
+      useNavBadge().refresh() // 状态变更后刷新导航栏 badge
+      return
+    }
+
+    // 回滚
+    detail.value.statusId = oldStatusId
+    detail.value.status = oldStatus
+
+    if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
+      // 描述为空警告
+      Modal.warning({
+        title: '工单描述为空',
+        content: res.message,
+        okText: '继续变更',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => doTransitStatus(target, comment, { ...forceFlags, forceDescEmpty: true })
+      })
+    } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+      // WIP 超限
+      Modal.warning({
+        title: 'WIP 限制',
+        content: res.message,
+        okText: '继续移入',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => doTransitStatus(target, comment, { ...forceFlags, forceWip: true })
+      })
+    } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
+      // 关闭确认
+      Modal.warning({
+        title: '确认关闭',
+        content: res.message,
+        okText: '强制关闭',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => doTransitStatus(target, comment, { ...forceFlags, force: true })
+      })
+    } else {
+      Message.error(res.message || '状态变更失败')
+    }
   } catch (e: any) {
     // Rollback
-    if (detail.value.status) {
-      detail.value.statusId = oldStatusId
-    }
-    // Reload to get correct state
-    loadDetail()
+    detail.value.statusId = oldStatusId
+    detail.value.status = oldStatus
     Message.error(e.response?.data?.message || '状态变更失败')
   }
 }
