@@ -17,7 +17,7 @@
     />
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
-    <div class="editor-content">
+    <div class="editor-content" @mousedown="addNodePanelOpen = false">
       <!-- 世界坐标水印：复用 LogicFlow 的变换矩阵，跟随画布平移和缩放 -->
       <div
         v-if="watermarkReady"
@@ -38,19 +38,18 @@
       </div>
       <!-- 画布（全屏） -->
       <div ref="containerRef" class="canvas-container"></div>
-      <!-- 左侧悬浮：节点面板 -->
-      <div class="node-panel" :class="{ collapsed: !leftPanelOpen }">
-        <!-- 收起/展开 tab -->
-        <button class="panel-toggle panel-toggle-left" @click="leftPanelOpen = !leftPanelOpen">
-          <span>{{ leftPanelOpen ? '◀' : '▶' }}</span>
-        </button>
-
-        <div class="panel-inner">
+      <!-- 添加节点弹层（从底部工具栏向上弹出） -->
+      <Transition name="node-popover">
+        <div
+          v-if="addNodePanelOpen"
+          class="add-node-popover"
+          @mousedown.stop
+        >
           <!-- 搜索框 -->
           <div class="node-search-wrap">
             <a-input
               v-model="nodeSearchKeyword"
-              placeholder="搜索节点..."
+              placeholder="搜索节点、插件、工作流"
               size="small"
               allow-clear
               class="node-search-input"
@@ -59,71 +58,45 @@
             </a-input>
           </div>
 
-          <!-- 按分类展示（图标网格模式） -->
+          <!-- 节点列表（搜索 or 分类） -->
           <div class="panel-scroll">
             <template v-if="nodeSearchKeyword">
-              <!-- 搜索结果：网格 -->
               <div class="panel-section">
                 <div v-if="filteredNodes.length === 0" class="no-search-result">无匹配节点</div>
-                <div class="node-grid">
-                  <a-tooltip
-                    v-for="node in filteredNodes"
-                    :key="node.type"
-                    :content="node.label"
-                    position="right"
-                    mini
-                  >
-                    <div
-                      class="node-grid-item"
-                      :style="{ '--node-color': node.color }"
-                      @mousedown="(e) => onDragStart(e, node)"
-                    >
-                      <div class="node-grid-icon">{{ node.icon }}</div>
-                      <div class="node-grid-label">{{ node.label }}</div>
-                    </div>
-                  </a-tooltip>
+                <div
+                  v-for="node in filteredNodes"
+                  :key="node.type"
+                  class="node-list-item"
+                  :style="{ '--node-color': node.color }"
+                  @mousedown="(e) => { addNodePanelOpen = false; onDragStart(e, node) }"
+                >
+                  <div class="node-list-icon">{{ node.icon }}</div>
+                  <div class="node-list-name">{{ node.label }}</div>
                 </div>
               </div>
             </template>
             <template v-else>
-              <!-- 按分类分组：网格 -->
               <div
                 v-for="category in nodeCategories"
                 :key="category.name"
                 class="panel-section"
               >
+                <div class="section-title">{{ category.name }}</div>
                 <div
-                  class="section-title section-title-clickable"
-                  @click="toggleCategory(category.name)"
+                  v-for="node in category.nodes"
+                  :key="node.type"
+                  class="node-list-item"
+                  :style="{ '--node-color': node.color }"
+                  @mousedown="(e) => { addNodePanelOpen = false; onDragStart(e, node) }"
                 >
-                  <span>{{ category.name }}</span>
-                  <span class="category-arrow">{{ collapsedCategories.has(category.name) ? '▶' : '▼' }}</span>
+                  <div class="node-list-icon">{{ node.icon }}</div>
+                  <div class="node-list-name">{{ node.label }}</div>
                 </div>
-                <template v-if="!collapsedCategories.has(category.name)">
-                  <div class="node-grid">
-                    <a-tooltip
-                      v-for="node in category.nodes"
-                      :key="node.type"
-                      :content="node.label"
-                      position="right"
-                      mini
-                    >
-                      <div
-                        class="node-grid-item"
-                        :style="{ '--node-color': node.color }"
-                        @mousedown="(e) => onDragStart(e, node)"
-                      >
-                        <div class="node-grid-icon">{{ node.icon }}</div>
-                        <div class="node-grid-label">{{ node.label }}</div>
-                      </div>
-                    </a-tooltip>
-                  </div>
-                </template>
               </div>
             </template>
           </div>
         </div>
-      </div>
+      </Transition>
 
       <!-- 右侧悬浮：配置面板 -->
       <div class="config-panel" :class="{ collapsed: !rightPanelOpen }">
@@ -333,7 +306,7 @@ watch(selectedNode, value => {
 }, { deep: true })
 
 // 面板开关
-const leftPanelOpen = ref(true)
+const addNodePanelOpen = ref(false)
 const rightPanelOpen = ref(false)  // 默认收起，点击节点时自动打开
 
 // 执行状态
@@ -520,9 +493,12 @@ function toggleMinimap() {
   }
 }
 
-/** 6. + 添加节点面板（复用左侧面板） */
+/** 6. + 添加节点面板（底部弹出） */
 function toggleAddNodePanel() {
-  leftPanelOpen.value = !leftPanelOpen.value
+  addNodePanelOpen.value = !addNodePanelOpen.value
+  if (addNodePanelOpen.value) {
+    nodeSearchKeyword.value = ''
+  }
 }
 
 /** 7. 调试模式 */
@@ -1179,38 +1155,108 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+/* ── 添加节点弹层（底部弹出） ── */
+.add-node-popover {
+  position: absolute;
+  bottom: 72px; /* 底部工具栏高度 + 间距 */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  width: 360px;
+  max-height: 480px;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: all;
+}
+
+/* 弹出动画 */
+.node-popover-enter-active,
+.node-popover-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.node-popover-enter-from,
+.node-popover-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+.node-popover-enter-to,
+.node-popover-leave-from {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 弹层内节点列表项 */
+.node-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.node-list-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: var(--node-color, #6366f1);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.node-list-item:hover {
+  background: var(--tf-bg-hover);
+}
+
+.node-list-item:hover::before {
+  opacity: 1;
+}
+
+.node-list-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: color-mix(in srgb, var(--node-color, #6366f1) 15%, transparent);
+  flex-shrink: 0;
+}
+
+.node-list-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
 /* 悬浮面板公共样式 */
-.node-panel,
 .config-panel {
   position: absolute;
   top: 12px;
   bottom: 12px;
   z-index: 10;
   display: flex;
-  flex-direction: row;
+  flex-direction: row-reverse;
+  right: 12px;
   transition: transform 0.2s ease;
-  pointer-events: none; /* 面板容器本身穿透，只有子元素响应 */
+  pointer-events: none;
 }
 
-.node-panel > *,
 .config-panel > * {
   pointer-events: auto;
-}
-
-/* 左侧节点面板 */
-.node-panel {
-  left: 12px;
-  flex-direction: row;
-}
-
-.node-panel.collapsed {
-  transform: translateX(calc(-100% + 28px));
-}
-
-/* 右侧配置面板 */
-.config-panel {
-  right: 12px;
-  flex-direction: row-reverse;
 }
 
 .config-panel.collapsed {
