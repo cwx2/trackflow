@@ -62,6 +62,7 @@
         @add-link="() => {}"
         @upload="triggerUpload(false)"
         @upload-private="triggerUpload(true)"
+        @upload-files="onDropFiles"
         @copy-id="onCopyId"
         @clone="onCloneIssue"
         @create-subtask="onCreateSubtask"
@@ -1174,6 +1175,14 @@ function triggerUpload(isPrivate: boolean) {
     }
   }
   input.click()
+}
+
+/** 处理拖拽上传的文件 */
+async function onDropFiles(files: File[]) {
+  if (!issue.value || files.length === 0) return
+  for (const file of files) {
+    await doUploadFile(file, false)
+  }
 }
 
 async function doUploadFile(file: File, isPrivate: boolean) {

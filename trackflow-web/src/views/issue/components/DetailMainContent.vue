@@ -182,6 +182,7 @@
           <button class="section-link" @click="$emit('upload-private')">私有上传</button>
         </div>
       </div>
+      <!-- 已有附件列表 -->
       <div v-if="attachments.length > 0" class="att-grid">
         <div v-for="att in attachments" :key="att.id" class="att-chip" :class="{ 'att-private': att.isPrivate }">
           <svg v-if="att.isPrivate" class="att-lock-icon" viewBox="0 0 16 16" width="12" height="12" :title="att.visibleToGroupNames?.join(', ') || '私有'">
@@ -191,7 +192,25 @@
           <span class="att-sz">{{ att.sizeText }}</span>
         </div>
       </div>
-      <p v-else class="empty-hint">暂无附件</p>
+      <!-- 拖拽上传区域 -->
+      <div
+        v-if="!readonly"
+        class="att-dropzone"
+        :class="{ 'att-dropzone--active': isDragOver }"
+        @dragover.prevent="onDragOver"
+        @dragleave="onDragLeave"
+        @drop.prevent="onDrop"
+        @click="$emit('upload')"
+      >
+        <div class="att-dropzone-content">
+          <icon-upload class="att-dropzone-icon" />
+          <span class="att-dropzone-text">
+            将文件拖拽至此上传，或<span class="att-dropzone-link">点击选择</span>
+          </span>
+          <span class="att-dropzone-hint">支持图片、文档、压缩包等，单文件最大 50MB</span>
+        </div>
+      </div>
+      <p v-else-if="attachments.length === 0" class="empty-hint">暂无附件</p>
     </section>
 
     <!-- Activity slot -->
@@ -240,6 +259,7 @@ const emit = defineEmits<{
   'add-link': []
   'upload': []
   'upload-private': []
+  'upload-files': [files: File[]]
   'copy-id': []
   'clone': []
   'move': []
@@ -248,6 +268,38 @@ const emit = defineEmits<{
   'find-similar': []
   'create-subtask': []
 }>()
+
+// ========== 拖拽上传 ==========
+const isDragOver = ref(false)
+let dragLeaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function onDragOver() {
+  if (dragLeaveTimer) {
+    clearTimeout(dragLeaveTimer)
+    dragLeaveTimer = null
+  }
+  isDragOver.value = true
+}
+
+function onDragLeave() {
+  // 使用 timer 防止在子元素间移动时闪烁
+  dragLeaveTimer = setTimeout(() => {
+    isDragOver.value = false
+  }, 50)
+}
+
+function onDrop(e: DragEvent) {
+  isDragOver.value = false
+  if (dragLeaveTimer) {
+    clearTimeout(dragLeaveTimer)
+    dragLeaveTimer = null
+  }
+  
+  const files = e.dataTransfer?.files
+  if (files && files.length > 0) {
+    emit('upload-files', Array.from(files))
+  }
+}
 
 const editingTitle = ref(false)
 const localTitle = ref('')
@@ -582,7 +634,7 @@ function commitDesc(content: string) {
 .link-status { font-size: 11px; font-weight: 500; flex-shrink: 0; margin-left: auto; }
 
 /* Attachments */
-.att-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.att-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .att-chip {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
   background: var(--tf-bg-elevated); border-radius: 3px; font-size: 12px; color: var(--tf-text-secondary);
@@ -594,6 +646,56 @@ function commitDesc(content: string) {
 .att-private:hover { border-color: var(--color-warning-light, #d29922); }
 .att-lock-icon { color: var(--color-warning-light, #d29922); flex-shrink: 0; }
 .att-sz { color: var(--tf-text-muted); font-size: 11px; }
+
+/* 拖拽上传区域 */
+.att-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  border: 2px dashed var(--tf-border);
+  border-radius: 6px;
+  background: var(--tf-bg-surface);
+  cursor: pointer;
+  transition: border-color 200ms, background 200ms;
+}
+.att-dropzone:hover {
+  border-color: var(--tf-accent);
+  background: var(--tf-bg-hover);
+}
+.att-dropzone--active {
+  border-color: var(--tf-accent);
+  background: rgba(var(--tf-accent-rgb, 88, 166, 255), 0.08);
+  border-style: solid;
+}
+.att-dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.att-dropzone-icon {
+  font-size: 24px;
+  color: var(--tf-text-muted);
+  transition: color 200ms;
+}
+.att-dropzone:hover .att-dropzone-icon,
+.att-dropzone--active .att-dropzone-icon {
+  color: var(--tf-accent);
+}
+.att-dropzone-text {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+}
+.att-dropzone-link {
+  color: var(--tf-accent);
+}
+.att-dropzone-hint {
+  font-size: 11px;
+  color: var(--tf-text-muted);
+}
+
 .section-actions { display: flex; gap: 12px; }
 .empty-hint { font-size: 11px; color: var(--tf-text-muted); margin: 0; }
 </style>
