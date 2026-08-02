@@ -59,29 +59,34 @@
             </a-input>
           </div>
 
-          <!-- 按分类展示 -->
+          <!-- 按分类展示（图标网格模式） -->
           <div class="panel-scroll">
             <template v-if="nodeSearchKeyword">
-              <!-- 搜索结果 -->
+              <!-- 搜索结果：网格 -->
               <div class="panel-section">
                 <div v-if="filteredNodes.length === 0" class="no-search-result">无匹配节点</div>
-                <div
-                  v-for="node in filteredNodes"
-                  :key="node.type"
-                  class="node-item"
-                  :style="{ '--node-color': node.color }"
-                  @mousedown="(e) => onDragStart(e, node)"
-                >
-                  <div class="node-item-icon">{{ node.icon }}</div>
-                  <div class="node-item-body">
-                    <div class="node-item-name">{{ node.label }}</div>
-                    <div class="node-item-desc">{{ node.desc }}</div>
-                  </div>
+                <div class="node-grid">
+                  <a-tooltip
+                    v-for="node in filteredNodes"
+                    :key="node.type"
+                    :content="node.label"
+                    position="right"
+                    mini
+                  >
+                    <div
+                      class="node-grid-item"
+                      :style="{ '--node-color': node.color }"
+                      @mousedown="(e) => onDragStart(e, node)"
+                    >
+                      <div class="node-grid-icon">{{ node.icon }}</div>
+                      <div class="node-grid-label">{{ node.label }}</div>
+                    </div>
+                  </a-tooltip>
                 </div>
               </div>
             </template>
             <template v-else>
-              <!-- 按分类分组 -->
+              <!-- 按分类分组：网格 -->
               <div
                 v-for="category in nodeCategories"
                 :key="category.name"
@@ -95,18 +100,23 @@
                   <span class="category-arrow">{{ collapsedCategories.has(category.name) ? '▶' : '▼' }}</span>
                 </div>
                 <template v-if="!collapsedCategories.has(category.name)">
-                  <div
-                    v-for="node in category.nodes"
-                    :key="node.type"
-                    class="node-item"
-                    :style="{ '--node-color': node.color }"
-                    @mousedown="(e) => onDragStart(e, node)"
-                  >
-                    <div class="node-item-icon">{{ node.icon }}</div>
-                    <div class="node-item-body">
-                      <div class="node-item-name">{{ node.label }}</div>
-                      <div class="node-item-desc">{{ node.desc }}</div>
-                    </div>
+                  <div class="node-grid">
+                    <a-tooltip
+                      v-for="node in category.nodes"
+                      :key="node.type"
+                      :content="node.label"
+                      position="right"
+                      mini
+                    >
+                      <div
+                        class="node-grid-item"
+                        :style="{ '--node-color': node.color }"
+                        @mousedown="(e) => onDragStart(e, node)"
+                      >
+                        <div class="node-grid-icon">{{ node.icon }}</div>
+                        <div class="node-grid-label">{{ node.label }}</div>
+                      </div>
+                    </a-tooltip>
                   </div>
                 </template>
               </div>
@@ -1209,7 +1219,7 @@ onUnmounted(() => {
 
 /* 面板内容区 */
 .panel-inner {
-  width: 220px;
+  width: 176px;
   background: var(--tf-bg-surface);
   border: 1px solid var(--tf-border);
   border-radius: 8px;
@@ -1259,7 +1269,7 @@ onUnmounted(() => {
 
 /* 节点面板内部 */
 .panel-section {
-  padding: 10px 8px;
+  padding: 8px 8px;
 }
 
 .section-title {
@@ -1378,6 +1388,67 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── 图标网格（扣子风格） ── */
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px 0 8px;
+}
+
+.node-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border-radius: 8px;
+  cursor: grab;
+  user-select: none;
+  transition: background 0.15s, transform 0.1s;
+  position: relative;
+}
+
+.node-grid-item:hover {
+  background: var(--tf-bg-hover);
+  transform: translateY(-1px);
+}
+
+.node-grid-item:active {
+  cursor: grabbing;
+  transform: scale(0.94);
+}
+
+.node-grid-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: color-mix(in srgb, var(--node-color, #6366f1) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--node-color, #6366f1) 30%, transparent);
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.node-grid-item:hover .node-grid-icon {
+  background: color-mix(in srgb, var(--node-color, #6366f1) 28%, transparent);
+}
+
+.node-grid-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tf-text-secondary);
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* 配置面板头部 */
