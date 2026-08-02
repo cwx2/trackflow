@@ -66,7 +66,10 @@
               :estimated="field.progress.estimated"
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
-            <span class="val-text editable" :class="{ 'prompt-text': field.isSetValuePrompt }">{{ field.value }}</span>
+            <a-tooltip v-if="field.tooltip" :content="field.tooltip" position="top" mini>
+              <span class="val-text editable" :class="[field.class, { 'prompt-text': field.isSetValuePrompt }]">{{ field.value }}</span>
+            </a-tooltip>
+            <span v-else class="val-text editable" :class="[field.class, { 'prompt-text': field.isSetValuePrompt }]">{{ field.value }}</span>
             <span class="val-chevron" aria-hidden="true">‹</span>
           </div>
           <template #content>
@@ -198,7 +201,7 @@
         </a-trigger>
 
         <!-- 只读字段（无 editType 或被权限限制） -->
-        <a-tooltip v-else :content="getReadonlyTooltip(field)" position="left" mini>
+        <a-tooltip v-else :content="field.tooltip || getReadonlyTooltip(field)" position="left" mini>
           <div class="sb-value readonly-value" @click="onReadonlyFieldClick(field)">
             <TimeProgressIndicator
               v-if="field.progress && field.progress.estimated > 0"
@@ -206,7 +209,7 @@
               :estimated="field.progress.estimated"
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
-            <span class="val-text">{{ field.value }}</span>
+            <span class="val-text" :class="field.class">{{ field.value }}</span>
             <span class="readonly-lock-icon" aria-hidden="true">
               <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                 <path d="M4 4v2h-.25A1.75 1.75 0 002 7.75v5.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0014 13.25v-5.5A1.75 1.75 0 0012.25 6H12V4a4 4 0 10-8 0zm6.5 2V4a2.5 2.5 0 00-5 0v2h5zM12.25 7.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25v-5.5a.25.25 0 01.25-.25h8.5z"/>
@@ -247,6 +250,8 @@ export interface SidebarField {
   badge?: string
   badgeColor?: string
   class?: string
+  /** 字段值的 tooltip 提示（如过期日期提示） */
+  tooltip?: string
   readonly?: boolean
   editType?: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'issue-search' | 'text' | 'period'
   options?: FieldOption[]
@@ -963,5 +968,15 @@ function confirmAddOption(field: SidebarField) {
 .add-option-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ========== 截止日期过期样式 ========== */
+.val-text.due-overdue {
+  color: var(--tf-danger, #f85149) !important;
+  font-weight: 500;
+}
+.val-text.due-due-soon {
+  color: var(--tf-warning, #d29922) !important;
+  font-weight: 500;
 }
 </style>

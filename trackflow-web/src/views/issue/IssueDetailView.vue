@@ -767,6 +767,40 @@ const currentStatus = computed<StatusInfo>(() => {
   return { id: '', name: '未知', color: '#666' }
 })
 
+/**
+ * 计算截止日期状态：过期/即将到期/正常
+ * 关闭的工单不显示警告颜色
+ */
+function getDueDateStatus(dueDate: string | undefined | null): 'overdue' | 'due-soon' | 'normal' {
+  if (!dueDate) return 'normal'
+  // 关闭的工单不显示警告颜色
+  if (issue.value?.status?.isClosed) return 'normal'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate)
+  due.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
+  if (diffDays < 0) return 'overdue'
+  if (diffDays <= 3) return 'due-soon'
+  return 'normal'
+}
+
+/**
+ * 获取截止日期 tooltip 提示文本
+ */
+function getDueDateTooltip(dueDate: string | undefined | null): string {
+  if (!dueDate) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate)
+  due.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
+  if (diffDays < 0) return `已逾期 ${Math.abs(diffDays)} 天`
+  if (diffDays === 0) return '今天到期'
+  if (diffDays === 1) return '明天到期'
+  return `${diffDays} 天后到期`
+}
+
 const availableTransitions = computed<StatusInfo[]>(() => {
   return transitions.value.map(s => ({
     id: s.id,
@@ -825,7 +859,16 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
-    { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit },
+    { 
+      key: 'dueDate', 
+      label: '截止日期', 
+      value: i.dueDate || '-', 
+      editType: 'date' as const, 
+      rawValue: i.dueDate || '', 
+      readonly: !canEdit,
+      class: getDueDateStatus(i.dueDate) !== 'normal' ? `due-${getDueDateStatus(i.dueDate)}` : undefined,
+      tooltip: getDueDateStatus(i.dueDate) !== 'normal' ? getDueDateTooltip(i.dueDate) : undefined
+    },
     ...(projectTimeTrackingEnabled.value ? [
       { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit, progress: i.estimatedHours ? { spent: i.spentHours || 0, estimated: i.estimatedHours } : undefined },
       { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
