@@ -65,6 +65,14 @@ const routes = [
         meta: { requiresProjectEdit: true }
       },
       {
+        path: 'projects/:projectKey/issues',
+        name: 'ProjectIssues',
+        redirect: to => ({
+          path: '/issues',
+          query: { project: to.params.projectKey }
+        })
+      },
+      {
         path: 'boards',
         name: 'Boards',
         component: () => import('@/views/board/KanbanBoardView.vue')
