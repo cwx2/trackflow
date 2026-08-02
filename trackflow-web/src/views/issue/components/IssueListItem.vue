@@ -83,9 +83,9 @@
 
     <!-- Row 2: M/L density - custom fields + reporter -->
     <div v-if="density !== 'S'" class="item-row2">
-      <span class="item-field" v-if="issue.assigneeName">
+      <span class="item-field item-assignee-field" :class="{ unassigned: !issue.assigneeName }">
         <span class="field-label">负责人:</span>
-        <span class="field-value">{{ issue.assigneeName }}</span>
+        <span class="field-value">{{ issue.assigneeName || '未分配' }}</span>
       </span>
       <!-- Sprint: inline-editable when sprintOptions is provided (non-null array) -->
       <span
@@ -546,6 +546,13 @@ function truncateDescription(desc?: string): string {
 
 .field-value {
   color: var(--tf-text-tertiary, var(--color-text-3));
+}
+
+/* Unassigned assignee highlight */
+.item-assignee-field.unassigned .field-value {
+  color: rgb(var(--warning-6));
+  font-weight: 500;
+  font-style: italic;
 }
 
 .field-cf-badge {
