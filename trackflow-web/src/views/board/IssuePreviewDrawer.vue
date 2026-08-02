@@ -180,7 +180,13 @@
         </div>
         <div class="preview-field" v-if="timeTrackingEnabled && detail.spentHours">
           <span class="field-label">已花费</span>
-          <span class="field-value">{{ detail.spentHours }}h</span>
+          <span 
+            class="field-value" 
+            :class="{ 'field-value--over-budget': detail.estimatedHours && detail.estimatedHours > 0 && detail.spentHours > detail.estimatedHours }"
+            :title="(detail.estimatedHours && detail.estimatedHours > 0 && detail.spentHours > detail.estimatedHours) ? `已超出预估 ${(detail.spentHours - detail.estimatedHours).toFixed(1)}h` : ''"
+          >
+            {{ detail.spentHours }}h
+          </span>
         </div>
         <!-- 自定义字段 -->
         <template v-if="detail.customFieldDetails && detail.customFieldDetails.length > 0">
@@ -753,6 +759,11 @@ function renderCommentContent(content: string): string {
 
 .field-value--due-soon {
   color: var(--tf-warning, #d29922);
+  font-weight: 500;
+}
+
+.field-value--over-budget {
+  color: var(--tf-danger, #f85149);
   font-weight: 500;
 }
 

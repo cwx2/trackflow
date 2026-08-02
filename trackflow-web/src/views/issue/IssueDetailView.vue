@@ -871,10 +871,32 @@ const sidebarFields = computed<SidebarField[]>(() => {
     },
     ...(projectTimeTrackingEnabled.value ? [
       { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit, progress: i.estimatedHours ? { spent: i.spentHours || 0, estimated: i.estimatedHours } : undefined },
-      { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true },
+      { 
+        key: 'spentHours', 
+        label: '已花时间', 
+        value: i.spentHours ? `${i.spentHours}h` : '-', 
+        readonly: true,
+        // 超出预估时显示红色警告
+        class: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) ? 'time-over-budget' : undefined,
+        tooltip: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) 
+          ? `已超出预估 ${((i.spentHours || 0) - i.estimatedHours).toFixed(1)}h` 
+          : undefined
+      },
     ] : []),
     ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true }] : []),
-    ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [{ key: 'derivedSpentHours', label: '总花费时间', value: `${i.derivedSpentHours}h`, readonly: true }] : []),
+    ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [
+      { 
+        key: 'derivedSpentHours', 
+        label: '总花费时间', 
+        value: `${i.derivedSpentHours}h`, 
+        readonly: true,
+        // 总花费时间超出总预估时也显示警告
+        class: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? 'time-over-budget' : undefined,
+        tooltip: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours)
+          ? `已超出预估 ${(i.derivedSpentHours - i.derivedEstimatedHours).toFixed(1)}h`
+          : undefined
+      }
+    ] : []),
     // 自定义字段
     ...buildCustomFieldSidebarEntries(i, canEditCF),
     { key: '_sep', label: '', value: '', readonly: true },

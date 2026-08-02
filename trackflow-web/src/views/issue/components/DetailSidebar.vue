@@ -979,4 +979,10 @@ function confirmAddOption(field: SidebarField) {
   color: var(--tf-warning, #d29922) !important;
   font-weight: 500;
 }
+
+/* ========== 工时超出预估样式 ========== */
+.val-text.time-over-budget {
+  color: var(--tf-danger, #f85149) !important;
+  font-weight: 500;
+}
 </style>
