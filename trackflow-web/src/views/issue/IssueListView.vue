@@ -2714,7 +2714,7 @@ function selectStatus(issue: IssueVO, status: IssueStatusVO) {
   }
 }
 
-/** 执行状态转换，处理各种警告（描述为空、WIP 超限、关闭确认） */
+/** 执行状态转换，处理各种警告（描述为空、WIP 超限、关闭确认、字段校验） */
 async function performStatusTransition(issue: IssueVO, status: IssueStatusVO, comment?: string, forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean }) {
   const oldStatusId = issue.statusId
   // 乐观更新
@@ -2724,6 +2724,20 @@ async function performStatusTransition(issue: IssueVO, status: IssueStatusVO, co
     const res = await issueApi.transitStatus(issue.id, status.id, comment, issue.version, forceFlags?.force, forceFlags?.forceWip, forceFlags?.forceDescEmpty)
 
     if (res.code === 0) {
+      // 检查是否为字段校验失败（状态转换被阻止）
+      const actionResult = res.data?.actionResult
+      if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
+        // 回滚乐观更新
+        issue.statusId = oldStatusId
+        // 显示警告消息
+        Modal.warning({
+          title: '字段校验',
+          content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
+          okText: '知道了'
+        })
+        return
+      }
+
       // 成功：同步版本号
       if (res.data != null) {
         const version = extractVersion(res.data)

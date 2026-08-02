@@ -28,7 +28,9 @@ public class ActionExecutionResult {
         /** 自动添加评论成功 */
         COMMENT_ADDED,
         /** 保留现有负责人（当前负责人已属于目标角色，无需重新分配） */
-        KEPT_EXISTING
+        KEPT_EXISTING,
+        /** 前置字段校验失败（缺少必填字段），状态转换被阻止 */
+        FIELD_VALIDATION_FAILED
     }
 
     /** 是否有动作被成功执行 */
@@ -48,6 +50,17 @@ public class ActionExecutionResult {
 
     /** 使用了哪个策略 */
     private String strategyUsed;
+
+    // ===== require_field 动作专用字段 =====
+
+    /** 校验失败的字段 ID（FIELD_VALIDATION_FAILED 时非空） */
+    private String requiredFieldId;
+
+    /** 校验失败的字段名称（FIELD_VALIDATION_FAILED 时非空） */
+    private String requiredFieldName;
+
+    /** 校验失败的警告消息（FIELD_VALIDATION_FAILED 时非空） */
+    private String warningMessage;
 
     // ===== 工厂方法 =====
 
@@ -111,6 +124,20 @@ public class ActionExecutionResult {
         r.setNewAssigneeId(assigneeId != null ? String.valueOf(assigneeId) : null);
         r.setNewAssigneeName(assigneeName);
         r.setStrategyUsed(strategy);
+        return r;
+    }
+
+    /**
+     * 字段校验失败：必填字段为空，状态转换被阻止。
+     */
+    public static ActionExecutionResult fieldValidationFailed(Long fieldId, String fieldName, String message) {
+        ActionExecutionResult r = new ActionExecutionResult();
+        r.setExecuted(false);
+        r.setActionType("require_field");
+        r.setOutcome(Outcome.FIELD_VALIDATION_FAILED);
+        r.setRequiredFieldId(fieldId != null ? String.valueOf(fieldId) : null);
+        r.setRequiredFieldName(fieldName);
+        r.setWarningMessage(message);
         return r;
     }
 }

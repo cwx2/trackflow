@@ -2185,6 +2185,16 @@ public class IssueService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Invalid target status");
         }
 
+        // 前置字段校验（require_field 动作）
+        // 如果必填字段为空，返回校验失败结果，不执行状态变更
+        ActionExecutionResult preValidation = transitionActionEngine.validatePreTransition(
+                issue, oldStatusId, newStatusId);
+        if (preValidation != null && preValidation.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
+            log.info("[IssueService] Issue {} 状态转换被阻止：字段校验失败，field={}, message={}",
+                    issue.getId(), preValidation.getRequiredFieldName(), preValidation.getWarningMessage());
+            return preValidation;
+        }
+
         issue.setStatusId(newStatusId);
         if (newStatus.getIsClosed()) {
             issue.setResolvedAt(LocalDateTime.now());

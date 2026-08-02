@@ -82,4 +82,66 @@ public class ActionConfig {
      */
     @JsonProperty("force_reassign")
     private Boolean forceReassign;
+
+    // ===== require_field 动作专用字段 =====
+
+    /**
+     * 必填字段 ID（action_type = require_field 时必填）。
+     * 指向 custom_field_definition.id。
+     * <p>
+     * 当状态转换到目标状态时，如果此字段为空，将显示警告并阻止转换。
+     * 参考 YouTrack Workflow 的 issue.fields.required(field, message) 方法。
+     * <p>
+     * 注意：此字段使用 Object 类型存储 JSON 值，然后通过 getRequiredFieldId() 转为 Long。
+     * 原因是 Jackson 解析 JSONB 中的大整数时可能存在精度丢失
+     * （当数值超过 JS Number.MAX_SAFE_INTEGER 时）。
+     * 使用 Object 类型可以捕获原始值（Number 或 String），再安全地转换。
+     */
+    @JsonProperty("required_field_id")
+    private Object requiredFieldIdRaw;
+
+    /**
+     * 获取必填字段 ID（安全转换，避免精度丢失）。
+     */
+    public Long getRequiredFieldId() {
+        if (requiredFieldIdRaw == null) {
+            return null;
+        }
+        if (requiredFieldIdRaw instanceof Number) {
+            // Jackson 可能将大整数解析为 BigInteger 或 Double
+            // 对于超过 Long.MAX_VALUE 的情况，longValue() 会溢出，但我们的 ID 不会那么大
+            return ((Number) requiredFieldIdRaw).longValue();
+        }
+        if (requiredFieldIdRaw instanceof String) {
+            try {
+                return Long.parseLong((String) requiredFieldIdRaw);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取原始值（用于调试）。
+     */
+    public Object getRequiredFieldIdRaw() {
+        return requiredFieldIdRaw;
+    }
+
+    /**
+     * 必填字段名称（可选，用于显示警告消息）。
+     * 如果不填，将自动从 custom_field_definition 获取。
+     */
+    @JsonProperty("required_field_name")
+    private String requiredFieldName;
+
+    /**
+     * 校验失败时的警告消息模板（可选）。
+     * 支持占位符：{field_name}（字段名称）
+     * <p>
+     * 默认消息："请先填写「{field_name}」字段"
+     */
+    @JsonProperty("warning_message")
+    private String warningMessage;
 }

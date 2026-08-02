@@ -912,16 +912,22 @@ export interface WorkflowImpactAnalysisVO {
 export interface ActionExecutionResult {
   /** 是否有动作被成功执行 */
   executed: boolean
-  /** 动作类型（如 "auto_assign"） */
+  /** 动作类型（如 "auto_assign", "require_field"） */
   actionType?: string
   /** 执行结果 */
-  outcome: 'ASSIGNED' | 'MANUAL_OVERRIDE' | 'STRATEGY_FAILED' | 'NO_ACTIONS' | 'EXECUTION_ERROR' | 'COMMENT_ADDED' | 'KEPT_EXISTING'
+  outcome: 'ASSIGNED' | 'MANUAL_OVERRIDE' | 'STRATEGY_FAILED' | 'NO_ACTIONS' | 'EXECUTION_ERROR' | 'COMMENT_ADDED' | 'KEPT_EXISTING' | 'FIELD_VALIDATION_FAILED'
   /** 分配给了谁的用户 ID */
   newAssigneeId?: string
   /** 分配给了谁的显示名称 */
   newAssigneeName?: string
   /** 使用了哪个策略 */
   strategyUsed?: string
+  /** 校验失败的字段 ID（FIELD_VALIDATION_FAILED 时非空） */
+  requiredFieldId?: string
+  /** 校验失败的字段名称（FIELD_VALIDATION_FAILED 时非空） */
+  requiredFieldName?: string
+  /** 校验失败的警告消息（FIELD_VALIDATION_FAILED 时非空） */
+  warningMessage?: string
 }
 
 /** 状态转换 API 响应体 */

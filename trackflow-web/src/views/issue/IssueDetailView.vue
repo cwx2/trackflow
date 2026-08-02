@@ -1388,6 +1388,18 @@ async function executeTransition(
       forceFlags?.forceDescEmpty
     )
     if (res.code === 0) {
+      // 检查是否为字段校验失败（状态转换被阻止）
+      const actionResult = res.data?.actionResult
+      if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
+        // 显示警告消息，提示用户先填写必填字段
+        Modal.warning({
+          title: '字段校验',
+          content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
+          okText: '知道了'
+        })
+        return
+      }
+
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
       showActionFeedback(res.data)
@@ -1425,7 +1437,42 @@ async function executeTransition(
     } else {
       Message.error(res.message || '变更失败')
     }
-  } catch (e: any) { handleUpdateError(e, '变更失败') }
+  } catch (e: any) {
+    // 处理特殊错误码（后端以 4xx 状态码返回但需要前端交互处理的场景）
+    const errorCode = e.response?.data?.code
+    const errorMessage = e.response?.data?.message
+
+    if (errorCode === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
+      Modal.warning({
+        title: 'WIP 限制',
+        content: errorMessage,
+        okText: '继续移入',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true })
+      })
+    } else if (errorCode === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
+      Modal.warning({
+        title: '确认关闭',
+        content: errorMessage,
+        okText: '强制关闭',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true })
+      })
+    } else if (errorCode === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
+      Modal.warning({
+        title: '工单描述为空',
+        content: errorMessage,
+        okText: '继续变更',
+        cancelText: '取消',
+        hideCancel: false,
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true })
+      })
+    } else {
+      handleUpdateError(e, '变更失败')
+    }
+  }
 }
 
 function openTimeDialog() {

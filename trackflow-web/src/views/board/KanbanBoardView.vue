@@ -3762,6 +3762,21 @@ async function onDrop(event: DragEvent, targetStatusId: string) {
       return
     }
 
+    // 检查是否为字段校验失败（状态转换被阻止）
+    const actionResult = res.data?.actionResult
+    if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
+      // 回滚乐观更新
+      issue.statusId = oldStatusId
+      transitioningIssueIds.value.delete(issue.id)
+      // 显示警告消息
+      Modal.warning({
+        title: '字段校验',
+        content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
+        okText: '知道了'
+      })
+      return
+    }
+
     // 同步更新本地版本号（后端返回 TransitStatusResultVO）
     const newVersion = extractVersion(res.data)
     if (newVersion != null) {

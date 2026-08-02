@@ -1,5 +1,10 @@
 package com.trackflow.workflow.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.entity.CustomFieldValue;
+import com.trackflow.customfield.mapper.CustomFieldDefinitionMapper;
+import com.trackflow.customfield.mapper.CustomFieldValueMapper;
 import com.trackflow.integration.entity.NotificationReason;
 import com.trackflow.integration.entity.NotificationType;
 import com.trackflow.integration.service.NotificationService;
@@ -51,6 +56,8 @@ public class TransitionActionEngine {
     private final IssueStatusMapper issueStatusMapper;
     private final SysUserMapper sysUserMapper;
     private final List<AssignmentStrategy> strategyList;
+    private final CustomFieldDefinitionMapper customFieldDefinitionMapper;
+    private final CustomFieldValueMapper customFieldValueMapper;
 
     private Map<String, AssignmentStrategy> strategyMap;
 
@@ -62,6 +69,105 @@ public class TransitionActionEngine {
         }
         log.info("[TransitionActionEngine] 已注册 {} 个分配策略: {}",
                 strategyMap.size(), strategyMap.keySet());
+    }
+
+    /**
+     * 执行前置校验（状态变更前调用）。
+     * <p>
+     * 检查 require_field 类型的动作，验证必填字段是否已填写。
+     * 如果校验失败，返回包含警告信息的 ActionExecutionResult，调用方应阻止状态转换。
+     * <p>
+     * 参考 YouTrack Workflow 的 issue.fields.required(field, message) 方法。
+     *
+     * @param issue       当前 Issue（状态未变更）
+     * @param oldStatusId 当前状态 ID
+     * @param newStatusId 目标状态 ID
+     * @return 校验失败时返回 FIELD_VALIDATION_FAILED 结果；校验通过时返回 null
+     */
+    public ActionExecutionResult validatePreTransition(Issue issue, Long oldStatusId, Long newStatusId) {
+        log.debug("[validatePreTransition] issue={}, oldStatus={} -> newStatus={}",
+                issue.getIssueKey(), oldStatusId, newStatusId);
+        
+        // 解析匹配的动作列表
+        List<TransitionAction> actions = actionResolver.resolve(
+                issue.getProjectId(), issue.getIssueType(), oldStatusId, newStatusId);
+
+        if (actions == null || actions.isEmpty()) {
+            log.debug("[validatePreTransition] 无匹配动作，跳过校验");
+            return null; // 无动作配置，校验通过
+        }
+
+        // 遍历所有 require_field 动作，检查字段是否为空
+        for (TransitionAction action : actions) {
+            if (!"require_field".equals(action.getActionType())) {
+                continue;
+            }
+
+            log.debug("[validatePreTransition] 检查 require_field 动作: actionId={}", action.getId());
+            ActionExecutionResult validationResult = validateRequiredField(action, issue);
+            if (validationResult != null) {
+                // 校验失败，立即返回（第一个失败的字段）
+                return validationResult;
+            }
+        }
+
+        return null; // 所有校验通过
+    }
+
+    /**
+     * 校验单个必填字段。
+     *
+     * @return 校验失败时返回 FIELD_VALIDATION_FAILED 结果；校验通过时返回 null
+     */
+    private ActionExecutionResult validateRequiredField(TransitionAction action, Issue issue) {
+        ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
+        if (config == null) {
+            log.warn("[validateRequiredField] action {} 的 action_config 解析失败", action.getId());
+            return null;
+        }
+        
+        Long fieldId = config.getRequiredFieldId();
+        if (fieldId == null) {
+            log.warn("[validateRequiredField] action {} 缺少 required_field_id 配置", action.getId());
+            return null; // 配置不完整，跳过此动作
+        }
+
+        // 获取字段定义
+        CustomFieldDefinition fieldDef = customFieldDefinitionMapper.selectById(fieldId);
+        if (fieldDef == null) {
+            log.warn("[validateRequiredField] action {} 引用的字段 {} 不存在", action.getId(), fieldId);
+            return null; // 字段不存在，跳过此动作
+        }
+
+        // 检查字段值是否为空
+        CustomFieldValue fieldValue = customFieldValueMapper.selectOne(
+                new LambdaQueryWrapper<CustomFieldValue>()
+                        .eq(CustomFieldValue::getIssueId, issue.getId())
+                        .eq(CustomFieldValue::getCustomFieldId, fieldId)
+                        .last("LIMIT 1")
+        );
+
+        boolean isEmpty = (fieldValue == null || fieldValue.getValue() == null 
+                || fieldValue.getValue().isBlank());
+
+        if (isEmpty) {
+            // 字段为空，构造警告消息
+            String fieldName = config.getRequiredFieldName() != null 
+                    ? config.getRequiredFieldName() 
+                    : fieldDef.getName();
+            String warningMessage = config.getWarningMessage();
+            if (warningMessage == null || warningMessage.isBlank()) {
+                warningMessage = "请先填写「{field_name}」字段";
+            }
+            warningMessage = warningMessage.replace("{field_name}", fieldName);
+
+            log.info("[TransitionActionEngine] Issue {} 前置校验失败：字段「{}」为空",
+                    issue.getIssueKey(), fieldName);
+
+            return ActionExecutionResult.fieldValidationFailed(fieldId, fieldName, warningMessage);
+        }
+
+        return null; // 校验通过
     }
 
     /**

@@ -317,6 +317,11 @@ public class IssueController {
                 dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
                 dto.getVersion(), true);
 
+        // 字段校验失败时，返回校验结果但不更新版本号（状态未变更）
+        if (actionResult != null && actionResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
+            return R.ok(TransitStatusResultVO.of(dto.getVersion(), actionResult));
+        }
+
         // 返回更新后的版本号 + 动作执行结果
         Issue updated = issueService.getById(id);
         return R.ok(TransitStatusResultVO.of(updated.getVersion(), actionResult));

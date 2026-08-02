@@ -391,6 +391,21 @@ async function doTransitStatus(target: IssueStatusVO, comment: string | undefine
     const res = await issueApi.transitStatus(props.issueId, target.id, comment, detail.value.version, forceFlags?.force, forceFlags?.forceWip, forceFlags?.forceDescEmpty)
 
     if (res.code === 0) {
+      // 检查是否为字段校验失败（状态转换被阻止）
+      const actionResult = res.data?.actionResult
+      if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
+        // 回滚乐观更新
+        detail.value.statusId = oldStatusId
+        detail.value.status = oldStatus
+        // 显示警告消息
+        Modal.warning({
+          title: '字段校验',
+          content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
+          okText: '知道了'
+        })
+        return
+      }
+
       // 成功：同步版本号
       detail.value.version = (detail.value.version || 0) + 1
       Message.success(`状态已变更为「${localizeStatusName(target.name)}」`)
