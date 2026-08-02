@@ -155,6 +155,34 @@ export function localizeCategoryName(category?: string | null): string {
 }
 
 /**
+ * 判断值是否看起来像内部标识符（应该被过滤的技术名称）
+ * 例如：TestOnlyStatus、TEST_STATUS、InternalState 等
+ * @param value 字符串值
+ * @returns 是否为内部标识符
+ */
+function looksLikeInternalIdentifier(value: string): boolean {
+  // 1. 包含 Test、Internal、Debug、Mock、Dummy、Temp 等测试/内部关键词（不区分大小写）
+  const testKeywords = /test|internal|debug|mock|dummy|temp|placeholder|dev\b/i
+  if (testKeywords.test(value)) return true
+
+  // 2. 全大写带下划线的枚举风格（如 IN_PROGRESS、TODO_STATUS）
+  if (/^[A-Z][A-Z_0-9]+$/.test(value)) return true
+
+  // 3. PascalCase 且超过一个单词但不含中文（如 TestOnlyStatus、InProgressState）
+  // 但排除已知的合法英文状态名（如 "In Progress"、"Code Review"）
+  const knownEnglishStatuses = [
+    'Open', 'In Progress', 'Code Review', 'Testing', 'Done', 'Cancelled',
+    'Reopened', 'Todo', 'UI Todo', 'Online', 'Solved', 'Closed', 'Pending'
+  ]
+  if (!knownEnglishStatuses.some(s => value.includes(s))) {
+    // 检测 PascalCase 多词形式（如 TestOnlyStatus）
+    if (/^[A-Z][a-z]+(?:[A-Z][a-z]+)+$/.test(value)) return true
+  }
+
+  return false
+}
+
+/**
  * 根据字段名，本地化字段值
  * 适用于活动记录中展示 old_value / new_value 的场景
  * @param fieldName 字段标识（如 "priority"、"status"）
@@ -170,9 +198,16 @@ export function localizeFieldValue(fieldName?: string | null, value?: string | n
     return priorityLabelMap[value] || value
   }
 
-  // 状态字段
+  // 状态字段：额外处理无法识别的历史状态值
   if (fieldName === 'status' || fieldName === 'status_id') {
-    return statusLabelMap[value] || value
+    const localized = statusLabelMap[value]
+    if (localized) return localized
+    // 如果值看起来像内部标识符（如 TestOnlyStatus），显示为"(未知状态)"
+    // 防止历史脏数据（测试状态、已删除状态）泄漏到用户界面
+    if (looksLikeInternalIdentifier(value)) {
+      return '(未知状态)'
+    }
+    return value
   }
 
   // Issue 类型字段
