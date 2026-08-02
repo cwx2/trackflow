@@ -247,32 +247,18 @@
             </a-input-number>
           </div>
 
-          <!-- 自定义字段（可折叠区域） -->
-          <template v-if="customFields.length > 0">
-            <div class="prop-section-header" :class="{ 'has-required': requiredCustomFieldsCount > 0 }" @click="toggleCustomFieldsSection">
-              <span class="section-title">
-                <span v-if="requiredCustomFieldsCount > 0" class="required-indicator"></span>
-                更多字段
-                <span v-if="requiredCustomFieldsCount > 0" class="section-required-hint">
-                  ({{ requiredCustomFieldsCount }} 个必填)
-                </span>
+          <!-- 必填自定义字段（始终直接显示，参考 YouTrack 设计） -->
+          <template v-if="requiredCustomFields.length > 0">
+            <div v-for="cf in requiredCustomFields" :key="cf.id" class="prop-row required-custom-field" :class="{ 'requires-explicit-selection': cf.requiresExplicitSelection && !customFieldValues[cf.id] }" :data-field-id="cf.id">
+              <span class="prop-label">
+                {{ cf.name }}
+                <a-tooltip v-if="cf.requiresExplicitSelection" content="此字段必须主动选择，没有默认值" position="top" mini>
+                  <span class="required-mark set-value-mark">*</span>
+                </a-tooltip>
+                <a-tooltip v-else content="必填字段" position="top" mini>
+                  <span class="required-mark">*</span>
+                </a-tooltip>
               </span>
-              <span class="section-toggle">
-                <icon-down v-if="!showCustomFields" />
-                <icon-up v-else />
-              </span>
-            </div>
-            <template v-if="showCustomFields">
-              <div v-for="cf in customFields" :key="cf.id" class="prop-row" :class="{ 'requires-explicit-selection': cf.requiresExplicitSelection && !customFieldValues[cf.id] }" :data-field-id="cf.id">
-                <span class="prop-label">
-                  {{ cf.name }}
-                  <a-tooltip v-if="cf.requiresExplicitSelection" content="此字段必须主动选择，没有默认值" position="top" mini>
-                    <span class="required-mark set-value-mark">*</span>
-                  </a-tooltip>
-                  <a-tooltip v-else-if="cf.effectiveIsRequired ?? cf.isRequired" content="必填字段" position="top" mini>
-                    <span class="required-mark">*</span>
-                  </a-tooltip>
-                </span>
               <!-- string -->
               <a-input
                 v-if="cf.fieldFormat === 'string'"
@@ -419,6 +405,146 @@
               <!-- inline error message -->
               <span v-if="cfValidationErrors[cf.id]" class="field-error-msg">{{ cfValidationErrors[cf.id] }}</span>
             </div>
+          </template>
+
+          <!-- 可选自定义字段（可折叠区域） -->
+          <template v-if="optionalCustomFields.length > 0">
+            <div class="prop-section-header" @click="toggleCustomFieldsSection">
+              <span class="section-title">
+                更多字段
+              </span>
+              <span class="section-toggle">
+                <icon-down v-if="!showCustomFields" />
+                <icon-up v-else />
+              </span>
+            </div>
+            <template v-if="showCustomFields">
+              <div v-for="cf in optionalCustomFields" :key="cf.id" class="prop-row" :data-field-id="cf.id">
+                <span class="prop-label">{{ cf.name }}</span>
+                <!-- string -->
+                <a-input
+                  v-if="cf.fieldFormat === 'string'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  allow-clear
+                />
+                <!-- text (多行/Markdown) -->
+                <a-textarea
+                  v-else-if="cf.fieldFormat === 'text'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  :auto-size="{ minRows: 2, maxRows: 6 }"
+                  allow-clear
+                />
+                <!-- int -->
+                <a-input-number
+                  v-else-if="cf.fieldFormat === 'int'"
+                  :model-value="customFieldValues[cf.id] ? Number(customFieldValues[cf.id]) : undefined"
+                  @update:model-value="(v: any) => { customFieldValues[cf.id] = v != null ? String(v) : '' }"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  :precision="0"
+                  hide-button
+                  style="width: 100%"
+                />
+                <!-- float -->
+                <a-input-number
+                  v-else-if="cf.fieldFormat === 'float'"
+                  :model-value="customFieldValues[cf.id] ? Number(customFieldValues[cf.id]) : undefined"
+                  @update:model-value="(v: any) => { customFieldValues[cf.id] = v != null ? String(v) : '' }"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  hide-button
+                  style="width: 100%"
+                />
+                <!-- date -->
+                <a-date-picker
+                  v-else-if="cf.fieldFormat === 'date'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  style="width: 100%"
+                  :placeholder="getFieldPlaceholder(cf)"
+                />
+                <!-- datetime -->
+                <a-date-picker
+                  v-else-if="cf.fieldFormat === 'datetime'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  style="width: 100%"
+                  show-time
+                  format="YYYY-MM-DDTHH:mm:ss"
+                  :placeholder="getFieldPlaceholder(cf)"
+                />
+                <!-- bool -->
+                <a-switch
+                  v-else-if="cf.fieldFormat === 'bool'"
+                  :model-value="customFieldValues[cf.id] === 'true'"
+                  size="small"
+                  @change="(v: any) => { customFieldValues[cf.id] = String(v) }"
+                />
+                <!-- list (多值模式) -->
+                <a-select
+                  v-else-if="cf.fieldFormat === 'list' && cf.isMulti"
+                  :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
+                  @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(',') }"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  multiple
+                  allow-clear
+                >
+                  <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
+                    <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                      <span class="cf-option-label">{{ opt.value }}</span>
+                    </a-tooltip>
+                  </a-option>
+                  <template #footer v-if="canAddFieldOption">
+                    <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
+                      <span class="add-icon">+</span> 添加新值
+                    </div>
+                    <div class="select-add-input" v-else @click.stop>
+                      <input v-model="newOptionInput" class="add-opt-field" placeholder="输入新值" @keyup.enter="confirmAddOptionInSelect(cf)" @keyup.escape="cancelAddOptionInSelect()" />
+                      <button class="add-opt-btn" :disabled="!newOptionInput.trim()" @click="confirmAddOptionInSelect(cf)">添加</button>
+                    </div>
+                  </template>
+                </a-select>
+                <!-- list (单值模式) -->
+                <a-select
+                  v-else-if="cf.fieldFormat === 'list'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  allow-clear
+                >
+                  <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
+                    <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                      <span class="cf-option-label">{{ opt.value }}</span>
+                    </a-tooltip>
+                  </a-option>
+                  <template #footer v-if="canAddFieldOption">
+                    <div class="select-add-option" v-if="addingOptionFieldId !== cf.id" @click.stop="startAddOptionInSelect(cf.id)">
+                      <span class="add-icon">+</span> 添加新值
+                    </div>
+                    <div class="select-add-input" v-else @click.stop>
+                      <input v-model="newOptionInput" class="add-opt-field" placeholder="输入新值" @keyup.enter="confirmAddOptionInSelect(cf)" @keyup.escape="cancelAddOptionInSelect()" />
+                      <button class="add-opt-btn" :disabled="!newOptionInput.trim()" @click="confirmAddOptionInSelect(cf)">添加</button>
+                    </div>
+                  </template>
+                </a-select>
+                <!-- user -->
+                <a-select
+                  v-else-if="cf.fieldFormat === 'user'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  :placeholder="form.projectId ? getFieldPlaceholder(cf) : '请先选择项目'"
+                  :disabled="!form.projectId"
+                  allow-clear
+                  allow-search
+                >
+                  <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
+                </a-select>
+              </div>
             </template>
           </template>
         </div>
@@ -738,6 +864,16 @@ const { fields: customFields, values: customFieldValues, loading: cfLoading, val
   issueTypeRef
 )
 
+// 将自定义字段分为两组：必填字段（始终显示）和可选字段（折叠区域）
+// 参考 YouTrack：必填字段直接在表单主区域可见，显示 "Set value" 提示
+const requiredCustomFields = computed<CustomFieldDefinitionVO[]>(() => {
+  return customFields.value.filter(cf => cf.effectiveIsRequired ?? cf.isRequired)
+})
+
+const optionalCustomFields = computed<CustomFieldDefinitionVO[]>(() => {
+  return customFields.value.filter(cf => !(cf.effectiveIsRequired ?? cf.isRequired))
+})
+
 // 自定义字段校验错误（inline 显示）
 const cfValidationErrors = ref<Record<string, string>>({})
 
@@ -894,6 +1030,8 @@ function validateFieldOnBlur(cf: CustomFieldDefinitionVO) {
 /**
  * 滚动到第一个错误字段并聚焦
  * 提交时若有校验错误，自动定位到第一个问题字段
+ * 
+ * 注：现在必填字段直接显示在主区域，不需要展开折叠区域
  */
 function scrollToFirstError() {
   // 优先检查标题错误（标题在页面顶部）
@@ -906,28 +1044,22 @@ function scrollToFirstError() {
     }
   }
 
-  // 检查自定义字段错误
+  // 检查自定义字段错误（必填字段现在直接在主区域显示）
   const errorFieldIds = Object.keys(cfValidationErrors.value)
   if (errorFieldIds.length === 0) return
 
-  // 如果有自定义字段错误，先展开折叠区域
-  expandCustomFieldsSection()
-
   const firstFieldId = errorFieldIds[0]
-  // 需要等待 DOM 更新后再查找元素
-  setTimeout(() => {
-    // 通过 data-field-id 属性查找元素
-    const fieldRow = document.querySelector(`.prop-row[data-field-id="${firstFieldId}"]`) as HTMLElement
-    if (fieldRow) {
-      // 滚动到视野中
-      fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      // 尝试聚焦输入元素
-      setTimeout(() => {
-        const input = fieldRow.querySelector('input, textarea, .arco-select-view') as HTMLElement
-        input?.focus?.()
-      }, 300)
-    }
-  }, 50)
+  // 通过 data-field-id 属性查找元素
+  const fieldRow = document.querySelector(`.prop-row[data-field-id="${firstFieldId}"]`) as HTMLElement
+  if (fieldRow) {
+    // 滚动到视野中
+    fieldRow.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // 尝试聚焦输入元素
+    setTimeout(() => {
+      const input = fieldRow.querySelector('input, textarea, .arco-select-view') as HTMLElement
+      input?.focus?.()
+    }, 300)
+  }
 }
 
 /**
@@ -974,33 +1106,20 @@ const canSubmit = computed(() => !!form.projectId && !!form.title.trim())
 
 /**
  * 计算自定义字段中的必填字段数量
+ * 现在必填字段直接显示在主区域，这个计算主要用于校验逻辑
  */
 const requiredCustomFieldsCount = computed(() => {
-  return customFields.value.filter(cf => cf.effectiveIsRequired ?? cf.isRequired).length
+  return requiredCustomFields.value.length
 })
 
-/**
- * 当自定义字段加载完成且包含必填项时，自动展开折叠区域
- * 这样用户可以立即看到需要填写的必填字段，避免提交失败后才发现
- */
-watch(requiredCustomFieldsCount, (count) => {
-  if (count > 0) {
-    showCustomFields.value = true
-  }
-}, { immediate: true })
+// 移除自动展开折叠区域的逻辑，因为必填字段现在直接显示在主区域，不需要展开"更多字段"
+// 旧逻辑：watch(requiredCustomFieldsCount, ...) 自动展开
 
 /**
  * 切换自定义字段区域的折叠状态
  */
 function toggleCustomFieldsSection() {
   showCustomFields.value = !showCustomFields.value
-}
-
-/**
- * 展开自定义字段区域（供校验失败时调用）
- */
-function expandCustomFieldsSection() {
-  showCustomFields.value = true
 }
 
 /**
@@ -1845,24 +1964,6 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
 }
-/* 必填字段红色圆点指示器 */
-.required-indicator {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: #f85149;
-  flex-shrink: 0;
-}
-/* 当有必填字段时，整个区域头部更醒目 */
-.prop-section-header.has-required .section-title {
-  color: var(--color-text-1);
-}
-.section-required-hint {
-  font-size: 11px;
-  font-weight: 500;
-  color: #f85149;
-}
 .section-toggle {
   font-size: 12px;
   color: var(--color-text-3);
@@ -1883,6 +1984,13 @@ onMounted(() => {
 /* "设置值"标记 — 无默认值但必填字段的醒目提示 */
 .required-mark.set-value-mark {
   color: var(--tf-warning, #d29922);
+}
+
+/* 必填自定义字段：在主区域直接显示，添加顶部分隔线作为视觉分隔 */
+.prop-row.required-custom-field:first-of-type {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-2, var(--tf-border-light));
 }
 
 /* 需要用户主动选择的字段行：未填写时的高亮提示 */
