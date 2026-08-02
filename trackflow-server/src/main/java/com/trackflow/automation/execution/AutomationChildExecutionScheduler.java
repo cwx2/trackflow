@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.automation.execution.entity.AutomationExecution;
 import com.trackflow.automation.execution.mapper.AutomationExecutionMapper;
 import com.trackflow.automation.node.model.WorkflowDefinitionModel;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import com.trackflow.common.service.DistributedLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,9 +28,11 @@ public class AutomationChildExecutionScheduler {
     private final DAGExecutor dagExecutor;
     private final DistributedLockService lockService;
     private final ObjectMapper objectMapper;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     @Scheduled(fixedDelay = 1000)
     public void resumeParents() {
+        if (!runtimeCoordinator.shouldRunWorkers()) return;
         lockService.executeWithLock("automation_child_resume", this::scanParents);
     }
 

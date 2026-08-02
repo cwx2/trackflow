@@ -25,6 +25,9 @@ public class WorkflowDetailVO {
     private Integer maxConcurrent;
     private Long actorUserId;
     private LocalDateTime publishedAt;
+    private Boolean runtimeEnabled;
+    private LocalDateTime activatedAt;
+    private String activatedBy;
     private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -17,11 +17,13 @@ public interface AutomationWorkflowConverter extends BaseConverter {
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "createdBy", expression = "java(longToString(entity.getCreatedBy()))")
+    @Mapping(target = "activatedBy", expression = "java(longToString(entity.getActivatedBy()))")
     WorkflowVO toVO(AutomationWorkflow entity);
 
     List<WorkflowVO> toVOList(List<AutomationWorkflow> entities);
 
     @Mapping(target = "id", expression = "java(longToString(entity.getId()))")
     @Mapping(target = "createdBy", expression = "java(longToString(entity.getCreatedBy()))")
+    @Mapping(target = "activatedBy", expression = "java(longToString(entity.getActivatedBy()))")
     WorkflowDetailVO toDetailVO(AutomationWorkflow entity);
 }

@@ -1,6 +1,7 @@
 package com.trackflow.automation.trigger;
 
 import com.trackflow.common.service.DistributedLockService;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -11,9 +12,11 @@ import org.springframework.stereotype.Component;
 public class AutomationEventInboxScheduler {
     private final DistributedLockService lockService;
     private final AutomationTriggerService triggerService;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     @Scheduled(fixedDelay = 5000)
     public void process() {
+        if (!runtimeCoordinator.shouldRunWorkers()) return;
         lockService.executeWithLock("automation_event_inbox",
                 triggerService::processPendingEvents);
     }

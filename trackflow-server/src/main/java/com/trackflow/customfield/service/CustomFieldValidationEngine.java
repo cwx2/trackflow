@@ -38,6 +38,11 @@ public class CustomFieldValidationEngine {
             "string", "text", "int", "float", "date", "datetime", "bool", "list", "user", "period"
     );
 
+    /** 无项目上下文时使用的兼容入口。 */
+    public List<FieldValidationError> validate(CustomFieldDefinition field, String value) {
+        return validate(field, value, null, null);
+    }
+
     /**
      * period（时间周期）格式的正则表达式
      * 支持格式: 1w2d3h30m, 2h30m, 1d, 45m, 2h, 1w 等

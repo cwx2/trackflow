@@ -12,7 +12,7 @@ requirements
 .kiro/
 docs/
 .playwright-mcp
-test
+/test/
 tools
 
 # === Java / Maven ===

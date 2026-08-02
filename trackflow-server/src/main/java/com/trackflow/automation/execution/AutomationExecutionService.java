@@ -11,6 +11,7 @@ import com.trackflow.automation.approval.entity.AutomationApproval;
 import com.trackflow.automation.approval.mapper.AutomationApprovalMapper;
 import com.trackflow.automation.node.model.WorkflowDefinitionModel;
 import com.trackflow.automation.service.AutomationWorkflowService;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class AutomationExecutionService {
     private final ObjectMapper objectMapper;
     private final AutomationNodeExecutionMapper nodeExecutionMapper;
     private final AutomationApprovalMapper approvalMapper;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     public Long startDraft(Long automationId, Map<String, Object> inputs, Long requestedActorUserId) {
         AutomationWorkflow workflow = workflowService.getById(automationId);
@@ -159,6 +161,7 @@ public class AutomationExecutionService {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "触发输入无法序列化");
         }
         executionMapper.insert(execution);
+        runtimeCoordinator.wakeWorkersAfterCommit();
         dagExecutor.executeAsync(definition, execution.getId(), safeInputs, actorUserId);
         return execution.getId();
     }

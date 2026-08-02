@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.automation.entity.AutomationWorkflow;
 import com.trackflow.automation.service.AutomationWorkflowService;
+import com.trackflow.auth.security.NoAuthorizationRequired;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
@@ -24,13 +25,16 @@ public class AutomationWebhookController {
     private final ObjectMapper objectMapper;
 
     @PostMapping("/{workflowId}")
+    @NoAuthorizationRequired(reason = "Webhook 使用工作流专属 Token 和幂等键鉴权")
     public R<Void> receive(@PathVariable Long workflowId,
                            @RequestHeader("X-TrackFlow-Webhook-Token") String token,
                            @RequestHeader("X-Idempotency-Key") String idempotencyKey,
                            @RequestBody(required = false) Map<String, Object> payload) {
         AutomationWorkflow workflow = workflowService.getById(workflowId);
-        if (!"published".equals(workflow.getStatus()) || !"webhook".equals(workflow.getTriggerType())) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Webhook 工作流不存在或未发布");
+        if (!"published".equals(workflow.getStatus())
+                || !Boolean.TRUE.equals(workflow.getRuntimeEnabled())
+                || !"webhook".equals(workflow.getTriggerType())) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Webhook 工作流不存在、未发布或未启动");
         }
         try {
             Map<String, Object> config = objectMapper.readValue(

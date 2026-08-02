@@ -27,10 +27,26 @@
       <a-tag :color="status === 'published' ? 'green' : status === 'disabled' ? 'gray' : 'orange'">
         {{ status === 'published' ? '已发布' : status === 'disabled' ? '已停用' : '草稿' }}
       </a-tag>
-      <a-button @click="emit('settings')">运行设置</a-button>
-      <a-button v-if="status === 'published'" status="warning" @click="emit('disable')">停用</a-button>
-      <a-button v-else :loading="publishing" @click="emit('publish')">发布</a-button>
-      <a-button type="primary" :loading="saving" @click="emit('save')">保存</a-button>
+      <a-tag :color="runtimeEnabled ? 'arcoblue' : 'gray'">
+        {{ runtimeEnabled ? '运行中' : '未启动' }}
+      </a-tag>
+      <a-button :disabled="runtimeEnabled" @click="emit('settings')">运行设置</a-button>
+      <a-button :loading="publishing" :disabled="runtimeEnabled" @click="emit('publish')">
+        {{ status === 'published' ? '重新发布' : '发布' }}
+      </a-button>
+      <a-button
+        v-if="status === 'published' && runtimeEnabled"
+        status="warning"
+        :loading="runtimeChanging"
+        @click="emit('stop')"
+      >停止</a-button>
+      <a-button
+        v-else-if="status === 'published'"
+        type="primary"
+        :loading="runtimeChanging"
+        @click="emit('start')"
+      >启动</a-button>
+      <a-button type="primary" :loading="saving" :disabled="runtimeEnabled" @click="emit('save')">保存</a-button>
     </div>
   </div>
 </template>
@@ -38,11 +54,13 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   name: string
   saving: boolean
   publishing: boolean
   status: 'draft' | 'published' | 'disabled'
+  runtimeEnabled: boolean
+  runtimeChanging: boolean
 }>()
 
 const emit = defineEmits<{
@@ -51,13 +69,15 @@ const emit = defineEmits<{
   'update:name': [value: string]
   'settings': []
   'publish': []
-  'disable': []
+  'start': []
+  'stop': []
 }>()
 
 const editing = ref(false)
 const inputRef = ref<InstanceType<typeof import('@arco-design/web-vue').Input> | null>(null)
 
 function startEdit() {
+  if (props.runtimeEnabled) return
   editing.value = true
   nextTick(() => {
     ;(inputRef.value as any)?.focus()

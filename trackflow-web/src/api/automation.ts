@@ -13,6 +13,9 @@ export interface WorkflowVO {
   status?: 'draft' | 'published' | 'disabled'
   version?: number
   triggerType?: string
+  runtimeEnabled?: boolean
+  activatedAt?: string
+  activatedBy?: string
 }
 
 export interface WorkflowDetailVO extends WorkflowVO {
@@ -218,6 +221,14 @@ export const automationApi = {
 
   publish(id: string) {
     return request.post<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}/publish`)
+  },
+
+  start(id: string) {
+    return request.post<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}/start`)
+  },
+
+  stop(id: string) {
+    return request.post<any, R<WorkflowDetailVO>>(`/automation/workflows/${id}/stop`)
   },
 
   disable(id: string) {

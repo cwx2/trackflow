@@ -8,13 +8,17 @@ import com.trackflow.automation.mapper.AutomationWorkflowMapper;
 import com.trackflow.automation.execution.DAGBuilder;
 import com.trackflow.automation.node.NodeRegistry;
 import com.trackflow.automation.node.model.WorkflowDefinitionModel;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -37,6 +41,7 @@ public class AutomationWorkflowService {
     private final ObjectMapper objectMapper;
     private final DAGBuilder dagBuilder;
     private final NodeRegistry nodeRegistry;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     private static final Set<String> TRIGGERS = Set.of(
             "manual", "schedule", "issue_created", "issue_changed", "webhook");
@@ -78,6 +83,7 @@ public class AutomationWorkflowService {
         workflow.setTriggerConfig("{}");
         workflow.setConcurrencyMode("queue");
         workflow.setMaxConcurrent(1);
+        workflow.setRuntimeEnabled(false);
         // 初始化空的 definition
         workflow.setDefinition("{\"variables\":{},\"nodes\":[],\"edges\":[]}");
         workflowMapper.insert(workflow);
@@ -91,6 +97,10 @@ public class AutomationWorkflowService {
     @Transactional(rollbackFor = Exception.class)
     public AutomationWorkflow update(Long id, UpdateWorkflowDTO dto) {
         AutomationWorkflow workflow = getById(id);
+
+        if (Boolean.TRUE.equals(workflow.getRuntimeEnabled())) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "工作流正在运行，请先停止再修改配置");
+        }
 
         if (dto.getVersion() != null && !dto.getVersion().equals(workflow.getVersion())) {
             throw new BusinessException(ErrorCode.CONFLICT, "工作流已被其他人修改，请刷新后重试");
@@ -132,6 +142,9 @@ public class AutomationWorkflowService {
     @Transactional(rollbackFor = Exception.class)
     public AutomationWorkflow publish(Long id) {
         AutomationWorkflow workflow = getById(id);
+        if (Boolean.TRUE.equals(workflow.getRuntimeEnabled())) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "工作流正在运行，请先停止再重新发布");
+        }
         validateDefinition(workflow.getDefinition());
         validateTriggerConfig(workflow);
         if (workflow.getActorUserId() == null && !"manual".equals(workflow.getTriggerType())) {
@@ -140,6 +153,7 @@ public class AutomationWorkflowService {
         workflow.setPublishedDefinition(workflow.getDefinition());
         workflow.setStatus("published");
         workflow.setPublishedAt(LocalDateTime.now());
+        workflow.setRuntimeEnabled(false);
         workflow.setVersion(workflow.getVersion() + 1);
         workflowMapper.updateById(workflow);
         return workflowMapper.selectById(id);
@@ -149,9 +163,65 @@ public class AutomationWorkflowService {
     public AutomationWorkflow disable(Long id) {
         AutomationWorkflow workflow = getById(id);
         workflow.setStatus("disabled");
+        workflow.setRuntimeEnabled(false);
         workflow.setVersion(workflow.getVersion() + 1);
         workflowMapper.updateById(workflow);
-        return workflowMapper.selectById(id);
+        AutomationWorkflow disabled = workflowMapper.selectById(id);
+        afterCommit(() -> runtimeCoordinator.onWorkflowStopped(id));
+        return disabled;
+    }
+
+    /** 人工启动已发布版本。发布动作本身不会启动自动触发。 */
+    @Transactional(rollbackFor = Exception.class)
+    public AutomationWorkflow startRuntime(Long id) {
+        AutomationWorkflow workflow = getById(id);
+        if (!"published".equals(workflow.getStatus()) || workflow.getPublishedDefinition() == null) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "请先发布工作流，再启动自动运行");
+        }
+        if (Boolean.TRUE.equals(workflow.getRuntimeEnabled())) {
+            afterCommit(() -> runtimeCoordinator.onWorkflowStarted(workflow));
+            return workflow;
+        }
+        if (workflow.getActorUserId() == null && !"manual".equals(workflow.getTriggerType())) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "自动运行前必须配置执行身份");
+        }
+        workflow.setRuntimeEnabled(true);
+        workflow.setActivatedAt(LocalDateTime.now());
+        workflow.setActivatedBy(SecurityUtils.getCurrentUserId());
+        workflow.setVersion(workflow.getVersion() + 1);
+        workflowMapper.updateById(workflow);
+        AutomationWorkflow started = workflowMapper.selectById(id);
+        afterCommit(() -> runtimeCoordinator.onWorkflowStarted(started));
+        return started;
+    }
+
+    /** 停止接收新触发；已入队和执行中的任务继续排空。 */
+    @Transactional(rollbackFor = Exception.class)
+    public AutomationWorkflow stopRuntime(Long id) {
+        AutomationWorkflow workflow = getById(id);
+        if (!Boolean.TRUE.equals(workflow.getRuntimeEnabled())) {
+            afterCommit(() -> runtimeCoordinator.onWorkflowStopped(id));
+            return workflow;
+        }
+        workflow.setRuntimeEnabled(false);
+        workflow.setVersion(workflow.getVersion() + 1);
+        workflowMapper.updateById(workflow);
+        AutomationWorkflow stopped = workflowMapper.selectById(id);
+        afterCommit(() -> runtimeCoordinator.onWorkflowStopped(id));
+        return stopped;
+    }
+
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     private void validateDefinition(String definitionJson) {
@@ -224,6 +294,9 @@ public class AutomationWorkflowService {
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         AutomationWorkflow workflow = getById(id);
+        if (Boolean.TRUE.equals(workflow.getRuntimeEnabled())) {
+            throw new BusinessException(ErrorCode.INVALID_STATE, "工作流正在运行，请先停止再删除");
+        }
         workflowMapper.deleteById(id);
         log.info("删除工作流: id={}, name={}", id, workflow.getName());
     }

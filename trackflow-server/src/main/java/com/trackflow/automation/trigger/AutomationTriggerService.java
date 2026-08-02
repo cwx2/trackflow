@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.automation.entity.AutomationWorkflow;
 import com.trackflow.automation.mapper.AutomationWorkflowMapper;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import com.trackflow.automation.trigger.entity.AutomationEventInbox;
 import com.trackflow.automation.trigger.mapper.AutomationEventInboxMapper;
 import com.trackflow.automation.workitem.AutomationWorkItemService;
@@ -27,12 +28,15 @@ public class AutomationTriggerService {
     private final AutomationWorkItemService workItemService;
     private final AutomationEventInboxMapper eventInboxMapper;
     private final ObjectMapper objectMapper;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     public void recordIssueEvent(String triggerType, Long issueId, Long projectId,
                                  String eventKey, Map<String, Object> eventPayload) {
+        if (!runtimeCoordinator.shouldRunTrigger(triggerType)) return;
         long subscriberCount = workflowMapper.selectCount(
                 new LambdaQueryWrapper<AutomationWorkflow>()
                         .eq(AutomationWorkflow::getStatus, "published")
+                        .eq(AutomationWorkflow::getRuntimeEnabled, true)
                         .eq(AutomationWorkflow::getTriggerType, triggerType)
                         .and(query -> query.eq(AutomationWorkflow::getProjectId, projectId)
                                 .or().isNull(AutomationWorkflow::getProjectId)));
@@ -49,6 +53,7 @@ public class AutomationTriggerService {
         try {
             event.setPayload(objectMapper.writeValueAsString(eventPayload));
             eventInboxMapper.insert(event);
+            runtimeCoordinator.wakeWorkersAfterCommit();
         } catch (DuplicateKeyException ignored) {
             log.debug("自动化领域事件已记录，忽略重复事件: {}", eventKey);
         } catch (Exception exception) {
@@ -100,6 +105,7 @@ public class AutomationTriggerService {
         List<AutomationWorkflow> workflows = workflowMapper.selectList(
                 new LambdaQueryWrapper<AutomationWorkflow>()
                         .eq(AutomationWorkflow::getStatus, "published")
+                        .eq(AutomationWorkflow::getRuntimeEnabled, true)
                         .eq(AutomationWorkflow::getTriggerType, triggerType)
                         .and(query -> query.eq(AutomationWorkflow::getProjectId, projectId)
                                 .or().isNull(AutomationWorkflow::getProjectId)));

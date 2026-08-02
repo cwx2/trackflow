@@ -3,6 +3,7 @@ package com.trackflow.customfield.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,12 +27,14 @@ class CustomFieldValidationEngineTest {
     private CustomFieldOptionMapper optionMapper;
     @Mock
     private SysUserMapper userMapper;
+    @Mock
+    private ProjectMemberMapper projectMemberMapper;
 
     private CustomFieldValidationEngine engine;
 
     @BeforeEach
     void setUp() {
-        engine = new CustomFieldValidationEngine(optionMapper, userMapper);
+        engine = new CustomFieldValidationEngine(optionMapper, userMapper, projectMemberMapper);
     }
 
     private CustomFieldDefinition field(String name, String format) {

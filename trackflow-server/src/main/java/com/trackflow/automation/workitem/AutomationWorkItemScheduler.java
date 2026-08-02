@@ -7,6 +7,7 @@ import com.trackflow.automation.execution.AutomationExecutionStatus;
 import com.trackflow.automation.execution.entity.AutomationExecution;
 import com.trackflow.automation.workitem.entity.AutomationWorkItem;
 import com.trackflow.automation.service.AutomationWorkflowService;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,9 +28,11 @@ public class AutomationWorkItemScheduler {
     private final AutomationExecutionService executionService;
     private final ObjectMapper objectMapper;
     private final AutomationWorkflowService workflowService;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     @Scheduled(fixedDelay = 2000)
     public void dispatch() {
+        if (!runtimeCoordinator.shouldRunWorkers()) return;
         reconcileExecutions();
         for (int i = 0; i < CLAIM_BATCH_SIZE; i++) {
             AutomationWorkItem item = workItemService.claim(workerId);

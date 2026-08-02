@@ -39,6 +39,9 @@ public class AutomationWorkflow implements Serializable {
     private Integer maxConcurrent;
     private Long actorUserId;
     private LocalDateTime publishedAt;
+    private Boolean runtimeEnabled;
+    private LocalDateTime activatedAt;
+    private Long activatedBy;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;

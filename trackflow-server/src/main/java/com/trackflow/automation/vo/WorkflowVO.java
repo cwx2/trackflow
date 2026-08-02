@@ -17,6 +17,9 @@ public class WorkflowVO {
     private String status;
     private Integer version;
     private String triggerType;
+    private Boolean runtimeEnabled;
+    private LocalDateTime activatedAt;
+    private String activatedBy;
     private String createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

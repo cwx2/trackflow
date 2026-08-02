@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.automation.entity.AutomationWorkflow;
 import com.trackflow.automation.mapper.AutomationWorkflowMapper;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import com.trackflow.common.service.DistributedLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +29,11 @@ public class AutomationScheduleTrigger {
     private final AutomationTriggerService triggerService;
     private final DistributedLockService distributedLockService;
     private final ObjectMapper objectMapper;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     @Scheduled(cron = "0 * * * * ?")
     public void tick() {
+        if (!runtimeCoordinator.shouldRunTrigger("schedule")) return;
         distributedLockService.executeWithLock("automation_schedule_trigger", this::enqueueDueSchedules);
     }
 
@@ -39,6 +42,7 @@ public class AutomationScheduleTrigger {
         List<AutomationWorkflow> workflows = workflowMapper.selectList(
                 new LambdaQueryWrapper<AutomationWorkflow>()
                         .eq(AutomationWorkflow::getStatus, "published")
+                        .eq(AutomationWorkflow::getRuntimeEnabled, true)
                         .eq(AutomationWorkflow::getTriggerType, "schedule"));
         for (AutomationWorkflow workflow : workflows) {
             try {

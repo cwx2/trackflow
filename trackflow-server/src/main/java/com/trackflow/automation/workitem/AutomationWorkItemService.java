@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.automation.workitem.entity.AutomationWorkItem;
 import com.trackflow.automation.workitem.mapper.AutomationWorkItemMapper;
+import com.trackflow.automation.runtime.AutomationRuntimeCoordinator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class AutomationWorkItemService {
 
     private final AutomationWorkItemMapper mapper;
     private final ObjectMapper objectMapper;
+    private final AutomationRuntimeCoordinator runtimeCoordinator;
 
     @Transactional
     public AutomationWorkItem enqueue(Long automationId, Long issueId, String correlationId,
@@ -40,11 +42,16 @@ public class AutomationWorkItemService {
         try {
             item.setPayload(objectMapper.writeValueAsString(payload != null ? payload : Map.of()));
             mapper.insert(item);
+            runtimeCoordinator.wakeWorkersAfterCommit();
             return item;
         } catch (DuplicateKeyException duplicate) {
-            return mapper.selectOne(new LambdaQueryWrapper<AutomationWorkItem>()
+            AutomationWorkItem existing = mapper.selectOne(new LambdaQueryWrapper<AutomationWorkItem>()
                     .eq(AutomationWorkItem::getAutomationId, automationId)
                     .eq(AutomationWorkItem::getCorrelationId, correlationId));
+            if (existing != null && ACTIVE_STATES.contains(existing.getState())) {
+                runtimeCoordinator.wakeWorkersAfterCommit();
+            }
+            return existing;
         } catch (Exception exception) {
             throw new IllegalStateException("自动化工作入队失败", exception);
         }
@@ -150,6 +157,7 @@ public class AutomationWorkItemService {
                 .eq(AutomationWorkItem::getId, id)
                 .in(AutomationWorkItem::getState, "failed", "dead_letter"));
         if (updated != 1) throw new IllegalStateException("只有失败或死信工作可以重新入队");
+        runtimeCoordinator.wakeWorkersAfterCommit();
     }
 
     public void cancelQueued(Long id) {
@@ -199,4 +207,7 @@ public class AutomationWorkItemService {
             throw new IllegalStateException("工作租约已失效，拒绝重复执行");
         }
     }
+
+    private static final java.util.Set<String> ACTIVE_STATES = java.util.Set.of(
+            "queued", "leased", "running");
 }

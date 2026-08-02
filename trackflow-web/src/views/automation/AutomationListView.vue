@@ -42,10 +42,27 @@
           <template #updatedAt="{ record }">
             <span class="workflow-time">{{ formatTime(record.updatedAt) }}</span>
           </template>
+          <template #status="{ record }">
+            <a-tag :color="record.status === 'published' ? 'green' : record.status === 'disabled' ? 'gray' : 'orange'">
+              {{ record.status === 'published' ? '已发布' : record.status === 'disabled' ? '已停用' : '草稿' }}
+            </a-tag>
+          </template>
+          <template #runtimeEnabled="{ record }">
+            <a-tag :color="record.runtimeEnabled ? 'arcoblue' : 'gray'">
+              {{ record.runtimeEnabled ? '运行中' : '未启动' }}
+            </a-tag>
+          </template>
           <template #actions="{ record }">
             <div class="action-buttons">
               <a-button type="text" size="small" @click="goToEditor(record.id)">编辑</a-button>
               <a-button type="text" size="small" @click="goToHistory(record.id)">执行历史</a-button>
+              <a-button
+                v-if="record.status === 'published'"
+                type="text"
+                size="small"
+                :status="record.runtimeEnabled ? 'warning' : 'success'"
+                @click="toggleRuntime(record)"
+              >{{ record.runtimeEnabled ? '停止' : '启动' }}</a-button>
               <a-button type="text" size="small" status="danger" @click="confirmDelete(record)">删除</a-button>
             </div>
           </template>
@@ -92,9 +109,25 @@ const createForm = ref<CreateWorkflowDTO>({ name: '', description: '' })
 const columns = [
   { title: '名称', dataIndex: 'name', slotName: 'name', width: 300 },
   { title: '描述', dataIndex: 'description', slotName: 'description' },
+  { title: '版本', dataIndex: 'status', slotName: 'status', width: 90 },
+  { title: '运行', dataIndex: 'runtimeEnabled', slotName: 'runtimeEnabled', width: 90 },
   { title: '更新时间', dataIndex: 'updatedAt', slotName: 'updatedAt', width: 180 },
-  { title: '操作', slotName: 'actions', width: 220 }
+  { title: '操作', slotName: 'actions', width: 280 }
 ]
+
+async function toggleRuntime(workflow: WorkflowVO) {
+  try {
+    const res = workflow.runtimeEnabled
+      ? await automationApi.stop(workflow.id)
+      : await automationApi.start(workflow.id)
+    if (res.code === 0) {
+      Message.success(workflow.runtimeEnabled ? '自动化已停止' : '自动化已启动')
+      await loadWorkflows()
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || (workflow.runtimeEnabled ? '停止失败' : '启动失败'))
+  }
+}
 
 // 加载工作流列表
 async function loadWorkflows() {

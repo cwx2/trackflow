@@ -6,11 +6,14 @@
       :saving="saving"
       :publishing="publishing"
       :status="workflowStatus"
+      :runtime-enabled="workflowRuntimeEnabled"
+      :runtime-changing="runtimeChanging"
       @back="goBack"
       @save="handleSave"
       @settings="settingsOpen = true"
       @publish="handlePublish"
-      @disable="handleDisable"
+      @start="handleStartRuntime"
+      @stop="handleStopRuntime"
     />
 
     <!-- 编辑器主体：画布 + 悬浮面板 -->
@@ -181,6 +184,9 @@
     </div>
 
     <a-modal v-model:visible="settingsOpen" title="自动运行设置" :width="520" @ok="saveSettings">
+      <a-alert type="info" class="runtime-settings-alert">
+        保存和发布都不会启动自动化。发布成功后，请在顶部点击“启动”；停止后不再接收新触发，已有任务会继续完成。
+      </a-alert>
       <a-form :model="settingsModel" layout="vertical">
         <a-form-item label="所属项目 ID">
           <a-input-number v-model="workflowProjectId" :min="1" style="width: 100%" />
@@ -284,7 +290,9 @@ const workflowName = ref('加载中...')
 const loading = ref(false)
 const saving = ref(false)
 const publishing = ref(false)
+const runtimeChanging = ref(false)
 const workflowStatus = ref<'draft' | 'published' | 'disabled'>('draft')
+const workflowRuntimeEnabled = ref(false)
 const workflowVersion = ref(1)
 const workflowProjectId = ref<number>()
 const workflowActorUserId = ref<number>()
@@ -672,6 +680,7 @@ async function loadWorkflow() {
     if (res.code === 0) {
       workflowName.value = res.data.name
       workflowStatus.value = res.data.status || 'draft'
+      workflowRuntimeEnabled.value = Boolean(res.data.runtimeEnabled)
       workflowVersion.value = res.data.version || 1
       workflowProjectId.value = res.data.projectId
       workflowActorUserId.value = res.data.actorUserId
@@ -863,7 +872,8 @@ async function handlePublish() {
     if (res.code === 0) {
       workflowStatus.value = 'published'
       workflowVersion.value = res.data.version || workflowVersion.value + 1
-      Message.success('工作流已发布，自动触发开始生效')
+      workflowRuntimeEnabled.value = false
+      Message.success('工作流已发布，请确认配置后点击“启动”')
     } else Message.error(res.message || '发布失败')
   } catch (error: any) {
     Message.error(error.response?.data?.message || '发布失败')
@@ -872,16 +882,35 @@ async function handlePublish() {
   }
 }
 
-async function handleDisable() {
+async function handleStartRuntime() {
+  runtimeChanging.value = true
   try {
-    const res = await automationApi.disable(workflowId.value)
+    const res = await automationApi.start(workflowId.value)
     if (res.code === 0) {
-      workflowStatus.value = 'disabled'
+      workflowRuntimeEnabled.value = true
       workflowVersion.value = res.data.version || workflowVersion.value + 1
-      Message.success('工作流已停用，新事件不会再入队')
+      Message.success('自动化已启动，将按当前触发配置运行')
     }
   } catch (error: any) {
-    Message.error(error.response?.data?.message || '停用失败')
+    Message.error(error.response?.data?.message || '启动失败')
+  } finally {
+    runtimeChanging.value = false
+  }
+}
+
+async function handleStopRuntime() {
+  runtimeChanging.value = true
+  try {
+    const res = await automationApi.stop(workflowId.value)
+    if (res.code === 0) {
+      workflowRuntimeEnabled.value = false
+      workflowVersion.value = res.data.version || workflowVersion.value + 1
+      Message.success('自动化已停止接收新触发，已有任务将继续完成')
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.message || '停止失败')
+  } finally {
+    runtimeChanging.value = false
   }
 }
 
