@@ -120,6 +120,7 @@ export const statusLabelMap: Record<string, string> = {
   'Closed': '已关闭',
   'Pending Cancel': '待取消',
   'Pending Extension': '待延期',
+  'Needs Fix': '待修复',
 }
 
 /**
