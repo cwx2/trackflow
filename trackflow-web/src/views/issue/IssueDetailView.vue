@@ -1367,16 +1367,28 @@ async function onTransitionConfirm(comment: string) {
   }
 }
 
-/** Execute the actual status transition API call */
-async function executeTransition(target: StatusInfo, comment: string | undefined) {
+/** Execute the actual status transition API call (recursive pattern for handling multiple warnings) */
+async function executeTransition(
+  target: StatusInfo,
+  comment: string | undefined,
+  forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean }
+) {
   const { refresh: refreshNavBadge } = useNavBadge()
   try {
-    const res = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version)
+    const res = await issueApi.transitStatus(
+      issue.value!.id,
+      target.id,
+      comment,
+      issue.value!.version,
+      forceFlags?.force,
+      forceFlags?.forceWip,
+      forceFlags?.forceDescEmpty
+    )
     if (res.code === 0) {
       await loadAll()
       Message.success(`状态已变更为 ${target.name}`)
       showActionFeedback(res.data)
-      refreshNavBadge() // 状态变更后刷新导航栏 badge
+      refreshNavBadge()
     } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
       // WIP 超限警告 — 弹确认框
       Modal.warning({
@@ -1385,21 +1397,7 @@ async function executeTransition(target: StatusInfo, comment: string | undefined
         okText: '继续移入',
         cancelText: '取消',
         hideCancel: false,
-        onOk: async () => {
-          try {
-            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version, undefined, true)
-            if (forceRes.code === 0) {
-              await loadAll()
-              Message.success(`状态已变更为 ${target.name}`)
-              showActionFeedback(forceRes.data)
-              refreshNavBadge() // 状态变更后刷新导航栏 badge
-            } else {
-              Message.error(forceRes.message || '变更失败')
-            }
-          } catch (e2: any) {
-            handleUpdateError(e2, '变更失败')
-          }
-        }
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true })
       })
     } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
       // 关闭前置检查警告（子任务未完成 / 被阻塞 / 组合）— 统一弹窗
@@ -1409,21 +1407,7 @@ async function executeTransition(target: StatusInfo, comment: string | undefined
         okText: '强制关闭',
         cancelText: '取消',
         hideCancel: false,
-        onOk: async () => {
-          try {
-            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version, true)
-            if (forceRes.code === 0) {
-              await loadAll()
-              Message.success(`状态已变更为 ${target.name}`)
-              showActionFeedback(forceRes.data)
-              refreshNavBadge() // 状态变更后刷新导航栏 badge
-            } else {
-              Message.error(forceRes.message || '变更失败')
-            }
-          } catch (e2: any) {
-            handleUpdateError(e2, '变更失败')
-          }
-        }
+        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true })
       })
     } else if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
       // 描述为空警告 — 转换到 Testing 状态时如果描述为空
@@ -1433,21 +1417,7 @@ async function executeTransition(target: StatusInfo, comment: string | undefined
         okText: '继续变更',
         cancelText: '取消',
         hideCancel: false,
-        onOk: async () => {
-          try {
-            const forceRes = await issueApi.transitStatus(issue.value!.id, target.id, comment, issue.value!.version, undefined, undefined, true)
-            if (forceRes.code === 0) {
-              await loadAll()
-              Message.success(`状态已变更为 ${target.name}`)
-              showActionFeedback(forceRes.data)
-              refreshNavBadge() // 状态变更后刷新导航栏 badge
-            } else {
-              Message.error(forceRes.message || '变更失败')
-            }
-          } catch (e2: any) {
-            handleUpdateError(e2, '变更失败')
-          }
-        }
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true })
       })
     } else {
       Message.error(res.message || '变更失败')

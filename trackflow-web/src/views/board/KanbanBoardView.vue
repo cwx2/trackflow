@@ -4151,6 +4151,33 @@ async function handleBacklogDrop(issue: BoardIssue, targetStatusId: string) {
         return
       }
 
+      // ★ Handle description empty warning — prompt user to confirm
+      if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
+        Modal.warning({
+          title: '工单描述为空',
+          content: res.message,
+          okText: '继续变更',
+          cancelText: '取消',
+          hideCancel: false,
+          onOk: async () => {
+            try {
+              const forceRes = await issueApi.transitStatus(issue.id, targetStatusId, undefined, issue.version, undefined, undefined, true)
+              if (forceRes.code === 0) {
+                finalizeBacklogDrop(forceRes)
+              } else {
+                await rollbackSprintAssignment(forceRes.message || '状态变更失败')
+              }
+            } catch (e2: any) {
+              await rollbackSprintAssignment(e2.response?.data?.message || '状态变更失败')
+            }
+          },
+          onCancel: async () => {
+            await rollbackSprintAssignment(null)
+          },
+        })
+        return
+      }
+
       // ★ Any other non-success code: rollback sprint assignment
       if (res.code !== 0) {
         await rollbackSprintAssignment(res.message || '状态变更失败')
