@@ -132,7 +132,7 @@
                     <a-option :value="true">允许为空</a-option>
                     <a-option :value="false">不允许为空</a-option>
                   </a-select>
-                  <a-tooltip content="设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）" position="right">
+                  <a-tooltip :content="tooltipRequiredText" position="right">
                     <icon-info-circle class="hint-icon" />
                   </a-tooltip>
                 </div>
@@ -258,7 +258,7 @@
                       <a-option :value="true">允许为空</a-option>
                       <a-option :value="false">不允许为空</a-option>
                     </a-select>
-                    <a-tooltip content="设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）" position="right">
+                    <a-tooltip :content="tooltipRequiredText" position="right">
                       <icon-info-circle class="hint-icon" />
                     </a-tooltip>
                   </div>
@@ -359,7 +359,7 @@
                       <a-option :value="true">允许为空</a-option>
                       <a-option :value="false">不允许为空</a-option>
                     </a-select>
-                    <a-tooltip content="设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）" position="right">
+                    <a-tooltip :content="tooltipRequiredText" position="right">
                       <icon-info-circle class="hint-icon" />
                     </a-tooltip>
                   </div>
@@ -489,6 +489,9 @@ import { IconSearch, IconRight, IconPlus, IconFolder, IconFile, IconLeft, IconDe
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import type { ProjectFieldsVO, FieldSummaryVO, CustomFieldDefinitionVO } from '@/api/types'
+
+// Tooltip 提示文本（避免 HTML attribute 中的引号问题）
+const tooltipRequiredText = '设置为「不允许为空」+ 无默认值时，用户创建工单必须主动选择（参考 YouTrack "Set value"）'
 
 const loading = ref(false)
 const keyword = ref('')
