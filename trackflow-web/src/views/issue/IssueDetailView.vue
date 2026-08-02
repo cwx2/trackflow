@@ -344,18 +344,21 @@ const isAssignee = computed(() => {
 })
 
 /**
- * 综合权限：项目级 issue:edit OR 固有权限（reporter 无条件） OR 资源级（reporter + edit_own / assignee + edit_assigned）
+ * 综合权限：项目级 issue:edit OR 资源级（reporter + edit_own / assignee + edit_assigned）
  * 
- * 固有权限（Inherent Permissions）参考 YouTrack：
- * Reporter 天然拥有 issue:view, issue:edit, issue:comment，无需角色显式授予。
- * 注意：不包含 issue:change_status，状态转换需通过工作流引擎控制，需要明确的角色权限授权。
+ * 权限模型说明：
+ * - 项目级 issue:edit：有此权限可编辑项目内所有工单
+ * - 资源级 issue:edit_own：Reporter 需要此权限才能编辑自己创建的工单
+ * - 资源级 issue:edit_assigned：Assignee 需要此权限才能编辑分配给自己的工单
+ * 
+ * 注意：Observer 角色不应有任何编辑权限（参考 YouTrack 文档）。
+ * 因此 reporter 的"固有权限"已移除，必须配合 issue:edit_own 权限才能编辑。
  */
 const canEditIssueEffective = computed(() => {
   if (isProjectArchived.value) return false
+  // 项目级：有 issue:edit 权限可编辑所有工单
   if (canEditIssue.value) return true
-  // 固有权限：reporter 无条件拥有 edit 权限
-  if (isReporter.value) return true
-  // 资源级：reporter 需要 issue:edit_own 权限（覆盖场景：非 reporter 但有 edit_own）
+  // 资源级：reporter 需要 issue:edit_own 权限
   if (isReporter.value && hasProjectPermission('issue:edit_own')) return true
   // 资源级：assignee 需要 issue:edit_assigned 权限
   if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
@@ -901,14 +904,14 @@ const sidebarFields = computed<SidebarField[]>(() => {
     // 自定义字段
     ...buildCustomFieldSidebarEntries(i, canEditCF),
     { key: '_sep', label: '', value: '', readonly: true },
-    // 可见性字段（仅报告者或项目管理员可修改）
+    // 可见性字段（需要编辑权限或项目管理员）
     {
       key: 'visibility',
       label: '可见性',
       value: i.visibility === 'restricted' ? '受限访问' : '所有成员',
       editType: 'select' as const,
       rawValue: i.visibility || 'public',
-      readonly: !(isReporter.value || hasProjectPermission('project:admin')),
+      readonly: !(canEdit || hasProjectPermission('project:admin')),
       options: [
         { value: 'public', label: '所有成员' },
         { value: 'restricted', label: '受限访问（仅指定用户）' },
