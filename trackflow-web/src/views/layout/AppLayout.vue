@@ -1,73 +1,172 @@
 <template>
   <div class="app-layout">
     <!-- 左侧导航栏（全高） -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <!-- 折叠切换按钮 -->
+      <button class="sidebar-toggle" :title="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'" @click="toggleSidebar">
+        <icon-left v-if="!sidebarCollapsed" />
+        <icon-right v-else />
+      </button>
+
       <div class="sidebar-logo" @click="$router.push('/')">
         <img class="logo-image" :src="trackflowLogoUrl" alt="TrackFlow" />
       </div>
 
       <nav class="sidebar-nav">
-        <router-link to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
+        <a-tooltip v-if="sidebarCollapsed" content="仪表盘" position="right" :mini="true">
+          <router-link to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
+            <icon-dashboard class="nav-icon" />
+            <span class="nav-label">仪表盘</span>
+          </router-link>
+        </a-tooltip>
+        <router-link v-else to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
           <icon-dashboard class="nav-icon" />
           <span class="nav-label">仪表盘</span>
         </router-link>
-        <router-link to="/issues" class="nav-item" :class="{ active: $route.name === 'Issues' }">
+
+        <a-tooltip v-if="sidebarCollapsed" content="问题" position="right" :mini="true">
+          <router-link to="/issues" class="nav-item" :class="{ active: $route.name === 'Issues' }">
+            <icon-unordered-list class="nav-icon" />
+            <span class="nav-label">问题</span>
+            <span v-if="issueBadgeCount > 0" class="nav-badge">{{ issueBadgeCount > 99 ? '99+' : issueBadgeCount }}</span>
+          </router-link>
+        </a-tooltip>
+        <router-link v-else to="/issues" class="nav-item" :class="{ active: $route.name === 'Issues' }">
           <icon-unordered-list class="nav-icon" />
           <span class="nav-label">问题</span>
           <span v-if="issueBadgeCount > 0" class="nav-badge" :title="`${issueBadgeCount} 个待测试工单`">
             {{ issueBadgeCount > 99 ? '99+' : issueBadgeCount }}
           </span>
         </router-link>
-        <router-link to="/projects" class="nav-item" :class="{ active: $route.name === 'Projects' }">
-          <icon-layers class="nav-icon" />
-          <span class="nav-label">项目</span>
+
+        <a-tooltip v-if="sidebarCollapsed" content="项目" position="right" :mini="true">
+          <router-link to="/projects" class="nav-item" :class="{ active: $route.name === 'Projects' }">
+            <icon-layers class="nav-icon" /><span class="nav-label">项目</span>
+          </router-link>
+        </a-tooltip>
+        <router-link v-else to="/projects" class="nav-item" :class="{ active: $route.name === 'Projects' }">
+          <icon-layers class="nav-icon" /><span class="nav-label">项目</span>
         </router-link>
-        <router-link to="/boards" class="nav-item" :class="{ active: $route.name === 'Boards' }">
-          <icon-apps class="nav-icon" />
-          <span class="nav-label">看板</span>
+
+        <a-tooltip v-if="sidebarCollapsed" content="看板" position="right" :mini="true">
+          <router-link to="/boards" class="nav-item" :class="{ active: $route.name === 'Boards' }">
+            <icon-apps class="nav-icon" /><span class="nav-label">看板</span>
+          </router-link>
+        </a-tooltip>
+        <router-link v-else to="/boards" class="nav-item" :class="{ active: $route.name === 'Boards' }">
+          <icon-apps class="nav-icon" /><span class="nav-label">看板</span>
         </router-link>
-        <router-link to="/sprints" class="nav-item" :class="{ active: $route.name === 'Sprints' }">
-          <icon-thunderbolt class="nav-icon" />
-          <span class="nav-label">迭代</span>
+
+        <a-tooltip v-if="sidebarCollapsed" content="迭代" position="right" :mini="true">
+          <router-link to="/sprints" class="nav-item" :class="{ active: $route.name === 'Sprints' }">
+            <icon-thunderbolt class="nav-icon" /><span class="nav-label">迭代</span>
+          </router-link>
+        </a-tooltip>
+        <router-link v-else to="/sprints" class="nav-item" :class="{ active: $route.name === 'Sprints' }">
+          <icon-thunderbolt class="nav-icon" /><span class="nav-label">迭代</span>
         </router-link>
-        <router-link v-if="canViewSprintPlanning" to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
-          <icon-calendar class="nav-icon" />
-          <span class="nav-label">规划</span>
+
+        <template v-if="canViewSprintPlanning">
+          <a-tooltip v-if="sidebarCollapsed" content="规划" position="right" :mini="true">
+            <router-link to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
+              <icon-calendar class="nav-icon" /><span class="nav-label">规划</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/sprint-planning" class="nav-item" :class="{ active: $route.name === 'SprintPlanning' }">
+            <icon-calendar class="nav-icon" /><span class="nav-label">规划</span>
+          </router-link>
+        </template>
+
+        <a-tooltip v-if="sidebarCollapsed" content="时间表" position="right" :mini="true">
+          <router-link to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
+            <icon-clock-circle class="nav-icon" /><span class="nav-label">时间表</span>
+          </router-link>
+        </a-tooltip>
+        <router-link v-else to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
+          <icon-clock-circle class="nav-icon" /><span class="nav-label">时间表</span>
         </router-link>
-        <router-link to="/timesheets" class="nav-item" :class="{ active: $route.name === 'Timesheets' }">
-          <icon-clock-circle class="nav-icon" />
-          <span class="nav-label">时间表</span>
-        </router-link>
-        <router-link v-if="canViewReport" to="/reports" class="nav-item" :class="{ active: $route.path.startsWith('/reports') }">
-          <icon-bar-chart class="nav-icon" />
-          <span class="nav-label">报表</span>
-        </router-link>
-        <router-link v-if="isAdmin" to="/automation" class="nav-item" :class="{ active: $route.path.startsWith('/automation') }">
-          <icon-robot class="nav-icon" />
-          <span class="nav-label">自动化</span>
-        </router-link>
-        <router-link v-if="canManageWorkflow" to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
-          <icon-share-alt class="nav-icon" />
-          <span class="nav-label">工作流</span>
-        </router-link>
-        <router-link v-if="isAdmin" to="/admin" class="nav-item" :class="{ active: isAdminRoute }">
-          <icon-settings class="nav-icon" />
-          <span class="nav-label">管理</span>
-        </router-link>
-        <router-link v-if="canViewTrash" to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
-          <icon-delete class="nav-icon" />
-          <span class="nav-label">回收站</span>
-        </router-link>
+
+        <template v-if="canViewReport">
+          <a-tooltip v-if="sidebarCollapsed" content="报表" position="right" :mini="true">
+            <router-link to="/reports" class="nav-item" :class="{ active: $route.path.startsWith('/reports') }">
+              <icon-bar-chart class="nav-icon" /><span class="nav-label">报表</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/reports" class="nav-item" :class="{ active: $route.path.startsWith('/reports') }">
+            <icon-bar-chart class="nav-icon" /><span class="nav-label">报表</span>
+          </router-link>
+        </template>
+
+        <template v-if="isAdmin">
+          <a-tooltip v-if="sidebarCollapsed" content="自动化" position="right" :mini="true">
+            <router-link to="/automation" class="nav-item" :class="{ active: $route.path.startsWith('/automation') }">
+              <icon-robot class="nav-icon" /><span class="nav-label">自动化</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/automation" class="nav-item" :class="{ active: $route.path.startsWith('/automation') }">
+            <icon-robot class="nav-icon" /><span class="nav-label">自动化</span>
+          </router-link>
+        </template>
+
+        <template v-if="canManageWorkflow">
+          <a-tooltip v-if="sidebarCollapsed" content="工作流" position="right" :mini="true">
+            <router-link to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
+              <icon-share-alt class="nav-icon" /><span class="nav-label">工作流</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
+            <icon-share-alt class="nav-icon" /><span class="nav-label">工作流</span>
+          </router-link>
+        </template>
+
+        <template v-if="isAdmin">
+          <a-tooltip v-if="sidebarCollapsed" content="管理" position="right" :mini="true">
+            <router-link to="/admin" class="nav-item" :class="{ active: isAdminRoute }">
+              <icon-settings class="nav-icon" /><span class="nav-label">管理</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/admin" class="nav-item" :class="{ active: isAdminRoute }">
+            <icon-settings class="nav-icon" /><span class="nav-label">管理</span>
+          </router-link>
+        </template>
+
+        <template v-if="canViewTrash">
+          <a-tooltip v-if="sidebarCollapsed" content="回收站" position="right" :mini="true">
+            <router-link to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
+              <icon-delete class="nav-icon" /><span class="nav-label">回收站</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/trash" class="nav-item" :class="{ active: $route.name === 'Trash' }">
+            <icon-delete class="nav-icon" /><span class="nav-label">回收站</span>
+          </router-link>
+        </template>
       </nav>
 
       <div class="sidebar-footer">
-        <router-link v-if="canCreateIssue" to="/issues/create" class="footer-item">
-          <icon-plus-circle class="nav-icon" />
-          <span class="nav-label">创建</span>
-        </router-link>
+        <template v-if="canCreateIssue">
+          <a-tooltip v-if="sidebarCollapsed" content="创建" position="right" :mini="true">
+            <router-link to="/issues/create" class="footer-item">
+              <icon-plus-circle class="nav-icon" /><span class="nav-label">创建</span>
+            </router-link>
+          </a-tooltip>
+          <router-link v-else to="/issues/create" class="footer-item">
+            <icon-plus-circle class="nav-icon" /><span class="nav-label">创建</span>
+          </router-link>
+        </template>
 
         <!-- 通知铃铛 -->
-        <div class="footer-item notification-trigger" @click="toggleNotificationPanel">
+        <a-tooltip v-if="sidebarCollapsed" content="通知" position="right" :mini="true">
+          <div class="footer-item notification-trigger" @click="toggleNotificationPanel">
+            <span class="nav-icon notification-icon-wrap">
+              <icon-notification />
+              <span v-if="hasUnread" class="notification-badge">
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
+              </span>
+            </span>
+            <span class="nav-label">通知</span>
+          </div>
+        </a-tooltip>
+        <div v-else class="footer-item notification-trigger" @click="toggleNotificationPanel">
           <span class="nav-icon notification-icon-wrap">
             <icon-notification />
             <span v-if="hasUnread" class="notification-badge">
@@ -114,12 +213,24 @@
         </div>
 
         <!-- 主题切换 -->
-        <div class="footer-item theme-switcher" @click="cycleTheme">
+        <a-tooltip v-if="sidebarCollapsed" :content="themeLabel" position="right" :mini="true">
+          <div class="footer-item theme-switcher" @click="cycleTheme">
+            <component :is="themeIconComponent" class="nav-icon" />
+            <span class="nav-label">{{ themeLabel }}</span>
+          </div>
+        </a-tooltip>
+        <div v-else class="footer-item theme-switcher" @click="cycleTheme">
           <component :is="themeIconComponent" class="nav-icon" />
           <span class="nav-label">{{ themeLabel }}</span>
         </div>
 
-        <div class="sidebar-user" @click="showUserMenu = !showUserMenu">
+        <a-tooltip v-if="sidebarCollapsed" :content="userName" position="right" :mini="true">
+          <div class="sidebar-user" @click="showUserMenu = !showUserMenu">
+            <div class="user-avatar-sm">{{ userInitial }}</div>
+            <span class="user-name">{{ userName }}</span>
+          </div>
+        </a-tooltip>
+        <div v-else class="sidebar-user" @click="showUserMenu = !showUserMenu">
           <div class="user-avatar-sm">{{ userInitial }}</div>
           <span class="user-name">{{ userName }}</span>
         </div>
@@ -170,7 +281,7 @@ import { useTimerStore } from '@/stores/timer'
 import { useTheme } from '@/composables/useTheme'
 import { useNavBadge } from '@/composables/useNavBadge'
 import { useNotification } from '@/composables/useNotification'
-import { IconMoon, IconSun, IconCommon } from '@arco-design/web-vue/es/icon'
+import { IconMoon, IconSun, IconCommon, IconLeft, IconRight } from '@arco-design/web-vue/es/icon'
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
@@ -181,6 +292,14 @@ const authStore = useAuthStore()
 const timerStore = useTimerStore()
 const { issueBadgeCount, init: initNavBadge } = useNavBadge()
 const { unreadCount, hasUnread, togglePanel: toggleNotificationPanel, init: initNotification } = useNotification()
+
+// 侧边栏折叠状态（持久化）
+const SIDEBAR_KEY = 'tf_sidebar_collapsed'
+const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_KEY) === 'true')
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem(SIDEBAR_KEY, String(sidebarCollapsed.value))
+}
 
 // TabBar 仅在 Issue 相关路由显示（Issue 列表、Issue 详情）
 const showTabBar = computed(() => {
@@ -348,7 +467,46 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: background-color 0.2s;
+  transition: width 0.2s ease, background-color 0.2s;
+  position: relative;
+  overflow: visible;
+}
+
+/* 折叠状态 */
+.sidebar.collapsed {
+  width: 56px;
+}
+
+/* 折叠切换按钮 */
+.sidebar-toggle {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--tf-border);
+  background: var(--tf-bg-elevated);
+  color: var(--tf-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  font-size: 12px;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  opacity: 0;
+  padding: 0;
+  line-height: 1;
+}
+.sidebar:hover .sidebar-toggle {
+  opacity: 1;
+}
+.sidebar-toggle:hover {
+  background: var(--tf-accent);
+  color: #fff;
+  border-color: var(--tf-accent);
 }
 
 .sidebar-logo {
@@ -358,6 +516,8 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   gap: 8px;
   border-bottom: 1px solid var(--tf-border-light);
   cursor: pointer;
+  overflow: hidden;
+  min-height: 58px;
 }
 
 .logo-image {
@@ -366,6 +526,19 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   height: 34px;
   object-fit: contain;
   object-position: left center;
+  flex-shrink: 0;
+  transition: opacity 0.15s, width 0.2s;
+}
+
+/* 折叠时 logo 变成小图标 */
+.sidebar.collapsed .sidebar-logo {
+  padding: 12px 8px;
+  justify-content: center;
+}
+.sidebar.collapsed .logo-image {
+  width: 28px;
+  height: 28px;
+  object-position: center;
 }
 
 .sidebar-nav {
@@ -388,6 +561,8 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   font-size: 13px;
   transition: background 0.15s, color 0.15s;
   cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .nav-item:hover {
   background: var(--tf-sidebar-hover);
@@ -397,6 +572,30 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .nav-item.active {
   background: var(--tf-sidebar-active-bg);
   color: var(--tf-sidebar-active-text);
+}
+
+/* 折叠时导航项居中 */
+.sidebar.collapsed .nav-item {
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+.sidebar.collapsed .footer-item {
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+.sidebar.collapsed .sidebar-user {
+  padding: 8px 0;
+  justify-content: center;
+}
+
+/* 折叠时隐藏文字 */
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .user-name,
+.sidebar.collapsed .timer-badge-label,
+.sidebar.collapsed .nav-badge {
+  display: none;
 }
 
 .nav-icon {
