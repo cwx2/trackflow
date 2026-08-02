@@ -9,7 +9,8 @@
       </button>
 
       <div class="sidebar-logo" @click="$router.push('/')">
-        <img class="logo-image" :src="trackflowLogoUrl" alt="TrackFlow" />
+        <img v-if="!sidebarCollapsed" class="logo-image" :src="trackflowLogoUrl" alt="TrackFlow" />
+        <img v-else class="logo-icon" :src="trackflowIconUrl" alt="TrackFlow" />
       </div>
 
       <nav class="sidebar-nav">
@@ -285,6 +286,7 @@ import { IconMoon, IconSun, IconCommon, IconLeft, IconRight } from '@arco-design
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
+import trackflowIconUrl from '@/assets/trackflow-icon.svg'
 
 const router = useRouter()
 const route = useRoute()
@@ -527,18 +529,21 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   object-fit: contain;
   object-position: left center;
   flex-shrink: 0;
-  transition: opacity 0.15s, width 0.2s;
+  transition: opacity 0.15s;
 }
 
-/* 折叠时 logo 变成小图标 */
+.logo-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* 折叠时 logo 居中 */
 .sidebar.collapsed .sidebar-logo {
   padding: 12px 8px;
   justify-content: center;
-}
-.sidebar.collapsed .logo-image {
-  width: 28px;
-  height: 28px;
-  object-position: center;
 }
 
 .sidebar-nav {
