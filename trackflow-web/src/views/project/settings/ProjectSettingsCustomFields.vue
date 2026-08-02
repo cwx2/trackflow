@@ -433,7 +433,9 @@
           <div v-else class="dialog-empty">
             <icon-check-circle class="dialog-empty-icon" />
             <p>所有可用字段已附加到本项目，或当前没有项目级字段。</p>
-            <p class="dialog-empty-hint">如需创建新字段，请前往全局管理后台。</p>
+            <p class="dialog-empty-hint">
+              如需创建新字段，请前往<router-link to="/admin/custom-fields" class="dialog-empty-link">全局管理后台</router-link>。
+            </p>
           </div>
         </template>
       </div>
@@ -1386,6 +1388,16 @@ onMounted(() => {
 .dialog-empty-hint {
   font-size: 12px;
   color: var(--tf-text-tertiary) !important;
+}
+
+.dialog-empty-link {
+  color: var(--tf-accent);
+  text-decoration: none;
+  font-weight: 500;
+  
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 /* Detach confirm */
