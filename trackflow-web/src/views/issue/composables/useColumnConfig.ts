@@ -19,7 +19,7 @@ const FIXED_KEYS = ['checkbox', 'issueKey', 'title']
 
 /** 默认显示的列 */
 const DEFAULT_VISIBLE_KEYS = [
-  'checkbox', 'issueKey', 'issueType', 'title', 'assignee', 'status', 'sprint', 'priority', 'updatedAt'
+  'checkbox', 'issueKey', 'issueType', 'title', 'assignee', 'status', 'sprint', 'priority', 'dueDate', 'updatedAt'
 ]
 
 const STORAGE_KEY = 'trackflow:issue-list-columns'
