@@ -656,7 +656,7 @@
                 background: (issue.statusColor || '#6b7280') + '20',
                 color: issue.statusColor || '#6b7280'
               }"
-            >{{ issue.statusName || '未知' }}</span>
+            >{{ localizeStatusName(issue.statusName) }}</span>
             <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
           </div>
         </div>
@@ -849,6 +849,7 @@ import { ERROR_CODES } from '@/api/error-codes'
 import SprintBurndownChart from './SprintBurndownChart.vue'
 import SprintAssigneeDistribution from './SprintAssigneeDistribution.vue'
 import SprintIssueDrawer from './SprintIssueDrawer.vue'
+import { localizeStatusName } from '@/utils/fieldLabels'
 
 const router = useRouter()
 const route = useRoute()
