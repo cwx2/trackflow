@@ -39,7 +39,7 @@
     <!-- 字段列表（折叠时隐藏） -->
     <template v-if="!collapsed">
     <div
-      v-for="field in fields"
+      v-for="field in visibleFields"
       :key="field.key"
       class="sb-field"
       :class="{
@@ -221,12 +221,20 @@
       </template>
       <div v-else class="sep-line"></div>
     </div>
+
+    <!-- 空值自定义字段折叠/展开按钮 -->
+    <div v-if="hiddenFieldCount > 0" class="show-more-fields">
+      <button class="show-more-btn" @click="toggleShowAllFields">
+        <span class="show-more-icon">{{ showAllFields ? '▾' : '▸' }}</span>
+        <span class="show-more-text">{{ showAllFields ? '隐藏空字段' : `显示全部字段 (${hiddenFieldCount})` }}</span>
+      </button>
+    </div>
     </template><!-- end v-if="!collapsed" -->
   </aside>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onUnmounted } from 'vue'
 import TimeProgressIndicator from './TimeProgressIndicator.vue'
 
 export interface FieldOption {
@@ -272,6 +280,11 @@ export interface SidebarField {
    * 参考 YouTrack "Set value" 提示行为。当此值为 true 时，前端应显示醒目的提示样式。
    */
   isSetValuePrompt?: boolean
+  /**
+   * 标记为空值自定义字段（显示"-"且无 requiresExplicitSelection）。
+   * 默认折叠，点击"显示更多字段"后展开。
+   */
+  isEmptyCustomField?: boolean
 }
 
 export interface StatusInfo {
@@ -297,6 +310,30 @@ const emit = defineEmits<{
   'add-option': [fieldId: string, value: string]
   'toggle-collapse': []
 }>()
+
+// ========== 空值自定义字段折叠控制 ==========
+const SHOW_ALL_FIELDS_KEY = 'tf_issue_detail_show_all_fields'
+/** 是否展开空值自定义字段（从 localStorage 恢复偏好） */
+const showAllFields = ref<boolean>(localStorage.getItem(SHOW_ALL_FIELDS_KEY) === 'true')
+
+/** 被隐藏的空值自定义字段数量 */
+const hiddenFieldCount = computed(() => {
+  return props.fields.filter(f => f.isEmptyCustomField).length
+})
+
+/** 当前可见的字段列表（过滤掉折叠的空值自定义字段） */
+const visibleFields = computed(() => {
+  if (showAllFields.value || hiddenFieldCount.value === 0) {
+    return props.fields
+  }
+  return props.fields.filter(f => !f.isEmptyCustomField)
+})
+
+// 监听 showAllFields 变化，持久化到 localStorage
+function toggleShowAllFields() {
+  showAllFields.value = !showAllFields.value
+  localStorage.setItem(SHOW_ALL_FIELDS_KEY, String(showAllFields.value))
+}
 
 // ========== 拖拽调整宽度 ==========
 const SIDEBAR_WIDTH_KEY = 'tf_issue_detail_sidebar_width'
@@ -994,5 +1031,44 @@ function confirmAddOption(field: SidebarField) {
 .val-text.time-over-budget {
   color: var(--tf-danger, #f85149) !important;
   font-weight: 500;
+}
+
+/* ========== 显示更多字段按钮 ========== */
+.show-more-fields {
+  margin-top: 8px;
+  padding: 4px 6px;
+}
+
+.show-more-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--tf-text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+
+.show-more-btn:hover {
+  background: var(--tf-bg-hover);
+  color: var(--tf-text-secondary, var(--tf-text-primary));
+}
+
+.show-more-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.show-more-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

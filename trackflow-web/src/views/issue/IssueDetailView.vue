@@ -1092,7 +1092,9 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       options,
       canAddOption: cf.fieldFormat === 'list' && canManageCustomFieldsComputed.value,
       customFieldId: cf.id,
-      isSetValuePrompt
+      isSetValuePrompt,
+      // 空值自定义字段（无 requiresExplicitSelection、无值）：默认折叠
+      isEmptyCustomField: !isSetValuePrompt && !rawValue && !(isMulti && rawValues.length > 0)
     }
   })
 }
