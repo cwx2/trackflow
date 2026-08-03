@@ -111,6 +111,71 @@ def read_req_status(req_file: Path) -> dict[str, str]:
     return status
 
 
+def write_req_status(req_file: Path, updates: dict[str, str]) -> bool:
+    """更新需求文件的 ## 自动化状态 字段；字段不存在时在区块末尾追加。"""
+    if not updates or not req_file.exists():
+        return False
+
+    try:
+        content = req_file.read_text(encoding="utf-8")
+    except Exception as e:
+        log.warning(f"[status] 读取 {req_file.name} 失败: {e}")
+        return False
+
+    lines = content.splitlines(keepends=True)
+    in_block = False
+    block_start = -1
+    block_end = len(lines)
+    seen: set[str] = set()
+    changed = False
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "## 自动化状态":
+            in_block = True
+            block_start = index
+            continue
+        if in_block and stripped.startswith("## "):
+            block_end = index
+            break
+        if not in_block or ":" not in stripped:
+            continue
+
+        key, _, _ = stripped.partition(":")
+        key = key.strip()
+        if key not in updates:
+            continue
+
+        newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+        new_line = f"{key}: {updates[key]}{newline}"
+        if lines[index] != new_line:
+            lines[index] = new_line
+            changed = True
+        seen.add(key)
+
+    if block_start < 0:
+        return False
+
+    newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
+    missing = [key for key in updates if key not in seen]
+    if missing:
+        insert_at = block_end
+        prefix = "" if insert_at > 0 and lines[insert_at - 1].endswith(("\n", "\r\n")) else newline
+        added = [f"{key}: {updates[key]}{newline}" for key in missing]
+        lines[insert_at:insert_at] = ([prefix] if prefix else []) + added
+        changed = True
+
+    if not changed:
+        return True
+
+    try:
+        req_file.write_text("".join(lines), encoding="utf-8")
+        return True
+    except Exception as e:
+        log.warning(f"[status] 更新 {req_file.name} 失败: {e}")
+        return False
+
+
 def parse_test_result(output: str) -> tuple[bool, str]:
     """
     解析 e2e-test 输出（兜底方案，优先使用 read_req_status）。
@@ -216,40 +281,57 @@ def parse_review_result(output: str) -> tuple[bool, str]:
     return False, summary
 
 
-def extract_arch_issues(req_file: Path) -> tuple[list[str], str]:
+def extract_arch_issues_from_text(content: str) -> tuple[list[str], str]:
     """
-    从需求文件中检测 code-review 写入的架构问题标记。
+    从文本中检测 code-review 写入的架构问题标记。
 
     code-review SKILL 在发现系统性问题时写入：
 
+        ARCH_ISSUES_BEGIN
         ## 🏗️ 架构问题（ARCH_ISSUES_DETECTED）
 
         ARCH_KEYWORDS: Sprint管理, 状态流转
 
         ### 详情
         1. xxx
+        ARCH_ISSUES_END
 
     返回 (keywords_list, detail_text)，未检测到时返回 ([], "")。
     """
-    if not req_file.exists():
-        return [], ""
-    content = req_file.read_text(encoding="utf-8", errors="ignore")
     if "ARCH_ISSUES_DETECTED" not in content:
         return [], ""
 
     keywords: list[str] = []
     detail_lines: list[str] = []
     in_detail = False
+    in_arch_block = "ARCH_ISSUES_BEGIN" not in content
 
     for line in content.split("\n"):
-        if line.startswith("ARCH_KEYWORDS:"):
-            raw = line.split(":", 1)[1].strip()
+        normalized = _normalize_marker_line(line)
+        if normalized == "ARCH_ISSUES_BEGIN":
+            in_arch_block = True
+            continue
+        if normalized == "ARCH_ISSUES_END" and in_arch_block:
+            break
+        if not in_arch_block:
+            continue
+
+        if normalized.startswith("ARCH_KEYWORDS:"):
+            raw = normalized.split(":", 1)[1].strip()
             keywords = [k.strip() for k in raw.split(",") if k.strip()]
-        elif line.strip().startswith("### 详情"):
+        elif normalized.startswith("### 详情"):
             in_detail = True
         elif in_detail:
-            if line.startswith("## "):
+            if normalized.startswith("## "):
                 break
             detail_lines.append(line)
 
     return keywords, "\n".join(detail_lines).strip()
+
+
+def extract_arch_issues(req_file: Path) -> tuple[list[str], str]:
+    """从需求文件中检测 code-review 写入的架构问题标记。"""
+    if not req_file.exists():
+        return [], ""
+    content = req_file.read_text(encoding="utf-8", errors="ignore")
+    return extract_arch_issues_from_text(content)

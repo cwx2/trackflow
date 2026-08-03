@@ -21,7 +21,8 @@ from _config import (
 from _kiro import run_kiro, run_kiro_resume, get_current_commit, get_latest_session_id
 from _parsers import (
     parse_fix_result, parse_test_result, parse_review_result,
-    read_req_status, reset_req_status, is_test_environment_failure, extract_arch_issues,
+    read_req_status, reset_req_status, write_req_status, is_test_environment_failure,
+    extract_arch_issues, extract_arch_issues_from_text,
 )
 
 
@@ -132,6 +133,115 @@ def _refresh_diff_range(diff_base: str, req_file: Path, fallback_head: str = "")
     req_status = read_req_status(req_file)
     commit_after = req_status.get("fix_commit", "").strip() or fallback_head or get_current_commit()
     return _build_diff_range(diff_base, commit_after)
+
+
+def _merge_arch_issues(items: list[tuple[list[str], str]]) -> tuple[list[str], str]:
+    """合并多轮审核/需求文件中的架构问题，保留关键词顺序并去重。"""
+    keywords: list[str] = []
+    detail_blocks: list[str] = []
+    seen_keywords: set[str] = set()
+    seen_details: set[str] = set()
+
+    for item_keywords, item_detail in items:
+        for keyword in item_keywords:
+            if keyword not in seen_keywords:
+                keywords.append(keyword)
+                seen_keywords.add(keyword)
+        detail = item_detail.strip()
+        if detail and detail not in seen_details:
+            detail_blocks.append(detail)
+            seen_details.add(detail)
+
+    return keywords, "\n\n".join(detail_blocks).strip()
+
+
+def _arch_artifact_paths() -> list[str]:
+    """收集 tech-requirement 允许产生并提交的产物。"""
+    try:
+        result = subprocess.run(
+            [
+                "git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--",
+                "requirements/review", "requirements/exploration-log.md", "test",
+            ],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=15,
+        )
+    except Exception as e:
+        log.warning(f"[arch] 无法检查架构需求产物: {e}")
+        return []
+
+    if result.returncode != 0:
+        log.warning(f"[arch] 架构需求产物状态检查失败: {result.stderr.strip()}")
+        return []
+
+    allowed: set[str] = set()
+    for entry in result.stdout.split("\0"):
+        if len(entry) < 4:
+            continue
+        path_text = entry[3:].strip().replace("\\", "/")
+        # 重命名格式是 "old -> new"，提交新路径即可。
+        path = path_text.split(" -> ")[-1].strip().strip('"')
+        if (
+            path.startswith("requirements/review/")
+            or path == "requirements/exploration-log.md"
+            or path.startswith("test/tech-")
+        ):
+            allowed.add(path)
+
+    return sorted(allowed)
+
+
+def _commit_and_push_arch_artifacts(label: str, arch_keywords: list[str]) -> bool:
+    """提交并推送 tech-requirement 生成的技术需求文件/探索日志/参考截图。"""
+    artifact_paths = _arch_artifact_paths()
+    if not artifact_paths:
+        log.warning(f"[{label}] 🏗️ 架构审计未产生可提交产物")
+        return False
+
+    try:
+        add_result = subprocess.run(
+            ["git", "add", "--", *artifact_paths],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=30,
+        )
+        if add_result.returncode != 0:
+            log.warning(f"[{label}] 🏗️ 架构需求 git add 失败: {add_result.stderr.strip()}")
+            return False
+
+        diff_result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=str(WORKSPACE), timeout=15,
+        )
+        if diff_result.returncode == 0:
+            log.warning(f"[{label}] 🏗️ 架构审计没有 staged 变更")
+            return False
+        if diff_result.returncode != 1:
+            log.warning(f"[{label}] 🏗️ 架构需求 staged diff 检查异常")
+            return False
+
+        scope = ", ".join(arch_keywords[:3]) if arch_keywords else "architecture follow-up"
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", f"chore: add architecture follow-up requirements ({scope})"],
+            capture_output=True, text=True, cwd=str(WORKSPACE),
+            encoding="utf-8", errors="replace", timeout=60,
+        )
+        if commit_result.returncode != 0:
+            log.warning(f"[{label}] 🏗️ 架构需求提交失败: {commit_result.stderr.strip()}")
+            return False
+
+        push_result = subprocess.run(
+            ["git", "push"], capture_output=True, text=True,
+            cwd=str(WORKSPACE), encoding="utf-8", errors="replace", timeout=60,
+        )
+        if push_result.returncode != 0:
+            log.warning(f"[{label}] 🏗️ 架构需求推送失败: {push_result.stderr.strip()}")
+            return False
+
+        log.info(f"[{label}] 🏗️ 架构需求已提交并推送：{', '.join(artifact_paths)}")
+        return True
+    except Exception as e:
+        log.warning(f"[{label}] 🏗️ 架构需求提交/推送异常: {e}")
+        return False
 
 
 def _existing_fix_diff(fix_commit: str) -> tuple[str, list[str]]:
@@ -473,6 +583,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
     review_skill = SKILLS["code-review"]
     prev_review_summary = ""
     review_passed = False
+    arch_issue_items: list[tuple[list[str], str]] = []
 
     for review_round in range(1, MAX_REVIEW_RETRIES + 1):
         if reuse_review_result:
@@ -508,6 +619,10 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             _move_back_to_develop(req_file)
             log.warning(f"[{label}] 审核环境故障（{review_output}），不消耗需求重试次数")
             return ConsumeOutcome(None, transient=True)
+        output_arch_keywords, output_arch_detail = extract_arch_issues_from_text(review_output)
+        if output_arch_keywords:
+            arch_issue_items.append((output_arch_keywords, output_arch_detail))
+            log.info(f"[{label}] 🏗️ 审核输出发现架构问题标记：{output_arch_keywords}")
 
         req_status = read_req_status(req_file)
         file_review_status = req_status.get("review_status", "")
@@ -521,6 +636,13 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
         else:
             log.warning(f"[{label}] ⚠️ 未找到 review_status，降级到 stdout 解析")
             review_passed, prev_review_summary = parse_review_result(review_output)
+            write_req_status(
+                req_file,
+                {
+                    "review_status": "PASS" if review_passed else "FAIL",
+                    "review_round": str(review_round),
+                },
+            )
             if review_passed:
                 log.info(f"[{label}] ✅ 审核通过（第 {review_round} 轮，stdout）")
                 break
@@ -595,7 +717,10 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
 
         # ── 步骤 6：检测并触发架构审计（可选）──
         arch_req_file = IMPLEMENT_DIR / req_file.name
-        arch_keywords, arch_detail = extract_arch_issues(arch_req_file)
+        file_arch_keywords, file_arch_detail = extract_arch_issues(arch_req_file)
+        if file_arch_keywords:
+            arch_issue_items.append((file_arch_keywords, file_arch_detail))
+        arch_keywords, arch_detail = _merge_arch_issues(arch_issue_items)
         if arch_keywords:
             log.info(f"[{label}] 🏗️ 发现架构问题，触发 tech-requirement 审计：{arch_keywords}")
             tech_skill = SKILLS.get("tech-requirement", {})
@@ -607,10 +732,22 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 f"请以此为切入点进行技术审计，找出根因并写成技术需求文档：\n\n"
                 f"**涉及模块**：{', '.join(arch_keywords)}\n\n"
                 f"**问题详情**：\n{arch_detail}\n\n"
-                f"请按照 tech-requirement SKILL 的完整审计流程执行，"
-                f"将发现的问题写入 review/ 目录。"
+                f"请使用 tech-requirement 的「code-review follow-up mode」执行："
+                f"先查重，再基于上述审核证据做聚焦审计，将确认的问题写入 review/ 目录；"
+                f"如果证据不足，再补充 YouTrack/OpenProject 参考。"
             )
-            run_kiro(tech_prompt, f"{label}-arch", worker_id=worker_id)
+            before_review_files = {p.name for p in REVIEW_DIR.glob("requirement-*.md")}
+            with _review_lock:
+                _, arch_output = run_kiro(tech_prompt, f"{label}-arch", worker_id=worker_id)
+                after_review_files = {p.name for p in REVIEW_DIR.glob("requirement-*.md")}
+                new_review_files = sorted(after_review_files - before_review_files)
+                if _is_transient_cli_output(arch_output):
+                    log.warning(f"[{label}] 🏗️ 架构审计环境故障（{arch_output}），跳过本次自动沉淀")
+                elif not new_review_files:
+                    log.warning(f"[{label}] 🏗️ 架构审计未创建新的 review/ 技术需求")
+                else:
+                    log.info(f"[{label}] 🏗️ 架构审计创建需求：{', '.join(new_review_files)}")
+                _commit_and_push_arch_artifacts(label, arch_keywords)
             log.info(f"[{label}] 🏗️ 架构审计会话结束")
     else:
         status = []
