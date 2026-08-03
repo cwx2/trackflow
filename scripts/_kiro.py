@@ -13,7 +13,7 @@ from pathlib import Path
 
 from _config import (
     WORKSPACE, KIRO_CLI, KIRO_MODEL, KIRO_MODEL_FIX,
-    TIMEOUT_SECONDS, log, strip_ansi,
+    TIMEOUT_SECONDS, IDLE_TIMEOUT_SECONDS, log, strip_ansi,
 )
 
 # 构建 kiro-cli 所需的环境变量（抑制交互式行为）
@@ -33,6 +33,8 @@ _BASE_ENV = {
 _RUNTIME_GUARD = """自动化运行约束：
 - 当前工作目录已经是项目根目录；Windows PowerShell 不要使用 `cd ... && ...` 或 Unix shell 语法。
 - PostgreSQL 查询工具只提交一条不带 SQL 注释、不混入外部输入、不带末尾分号的 SELECT 查询；禁止把注释或多条语句放进 query 参数。
+- 禁止通过 shell/read/grep/Get-Content/cat/type/echo 读取或打印任何密码、token、.env、Keycloak credential、TRACKFLOW_TEST_PASSWORD；测试登录只能使用已配置 MCP 环境或已登录会话，拿不到凭据时必须标记环境故障。
+- 禁止猜测、硬编码或从源码/配置中挖掘测试密码；不要把密钥、JWT、Authorization、Cookie 写入日志、需求文件或提交。
 - 只有完成了实际验证，才能输出阶段成功标记；无法验证时必须明确报告失败或阻塞原因。
 """
 
@@ -51,7 +53,23 @@ _SENSITIVE_OUTPUT_PATTERNS = (
     (re.compile(r'(?i)("password"\s*:\s*")[^"]*(")'), r"\1***\2"),
     (re.compile(r"(?i)('password'\s*:\s*')[^']*(')"), r"\1***\2"),
     (re.compile(r"(?i)(password=)[^&\s\"']+"), r"\1***"),
+    (re.compile(r'(?i)("access_token"\s*:\s*")[^"]*(")'), r"\1***\2"),
+    (re.compile(r"(?i)(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1***"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"), "***JWT***"),
     (re.compile(r"(?i)((?:#password|password)[^'\"]*\.fill\(['\"])[^'\"]*(['\"]\))"), r"\1***\2"),
+)
+
+_FORBIDDEN_OUTPUT_PATTERNS = (
+    re.compile(
+        r"(?i)I will run the following command:.*"
+        r"(TRACKFLOW_TEST_PASSWORD|GetEnvironmentVariable|\.env\b|keycloak.*credentials|credentials.*keycloak)"
+    ),
+    re.compile(r"(?i)Purpose:.*(get|read|look for|check|search).*password"),
+    re.compile(r"(?i)Searching for:.*(TRACKFLOW_TEST_PASSWORD|\"credentials\")"),
+    re.compile(r"(?i)cmdlet\s+Write-Output"),
+    re.compile(r"(?i)位于命令管道位置 .* 的 cmdlet .* 请为以下参数提供值"),
+    re.compile(r"请为以下参数提供值"),
+    re.compile(r"(?i)InputObject\[\d+\]:"),
 )
 
 _circuit_lock = threading.Lock()
@@ -102,11 +120,19 @@ def _redact_sensitive_output(text: str) -> str:
     return redacted
 
 
+def _is_forbidden_output(text: str) -> bool:
+    """识别会泄露凭据或触发交互式 shell 卡死的 Kiro 输出。"""
+    clean = strip_ansi(text)
+    return any(pattern.search(clean) for pattern in _FORBIDDEN_OUTPUT_PATTERNS)
+
+
 def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[bool, str]:
     """运行 Kiro CLI，并保证 stdout 卡住时超时能够真正回收。"""
     _wait_for_kiro_circuit(label)
     start = time.time()
     output_lines: list[str] = []
+    last_output_at = [start]
+    policy_blocked = [False]
 
     try:
         process = subprocess.Popen(
@@ -131,6 +157,15 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
                 print(f"  [{label}] {safe_line}")
                 log.debug(f"[{label}] {strip_ansi(safe_line)}")
                 output_lines.append(safe_line)
+                last_output_at[0] = time.time()
+                if _is_forbidden_output(line_stripped):
+                    policy_blocked[0] = True
+                    log.error(f"[{label}] 检测到敏感/交互式 shell 行为，立即终止 kiro-cli")
+                    try:
+                        process.kill()
+                    except Exception:
+                        pass
+                    break
         except Exception as e:
             log.warning(f"[{label}] 读取输出异常: {e}")
 
@@ -138,7 +173,24 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
     reader.start()
 
     try:
-        reader.join(TIMEOUT_SECONDS)
+        deadline = start + TIMEOUT_SECONDS
+        while reader.is_alive() and time.time() < deadline:
+            reader.join(5)
+            if not reader.is_alive():
+                break
+            if time.time() - last_output_at[0] > IDLE_TIMEOUT_SECONDS:
+                log.error(
+                    f"[{label}] 无输出超时（{IDLE_TIMEOUT_SECONDS}s），"
+                    "疑似 shell 交互/工具卡死，终止 kiro-cli"
+                )
+                process.kill()
+                reader.join(10)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    log.error(f"[{label}] kiro-cli 进程未能及时退出")
+                return False, "IDLE_TIMEOUT"
+
         if reader.is_alive():
             log.error(f"[{label}] 超时（{TIMEOUT_SECONDS}s），终止 kiro-cli")
             process.kill()
@@ -163,6 +215,9 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
 
     elapsed = time.time() - start
     output = "\n".join(output_lines)
+    if policy_blocked[0]:
+        log.warning(f"[{label}] 已按策略阻断敏感/交互式命令")
+        return False, "POLICY_BLOCKED"
     normalized_output = output.lower()
     if any(marker in normalized_output for marker in _TRANSIENT_OUTPUT_MARKERS):
         log.warning(f"[{label}] Kiro 服务暂时不可用，按环境故障处理")

@@ -28,6 +28,7 @@ for _d in [REVIEW_DIR, DEVELOP_DIR, IMPLEMENT_DIR, REJECTED_DIR, WORKING_DIR]:
 
 MIN_DEVELOP_QUEUE = 6       # develop 低于此数时触发生产
 TIMEOUT_SECONDS   = 2400    # 单次 kiro-cli 超时（40 分钟）
+IDLE_TIMEOUT_SECONDS = 180  # kiro-cli 长时间无输出视为卡住（常见于 shell 交互式提示）
 MAX_RETRIES       = 5       # 需求最大失败重试次数
 COOLDOWN_SECONDS  = 5
 MAX_TEST_RETRIES   = 3      # 测试最多重试轮数

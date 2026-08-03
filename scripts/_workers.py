@@ -43,7 +43,7 @@ _AUTOMATION_PROMPT_RULES = """
 
 
 def _is_transient_cli_output(output: str) -> bool:
-    return output in {"STARTUP_FAIL", "TIMEOUT", "PROCESS_ERROR"}
+    return output in {"STARTUP_FAIL", "TIMEOUT", "IDLE_TIMEOUT", "PROCESS_ERROR", "POLICY_BLOCKED"}
 
 
 def _move_back_to_develop(req_file: Path) -> None:

@@ -50,7 +50,29 @@ TrackFlow 是一个内部项目及任务管理系统，替代 YouTrack。核心�
 - 前端: http://localhost:3000
 - 后端 API: http://localhost:8090
 - Keycloak: http://localhost:8080
-- 默认测试账号: `testuser` / 由本地环境变量 `TRACKFLOW_TEST_PASSWORD` 提供
+- 默认测试账号: `testuser` / 密码由本地 MCP/环境预配置提供，测试 agent **不得读取、打印或猜测密码**
+
+### 🔐 密钥与登录纪律（强制）
+
+测试 agent 不拥有读取密钥的权限。任何情况下都必须遵守：
+
+- ❌ 禁止运行 `echo %TRACKFLOW_TEST_PASSWORD%`、`echo $env:TRACKFLOW_TEST_PASSWORD`、`GetEnvironmentVariable(...)` 等命令读取环境变量
+- ❌ 禁止读取 `.env`、`*.env`、Keycloak realm JSON、配置文件中的 `credentials` 来寻找密码
+- ❌ 禁止 grep/search `TRACKFLOW_TEST_PASSWORD`、`password`、`credentials` 来推断登录凭据
+- ❌ 禁止硬编码或猜测测试密码
+- ❌ 禁止把 password、access token、Authorization、Cookie、JWT 写入日志、需求文件或测试报告
+- ✅ 优先复用已登录浏览器会话；若需要切换用户，只使用已配置的 MCP/Postmancer 环境能力
+- ✅ 如果无法通过已配置工具完成登录，立即输出 `TEST_ENVIRONMENT_FAILURE`，不要搜索密钥、不要等待、不要反复尝试
+
+登录凭据缺失时的固定失败格式：
+
+```text
+TEST_ENVIRONMENT_FAILURE
+TEST_FAILURES_BEGIN
+- 环境检查：测试登录凭据未通过 MCP 环境预配置提供，无法安全登录
+TEST_FAILURES_END
+TEST_RESULT: FAIL
+```
 
 ## 工作流程
 
@@ -146,6 +168,7 @@ mcp_trackflow_test_build_backend(java_files=["本次变更的 Java 文件"])
    - 如果在登录页，点击"使用公司账号登录"
    - 在 Keycloak 页面输入账号密码，点击登录
    - 如果 Keycloak 已有 session，会自动跳回
+   - 如果无法通过已配置工具安全取得登录态，按上方 `TEST_ENVIRONMENT_FAILURE` 固定格式停止
 4. 确认到达应用首页后开始正式测试
 5. **测试结束后**：调用 `browser_tabs`（action: "close"）关闭 tab，释放资源
 
@@ -299,7 +322,7 @@ async (page) => {
 
 > 完整信息参考：#[[file:.kiro/steering/test-accounts.md]]
 
-所有密码由本地环境变量 `TRACKFLOW_TEST_PASSWORD` 提供，禁止写入需求、日志或提交。
+所有密码由本地 MCP/环境预配置提供，禁止通过 shell、文件读取、grep、源码配置搜索来获取；禁止写入需求、日志或提交。
 
 | 角色 | 用户名 | 定位 |
 |------|--------|------|
@@ -314,9 +337,9 @@ async (page) => {
 **用户切换**（Keycloak SSO 难以通过清除 cookies 注销，使用以下方法）：
 
 ```javascript
-// 1. 通过 mcp_postmancer_http_request 获取 token
+// 1. 通过已配置的 mcp_postmancer_http_request / Postmancer 环境获取 token
 // POST http://localhost:8080/realms/trackflow/protocol/openid-connect/token
-// Body: grant_type=password&client_id=trackflow-frontend&username={用户名}&password={TRACKFLOW_TEST_PASSWORD}&scope=openid profile email
+// Body 中的 password 必须来自已配置环境，不得由 agent 读取/打印/猜测。
 
 // 2. 在浏览器中注入 token
 await page.evaluate((token) => {
