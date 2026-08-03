@@ -144,6 +144,8 @@
     :visible="showTransitionModal"
     :target-status="transitionTarget"
     :require-comment="transitionRequireComment"
+    :show-assignee="true"
+    :members="members"
     @confirm="onTransitionConfirm"
     @cancel="showTransitionModal = false"
   />
@@ -1393,10 +1395,10 @@ async function onTransition(target: StatusInfo) {
 }
 
 /** Called when user confirms the transition comment modal */
-async function onTransitionConfirm(comment: string) {
+async function onTransitionConfirm(comment: string, assigneeId: string | undefined, assigneeExplicit: boolean) {
   showTransitionModal.value = false
   if (transitionTarget.value) {
-    await executeTransition(transitionTarget.value, comment || undefined)
+    await executeTransition(transitionTarget.value, comment || undefined, undefined, assigneeId, assigneeExplicit)
   }
 }
 
@@ -1404,7 +1406,9 @@ async function onTransitionConfirm(comment: string) {
 async function executeTransition(
   target: StatusInfo,
   comment: string | undefined,
-  forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean }
+  forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean },
+  assigneeId?: string,
+  assigneeExplicit?: boolean
 ) {
   const { refresh: refreshNavBadge } = useNavBadge()
   try {
@@ -1415,7 +1419,9 @@ async function executeTransition(
       issue.value!.version,
       forceFlags?.force,
       forceFlags?.forceWip,
-      forceFlags?.forceDescEmpty
+      forceFlags?.forceDescEmpty,
+      assigneeId,
+      assigneeExplicit
     )
     if (res.code === 0) {
       // 检查是否为字段校验失败（状态转换被阻止）
@@ -1442,7 +1448,7 @@ async function executeTransition(
         okText: '继续移入',
         cancelText: '取消',
         hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true })
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true }, assigneeId, assigneeExplicit)
       })
     } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
       // 关闭前置检查警告（子任务未完成 / 被阻塞 / 组合）— 统一弹窗
@@ -1452,7 +1458,7 @@ async function executeTransition(
         okText: '强制关闭',
         cancelText: '取消',
         hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true })
+        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true }, assigneeId, assigneeExplicit)
       })
     } else if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
       // 描述为空警告 — 转换到 Testing 状态时如果描述为空
@@ -1462,7 +1468,7 @@ async function executeTransition(
         okText: '继续变更',
         cancelText: '取消',
         hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true })
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true }, assigneeId, assigneeExplicit)
       })
     } else {
       Message.error(res.message || '变更失败')
@@ -1479,7 +1485,7 @@ async function executeTransition(
         okText: '继续移入',
         cancelText: '取消',
         hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true })
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true }, assigneeId, assigneeExplicit)
       })
     } else if (errorCode === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
       Modal.warning({
@@ -1488,7 +1494,7 @@ async function executeTransition(
         okText: '强制关闭',
         cancelText: '取消',
         hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true })
+        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true }, assigneeId, assigneeExplicit)
       })
     } else if (errorCode === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
       Modal.warning({
@@ -1497,7 +1503,7 @@ async function executeTransition(
         okText: '继续变更',
         cancelText: '取消',
         hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true })
+        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true }, assigneeId, assigneeExplicit)
       })
     } else {
       handleUpdateError(e, '变更失败')

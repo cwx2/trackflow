@@ -16,6 +16,26 @@
           {{ targetStatus?.name }}
         </span>
       </div>
+
+      <!-- Assignee selector (optional override) -->
+      <div v-if="showAssignee" class="assignee-section">
+        <label class="assignee-label">指派给（可选）</label>
+        <a-select
+          v-model="selectedAssigneeId"
+          placeholder="自动分配（上一任开发人员）"
+          allow-clear
+          :allow-search="true"
+          :filter-option="filterMemberOption"
+        >
+          <a-option v-for="member in members" :key="member.userId" :value="member.userId">
+            {{ member.displayName || member.username }}
+          </a-option>
+        </a-select>
+        <p class="assignee-hint">
+          留空时系统将自动分配给上一任负责人
+        </p>
+      </div>
+
       <div class="comment-section">
         <label class="comment-label">
           {{ requireComment ? '理由（必填）' : '备注（选填）' }}
@@ -39,20 +59,26 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import type { StatusInfo } from './DetailSidebar.vue'
+import type { ProjectMemberVO } from '@/api/types'
 
 const props = defineProps<{
   visible: boolean
   targetStatus: StatusInfo | null
   /** 是否强制要求填写评论 */
   requireComment: boolean
+  /** 是否显示负责人选择器 */
+  showAssignee?: boolean
+  /** 可分配的项目成员列表 */
+  members?: ProjectMemberVO[]
 }>()
 
 const emit = defineEmits<{
-  confirm: [comment: string]
+  confirm: [comment: string, assigneeId: string | undefined, assigneeExplicit: boolean]
   cancel: []
 }>()
 
 const comment = ref('')
+const selectedAssigneeId = ref<string | undefined>(undefined)
 const textareaRef = ref()
 
 const modalTitle = computed(() => {
@@ -73,10 +99,20 @@ const placeholder = computed(() => {
   return '可选：添加备注说明本次状态变更的原因'
 })
 
-// Reset comment when modal opens
+/** Filter member options for search */
+function filterMemberOption(inputValue: string, option: any) {
+  const member = props.members?.find(m => m.userId === option.value)
+  if (!member) return false
+  const keyword = inputValue.toLowerCase()
+  return (member.displayName || '').toLowerCase().includes(keyword) ||
+    (member.username || '').toLowerCase().includes(keyword)
+}
+
+// Reset state when modal opens
 watch(() => props.visible, (val) => {
   if (val) {
     comment.value = ''
+    selectedAssigneeId.value = undefined
     nextTick(() => {
       textareaRef.value?.focus()
     })
@@ -84,7 +120,8 @@ watch(() => props.visible, (val) => {
 })
 
 function handleOk() {
-  emit('confirm', comment.value.trim())
+  const assigneeExplicit = selectedAssigneeId.value !== undefined
+  emit('confirm', comment.value.trim(), selectedAssigneeId.value, assigneeExplicit)
 }
 
 function handleCancel() {
@@ -118,6 +155,24 @@ function handleCancel() {
   font-size: 12px;
   font-weight: 500;
   color: #fff;
+}
+
+.assignee-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assignee-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.assignee-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
 }
 
 .comment-section {
