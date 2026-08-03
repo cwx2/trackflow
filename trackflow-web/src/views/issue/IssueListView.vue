@@ -720,7 +720,7 @@
         <template #sprint="{ record }">
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="sprintDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
-              <span class="editable-cell" @click="openSprintEdit(record)">
+              <span class="editable-cell" :class="{ 'sprint-completed': record.sprintStatus === 'completed' }" @click="openSprintEdit(record)">
                 {{ getSprintName(record.sprintId, record.sprintName) || '\u2014' }}
                 <icon-loading v-if="isCellEditing(record.id, 'sprintId')" class="cell-spinner" />
               </span>
@@ -737,7 +737,7 @@
                 </div>
               </template>
             </a-trigger>
-            <span v-else class="readonly-cell">{{ getSprintName(record.sprintId, record.sprintName) || '\u2014' }}</span>
+            <span v-else class="readonly-cell" :class="{ 'sprint-completed': record.sprintStatus === 'completed' }">{{ getSprintName(record.sprintId, record.sprintName) || '\u2014' }}</span>
           </div>
         </template>
         <template #priority="{ record }">
@@ -4366,6 +4366,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 .editable-cell { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 3px; transition: background 0.15s; font-size: 12px; color: var(--tf-text-secondary); }
 .editable-cell:hover { background: var(--tf-bg-hover); }
 .readonly-cell { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font-size: 12px; color: var(--tf-text-secondary); cursor: default; }
+/* 已完成迭代的 Sprint 名称视觉弱化 */
+.sprint-completed { color: var(--tf-text-tertiary); text-decoration: line-through; opacity: 0.7; }
 /* 未分配工单视觉高亮 */
 .unassigned-cell { color: rgb(var(--warning-6)); }
 .unassigned-cell:hover { background: rgba(var(--warning-6), 0.08); }

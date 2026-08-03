@@ -26,6 +26,8 @@ public class IssueVO {
     private String reporterName;
     private String sprintId;
     private String sprintName;
+    /** Sprint 状态（planned/active/completed/archived），用于前端视觉区分已完成迭代 */
+    private String sprintStatus;
 
     /**
      * 工单关联的所有 Sprint ID 列表（多 Sprint 模式时非空）。

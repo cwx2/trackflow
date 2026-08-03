@@ -672,7 +672,7 @@ public class IssueService {
     }
 
     /**
-     * 批量填充 sprintName（仅查询用到的 Sprint）
+     * 批量填充 sprintName 和 sprintStatus（仅查询用到的 Sprint）
      */
     private void fillSprintInfo(List<Issue> issues, List<IssueVO> voList) {
         Set<Long> sprintIds = new java.util.HashSet<>();
@@ -691,6 +691,9 @@ public class IssueService {
                 com.trackflow.sprint.entity.Sprint sprint = sprintMap.get(issue.getSprintId());
                 if (sprint != null) {
                     voList.get(i).setSprintName(sprint.getName());
+                    if (sprint.getStatus() != null) {
+                        voList.get(i).setSprintStatus(sprint.getStatus().getValue());
+                    }
                 }
             }
         }
@@ -2760,6 +2763,7 @@ public class IssueService {
         vo.setReporterName(row.getReporterName());
         vo.setSprintId(row.getSprintId() != null ? String.valueOf(row.getSprintId()) : null);
         vo.setSprintName(row.getSprintName());
+        vo.setSprintStatus(row.getSprintStatus());
         // 多 Sprint 关联信息
         List<Long> relatedSprintIds = issueSprintMapper.selectSprintIdsByIssueId(id);
         if (relatedSprintIds.size() > 1) {

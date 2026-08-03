@@ -263,6 +263,8 @@ export interface IssueVO {
   reporterName?: string
   sprintId?: string
   sprintName?: string
+  /** Sprint 状态（planned/active/completed/archived），用于前端视觉区分已完成迭代 */
+  sprintStatus?: string
   /** 多 Sprint 模式：工单关联的所有 Sprint ID */
   sprintIds?: string[]
   /** 多 Sprint 模式：工单关联的所有 Sprint 名称（与 sprintIds 对应） */

@@ -67,6 +67,7 @@ public class IssueDetailRow {
 
     // JOIN sprint
     private String sprintName;
+    private String sprintStatus;
 
     // JOIN issue (parent)
     private String parentKey;

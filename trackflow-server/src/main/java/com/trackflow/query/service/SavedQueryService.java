@@ -356,6 +356,10 @@ public class SavedQueryService {
         List<Map<String, Object>> filters = parseFilters(query.getFilters());
         List<Map<String, String>> sortCriteria = parseSortCriteria(query.getSortCriteria());
 
+        // 如果 Saved Query 绑定了项目且 filters 中无 project 字段，注入隐式项目上下文
+        // 这样 QueryExecutor 的动态变量（如 ${currentSprint}）能正确限定项目范围
+        injectProjectContext(filters, query.getProjectId());
+
         // 注入项目成员过滤条件
         List<Long> accessibleProjectIds = projectService.getAccessibleProjectIds(userId);
         return queryExecutor.executeWithProjectFilter(filters, page, pageSize, sortCriteria, accessibleProjectIds, hideResolved);
@@ -463,11 +467,11 @@ public class SavedQueryService {
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> parseFilters(String json) {
-        if (json == null || json.isBlank() || "[]".equals(json)) return List.of();
+        if (json == null || json.isBlank() || "[]".equals(json)) return new java.util.ArrayList<>();
         try {
             return objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
         } catch (JsonProcessingException e) {
-            return List.of();
+            return new java.util.ArrayList<>();
         }
     }
 
@@ -479,6 +483,27 @@ public class SavedQueryService {
         } catch (JsonProcessingException e) {
             return List.of();
         }
+    }
+
+    /**
+     * 如果 Saved Query 绑定了项目且 filters 中没有 project 字段，
+     * 注入一个隐式的 project filter，供 QueryExecutor 解析动态变量时获取项目上下文。
+     * 注：这不会改变实际查询结果（因为 executeWithProjectFilter 已限定可访问项目），
+     * 仅为 ${currentSprint} 等变量提供项目范围。
+     */
+    private void injectProjectContext(List<Map<String, Object>> filters, Long projectId) {
+        if (projectId == null) return;
+        // 检查 filters 中是否已有 project 字段
+        boolean hasProject = filters.stream()
+                .anyMatch(f -> "project".equals(f.get("field")));
+        if (hasProject) return;
+
+        // 注入隐式 project 上下文
+        Map<String, Object> projectFilter = new java.util.HashMap<>();
+        projectFilter.put("field", "project");
+        projectFilter.put("operator", "eq");
+        projectFilter.put("value", java.util.List.of(String.valueOf(projectId)));
+        filters.add(0, projectFilter);
     }
 
     private String toJson(Object obj) {

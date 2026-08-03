@@ -91,7 +91,7 @@
       <span
         v-if="issue.sprintName || sprintOptions !== null"
         class="item-field item-sprint-field"
-        :class="{ 'sprint-editable': sprintOptions !== null }"
+        :class="{ 'sprint-editable': sprintOptions !== null, 'sprint-completed': issue.sprintStatus === 'completed' }"
         @click.stop
       >
         <span class="field-label">Sprint:</span>
@@ -574,6 +574,12 @@ function truncateDescription(desc?: string): string {
 /* Sprint 内联编辑 */
 .item-sprint-field {
   cursor: default;
+}
+
+.item-sprint-field.sprint-completed .field-value {
+  color: var(--tf-text-tertiary, var(--color-text-3));
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 
 .item-sprint-field.sprint-editable {

@@ -34,6 +34,7 @@
             updater.id AS updated_by_id,
             updater.display_name AS updated_by_name,
             sp.name AS sprint_name,
+            sp.status AS sprint_status,
             pi.issue_key AS parent_key
         FROM issue i
         LEFT JOIN project p ON p.id = i.project_id

@@ -13,6 +13,9 @@ import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.service.StatusCacheHelper;
+import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.entity.SprintStatus;
+import com.trackflow.sprint.mapper.SprintMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -44,6 +47,7 @@ public class QueryExecutor {
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldSortHelper customFieldSortHelper;
     private final CustomFieldDefinitionMapper customFieldDefinitionMapper;
+    private final SprintMapper sprintMapper;
 
     /**
      * 允许排序的字段白名单（数据库列名）
@@ -257,6 +261,9 @@ public class QueryExecutor {
 
         Long currentUserId = SecurityUtils.getCurrentUserId();
 
+        // 预扫描 filters 提取项目 ID 上下文（用于解析 ${currentSprint}）
+        List<Long> contextProjectIds = extractProjectIds(filters);
+
         for (Map<String, Object> filter : filters) {
             String field = (String) filter.get("field");
             String operator = (String) filter.get("operator");
@@ -271,7 +278,12 @@ public class QueryExecutor {
             }
 
             // 解析动态变量
-            List<String> values = resolveValues(value, currentUserId);
+            List<String> values = resolveValues(value, currentUserId, contextProjectIds);
+
+            // 当 ${currentSprint} 扩展为多个 ID 且原操作符为 eq 时，升级为 in
+            if ("sprint".equals(field) && "eq".equals(operator) && values.size() > 1) {
+                operator = "in";
+            }
 
             switch (field) {
                 case "project" -> applyUserFilter(wrapper, "project_id", operator, values, currentUserId);
@@ -310,19 +322,92 @@ public class QueryExecutor {
         return wrapper;
     }
 
+    /**
+     * 从 filters 中提取 project 字段的值作为上下文项目 ID 列表。
+     * 用于解析 ${currentSprint} 时确定在哪些项目中查找活跃 Sprint。
+     */
     @SuppressWarnings("unchecked")
-    private List<String> resolveValues(Object value, Long currentUserId) {
+    private List<Long> extractProjectIds(List<Map<String, Object>> filters) {
+        List<Long> projectIds = new ArrayList<>();
+        for (Map<String, Object> filter : filters) {
+            String field = (String) filter.get("field");
+            if ("project".equals(field)) {
+                Object value = filter.get("value");
+                if (value instanceof List) {
+                    for (Object v : (List<Object>) value) {
+                        try {
+                            projectIds.add(Long.parseLong(String.valueOf(v)));
+                        } catch (NumberFormatException ignored) {
+                            // skip non-numeric values like ${currentUser}
+                        }
+                    }
+                }
+            }
+        }
+        return projectIds;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> resolveValues(Object value, Long currentUserId, List<Long> contextProjectIds) {
         if (value instanceof List) {
-            return ((List<Object>) value).stream().map(v -> {
+            List<String> result = new ArrayList<>();
+            for (Object v : (List<Object>) value) {
                 String s = String.valueOf(v);
                 if ("${currentUser}".equals(s) && currentUserId != null) {
-                    return String.valueOf(currentUserId);
+                    result.add(String.valueOf(currentUserId));
+                } else if ("${currentSprint}".equals(s)) {
+                    // 解析当前活跃 Sprint：查找 contextProjectIds 中状态为 ACTIVE 的 Sprint
+                    List<Long> activeSprintIds = resolveCurrentSprintIds(contextProjectIds);
+                    if (activeSprintIds.isEmpty()) {
+                        // 无活跃 Sprint 时，使用一个不可能匹配的 ID，确保查询结果为空
+                        result.add("-1");
+                    } else {
+                        for (Long sprintId : activeSprintIds) {
+                            result.add(String.valueOf(sprintId));
+                        }
+                    }
+                } else {
+                    // ${today} kept as-is — resolved later in applyDateFilter
+                    result.add(s);
                 }
-                // ${today} kept as-is — resolved later in applyDateFilter
-                return s;
-            }).toList();
+            }
+            return result;
         }
         return List.of(String.valueOf(value));
+    }
+
+    /**
+     * 查找指定项目中当前活跃的 Sprint ID 列表。
+     * 逻辑参考 YouTrack 的 {Current sprint} 语义：
+     * 1. 优先匹配 status = ACTIVE 的 Sprint
+     * 2. 如果没有 ACTIVE，回退到最早的 PLANNED Sprint（尚未开始的下一个）
+     * 3. 如果 contextProjectIds 为空，查找所有项目的活跃 Sprint
+     */
+    private List<Long> resolveCurrentSprintIds(List<Long> contextProjectIds) {
+        LambdaQueryWrapper<Sprint> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Sprint::getStatus, SprintStatus.ACTIVE);
+        if (contextProjectIds != null && !contextProjectIds.isEmpty()) {
+            wrapper.in(Sprint::getProjectId, contextProjectIds);
+        }
+        List<Sprint> activeSprints = sprintMapper.selectList(wrapper);
+        if (!activeSprints.isEmpty()) {
+            return activeSprints.stream().map(Sprint::getId).toList();
+        }
+
+        // 回退：查找最早的 PLANNED Sprint
+        LambdaQueryWrapper<Sprint> plannedWrapper = new LambdaQueryWrapper<>();
+        plannedWrapper.eq(Sprint::getStatus, SprintStatus.PLANNED);
+        if (contextProjectIds != null && !contextProjectIds.isEmpty()) {
+            plannedWrapper.in(Sprint::getProjectId, contextProjectIds);
+        }
+        plannedWrapper.orderByAsc(Sprint::getStartDate);
+        plannedWrapper.last("LIMIT 1");
+        List<Sprint> plannedSprints = sprintMapper.selectList(plannedWrapper);
+        if (!plannedSprints.isEmpty()) {
+            return plannedSprints.stream().map(Sprint::getId).toList();
+        }
+
+        return List.of();
     }
 
     private void applyFilter(QueryWrapper<Issue> wrapper, String column, String operator, List<String> values) {
