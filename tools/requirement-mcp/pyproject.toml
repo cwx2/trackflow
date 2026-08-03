@@ -1,0 +1,18 @@
+[project]
+name = "requirement-manager-mcp"
+version = "0.1.0"
+description = "需求文件管理 MCP Server —— 自动分配编号、创建/移动/列表需求文件"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["requirement_manager"]
+
+[project.scripts]
+requirement-manager = "requirement_manager.server:main"

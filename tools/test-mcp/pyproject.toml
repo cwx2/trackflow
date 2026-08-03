@@ -1,0 +1,19 @@
+[project]
+name = "trackflow-test-mcp"
+version = "0.1.0"
+description = "读取本地截图返回给 AI 查看"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "Pillow>=10.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["trackflow_test"]
+
+[project.scripts]
+trackflow-test = "trackflow_test.server:main"
