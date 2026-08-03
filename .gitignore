@@ -13,7 +13,6 @@ requirements
 docs/
 .playwright-mcp
 /test/
-tools
 
 # === Java / Maven ===
 trackflow-server/target/
