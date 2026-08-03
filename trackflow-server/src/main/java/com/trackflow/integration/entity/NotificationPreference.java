@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("notification_preference")
+@TableName(value = "notification_preference", autoResultMap = true)
 public class NotificationPreference implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)
