@@ -77,11 +77,15 @@
             :current-user-id="currentUserId"
             :can-manage-comments="canManageComments"
             :show-add-time="projectTimeTrackingEnabled && canLogTime"
+            :has-more="activityHasMore"
+            :loading-more="activityLoadingMore"
+            :total-activities="activityTotal"
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
             @restore-comment="onRestoreComment"
             @permanently-delete-comment="onPermanentlyDeleteComment"
             @add-time="openTimeDialog"
+            @load-more="loadMoreActivities"
           />
           <CommentInput
             v-if="canCommentEffective"
@@ -410,6 +414,10 @@ const transitionRequireComment = ref(false)
 const transitions = ref<IssueStatusVO[]>([])
 const comments = ref<IssueCommentVO[]>([])
 const activities = ref<IssueActivityVO[]>([])
+const activityPage = ref(1)
+const activityTotal = ref(0)
+const activityHasMore = ref(false)
+const activityLoadingMore = ref(false)
 const attachments = ref<IssueAttachmentVO[]>([])
 const links = ref<IssueLinkVO[]>([])
 const projectTagList = ref<IssueTagVO[]>([])
@@ -566,11 +574,33 @@ async function loadCommentsAndActivities() {
   try {
     const [commRes, actRes] = await Promise.all([
       issueApi.listComments(issue.value.id),
-      issueApi.listActivities(issue.value.id)
+      issueApi.listActivities(issue.value.id, { page: 1, pageSize: 20 })
     ])
     if (commRes.code === 0) comments.value = commRes.data || []
-    if (actRes.code === 0) activities.value = actRes.data || []
+    if (actRes.code === 0) {
+      const pageData = actRes.data
+      activities.value = pageData.list || []
+      activityPage.value = 1
+      activityTotal.value = pageData.pagination.total
+      activityHasMore.value = pageData.pagination.page < pageData.pagination.totalPages
+    }
   } catch { /* ignore */ }
+}
+
+async function loadMoreActivities() {
+  if (!issue.value || !activityHasMore.value || activityLoadingMore.value) return
+  activityLoadingMore.value = true
+  try {
+    const nextPage = activityPage.value + 1
+    const res = await issueApi.listActivities(issue.value.id, { page: nextPage, pageSize: 20 })
+    if (res.code === 0) {
+      const pageData = res.data
+      activities.value = [...activities.value, ...(pageData.list || [])]
+      activityPage.value = nextPage
+      activityHasMore.value = pageData.pagination.page < pageData.pagination.totalPages
+    }
+  } catch { /* ignore */ }
+  finally { activityLoadingMore.value = false }
 }
 
 async function loadAttachments() {
@@ -690,7 +720,7 @@ async function loadRelatedData() {
     // tags 使用 _silent403：观察者等低权限角色可能触发 403，不应弹出提示
     const promises: Promise<any>[] = [
       issueApi.listComments(id),
-      issueApi.listActivities(id),
+      issueApi.listActivities(id, { page: 1, pageSize: 20 }),
       issueApi.listAttachments(id),
       issueApi.listLinks(id),
       tagApi.listProjectTags(pid, { _silent403: true }),
@@ -714,7 +744,13 @@ async function loadRelatedData() {
     let idx = 0
     if (results[idx].status === 'fulfilled') comments.value = (results[idx] as any).value.data || []
     idx++
-    if (results[idx].status === 'fulfilled') activities.value = (results[idx] as any).value.data || []
+    if (results[idx].status === 'fulfilled') {
+      const pageData = (results[idx] as any).value.data
+      activities.value = pageData?.list || []
+      activityPage.value = 1
+      activityTotal.value = pageData?.pagination?.total || 0
+      activityHasMore.value = (pageData?.pagination?.page || 0) < (pageData?.pagination?.totalPages || 0)
+    }
     idx++
     if (results[idx].status === 'fulfilled') attachments.value = (results[idx] as any).value.data || []
     idx++

@@ -166,9 +166,9 @@ export const issueApi = {
 
   // ========== 活动记录 ==========
 
-  /** 活动记录 */
-  listActivities(issueId: string) {
-    return request.get<any, R<IssueActivityVO[]>>(`/issues/${issueId}/activities`)
+  /** 活动记录（分页，按时间倒序） */
+  listActivities(issueId: string, params?: { page?: number; pageSize?: number }) {
+    return request.get<any, R<PageResult<IssueActivityVO>>>(`/issues/${issueId}/activities`, { params })
   },
 
   // ========== 附件 ==========

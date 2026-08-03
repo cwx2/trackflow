@@ -452,9 +452,12 @@ public class IssueController {
     // ========== 活动记录 ==========
 
     @GetMapping("/{id}/activities")
-    public R<List<IssueActivityVO>> listActivities(@PathVariable("id") Long id) {
+    public R<PageResult<IssueActivityVO>> listActivities(
+            @PathVariable("id") Long id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize) {
         issueService.getByIdWithAccessCheck(id);
-        return R.ok(issueService.listActivitiesWithUser(id));
+        return R.ok(issueService.listActivitiesWithUserPaged(id, page, pageSize));
     }
 
     // ========== 标签 ==========

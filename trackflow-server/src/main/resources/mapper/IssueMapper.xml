@@ -81,6 +81,30 @@
         ORDER BY a.created_at ASC
     </select>
 
+    <!-- 活动列表分页查询（按时间倒序，最新在前） -->
+    <select id="selectActivitiesWithUserPaged" resultType="com.trackflow.issue.mapper.result.ActivityRow">
+        SELECT
+            a.id, a.issue_id, a.user_id, a.action, a.field_name,
+            <include refid="activity_value_columns"/>,
+            a.detail, a.source, a.created_at,
+            u.display_name AS user_name,
+            u.avatar_url AS user_avatar
+        FROM issue_activity a
+        LEFT JOIN sys_user u ON u.id = a.user_id
+        WHERE a.issue_id = #{issueId}
+          AND NOT (a.old_value IS NOT NULL AND a.new_value IS NOT NULL AND a.old_value = a.new_value)
+        ORDER BY a.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 活动记录总数 -->
+    <select id="countActivities" resultType="long">
+        SELECT COUNT(*)
+        FROM issue_activity a
+        WHERE a.issue_id = #{issueId}
+          AND NOT (a.old_value IS NOT NULL AND a.new_value IS NOT NULL AND a.old_value = a.new_value)
+    </select>
+
     <!-- Dashboard 活动流：指定 issue 列表的最近活动 -->
     <select id="selectDashboardActivities" resultType="com.trackflow.issue.mapper.result.ActivityRow">
         SELECT

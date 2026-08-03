@@ -35,6 +35,18 @@ public interface IssueMapper extends BaseMapper<Issue> {
     List<ActivityRow> selectActivitiesWithUser(@Param("issueId") Long issueId);
 
     /**
+     * 活动列表分页查询（按时间倒序，最新在前）
+     */
+    List<ActivityRow> selectActivitiesWithUserPaged(@Param("issueId") Long issueId,
+                                                    @Param("offset") int offset,
+                                                    @Param("limit") int limit);
+
+    /**
+     * 活动记录总数（排除 no-op 变更）
+     */
+    long countActivities(@Param("issueId") Long issueId);
+
+    /**
      * Dashboard 活动流：查询指定 issue 列表的最近活动记录，JOIN 用户表和 Issue 表
      */
     List<ActivityRow> selectDashboardActivities(@Param("issueIds") List<Long> issueIds, @Param("limit") int limit);

@@ -2985,28 +2985,40 @@ public class IssueService {
     @Transactional(readOnly = true)
     public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
         List<ActivityRow> rows = issueMapper.selectActivitiesWithUser(issueId);
-        return rows.stream().map(row -> {
-            IssueActivityVO vo = new IssueActivityVO();
-            vo.setId(String.valueOf(row.getId()));
-            vo.setIssueId(String.valueOf(row.getIssueId()));
-            // 自动化规则操作的 userId 为 null，避免 String.valueOf(null) = "null"
-            vo.setUserId(row.getUserId() != null ? String.valueOf(row.getUserId()) : null);
-            // 自动化操作无关联用户时，使用友好展示名
-            if ("automation".equals(row.getSource())) {
-                vo.setUserName(row.getUserName() != null ? row.getUserName() : "自动化规则");
-            } else {
-                vo.setUserName(row.getUserName());
-            }
-            vo.setUserAvatar(row.getUserAvatar());
-            vo.setAction(row.getAction());
-            vo.setFieldName(row.getFieldName());
-            vo.setOldValue(row.getOldValue());
-            vo.setNewValue(row.getNewValue());
-            vo.setDetail(row.getDetail());
-            vo.setSource(row.getSource());
-            vo.setCreatedAt(row.getCreatedAt());
-            return vo;
-        }).toList();
+        return rows.stream().map(this::mapActivityRow).toList();
+    }
+
+    /**
+     * 获取活动列表（分页） —— 按时间倒序，支持加载更多
+     */
+    @Transactional(readOnly = true)
+    public PageResult<IssueActivityVO> listActivitiesWithUserPaged(Long issueId, int page, int pageSize) {
+        int offset = (page - 1) * pageSize;
+        List<ActivityRow> rows = issueMapper.selectActivitiesWithUserPaged(issueId, offset, pageSize);
+        long total = issueMapper.countActivities(issueId);
+        List<IssueActivityVO> voList = rows.stream().map(this::mapActivityRow).toList();
+        return new PageResult<>(voList, total, page, pageSize);
+    }
+
+    private IssueActivityVO mapActivityRow(ActivityRow row) {
+        IssueActivityVO vo = new IssueActivityVO();
+        vo.setId(String.valueOf(row.getId()));
+        vo.setIssueId(String.valueOf(row.getIssueId()));
+        vo.setUserId(row.getUserId() != null ? String.valueOf(row.getUserId()) : null);
+        if ("automation".equals(row.getSource())) {
+            vo.setUserName(row.getUserName() != null ? row.getUserName() : "自动化规则");
+        } else {
+            vo.setUserName(row.getUserName());
+        }
+        vo.setUserAvatar(row.getUserAvatar());
+        vo.setAction(row.getAction());
+        vo.setFieldName(row.getFieldName());
+        vo.setOldValue(row.getOldValue());
+        vo.setNewValue(row.getNewValue());
+        vo.setDetail(row.getDetail());
+        vo.setSource(row.getSource());
+        vo.setCreatedAt(row.getCreatedAt());
+        return vo;
     }
 
     // ========== 附件上传 ==========

@@ -177,6 +177,13 @@
         </div>
       </div>
       <p v-if="sorted.length === 0" class="empty">暂无活动</p>
+      <!-- Load more button -->
+      <div v-if="props.hasMore" class="load-more-wrap">
+        <button class="load-more-btn" :disabled="props.loadingMore" @click="emit('loadMore')">
+          <template v-if="props.loadingMore">加载中...</template>
+          <template v-else>加载更多活动<span v-if="props.totalActivities" class="load-more-hint">（共 {{ props.totalActivities }} 条）</span></template>
+        </button>
+      </div>
     </div>
 
     <!-- Delete confirmation modal -->
@@ -245,6 +252,9 @@ const props = defineProps<{
   currentUserId?: string
   canManageComments?: boolean
   showAddTime?: boolean
+  hasMore?: boolean
+  loadingMore?: boolean
+  totalActivities?: number
 }>()
 
 const emit = defineEmits<{
@@ -253,6 +263,7 @@ const emit = defineEmits<{
   restoreComment: [commentId: string]
   permanentlyDeleteComment: [commentId: string]
   addTime: []
+  loadMore: []
 }>()
 
 const filters = [
@@ -691,4 +702,36 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 }
 
 .empty { color: var(--tf-text-muted); font-size: 12px; text-align: center; padding: 24px 0; }
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 8px;
+}
+
+.load-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+.load-more-btn:hover:not(:disabled) {
+  color: var(--tf-text-primary);
+  background: var(--tf-bg-hover);
+}
+.load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.load-more-hint {
+  color: var(--tf-text-muted);
+  margin-left: 4px;
+}
 </style>
