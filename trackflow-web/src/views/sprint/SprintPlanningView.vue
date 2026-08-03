@@ -196,6 +196,11 @@
               </span>
               <h3 class="panel-title">{{ sprint.name }}</h3>
               <span class="panel-count">{{ getSprintIssues(sprint.id).length }}</span>
+              <span
+                v-if="sprint.totalIssues > 0 && getSprintIssues(sprint.id).length < sprint.totalIssues"
+                class="panel-count-total"
+                :title="`共 ${sprint.totalIssues} 个工单，${sprint.totalIssues - getSprintIssues(sprint.id).length} 个已完成`"
+              >/ {{ sprint.totalIssues }}</span>
             </div>
             <div class="panel-header-right">
               <span class="sprint-total-hours" v-if="getSprintTotalHours(sprint.id) > 0">⏱ {{ formatHours(getSprintTotalHours(sprint.id)) }}</span>
@@ -327,7 +332,12 @@
               </div>
 
               <!-- Sprint 空状态 -->
-              <div v-if="getSprintIssues(sprint.id).length === 0" class="panel-empty panel-empty--sprint">
+              <div v-if="getSprintIssues(sprint.id).length === 0 && sprint.totalIssues > 0" class="panel-empty panel-empty--sprint panel-empty--all-done">
+                <div class="empty-icon">✅</div>
+                <div class="empty-title">所有工单已完成</div>
+                <div class="empty-desc">此 Sprint 共 {{ sprint.totalIssues }} 个工单，全部已完成</div>
+              </div>
+              <div v-else-if="getSprintIssues(sprint.id).length === 0" class="panel-empty panel-empty--sprint">
                 <div class="empty-icon">🎯</div>
                 <div class="empty-title">暂无工单</div>
                 <div class="empty-desc">从 Backlog 拖拽工单到此处，或使用下方输入框快速创建</div>
@@ -1436,6 +1446,12 @@ onMounted(async () => {
   padding: 2px 6px;
   border-radius: 3px;
 }
+.panel-count-total {
+  font-size: 11px;
+  color: var(--color-text-4);
+  margin-left: 2px;
+  cursor: help;
+}
 .sprint-badge {
   font-size: 10px;
   padding: 2px 6px;
@@ -1704,6 +1720,15 @@ onMounted(async () => {
 .panel-empty--sprint {
   padding: 48px 16px;
   min-height: 200px;
+}
+.panel-empty--all-done {
+  opacity: 0.7;
+}
+.panel-empty--all-done .empty-icon {
+  font-size: 28px;
+}
+.panel-empty--all-done .empty-title {
+  color: var(--color-text-2);
 }
 .empty-icon {
   font-size: 32px;
