@@ -816,7 +816,16 @@
 
         <!-- empty -->
         <template #empty>
-          <div class="empty-state">
+          <div v-if="loadError" class="empty-state error-state">
+            <icon-close-circle class="empty-icon error-icon" />
+            <p class="empty-title">加载失败</p>
+            <p class="empty-desc">无法获取工单列表，请检查网络连接或稍后重试</p>
+            <a-button type="primary" size="small" @click="refreshList">
+              <template #icon><icon-refresh /></template>
+              重试
+            </a-button>
+          </div>
+          <div v-else class="empty-state">
             <icon-search class="empty-icon" />
             <p class="empty-title">暂无工单</p>
             <p class="empty-desc">尝试调整筛选条件或创建新的工单</p>
@@ -833,6 +842,7 @@
         :density="density"
         :structure="structure"
         :loading="loading"
+        :error="loadError"
         :sort-state="sortState"
         :active-issue-id="previewIssueId"
         :focused-issue-id="focusedIssueId"
@@ -854,6 +864,7 @@
         @discard-order="onDiscardManualOrder"
         @sprint-edit="onListSprintEdit"
         @sprint-select="onListSprintSelect"
+        @retry="refreshList"
       />
 
       <!-- Pagination -->
@@ -1010,7 +1021,7 @@ const route = useRoute()
 
 // Composables
 const {
-  issues, totalIssues, currentPage, pageSize, loading,
+  issues, totalIssues, currentPage, pageSize, loading, loadError,
   sortState, loadIssues, goPage, updateLocalIssue, removeLocalIssue
 } = useIssueList()
 
@@ -4398,6 +4409,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 .empty-icon { font-size: 36px; color: var(--tf-text-quaternary); }
 .empty-title { font-size: 14px; font-weight: 500; color: var(--tf-text-primary); margin: 0; }
 .empty-desc { font-size: 12px; color: var(--tf-text-tertiary); margin: 0 0 8px; }
+.error-state .error-icon { color: var(--color-danger-6, #f53f3f); }
 
 /* Pagination */
 .pagination-bar { display: flex; justify-content: center; padding: 12px 16px; border-top: 1px solid var(--tf-border); flex-shrink: 0; }

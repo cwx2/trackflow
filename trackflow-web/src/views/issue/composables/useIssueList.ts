@@ -53,6 +53,7 @@ export function useIssueList() {
   const currentPage = ref(1)
   const pageSize = 20
   const loading = ref(false)
+  const loadError = ref(false)
   const sortState = ref<SortState>({ field: null, direction: null })
 
   // 请求取消控制器：用于取消前一个请求，避免竞态条件
@@ -100,6 +101,7 @@ export function useIssueList() {
     const currentAbortController = abortController
 
     loading.value = true
+    loadError.value = false
     try {
       const params: Record<string, any> = {
         page: currentPage.value,
@@ -167,6 +169,7 @@ export function useIssueList() {
       if (!currentAbortController.signal.aborted) {
         issues.value = []
         totalIssues.value = 0
+        loadError.value = true
       }
     } finally {
       // 只有当前请求未被取消时才取消 loading 状态
@@ -226,6 +229,7 @@ export function useIssueList() {
     currentPage,
     pageSize,
     loading,
+    loadError,
     sortState,
     sortParam,
     toggleSort,

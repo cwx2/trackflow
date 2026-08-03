@@ -1,5 +1,8 @@
 <template>
   <div class="app-layout">
+    <!-- 全局服务状态横幅 -->
+    <ServiceStatusBanner />
+
     <!-- 左侧导航栏（全高） -->
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <!-- 折叠切换按钮 -->
@@ -285,6 +288,7 @@ import { useNotification } from '@/composables/useNotification'
 import { IconMoon, IconSun, IconCommon, IconLeft, IconRight } from '@arco-design/web-vue/es/icon'
 import TabBar from './TabBar.vue'
 import NotificationPanel from './NotificationPanel.vue'
+import ServiceStatusBanner from './ServiceStatusBanner.vue'
 import trackflowLogoUrl from '@/assets/trackflow-watermark.svg'
 import trackflowIconUrl from '@/assets/trackflow-icon.svg'
 

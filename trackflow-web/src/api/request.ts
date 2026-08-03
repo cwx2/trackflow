@@ -2,6 +2,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { decodeBase64Url } from '@/utils/jwt'
 import { emitSessionEvent } from '@/utils/sessionEvents'
+import { reportApiSuccess, reportApiFailure } from '@/composables/useServiceStatus'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -138,7 +139,10 @@ request.interceptors.request.use(
 
 // 响应拦截器：处理 401 刷新 Token + 403 权限不足提示
 request.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    reportApiSuccess()
+    return response.data
+  },
   async (error) => {
     // 如果是主动取消的请求（token 刷新失败），静默处理
     // 不再向上抛出错误，避免多个并发请求同时 reject 导致级联异常
@@ -226,6 +230,9 @@ request.interceptors.response.use(
         return Promise.reject(error)
       }
     }
+
+    // 报告服务级错误（500+、网络不可达），用于全局服务状态感知
+    reportApiFailure(error.response?.status, error.response?.data?.message)
 
     return Promise.reject(error)
   }

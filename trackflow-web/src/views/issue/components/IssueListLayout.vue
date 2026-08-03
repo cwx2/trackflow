@@ -34,6 +34,16 @@
       <span>加载中...</span>
     </div>
 
+    <div v-else-if="error" class="list-error">
+      <icon-close-circle class="error-icon" />
+      <p class="error-title">加载失败</p>
+      <p class="error-desc">无法获取工单列表，请检查网络连接或稍后重试</p>
+      <a-button type="primary" size="small" @click="$emit('retry')">
+        <template #icon><icon-refresh /></template>
+        重试
+      </a-button>
+    </div>
+
     <div v-else-if="issues.length === 0" class="list-empty">
       <icon-search class="empty-icon" />
       <p class="empty-title">暂无工单</p>
@@ -166,7 +176,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { IconDown, IconSearch, IconDragDotVertical } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconSearch, IconDragDotVertical, IconCloseCircle, IconRefresh } from '@arco-design/web-vue/es/icon'
 import Sortable from 'sortablejs'
 import type { IssueVO, SprintVO } from '@/api/types'
 import type { DensityLevel, StructureMode } from '../composables'
@@ -182,6 +192,7 @@ const props = withDefaults(defineProps<{
   density: DensityLevel
   structure: StructureMode
   loading: boolean
+  error: boolean
   sortState: SortState
   activeIssueId?: string | null
   focusedIssueId?: string | null
@@ -202,6 +213,7 @@ const props = withDefaults(defineProps<{
   draggable: false,
   isManualSorted: false,
   isOwnerOrder: false,
+  error: false,
   focusedIssueId: null,
   sprintOptionsCache: () => ({}),
   sprintLoadingIds: () => new Set(),
@@ -216,6 +228,7 @@ const emit = defineEmits<{
   (e: 'select', issue: IssueWithDesc): void
   (e: 'order-change', issueIds: string[]): void
   (e: 'discard-order'): void
+  (e: 'retry'): void
   /** 列表模式 Sprint 内联编辑：请求加载 sprint 选项 */
   (e: 'sprint-edit', issue: IssueWithDesc): void
   /** 列表模式 Sprint 内联编辑：用户选择了某个 Sprint */
@@ -491,6 +504,35 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--tf-text-tertiary, var(--color-text-3));
   margin: 0;
+}
+
+/* Error state */
+.list-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.list-error .error-icon {
+  font-size: 32px;
+  color: var(--color-danger-6, #f53f3f);
+  margin-bottom: 12px;
+}
+
+.list-error .error-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tf-text-secondary, var(--color-text-2));
+  margin: 0 0 4px;
+}
+
+.list-error .error-desc {
+  font-size: 12px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
+  margin: 0 0 16px;
 }
 
 /* Sortable.js styles */
