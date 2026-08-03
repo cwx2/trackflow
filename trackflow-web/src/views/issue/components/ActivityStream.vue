@@ -151,6 +151,9 @@
               <template v-else-if="item.action === 'link_removed'">
                 移除了关联: <span class="val-old">{{ localizeLinkValue(item.from) }}</span>
               </template>
+              <template v-else-if="item.action === 'auto_assign_skipped'">
+                <span class="system-event-badge">⚙</span> {{ formatAutoAssignSkipped(item.detail) }}
+              </template>
               <template v-else-if="item.action === 'comment_deleted'">
                 删除了评论<template v-if="item.from">: <span class="val-old comment-deleted-content">{{ item.from }}</span></template>
               </template>
@@ -419,6 +422,22 @@ function formatWorkDate(dateStr?: string): string {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   } catch {
     return dateStr
+  }
+}
+
+/**
+ * 将 auto_assign_skipped 的 detail 对象格式化为用户可读的中文描述。
+ * 根据 reason 字段展示不同解释文案。
+ */
+function formatAutoAssignSkipped(detail?: Record<string, any>): string {
+  if (!detail || !detail.reason) return '自动分配已跳过'
+  switch (detail.reason) {
+    case 'manual_override':
+      return '自动分配已跳过 — 负责人由用户手动指定'
+    case 'existing_assignee_matches_role':
+      return '自动分配已跳过 — 当前负责人已属于目标角色，无需变更'
+    default:
+      return `自动分配已跳过 — 原因：${detail.reason}`
   }
 }
 

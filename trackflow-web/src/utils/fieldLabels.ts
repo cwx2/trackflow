@@ -257,7 +257,7 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
   reopened: { short: '重新打开了', full: '重新打开了此工单' },
   resolved: { short: '解决了', full: '解决了此工单' },
   auto_assigned: { short: '自动分配了', full: '自动分配了负责人' },
-  auto_assign_skipped: { short: '跳过了自动分配', full: '跳过了自动分配' },
+  auto_assign_skipped: { short: '跳过了自动分配', full: '自动分配已跳过' },
   moved_to_project: { short: '移动到项目', full: '移动了工单到其他项目' },
   link_added: { short: '添加了关联', full: '添加了工单关联' },
   link_removed: { short: '移除了关联', full: '移除了工单关联' },
