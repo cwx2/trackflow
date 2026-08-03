@@ -160,6 +160,9 @@
               <template v-else-if="item.action === 'comment_permanently_deleted'">
                 永久删除了评论
               </template>
+              <template v-else-if="item.action === 'status_reverted'">
+                撤销了状态变更：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
+              </template>
               <template v-else-if="item.field">
                 修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
                 <span v-if="item.detail && item.detail.reason === 'member_removed'" class="auto-reason">（成员已从项目移除）</span>

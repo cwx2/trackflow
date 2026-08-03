@@ -2153,19 +2153,33 @@ public class IssueService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatusSkipWorkflow(Long id, Long newStatusId, String comment) {
-        return transitStatus(id, newStatusId, comment, null, false, null, true);
+        return transitStatus(id, newStatusId, comment, null, false, null, true, true);
     }
 
     /**
      * 状态变更内部实现
      *
-     * @param skipWorkflowCheck true = 跳过工作流规则校验（仅用于撤销操作，目标状态已在 undoTransitStatus 中校验为上一状态）
+     * @param skipWorkflowCheck true = 跳过工作流规则校验（Controller 已预校验或撤销操作）
      * @return 动作执行结果摘要
      */
     @Transactional(rollbackFor = Exception.class)
     public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
                               Long assigneeId, boolean assigneeExplicitlySet,
                               Integer expectedVersion, boolean skipWorkflowCheck) {
+        return transitStatus(id, newStatusId, comment, assigneeId, assigneeExplicitlySet, expectedVersion, skipWorkflowCheck, false);
+    }
+
+    /**
+     * 状态变更内部实现（完整参数版本）
+     *
+     * @param skipWorkflowCheck true = 跳过工作流规则校验（Controller 已预校验或撤销操作）
+     * @param isUndo            true = 撤销操作，活动记录使用 status_reverted action
+     * @return 动作执行结果摘要
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ActionExecutionResult transitStatus(Long id, Long newStatusId, String comment,
+                              Long assigneeId, boolean assigneeExplicitlySet,
+                              Integer expectedVersion, boolean skipWorkflowCheck, boolean isUndo) {
         Issue issue = getById(id);
         // 归档项目不允许变更工单状态
         projectService.assertProjectActive(issue.getProjectId());
@@ -2218,7 +2232,7 @@ public class IssueService {
         IssueStatus oldStatus = statusMapper.selectById(oldStatusId);
         String oldStatusDisplayName = oldStatus != null ? oldStatus.getLocalizedName() : String.valueOf(oldStatusId);
         String newStatusDisplayName = newStatus.getLocalizedName();
-        String activityAction = skipWorkflowCheck ? "status_reverted" : "status_changed";
+        String activityAction = isUndo ? "status_reverted" : "status_changed";
         recordActivity(id, currentUserId, activityAction, "status",
                 oldStatusDisplayName, newStatusDisplayName);
 
