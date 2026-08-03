@@ -18,6 +18,8 @@ export interface NotificationPreferenceVO {
   onDueDate: boolean
   onOverdue: boolean
   dueDateAdvanceDays: number
+  /** 逾期提醒间隔天数数组（默认 [1,3,7,14]） */
+  overdueReminderDays: number[] | null
   notifyOwnChanges: boolean
   emailEnabled: boolean
   // Per-event 邮件渠道控制
@@ -64,6 +66,8 @@ export interface UpdateNotificationPreferenceDTO {
   onDueDate?: boolean
   onOverdue?: boolean
   dueDateAdvanceDays?: number
+  /** 逾期提醒间隔天数数组（如 [1,3,7,14]） */
+  overdueReminderDays?: number[]
   notifyOwnChanges?: boolean
   emailEnabled?: boolean
   // Per-event 邮件渠道控制

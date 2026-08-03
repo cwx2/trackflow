@@ -52,6 +52,7 @@ public class NotificationPreferenceConverterManual implements NotificationPrefer
         vo.setOnDueDate(entity.getOnDueDate());
         vo.setOnOverdue(entity.getOnOverdue());
         vo.setDueDateAdvanceDays(entity.getDueDateAdvanceDays());
+        vo.setOverdueReminderDays(entity.getOverdueReminderDays());
 
         // 行为开关
         vo.setNotifyOwnChanges(entity.getNotifyOwnChanges());

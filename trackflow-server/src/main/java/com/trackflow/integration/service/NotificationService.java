@@ -773,6 +773,51 @@ public class NotificationService {
     }
 
     /**
+     * 按通知类型批量标记已读。
+     * 用于"将所有逾期通知标记为已读"等场景。
+     *
+     * @param userId 用户 ID
+     * @param types  通知类型名称列表
+     * @return 标记已读的通知数量
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int markReadByTypes(Long userId, List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return 0;
+        }
+        Notification update = new Notification();
+        update.setIsRead(true);
+        return notificationMapper.update(update,
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getIsRead, false)
+                        .in(Notification::getType, types)
+        );
+    }
+
+    /**
+     * 标记指定用户的指定工单之前的逾期通知为已读。
+     * 在创建新的逾期通知之前调用，避免同一工单的逾期通知累积。
+     * 参考 OpenProject: mark_previous_notifications_as_read (service.rb:63-70)
+     *
+     * @param userId     用户 ID
+     * @param resourceId 工单 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void markPreviousOverdueAsRead(Long userId, Long resourceId) {
+        Notification update = new Notification();
+        update.setIsRead(true);
+        notificationMapper.update(update,
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getType, NotificationType.overdue_alert.name())
+                        .eq(Notification::getResourceType, "issue")
+                        .eq(Notification::getResourceId, resourceId)
+                        .eq(Notification::getIsRead, false)
+        );
+    }
+
+    /**
      * 未读数量
      */
     @Transactional(readOnly = true)

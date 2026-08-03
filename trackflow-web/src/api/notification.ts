@@ -125,6 +125,11 @@ export const notificationApi = {
     return request.put<any, R<void>>('/notifications/read-all')
   },
 
+  /** 按通知类型批量标记已读（如将所有逾期通知标记为已读） */
+  markReadByTypes(types: NotificationType[]) {
+    return request.put<any, R<number>>('/notifications/read-by-types', null, { params: { types: types.join(',') } })
+  },
+
   /** 删除单条通知 */
   delete(id: string) {
     return request.delete<any, R<void>>(`/notifications/${id}`)

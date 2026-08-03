@@ -140,7 +140,18 @@ public class DateAlertScheduler {
     }
 
     /**
-     * 处理已逾期的工单
+     * 默认逾期提醒间隔（天数）。仅在逾期第 1、3、7、14 天发送通知。
+     * 参考 OpenProject: DATE_ALERT_OVERDUE_DURATIONS = [nil, 1, 3, 7]
+     */
+    private static final int[] DEFAULT_OVERDUE_REMINDER_DAYS = {1, 3, 7, 14};
+
+    /**
+     * 处理已逾期的工单。
+     * <p>
+     * 策略（参考 OpenProject alertable_work_packages.rb）：
+     * 1. 计算每个工单的逾期天数
+     * 2. 按用户偏好的递增间隔过滤（默认第1天、第3天、第7天、第14天）
+     * 3. 发送通知前将同一工单之前的未读逾期通知标记为已读（避免累积）
      */
     private int processOverdue(LocalDate today, Set<Long> closedStatusIds) {
         // 查询 due_date < today 的未关闭、未删除、有负责人的工单
@@ -172,12 +183,62 @@ public class DateAlertScheduler {
                 continue;
             }
 
+            // 获取用户配置的逾期提醒间隔（默认 [1,3,7,14]）
+            Set<Integer> reminderDays = getOverdueReminderDaysSet(pref);
+
             for (Issue issue : issues) {
-                sendOverdueNotification(issue, assigneeId, today);
-                notifiedCount++;
+                long overdueDays = java.time.temporal.ChronoUnit.DAYS.between(issue.getDueDate(), today);
+                if (shouldSendOverdueReminder(overdueDays, reminderDays)) {
+                    // 先标记该工单之前的逾期通知为已读（避免累积，参考 OpenProject mark_previous_notifications_as_read）
+                    notificationService.markPreviousOverdueAsRead(assigneeId, issue.getId());
+                    sendOverdueNotification(issue, assigneeId, today);
+                    notifiedCount++;
+                }
             }
         }
         return notifiedCount;
+    }
+
+    /**
+     * 判断是否应在指定逾期天数发送提醒。
+     * <p>
+     * 逻辑：精确匹配前几个配置天数；超出最大配置天数后，按最大间隔周期重复。
+     * 例如配置 [1,3,7,14]：第1天、第3天、第7天、第14天发送，
+     * 之后每隔 14 天发送一次（第28天、第42天……），避免完全静默。
+     */
+    private boolean shouldSendOverdueReminder(long overdueDays, Set<Integer> reminderDays) {
+        if (overdueDays <= 0) {
+            return false;
+        }
+        // 精确匹配配置的天数
+        if (reminderDays.contains((int) overdueDays)) {
+            return true;
+        }
+        // 超出最大天数后，按最大间隔周期重复
+        int maxDay = reminderDays.stream().mapToInt(Integer::intValue).max().orElse(14);
+        if (overdueDays > maxDay && maxDay > 0) {
+            return (overdueDays - maxDay) % maxDay == 0;
+        }
+        return false;
+    }
+
+    /**
+     * 从用户偏好获取逾期提醒天数集合
+     */
+    private Set<Integer> getOverdueReminderDaysSet(NotificationPreference pref) {
+        Integer[] days = pref.getOverdueReminderDays();
+        if (days == null || days.length == 0) {
+            return Arrays.stream(DEFAULT_OVERDUE_REMINDER_DAYS).boxed().collect(Collectors.toSet());
+        }
+        Set<Integer> result = new HashSet<>();
+        for (Integer day : days) {
+            if (day != null && day > 0) {
+                result.add(day);
+            }
+        }
+        return result.isEmpty()
+                ? Arrays.stream(DEFAULT_OVERDUE_REMINDER_DAYS).boxed().collect(Collectors.toSet())
+                : result;
     }
 
     /**

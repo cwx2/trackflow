@@ -358,6 +358,9 @@ public class NotificationPreferenceService {
         if (dto.getDueDateAdvanceDays() != null) {
             pref.setDueDateAdvanceDays(dto.getDueDateAdvanceDays());
         }
+        if (dto.getOverdueReminderDays() != null) {
+            pref.setOverdueReminderDays(dto.getOverdueReminderDays());
+        }
         if (dto.getNotifyOwnChanges() != null) {
             pref.setNotifyOwnChanges(dto.getNotifyOwnChanges());
         }

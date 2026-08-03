@@ -84,6 +84,19 @@ public class NotificationController {
     }
 
     /**
+     * 按通知类型批量标记已读。
+     * 用于"将所有逾期通知标记为已读"、"将所有到期提醒标记为已读"等场景。
+     *
+     * @param types 通知类型列表（如 ["overdue_alert", "due_date_alert"]）
+     */
+    @PutMapping("/read-by-types")
+    public R<Integer> markReadByTypes(@RequestParam("types") List<String> types) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        int count = notificationService.markReadByTypes(userId, types);
+        return R.ok(count);
+    }
+
+    /**
      * 删除单条通知（所有权校验：只能删除自己的通知）
      */
     @DeleteMapping("/{id}")

@@ -29,6 +29,13 @@ public class UpdateNotificationPreferenceDTO {
     @jakarta.validation.constraints.Min(value = 1, message = "提前提醒天数最少为1天")
     @jakarta.validation.constraints.Max(value = 14, message = "提前提醒天数最多为14天")
     private Integer dueDateAdvanceDays;
+    /**
+     * 逾期提醒间隔天数数组。仅在这些逾期天数时发送通知。
+     * 有效值范围：每个元素 1-90，最多 10 个元素。
+     * 默认 [1, 3, 7, 14]。
+     */
+    @jakarta.validation.constraints.Size(max = 10, message = "逾期提醒间隔最多配置10个")
+    private Integer[] overdueReminderDays;
 
     // 自己的操作是否通知自己
     private Boolean notifyOwnChanges;

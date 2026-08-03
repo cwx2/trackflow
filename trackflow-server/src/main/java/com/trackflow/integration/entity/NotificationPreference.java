@@ -39,6 +39,13 @@ public class NotificationPreference implements Serializable {
     private Boolean onDueDate;
     private Boolean onOverdue;
     private Integer dueDateAdvanceDays;
+    /**
+     * 逾期提醒间隔天数数组。仅在这些逾期天数时发送通知。
+     * 默认 [1, 3, 7, 14]，即逾期第1天、第3天、第7天、第14天提醒。
+     * 参考 OpenProject DATE_ALERT_OVERDUE_DURATIONS。
+     */
+    @com.baomidou.mybatisplus.annotation.TableField(typeHandler = com.trackflow.common.handler.IntegerArrayTypeHandler.class)
+    private Integer[] overdueReminderDays;
 
     // 自己的操作是否通知自己（默认 false，与 YouTrack "Changes applied by me" 一致）
     private Boolean notifyOwnChanges;

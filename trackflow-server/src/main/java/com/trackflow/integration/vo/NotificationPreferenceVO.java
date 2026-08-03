@@ -29,6 +29,8 @@ public class NotificationPreferenceVO {
     private Boolean onDueDate;
     private Boolean onOverdue;
     private Integer dueDateAdvanceDays;
+    /** 逾期提醒间隔天数数组（默认 [1,3,7,14]） */
+    private Integer[] overdueReminderDays;
 
     // 自己的操作是否通知自己
     private Boolean notifyOwnChanges;
