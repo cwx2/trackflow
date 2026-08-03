@@ -151,6 +151,15 @@
               <template v-else-if="item.action === 'link_removed'">
                 移除了关联: <span class="val-old">{{ localizeLinkValue(item.from) }}</span>
               </template>
+              <template v-else-if="item.action === 'comment_deleted'">
+                删除了评论<template v-if="item.from">: <span class="val-old comment-deleted-content">{{ item.from }}</span></template>
+              </template>
+              <template v-else-if="item.action === 'comment_restored'">
+                还原了评论
+              </template>
+              <template v-else-if="item.action === 'comment_permanently_deleted'">
+                永久删除了评论
+              </template>
               <template v-else-if="item.field">
                 修改了{{ item.field }}：<span class="val-old">{{ item.from || '未设置' }}</span> → <span class="val-new">{{ item.to || '未设置' }}</span>
                 <span v-if="item.detail && item.detail.reason === 'member_removed'" class="auto-reason">（成员已从项目移除）</span>

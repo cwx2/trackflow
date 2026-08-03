@@ -2428,13 +2428,14 @@ public class IssueService {
             }
         }
 
-        // 软删除：设置 deletedAt，保留评论在数据库中
-        comment.setDeletedAt(LocalDateTime.now());
-        commentMapper.updateById(comment);
-
-        // 保存被删除评论内容到活动记录（去 HTML 标签，截断至 500 字符）
+        // 保存被删除评论内容（去 HTML 标签，截断至 500 字符）— 必须在 deleteById 之前获取
         String deletedContent = stripHtmlForActivity(comment.getContent());
-        recordActivity(issueId, currentUserId, "comment_deleted", "comment", deletedContent, null);
+
+        // 软删除：MyBatis-Plus 全局逻辑删除会将 deleteById 转为 UPDATE SET deleted_at = NOW()
+        commentMapper.deleteById(commentId);
+
+        // 写入活动记录（不设 fieldName，避免被前端当作字段变更渲染）
+        recordActivity(issueId, currentUserId, "comment_deleted", null, deletedContent, null);
     }
 
     /**
@@ -2445,7 +2446,8 @@ public class IssueService {
         Issue issue = getById(issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
-        IssueComment comment = commentMapper.selectById(commentId);
+        // 使用自定义查询绕过 MyBatis-Plus 全局逻辑删除过滤
+        IssueComment comment = commentMapper.selectByIdIgnoreDeleted(commentId);
         if (comment == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
         }
@@ -2464,10 +2466,10 @@ public class IssueService {
             }
         }
 
-        comment.setDeletedAt(null);
-        commentMapper.updateById(comment);
+        // 使用自定义 SQL 将 deleted_at 置为 NULL（updateById 不会更新逻辑删除字段）
+        commentMapper.restoreById(commentId);
 
-        recordActivity(issueId, currentUserId, "comment_restored", "comment", null, null);
+        recordActivity(issueId, currentUserId, "comment_restored", null, null, null);
     }
 
     /**
@@ -2478,7 +2480,8 @@ public class IssueService {
         Issue issue = getById(issueId);
         projectService.assertProjectActive(issue.getProjectId());
 
-        IssueComment comment = commentMapper.selectById(commentId);
+        // 使用自定义查询绕过 MyBatis-Plus 全局逻辑删除过滤
+        IssueComment comment = commentMapper.selectByIdIgnoreDeleted(commentId);
         if (comment == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
         }
@@ -2492,9 +2495,10 @@ public class IssueService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权永久删除评论，需要 manage_comments 权限");
         }
 
-        commentMapper.deleteById(commentId);
+        // 使用自定义 SQL 执行真正的物理删除（deleteById 会被全局配置转为软删除）
+        commentMapper.physicalDeleteById(commentId);
 
-        recordActivity(issueId, currentUserId, "comment_permanently_deleted", "comment", null, null);
+        recordActivity(issueId, currentUserId, "comment_permanently_deleted", null, null, null);
     }
 
     /**
