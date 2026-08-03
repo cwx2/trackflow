@@ -122,6 +122,18 @@ def _build_diff_range(commit_before: str, commit_after: str) -> tuple[str, list[
     return diff_range, files
 
 
+def _refresh_diff_range(diff_base: str, req_file: Path, fallback_head: str = "") -> tuple[str, list[str]]:
+    """
+    Recompute the review/push range after a test or review feedback fix.
+
+    Keep the original base so multi-commit fixes are reviewed as the final delivered
+    change, instead of accidentally reviewing only the first failed commit.
+    """
+    req_status = read_req_status(req_file)
+    commit_after = req_status.get("fix_commit", "").strip() or fallback_head or get_current_commit()
+    return _build_diff_range(diff_base, commit_after)
+
+
 def _existing_fix_diff(fix_commit: str) -> tuple[str, list[str]]:
     """读取需求文件已记录的修复提交，支持恢复中断后继续测试/审核。"""
     if not fix_commit or any(char.isspace() for char in fix_commit):
@@ -270,10 +282,12 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
     existing_diff_range, existing_changed_files = _existing_fix_diff(
         req_status.get("fix_commit", "")
     ) if req_status.get("fix_status") == "DONE" else ("", [])
+    diff_base = ""
 
     if existing_diff_range and existing_changed_files:
         diff_range = existing_diff_range
         changed_files = existing_changed_files
+        diff_base = f"{req_status.get('fix_commit')}^"
         success, fix_output = True, "FIX_DONE"
         log.info(
             f"[{label}] 复用已完成修复提交 {req_status.get('fix_commit')}，"
@@ -281,6 +295,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
         )
     else:
         commit_before = get_current_commit()
+        diff_base = commit_before
         fix_prompt = (
             f"[使用 skill: fix-requirement-auto] "
             f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
@@ -317,7 +332,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
     # ── 步骤 2：获取 session_id（懒加载，只在需要 resume 时才查） ──
     if not existing_diff_range:
         commit_after = get_current_commit()
-        diff_range, changed_files = _build_diff_range(commit_before, commit_after)
+        diff_range, changed_files = _build_diff_range(diff_base, commit_after)
     log.info(f"[{label}] 代码变更范围: {diff_range}")
     if not changed_files:
         _move_back_to_develop(req_file)
@@ -438,6 +453,13 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 break
             if not fix_done:
                 log.warning(f"[{label}] 修复未输出 FIX_DONE，继续测试验证")
+            else:
+                diff_range, changed_files = _refresh_diff_range(diff_base, req_file)
+                log.info(f"[{label}] 测试反馈后刷新代码变更范围: {diff_range}")
+                if not changed_files or diff_range == "WORKTREE":
+                    _move_back_to_develop(req_file)
+                    log.warning(f"[{label}] 测试反馈修复后未形成可审核提交，放回 develop/")
+                    return ConsumeOutcome(None, transient=True)
 
     if not test_passed:
         log.warning(f"[{label}] ⚠️ 测试经 {MAX_TEST_RETRIES} 轮仍未通过，继续审核")
@@ -529,6 +551,13 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             fix_done2, _, _ = parse_fix_result(rv_out)
             if not fix_done2:
                 log.warning(f"[{label}] 审核反馈修复未输出 FIX_DONE，继续二次审核验证")
+            else:
+                diff_range, changed_files = _refresh_diff_range(diff_base, req_file)
+                log.info(f"[{label}] 审核反馈后刷新代码变更范围: {diff_range}")
+                if not changed_files or diff_range == "WORKTREE":
+                    _move_back_to_develop(req_file)
+                    log.warning(f"[{label}] 审核反馈修复后未形成可审核提交，放回 develop/")
+                    return ConsumeOutcome(None, transient=True)
 
     # ── 步骤 5：归档与推送 ──
     overall_success = test_passed and review_passed

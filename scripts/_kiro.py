@@ -5,6 +5,7 @@ kiro-cli 调用封装：run_kiro（新会话）、run_kiro_resume（恢复会话
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -44,6 +45,13 @@ _TRANSIENT_OUTPUT_MARKERS = (
     "rate limit reached",
     "request quota exceeded",
     "quota exceeded",
+)
+
+_SENSITIVE_OUTPUT_PATTERNS = (
+    (re.compile(r'(?i)("password"\s*:\s*")[^"]*(")'), r"\1***\2"),
+    (re.compile(r"(?i)('password'\s*:\s*')[^']*(')"), r"\1***\2"),
+    (re.compile(r"(?i)(password=)[^&\s\"']+"), r"\1***"),
+    (re.compile(r"(?i)((?:#password|password)[^'\"]*\.fill\(['\"])[^'\"]*(['\"]\))"), r"\1***\2"),
 )
 
 _circuit_lock = threading.Lock()
@@ -86,6 +94,14 @@ def _build_env(worker_id: str | None = None) -> dict:
     return env
 
 
+def _redact_sensitive_output(text: str) -> str:
+    """Remove credentials from Kiro/tool output before it reaches logs."""
+    redacted = text
+    for pattern, replacement in _SENSITIVE_OUTPUT_PATTERNS:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
+
+
 def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[bool, str]:
     """运行 Kiro CLI，并保证 stdout 卡住时超时能够真正回收。"""
     _wait_for_kiro_circuit(label)
@@ -111,9 +127,10 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
                 return
             for line in process.stdout:
                 line_stripped = line.rstrip("\r\n")
-                print(f"  [{label}] {line_stripped}")
-                log.debug(f"[{label}] {strip_ansi(line_stripped)}")
-                output_lines.append(line_stripped)
+                safe_line = _redact_sensitive_output(line_stripped)
+                print(f"  [{label}] {safe_line}")
+                log.debug(f"[{label}] {strip_ansi(safe_line)}")
+                output_lines.append(safe_line)
         except Exception as e:
             log.warning(f"[{label}] 读取输出异常: {e}")
 
