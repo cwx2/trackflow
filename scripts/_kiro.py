@@ -40,7 +40,41 @@ _TRANSIENT_OUTPUT_MARKERS = (
     "failed to send the request",
     "error sending request for url",
     "kiro is having trouble responding right now",
+    "kiro rate limit reached",
+    "rate limit reached",
+    "request quota exceeded",
+    "quota exceeded",
 )
+
+_circuit_lock = threading.Lock()
+_circuit_until = 0.0
+_circuit_failures = 0
+
+
+def _wait_for_kiro_circuit(label: str) -> None:
+    """限流/网络故障期间全局退避，避免多个 worker 同时继续轰炸 Kiro。"""
+    delay = 0.0
+    with _circuit_lock:
+        delay = max(0.0, _circuit_until - time.time())
+    if delay > 0:
+        log.info(f"[{label}] Kiro 全局退避中，{delay:.0f}s 后重试")
+        time.sleep(delay)
+
+
+def _open_kiro_circuit(label: str) -> None:
+    global _circuit_until, _circuit_failures
+    with _circuit_lock:
+        _circuit_failures = min(_circuit_failures + 1, 5)
+        delay = min(30 * (2 ** (_circuit_failures - 1)), 600)
+        _circuit_until = max(_circuit_until, time.time() + delay)
+    log.warning(f"[{label}] Kiro 暂时不可用，全局退避 {delay}s")
+
+
+def _close_kiro_circuit() -> None:
+    global _circuit_until, _circuit_failures
+    with _circuit_lock:
+        _circuit_until = 0.0
+        _circuit_failures = 0
 
 
 def _build_env(worker_id: str | None = None) -> dict:
@@ -54,6 +88,7 @@ def _build_env(worker_id: str | None = None) -> dict:
 
 def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[bool, str]:
     """运行 Kiro CLI，并保证 stdout 卡住时超时能够真正回收。"""
+    _wait_for_kiro_circuit(label)
     start = time.time()
     output_lines: list[str] = []
 
@@ -67,6 +102,7 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
         )
     except Exception as e:
         log.error(f"[{label}] 启动异常: {e}")
+        _open_kiro_circuit(label)
         return False, "STARTUP_FAIL"
 
     def read_output() -> None:
@@ -94,6 +130,7 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 log.error(f"[{label}] kiro-cli 进程未能及时退出")
+            _open_kiro_circuit(label)
             return False, "TIMEOUT"
 
         process.wait(timeout=10)
@@ -104,6 +141,7 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
             process.wait(timeout=5)
         except Exception:
             pass
+        _open_kiro_circuit(label)
         return False, "PROCESS_ERROR"
 
     elapsed = time.time() - start
@@ -111,6 +149,7 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
     normalized_output = output.lower()
     if any(marker in normalized_output for marker in _TRANSIENT_OUTPUT_MARKERS):
         log.warning(f"[{label}] Kiro 服务暂时不可用，按环境故障处理")
+        _open_kiro_circuit(label)
         return False, "STARTUP_FAIL"
 
     success = process.returncode == 0
@@ -120,7 +159,10 @@ def _run_cli(cmd: list[str], label: str, worker_id: str | None = None) -> tuple[
     )
     if not success and elapsed < 30:
         log.warning(f"[{label}] kiro-cli 启动失败（{elapsed:.0f}s）")
+        _open_kiro_circuit(label)
         return False, "STARTUP_FAIL"
+    if success:
+        _close_kiro_circuit()
     return success, output
 
 

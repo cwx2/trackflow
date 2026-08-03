@@ -3,8 +3,16 @@
 """
 
 from pathlib import Path
+import re
 
 from _config import strip_ansi, log
+
+
+def _normalize_marker_line(line: str) -> str:
+    """兼容 Kiro 输出中的引用符、列表符号和 Markdown 代码标记。"""
+    normalized = strip_ansi(line).strip()
+    normalized = re.sub(r"^(?:>\s*|[-*]\s+|```(?:\w+)?\s*)+", "", normalized)
+    return normalized.strip("`*_ ").strip()
 
 
 def reset_req_status(req_file: Path, *keys: str) -> bool:
@@ -62,7 +70,7 @@ def parse_fix_result(output: str) -> tuple[bool, bool, str]:
     clean = strip_ansi(output)
     lines = clean.strip().split("\n")
     for line in reversed(lines):
-        line = line.strip()
+        line = _normalize_marker_line(line)
         if line == "FIX_DONE":
             return True, False, ""
         if line.startswith("FIX_BLOCKED:"):
@@ -117,7 +125,7 @@ def parse_test_result(output: str) -> tuple[bool, str]:
     # 1. 检查 TEST_RESULT 机器标记（最后 15 行）
     result_line = None
     for line in reversed(lines[-15:]):
-        stripped = line.strip()
+        stripped = _normalize_marker_line(line)
         if stripped in ("TEST_RESULT: PASS", "TEST_RESULT: FAIL"):
             result_line = stripped
             break
@@ -127,10 +135,11 @@ def parse_test_result(output: str) -> tuple[bool, str]:
     in_block = False
     failure_lines: list[str] = []
     for line in lines:
-        if line.strip() == "TEST_FAILURES_BEGIN":
+        normalized = _normalize_marker_line(line)
+        if normalized == "TEST_FAILURES_BEGIN":
             in_block = True
             continue
-        if line.strip() == "TEST_FAILURES_END":
+        if normalized == "TEST_FAILURES_END":
             in_block = False
             continue
         if in_block:
@@ -189,7 +198,7 @@ def parse_review_result(output: str) -> tuple[bool, str]:
     lines = clean.strip().split("\n")
 
     for line in reversed(lines[-15:]):
-        line = line.strip()
+        line = _normalize_marker_line(line)
         if line == "REVIEW_RESULT: PASS":
             return True, "\n".join(lines[-10:])
         if line == "REVIEW_RESULT: FAIL":
