@@ -57,6 +57,7 @@
           trigger="click"
           position="bl"
           :popup-visible="editingKey === field.key"
+          :unmount-on-close="true"
           @update:popup-visible="v => v ? openEdit(field) : cancelEdit()"
         >
           <div class="sb-value clickable" :class="{ 'set-value-prompt': field.isSetValuePrompt }">
