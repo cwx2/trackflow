@@ -33,6 +33,14 @@ class ConsumeOutcome:
     transient: bool = False
 
 
+_AUTOMATION_PROMPT_RULES = """
+自动化边界：
+- 只处理本轮指定需求和本轮指定的变更范围，不重复已通过的阶段，不扩展到无关模块。
+- 阶段完成后先更新需求文件状态，再在输出末尾单独给出机器标记；不要在标记后继续解释。
+- 标记必须使用原文：FIX_DONE、FIX_BLOCKED: 原因、TEST_RESULT: PASS/FAIL、REVIEW_RESULT: PASS/FAIL。
+""".strip()
+
+
 def _is_transient_cli_output(output: str) -> bool:
     return output in {"STARTUP_FAIL", "TIMEOUT", "PROCESS_ERROR"}
 
@@ -276,7 +284,9 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
         fix_prompt = (
             f"[使用 skill: fix-requirement-auto] "
             f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
-            f"修需求 {req_file.stem}，需求文件位于 {actual_path}"
+            f"{_AUTOMATION_PROMPT_RULES}\n\n"
+            f"修需求 {req_file.stem}，需求文件位于 {actual_path}\n"
+            "本轮只做分析、修复、精确提交和状态更新；不要自行跑完整 e2e、代码审核或 git push。"
         )
         success, fix_output = run_kiro(
             fix_prompt, label, model=KIRO_MODEL_FIX, worker_id=worker_id
@@ -354,9 +364,11 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             test_prompt = (
                 f"[使用 skill: e2e-test] "
                 f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"{_AUTOMATION_PROMPT_RULES}\n\n"
                 f"测试需求 {req_file.stem}，验证其验收标准。需求文件位于 {actual_path}\n\n"
                 f"⚠️ 开始测试前必须先读取需求文件 {actual_path}，"
                 f"提取验收标准和「Agent 交接上下文」章节中的测试重点。\n"
+                f"只验证本需求和本次变更直接影响的路径，不做无关模块的全量回归；不要修改代码。\n"
                 f"如果前端、后端、Keycloak 或测试工具不可用，必须输出 TEST_ENVIRONMENT_FAILURE，"
                 f"不要把环境故障判定为需求缺陷。"
             )
@@ -364,9 +376,10 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             test_prompt = (
                 f"[使用 skill: e2e-test] "
                 f"(skill 文件: {test_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"{_AUTOMATION_PROMPT_RULES}\n\n"
                 f"重测需求 {req_file.stem}（第 {test_round} 轮）。需求文件位于 {actual_path}\n\n"
                 f"上轮失败摘要：\n{prev_test_summary}\n\n"
-                f"请仅验证上轮失败的用例，并回归已通过的用例；如果环境不可用，输出 "
+                f"请仅验证上轮失败的用例，并抽样回归已通过的用例；如果环境不可用，输出 "
                 f"TEST_ENVIRONMENT_FAILURE。"
             )
 
@@ -399,8 +412,9 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
 
         if test_round < MAX_TEST_RETRIES:
             feedback_prompt = (
+                f"{_AUTOMATION_PROMPT_RULES}\n\n"
                 f"端到端测试失败（第 {test_round} 轮），请根据失败信息修复代码：\n\n"
-                f"{prev_test_summary}\n\n修复完成后请输出 FIX_DONE。"
+                f"{prev_test_summary}\n\n只修复这些失败，不重新分析无关模块；修复并提交后输出 FIX_DONE。"
             )
             if get_session_id_lazy():
                 _, fb_out = run_kiro_resume(get_session_id_lazy(), feedback_prompt,
@@ -409,6 +423,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 fallback = (
                     f"[使用 skill: fix-requirement-auto] "
                     f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+                    f"{_AUTOMATION_PROMPT_RULES}\n\n"
                     f"继续处理 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n{prev_test_summary}"
                 )
                 _, fb_out = run_kiro(fallback, f"{label}-fix{test_round}",
@@ -449,19 +464,21 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             review_prompt = (
                 f"[使用 skill: code-review] "
                 f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"{_AUTOMATION_PROMPT_RULES}\n\n"
                 f"审核需求 {req_file.stem} 的本次代码变更。需求文件位于 {actual_path}\n\n"
                 f"⚠️ 开始审核前必须先读取需求文件 {actual_path}，"
                 f"提取「Agent 交接上下文」中的变更文件清单和审核重点。\n\n"
                 f"变更范围：{('git diff ' + diff_range) if diff_range != 'WORKTREE' else 'git diff'}\n"
-                f"请审核这个范围内的所有改动（可能包含多个 commit）。"
+                f"请只审核这个范围内的所有改动（可能包含多个 commit），不要重新审核无关历史代码。"
             )
         else:
             review_prompt = (
                 f"[使用 skill: code-review] "
                 f"(skill 文件: {review_skill['path']}，请严格按照该 skill 的规则执行)\n\n"
+                f"{_AUTOMATION_PROMPT_RULES}\n\n"
                 f"二次审核需求 {req_file.stem}（第 {review_round} 轮）。需求文件位于 {actual_path}\n\n"
                 f"上轮 MUST 问题：\n{prev_review_summary}\n\n"
-                f"请验证 MUST 问题是否已修复，无需重新做完整审核。"
+                f"请只验证这些 MUST 问题是否已修复，无需重新做完整审核；确认后输出 REVIEW_RESULT。"
             )
 
         _, review_output = run_kiro(review_prompt, f"{label}-review{review_round}", worker_id=worker_id)
@@ -489,8 +506,9 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
 
         if review_round < MAX_REVIEW_RETRIES:
             feedback_prompt = (
+                f"{_AUTOMATION_PROMPT_RULES}\n\n"
                 f"代码审核发现 MUST 级问题（第 {review_round} 轮），请修复后重新 commit：\n\n"
-                f"```\n{prev_review_summary}\n```\n\n修复完成后请输出 FIX_DONE。"
+                f"```\n{prev_review_summary}\n```\n\n只修复这些 MUST，不扩展范围；修复并提交后输出 FIX_DONE。"
             )
             if get_session_id_lazy():
                 _, rv_out = run_kiro_resume(get_session_id_lazy(), feedback_prompt,
@@ -499,6 +517,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 fallback = (
                     f"[使用 skill: fix-requirement-auto] "
                     f"(skill 文件: {skill_info['path']}，请严格按照该 skill 的规则执行)\n\n"
+                    f"{_AUTOMATION_PROMPT_RULES}\n\n"
                     f"继续处理 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n{prev_review_summary}"
                 )
                 _, rv_out = run_kiro(fallback, f"{label}-fixr{review_round}",
