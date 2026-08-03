@@ -17,6 +17,11 @@ public class IssueCommentVO {
     private Boolean isEdited;
 
     /**
+     * 软删除时间。非空表示评论已被删除（前端应显示占位符）。
+     */
+    private LocalDateTime deletedAt;
+
+    /**
      * 可见性限制的组 ID 列表（String 类型防 JS 精度丢失）。
      * null 或空表示全体可见。
      */

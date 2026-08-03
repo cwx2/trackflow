@@ -406,6 +406,7 @@ export interface IssueCommentVO {
   content: string
   source: string
   isEdited?: boolean
+  deletedAt?: string | null
   visibleToGroupIds?: string[]
   visibleToGroupNames?: string[]
   createdAt: string

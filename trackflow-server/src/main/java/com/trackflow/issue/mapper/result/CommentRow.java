@@ -18,6 +18,7 @@ public class CommentRow {
     private Long userId;
     private String content;
     private String source;
+    private LocalDateTime deletedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

@@ -58,13 +58,19 @@
               :title="item.detail.ruleName ? '自动规则：' + item.detail.ruleName : '由自动化规则触发'"
             >⚡ {{ item.detail.ruleName || '自动规则' }}</span>
             <!-- Comment actions -->
-            <div v-if="item.type === 'comment' && canModifyComment(item) && hoveredId === item.id && editingCommentId !== item.commentId" class="comment-actions">
+            <div v-if="item.type === 'comment' && !item.isDeleted && canModifyComment(item) && hoveredId === item.id && editingCommentId !== item.commentId" class="comment-actions">
               <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
               <button class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
             </div>
           </div>
+          <!-- Deleted comment placeholder -->
+          <div v-if="item.type === 'comment' && item.isDeleted" class="deleted-comment-placeholder">
+            <span class="deleted-text">评论已删除。</span>
+            <button v-if="canModifyComment(item)" class="deleted-action-btn" @click="doRestore(item)">还原</button>
+            <button v-if="props.canManageComments" class="deleted-action-btn deleted-action-btn-danger" @click="confirmPermanentDelete(item)">永久删除</button>
+          </div>
           <!-- Editing mode -->
-          <div v-if="item.type === 'comment' && editingCommentId === item.commentId" class="comment-edit">
+          <div v-if="item.type === 'comment' && !item.isDeleted && editingCommentId === item.commentId" class="comment-edit">
             <div class="edit-area">
               <EditorContent :editor="editEditor" />
             </div>
@@ -76,7 +82,7 @@
           <!-- Normal display -->
           <template v-else>
             <!-- 评论 -->
-            <div v-if="item.type === 'comment'" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
+            <div v-if="item.type === 'comment' && !item.isDeleted" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
             <div v-else class="change-text">
               <template v-if="item.action === 'created'">创建了此工单</template>
               <template v-else-if="item.action === 'deleted'">删除了此工单</template>
@@ -168,7 +174,20 @@
       @ok="doDelete"
       @cancel="deleteModalVisible = false"
     >
-      <p>确定要删除这条评论吗？此操作无法撤销。</p>
+      <p>确定要删除这条评论吗？删除后可通过"还原"恢复。</p>
+    </a-modal>
+
+    <!-- Permanent delete confirmation modal -->
+    <a-modal
+      v-model:visible="permanentDeleteModalVisible"
+      title="永久删除评论"
+      :ok-text="'永久删除'"
+      :cancel-text="'取消'"
+      :ok-button-props="{ status: 'danger' }"
+      @ok="doPermanentDelete"
+      @cancel="permanentDeleteModalVisible = false"
+    >
+      <p>确定要永久删除这条评论吗？此操作不可恢复。</p>
     </a-modal>
   </section>
 </template>
@@ -189,6 +208,7 @@ export interface ActivityItem {
   userAvatar?: string
   commentId?: string
   isEdited?: boolean
+  isDeleted?: boolean
   rawContent?: string
   visibleToGroupNames?: string[]
   timeAgo: string
@@ -215,6 +235,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   editComment: [commentId: string, content: string]
   deleteComment: [commentId: string]
+  restoreComment: [commentId: string]
+  permanentlyDeleteComment: [commentId: string]
   addTime: []
 }>()
 
@@ -336,6 +358,29 @@ function doDelete() {
   }
   deleteModalVisible.value = false
   deletingCommentId.value = null
+}
+
+function doRestore(item: ActivityItem) {
+  if (item.commentId) {
+    emit('restoreComment', item.commentId)
+  }
+}
+
+// Permanent delete confirmation
+const permanentDeleteModalVisible = ref(false)
+const permanentDeletingCommentId = ref<string | null>(null)
+
+function confirmPermanentDelete(item: ActivityItem) {
+  permanentDeletingCommentId.value = item.commentId || null
+  permanentDeleteModalVisible.value = true
+}
+
+function doPermanentDelete() {
+  if (permanentDeletingCommentId.value) {
+    emit('permanentlyDeleteComment', permanentDeletingCommentId.value)
+  }
+  permanentDeleteModalVisible.value = false
+  permanentDeletingCommentId.value = null
 }
 
 function initial(name: string) { return name ? name[0].toUpperCase() : 'U' }
@@ -497,6 +542,42 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 }
 .comment-text :deep(p) { margin: 4px 0; }
 .comment-text :deep(code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 11px; }
+
+/* Deleted comment placeholder */
+.deleted-comment-placeholder {
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--tf-bg-surface);
+  border-radius: 6px;
+  border: 1px dashed var(--tf-border);
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.deleted-text {
+  font-style: italic;
+}
+.deleted-action-btn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--tf-text-accent);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 150ms;
+}
+.deleted-action-btn:hover {
+  background: var(--tf-bg-hover);
+}
+.deleted-action-btn-danger {
+  color: var(--tf-text-error, #f85149);
+}
+.deleted-action-btn-danger:hover {
+  background: rgba(248, 81, 73, 0.1);
+}
 
 /* Edit mode */
 .comment-edit {

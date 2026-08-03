@@ -154,6 +154,16 @@ export const issueApi = {
     return request.delete<any, R<void>>(`/issues/${issueId}/comments/${commentId}`)
   },
 
+  /** 还原已删除的评论 */
+  restoreComment(issueId: string, commentId: string) {
+    return request.post<any, R<void>>(`/issues/${issueId}/comments/${commentId}/restore`)
+  },
+
+  /** 永久删除评论（不可恢复） */
+  permanentlyDeleteComment(issueId: string, commentId: string) {
+    return request.delete<any, R<void>>(`/issues/${issueId}/comments/${commentId}/permanent`)
+  },
+
   // ========== 活动记录 ==========
 
   /** 活动记录 */

@@ -373,6 +373,20 @@ public class IssueController {
         return R.ok();
     }
 
+    @PostMapping("/{id}/comments/{commentId}/restore")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
+    public R<Void> restoreComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
+        issueService.restoreComment(id, commentId);
+        return R.ok();
+    }
+
+    @DeleteMapping("/{id}/comments/{commentId}/permanent")
+    @PreAuthorize("@perm.checkIssue(#id, 'issue:manage_comments')")
+    public R<Void> permanentlyDeleteComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
+        issueService.permanentlyDeleteComment(id, commentId);
+        return R.ok();
+    }
+
     // ========== 附件 ==========
 
     @GetMapping("/{id}/attachments")

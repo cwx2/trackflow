@@ -38,8 +38,10 @@ public record IssueRealtimeEvent(
         FIELD_UPDATED,
         /** 评论新增 */
         COMMENT_ADDED,
-        /** 评论删除 */
+        /** 评论删除（软删除） */
         COMMENT_DELETED,
+        /** 评论还原 */
+        COMMENT_RESTORED,
         /** 标签变更 */
         TAG_CHANGED,
         /** 附件变更 */

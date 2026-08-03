@@ -2428,9 +2428,90 @@ public class IssueService {
             }
         }
 
+        // 软删除：设置 deletedAt，保留评论在数据库中
+        comment.setDeletedAt(LocalDateTime.now());
+        commentMapper.updateById(comment);
+
+        // 保存被删除评论内容到活动记录（去 HTML 标签，截断至 500 字符）
+        String deletedContent = stripHtmlForActivity(comment.getContent());
+        recordActivity(issueId, currentUserId, "comment_deleted", "comment", deletedContent, null);
+    }
+
+    /**
+     * 还原已软删除的评论
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreComment(Long issueId, Long commentId) {
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
+        IssueComment comment = commentMapper.selectById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+        }
+        if (comment.getDeletedAt() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "评论未被删除，无需还原");
+        }
+        if (!comment.getIssueId().equals(issueId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+        }
+
+        // 权限校验：作者本人 OR 拥有 issue:manage_comments 权限
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!comment.getUserId().equals(currentUserId)) {
+            if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments")) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权还原他人评论");
+            }
+        }
+
+        comment.setDeletedAt(null);
+        commentMapper.updateById(comment);
+
+        recordActivity(issueId, currentUserId, "comment_restored", "comment", null, null);
+    }
+
+    /**
+     * 永久删除评论（物理删除，不可恢复）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void permanentlyDeleteComment(Long issueId, Long commentId) {
+        Issue issue = getById(issueId);
+        projectService.assertProjectActive(issue.getProjectId());
+
+        IssueComment comment = commentMapper.selectById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不存在");
+        }
+        if (!comment.getIssueId().equals(issueId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "评论不属于该工单");
+        }
+
+        // 永久删除需要 issue:manage_comments 权限（比软删除更严格）
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments")) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权永久删除评论，需要 manage_comments 权限");
+        }
+
         commentMapper.deleteById(commentId);
 
-        recordActivity(issueId, currentUserId, "comment_deleted", null, null, null);
+        recordActivity(issueId, currentUserId, "comment_permanently_deleted", "comment", null, null);
+    }
+
+    /**
+     * 去除 HTML 标签并截断内容用于活动记录
+     */
+    private String stripHtmlForActivity(String html) {
+        if (html == null || html.isBlank()) {
+            return "";
+        }
+        // 去除 HTML 标签
+        String text = html.replaceAll("<[^>]+>", "").trim();
+        // 去除多余空白
+        text = text.replaceAll("\\s+", " ");
+        if (text.length() > 500) {
+            return text.substring(0, 497) + "...";
+        }
+        return text;
     }
 
     // ========== 附件 ==========
@@ -2807,7 +2888,9 @@ public class IssueService {
             vo.setUserId(String.valueOf(row.getUserId()));
             vo.setUserName(row.getUserName());
             vo.setUserAvatar(row.getUserAvatar());
-            vo.setContent(row.getContent());
+            vo.setDeletedAt(row.getDeletedAt());
+            // 软删除评论不暴露内容给前端（隐私保护）
+            vo.setContent(row.getDeletedAt() != null ? null : row.getContent());
             vo.setSource(row.getSource());
             vo.setCreatedAt(row.getCreatedAt());
             vo.setUpdatedAt(row.getUpdatedAt());

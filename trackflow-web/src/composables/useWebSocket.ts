@@ -15,7 +15,7 @@ export interface IssueRealtimeEvent {
   issueId: number
   projectId: number
   issueKey: string
-  action: 'FIELD_UPDATED' | 'COMMENT_ADDED' | 'COMMENT_DELETED' | 'TAG_CHANGED' | 'ATTACHMENT_CHANGED' | 'LINK_CHANGED' | 'CREATED' | 'DELETED'
+  action: 'FIELD_UPDATED' | 'COMMENT_ADDED' | 'COMMENT_DELETED' | 'COMMENT_RESTORED' | 'TAG_CHANGED' | 'ATTACHMENT_CHANGED' | 'LINK_CHANGED' | 'CREATED' | 'DELETED'
   changes: Record<string, any>
   operatorId: number
   operatorName: string | null

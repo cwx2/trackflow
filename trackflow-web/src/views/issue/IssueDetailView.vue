@@ -79,6 +79,8 @@
             :show-add-time="projectTimeTrackingEnabled && canLogTime"
             @edit-comment="onEditComment"
             @delete-comment="onDeleteComment"
+            @restore-comment="onRestoreComment"
+            @permanently-delete-comment="onPermanentlyDeleteComment"
             @add-time="openTimeDialog"
           />
           <CommentInput
@@ -1097,7 +1099,9 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
   for (const c of comments.value) {
-    const isHtml = c.content.trim().startsWith('<')
+    const isDeleted = !!c.deletedAt
+    const content = c.content || ''
+    const isHtml = content.trim().startsWith('<')
     items.push({
       id: 'c_' + c.id,
       type: 'comment',
@@ -1106,9 +1110,10 @@ const activityItems = computed<ActivityItem[]>(() => {
       userAvatar: c.userAvatar || undefined,
       commentId: c.id,
       isEdited: c.isEdited || false,
-      rawContent: c.content,
+      isDeleted,
+      rawContent: content,
       visibleToGroupNames: c.visibleToGroupNames || undefined,
-      html: isHtml ? c.content : renderMarkdown(c.content),
+      html: isDeleted ? '' : (isHtml ? content : renderMarkdown(content)),
       timeAgo: timeAgo(c.createdAt),
       ts: new Date(c.createdAt).getTime()
     })
@@ -1341,6 +1346,26 @@ async function onDeleteComment(commentId: string) {
     Message.success('评论已删除')
   } catch (e: any) {
     Message.error(e.response?.data?.message || '删除评论失败')
+  }
+}
+
+async function onRestoreComment(commentId: string) {
+  try {
+    await issueApi.restoreComment(issue.value!.id, commentId)
+    await loadAll()
+    Message.success('评论已还原')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '还原评论失败')
+  }
+}
+
+async function onPermanentlyDeleteComment(commentId: string) {
+  try {
+    await issueApi.permanentlyDeleteComment(issue.value!.id, commentId)
+    await loadAll()
+    Message.success('评论已永久删除')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '永久删除评论失败')
   }
 }
 
