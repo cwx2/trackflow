@@ -37,6 +37,8 @@ export interface IssueListFilters {
   updatedBefore?: string
   resolvedAfter?: string
   resolvedBefore?: string
+  dueAfter?: string
+  dueBefore?: string
   // Special filters
   overdue?: string
   dueSoon?: string
@@ -131,6 +133,8 @@ export function useIssueList() {
       if (filters.updatedBefore) params.updatedBefore = filters.updatedBefore
       if (filters.resolvedAfter) params.resolvedAfter = filters.resolvedAfter
       if (filters.resolvedBefore) params.resolvedBefore = filters.resolvedBefore
+      if (filters.dueAfter) params.dueAfter = filters.dueAfter
+      if (filters.dueBefore) params.dueBefore = filters.dueBefore
       // Special filters
       if (filters.overdue) params.overdue = filters.overdue
       if (filters.dueSoon) params.dueSoon = filters.dueSoon

@@ -1872,10 +1872,150 @@ function toggleHideResolved() {
   loadPanel() // 刷新面板计数以匹配 hideResolved 状态
 }
 
+/** Resolve date keyword (今天/昨天/etc) to ISO date string */
+function resolveDateKeyword(value: string): string | null {
+  const today = new Date()
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  switch (value) {
+    case 'today': case '今天': return fmt(today)
+    case 'yesterday': case '昨天': return fmt(new Date(today.getTime() - 86400000))
+    default:
+      // If value looks like a date (yyyy-MM-dd), return as-is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+      return null
+  }
+}
+
 function onGlobalSearch(keyword: string) {
+  // Detect structured query syntax (e.g. "状态: Testing  负责人: 我")
+  // If any known field label followed by ":" is found, parse as structured query
+  const normalized = keyword.replace(/：/g, ':')
+  const allFieldLabels = Object.keys(queryFieldLabelToKey)
+  const hasStructuredSyntax = allFieldLabels.some(label => {
+    const idx = normalized.indexOf(`${label}:`)
+    if (idx < 0) return false
+    // Must be at start or after whitespace
+    return idx === 0 || normalized[idx - 1] === ' '
+  })
+
+  if (hasStructuredSyntax) {
+    // Parse structured query using existing queryTextToFilters
+    const parsedFilters = queryTextToFilters(keyword)
+    if (parsedFilters.length > 0) {
+      // Convert structured filters to globalFilterParams format (same mapping as FilterBar.emitFilters)
+      const filterParams: Record<string, any> = {}
+      let remainingKeyword = ''
+
+      for (const f of parsedFilters) {
+        const fieldKey = f.field
+        const op = f.operator
+        const values: string[] = f.value || []
+        const isNegative = op === 'neq' || op === 'not_in'
+
+        switch (fieldKey) {
+          case 'status':
+            if (op === 'open') {
+              // Find all non-closed status IDs
+              const openIds = statusCache.value.filter(s => !s.isClosed).map(s => s.id)
+              if (openIds.length) filterParams.statusId = openIds.join(',')
+            } else if (op === 'closed') {
+              const closedIds = statusCache.value.filter(s => s.isClosed).map(s => s.id)
+              if (closedIds.length) filterParams.statusId = closedIds.join(',')
+            } else {
+              // Resolve status name/code to IDs
+              const statusIds = values.map(v => {
+                const st = statusCache.value.find(s =>
+                  s.code === v || s.name === v || localizeStatusName(s.name) === v
+                )
+                return st?.id || v
+              })
+              if (!isNegative) filterParams.statusId = statusIds.join(',')
+              else filterParams.statusIdNot = statusIds.join(',')
+            }
+            break
+          case 'priority':
+            if (!isNegative) filterParams.priority = values.join(',')
+            else filterParams.priorityNot = values.join(',')
+            break
+          case 'type':
+            if (!isNegative) filterParams.issueType = values.join(',')
+            else filterParams.issueTypeNot = values.join(',')
+            break
+          case 'assignee':
+            if (values.includes('${currentUser}')) {
+              filterParams.assignedToMe = 'true'
+            } else if (!isNegative) {
+              filterParams.assigneeId = values.join(',')
+            } else {
+              filterParams.assigneeIdNot = values.join(',')
+            }
+            break
+          case 'reporter':
+            if (values.includes('${currentUser}')) {
+              filterParams.reportedByMe = 'true'
+            }
+            break
+          case 'sprint':
+            if (!isNegative) filterParams.sprintId = values.join(',')
+            else filterParams.sprintIdNot = values.join(',')
+            break
+          case 'project': {
+            const p = projectList.value.find(pr => pr.key === values[0] || pr.name === values[0])
+            if (p) filterParams.projectId = p.id
+            else filterParams.projectId = values[0]
+            break
+          }
+          case 'keyword':
+            remainingKeyword = values.join(' ')
+            break
+          case 'createdAt':
+            if (op === 'between' && values.length >= 2) {
+              filterParams.createdAfter = values[0]
+              filterParams.createdBefore = values[1]
+            }
+            break
+          case 'updatedAt':
+            if (op === 'between' && values.length >= 2) {
+              filterParams.updatedAfter = values[0]
+              filterParams.updatedBefore = values[1]
+            }
+            break
+          case 'resolvedAt':
+            if (op === 'between' && values.length >= 2) {
+              filterParams.resolvedAfter = values[0]
+              filterParams.resolvedBefore = values[1]
+            }
+            break
+          case 'dueDate':
+            if (op === 'between' && values.length >= 2) {
+              filterParams.dueAfter = values[0]
+              filterParams.dueBefore = values[1]
+            } else if (values.length > 0) {
+              // Single date value — map to due on that date
+              const dateVal = resolveDateKeyword(values[0])
+              if (dateVal) {
+                filterParams.dueAfter = dateVal
+                filterParams.dueBefore = dateVal
+              }
+            }
+            break
+          default:
+            // Unknown field — treat as keyword fragment
+            break
+        }
+      }
+
+      searchKeyword.value = remainingKeyword
+      globalFilterParams.value = filterParams
+      currentPage.value = 1
+      refreshList()
+      return
+    }
+  }
+
+  // Fallback: plain keyword search (original behavior)
   searchKeyword.value = keyword
   globalFilterParams.value = {}
-  // If user types in search while a saved query is active, keep the query active for combined filtering
   currentPage.value = 1
   refreshList()
 }
