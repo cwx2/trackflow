@@ -233,10 +233,24 @@ public class QueryExecutor {
                         log.warn("非法排序字段被拦截: {}", field);
                         continue;
                     }
-                    if (asc) {
-                        wrapper.orderByAsc(columnName);
+                    // priority 是 VARCHAR 字段，按字母排序不符合语义权重，需映射为数值排序
+                    // 权重：Critical=1, High=2, Normal=3, Low=4（数值越小优先级越高）
+                    // 用户 "desc" = 最高优先级在前 = CASE ASC；用户 "asc" = 最低优先级在前 = CASE DESC
+                    if ("priority".equals(columnName)) {
+                        String caseExpr = "CASE LOWER(priority) WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END";
+                        if (asc) {
+                            // 用户要求 asc = 低优先级在前（Low → Normal → High → Critical）
+                            wrapper.orderByDesc(caseExpr);
+                        } else {
+                            // 用户要求 desc = 高优先级在前（Critical → High → Normal → Low）
+                            wrapper.orderByAsc(caseExpr);
+                        }
                     } else {
-                        wrapper.orderByDesc(columnName);
+                        if (asc) {
+                            wrapper.orderByAsc(columnName);
+                        } else {
+                            wrapper.orderByDesc(columnName);
+                        }
                     }
                     hasValidSort = true;
                 }
