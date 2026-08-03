@@ -462,7 +462,7 @@ public class IssueService {
         // 处理排序：自定义字段排序通过子查询实现，内置字段通过 toPage() 处理
         String sort = query.getSort();
         boolean hasCustomFieldSort = false;
-        boolean hasRemainingSort = false;
+        boolean hasSpecialSort = false;
         if (sort != null && !sort.isBlank()) {
             // 解析排序方向（-fieldName 降序，fieldName 升序）
             boolean desc = sort.startsWith("-");
@@ -471,22 +471,33 @@ public class IssueService {
                 hasCustomFieldSort = customFieldSortHelper.applyCustomFieldSort(wrapper, sortField, !desc);
             } else if ("remaining".equals(sortField)) {
                 // remaining 是派生字段（estimated_hours - COALESCE(spent_hours, 0)），不对应实际列，需特殊处理
-                hasRemainingSort = true;
+                hasSpecialSort = true;
                 if (desc) {
                     wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) DESC NULLS LAST");
                 } else {
                     wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) ASC NULLS LAST");
                 }
+            } else if ("priority".equals(sortField)) {
+                // priority 是 VARCHAR 字段，按字母排序不符合语义权重，需映射为数值排序
+                // 权重：Critical=1, High=2, Normal=3, Low=4（数值越小优先级越高）
+                // ASC = 优先级从高到低（紧急→低），DESC = 优先级从低到高（低→紧急）
+                hasSpecialSort = true;
+                String caseExpr = "CASE LOWER(priority) WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END";
+                if (desc) {
+                    wrapper.last("ORDER BY " + caseExpr + " DESC, updated_at DESC");
+                } else {
+                    wrapper.last("ORDER BY " + caseExpr + " ASC, updated_at DESC");
+                }
             }
         }
 
         // 默认排序兜底（当无有效自定义字段排序且 toPage() 也无有效排序时生效）
-        if (!hasCustomFieldSort && !hasRemainingSort) {
+        if (!hasCustomFieldSort && !hasSpecialSort) {
             wrapper.orderByDesc("updated_at");
         }
 
-        // 对于自定义字段排序或 remaining 排序，清空 sort 参数避免 toPage() 产生冲突的 ORDER BY
-        if (hasCustomFieldSort || hasRemainingSort) {
+        // 对于自定义字段排序或特殊字段排序，清空 sort 参数避免 toPage() 产生冲突的 ORDER BY
+        if (hasCustomFieldSort || hasSpecialSort) {
             String originalSort = query.getSort();
             query.setSort(null);
             Page<Issue> result = issueMapper.selectPage(query.toPage(), wrapper);
