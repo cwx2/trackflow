@@ -601,6 +601,7 @@ const availableUsers = ref<Array<{ id: string; name: string }>>([])
 const activityTypeOptions = [
   { value: 'commented', label: '评论' },
   { value: 'status_changed', label: '状态变更' },
+  { value: 'status_reverted', label: '撤销状态变更' },
   { value: 'field_change', label: '字段变更' },
   { value: 'update', label: '更新' },
   { value: 'assigned', label: '分配' },

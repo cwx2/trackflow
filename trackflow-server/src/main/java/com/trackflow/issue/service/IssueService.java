@@ -993,8 +993,8 @@ public class IssueService {
         // 验证目标状态与上一次变更的旧状态一致
         validateUndoTargetStatus(targetStatusId, lastStatusChange);
 
-        // 执行撤销（跳过工作流校验，目标状态已验证为上一状态）
-        ActionExecutionResult actionResult = transitStatusSkipWorkflow(issueId, targetStatusId, "撤销状态变更");
+        // 执行撤销（跳过工作流校验，目标状态已验证为上一状态）— 不传 comment，撤销不应产生普通评论
+        ActionExecutionResult actionResult = transitStatusSkipWorkflow(issueId, targetStatusId, null);
 
         // 返回更新后的版本号
         Issue updated = getById(issueId);
@@ -2214,11 +2214,12 @@ public class IssueService {
             throw new BusinessException(ErrorCode.CONFLICT, "该工单已被其他人修改，请刷新页面后重试");
         }
 
-        // 记录状态变更活动
+        // 记录状态变更活动（撤销操作使用 status_reverted，普通变更使用 status_changed）
         IssueStatus oldStatus = statusMapper.selectById(oldStatusId);
         String oldStatusDisplayName = oldStatus != null ? oldStatus.getLocalizedName() : String.valueOf(oldStatusId);
         String newStatusDisplayName = newStatus.getLocalizedName();
-        recordActivity(id, currentUserId, "status_changed", "status",
+        String activityAction = skipWorkflowCheck ? "status_reverted" : "status_changed";
+        recordActivity(id, currentUserId, activityAction, "status",
                 oldStatusDisplayName, newStatusDisplayName);
 
         // 通知报告人+负责人状态已变更 — 事务提交后触发

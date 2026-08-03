@@ -235,6 +235,7 @@ export const actionLabelMap: Record<string, { short: string; full: string }> = {
   updated: { short: '更新了', full: '修改了工单' },
   status_change: { short: '变更了状态', full: '修改了状态' },
   status_changed: { short: '变更了状态', full: '修改了状态' },
+  status_reverted: { short: '撤销了状态变更', full: '撤销了状态变更' },
   status_reset: { short: '重置了状态', full: '重置了状态' },
   assign: { short: '分配了', full: '修改了负责人' },
   assigned: { short: '分配了', full: '修改了负责人' },

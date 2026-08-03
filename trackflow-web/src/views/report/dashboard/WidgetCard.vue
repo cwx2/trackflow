@@ -908,6 +908,7 @@ const activityActionLabels: Record<string, string> = {
   created: '创建了',
   commented: '评论了',
   status_changed: '变更了状态',
+  status_reverted: '撤销了状态变更',
   field_change: '修改了',
   update: '更新了',
   updated: '更新了',
