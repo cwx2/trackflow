@@ -130,10 +130,11 @@ public class SavedQueryController {
             @PathVariable("id") String id,
             @RequestParam(value = "page", defaultValue = "1") Integer page,
             @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize,
-            @RequestParam(value = "hideResolved", required = false) String hideResolved) {
+            @RequestParam(value = "hideResolved", required = false) String hideResolved,
+            @RequestParam(value = "sort", required = false) String sort) {
         Long userId = SecurityUtils.getCurrentUserId();
         Long queryId = Long.parseLong(id);
-        Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(queryId, page, pageSize, userId, "true".equals(hideResolved));
+        Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(queryId, page, pageSize, userId, "true".equals(hideResolved), sort);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
         fillAssigneeNames(result.getRecords(), voList);
         fillCustomFieldValues(result.getRecords(), voList);

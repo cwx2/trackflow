@@ -110,6 +110,7 @@ public class SavedQueryService {
                     .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
                     .count(count)
                     .filters(q.getFilters())
+                    .sortCriteria(q.getSortCriteria())
                     .favorited(isFavorited || isOwn)
                     .build();
 
@@ -157,6 +158,7 @@ public class SavedQueryService {
                 .userId(q.getUserId() != null ? String.valueOf(q.getUserId()) : null)
                 .count(0) // 不计数（性能考虑）
                 .filters(q.getFilters())
+                .sortCriteria(q.getSortCriteria())
                 .favorited(favoriteIds.contains(q.getId()))
                 .build()
         ).toList();
@@ -347,14 +349,21 @@ public class SavedQueryService {
      * 执行保存查询（带项目成员过滤）
      * 查询结果自动限定在用户所属项目范围内
      */
-    public Page<Issue> executeByIdWithAccessCheck(Long id, int page, int pageSize, Long userId, boolean hideResolved) {
+    public Page<Issue> executeByIdWithAccessCheck(Long id, int page, int pageSize, Long userId, boolean hideResolved, String sortOverride) {
         SavedQuery query = queryMapper.selectById(id);
         if (query == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Query not found");
         }
 
         List<Map<String, Object>> filters = parseFilters(query.getFilters());
-        List<Map<String, String>> sortCriteria = parseSortCriteria(query.getSortCriteria());
+
+        // 客户端 sort 参数优先（用户手动点击列头排序），否则使用保存的排序配置
+        List<Map<String, String>> sortCriteria;
+        if (sortOverride != null && !sortOverride.isBlank()) {
+            sortCriteria = parseClientSort(sortOverride);
+        } else {
+            sortCriteria = parseSortCriteria(query.getSortCriteria());
+        }
 
         // 如果 Saved Query 绑定了项目且 filters 中无 project 字段，注入隐式项目上下文
         // 这样 QueryExecutor 的动态变量（如 ${currentSprint}）能正确限定项目范围
@@ -483,6 +492,17 @@ public class SavedQueryService {
         } catch (JsonProcessingException e) {
             return List.of();
         }
+    }
+
+    /**
+     * 解析客户端 sort 参数格式为 sortCriteria 列表。
+     * 格式：-fieldName 表示 desc，fieldName 表示 asc
+     */
+    private List<Map<String, String>> parseClientSort(String sort) {
+        if (sort == null || sort.isBlank()) return List.of();
+        boolean desc = sort.startsWith("-");
+        String field = desc ? sort.substring(1) : sort;
+        return List.of(Map.of("field", field, "direction", desc ? "desc" : "asc"));
     }
 
     /**

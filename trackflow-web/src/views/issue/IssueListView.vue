@@ -3580,10 +3580,36 @@ function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): 
   return chips
 }
 
+/**
+ * 解析 Saved Query 的 sortCriteria JSON 并应用到 sortState。
+ * sortCriteria 格式: [{"field":"priority","direction":"desc"}]
+ * 如果没有有效的排序配置，清除 sortState（回退到后端默认排序）。
+ */
+function applySavedQuerySort(q: any) {
+  if (!q.sortCriteria) {
+    sortState.value = { field: null, direction: null }
+    return
+  }
+  try {
+    const criteria = typeof q.sortCriteria === 'string' ? JSON.parse(q.sortCriteria) : q.sortCriteria
+    if (Array.isArray(criteria) && criteria.length > 0 && criteria[0].field) {
+      const dir = criteria[0].direction === 'desc' ? 'desc' : 'asc'
+      sortState.value = { field: criteria[0].field, direction: dir }
+    } else {
+      sortState.value = { field: null, direction: null }
+    }
+  } catch {
+    sortState.value = { field: null, direction: null }
+  }
+}
+
 function selectQuery(q: any) {
   activeQueryId.value = q.id; activeQueryName.value = q.name; activeQueryObj.value = q; activeProjectId.value = null; activeTagId.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
   const { project, ...rest } = route.query
   router.replace({ query: rest })
+
+  // Apply saved query's sort criteria to sortState
+  applySavedQuerySort(q)
 
   // Persist user's query preference
   localStorage.setItem('tf_last_active_query_id', q.id)
@@ -3598,6 +3624,7 @@ function selectQuery(q: any) {
 function selectAllProjects() {
   if (activeProjectId.value === null && activeTagId.value === null && activeQueryId.value === null && searchKeyword.value === '') return // Already showing all
   activeProjectId.value = null; activeQueryId.value = null; activeTagId.value = null; activeQueryName.value = '所有工单'; activeQueryObj.value = null; filterProject.value = undefined; searchKeyword.value = ''; globalFilterParams.value = {}; currentPage.value = 1
+  sortState.value = { field: null, direction: null }
   const { project, ...rest } = route.query
   router.replace({ query: rest })
 

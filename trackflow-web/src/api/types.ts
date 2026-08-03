@@ -659,6 +659,7 @@ export interface SavedQueryVO {
   pinned: boolean
   folder?: string
   filters?: string
+  sortCriteria?: string
   icon?: string
   sortOrder: number
   createdAt: string
