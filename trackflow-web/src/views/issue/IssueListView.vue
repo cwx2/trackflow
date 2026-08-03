@@ -3747,18 +3747,6 @@ async function loadStatuses() {
  * when the user navigates to the Issues list without explicit URL params.
  * This provides a YouTrack-like "open and see my tasks" experience.
  */
-function autoSelectDefaultQuery() {
-  const pinnedQueries = savedQueries.value.filter((q: any) => q.pinned)
-  if (pinnedQueries.length > 0) {
-    selectQuery(pinnedQueries[0])
-  } else if (savedQueries.value.length > 0) {
-    // Fallback: select the first available query
-    selectQuery(savedQueries.value[0])
-  } else {
-    // No saved queries at all — show all issues
-    refreshList()
-  }
-}
 
 onMounted(async () => {
   // 检查是否有会话过期时保存的恢复草稿 — 保存为正式草稿但不自动打开模态框
@@ -3822,7 +3810,7 @@ onMounted(async () => {
   if (route.query.statusId || route.query.statusCode || route.query.statusCategory || route.query.statusName || route.query.status || route.query.overdue || route.query.dueSoon || route.query.sprint || route.query.reportedByMe || route.query.assignedToMe || route.query.priority || route.query.issueType || route.query.assigneeName || route.query.assignee || route.query.projectId || route.query.keyword) {
     applyDashboardFilter()
   } else if (!route.query.project && !activeProjectId.value) {
-    // Auto-select default saved query (e.g., "分配给我") when no URL params override the view
+    // Restore user's last query preference, or show all issues on first visit (YouTrack standard)
     // Check localStorage for user's last selected query preference
     const lastQueryId = localStorage.getItem('tf_last_active_query_id')
     const lastQueryIsAll = localStorage.getItem('tf_last_active_query_all') === 'true'
@@ -3836,12 +3824,13 @@ onMounted(async () => {
       if (matched) {
         selectQuery(matched)
       } else {
-        // Last selected query no longer exists, fall back to first pinned
-        autoSelectDefaultQuery()
+        // Last selected query no longer exists — show all issues
+        localStorage.removeItem('tf_last_active_query_id')
+        refreshList()
       }
     } else {
-      // First visit or no preference — auto-select the first pinned query
-      autoSelectDefaultQuery()
+      // First visit or no preference — show all issues (YouTrack standard: unfiltered list on first visit)
+      refreshList()
     }
   } else {
     refreshList()
