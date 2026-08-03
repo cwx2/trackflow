@@ -10,7 +10,7 @@
 
     <!-- 双标签页 -->
     <a-tabs v-model:active-key="activeTab" size="small" class="cf-tabs">
-      <a-tab-pane key="list" title="Fields List">
+      <a-tab-pane key="list" title="字段列表">
         <!-- 字段列表 + 详情侧边栏 -->
         <div class="cf-body">
           <div class="cf-table" :class="{ 'has-detail': !!selectedField }">
@@ -252,7 +252,7 @@
           </div>
         </div>
       </a-tab-pane>
-      <a-tab-pane key="projects" title="Fields in Projects">
+      <a-tab-pane key="projects" title="项目中的字段">
         <FieldsInProjects ref="fieldsInProjectsRef" @field-created="loadList" />
       </a-tab-pane>
     </a-tabs>
