@@ -70,7 +70,7 @@
             <button v-if="props.canManageComments" class="deleted-action-btn deleted-action-btn-danger" @click="confirmPermanentDelete(item)">永久删除</button>
           </div>
           <!-- Editing mode -->
-          <div v-if="item.type === 'comment' && !item.isDeleted && editingCommentId === item.commentId" class="comment-edit">
+          <div v-else-if="item.type === 'comment' && !item.isDeleted && editingCommentId === item.commentId" class="comment-edit">
             <div class="edit-area">
               <EditorContent :editor="editEditor" />
             </div>
