@@ -211,7 +211,14 @@
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
             <span class="val-text" :class="field.class">{{ field.value }}</span>
-            <span class="readonly-lock-icon" aria-hidden="true">
+            <!-- 设计上只读（累计/汇总）：显示计算器图标 -->
+            <span v-if="field.readonlyReason === 'computed' || field.readonlyReason === 'derived'" class="readonly-info-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm2-.5a.5.5 0 0 0-.5.5v2.5h9V2a.5.5 0 0 0-.5-.5H4zm8.5 4h-9v2h9v-2zm0 3h-4v5.5H12a.5.5 0 0 0 .5-.5v-5zm-5 5.5v-5.5h-4V14a.5.5 0 0 0 .5.5h3.5z"/>
+              </svg>
+            </span>
+            <!-- 权限不足：显示锁图标 -->
+            <span v-else class="readonly-lock-icon" aria-hidden="true">
               <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                 <path d="M4 4v2h-.25A1.75 1.75 0 002 7.75v5.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0014 13.25v-5.5A1.75 1.75 0 0012.25 6H12V4a4 4 0 10-8 0zm6.5 2V4a2.5 2.5 0 00-5 0v2h5zM12.25 7.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25v-5.5a.25.25 0 01.25-.25h8.5z"/>
               </svg>
@@ -285,6 +292,14 @@ export interface SidebarField {
    * 默认折叠，点击"显示更多字段"后展开。
    */
   isEmptyCustomField?: boolean
+  /**
+   * 只读字段的原因说明。
+   * - 'computed': 由系统自动计算/累计的字段（如"已花时间"由工时记录累计）
+   * - 'derived': 由子工单聚合汇总的字段（如"总预估工时"）
+   * - 自定义字符串: 直接作为 tooltip 展示
+   * - undefined: 默认当作权限不足处理
+   */
+  readonlyReason?: 'computed' | 'derived' | string
 }
 
 export interface StatusInfo {
@@ -441,11 +456,23 @@ function cancelEdit() {
 
 /**
  * 获取只读字段的 tooltip 提示文本
- * 根据字段类型返回更具体的说明
+ * 根据字段只读原因返回相应说明：
+ * - readonlyReason='computed': 系统自动累计字段
+ * - readonlyReason='derived': 子工单聚合字段
+ * - readonlyReason=其他字符串: 直接展示
+ * - 无 readonlyReason: 当作权限不足处理
  */
 function getReadonlyTooltip(field: SidebarField): string {
-  // 根据字段类型提供更具体的提示
   const fieldLabel = field.label || '此字段'
+  if (field.readonlyReason) {
+    if (field.readonlyReason === 'computed') {
+      return `${fieldLabel}由系统自动累计，不可直接编辑`
+    }
+    if (field.readonlyReason === 'derived') {
+      return `${fieldLabel}由子工单自动汇总`
+    }
+    return field.readonlyReason
+  }
   return `您没有权限修改${fieldLabel}`
 }
 
@@ -759,8 +786,21 @@ function confirmAddOption(field: SidebarField) {
   margin-left: auto;
 }
 
+/* 设计上只读字段的信息图标（累计/汇总） */
+.readonly-info-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tf-text-muted);
+  opacity: 0;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 /* hover 时显示锁图标 */
-.sb-value.readonly-value:hover .readonly-lock-icon {
+.sb-value.readonly-value:hover .readonly-lock-icon,
+.sb-value.readonly-value:hover .readonly-info-icon {
   opacity: 1;
 }
 

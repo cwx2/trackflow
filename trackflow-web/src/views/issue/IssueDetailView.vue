@@ -854,7 +854,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
   const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || '未排期'
 
   return [
-    { key: 'project', label: '项目', value: projectName.value, readonly: true },
+    { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
     { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: [
       { value: 'Critical', label: priorityLabelMap['Critical'] || '紧急' },
       { value: 'High', label: priorityLabelMap['High'] || '高' },
@@ -864,7 +864,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
     { key: 'issueType', label: '类型', value: localizeIssueType(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: Object.entries(issueTypeLabelMap).map(([value, label]) => ({ value, label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
-    { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true },
+    { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true, readonlyReason: '报告人为工单创建者，不可修改' },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
     { 
       key: 'dueDate', 
@@ -883,6 +883,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
         label: '已花时间', 
         value: i.spentHours ? `${i.spentHours}h` : '-', 
         readonly: true,
+        readonlyReason: 'computed',
         // 超出预估时显示红色警告
         class: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) ? 'time-over-budget' : undefined,
         tooltip: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) 
@@ -890,13 +891,14 @@ const sidebarFields = computed<SidebarField[]>(() => {
           : undefined
       },
     ] : []),
-    ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true }] : []),
+    ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true, readonlyReason: 'derived' }] : []),
     ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [
       { 
         key: 'derivedSpentHours', 
         label: '总花费时间', 
         value: `${i.derivedSpentHours}h`, 
         readonly: true,
+        readonlyReason: 'derived',
         // 总花费时间超出总预估时也显示警告
         class: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? 'time-over-budget' : undefined,
         tooltip: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours)
