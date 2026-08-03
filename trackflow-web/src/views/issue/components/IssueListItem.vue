@@ -46,7 +46,7 @@
     </span>
 
     <!-- Issue key -->
-    <span class="item-key">{{ issue.issueKey }}</span>
+    <router-link :to="`/issues/${issue.issueKey}`" class="item-key" @click.stop>{{ issue.issueKey }}</router-link>
 
     <!-- Title -->
     <span class="item-title">{{ issue.title }}</span>
@@ -474,8 +474,13 @@ function truncateDescription(desc?: string): string {
 .item-key {
   flex-shrink: 0;
   font-size: 12px;
-  color: var(--tf-text-tertiary, var(--color-text-3));
+  color: var(--tf-accent, var(--color-text-3));
   font-family: 'JetBrains Mono', monospace;
+  text-decoration: none;
+  cursor: pointer;
+}
+.item-key:hover {
+  text-decoration: underline;
 }
 
 /* Title */

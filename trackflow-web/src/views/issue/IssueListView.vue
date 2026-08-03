@@ -661,7 +661,7 @@
 
         <!-- Cell slots -->
         <template #issueKey="{ record }">
-          <span class="issue-key">{{ record.issueKey }}</span>
+          <router-link :to="`/issues/${record.issueKey}`" class="issue-key" @click.stop>{{ record.issueKey }}</router-link>
         </template>
         <template #title-cell="{ record }">
           <span class="issue-title-text">{{ record.title }}</span>
@@ -4189,11 +4189,13 @@ onBeforeRouteLeave((_to, _from, next) => {
 .issue-table :deep(.arco-table-col-resize-handle:hover),
 .issue-table :deep(.arco-table-col-resize-handle.active) { background: var(--tf-accent); }
 
-.issue-key { color: var(--tf-accent); font-weight: 500; font-size: 12px; }
+.issue-key { color: var(--tf-accent); font-weight: 500; font-size: 12px; text-decoration: none; cursor: pointer; }
+.issue-key:hover { text-decoration: underline; }
 .issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 
 /* Resolved issue styling (YouTrack: strikethrough key + gray text) */
 .issue-table :deep(.issue-resolved) .issue-key { text-decoration: line-through; color: var(--tf-text-tertiary); }
+.issue-table :deep(.issue-resolved) .issue-key:hover { text-decoration: line-through underline; }
 .issue-table :deep(.issue-resolved) .issue-title-text { color: var(--tf-text-tertiary); }
 .issue-table :deep(.issue-resolved) .editable-cell { color: var(--tf-text-tertiary); }
 .issue-table :deep(.issue-resolved) .readonly-cell { color: var(--tf-text-tertiary); }
