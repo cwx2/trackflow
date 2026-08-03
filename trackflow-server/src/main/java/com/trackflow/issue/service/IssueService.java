@@ -138,7 +138,7 @@ public class IssueService {
         issue.setIssueKey(issueKey);
         issue.setTitle(dto.getTitle());
         issue.setDescription(dto.getDescription());
-        issue.setIssueType(dto.getIssueType() != null ? dto.getIssueType() : "Task");
+        issue.setIssueType(workflowService.normalizeIssueType(dto.getIssueType()));
         issue.setStatusId(resolvedStatusId);
         issue.setPriority(dto.getPriority() != null ? dto.getPriority() : "Normal");
         // 校验 assignee 是否为有效的项目成员
@@ -1219,34 +1219,37 @@ public class IssueService {
             // 收集描述变更（不传具体内容，仅告知有变更）
             fieldChanges.put("description", new String[]{null, null});
         }
-        if (dto.getIssueType() != null && !dto.getIssueType().equals(issue.getIssueType())) {
+        if (dto.getIssueType() != null) {
             String oldType = issue.getIssueType();
-            String newType = dto.getIssueType();
+            String newType = workflowService.normalizeIssueType(dto.getIssueType());
 
-            // 1. 工作流状态兼容性检查：当前状态在新类型的工作流图中是否仍然可达
-            boolean statusValid = workflowService.isStatusInWorkflow(
-                    issue.getProjectId(), newType, issue.getStatusId());
-            if (!statusValid) {
-                // 自动回退到系统默认状态
-                IssueStatus defaultStatus = workflowService.getDefaultStatus();
-                if (defaultStatus != null) {
-                    Long oldStatusId = issue.getStatusId();
-                    issue.setStatusId(defaultStatus.getId());
-                    String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
-                    String newStatusName = defaultStatus.getLocalizedName();
-                    recordActivity(id, currentUserId, "status_reset", "status",
-                            oldStatusName, newStatusName);
-                    statusAutoReset = true;
-                    log.info("Issue {} type changed from {} to {}: status auto-reset from {} to default ({})",
-                            id, oldType, newType, oldStatusName, newStatusName);
+            // 归一化后实际未变更则跳过
+            if (!newType.equals(oldType)) {
+                // 1. 工作流状态兼容性检查：当前状态在新类型的工作流图中是否仍然可达
+                boolean statusValid = workflowService.isStatusInWorkflow(
+                        issue.getProjectId(), newType, issue.getStatusId());
+                if (!statusValid) {
+                    // 自动回退到系统默认状态
+                    IssueStatus defaultStatus = workflowService.getDefaultStatus();
+                    if (defaultStatus != null) {
+                        Long oldStatusId = issue.getStatusId();
+                        issue.setStatusId(defaultStatus.getId());
+                        String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
+                        String newStatusName = defaultStatus.getLocalizedName();
+                        recordActivity(id, currentUserId, "status_reset", "status",
+                                oldStatusName, newStatusName);
+                        statusAutoReset = true;
+                        log.info("Issue {} type changed from {} to {}: status auto-reset from {} to default ({})",
+                                id, oldType, newType, oldStatusName, newStatusName);
+                    }
                 }
+
+                // 2. 自定义字段重新适配：删除不再适用于新类型的字段值
+                customFieldService.removeOrphanValues(issue.getId(), newType, issue.getProjectId());
+
+                recordActivity(id, currentUserId, "updated", "issue_type", oldType, newType);
+                issue.setIssueType(newType);
             }
-
-            // 2. 自定义字段重新适配：删除不再适用于新类型的字段值
-            customFieldService.removeOrphanValues(issue.getId(), newType, issue.getProjectId());
-
-            recordActivity(id, currentUserId, "updated", "issue_type", oldType, newType);
-            issue.setIssueType(newType);
         }
         if (dto.getPriority() != null) {
             String oldPriority = issue.getPriority();

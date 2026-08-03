@@ -603,27 +603,51 @@ public class WorkflowService {
      * 获取系统中已使用的工单类型列表
      * 返回数据库中 issue 表的 distinct issue_type 值 + 预定义类型
      */
+    /**
+     * 系统预定义的 Issue 类型（标准值，大小写敏感）。
+     * 所有写入 issue_type 字段的值必须属于此集合。
+     */
+    public static final List<String> PREDEFINED_ISSUE_TYPES = List.of("Bug", "Task", "Feature", "Epic", "Story");
+
+    /**
+     * 用于大小写无关匹配的映射表：小写 → 标准值
+     */
+    private static final Map<String, String> ISSUE_TYPE_NORMALIZE_MAP;
+    static {
+        Map<String, String> map = new java.util.HashMap<>();
+        for (String type : PREDEFINED_ISSUE_TYPES) {
+            map.put(type.toLowerCase(), type);
+        }
+        ISSUE_TYPE_NORMALIZE_MAP = Map.copyOf(map);
+    }
+
+    /**
+     * 返回系统预定义的 Issue 类型列表。
+     * 不再从 issue 表 DISTINCT 查询，避免脏数据污染类型列表。
+     */
     @Transactional(readOnly = true)
     public List<String> listIssueTypes() {
-        // 预定义的基础类型（与系统内置类型一致）
-        List<String> baseTypes = List.of("Bug", "Task", "Feature", "Epic");
+        return PREDEFINED_ISSUE_TYPES;
+    }
 
-        // 从 issue 表查询所有已使用的 issue_type（排除已删除的）
-        List<Object> dbTypes = issueMapper.selectObjs(
-                new LambdaQueryWrapper<Issue>()
-                        .select(Issue::getIssueType)
-                        .isNull(Issue::getDeletedAt)
-                        .groupBy(Issue::getIssueType)
-        );
-
-        // 合并：预定义 + 已使用（去重）
-        java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>(baseTypes);
-        for (Object obj : dbTypes) {
-            if (obj != null) {
-                merged.add(obj.toString());
-            }
+    /**
+     * 校验并归一化 issueType 值。
+     * 支持大小写无关匹配（如 "bug" → "Bug"），不在预定义列表中则抛异常。
+     *
+     * @param issueType 用户输入的类型值
+     * @return 归一化后的标准类型值
+     * @throws BusinessException 当类型不合法时
+     */
+    public String normalizeIssueType(String issueType) {
+        if (issueType == null || issueType.isBlank()) {
+            return "Task"; // 默认值
         }
-        return List.copyOf(merged);
+        String normalized = ISSUE_TYPE_NORMALIZE_MAP.get(issueType.toLowerCase().trim());
+        if (normalized == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "不支持的 Issue 类型: " + issueType + "，允许的值: " + PREDEFINED_ISSUE_TYPES);
+        }
+        return normalized;
     }
 
     /**
