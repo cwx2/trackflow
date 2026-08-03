@@ -831,10 +831,11 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
   // 状态选项
   const statusOptions = [
-    { value: currentStatus.value.id, label: `● ${currentStatus.value.name}（当前）` },
+    { value: currentStatus.value.id, label: `${currentStatus.value.name}（当前）`, dot: currentStatus.value.color },
     ...availableTransitions.value.map(s => ({
       value: s.id,
       label: s.blocked ? `⚠ ${s.name}` : s.name,
+      dot: s.color,
       badge: s.blocked ? '被阻塞' : undefined,
       badgeColor: s.blocked ? '#d29922' : undefined
     }))

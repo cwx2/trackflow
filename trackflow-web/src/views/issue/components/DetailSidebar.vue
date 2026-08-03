@@ -99,6 +99,7 @@
                     :class="{ selected: opt.value === (field.rawValue || '') }"
                     @click="selectOption(field, opt.value)"
                   >
+                    <span v-if="opt.dot" class="item-dot" :style="{ background: opt.dot }"></span>
                     <span class="item-text">{{ opt.label }}</span>
                     <span v-if="opt.badge" class="item-badge" :style="{ background: opt.badgeColor || 'var(--tf-accent)' }">{{ opt.badge }}</span>
                   </div>
@@ -233,6 +234,8 @@ export interface FieldOption {
   label: string
   badge?: string
   badgeColor?: string
+  /** 选项前的颜色圆点（用于状态等带颜色的选项） */
+  dot?: string
   /** 选项描述，用于 tooltip 展示 */
   description?: string
 }
@@ -836,6 +839,13 @@ function confirmAddOption(field: SidebarField) {
 }
 .item-text {
   flex: 1;
+}
+.item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 8px;
 }
 .item-badge {
   font-size: 10px;
