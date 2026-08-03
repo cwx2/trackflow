@@ -3982,11 +3982,27 @@ function applyDashboardFilter() {
 
   if (route.query.sprint) {
     filters.sprintId = String(route.query.sprint)
+    // Resolve sprint display name from label param (only when no statusCategory, since
+    // combined labels like "Sprint Name - 已完成工单" are meant for the page title, not the chip)
+    let sprintDisplayName = ''
+    if (route.query.label && !route.query.statusCategory) {
+      sprintDisplayName = String(route.query.label)
+    }
+    if (!sprintDisplayName) {
+      const sprintId = String(route.query.sprint)
+      for (const sprints of Object.values(sprintOptionsCache)) {
+        const matched = sprints.find(s => s.id === sprintId)
+        if (matched) { sprintDisplayName = matched.name; break }
+      }
+    }
+    if (!sprintDisplayName) {
+      sprintDisplayName = `Sprint #${route.query.sprint}`
+    }
     chips.push({
       fieldKey: 'sprint',
       operator: 'equals',
       values: [String(route.query.sprint)],
-      valueLabels: ['Sprint']
+      valueLabels: [sprintDisplayName]
     })
   }
 
