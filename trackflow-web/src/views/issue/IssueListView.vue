@@ -4458,7 +4458,6 @@ onBeforeRouteLeave((_to, _from, next) => {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #fff; font-weight: 500; }
-.priority-badge { display: inline-block; width: 10px; height: 10px; min-width: 10px; min-height: 10px; flex-shrink: 0; border-radius: 2px; }
 .priority-dot { display: inline-block; width: 8px; height: 8px; min-width: 8px; min-height: 8px; flex-shrink: 0; border-radius: 50%; }
 .priority-critical { background: var(--tf-danger); }
 .priority-high { background: var(--tf-warning); }

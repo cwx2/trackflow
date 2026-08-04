@@ -220,8 +220,8 @@ TrackFlow 已有完整的自定义字段模块（`customfield` 包），支持 e
 ## 自动化状态
 
 fix_status: DONE
-fix_commit: efa207d5
-fix_round: 1
+fix_commit: de643ade
+fix_round: 2
 test_status: PENDING
 test_round: 0
 review_status: PENDING
@@ -232,62 +232,45 @@ review_round: 0
 ## Agent 交接上下文
 
 > 由 fix-requirement-auto 会话写入，供 e2e-test 和 code-review 会话读取。
-> 最后更新：2026-08-05 00:25
+> 最后更新：2026-08-05 00:31
 
 ### 本次改动摘要
-将优先级从硬编码 VARCHAR 字段迁移为自定义字段系统中的枚举类型自定义字段（Phase 1：配置化 + 动态加载）。
+第 2 轮修复，处理 code review 发现的 2 个 MUST 问题和 1 个 SHOULD 问题：
 
-- **V249 Flyway 迁移**：在 `custom_field_definition` 中创建 Priority 字段（ID=1000000000000000001，type=list，is_for_all=true，is_auto_attach=true，is_private=true），种子化 5 个带颜色的选项（Show-stopper/Critical/High/Normal/Low），自动附加到所有 13 个现有项目，规范化现有 issue.priority 数据
-- **PriorityFieldService.java**：封装优先级字段的自定义字段系统接口，提供 getPriorityOptions(projectId)、getDefaultPriority(projectId)、isValidPriority() 等方法
-- **IssueController.java**：新增 `GET /api/v1/issues/priority-options?projectId=X` 端点，返回项目有效的优先级选项列表（含颜色、描述）
-- **IssueService.java**：创建工单时默认优先级从 PriorityFieldService.getDefaultPriority() 动态获取（不再硬编码 "Normal"）
-- **IssueExportService.java**：更新 localizePriority 方法支持所有优先级值
-- **usePriorityOptions.ts**：前端 composable，带 5 分钟缓存，API 加载失败时回退到预设值
-- **IssueListView/IssueDetailView/IssueCreatePanel/BatchActionToolbar/FilterBar**：所有优先级下拉从 API 动态加载，圆点改为 10px 彩色方块，颜色来自 API 响应
-- **fieldLabels.ts**：添加 "Show-stopper" → "阻塞" 映射
+- **MUST-1（IssueController.java）**：将 getPriorityOptions 中的手动 entity→VO 映射替换为 `customFieldConverter.toOptionVOList(options)`，新增 `CustomFieldConverter` 字段注入
+- **MUST-2（V250 迁移 + PriorityFieldService + 前端映射）**：新增 V250 迁移脚本将数据库中 `medium` 脏数据规范为 `Normal`；PriorityFieldService 新增 `normalizePriority()` 方法；前端添加 medium 映射
+- **SHOULD（.priority-badge 提取）**：将共享的 `.priority-badge` 样式提取到全局 `components.css`，从 3 个组件中移除重复定义
+- **Suggestion 3（localizePriority 合并）**：使用 `priority.toLowerCase()` 后统一 switch
 
 ### 本次变更文件清单
-- `trackflow-server/src/main/java/com/trackflow/issue/service/PriorityFieldService.java`
-- `trackflow-server/src/main/resources/db/migration/V249__seed_priority_custom_field.sql`
 - `trackflow-server/src/main/java/com/trackflow/issue/controller/IssueController.java`
-- `trackflow-server/src/main/java/com/trackflow/issue/service/IssueService.java`
 - `trackflow-server/src/main/java/com/trackflow/issue/service/IssueExportService.java`
-- `trackflow-web/src/views/issue/composables/usePriorityOptions.ts`
-- `trackflow-web/src/api/issue.ts`
+- `trackflow-server/src/main/java/com/trackflow/issue/service/PriorityFieldService.java`
+- `trackflow-server/src/main/resources/db/migration/V250__normalize_priority_medium_to_normal.sql`
+- `trackflow-web/src/styles/components.css`
 - `trackflow-web/src/utils/fieldLabels.ts`
-- `trackflow-web/src/views/issue/IssueListView.vue`
-- `trackflow-web/src/views/issue/IssueDetailView.vue`
 - `trackflow-web/src/views/issue/IssueCreatePanel.vue`
+- `trackflow-web/src/views/issue/IssueListView.vue`
 - `trackflow-web/src/views/issue/components/BatchActionToolbar.vue`
-- `trackflow-web/src/views/issue/components/FilterBar.vue`
+- `trackflow-web/src/views/issue/composables/usePriorityOptions.ts`
 
 ### 测试重点（给 e2e-test 会话）
 - **必须验证的核心路径**：
   1. 以 testuser 登录 → 打开项目 DE4 → 查看 Issue 列表 → 确认优先级列显示彩色方块 + 中文标签
-  2. 点击某工单优先级下拉 → 确认选项列表包含 5 个值（阻塞/紧急/高/普通/低），每个带颜色方块
-  3. 修改优先级为其他值 → 确认保存成功、列表刷新显示新颜色
+  2. 点击某工单优先级下拉 → 确认选项列表包含 5 个值（阻塞/紧急/高/普通/低）
+  3. 修改优先级为其他值 → 确认保存成功
   4. 创建新工单 → 确认优先级下拉包含 5 个带颜色的选项
-  5. 打开工单详情 → 确认右侧面板优先级字段显示颜色圆点 + 中文名
-  6. 批量选择工单 → 点击"变更优先级" → 确认下拉包含 5 个带颜色的选项
 - **边界场景**：
-  - 切换不同项目后优先级选项仍正确加载
-  - 筛选器中优先级选项包含 "阻塞"（Show-stopper）
-- **建议测试账号**：testuser（超级管理员）
-- **注意事项**：
-  - `issue.priority` 字段仍保留在 issue 表中（向后兼容），Phase 1 不删除
-  - 如果前端优先级下拉只显示 4 个值（没有 Show-stopper），可能是 API 缓存问题，刷新页面重试
-  - 需要验证优先级筛选器包含 "阻塞" 选项
+  - 数据库中不再有 "medium" 值（已由 V250 清理）
+  - `.priority-badge` 样式在所有组件中正常渲染
+- **建议测试账号**：testuser
+- **注意事项**：本轮变更为纯修复性质，功能逻辑未改变
 
 ### 审核重点（给 code-review 会话）
-- **重点关注文件**：PriorityFieldService.java（新文件）、V249 迁移脚本、usePriorityOptions.ts
-- **潜在风险点**：
-  - PriorityFieldService 使用硬编码 ID（1000000000000000001），需确认迁移脚本 ON CONFLICT 幂等
-  - usePriorityOptions 的缓存 TTL 为 5 分钟，管理员修改优先级选项后可能需要手动刷新
-  - IssueListView 中 `priorityOptions` 从 const 改为 ref，需要确认所有模板引用 `.value`
-- **已知遗留项**：
-  - Phase 2 未做：将 issue.priority VARCHAR 完全废弃，改为从 custom_field_value 表读写
-  - Phase 2 未做：项目设置中优先级字段的独立值集合管理 UI
-  - FilterBar 中的优先级选项仍是静态写死（虽然已更新为含 Show-stopper），未来应改为从 API 加载
+- **重点关注文件**：IssueController.java（CustomFieldConverter 注入和使用）、V250 迁移脚本
+- **潜在风险点**：IssueCreatePanel 中 `.priority-badge` 仅保留 `margin-right: 6px` 覆盖
+- **已知遗留项**：Phase 2 未做（完全废弃 issue.priority VARCHAR）
+
 
 ======================
 
@@ -299,7 +282,7 @@ review_round: 0
 ### 根因分析
 优先级字段在 TrackFlow 中是 `issue.priority VARCHAR(50)` 硬编码实现，前端选项写死在各组件中。与 YouTrack 中优先级作为可配置的枚举类型自定义字段的设计存在重大架构差异。系统已有完整的自定义字段模块但优先级未接入。
 
-### 修复方案
+### 修复方案（第 1 轮）
 | 文件 | 改动说明 |
 |------|----------|
 | `V249__seed_priority_custom_field.sql` | 创建 Priority 自定义字段定义 + 5 个带颜色选项 + 自动附加所有项目 + 数据规范化 |
@@ -308,12 +291,18 @@ review_round: 0
 | `IssueService.java` | 默认优先级改为动态获取 |
 | `IssueExportService.java` | 支持所有优先级值的中文本地化 |
 | `usePriorityOptions.ts` | 前端 composable，5 分钟缓存 + API 回退 |
-| `IssueListView.vue` | 动态加载优先级选项，彩色方块替代圆点 |
-| `IssueDetailView.vue` | 详情页侧边栏使用动态选项和颜色 |
-| `IssueCreatePanel.vue` | 创建面板使用动态选项 |
-| `BatchActionToolbar.vue` | 批量操作使用动态选项 |
-| `FilterBar.vue` | 筛选器增加 Show-stopper 选项 |
-| `fieldLabels.ts` | 增加 Show-stopper 中文映射 |
+| 前端组件（5 个） | 动态加载优先级选项，彩色方块替代圆点 |
+
+### 修复方案（第 2 轮 - code review 反馈）
+| 文件 | 改动说明 |
+|------|----------|
+| `IssueController.java` | MUST-1: 使用 CustomFieldConverter.toOptionVOList() 替代手动映射 |
+| `V250__normalize_priority_medium_to_normal.sql` | MUST-2: 清理 medium 脏数据 |
+| `PriorityFieldService.java` | MUST-2: 新增 normalizePriority() + case-insensitive 验证 |
+| `IssueExportService.java` | 合并 localizePriority switch 分支 + 支持 medium |
+| `components.css` | SHOULD: 提取 .priority-badge 全局样式 |
+| `IssueListView/IssueCreatePanel/BatchActionToolbar` | SHOULD: 移除重复 .priority-badge 定义 |
+| `fieldLabels.ts` / `usePriorityOptions.ts` | MUST-2: 添加 medium 映射 |
 
 ### 影响范围
 - 工单列表页（优先级列展示和行内编辑）

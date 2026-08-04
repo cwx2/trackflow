@@ -5,6 +5,7 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.customfield.converter.CustomFieldConverter;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.*;
@@ -39,6 +40,7 @@ public class IssueController {
     private final IssueService issueService;
     private final IssueExportService issueExportService;
     private final IssueConverter issueConverter;
+    private final CustomFieldConverter customFieldConverter;
     private final WorkflowService workflowService;
     private final IssueLinkService linkService;
     private final IssueLinkTypeService linkTypeService;
@@ -539,18 +541,6 @@ public class IssueController {
     public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getPriorityOptions(
             @RequestParam("projectId") Long projectId) {
         var options = priorityFieldService.getPriorityOptions(projectId);
-        return R.ok(options.stream().map(opt -> {
-            var vo = new com.trackflow.customfield.vo.CustomFieldOptionVO();
-            vo.setId(String.valueOf(opt.getId()));
-            vo.setCustomFieldId(String.valueOf(opt.getCustomFieldId()));
-            vo.setProjectId(opt.getProjectId() != null ? String.valueOf(opt.getProjectId()) : null);
-            vo.setValue(opt.getValue());
-            vo.setPosition(opt.getPosition());
-            vo.setIsDefault(opt.getIsDefault());
-            vo.setIsArchived(opt.getIsArchived());
-            vo.setColor(opt.getColor());
-            vo.setDescription(opt.getDescription());
-            return vo;
-        }).toList());
+        return R.ok(customFieldConverter.toOptionVOList(options));
     }
 }

@@ -70,3 +70,14 @@
 .tippy-box[data-animation='shift-away'][data-state='hidden'][data-placement^='bottom'] {
   transform: translateY(-8px);
 }
+
+/* ====== Priority Badge ====== */
+.priority-badge {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}

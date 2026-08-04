@@ -72,8 +72,24 @@ public class PriorityFieldService {
         if (priority == null || priority.isBlank()) {
             return true; // 允许为空（由字段配置的 canBeEmpty 控制）
         }
+        // 兼容旧数据：medium 映射为 Normal
+        String normalized = normalizePriority(priority);
         List<CustomFieldOption> options = getPriorityOptions(projectId);
-        return options.stream().anyMatch(opt -> opt.getValue().equals(priority));
+        return options.stream().anyMatch(opt -> opt.getValue().equalsIgnoreCase(normalized));
+    }
+
+    /**
+     * 规范化优先级值（兼容旧数据中的 medium 等脏数据）。
+     *
+     * @param priority 原始优先级值
+     * @return 规范化后的优先级值
+     */
+    public String normalizePriority(String priority) {
+        if (priority == null) return null;
+        if ("medium".equalsIgnoreCase(priority)) {
+            return "Normal";
+        }
+        return priority;
     }
 
     /**

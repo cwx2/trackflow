@@ -80,11 +80,13 @@ export const priorityLabelMap: Record<string, string> = {
   'Show-stopper': '阻塞',
   Critical: '紧急',
   High: '高',
+  Medium: '普通',
   Normal: '普通',
   Low: '低',
   'show-stopper': '阻塞',
   critical: '紧急',
   high: '高',
+  medium: '普通',
   normal: '普通',
   low: '低',
 }

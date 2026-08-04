@@ -1946,7 +1946,7 @@ onMounted(() => {
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
-.priority-badge { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; flex-shrink: 0; }
+.priority-badge { margin-right: 6px; }
 .priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .priority-dot.critical { background: #ef4444; }
 .priority-dot.high { background: #f59e0b; }

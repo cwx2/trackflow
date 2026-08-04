@@ -951,13 +951,6 @@ function confirmBatchDelete() {
   color: var(--tf-text-tertiary);
 }
 
-.priority-badge {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
 .priority-dot {
   display: inline-block;
   width: 8px;

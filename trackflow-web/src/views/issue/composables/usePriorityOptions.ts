@@ -27,6 +27,7 @@ const FALLBACK_LABELS: Record<string, string> = {
   'Show-stopper': '阻塞',
   'Critical': '紧急',
   'High': '高',
+  'Medium': '普通',
   'Normal': '普通',
   'Low': '低',
 }
@@ -36,6 +37,7 @@ const FALLBACK_COLORS: Record<string, string> = {
   'Show-stopper': '#b91c1c',
   'Critical': '#ef4444',
   'High': '#f59e0b',
+  'Medium': '#6366f1',
   'Normal': '#6366f1',
   'Low': '#64748b',
 }
