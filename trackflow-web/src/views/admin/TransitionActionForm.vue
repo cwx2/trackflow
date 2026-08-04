@@ -438,8 +438,8 @@ async function loadCustomFields() {
   if (!props.projectId || props.projectId === '0') return
   fieldsLoading.value = true
   try {
-    const res = await customFieldApi.list({ pageSize: 200 })
-    customFields.value = ((res.data as any)?.list || []).map((f: any) => ({
+    const res = await customFieldApi.listByProject(props.projectId)
+    customFields.value = (res.data || []).map((f: any) => ({
       id: f.id,
       name: f.name,
       fieldType: f.fieldFormat || f.fieldType || 'text'

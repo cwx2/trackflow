@@ -25,7 +25,7 @@
           <div class="action-main">
             <div class="action-header">
               <a-tag color="arcoblue" size="small">{{ actionTypeLabel(action.actionType) }}</a-tag>
-              <span class="strategy-desc">{{ strategyDescription(action.actionConfig) }}</span>
+              <span class="strategy-desc">{{ strategyDescription(action.actionConfig, action.actionType) }}</span>
               <a-tooltip v-if="action.pathValid === false" content="该动作绑定的转换路径已被删除，动作不会触发">
                 <icon-exclamation-circle-fill class="path-warning-icon" />
               </a-tooltip>
@@ -206,20 +206,20 @@ function strategyLabel(strategy: string): string {
   return map[strategy] || strategy
 }
 
-function strategyDescription(config: TransitionActionVO['actionConfig']): string {
-  // For non-auto_assign action types, show relevant config info
-  if (config.comment_template) {
-    const template = config.comment_template
-    return template.length > 30 ? template.substring(0, 30) + '...' : template
+function strategyDescription(config: TransitionActionVO['actionConfig'], actionType?: string): string {
+  // 根据动作类型展示对应配置信息
+  if (actionType === 'add_comment') {
+    const template = config.comment_template || ''
+    return template.length > 30 ? template.substring(0, 30) + '...' : (template || '默认模板')
   }
-  if (config.tag_name) {
-    return `标签: ${config.tag_name}`
+  if (actionType === 'add_tag') {
+    return config.tag_name ? `标签: ${config.tag_name}` : '未指定标签'
   }
-  if (config.required_field_id) {
-    return config.required_field_name || `字段 #${config.required_field_id}`
+  if (actionType === 'require_field') {
+    return config.required_field_name || (config.required_field_id ? `字段 #${config.required_field_id}` : '未指定字段')
   }
 
-  // auto_assign strategy description
+  // auto_assign 分配策略描述
   switch (config.strategy) {
     case 'specific_user':
       return '指定用户'

@@ -12,11 +12,22 @@ export interface TransitionActionVO {
   newStatusName?: string
   actionType: string
   actionConfig: {
-    strategy: string
+    // auto_assign 相关
+    strategy?: string
     user_id?: number
     role_id?: number
     mode?: string
     fallback_strategy?: string
+    weights?: Record<string, number>
+    // add_comment 相关
+    comment_template?: string
+    // add_tag 相关
+    tag_id?: number
+    tag_name?: string
+    // require_field 相关
+    required_field_id?: number
+    required_field_name?: string
+    warning_message?: string
   }
   sortOrder: number
   enabled: boolean
