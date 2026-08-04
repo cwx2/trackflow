@@ -2,6 +2,8 @@ package com.trackflow.customfield.vo;
 
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class CustomFieldOptionVO {
     private String id;
@@ -22,4 +24,8 @@ public class CustomFieldOptionVO {
     private String ownerUserId;
     /** 选项负责人显示名（后端填充，前端直接展示） */
     private String ownerDisplayName;
+    /** 版本发布日期（仅 version 类型使用） */
+    private LocalDate releaseDate;
+    /** 是否已正式发布（仅 version 类型使用） */
+    private Boolean isReleased;
 }

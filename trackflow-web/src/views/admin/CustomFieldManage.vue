@@ -88,7 +88,7 @@
                 </a-table-column>
                 <a-table-column title="选项值" :width="220">
                   <template #cell="{ record }">
-                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField') && record.options && record.options.length > 0">
+                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version') && record.options && record.options.length > 0">
                       <div class="options-inline">
                         <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
                           <span
@@ -334,9 +334,9 @@
           </a-form-item>
         </template>
 
-        <!-- list/state 类型选项管理 -->
-        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField'">
-          <a-form-item v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField'" label="多值选择">
+        <!-- list/state/version 类型选项管理 -->
+        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version'">
+          <a-form-item v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version'" label="多值选择">
             <a-switch v-model="form.isMulti" :disabled="isMultiDisabled" />
             <div class="form-help">
               <template v-if="isMultiDisabled">
@@ -713,7 +713,8 @@ const fieldTypeOptions = [
   { value: 'ownedField', label: '子系统(Owned Field)' },
   { value: 'state', label: '状态(State)' },
   { value: 'user', label: '用户' },
-  { value: 'period', label: '时间周期' }
+  { value: 'period', label: '时间周期' },
+  { value: 'version', label: '版本(Version)' }
 ]
 
 function formatTypeLabel(format: string) {

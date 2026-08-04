@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -23,7 +24,7 @@ public class CreateCustomFieldDTO {
     private Integer maxLength = 0;
     private String regexp;
 
-    /** 列表类型是否支持多值选择（仅 list 类型有效） */
+    /** 列表类型是否支持多值选择（仅 list/version 类型有效） */
     private Boolean isMulti = false;
 
     /** 是否在工单列表的默认列选择器中隐藏 */
@@ -67,5 +68,9 @@ public class CreateCustomFieldDTO {
         private Boolean isResolved;
         /** 仅 ownedField 类型使用：选项负责人用户 ID */
         private Long ownerUserId;
+        /** 仅 version 类型使用：版本发布日期 */
+        private LocalDate releaseDate;
+        /** 仅 version 类型使用：是否已正式发布 */
+        private Boolean isReleased;
     }
 }

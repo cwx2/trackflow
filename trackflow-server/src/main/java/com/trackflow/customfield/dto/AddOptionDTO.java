@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 /**
  * 内联添加枚举字段选项值 DTO。
  * 用于工单详情页/创建表单中直接添加新选项。
@@ -20,4 +22,10 @@ public class AddOptionDTO {
 
     /** 选项负责人用户 ID（仅 ownedField 类型使用，可选） */
     private Long ownerUserId;
+
+    /** 版本发布日期（仅 version 类型使用，可选） */
+    private LocalDate releaseDate;
+
+    /** 是否已正式发布（仅 version 类型使用，可选） */
+    private Boolean isReleased;
 }

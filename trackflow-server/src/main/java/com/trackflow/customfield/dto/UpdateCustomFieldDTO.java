@@ -64,5 +64,9 @@ public class UpdateCustomFieldDTO {
         private Boolean isResolved;
         /** 仅 ownedField 类型使用：选项负责人用户 ID */
         private Long ownerUserId;
+        /** 仅 version 类型使用：版本发布日期 */
+        private java.time.LocalDate releaseDate;
+        /** 仅 version 类型使用：是否已正式发布 */
+        private Boolean isReleased;
     }
 }

@@ -335,9 +335,9 @@
                 size="small"
                 @change="(v: any) => { customFieldValues[cf.id] = String(v); clearFieldError(cf.id) }"
               />
-              <!-- list/ownedField (多值模式) -->
+              <!-- list/ownedField/version (多值模式) -->
               <a-select
-                v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && cf.isMulti"
+                v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && cf.isMulti"
                 :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
                 @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(','); clearFieldError(cf.id) }"
                 size="small"
@@ -362,9 +362,9 @@
                   </div>
                 </template>
               </a-select>
-              <!-- list/ownedField (单值模式) -->
+              <!-- list/ownedField/version (单值模式) -->
               <a-select
-                v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField'"
+                v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
                 :placeholder="getFieldPlaceholder(cf)"
@@ -483,9 +483,9 @@
                   size="small"
                   @change="(v: any) => { customFieldValues[cf.id] = String(v) }"
                 />
-                <!-- list/ownedField (多值模式) -->
+                <!-- list/ownedField/version (多值模式) -->
                 <a-select
-                  v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && cf.isMulti"
+                  v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && cf.isMulti"
                   :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
                   @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(',') }"
                   size="small"
@@ -508,9 +508,9 @@
                     </div>
                   </template>
                 </a-select>
-                <!-- list/ownedField (单值模式) -->
+                <!-- list/ownedField/version (单值模式) -->
                 <a-select
-                  v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField'"
+                  v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version'"
                   v-model="customFieldValues[cf.id]"
                   size="small"
                   :placeholder="getFieldPlaceholder(cf)"

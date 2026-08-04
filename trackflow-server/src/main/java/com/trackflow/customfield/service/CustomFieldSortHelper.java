@@ -32,7 +32,7 @@ public class CustomFieldSortHelper {
      * 支持排序的自定义字段类型
      */
     private static final Set<String> SORTABLE_FIELD_FORMATS = Set.of(
-            "string", "int", "float", "date", "datetime", "list", "user", "state", "ownedField"
+            "string", "int", "float", "date", "datetime", "list", "user", "state", "ownedField", "version"
     );
 
     /**
@@ -113,7 +113,7 @@ public class CustomFieldSortHelper {
                     "(SELECT cfv.value::DOUBLE PRECISION FROM custom_field_value cfv " +
                     "WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = " + cfId +
                     " AND cfv.is_multi = false AND cfv.value IS NOT NULL AND cfv.value != '' LIMIT 1)";
-            case "list", "state", "ownedField" ->
+            case "list", "state", "ownedField", "version" ->
                     // 按选项的 position 排序（管理员定义的选项顺序）
                     "(SELECT cfo.position FROM custom_field_value cfv " +
                     "JOIN custom_field_option cfo ON cfo.id = cfv.value::BIGINT " +

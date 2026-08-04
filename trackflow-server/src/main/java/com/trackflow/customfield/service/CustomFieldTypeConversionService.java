@@ -65,6 +65,9 @@ public class CustomFieldTypeConversionService {
         // ownedField 可转换为 list（丢弃 owner 信息）或 string
         CONVERSION_RULES.put("ownedField", Set.of("list", "string"));
 
+        // version 可转换为 list（丢弃 releaseDate/released 信息）或 string
+        CONVERSION_RULES.put("version", Set.of("list", "string"));
+
         // bool 和 user 类型没有可用转换
         CONVERSION_RULES.put("bool", Set.of());
         CONVERSION_RULES.put("user", Set.of());
@@ -545,6 +548,7 @@ public class CustomFieldTypeConversionService {
             case "bool" -> "布尔值";
             case "list" -> "枚举列表";
             case "user" -> "用户";
+            case "version" -> "版本";
             default -> format;
         };
     }

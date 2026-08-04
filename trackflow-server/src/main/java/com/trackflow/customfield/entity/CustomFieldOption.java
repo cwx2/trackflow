@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -55,6 +56,12 @@ public class CustomFieldOption implements Serializable {
 
     /** 选项负责人用户 ID（仅 ownedField 类型使用），指向 sys_user */
     private Long ownerUserId;
+
+    /** 版本发布日期（仅 version 类型使用），实际或预计发布日期 */
+    private LocalDate releaseDate;
+
+    /** 是否已正式发布（仅 version 类型使用）。影响下拉排序逻辑。 */
+    private Boolean isReleased;
 
     private LocalDateTime createdAt;
 

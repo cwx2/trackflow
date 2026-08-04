@@ -1135,6 +1135,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
     switch (cf.fieldFormat) {
       case 'list':
       case 'ownedField':
+      case 'version':
         editType = isMulti ? 'multi-select' : 'select'
         // Only show active (non-archived) options in the selector;
         // if current value references an archived option, it's still displayed via displayValue
@@ -1172,7 +1173,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
 
     // 确定颜色（仅 list/ownedField 类型且有颜色配置时）
     let fieldColor: string | undefined
-    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && stored) {
+    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && stored) {
       if (isMulti && stored.colors?.length) {
         // 多值：取第一个有颜色的
         fieldColor = stored.colors.find(c => c != null) || undefined
@@ -1191,7 +1192,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       rawValues: isMulti ? rawValues : undefined,
       readonly: !canEdit || cf.editable === false,
       options,
-      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && canManageCustomFieldsComputed.value,
+      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && canManageCustomFieldsComputed.value,
       customFieldId: cf.id,
       isSetValuePrompt,
       // 空值自定义字段（无 requiresExplicitSelection、无值）：默认折叠

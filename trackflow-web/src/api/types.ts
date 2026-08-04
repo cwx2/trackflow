@@ -671,7 +671,7 @@ export interface SavedQueryVO {
 export interface CustomFieldDefinitionVO {
   id: string
   name: string
-  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user' | 'ownedField'
+  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user' | 'ownedField' | 'version'
   isRequired: boolean
   isForAll: boolean
   isMulti: boolean
@@ -768,6 +768,10 @@ export interface CustomFieldOptionVO {
   ownerUserId?: string | null
   /** 选项负责人显示名（后端填充） */
   ownerDisplayName?: string | null
+  /** 版本发布日期（仅 version 类型使用） */
+  releaseDate?: string | null
+  /** 是否已正式发布（仅 version 类型使用） */
+  isReleased?: boolean
 }
 
 /** 选项集状态 VO */

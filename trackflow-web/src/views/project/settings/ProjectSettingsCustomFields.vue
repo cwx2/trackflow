@@ -567,7 +567,7 @@ function formatDefaultValue(field: CustomFieldDefinitionVO, useGlobalDefault = f
   if (!defaultValue) return ''
 
   // 列表/状态类型：从 options 中查找选项名称
-  if ((field.fieldFormat === 'list' || field.fieldFormat === 'state') && field.options && field.options.length > 0) {
+  if ((field.fieldFormat === 'list' || field.fieldFormat === 'state' || field.fieldFormat === 'version') && field.options && field.options.length > 0) {
     const option = field.options.find(opt => opt.id === defaultValue)
     if (option) {
       return option.value

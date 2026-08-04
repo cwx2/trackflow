@@ -35,7 +35,7 @@ public class CustomFieldValidationEngine {
     private final ProjectMemberMapper projectMemberMapper;
 
     public static final Set<String> SUPPORTED_FORMATS = Set.of(
-            "string", "text", "int", "float", "date", "datetime", "bool", "list", "user", "period", "state", "ownedField"
+            "string", "text", "int", "float", "date", "datetime", "bool", "list", "user", "period", "state", "ownedField", "version"
     );
 
     /** 无项目上下文时使用的兼容入口。 */
@@ -97,7 +97,7 @@ public class CustomFieldValidationEngine {
             case "date" -> validateDate(field, value, errors);
             case "datetime" -> validateDatetime(field, value, errors);
             case "bool" -> validateBool(field, value, errors);
-            case "list", "state", "ownedField" -> validateList(field, value, errors);
+            case "list", "state", "ownedField", "version" -> validateList(field, value, errors);
             case "user" -> validateUser(field, value, projectId, errors);
             case "period" -> validatePeriod(field, value, errors);
             default -> {

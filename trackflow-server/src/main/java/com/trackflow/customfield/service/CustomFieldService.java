@@ -64,13 +64,17 @@ public class CustomFieldService {
      *   <li>1000000000000000002 = Type (V251)</li>
      *   <li>1000000000000000003 = Due Date (V252)</li>
      *   <li>1000000000000000004 = State (V253)</li>
+     *   <li>1000000000000000005 = Fix versions (V256)</li>
+     *   <li>1000000000000000006 = Affected versions (V256)</li>
      * </ul>
      */
     public static final java.util.Set<Long> BUILTIN_FIELD_IDS = java.util.Set.of(
             1000000000000000001L,
             1000000000000000002L,
             1000000000000000003L,
-            1000000000000000004L
+            1000000000000000004L,
+            1000000000000000005L,
+            1000000000000000006L
     );
 
     /** State 内置字段 ID，用于特殊处理逻辑 */
@@ -121,7 +125,7 @@ public class CustomFieldService {
         entity.setMaxLength(dto.getMaxLength());
         entity.setRegexp(dto.getRegexp());
         entity.setPosition(position);
-        entity.setIsMulti(("list".equals(dto.getFieldFormat()) || "ownedField".equals(dto.getFieldFormat())) && Boolean.TRUE.equals(dto.getIsMulti()));
+        entity.setIsMulti(("list".equals(dto.getFieldFormat()) || "ownedField".equals(dto.getFieldFormat()) || "version".equals(dto.getFieldFormat())) && Boolean.TRUE.equals(dto.getIsMulti()));
         entity.setIsHiddenInList(Boolean.TRUE.equals(dto.getIsHiddenInList()));
         entity.setAliases(dto.getAliases());
         entity.setIsPrivate(Boolean.TRUE.equals(dto.getIsPrivate()));
@@ -149,6 +153,8 @@ public class CustomFieldService {
                     option.setDescription(opt.getDescription());
                     option.setIsResolved(Boolean.TRUE.equals(opt.getIsResolved()));
                     option.setOwnerUserId(opt.getOwnerUserId());
+                    option.setReleaseDate(opt.getReleaseDate());
+                    option.setIsReleased(Boolean.TRUE.equals(opt.getIsReleased()));
                     option.setCreatedAt(LocalDateTime.now());
                     option.setUpdatedAt(LocalDateTime.now());
                     optionMapper.insert(option);
@@ -531,8 +537,8 @@ public class CustomFieldService {
 
     /** 委托给 {@link CustomFieldOptionService} */
     @Transactional(rollbackFor = Exception.class)
-    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId) {
-        return optionService.addOptionInline(projectId, fieldId, value, color, ownerUserId);
+    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId, java.time.LocalDate releaseDate, Boolean isReleased) {
+        return optionService.addOptionInline(projectId, fieldId, value, color, ownerUserId, releaseDate, isReleased);
     }
 
     // ========== 项目级独立选项集管理（Make Independent Copy）==========
@@ -1002,7 +1008,7 @@ public class CustomFieldService {
         if (condField == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "条件源字段不存在");
         }
-        if (!"list".equals(condField.getFieldFormat()) && !"ownedField".equals(condField.getFieldFormat())) {
+        if (!"list".equals(condField.getFieldFormat()) && !"ownedField".equals(condField.getFieldFormat()) && !"version".equals(condField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "条件源字段必须是列表(枚举)类型");
         }
         if (Boolean.TRUE.equals(condField.getIsMulti())) {
@@ -1190,7 +1196,7 @@ public class CustomFieldService {
         }
 
         // 目标字段必须是枚举类型
-        if (!"list".equals(targetField.getFieldFormat()) && !"ownedField".equals(targetField.getFieldFormat())) {
+        if (!"list".equals(targetField.getFieldFormat()) && !"ownedField".equals(targetField.getFieldFormat()) && !"version".equals(targetField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "值过滤只适用于列表(枚举)类型字段");
         }
 
@@ -1225,7 +1231,7 @@ public class CustomFieldService {
         if (sourceField == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在");
         }
-        if (!"list".equals(sourceField.getFieldFormat()) && !"ownedField".equals(sourceField.getFieldFormat())) {
+        if (!"list".equals(sourceField.getFieldFormat()) && !"ownedField".equals(sourceField.getFieldFormat()) && !"version".equals(sourceField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段必须是列表(枚举)类型");
         }
         if (Boolean.TRUE.equals(sourceField.getIsMulti())) {
@@ -1406,7 +1412,7 @@ public class CustomFieldService {
     public List<CustomFieldDefinition> listEnumFields() {
         return definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
-                        .in(CustomFieldDefinition::getFieldFormat, "list", "state", "ownedField")
+                        .in(CustomFieldDefinition::getFieldFormat, "list", "state", "ownedField", "version")
                         .orderByAsc(CustomFieldDefinition::getPosition));
     }
 

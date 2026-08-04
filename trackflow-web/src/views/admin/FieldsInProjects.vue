@@ -537,7 +537,8 @@ const fieldTypeOptions = [
   { value: 'bool', label: '布尔' },
   { value: 'list', label: '列表(枚举)' },
   { value: 'user', label: '用户' },
-  { value: 'period', label: '时间周期' }
+  { value: 'period', label: '时间周期' },
+  { value: 'version', label: '版本(Version)' }
 ]
 
 const fieldTypeLabels: Record<string, string> = {
@@ -550,7 +551,8 @@ const fieldTypeLabels: Record<string, string> = {
   bool: '布尔',
   list: '列表(枚举)',
   user: '用户',
-  period: '时间周期'
+  period: '时间周期',
+  version: '版本(Version)'
 }
 
 // === 汇总统计 ===
