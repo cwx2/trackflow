@@ -1,6 +1,15 @@
 import request from './request'
 import type { R, PageResult, UserVO } from './types'
 
+/** 用户摘要 VO — 悬停卡片等轻量级展示 */
+export interface UserSummaryVO {
+  id: string
+  username: string
+  displayName: string
+  email?: string
+  avatarUrl?: string
+}
+
 /**
  * 用户模块 API
  */
@@ -64,6 +73,11 @@ export const userApi = {
   /** 导出用户数据（GDPR 数据可携权） */
   exportData(userId: string) {
     return request.get<any, R<UserDataExportVO>>(`/users/${userId}/export`)
+  },
+
+  /** 用户摘要信息（悬停卡片用，所有认证用户可访问） */
+  getSummary(userId: string) {
+    return request.get<any, R<UserSummaryVO>>(`/users/${userId}/summary`)
   }
 }
 

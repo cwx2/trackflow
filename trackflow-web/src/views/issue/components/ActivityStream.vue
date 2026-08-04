@@ -37,15 +37,19 @@
 
     <div class="stream-list">
       <div v-for="item in sorted" :key="item.id" class="stream-item" @mouseenter="hoveredId = item.id" @mouseleave="hoveredId = ''">
-        <div v-if="item.userAvatar" class="avatar">
-          <img :src="item.userAvatar" :alt="item.user" class="avatar-img" />
-        </div>
-        <div v-else class="avatar" :style="{ background: avatarBg(item.user) }">
-          {{ initial(item.user) }}
-        </div>
+        <UserHoverCard :user-id="item.userId">
+          <div v-if="item.userAvatar" class="avatar">
+            <img :src="item.userAvatar" :alt="item.user" class="avatar-img" />
+          </div>
+          <div v-else class="avatar" :style="{ background: avatarBg(item.user) }">
+            {{ initial(item.user) }}
+          </div>
+        </UserHoverCard>
         <div class="item-body">
           <div class="item-head">
-            <strong>{{ item.user }}</strong>
+            <UserHoverCard :user-id="item.userId">
+              <strong class="user-name-link">{{ item.user }}</strong>
+            </UserHoverCard>
             <span class="item-time">{{ item.timeAgo }}</span>
             <span v-if="item.type === 'comment' && item.isEdited" class="edited-badge">已编辑</span>
             <span v-if="item.type === 'comment' && item.visibleToGroupNames && item.visibleToGroupNames.length > 0" class="visibility-badge" :title="'仅 ' + item.visibleToGroupNames.join(', ') + ' 可见'">
@@ -221,6 +225,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
+import UserHoverCard from './UserHoverCard.vue'
 
 export interface ActivityItem {
   id: string
@@ -525,6 +530,12 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 .item-body { flex: 1; min-width: 0; }
 .item-head { display: flex; align-items: baseline; gap: 8px; }
 .item-head strong { font-size: 12px; color: var(--tf-text-primary); font-weight: 600; }
+.user-name-link {
+  font-size: 12px; color: var(--tf-text-primary); font-weight: 600;
+  transition: color 150ms;
+  cursor: pointer;
+}
+.user-name-link:hover { color: var(--tf-accent); }
 .item-time { font-size: 11px; color: var(--tf-text-muted); }
 
 .edited-badge {

@@ -1182,7 +1182,7 @@ const activityItems = computed<ActivityItem[]>(() => {
         detail = undefined
       }
     }
-    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, detail, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
+    items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userId: a.userId, userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, detail, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
   }
   return items
 })

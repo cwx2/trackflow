@@ -18,6 +18,7 @@ import com.trackflow.system.service.UserService;
 import com.trackflow.system.vo.UserDataExportVO;
 import com.trackflow.system.vo.UserDetailVO;
 import com.trackflow.system.vo.UserProfileVO;
+import com.trackflow.system.vo.UserSummaryVO;
 import com.trackflow.system.vo.UserVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -171,5 +172,19 @@ public class UserController {
     public R<UserDataExportVO> exportUserData(@PathVariable("id") Long id) {
         UserDataExportVO exportData = userService.exportUserData(id);
         return R.ok(exportData);
+    }
+
+    /**
+     * 获取用户摘要信息（头像、姓名、用户名）
+     * 用于悬停卡片等轻量级展示场景，所有认证用户可访问
+     *
+     * @param id 用户ID
+     * @return 用户摘要
+     */
+    @GetMapping("/{id}/summary")
+    @PreAuthorize("isAuthenticated()")
+    public R<UserSummaryVO> getSummary(@PathVariable("id") Long id) {
+        SysUser user = userService.getById(id);
+        return R.ok(userConverter.toSummaryVO(user));
     }
 }
