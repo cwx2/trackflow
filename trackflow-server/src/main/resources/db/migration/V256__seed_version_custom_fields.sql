@@ -1,6 +1,11 @@
 -- V256__seed_version_custom_fields.sql
--- 预置 "Fix versions" 和 "Affected versions" 两个 version 类型的全局字段。
--- 使用固定 ID 以便系统识别为内置字段。
+-- 1. 更新 CHECK 约束以允许 'version' 类型
+-- 2. 预置 "Fix versions" 和 "Affected versions" 两个 version 类型的全局字段
+
+-- 先删除旧约束，再重建包含 'version' 的新约束
+ALTER TABLE custom_field_definition DROP CONSTRAINT IF EXISTS ck_custom_field_format;
+ALTER TABLE custom_field_definition ADD CONSTRAINT ck_custom_field_format
+    CHECK (field_format IN ('string','text','int','float','date','datetime','bool','list','user','period','state','ownedField','version'));
 
 -- Fix versions（修复版本）
 INSERT INTO custom_field_definition (id, name, field_format, is_required, is_for_all, default_value, min_length, max_length, regexp, position, is_multi, is_hidden_in_list, aliases, is_private, is_auto_attach, sort_mode, created_at, updated_at)
