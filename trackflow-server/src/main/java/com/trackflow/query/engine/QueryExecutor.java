@@ -8,7 +8,9 @@ import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.customfield.mapper.CustomFieldDefinitionMapper;
+import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
 import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.mapper.IssueMapper;
@@ -47,6 +49,7 @@ public class QueryExecutor {
     private final StatusCacheHelper statusCacheHelper;
     private final CustomFieldSortHelper customFieldSortHelper;
     private final CustomFieldDefinitionMapper customFieldDefinitionMapper;
+    private final CustomFieldOptionMapper customFieldOptionMapper;
     private final SprintMapper sprintMapper;
 
     /**
@@ -673,7 +676,95 @@ public class QueryExecutor {
             case "is_not_empty" -> wrapper.apply(
                     "EXISTS (SELECT 1 FROM custom_field_value cfv WHERE cfv.issue_id = issue.id AND cfv.custom_field_id = {0} AND cfv.value IS NOT NULL AND cfv.value != '')",
                     Long.parseLong(cfKey));
+            case "between" -> applyCustomFieldBetweenFilter(wrapper, cfKey, values);
         }
+    }
+
+    /**
+     * 枚举类型自定义字段的范围查询（between 操作符）。
+     * 根据选项的 position 排序确定范围，将 "值A .. 值B" 转换为匹配所有位于 A 和 B 之间选项值的查询。
+     *
+     * 支持字段类型：list、version（拥有有序选项的枚举类型）
+     * 不支持字段类型：user、state
+     *
+     * @param wrapper 查询包装器
+     * @param cfKey   自定义字段 ID（已校验格式）
+     * @param values  两个值的列表 [起始值, 结束值]
+     */
+    private void applyCustomFieldBetweenFilter(QueryWrapper<Issue> wrapper, String cfKey, List<String> values) {
+        if (values == null || values.size() < 2) {
+            log.warn("自定义字段 between 操作符需要两个值，实际收到: {}", values);
+            return;
+        }
+
+        Long fieldId = Long.parseLong(cfKey);
+        String startValue = values.get(0);
+        String endValue = values.get(1);
+
+        // 查找该字段的所有全局选项（按 position 排序）
+        List<CustomFieldOption> options = customFieldOptionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, fieldId)
+                        .isNull(CustomFieldOption::getProjectId)
+                        .orderByAsc(CustomFieldOption::getPosition)
+        );
+
+        if (options.isEmpty()) {
+            log.warn("自定义字段 {} 没有选项，范围查询无效", cfKey);
+            wrapper.apply("1 = 0");
+            return;
+        }
+
+        // 查找起始值和结束值的 position（先按选项 label 匹配，再按选项 ID 匹配）
+        Integer startPos = null;
+        Integer endPos = null;
+        for (CustomFieldOption option : options) {
+            // 先尝试按 label（option.value）匹配
+            if (option.getValue().equals(startValue)) {
+                startPos = option.getPosition();
+            }
+            if (option.getValue().equals(endValue)) {
+                endPos = option.getPosition();
+            }
+        }
+
+        // 如果按 label 未匹配，尝试按 option ID 匹配（支持 saved query 传入 ID 的场景）
+        if (startPos == null || endPos == null) {
+            for (CustomFieldOption option : options) {
+                if (startPos == null && String.valueOf(option.getId()).equals(startValue)) {
+                    startPos = option.getPosition();
+                }
+                if (endPos == null && String.valueOf(option.getId()).equals(endValue)) {
+                    endPos = option.getPosition();
+                }
+            }
+        }
+
+        if (startPos == null || endPos == null) {
+            log.warn("自定义字段 {} 范围查询的边界值无效: {} .. {}", cfKey, startValue, endValue);
+            wrapper.apply("1 = 0");
+            return;
+        }
+
+        // 确保 startPos <= endPos（如果反向则交换）
+        int minPos = Math.min(startPos, endPos);
+        int maxPos = Math.max(startPos, endPos);
+
+        // 收集 position 在范围内的所有选项 ID（custom_field_value.value 存储的是选项 ID）
+        List<String> rangeOptionIds = options.stream()
+                .filter(opt -> opt.getPosition() != null
+                        && opt.getPosition() >= minPos
+                        && opt.getPosition() <= maxPos)
+                .map(opt -> String.valueOf(opt.getId()))
+                .collect(Collectors.toList());
+
+        if (rangeOptionIds.isEmpty()) {
+            wrapper.apply("1 = 0");
+            return;
+        }
+
+        // 转换为 IN 查询（复用已有的参数化 IN 逻辑）
+        applyCustomFieldInFilter(wrapper, cfKey, rangeOptionIds, false);
     }
 
     /**

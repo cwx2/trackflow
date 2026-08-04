@@ -171,7 +171,7 @@ function getAllFields(): FieldDef[] {
 function getOperatorHints(): Suggestion[] {
   return [
     { id: 'op-comma', label: ',', hint: '多值（或关系）', insertText: ', ', type: 'operator' },
-    { id: 'op-range', label: '..', hint: '值范围（日期/数值）', insertText: ' .. ', type: 'operator' },
+    { id: 'op-range', label: '..', hint: '值范围（日期/数值/枚举排序）', insertText: ' .. ', type: 'operator' },
     { id: 'op-exclude', label: '-', hint: '排除值', insertText: '-', type: 'operator' },
     { id: 'op-empty', label: '无', hint: '字段为空', insertText: '无', type: 'keyword' },
     { id: 'op-any', label: '有', hint: '字段非空', insertText: '有', type: 'keyword' },
