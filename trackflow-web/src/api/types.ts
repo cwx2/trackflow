@@ -302,6 +302,8 @@ export interface IssueVO {
   voteCount?: number
   /** 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户） */
   visibility?: string
+  /** 工单关联的标签列表（列表查询时批量填充） */
+  tags?: IssueTagVO[]
 }
 
 export interface IssueDetailVO extends IssueVO {

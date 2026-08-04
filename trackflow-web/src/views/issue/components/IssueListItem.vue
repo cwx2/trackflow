@@ -51,7 +51,17 @@
     <!-- Title -->
     <span class="item-title">{{ issue.title }}</span>
 
-    <!-- Tags placeholder (if any) -->
+    <!-- Tags (colored badges, max 3 shown) -->
+    <template v-if="issue.tags && issue.tags.length > 0">
+      <span
+        v-for="tag in visibleTags"
+        :key="tag.id"
+        class="item-tag-badge"
+        :style="{ background: tag.color || '#6b7280' }"
+        :title="tag.name"
+      >{{ tag.name }}</span>
+      <span v-if="overflowTagCount > 0" class="item-tag-overflow" :title="overflowTagNames">+{{ overflowTagCount }}</span>
+    </template>
 
     <!-- Meta: child progress -->
     <span v-if="issue.childCount && issue.childCount > 0" class="item-meta-badge" :title="`${issue.childClosedCount || 0}/${issue.childCount} 子任务`">
@@ -282,6 +292,19 @@ const limitedCustomFieldDetails = computed((): CustomFieldValueVO[] => {
   return (props.issue.customFieldDetails || []).slice(0, 4)
 })
 
+// Tags: max 3 visible, rest as +N
+const MAX_VISIBLE_TAGS = 3
+const visibleTags = computed(() => {
+  return (props.issue.tags || []).slice(0, MAX_VISIBLE_TAGS)
+})
+const overflowTagCount = computed(() => {
+  const total = (props.issue.tags || []).length
+  return total > MAX_VISIBLE_TAGS ? total - MAX_VISIBLE_TAGS : 0
+})
+const overflowTagNames = computed(() => {
+  return (props.issue.tags || []).slice(MAX_VISIBLE_TAGS).map(t => t.name).join(', ')
+})
+
 // Time progress: use derived values for parent issues, direct values for leaf issues
 const effectiveEstimated = computed(() => {
   if (props.issue.derivedEstimatedHours != null && props.issue.derivedEstimatedHours > 0) {
@@ -505,6 +528,30 @@ function truncateDescription(desc?: string): string {
   padding: 1px 5px;
   background: var(--tf-bg-hover, var(--color-fill-1));
   border-radius: 3px;
+}
+
+/* Tag badges */
+.item-tag-badge {
+  flex-shrink: 0;
+  display: inline-block;
+  max-width: 72px;
+  font-size: 11px;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.item-tag-overflow {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
+  padding: 1px 3px;
+  font-weight: 500;
 }
 
 /* Time */

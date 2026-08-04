@@ -665,6 +665,16 @@
         </template>
         <template #title-cell="{ record }">
           <span class="issue-title-text">{{ record.title }}</span>
+          <template v-if="record.tags && record.tags.length > 0">
+            <span
+              v-for="tag in record.tags.slice(0, 3)"
+              :key="tag.id"
+              class="issue-tag-badge"
+              :style="{ background: tag.color || '#6b7280' }"
+              :title="tag.name"
+            >{{ tag.name }}</span>
+            <span v-if="record.tags.length > 3" class="issue-tag-overflow" :title="record.tags.slice(3).map((t: any) => t.name).join(', ')">+{{ record.tags.length - 3 }}</span>
+          </template>
         </template>
         <template #assignee="{ record }">
           <div @click.stop>
@@ -4379,7 +4389,31 @@ onBeforeRouteLeave((_to, _from, next) => {
 
 .issue-key { color: var(--tf-accent); font-weight: 500; font-size: 12px; text-decoration: none; cursor: pointer; }
 .issue-key:hover { text-decoration: underline; }
-.issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.issue-title-text { color: var(--tf-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Tag badges (inline in title cell) */
+.issue-tag-badge {
+  display: inline-block;
+  max-width: 72px;
+  font-size: 11px;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 4px;
+  line-height: 1.4;
+}
+.issue-tag-overflow {
+  font-size: 10px;
+  color: var(--tf-text-tertiary, var(--color-text-3));
+  margin-left: 2px;
+  font-weight: 500;
+  vertical-align: middle;
+}
 
 /* Resolved issue styling (YouTrack: strikethrough key + gray text) */
 .issue-table :deep(.issue-resolved) .issue-key { text-decoration: line-through; color: var(--tf-text-tertiary); }

@@ -85,4 +85,7 @@ public class IssueVO {
      * 默认 public。
      */
     private String visibility;
+
+    /** 工单关联的标签列表（列表查询时批量填充） */
+    private List<IssueTagVO> tags;
 }

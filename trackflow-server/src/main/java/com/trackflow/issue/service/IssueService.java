@@ -522,6 +522,7 @@ public class IssueService {
         fillSprintInfo(result.getRecords(), voList);
         fillMultiSprintInfo(result.getRecords(), voList);
         fillCustomFieldValues(result.getRecords(), voList);
+        fillTagInfo(result.getRecords(), voList);
 
         return new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
@@ -791,6 +792,30 @@ public class IssueService {
                 if (!cfColors.isEmpty()) {
                     voList.get(i).setCustomFieldColors(cfColors);
                 }
+            }
+        }
+    }
+
+    /**
+     * 批量填充工单标签信息（list 查询使用）。
+     */
+    private void fillTagInfo(List<Issue> issues, List<IssueVO> voList) {
+        List<Long> issueIds = issues.stream().map(Issue::getId).toList();
+        if (issueIds.isEmpty()) return;
+
+        Map<Long, List<IssueTag>> tagMap = tagService.batchListIssueTags(issueIds);
+        for (int i = 0; i < issues.size(); i++) {
+            Long issueId = issues.get(i).getId();
+            List<IssueTag> tags = tagMap.get(issueId);
+            if (tags != null && !tags.isEmpty()) {
+                List<IssueTagVO> tagVOs = tags.stream().map(tag -> {
+                    IssueTagVO vo = new IssueTagVO();
+                    vo.setId(String.valueOf(tag.getId()));
+                    vo.setName(tag.getName());
+                    vo.setColor(tag.getColor());
+                    return vo;
+                }).toList();
+                voList.get(i).setTags(tagVOs);
             }
         }
     }

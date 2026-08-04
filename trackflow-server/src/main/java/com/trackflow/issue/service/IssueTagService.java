@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -93,6 +96,43 @@ public class IssueTagService {
         }
         List<Long> tagIds = relations.stream().map(IssueTagRelation::getTagId).toList();
         return tagMapper.selectBatchIds(tagIds);
+    }
+
+    /**
+     * 批量获取多个 Issue 的标签映射（避免 N+1）。
+     *
+     * @param issueIds 工单 ID 列表
+     * @return Map: issueId → 该工单的标签列表
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, List<IssueTag>> batchListIssueTags(List<Long> issueIds) {
+        if (issueIds == null || issueIds.isEmpty()) {
+            return Map.of();
+        }
+        // 一次查询获取所有关联关系
+        List<IssueTagRelation> relations = tagRelationMapper.selectList(
+                new LambdaQueryWrapper<IssueTagRelation>()
+                        .in(IssueTagRelation::getIssueId, issueIds)
+        );
+        if (relations.isEmpty()) {
+            return Map.of();
+        }
+        // 收集所有 tagId，一次查询获取所有标签实体
+        Set<Long> tagIdSet = relations.stream()
+                .map(IssueTagRelation::getTagId)
+                .collect(Collectors.toSet());
+        Map<Long, IssueTag> tagMap = tagMapper.selectBatchIds(tagIdSet).stream()
+                .collect(Collectors.toMap(IssueTag::getId, t -> t, (a, b) -> a));
+
+        // 按 issueId 分组
+        Map<Long, List<IssueTag>> result = new java.util.HashMap<>();
+        for (IssueTagRelation rel : relations) {
+            IssueTag tag = tagMap.get(rel.getTagId());
+            if (tag != null) {
+                result.computeIfAbsent(rel.getIssueId(), k -> new java.util.ArrayList<>()).add(tag);
+            }
+        }
+        return result;
     }
 
     /**
