@@ -530,6 +530,11 @@ public class CustomFieldService {
         optionService.setOptionArchived(fieldId, optionId, archived);
     }
 
+    /** 委托给 {@link CustomFieldOptionService}：合并另一个字段的选项到当前字段 */
+    public int[] mergeOptionsFromField(Long targetFieldId, Long sourceFieldId) {
+        return optionService.mergeOptionsFromField(targetFieldId, sourceFieldId);
+    }
+
     /** 委托给 {@link CustomFieldOptionService} */
     public List<OptionUsageItemVO> getOptionUsage(Long id) {
         return optionService.getOptionUsage(id);

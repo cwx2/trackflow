@@ -1231,6 +1231,95 @@ public class CustomFieldOptionService {
     }
 
     /**
+     * 合并另一个枚举字段的活跃选项到目标字段（全局选项集）。
+     * <p>
+     * 规则：
+     * <ul>
+     *   <li>只合并源字段的活跃选项（isArchived=false），已归档的跳过</li>
+     *   <li>名称重复（不区分大小写）的选项跳过，不重复添加</li>
+     *   <li>新选项追加在目标字段现有选项末尾</li>
+     * </ul>
+     *
+     * @param targetFieldId 目标字段 ID（接收选项的字段）
+     * @param sourceFieldId 源字段 ID（提供选项的字段）
+     * @return [addedCount, skippedCount, totalCount]
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int[] mergeOptionsFromField(Long targetFieldId, Long sourceFieldId) {
+        CustomFieldDefinition targetField = definitionMapper.selectById(targetFieldId);
+        CustomFieldDefinition sourceField = definitionMapper.selectById(sourceFieldId);
+        if (targetField == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标字段不存在: " + targetFieldId);
+        }
+        if (sourceField == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在: " + sourceFieldId);
+        }
+        if (!isEnumLikeFormat(targetField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "目标字段不是枚举类型，无法合并选项");
+        }
+        if (!isEnumLikeFormat(sourceField.getFieldFormat())) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "源字段不是枚举类型，无法提供选项");
+        }
+        if (targetFieldId.equals(sourceFieldId)) {
+            throw new BusinessException(ErrorCode.INVALID_PARAMETER, "不能将字段的选项合并到自身");
+        }
+
+        // 获取源字段的活跃全局选项
+        List<CustomFieldOption> sourceOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, sourceFieldId)
+                        .isNull(CustomFieldOption::getProjectId)
+                        .eq(CustomFieldOption::getIsArchived, false)
+                        .orderByAsc(CustomFieldOption::getPosition));
+
+        // 获取目标字段的全局选项（含归档，用于判重）
+        List<CustomFieldOption> targetOptions = optionMapper.selectList(
+                new LambdaQueryWrapper<CustomFieldOption>()
+                        .eq(CustomFieldOption::getCustomFieldId, targetFieldId)
+                        .isNull(CustomFieldOption::getProjectId));
+        Set<String> existingValues = targetOptions.stream()
+                .map(o -> o.getValue().toLowerCase())
+                .collect(Collectors.toSet());
+
+        int maxPosition = targetOptions.stream()
+                .mapToInt(CustomFieldOption::getPosition)
+                .max()
+                .orElse(-1);
+
+        int addedCount = 0;
+        int skippedCount = 0;
+
+        for (CustomFieldOption sourceOpt : sourceOptions) {
+            String valueLower = sourceOpt.getValue().toLowerCase();
+            if (existingValues.contains(valueLower)) {
+                skippedCount++;
+            } else {
+                CustomFieldOption newOption = new CustomFieldOption();
+                newOption.setCustomFieldId(targetFieldId);
+                newOption.setValue(sourceOpt.getValue());
+                newOption.setPosition(++maxPosition);
+                newOption.setIsDefault(false);
+                newOption.setColor(sourceOpt.getColor());
+                newOption.setDescription(sourceOpt.getDescription());
+                newOption.setIsArchived(false);
+                newOption.setIsResolved(sourceOpt.getIsResolved());
+                newOption.setOwnerUserId(sourceOpt.getOwnerUserId());
+                newOption.setReleaseDate(sourceOpt.getReleaseDate());
+                newOption.setIsReleased(sourceOpt.getIsReleased());
+                optionMapper.insert(newOption);
+                existingValues.add(valueLower);
+                addedCount++;
+            }
+        }
+
+        int totalCount = targetOptions.size() + addedCount;
+        log.info("字段选项合并完成: targetFieldId={}, sourceFieldId={}, added={}, skipped={}, total={}",
+                targetFieldId, sourceFieldId, addedCount, skippedCount, totalCount);
+
+        return new int[]{addedCount, skippedCount, totalCount};
+    }
+
+    /**
      * 将指定 position 及之后的所有选项的 position 值 +1。
      */
     private void shiftPositionsFrom(Long fieldId, int fromPosition, Long projectId) {

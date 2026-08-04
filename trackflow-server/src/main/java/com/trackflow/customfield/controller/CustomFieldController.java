@@ -24,6 +24,7 @@ import com.trackflow.customfield.vo.ConversionResultVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
 import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
+import com.trackflow.customfield.vo.MergeOptionsResultVO;
 import com.trackflow.customfield.vo.OptionUsageItemVO;
 import com.trackflow.customfield.vo.ProjectFieldsVO;
 import com.trackflow.customfield.vo.ReplaceResultVO;
@@ -132,6 +133,24 @@ public class CustomFieldController {
                                  @RequestParam("archived") boolean archived) {
         customFieldService.setOptionArchived(id, optionId, archived);
         return R.ok();
+    }
+
+    /**
+     * 将源字段的活跃选项合并到当前字段（Merge with）。
+     * <p>
+     * 参考 YouTrack "Merge with" 功能：
+     * <ul>
+     *   <li>只合并源字段的活跃选项（已归档的跳过）</li>
+     *   <li>名称相同（不区分大小写）的选项跳过</li>
+     *   <li>操作后提示合并结果</li>
+     * </ul>
+     */
+    @PostMapping("/admin/custom-fields/{id}/merge-options")
+    @PreAuthorize("@perm.checkGlobal('system:manage_custom_fields')")
+    public R<MergeOptionsResultVO> mergeOptions(@PathVariable("id") Long id,
+                                                 @Valid @RequestBody com.trackflow.customfield.dto.MergeOptionsDTO dto) {
+        int[] result = customFieldService.mergeOptionsFromField(id, dto.getSourceFieldId());
+        return R.ok(new MergeOptionsResultVO(result[0], result[1], result[2]));
     }
 
     /**

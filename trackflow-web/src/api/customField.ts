@@ -20,6 +20,7 @@ export const customFieldApi = {
     isForAll?: boolean
     isMulti?: boolean
     isHiddenInList?: boolean
+    aliases?: string
     defaultValue?: string
     minLength?: number
     maxLength?: number
@@ -39,6 +40,7 @@ export const customFieldApi = {
     isForAll?: boolean
     isMulti?: boolean
     isHiddenInList?: boolean
+    aliases?: string
     defaultValue?: string
     minLength?: number
     maxLength?: number
@@ -114,6 +116,14 @@ export const customFieldApi = {
     return request.put<any, R<void>>(`/admin/custom-fields/${fieldId}/options/${optionId}/archive`, null, {
       params: { archived }
     })
+  },
+
+  /** 合并另一个字段的选项到目标字段（Merge with） */
+  mergeOptions(targetFieldId: string, sourceFieldId: string) {
+    return request.post<any, R<{ addedCount: number; skippedCount: number; totalCount: number }>>(
+      `/admin/custom-fields/${targetFieldId}/merge-options`,
+      { sourceFieldId }
+    )
   },
 
   // ========== 项目级读取 ==========

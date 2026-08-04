@@ -23,6 +23,17 @@
                 allow-clear
                 style="width: 220px"
               />
+              <a-select
+                v-model="filterFieldFormat"
+                placeholder="按类型筛选"
+                size="small"
+                allow-clear
+                style="width: 160px"
+                @change="onFilterChange"
+              >
+                <a-option value="">全部类型</a-option>
+                <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
+              </a-select>
               <div v-if="selectedKeys.length > 0" class="batch-toolbar">
                 <span class="batch-count">已选 {{ selectedKeys.length }} 项</span>
                 <a-button size="mini" type="outline" @click="batchToggleAutoAttach(true)">
@@ -391,6 +402,26 @@
             <div class="form-help">将源字段的选项追加到当前选项列表中（跳过同名选项）</div>
           </a-form-item>
 
+          <!-- 编辑模式下的"合并其他字段值集"操作（Merge with） -->
+          <a-form-item v-if="editingId" label="合并其他字段值集 (Merge with)">
+            <div class="copy-from-row">
+              <a-select
+                v-model="mergeFromFieldId"
+                placeholder="选择字段合并其选项到当前字段"
+                allow-clear
+                style="flex: 1"
+              >
+                <a-option v-for="f in enumFieldList.filter(x => x.id !== editingId)" :key="f.id" :value="f.id">
+                  {{ f.name }}（{{ (f.options || []).filter(o => !o.isArchived).length }} 个选项）
+                </a-option>
+              </a-select>
+              <a-button type="outline" size="small" status="warning" :disabled="!mergeFromFieldId" :loading="merging" @click="handleMergeFrom">
+                合并
+              </a-button>
+            </div>
+            <div class="form-help">将源字段的所有活跃选项合并到当前字段的值集中（已归档选项跳过，同名选项跳过）。操作立即生效。</div>
+          </a-form-item>
+
           <!-- 选项预览（从字段复制后） -->
           <a-form-item v-if="valueSetSource === 'copy' && !editingId && previewOptions.length > 0" label="选项预览">
             <div class="options-preview">
@@ -600,6 +631,9 @@ const issueTypeOptions = ref<Array<{ value: string; label: string }>>([])
 /** 搜索关键词 */
 const searchKeyword = ref('')
 
+/** 类型筛选 */
+const filterFieldFormat = ref('')
+
 /** 枚举字段内联展示最大选项数 */
 const MAX_INLINE_OPTIONS = 5
 
@@ -674,6 +708,8 @@ const valueSetSource = ref<'new' | 'copy'>('new')
 const enumFieldList = ref<CustomFieldDefinitionVO[]>([])
 const previewOptions = ref<Array<{ value: string; color?: string }>>([])
 const copyFromFieldId = ref<string | null>(null)
+const mergeFromFieldId = ref<string | null>(null)
+const merging = ref(false)
 
 const form = reactive({
   name: '',
@@ -736,7 +772,14 @@ function getProjectNamesText(projectIds?: string[]): string {
 async function loadList() {
   loading.value = true
   try {
-    const res = await customFieldApi.list({ page: pagination.current, pageSize: pagination.pageSize })
+    const params: { page: number; pageSize: number; fieldFormat?: string } = {
+      page: pagination.current,
+      pageSize: pagination.pageSize
+    }
+    if (filterFieldFormat.value) {
+      params.fieldFormat = filterFieldFormat.value
+    }
+    const res = await customFieldApi.list(params)
     fieldList.value = res.data?.list || []
     pagination.total = res.data?.pagination?.total || 0
   } catch {
@@ -744,6 +787,11 @@ async function loadList() {
   } finally {
     loading.value = false
   }
+}
+
+function onFilterChange() {
+  pagination.current = 1
+  loadList()
 }
 
 async function loadProjects() {
@@ -806,6 +854,7 @@ function resetForm() {
   valueSetSource.value = 'new'
   previewOptions.value = []
   copyFromFieldId.value = null
+  mergeFromFieldId.value = null
   optionUsageMap.value = {}
   showArchivedInDrawer.value = false
   expandedDescriptionIdx.value = -1
@@ -874,6 +923,41 @@ function handleCopyFrom() {
   copyFromFieldId.value = null
 }
 
+async function handleMergeFrom() {
+  if (!mergeFromFieldId.value || !editingId.value) return
+  merging.value = true
+  try {
+    const res = await customFieldApi.mergeOptions(editingId.value, mergeFromFieldId.value)
+    const result = res.data
+    if (result && result.addedCount > 0) {
+      Message.success(`合并完成：新增 ${result.addedCount} 个选项，跳过 ${result.skippedCount} 个重复项`)
+      // 重新加载字段详情以刷新选项列表
+      const detailRes = await customFieldApi.getDetail(editingId.value)
+      if (detailRes.data?.options) {
+        form.options = detailRes.data.options.map(o => ({
+          id: o.id,
+          value: o.value,
+          isDefault: o.isDefault,
+          color: o.color || undefined,
+          isArchived: o.isArchived || false,
+          isResolved: o.isResolved || false,
+          description: o.description || undefined,
+          ownerUserId: o.ownerUserId || undefined
+        }))
+      }
+      // 刷新列表
+      loadList()
+    } else if (result) {
+      Message.info(`所有选项均已存在，跳过 ${result.skippedCount} 个重复项`)
+    }
+    mergeFromFieldId.value = null
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '合并操作失败')
+  } finally {
+    merging.value = false
+  }
+}
+
 function openCreate() {
   editingId.value = null
   isMultiDisabled.value = false
@@ -902,6 +986,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.issueTypes = record.issueTypes || []
   form.copyOptionsFromFieldId = undefined
   copyFromFieldId.value = null
+  mergeFromFieldId.value = null
   // 检查字段是否有数据——有则禁止切换 isMulti
   isMultiDisabled.value = false
   if (record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField') {
