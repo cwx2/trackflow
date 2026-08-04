@@ -25,11 +25,19 @@
           @blur="commitTitle"
         />
         <div class="title-actions" v-if="!editingTitle && !editingDesc && !readonly">
-          <button class="action-icon" title="编辑" @click="startEditDesc">&#9998;</button>
-          <button class="action-icon" title="附件" @click="$emit('upload')">&#128206;</button>
-          <button class="action-icon" title="链接" @click="$emit('add-link')">&#128279;</button>
+          <a-tooltip content="编辑描述" position="bottom" mini>
+            <button class="action-icon" @click="startEditDesc"><icon-edit /></button>
+          </a-tooltip>
+          <a-tooltip content="上传附件" position="bottom" mini>
+            <button class="action-icon" @click="$emit('upload')"><icon-attachment /></button>
+          </a-tooltip>
+          <a-tooltip content="添加链接" position="bottom" mini>
+            <button class="action-icon" @click="$emit('add-link')"><icon-link /></button>
+          </a-tooltip>
           <a-dropdown trigger="click" position="br">
-            <button class="action-icon" title="更多操作">&#8943;</button>
+            <a-tooltip content="更多操作" position="bottom" mini>
+              <button class="action-icon"><icon-more /></button>
+            </a-tooltip>
             <template #content>
               <a-doption @click="onCopyIdAndSummary">
                 <template #icon><icon-copy /></template>
@@ -221,7 +229,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
+import { IconCopy, IconDelete, IconBranch, IconSwap, IconPrinter, IconClockCircle, IconUpload, IconLock, IconSearch, IconPlus, IconEdit, IconLink, IconMore, IconAttachment } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import RichEditor from './RichEditor.vue'
