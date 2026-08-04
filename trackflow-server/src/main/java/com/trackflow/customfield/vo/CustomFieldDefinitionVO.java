@@ -18,6 +18,8 @@ public class CustomFieldDefinitionVO {
     private Integer maxLength;
     private String regexp;
     private Integer position;
+    /** 是否为内置字段（Priority / Type / Due Date），不可删除不可改名 */
+    private Boolean isBuiltIn;
     /** 是否在工单列表中隐藏（管理员设置） */
     private Boolean isHiddenInList;
     /** 字段别名（逗号分隔），用户在搜索和命令中可用别名替代字段全名 */

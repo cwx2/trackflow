@@ -103,6 +103,7 @@ public class IssueService {
     private final com.trackflow.issue.mapper.IssueVisibilityUserMapper visibilityUserMapper;
     private final PriorityFieldService priorityFieldService;
     private final IssueTypeFieldService issueTypeFieldService;
+    private final DueDateFieldService dueDateFieldService;
 
     /**
      * 创建 Issue
@@ -172,6 +173,10 @@ public class IssueService {
             }
         }
         issue.setDueDate(dto.getDueDate());
+        // Due Date 项目级校验：必填性检查
+        if (dueDateFieldService.isRequiredForProject(dto.getProjectId()) && issue.getDueDate() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "截止日期为必填字段");
+        }
         issue.setEstimatedHours(dto.getEstimatedHours());
         issue.setCreatedBy(currentUserId);
 
@@ -1430,6 +1435,10 @@ public class IssueService {
             }
         }
         if (Boolean.TRUE.equals(dto.getClearDueDate())) {
+            // 必填校验：不允许清空必填字段
+            if (dueDateFieldService.isRequiredForProject(issue.getProjectId())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "截止日期为必填字段，不允许清空");
+            }
             // 显式清空截止日期
             String oldDueDateStr = issue.getDueDate() != null ? issue.getDueDate().toString() : null;
             if (oldDueDateStr != null) {

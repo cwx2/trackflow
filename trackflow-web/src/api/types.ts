@@ -675,6 +675,8 @@ export interface CustomFieldDefinitionVO {
   isRequired: boolean
   isForAll: boolean
   isMulti: boolean
+  /** 是否为内置字段（Priority / Type / Due Date），不可删除不可改名 */
+  isBuiltIn?: boolean
   /** 是否在工单列表的默认列选择器中隐藏 */
   isHiddenInList: boolean
   /** 字段别名（逗号分隔），用于搜索时字段名匹配 */

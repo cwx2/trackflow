@@ -72,6 +72,7 @@
                 <a-table-column title="字段名称" data-index="name">
                   <template #cell="{ record }">
                     <span class="clickable-name">{{ record.name }}</span>
+                    <a-tag v-if="record.isBuiltIn" size="small" color="arcoblue" style="margin-left: 6px">内置</a-tag>
                   </template>
                 </a-table-column>
                 <a-table-column title="类型" data-index="fieldFormat" :width="100">
@@ -154,7 +155,10 @@
                 <a-table-column title="操作" :width="120" align="center">
                   <template #cell="{ record }">
                     <a-button type="text" size="mini" @click.stop="openEdit(record)">编辑</a-button>
-                    <a-button type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
+                    <a-tooltip v-if="record.isBuiltIn" content="内置字段不可删除">
+                      <a-button type="text" size="mini" status="danger" disabled>删除</a-button>
+                    </a-tooltip>
+                    <a-button v-else type="text" size="mini" status="danger" @click.stop="confirmDelete(record)">删除</a-button>
                   </template>
                 </a-table-column>
               </template>

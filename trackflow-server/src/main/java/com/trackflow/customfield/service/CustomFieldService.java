@@ -54,6 +54,20 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CustomFieldService {
 
+    /**
+     * 内置字段 ID 集合 — 这些字段由系统迁移脚本创建，不可删除也不可修改类型。
+     * <ul>
+     *   <li>1000000000000000001 = Priority (V249)</li>
+     *   <li>1000000000000000002 = Type (V251)</li>
+     *   <li>1000000000000000003 = Due Date (V252)</li>
+     * </ul>
+     */
+    public static final java.util.Set<Long> BUILTIN_FIELD_IDS = java.util.Set.of(
+            1000000000000000001L,
+            1000000000000000002L,
+            1000000000000000003L
+    );
+
     private final CustomFieldDefinitionMapper definitionMapper;
     private final CustomFieldOptionMapper optionMapper;
     private final CustomFieldValueMapper valueMapper;
@@ -157,6 +171,12 @@ public class CustomFieldService {
         CustomFieldDefinition entity = definitionMapper.selectById(id);
         if (entity == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+
+        // 内置字段限制：不允许修改名称（其他配置如 isPrivate、isRequired 等允许修改）
+        if (BUILTIN_FIELD_IDS.contains(id) && dto.getName() != null
+                && !dto.getName().isBlank() && !dto.getName().equals(entity.getName())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "内置字段名称不允许修改");
         }
 
         boolean wasForAll = Boolean.TRUE.equals(entity.getIsForAll());
@@ -310,6 +330,11 @@ public class CustomFieldService {
     public void delete(Long id, boolean confirm) {
         if (definitionMapper.selectById(id) == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
+        }
+
+        // 内置字段不可删除（Priority / Type / Due Date）
+        if (BUILTIN_FIELD_IDS.contains(id)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "内置字段不允许删除");
         }
 
         long conditionRefCount = projectMapper.selectCount(
@@ -1522,7 +1547,9 @@ public class CustomFieldService {
         Map<Long, List<CustomFieldOption>> optionsMap = getBatchOptions(fieldIds);
         for (int i = 0; i < fields.size(); i++) {
             Long fieldId = fields.get(i).getId();
-            voList.get(i).setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            CustomFieldDefinitionVO vo = voList.get(i);
+            vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
+            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
         }
         return voList;
     }
@@ -1544,6 +1571,7 @@ public class CustomFieldService {
             CustomFieldDefinitionVO vo = voList.get(i);
             CustomFieldProject mapping = conditionsMap.get(fieldId);
 
+            vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
             vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
             enrichConditionInfo(vo, mapping);
             enrichEditableInfo(vo, mapping, userRoleIds);
@@ -1569,6 +1597,7 @@ public class CustomFieldService {
             CustomFieldDefinitionVO vo = voList.get(i);
             CustomFieldProject mapping = conditionsMap.get(fieldId);
 
+            vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
             vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
             vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
                     .map(String::valueOf).toList());
@@ -1589,7 +1618,9 @@ public class CustomFieldService {
         Map<Long, List<CustomFieldOption>> optionsMap = getBatchOptions(fieldIds);
         for (int i = 0; i < fields.size(); i++) {
             Long fieldId = fields.get(i).getId();
-            voList.get(i).setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            CustomFieldDefinitionVO vo = voList.get(i);
+            vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
+            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
         }
         return voList;
     }
@@ -1721,6 +1752,7 @@ public class CustomFieldService {
         for (int i = 0; i < entities.size(); i++) {
             Long fieldId = entities.get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
+            vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
             vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
             vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
                     .map(String::valueOf).toList());
@@ -1729,6 +1761,7 @@ public class CustomFieldService {
     }
 
     private void enrichAdminVO(CustomFieldDefinitionVO vo, Long fieldId) {
+        vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
         vo.setOptions(converter.toOptionVOList(getOptions(fieldId)));
         vo.setProjectIds(getProjectIds(fieldId).stream().map(String::valueOf).toList());
         vo.setIssueTypes(getIssueTypes(fieldId));

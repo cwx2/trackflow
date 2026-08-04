@@ -157,6 +157,11 @@ public class CustomFieldTypeConversionService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
 
+        // 内置字段不允许类型转换
+        if (CustomFieldService.BUILTIN_FIELD_IDS.contains(fieldId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "内置字段不允许类型转换");
+        }
+
         String sourceFormat = field.getFieldFormat();
 
         // 校验转换合法性
