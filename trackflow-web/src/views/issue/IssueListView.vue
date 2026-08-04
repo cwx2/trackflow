@@ -1956,8 +1956,28 @@ function onGlobalSearch(keyword: string) {
             }
             break
           case 'priority':
-            if (!isNegative) filterParams.priority = values.join(',')
-            else filterParams.priorityNot = values.join(',')
+            if (op === 'between' && values.length >= 2) {
+              // Resolve range using priorityOptions order (position-based)
+              const opts = priorityOptions.value
+              const findIdx = (v: string) => opts.findIndex(o =>
+                o.value.toLowerCase() === v.toLowerCase() || o.label === v
+              )
+              let startIdx = findIdx(values[0])
+              let endIdx = findIdx(values[1])
+              if (startIdx >= 0 && endIdx >= 0) {
+                // Auto-swap if reversed
+                if (startIdx > endIdx) [startIdx, endIdx] = [endIdx, startIdx]
+                const rangeValues = opts.slice(startIdx, endIdx + 1).map(o => o.value)
+                filterParams.priority = rangeValues.join(',')
+              } else {
+                // Fallback: send raw values as-is
+                filterParams.priority = values.join(',')
+              }
+            } else if (!isNegative) {
+              filterParams.priority = values.join(',')
+            } else {
+              filterParams.priorityNot = values.join(',')
+            }
             break
           case 'type':
             if (!isNegative) filterParams.issueType = values.join(',')
