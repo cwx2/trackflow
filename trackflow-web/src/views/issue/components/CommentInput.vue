@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -89,13 +89,8 @@ const groups = ref<GroupSimpleVO[]>([])
 const selectedGroupIds = ref<string[]>([])
 const showVisibilityDropdown = ref(false)
 
-// Mention suggestion 配置
-const { suggestion, clearCache } = useMentionSuggestion(() => props.projectId)
-
-// 监听 projectId 变化，清空成员缓存
-watch(() => props.projectId, () => {
-  clearCache()
-})
+// Mention suggestion 配置（按需搜索，无需缓存管理）
+const { suggestion } = useMentionSuggestion(() => props.projectId)
 
 const visibilityLabel = computed(() => {
   if (selectedGroupIds.value.length === 0) return '全部可见'
