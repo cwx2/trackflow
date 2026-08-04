@@ -17,4 +17,9 @@ public sealed interface WorkflowRuleEvent {
      * 字段变更事件 — 触发 on-field-changed 规则
      */
     record FieldChanged(Long issueId, Long projectId, String changedField, String oldValue) implements WorkflowRuleEvent {}
+
+    /**
+     * 评论添加事件 — 触发 comment_added 规则
+     */
+    record CommentAdded(Long issueId, Long projectId, Long commentId, String commentContent) implements WorkflowRuleEvent {}
 }

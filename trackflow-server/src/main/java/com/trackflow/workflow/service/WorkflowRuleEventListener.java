@@ -45,4 +45,15 @@ public class WorkflowRuleEventListener {
                     event.issueId(), event.changedField(), e.getMessage(), e);
         }
     }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onCommentAdded(WorkflowRuleEvent.CommentAdded event) {
+        try {
+            ruleEngine.fireOnCommentAdded(event.issueId(), event.projectId(), event.commentContent());
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] on-comment-added 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
 }

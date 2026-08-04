@@ -38,6 +38,9 @@ public class WorkflowRuleVO {
     /** 调度表达式（on_schedule 类型） */
     private String cronExpression;
 
+    /** Action Rule 的命令名（action 类型） */
+    private String actionCommand;
+
     /** 上次执行时间（on_schedule 类型） */
     private LocalDateTime lastExecutedAt;
 

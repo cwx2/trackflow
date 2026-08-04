@@ -49,6 +49,9 @@ public class WorkflowRule implements Serializable {
     /** 排序字段 */
     private Integer sortOrder;
 
+    /** Action Rule 的命令名（全局唯一），仅 rule_type=action 时有值 */
+    private String actionCommand;
+
     /** 调度表达式：daily / weekly / hourly 或标准 cron（仅 on_schedule） */
     private String cronExpression;
 

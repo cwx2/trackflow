@@ -47,4 +47,31 @@ public interface WorkflowRuleMapper extends BaseMapper<WorkflowRule> {
         ORDER BY sort_order ASC, id ASC
         """)
     List<WorkflowRule> findEnabledScheduledRules();
+
+    /**
+     * 根据命令名查找匹配的已启用 Action Rule（优先项目级，其次全局级）
+     */
+    @Select("""
+        SELECT * FROM workflow_rule
+        WHERE enabled = true
+          AND rule_type = 'action'
+          AND action_command = #{command}
+          AND (project_id = #{projectId} OR project_id IS NULL)
+        ORDER BY (CASE WHEN project_id IS NOT NULL THEN 0 ELSE 1 END) ASC
+        LIMIT 1
+        """)
+    WorkflowRule findEnabledActionRule(@Param("command") String command, @Param("projectId") Long projectId);
+
+    /**
+     * 查询项目下所有已启用的 Action Rule（含全局）
+     */
+    @Select("""
+        SELECT * FROM workflow_rule
+        WHERE enabled = true
+          AND rule_type = 'action'
+          AND action_command IS NOT NULL
+          AND (project_id = #{projectId} OR project_id IS NULL)
+        ORDER BY sort_order ASC, id ASC
+        """)
+    List<WorkflowRule> findEnabledActionRules(@Param("projectId") Long projectId);
 }

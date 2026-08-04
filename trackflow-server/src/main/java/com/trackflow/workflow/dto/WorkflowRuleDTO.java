@@ -12,15 +12,15 @@ import lombok.Data;
 public class WorkflowRuleDTO {
 
     @NotBlank(message = "规则名称不能为空")
-    @Size(max = 100, message = "规则名称不能超过100字符")
+    @Size(max = 200, message = "规则名称不能超过200字符")
     private String name;
 
     private String description;
 
-    /** 规则类型：on_change / on_schedule */
+    /** 规则类型：on_change / on_schedule / action */
     private String ruleType;
 
-    /** 触发事件：on_change 时必填（issue_created / field_changed），on_schedule 时忽略 */
+    /** 触发事件：on_change 时必填（issue_created / field_changed / comment_added），on_schedule/action 时忽略 */
     private String triggerEvent;
 
     /** 触发字段名，NULL=所有字段 */
@@ -42,4 +42,8 @@ public class WorkflowRuleDTO {
 
     /** 调度表达式：daily / weekly / hourly 或标准 cron（仅 on_schedule） */
     private String cronExpression;
+
+    /** Action Rule 的命令名（仅 action 类型）：全局唯一，小写字母+数字+连字符 */
+    @Size(max = 100, message = "命令名不能超过100字符")
+    private String actionCommand;
 }

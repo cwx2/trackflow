@@ -17,6 +17,7 @@ export interface WorkflowRuleVO {
   enabled: boolean
   sortOrder: number
   cronExpression: string | null
+  actionCommand: string | null
   lastExecutedAt: string | null
   createdBy: string | null
   createdAt: string
@@ -37,6 +38,7 @@ export interface WorkflowRuleDTO {
   enabled?: boolean
   sortOrder?: number
   cronExpression?: string | null
+  actionCommand?: string | null
 }
 
 /**
@@ -97,5 +99,15 @@ export const workflowRuleApi = {
     return request.get<any, R<WorkflowRuleExecutionLogVO[]>>(`/workflow-rules/${id}/execution-logs`, {
       params: { limit }
     })
+  },
+
+  /** 获取指定工单可用的 Action Rule 列表 */
+  getAvailableActionRules(issueId: string) {
+    return request.get<any, R<WorkflowRuleVO[]>>(`/issues/${issueId}/action-rules`)
+  },
+
+  /** 执行 Action Rule */
+  executeActionRule(issueId: string, command: string) {
+    return request.post<any, R<void>>(`/issues/${issueId}/action-rules/${command}/execute`)
   }
 }

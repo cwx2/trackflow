@@ -105,4 +105,31 @@ public class WorkflowRuleController {
         ruleService.getRule(id);
         return R.ok(scheduledRuleService.getExecutionLogs(id, Math.min(limit, 100)));
     }
+
+    /**
+     * 获取指定工单可用的 Action Rule 命令列表（Guard 条件已通过的）
+     */
+    @GetMapping("/issues/{issueId}/action-rules")
+    @PreAuthorize("isAuthenticated()")
+    public R<List<WorkflowRuleVO>> getAvailableActionRules(@PathVariable("issueId") Long issueId) {
+        var issue = com.trackflow.common.util.SecurityUtils.getCurrentUserId() != null
+                ? ruleService.getIssueForActionRules(issueId) : null;
+        if (issue == null) {
+            return R.ok(List.of());
+        }
+        var rules = ruleService.getAvailableActionRules(issueId, issue.getProjectId());
+        return R.ok(rules);
+    }
+
+    /**
+     * 执行 Action Rule（用户触发命令）
+     */
+    @PostMapping("/issues/{issueId}/action-rules/{command}/execute")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> executeActionRule(
+            @PathVariable("issueId") Long issueId,
+            @PathVariable("command") String command) {
+        ruleService.executeActionRule(issueId, command);
+        return R.ok();
+    }
 }

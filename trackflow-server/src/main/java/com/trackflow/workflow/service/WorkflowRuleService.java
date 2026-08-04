@@ -6,6 +6,7 @@ import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.workflow.converter.WorkflowRuleConverter;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
 import com.trackflow.workflow.entity.WorkflowRule;
@@ -13,6 +14,7 @@ import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +31,11 @@ import java.util.List;
 public class WorkflowRuleService {
 
     private final WorkflowRuleMapper ruleMapper;
+    private final IssueMapper issueMapper;
     private final ObjectMapper objectMapper;
     private final PermissionService permissionService;
     private final WorkflowRuleConverter workflowRuleConverter;
+    private final @Lazy WorkflowRuleEngine ruleEngine;
 
     /**
      * 查询项目规则列表（含全局规则）
@@ -66,7 +70,7 @@ public class WorkflowRuleService {
 
     /** 合法的规则类型 */
     private static final java.util.Set<String> VALID_RULE_TYPES =
-            java.util.Set.of("on_change", "on_schedule");
+            java.util.Set.of("on_change", "on_schedule", "action");
 
     /**
      * 创建规则
@@ -91,6 +95,11 @@ public class WorkflowRuleService {
         rule.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : true);
         rule.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 0);
         rule.setCronExpression(dto.getCronExpression());
+        // Action Rule: set action_command
+        if ("action".equals(ruleType)) {
+            validateActionCommand(dto.getActionCommand(), null);
+            rule.setActionCommand(dto.getActionCommand());
+        }
         rule.setCreatedBy(SecurityUtils.getCurrentUserId());
         rule.setCreatedAt(LocalDateTime.now());
         rule.setUpdatedAt(LocalDateTime.now());
@@ -126,6 +135,13 @@ public class WorkflowRuleService {
         rule.setConditionJson(dto.getConditionJson());
         rule.setActionJson(dto.getActionJson());
         rule.setCronExpression(dto.getCronExpression());
+        // Action Rule: update action_command
+        if ("action".equals(ruleType)) {
+            validateActionCommand(dto.getActionCommand(), rule.getId());
+            rule.setActionCommand(dto.getActionCommand());
+        } else {
+            rule.setActionCommand(null);
+        }
         if (dto.getEnabled() != null) {
             rule.setEnabled(dto.getEnabled());
         }
@@ -221,30 +237,35 @@ public class WorkflowRuleService {
     /**
      * 统一校验规则类型和对应必填字段。
      * <ul>
-     *   <li>on_change: triggerEvent 必填（issue_created / field_changed）</li>
+     *   <li>on_change: triggerEvent 必填（issue_created / field_changed / comment_added）</li>
      *   <li>on_schedule: cronExpression 必填，triggerEvent 忽略</li>
+     *   <li>action: actionCommand 必填</li>
      * </ul>
      */
     private void validateRuleTypeAndFields(String ruleType, WorkflowRuleDTO dto) {
         if (!VALID_RULE_TYPES.contains(ruleType)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "不支持的规则类型: " + ruleType + "，仅支持 on_change / on_schedule");
+                    "不支持的规则类型: " + ruleType + "，仅支持 on_change / on_schedule / action");
         }
         if ("on_change".equals(ruleType)) {
             validateTriggerEvent(dto.getTriggerEvent());
         } else if ("on_schedule".equals(ruleType)) {
             validateCronExpression(dto.getCronExpression());
+        } else if ("action".equals(ruleType)) {
+            if (dto.getActionCommand() == null || dto.getActionCommand().isBlank()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "action 规则的命令名不能为空");
+            }
         }
     }
 
     private void validateTriggerEvent(String event) {
         if (event == null || event.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "on_change 规则的触发事件不能为空，仅支持 issue_created / field_changed");
+                    "on_change 规则的触发事件不能为空，支持 issue_created / field_changed / comment_added");
         }
-        if (!"issue_created".equals(event) && !"field_changed".equals(event)) {
+        if (!"issue_created".equals(event) && !"field_changed".equals(event) && !"comment_added".equals(event)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "不支持的触发事件: " + event + "，仅支持 issue_created / field_changed");
+                    "不支持的触发事件: " + event + "，支持 issue_created / field_changed / comment_added");
         }
     }
 
@@ -282,5 +303,64 @@ public class WorkflowRuleService {
         }
     }
 
+    /**
+     * 校验 Action Rule 的命令名全局唯一性。
+     *
+     * @param command  命令名
+     * @param excludeId 排除的规则 ID（更新时排除自身）
+     */
+    private void validateActionCommand(String command, Long excludeId) {
+        if (command == null || command.isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "action 规则的命令名不能为空");
+        }
+        if (!command.matches("^[a-z][a-z0-9_-]*$")) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "命令名只能包含小写字母、数字、下划线和连字符，且必须以字母开头");
+        }
+        LambdaQueryWrapper<WorkflowRule> wrapper = new LambdaQueryWrapper<WorkflowRule>()
+                .eq(WorkflowRule::getActionCommand, command);
+        if (excludeId != null) {
+            wrapper.ne(WorkflowRule::getId, excludeId);
+        }
+        Long count = ruleMapper.selectCount(wrapper);
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "命令名 '" + command + "' 已被其他规则使用");
+        }
+    }
+
+    // ============ Action Rule 相关方法 ============
+
+    /**
+     * 获取工单信息（供 Controller 使用，不做权限校验的内部查询）。
+     */
+    public com.trackflow.issue.entity.Issue getIssueForActionRules(Long issueId) {
+        return issueMapper.selectById(issueId);
+    }
+
+    /**
+     * 获取指定工单可用的 Action Rule 列表（Guard 条件通过的）。
+     */
+    public List<WorkflowRuleVO> getAvailableActionRules(Long issueId, Long projectId) {
+        List<WorkflowRule> available = ruleEngine.getAvailableActionRules(issueId, projectId);
+        return workflowRuleConverter.toVOList(available);
+    }
+
+    /**
+     * 执行 Action Rule。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void executeActionRule(Long issueId, String command) {
+        com.trackflow.issue.entity.Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "工单不存在");
+        }
+        Long userId = SecurityUtils.getCurrentUserId();
+        boolean executed = ruleEngine.fireActionRule(issueId, issue.getProjectId(), command, userId);
+        if (!executed) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "命令 '" + command + "' 不可用（规则不存在、已禁用或条件不满足）");
+        }
+    }
 }
 

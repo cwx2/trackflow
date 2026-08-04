@@ -7,10 +7,12 @@ import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueComment;
+import com.trackflow.issue.entity.IssueLink;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueCommentMapper;
+import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
@@ -47,6 +49,7 @@ public class WorkflowRuleEngine {
     private final IssueActivityMapper activityMapper;
     private final IssueCommentMapper commentMapper;
     private final IssueTagRelationMapper tagRelationMapper;
+    private final IssueLinkMapper issueLinkMapper;
     private final IssueStatusMapper statusMapper;
     private final SysUserMapper sysUserMapper;
     private final SprintMapper sprintMapper;
@@ -162,6 +165,119 @@ public class WorkflowRuleEngine {
                 .toList();
         if (matching.isEmpty()) return;
         evaluateAndExecute(matching, issue, changedField, oldValue);
+    }
+
+    /**
+     * 触发 comment_added 规则。
+     * <p>
+     * 工单下有新评论添加时触发，条件中可用 keyword_contains 检查评论内容是否包含特定关键词。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void fireOnCommentAdded(Long issueId, Long projectId, String commentContent) {
+        List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, "comment_added");
+        if (rules.isEmpty()) return;
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) {
+            log.warn("[RuleEngine] on-comment-added: issue {} 不存在或已删除，跳过规则执行", issueId);
+            return;
+        }
+
+        for (WorkflowRule rule : rules) {
+            try {
+                if (evaluateConditionsWithComment(rule, issue, commentContent)) {
+                    executeActions(rule, issue);
+                }
+            } catch (Exception e) {
+                log.warn("[RuleEngine] Rule '{}' (id={}) failed for issue {} on comment_added: {}",
+                        rule.getName(), rule.getId(), issue.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 执行 Action Rule（用户触发的命令规则）。
+     * <p>
+     * 用户在 Apply Command 弹窗中输入命令名，系统通过 actionCommand 字段匹配对应的规则执行。
+     *
+     * @param issueId     工单 ID
+     * @param projectId   项目 ID
+     * @param command     用户输入的命令名
+     * @param triggeredBy 触发者用户 ID
+     * @return true 如果有规则被触发执行
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean fireActionRule(Long issueId, Long projectId, String command, Long triggeredBy) {
+        WorkflowRule rule = ruleMapper.findEnabledActionRule(command, projectId);
+        if (rule == null) {
+            log.debug("[RuleEngine] action-rule: no enabled rule found for command '{}' in project {}", command, projectId);
+            return false;
+        }
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) {
+            log.warn("[RuleEngine] action-rule: issue {} 不存在或已删除", issueId);
+            return false;
+        }
+
+        // Action Rule 也要评估 Prerequisites（Guard 条件）
+        if (!evaluateConditions(rule, issue, null, null)) {
+            log.debug("[RuleEngine] action-rule: guard conditions not met for command '{}' on issue {}",
+                    command, issue.getId());
+            return false;
+        }
+
+        executeActions(rule, issue);
+        return true;
+    }
+
+    /**
+     * 查询用户可用的 Action Rule 命令列表（Guard 条件通过的规则）。
+     */
+    public List<WorkflowRule> getAvailableActionRules(Long issueId, Long projectId) {
+        List<WorkflowRule> actionRules = ruleMapper.findEnabledActionRules(projectId);
+        if (actionRules.isEmpty()) return List.of();
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) return List.of();
+
+        return actionRules.stream()
+                .filter(rule -> evaluateConditions(rule, issue, null, null))
+                .toList();
+    }
+
+    private boolean evaluateConditionsWithComment(WorkflowRule rule, Issue issue, String commentContent) {
+        String json = rule.getConditionJson();
+        if (json == null || json.isBlank() || "[]".equals(json.trim())) return true;
+        try {
+            JsonNode arr = objectMapper.readTree(json);
+            if (!arr.isArray()) return true;
+            for (JsonNode cond : arr) {
+                if (!evalConditionWithComment(cond, issue, commentContent)) return false;
+            }
+            return true;
+        } catch (Exception e) {
+            log.warn("[RuleEngine] Condition parse error for rule '{}': {}", rule.getName(), e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean evalConditionWithComment(JsonNode cond, Issue issue, String commentContent) {
+        String field = textOf(cond, "field");
+        String op = textOf(cond, "operator");
+        String expected = textOf(cond, "value");
+
+        // 特殊条件：评论关键词匹配
+        if ("comment_content".equals(field) || "keyword".equals(field)) {
+            if (commentContent == null || expected == null) return false;
+            if ("contains".equals(op) || "keyword_contains".equals(op)) {
+                return commentContent.toLowerCase().contains(expected.toLowerCase());
+            }
+            return true;
+        }
+
+        // 其他条件退回标准评估
+        return evalCondition(cond, issue, null, null);
     }
 
     private void evaluateAndExecute(List<WorkflowRule> rules, Issue issue) {
@@ -295,11 +411,18 @@ public class WorkflowRuleEngine {
             JsonNode arr = objectMapper.readTree(json);
             if (!arr.isArray()) return;
             boolean modified = false;
+            // Track created issues for inter-block references (e.g., link_issue referencing create_issue result)
+            List<Issue> createdIssues = new java.util.ArrayList<>();
             for (JsonNode act : arr) {
                 String type = textOf(act, "type");
                 if ("set_field".equals(type)) modified |= doSetField(act, issue, rule);
                 else if ("add_tag".equals(type)) doAddTag(act, issue, rule);
                 else if ("add_comment".equals(type)) doAddComment(act, issue, rule);
+                else if ("create_issue".equals(type)) {
+                    Issue created = doCreateIssue(act, issue, rule);
+                    if (created != null) createdIssues.add(created);
+                }
+                else if ("link_issue".equals(type)) doLinkIssue(act, issue, rule, createdIssues);
             }
             if (modified) issueMapper.updateById(issue);
         } catch (Exception e) {
@@ -549,9 +672,7 @@ public class WorkflowRuleEngine {
     private void doAddComment(JsonNode act, Issue issue, WorkflowRule rule) {
         String content = textOf(act, "content");
         if (content == null || content.isBlank()) return;
-        content = content.replace("{{rule_name}}", rule.getName())
-                .replace("{{issue_key}}", issue.getIssueKey() != null ? issue.getIssueKey() : "")
-                .replace("{{issue_title}}", issue.getTitle() != null ? issue.getTitle() : "");
+        content = interpolateVariables(content, issue, rule);
         IssueComment c = new IssueComment();
         c.setIssueId(issue.getId());
         c.setUserId(rule.getCreatedBy());
@@ -561,6 +682,199 @@ public class WorkflowRuleEngine {
         c.setUpdatedAt(LocalDateTime.now());
         commentMapper.insert(c);
         logActivity(issue.getId(), rule, "commented", null, null, null);
+    }
+
+    /**
+     * Action: create_issue — 创建新工单。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "create_issue", "summary": "Task: {issue.summary}", "issueType": "Task",
+     *  "priority": "Normal", "projectId": "same"(默认同项目)}
+     *
+     * @return 创建的 Issue 对象（用于后续 link_issue 引用），失败返回 null
+     */
+    private Issue doCreateIssue(JsonNode act, Issue triggerIssue, WorkflowRule rule) {
+        String summary = textOf(act, "summary");
+        if (summary == null || summary.isBlank()) {
+            log.warn("[RuleEngine] create_issue: summary is empty in rule '{}' (id={})", rule.getName(), rule.getId());
+            return null;
+        }
+
+        summary = interpolateVariables(summary, triggerIssue, rule);
+        String description = textOf(act, "description");
+        if (description != null) {
+            description = interpolateVariables(description, triggerIssue, rule);
+        }
+
+        String issueType = textOf(act, "issueType");
+        if (issueType == null || issueType.isBlank()) issueType = "Task";
+        String priority = textOf(act, "priority");
+        if (priority == null || priority.isBlank()) priority = "Normal";
+
+        // Project: default to same project as trigger issue
+        Long projectId = triggerIssue.getProjectId();
+        String projectIdStr = textOf(act, "projectId");
+        if (projectIdStr != null && !"same".equals(projectIdStr)) {
+            try {
+                projectId = Long.parseLong(projectIdStr);
+            } catch (NumberFormatException e) {
+                log.warn("[RuleEngine] create_issue: invalid projectId '{}' in rule '{}'", projectIdStr, rule.getName());
+            }
+        }
+
+        // Generate issue key
+        com.trackflow.project.entity.Project project = projectService.getById(projectId);
+        if (project == null) {
+            log.warn("[RuleEngine] create_issue: project {} not found in rule '{}'", projectId, rule.getName());
+            return null;
+        }
+        int seq = projectService.nextIssueSequence(projectId);
+        String issueKey = project.getKey() + "-" + seq;
+
+        Issue newIssue = new Issue();
+        newIssue.setProjectId(projectId);
+        newIssue.setIssueKey(issueKey);
+        newIssue.setTitle(summary);
+        newIssue.setDescription(description);
+        newIssue.setIssueType(issueType);
+        newIssue.setPriority(priority);
+        newIssue.setReporterId(rule.getCreatedBy());
+        newIssue.setCreatedBy(rule.getCreatedBy());
+
+        // Resolve initial status for this issue type in this project
+        Long initialStatusId = resolveInitialStatus(projectId);
+        newIssue.setStatusId(initialStatusId);
+
+        // Copy sprint from trigger if in same project
+        if (Objects.equals(projectId, triggerIssue.getProjectId()) && triggerIssue.getSprintId() != null) {
+            newIssue.setSprintId(triggerIssue.getSprintId());
+        }
+
+        // Set parent if specified
+        String parentRef = textOf(act, "parent");
+        if ("trigger".equals(parentRef)) {
+            newIssue.setParentId(triggerIssue.getId());
+        }
+
+        issueMapper.insert(newIssue);
+
+        logActivity(newIssue.getId(), rule, "created", null, null, null);
+        log.info("[RuleEngine] create_issue: created {} (type={}, project={}) by rule '{}' (id={})",
+                issueKey, issueType, projectId, rule.getName(), rule.getId());
+
+        // Trigger on-create rules for the new issue (chain effect)
+        eventPublisher.publishEvent(new WorkflowRuleEvent.IssueCreated(newIssue.getId(), newIssue.getProjectId()));
+
+        return newIssue;
+    }
+
+    /**
+     * Action: link_issue — 创建工单关联。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "link_issue", "target": "from_block:0", "linkType": "subtask_of"}
+     * target 支持: "from_block:N"（引用本规则第 N 个 create_issue 的结果）、数字 ID（直接引用工单 ID）
+     */
+    private void doLinkIssue(JsonNode act, Issue triggerIssue, WorkflowRule rule, List<Issue> createdIssues) {
+        String linkType = textOf(act, "linkType");
+        if (linkType == null || linkType.isBlank()) linkType = "relates_to";
+
+        String targetRef = textOf(act, "target");
+        if (targetRef == null || targetRef.isBlank()) {
+            log.warn("[RuleEngine] link_issue: target is empty in rule '{}' (id={})", rule.getName(), rule.getId());
+            return;
+        }
+
+        Long targetIssueId;
+        if (targetRef.startsWith("from_block:")) {
+            // Reference a previously created issue in this rule execution
+            try {
+                int blockIndex = Integer.parseInt(targetRef.substring("from_block:".length()));
+                if (blockIndex < 0 || blockIndex >= createdIssues.size()) {
+                    log.warn("[RuleEngine] link_issue: block index {} out of range (created {} issues) in rule '{}'",
+                            blockIndex, createdIssues.size(), rule.getName());
+                    return;
+                }
+                targetIssueId = createdIssues.get(blockIndex).getId();
+            } catch (NumberFormatException e) {
+                log.warn("[RuleEngine] link_issue: invalid block reference '{}' in rule '{}'", targetRef, rule.getName());
+                return;
+            }
+        } else {
+            try {
+                targetIssueId = Long.parseLong(targetRef);
+            } catch (NumberFormatException e) {
+                log.warn("[RuleEngine] link_issue: invalid target ID '{}' in rule '{}'", targetRef, rule.getName());
+                return;
+            }
+        }
+
+        // Determine source and target based on link direction
+        Long sourceIssueId = triggerIssue.getId();
+
+        // Check if link already exists
+        Long existingCount = issueLinkMapper.selectCount(new LambdaQueryWrapper<IssueLink>()
+                .eq(IssueLink::getSourceIssueId, sourceIssueId)
+                .eq(IssueLink::getTargetIssueId, targetIssueId)
+                .eq(IssueLink::getLinkType, linkType));
+        if (existingCount > 0) {
+            log.debug("[RuleEngine] link_issue: link already exists between {} and {} (type={})",
+                    sourceIssueId, targetIssueId, linkType);
+            return;
+        }
+
+        IssueLink link = new IssueLink();
+        link.setSourceIssueId(sourceIssueId);
+        link.setTargetIssueId(targetIssueId);
+        link.setLinkType(linkType);
+        link.setCreatedBy(rule.getCreatedBy());
+        link.setCreatedAt(LocalDateTime.now());
+        issueLinkMapper.insert(link);
+
+        logActivity(triggerIssue.getId(), rule, "link_added", "link", null,
+                linkType + " → " + targetIssueId);
+        log.info("[RuleEngine] link_issue: created link {} -> {} (type={}) by rule '{}' (id={})",
+                sourceIssueId, targetIssueId, linkType, rule.getName(), rule.getId());
+    }
+
+    /**
+     * 解析初始状态 ID（取 issue_status 表中第一个非关闭状态）。
+     */
+    private Long resolveInitialStatus(Long projectId) {
+        IssueStatus status = statusMapper.selectOne(new LambdaQueryWrapper<IssueStatus>()
+                .eq(IssueStatus::getIsClosed, false)
+                .orderByAsc(IssueStatus::getSortOrder)
+                .last("LIMIT 1"));
+        return status != null ? status.getId() : null;
+    }
+
+    /**
+     * 变量插值 — 将文本中的占位符替换为实际值。
+     * <p>
+     * 支持格式：
+     * - {issue.id} / {issue.summary} / {issue.key} / {issue.project.name}
+     * - {{rule_name}} / {{issue_key}} / {{issue_title}} (旧格式兼容)
+     */
+    private String interpolateVariables(String text, Issue issue, WorkflowRule rule) {
+        if (text == null) return null;
+        // 旧格式兼容
+        text = text.replace("{{rule_name}}", rule.getName())
+                .replace("{{issue_key}}", issue.getIssueKey() != null ? issue.getIssueKey() : "")
+                .replace("{{issue_title}}", issue.getTitle() != null ? issue.getTitle() : "");
+        // 新格式：{issue.*}
+        text = text.replace("{issue.id}", issue.getIssueKey() != null ? issue.getIssueKey() : String.valueOf(issue.getId()))
+                .replace("{issue.summary}", issue.getTitle() != null ? issue.getTitle() : "")
+                .replace("{issue.key}", issue.getIssueKey() != null ? issue.getIssueKey() : "")
+                .replace("{issue.title}", issue.getTitle() != null ? issue.getTitle() : "")
+                .replace("{issue.type}", issue.getIssueType() != null ? issue.getIssueType() : "")
+                .replace("{issue.priority}", issue.getPriority() != null ? issue.getPriority() : "");
+        // {issue.project.name} — resolve project name
+        if (text.contains("{issue.project.name}")) {
+            com.trackflow.project.entity.Project proj = projectService.getById(issue.getProjectId());
+            String projectName = proj != null ? proj.getName() : "";
+            text = text.replace("{issue.project.name}", projectName);
+        }
+        return text;
     }
 
     private void logActivity(Long issueId, WorkflowRule rule, String action, String field, String oldVal, String newVal) {
