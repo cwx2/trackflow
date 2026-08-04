@@ -422,6 +422,7 @@ const attachments = ref<IssueAttachmentVO[]>([])
 const links = ref<IssueLinkVO[]>([])
 const projectTagList = ref<IssueTagVO[]>([])
 const members = ref<ProjectMemberVO[]>([])
+const allProjectMembers = ref<ProjectMemberVO[]>([])
 const sprints = ref<SprintVO[]>([])
 const customFieldDefs = ref<CustomFieldDefinitionVO[]>([])
 
@@ -738,6 +739,8 @@ async function loadRelatedData() {
     if (needSprintOptions) {
       promises.push(sprintApi.listByProject(pid))
     }
+    // 始终加载全部项目成员（user 类型自定义字段需要完整成员列表，不按权限过滤）
+    promises.push(projectApi.listMembers(pid))
 
     const results = await Promise.allSettled(promises)
 
@@ -772,6 +775,9 @@ async function loadRelatedData() {
       if (results[idx].status === 'fulfilled') sprints.value = (results[idx] as any).value.data?.list || []
       idx++
     }
+    // 全部项目成员（供 user 类型自定义字段使用）
+    if (results[idx].status === 'fulfilled') allProjectMembers.value = (results[idx] as any).value.data || []
+    idx++
   } catch { /* ignore partial failures */ }
 }
 
@@ -1081,7 +1087,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
         break
       case 'user':
         editType = 'user-select'
-        options = members.value.map(m => ({ value: m.userId, label: m.displayName }))
+        options = allProjectMembers.value.map(m => ({ value: m.userId, label: m.displayName }))
         break
       case 'date':
         editType = 'date'

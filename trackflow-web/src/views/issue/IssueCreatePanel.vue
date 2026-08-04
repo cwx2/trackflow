@@ -400,7 +400,7 @@
                 allow-search
                 @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
-                <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
+                <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
               </a-select>
               <!-- inline error message -->
               <span v-if="cfValidationErrors[cf.id]" class="field-error-msg">{{ cfValidationErrors[cf.id] }}</span>
@@ -542,7 +542,7 @@
                   allow-clear
                   allow-search
                 >
-                  <a-option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
+                  <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
                 </a-select>
               </div>
             </template>
@@ -830,6 +830,7 @@ function openSimilarIssue(issue: SimilarIssue) {
 
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
+const allProjectMembers = ref<any[]>([])
 const sprints = ref<any[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const projectTags = ref<any[]>([])
@@ -1292,8 +1293,9 @@ async function loadStatuses() {
 
 async function onProjectChange(val: any) {
   const pid = val ? String(val) : ''
-  if (!pid) { members.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; projectTags.value = []; return }
+  if (!pid) { members.value = []; allProjectMembers.value = []; sprints.value = []; templates.value = []; selectedTemplateId.value = null; projectTags.value = []; return }
   try { const res = await projectApi.listAssignableMembers(pid); members.value = res.data || [] } catch { members.value = [] }
+  try { const res = await projectApi.listMembers(pid); allProjectMembers.value = res.data || [] } catch { allProjectMembers.value = [] }
   try { const res = await sprintApi.listByProject(pid, { _silent403: true }); sprints.value = (res.data?.list || []).filter((s: any) => s.status !== 'Completed' && s.status !== 'completed' && s.status !== 'Archived' && s.status !== 'archived') } catch { sprints.value = [] }
   // 加载项目标签
   try { const res = await tagApi.listProjectTags(pid, { _silent403: true }); projectTags.value = res.data || [] } catch { projectTags.value = [] }

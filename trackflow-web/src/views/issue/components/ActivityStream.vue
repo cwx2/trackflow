@@ -58,7 +58,7 @@
               :title="item.detail.ruleName ? '自动规则：' + item.detail.ruleName : '由自动化规则触发'"
             >⚡ {{ item.detail.ruleName || '自动规则' }}</span>
             <!-- Comment actions -->
-            <div v-if="item.type === 'comment' && !item.isDeleted && canModifyComment(item) && hoveredId === item.id && editingCommentId !== item.commentId" class="comment-actions">
+            <div v-if="item.type === 'comment' && !item.isDeleted && canModifyComment(item) && editingCommentId !== item.commentId" class="comment-actions" :class="{ 'comment-actions--visible': hoveredId === item.id }">
               <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
               <button class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
             </div>
@@ -565,6 +565,11 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 
 .comment-actions {
   display: flex; gap: 4px; margin-left: auto;
+  opacity: 0; pointer-events: none;
+  transition: opacity 150ms;
+}
+.comment-actions--visible {
+  opacity: 1; pointer-events: auto;
 }
 .action-btn {
   font-size: 12px; padding: 2px 6px; border-radius: 3px;
