@@ -269,7 +269,7 @@ import IssueCreatePanel from './IssueCreatePanel.vue'
 import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import AttachmentPrivacyModal from './components/AttachmentPrivacyModal.vue'
-import type { ActivityItem } from './components/ActivityStream.vue'
+import type { ActivityItem, RelatedChange } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, priorityLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 
@@ -1255,11 +1255,15 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
 
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
+  const MERGE_WINDOW_MS = 60_000 // 1 minute
+
+  // Build comment items first
+  const commentItems: ActivityItem[] = []
   for (const c of comments.value) {
     const isDeleted = !!c.deletedAt
     const content = c.content || ''
     const isHtml = content.trim().startsWith('<')
-    items.push({
+    commentItems.push({
       id: 'c_' + c.id,
       type: 'comment',
       user: c.userName || '用户',
@@ -1272,11 +1276,55 @@ const activityItems = computed<ActivityItem[]>(() => {
       visibleToGroupNames: c.visibleToGroupNames || undefined,
       html: isDeleted ? '' : (isHtml ? content : renderMarkdown(content)),
       timeAgo: timeAgo(c.createdAt),
-      ts: new Date(c.createdAt).getTime()
+      ts: new Date(c.createdAt).getTime(),
+      relatedChanges: []
     })
   }
+
+  // Set of activity IDs that are merged into a comment (to exclude from standalone rendering)
+  const mergedActivityIds = new Set<string>()
+
+  // For each field-change activity, check if it falls within 1 minute AFTER a comment by the same user.
+  // When multiple comments qualify, merge into the closest preceding comment (smallest time diff).
   for (const a of activities.value) {
     if (a.action === 'commented') continue
+    // Only merge field_changed / status_changed type activities (ones that have fieldName)
+    if (!a.fieldName) continue
+
+    const activityTs = new Date(a.createdAt).getTime()
+    const activityUserId = a.userId
+
+    let bestComment: ActivityItem | null = null
+    let bestTimeDiff = Infinity
+
+    for (const ci of commentItems) {
+      if (ci.userId !== activityUserId) continue
+      if (ci.isDeleted) continue
+      const timeDiff = activityTs - ci.ts
+      if (timeDiff >= 0 && timeDiff <= MERGE_WINDOW_MS && timeDiff < bestTimeDiff) {
+        bestComment = ci
+        bestTimeDiff = timeDiff
+      }
+    }
+
+    if (bestComment) {
+      const change: RelatedChange = {
+        field: localizeFieldName(a.fieldName) || a.fieldName,
+        from: localizeFieldValue(a.fieldName, a.oldValue) || undefined,
+        to: localizeFieldValue(a.fieldName, a.newValue) || undefined
+      }
+      bestComment.relatedChanges!.push(change)
+      mergedActivityIds.add(a.id)
+    }
+  }
+
+  // Add all comment items
+  items.push(...commentItems)
+
+  // Add non-merged activity items
+  for (const a of activities.value) {
+    if (a.action === 'commented') continue
+    if (mergedActivityIds.has(a.id)) continue
     // 解析 detail 字段（JSON 字符串 → 对象），解析失败时置为 undefined
     let detail: Record<string, any> | undefined
     if (a.detail) {

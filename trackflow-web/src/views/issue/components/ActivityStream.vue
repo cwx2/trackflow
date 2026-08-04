@@ -62,7 +62,7 @@
               :title="item.detail.ruleName ? '自动规则：' + item.detail.ruleName : '由自动化规则触发'"
             >⚡ {{ item.detail.ruleName || '自动规则' }}</span>
             <!-- Comment actions -->
-            <div v-if="item.type === 'comment' && !item.isDeleted && canModifyComment(item) && editingCommentId !== item.commentId" class="comment-actions" :class="{ 'comment-actions--visible': hoveredId === item.id }">
+            <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item) && canModifyComment(item) && editingCommentId !== item.commentId" class="comment-actions" :class="{ 'comment-actions--visible': hoveredId === item.id }">
               <button class="action-btn" title="编辑评论" @click="startEdit(item)">✎</button>
               <button class="action-btn action-btn-danger" title="删除评论" @click="confirmDelete(item)">✕</button>
             </div>
@@ -86,8 +86,17 @@
           <!-- Normal display -->
           <template v-else>
             <!-- 评论 -->
-            <div v-if="item.type === 'comment' && !item.isDeleted" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
-            <div v-else class="change-text">
+            <div v-if="item.type === 'comment' && !item.isDeleted && !hideCommentText(item)" class="comment-text" :class="{ collapsed: !expandComments }" v-html="item.html"></div>
+            <!-- 评论关联的字段变更块（YouTrack 风格：评论后 1 分钟内的变更合并展示） -->
+            <div v-if="item.type === 'comment' && !item.isDeleted && item.relatedChanges && item.relatedChanges.length > 0" class="related-changes-block">
+              <div v-for="(change, idx) in item.relatedChanges" :key="idx" class="related-change-row">
+                <span class="rc-field">{{ change.field }}:</span>
+                <span class="rc-old">{{ change.from || '未设置' }}</span>
+                <span class="rc-arrow">→</span>
+                <span class="rc-new">{{ change.to || '未设置' }}</span>
+              </div>
+            </div>
+            <div v-else-if="item.type !== 'comment'" class="change-text">
               <template v-if="item.action === 'created'">创建了此工单</template>
               <template v-else-if="item.action === 'deleted'">删除了此工单</template>
               <template v-else-if="item.action === 'restored'">恢复了此工单</template>
@@ -227,6 +236,13 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { localizeAction, localizeLinkType } from '@/utils/fieldLabels'
 import UserHoverCard from './UserHoverCard.vue'
 
+/** 评论关联的字段变更（1分钟内的变更合并到评论条目展示） */
+export interface RelatedChange {
+  field: string
+  from?: string
+  to?: string
+}
+
 export interface ActivityItem {
   id: string
   type: 'comment' | 'change'
@@ -250,6 +266,11 @@ export interface ActivityItem {
    * 示例：{ source: 'action_rule' } | { source: 'automation', ruleName: '...' } | { reason: 'member_removed' }
    */
   detail?: Record<string, any>
+  /**
+   * 评论关联的字段变更列表（评论创建后 1 分钟内的字段变更）。
+   * 仅对 type === 'comment' 的条目有效。
+   */
+  relatedChanges?: RelatedChange[]
 }
 
 const props = defineProps<{
@@ -314,9 +335,23 @@ const deletingCommentId = ref<string | null>(null)
 const filtered = computed(() => {
   if (current.value === 'comments') return props.items.filter(i => i.type === 'comment')
   if (current.value === 'time') return props.items.filter(i => i.action === 'time_logged' || i.action === 'time_removed' || i.action === 'time_updated')
-  if (current.value === 'changes') return props.items.filter(i => i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed' && i.action !== 'time_updated')
+  if (current.value === 'changes') {
+    // Show standalone change items + comments that have relatedChanges (to display their merged changes)
+    return props.items.filter(i =>
+      (i.type === 'change' && i.action !== 'time_logged' && i.action !== 'time_removed' && i.action !== 'time_updated') ||
+      (i.type === 'comment' && i.relatedChanges && i.relatedChanges.length > 0)
+    )
+  }
   return props.items
 })
+
+/**
+ * Whether to hide the comment text for an item (used when filter is "changes" and
+ * we're only showing the relatedChanges block).
+ */
+function hideCommentText(item: ActivityItem): boolean {
+  return current.value === 'changes' && item.type === 'comment'
+}
 
 const sorted = computed(() => {
   const arr = [...filtered.value]
@@ -600,6 +635,43 @@ onBeforeUnmount(() => { editEditor.value?.destroy() })
 }
 .comment-text :deep(p) { margin: 4px 0; }
 .comment-text :deep(code) { background: var(--tf-bg-code); padding: 0 3px; border-radius: 2px; font-size: 11px; }
+
+/* Related changes block (YouTrack style: field changes within 1 minute of a comment) */
+.related-changes-block {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--tf-bg-surface);
+  border-radius: 6px;
+  border: 1px solid var(--tf-border-light);
+}
+.related-change-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tf-text-tertiary);
+}
+.related-change-row + .related-change-row {
+  margin-top: 2px;
+}
+.rc-field {
+  color: var(--tf-text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.rc-old {
+  text-decoration: line-through;
+  color: var(--tf-text-muted);
+}
+.rc-arrow {
+  color: var(--tf-text-muted);
+  flex-shrink: 0;
+}
+.rc-new {
+  color: var(--tf-accent);
+  font-weight: 500;
+}
 
 /* Deleted comment placeholder */
 .deleted-comment-placeholder {
