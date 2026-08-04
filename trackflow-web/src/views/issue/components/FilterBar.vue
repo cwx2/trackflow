@@ -215,6 +215,7 @@ import { IconFilter, IconSearch, IconPlus } from '@arco-design/web-vue/es/icon'
 import { projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueStatusVO, IssueTagVO, ProjectVO, SprintVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
+import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 import QueryInput from './QueryInput.vue'
 
 // ==================== Types ====================
@@ -652,9 +653,18 @@ async function loadValueOptions(fieldKey: string) {
         ]
         break
 
-      case 'issueType':
-        valueOptions.value = Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
+      case 'issueType': {
+        // 从自定义字段系统动态加载工单类型选项
+        const typePid = props.projectId
+        if (typePid) {
+          const typeOpts = await loadIssueTypeOptions(typePid)
+          valueOptions.value = typeOpts.map(o => ({ id: o.value, label: o.label, color: o.color || undefined }))
+        } else {
+          // 回退到静态映射
+          valueOptions.value = Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
+        }
         break
+      }
 
       case 'project':
         valueOptions.value = props.projectList.map(p => ({

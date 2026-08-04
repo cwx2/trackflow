@@ -339,6 +339,23 @@ export const issueApi = {
     }>>>('/issues/priority-options', { params: { projectId } })
   },
 
+  // ========== 工单类型选项 ==========
+
+  /** 获取项目的工单类型选项列表（从自定义字段系统动态获取，含颜色和描述） */
+  getIssueTypeOptions(projectId: string) {
+    return request.get<any, R<Array<{
+      id: string
+      customFieldId: string
+      projectId: string | null
+      value: string
+      position: number
+      isDefault: boolean
+      isArchived: boolean
+      color: string | null
+      description: string | null
+    }>>>('/issues/issue-type-options', { params: { projectId } })
+  },
+
   // ========== 手动排序 ==========
 
   /** 获取手动排序 */

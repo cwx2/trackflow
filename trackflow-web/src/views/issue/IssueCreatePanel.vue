@@ -188,7 +188,7 @@
           <div class="prop-row">
             <span class="prop-label">类型</span>
             <a-select v-model="form.issueType" size="small">
-              <a-option v-for="(label, value) in issueTypeLabelMap" :key="value" :value="value">{{ label }}</a-option>
+              <a-option v-for="t in issueTypeSelectOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
             </a-select>
           </div>
           <div class="prop-row">
@@ -599,6 +599,7 @@ import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
+import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap, localizeLinkType } from '@/utils/fieldLabels'
@@ -842,6 +843,15 @@ const prioritySelectOptions = ref([
   { value: 'High', label: '高', color: '#f59e0b' },
   { value: 'Normal', label: '普通', color: '#6366f1' },
   { value: 'Low', label: '低', color: '#64748b' },
+])
+
+// 工单类型选项（从自定义字段系统动态加载）
+const issueTypeSelectOptions = ref([
+  { value: 'Bug', label: '缺陷', color: '#ef4444' },
+  { value: 'Task', label: '任务', color: '#6366f1' },
+  { value: 'Feature', label: '需求', color: '#22c55e' },
+  { value: 'Epic', label: '史诗', color: '#a855f7' },
+  { value: 'Story', label: '故事', color: '#3b82f6' },
 ])
 
 // 工单模板
@@ -1313,6 +1323,10 @@ async function onProjectChange(val: any) {
   // 加载优先级选项（从自定义字段系统）
   loadPriorityOptions(pid).then(opts => {
     prioritySelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+  })
+  // 加载工单类型选项（从自定义字段系统）
+  loadIssueTypeOptions(pid).then(opts => {
+    issueTypeSelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
   })
   selectedTemplateId.value = null
   // Apply sprintId prop after sprints are loaded (ensures select shows correct label)

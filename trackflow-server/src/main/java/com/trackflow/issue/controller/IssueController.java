@@ -18,6 +18,7 @@ import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueLinkTypeService;
 import com.trackflow.issue.service.IssueTagService;
+import com.trackflow.issue.service.IssueTypeFieldService;
 import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.WorkflowService;
@@ -47,6 +48,7 @@ public class IssueController {
     private final IssueTagService tagService;
     private final CustomFieldService customFieldService;
     private final PriorityFieldService priorityFieldService;
+    private final IssueTypeFieldService issueTypeFieldService;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
 
     @PostMapping
@@ -541,6 +543,19 @@ public class IssueController {
     public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getPriorityOptions(
             @RequestParam("projectId") Long projectId) {
         var options = priorityFieldService.getPriorityOptions(projectId);
+        return R.ok(customFieldConverter.toOptionVOList(options));
+    }
+
+    // ========== 工单类型选项 ==========
+
+    /**
+     * 获取项目的工单类型选项列表。
+     * 工单类型已纳入自定义字段体系（V251），本接口返回项目有效的工单类型值列表（含颜色）。
+     */
+    @GetMapping("/issue-type-options")
+    public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getIssueTypeOptions(
+            @RequestParam("projectId") Long projectId) {
+        var options = issueTypeFieldService.getIssueTypeOptions(projectId);
         return R.ok(customFieldConverter.toOptionVOList(options));
     }
 }

@@ -35,6 +35,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { projectApi, customFieldApi } from '@/api'
 import type { IssueStatusVO, ProjectVO } from '@/api/types'
 import { localizeStatusName, issueTypeLabelMap, priorityLabelMap } from '@/utils/fieldLabels'
+import { loadIssueTypeOptions } from '../composables/useIssueTypeOptions'
 
 // ==================== Types ====================
 
@@ -79,6 +80,7 @@ const showDropdown = ref(false)
 const activeIndex = ref(0)
 const suggestions = ref<Suggestion[]>([])
 const userCache = ref<Array<{ id: string; label: string }>>([])
+const issueTypeCache = ref<Array<{ id: string; label: string }>>([])
 const customFields = ref<FieldDef[]>([])
 let blurTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -113,7 +115,9 @@ function getBuiltinFields(): FieldDef[] {
     },
     {
       key: 'type', label: '类型', queryKey: '类型', valueType: 'enum',
-      getValues: () => Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
+      getValues: () => issueTypeCache.value.length > 0
+        ? issueTypeCache.value
+        : Object.entries(issueTypeLabelMap).map(([id, label]) => ({ id, label }))
     },
     {
       key: 'sprint', label: 'Sprint', queryKey: 'Sprint', valueType: 'enum',
@@ -519,15 +523,26 @@ function mapFieldFormat(format: string): FieldDef['valueType'] {
   }
 }
 
+async function loadIssueTypes() {
+  try {
+    const pid = props.projectId
+    if (!pid) return
+    const opts = await loadIssueTypeOptions(pid)
+    issueTypeCache.value = opts.map(o => ({ id: o.value, label: o.label }))
+  } catch { /* ignore — fallback to static map */ }
+}
+
 // Watch projectId changes to reload custom fields and users
 watch(() => props.projectId, () => {
   loadCustomFields()
   loadUsers()
+  loadIssueTypes()
 })
 
 onMounted(() => {
   loadUsers()
   loadCustomFields()
+  loadIssueTypes()
 })
 
 // Close dropdown on outside click

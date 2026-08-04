@@ -11,6 +11,7 @@ import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.mapper.result.StatusCountRow;
+import com.trackflow.issue.service.IssueTypeFieldService;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.converter.RoleConverter;
 import com.trackflow.system.entity.SysRole;
@@ -66,6 +67,7 @@ public class WorkflowService {
     private final ObjectMapper objectMapper;
     private final TransitionActionMapper transitionActionMapper;
     private final TransitionGuardService transitionGuardService;
+    private final IssueTypeFieldService issueTypeFieldService;
 
     private final WorkflowDefinitionMapper workflowDefinitionMapper;
     private final ProjectWorkflowMapper projectWorkflowMapper;
@@ -604,14 +606,17 @@ public class WorkflowService {
      * 返回数据库中 issue 表的 distinct issue_type 值 + 预定义类型
      */
     /**
-     * 系统预定义的 Issue 类型（标准值，大小写敏感）。
-     * 所有写入 issue_type 字段的值必须属于此集合。
+     * 系统有效的 Issue 类型列表（从自定义字段系统动态获取，不再硬编码）。
+     * @deprecated 使用 {@link #listIssueTypes()} 替代直接访问此常量
      */
+    @Deprecated
     public static final List<String> PREDEFINED_ISSUE_TYPES = List.of("Bug", "Task", "Feature", "Epic", "Story");
 
     /**
-     * 用于大小写无关匹配的映射表：小写 → 标准值
+     * 用于大小写无关匹配的映射表（兼容旧代码引用）。
+     * @deprecated 使用 {@link IssueTypeFieldService#normalizeIssueType(String)} 替代
      */
+    @Deprecated
     private static final Map<String, String> ISSUE_TYPE_NORMALIZE_MAP;
     static {
         Map<String, String> map = new java.util.HashMap<>();
@@ -622,32 +627,24 @@ public class WorkflowService {
     }
 
     /**
-     * 返回系统预定义的 Issue 类型列表。
-     * 不再从 issue 表 DISTINCT 查询，避免脏数据污染类型列表。
+     * 返回系统中有效的 Issue 类型列表（从自定义字段体系动态获取）。
+     * 不再使用硬编码列表，支持管理员增删工单类型。
      */
     @Transactional(readOnly = true)
     public List<String> listIssueTypes() {
-        return PREDEFINED_ISSUE_TYPES;
+        return issueTypeFieldService.listIssueTypes();
     }
 
     /**
      * 校验并归一化 issueType 值。
-     * 支持大小写无关匹配（如 "bug" → "Bug"），不在预定义列表中则抛异常。
+     * 支持大小写无关匹配（如 "bug" → "Bug"），不在有效列表中则抛异常。
      *
      * @param issueType 用户输入的类型值
      * @return 归一化后的标准类型值
      * @throws BusinessException 当类型不合法时
      */
     public String normalizeIssueType(String issueType) {
-        if (issueType == null || issueType.isBlank()) {
-            return "Task"; // 默认值
-        }
-        String normalized = ISSUE_TYPE_NORMALIZE_MAP.get(issueType.toLowerCase().trim());
-        if (normalized == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "不支持的 Issue 类型: " + issueType + "，允许的值: " + PREDEFINED_ISSUE_TYPES);
-        }
-        return normalized;
+        return issueTypeFieldService.normalizeIssueType(issueType);
     }
 
     /**

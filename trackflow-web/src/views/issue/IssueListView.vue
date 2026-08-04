@@ -602,7 +602,7 @@
             @keyup.enter="quickCreate"
           />
           <a-select v-model="quickForm.issueType" size="small" style="width: 80px">
-            <a-option v-for="(label, value) in issueTypeLabelMap" :key="value" :value="value">{{ label }}</a-option>
+            <a-option v-for="t in issueTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
           </a-select>
           <a-select v-model="quickForm.priority" size="small" style="width: 80px">
             <a-option v-for="p in priorityOptions" :key="p.value" :value="p.value">
@@ -1008,6 +1008,7 @@ import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
+import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import type { IssueDraft } from './composables'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
 import { useNavBadge } from '@/composables/useNavBadge'
@@ -2424,11 +2425,22 @@ const priorityOptions = ref([
   { value: 'Low', label: '低', color: '#64748b' }
 ])
 
-// Load priority options from custom field system when project changes
+// 工单类型选项（从自定义字段系统动态加载）
+const issueTypeOptions = ref([
+  { value: 'Bug', label: '缺陷', color: '#ef4444' },
+  { value: 'Task', label: '任务', color: '#6366f1' },
+  { value: 'Feature', label: '需求', color: '#22c55e' },
+  { value: 'Epic', label: '史诗', color: '#a855f7' },
+  { value: 'Story', label: '故事', color: '#3b82f6' },
+])
+
+// Load priority and issue type options from custom field system when project changes
 watch(activeProjectId, async (projectId) => {
   if (projectId) {
     const loaded = await loadPriorityOptions(projectId)
     priorityOptions.value = loaded.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+    const loadedTypes = await loadIssueTypeOptions(projectId)
+    issueTypeOptions.value = loadedTypes.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
   }
 }, { immediate: true })
 

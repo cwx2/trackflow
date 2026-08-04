@@ -102,6 +102,7 @@ public class IssueService {
     private final com.trackflow.issue.service.precheck.ClosePreCheckChain closePreCheckChain;
     private final com.trackflow.issue.mapper.IssueVisibilityUserMapper visibilityUserMapper;
     private final PriorityFieldService priorityFieldService;
+    private final IssueTypeFieldService issueTypeFieldService;
 
     /**
      * 创建 Issue
@@ -139,7 +140,7 @@ public class IssueService {
         issue.setIssueKey(issueKey);
         issue.setTitle(dto.getTitle());
         issue.setDescription(dto.getDescription());
-        issue.setIssueType(workflowService.normalizeIssueType(dto.getIssueType()));
+        issue.setIssueType(issueTypeFieldService.normalizeIssueType(dto.getIssueType(), dto.getProjectId()));
         issue.setStatusId(resolvedStatusId);
         issue.setPriority(dto.getPriority() != null ? dto.getPriority() : priorityFieldService.getDefaultPriority(dto.getProjectId()));
         // 校验 assignee 是否为有效的项目成员
@@ -1247,7 +1248,7 @@ public class IssueService {
         }
         if (dto.getIssueType() != null) {
             String oldType = issue.getIssueType();
-            String newType = workflowService.normalizeIssueType(dto.getIssueType());
+            String newType = issueTypeFieldService.normalizeIssueType(dto.getIssueType(), issue.getProjectId());
 
             // 归一化后实际未变更则跳过
             if (!newType.equals(oldType)) {
