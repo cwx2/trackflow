@@ -884,7 +884,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.maxLength = record.maxLength
   form.regexp = record.regexp || ''
   form.options = (record.options || [])
-    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false }))
+    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false, isResolved: o.isResolved || false }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
   form.copyOptionsFromFieldId = undefined

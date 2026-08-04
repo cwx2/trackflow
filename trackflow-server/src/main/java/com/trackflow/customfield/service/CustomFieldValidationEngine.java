@@ -97,8 +97,7 @@ public class CustomFieldValidationEngine {
             case "date" -> validateDate(field, value, errors);
             case "datetime" -> validateDatetime(field, value, errors);
             case "bool" -> validateBool(field, value, errors);
-            case "list" -> validateList(field, value, errors);
-            case "state" -> validateList(field, value, errors);
+            case "list", "state" -> validateList(field, value, errors);
             case "user" -> validateUser(field, value, projectId, errors);
             case "period" -> validatePeriod(field, value, errors);
             default -> {

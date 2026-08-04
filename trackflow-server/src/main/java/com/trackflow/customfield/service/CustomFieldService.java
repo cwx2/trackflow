@@ -575,20 +575,21 @@ public class CustomFieldService {
 
     /** 委托给 {@link CustomFieldValueService} */
     public Map<Long, String> applyDefaultsAndValidate(Map<Long, String> userProvided, String issueType, Long projectId) {
-        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
         return valueService.applyDefaultsAndValidate(userProvided, issueType, projectId, applicableFields);
     }
 
     /** 仅应用默认值不校验必填（用于子工单快速创建），委托给 {@link CustomFieldValueService} */
     public Map<Long, String> applyDefaultsOnly(Map<Long, String> userProvided, String issueType, Long projectId) {
-        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
         return valueService.applyDefaultsOnly(userProvided, issueType, projectId, applicableFields);
     }
 
     /** 委托给 {@link CustomFieldValueService}，并触发级联清除 */
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId) {
-        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        fieldValues = excludeStateFieldValue(fieldValues);
+        List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
         valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields);
         // 级联清除：每个被修改的字段都可能是其他字段的 filterFieldId
         cascadeClearForBatch(issueId, fieldValues, projectId);
@@ -598,7 +599,8 @@ public class CustomFieldService {
     @Transactional(rollbackFor = Exception.class)
     public void saveValues(Long issueId, Map<Long, String> fieldValues, String issueType, Long projectId,
                            CustomFieldValidateMode mode) {
-        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        fieldValues = excludeStateFieldValue(fieldValues);
+        List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
         valueService.saveValues(issueId, fieldValues, issueType, projectId, applicableFields, mode);
         // 级联清除
         cascadeClearForBatch(issueId, fieldValues, projectId);
@@ -623,12 +625,16 @@ public class CustomFieldService {
 
     /**
      * 保存单个字段值，并触发级联清除依赖字段的失效值。
+     * State 字段（由工作流引擎管理）的写入请求将被拒绝。
      *
      * @return 被级联清除的字段名称列表（空列表表示无级联清除发生）
      */
     @Transactional(rollbackFor = Exception.class)
     public List<String> saveSingleValue(Long issueId, Long customFieldId, String value, String issueType, Long projectId) {
-        List<CustomFieldDefinition> applicableFields = listByProject(projectId, issueType);
+        if (STATE_FIELD_ID.equals(customFieldId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "状态字段由工作流引擎管理，不能通过自定义字段接口修改");
+        }
+        List<CustomFieldDefinition> applicableFields = excludeStateField(listByProject(projectId, issueType));
         valueService.saveSingleValue(issueId, customFieldId, value, issueType, projectId, applicableFields);
         // 级联清除：如果被修改的字段是其他字段的 filterFieldId，清除失效的依赖值
         return valueService.cascadeClearDependentValues(issueId, customFieldId, value, projectId);
@@ -1892,6 +1898,28 @@ public class CustomFieldService {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    /**
+     * 从适用字段列表中排除 State 内置字段。
+     * State 字段数据由工作流引擎管理（issue.status_id），不经过 custom_field_value 表。
+     */
+    private List<CustomFieldDefinition> excludeStateField(List<CustomFieldDefinition> fields) {
+        return fields.stream()
+                .filter(f -> !STATE_FIELD_ID.equals(f.getId()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 从用户提交的字段值 Map 中排除 State 字段（静默忽略，避免写入 custom_field_value）。
+     */
+    private Map<Long, String> excludeStateFieldValue(Map<Long, String> fieldValues) {
+        if (fieldValues == null || !fieldValues.containsKey(STATE_FIELD_ID)) {
+            return fieldValues;
+        }
+        Map<Long, String> filtered = new HashMap<>(fieldValues);
+        filtered.remove(STATE_FIELD_ID);
+        return filtered;
     }
 
     private String roleIdsToJson(List<Long> roleIds) {
