@@ -40,9 +40,9 @@
     </button>
     <span v-else-if="indent > 0" class="item-expand-spacer"></span>
 
-    <!-- Priority icon -->
-    <span class="item-priority" :class="'priority-' + (issue.priority || 'Normal').toLowerCase()" :title="localizePriority(issue.priority)">
-      <span class="priority-dot"></span>
+    <!-- Priority badge -->
+    <span class="item-priority" :class="'priority-' + (issue.priority || 'Normal').toLowerCase()">
+      {{ localizePriority(issue.priority) }}
     </span>
 
     <!-- Issue key -->
@@ -471,27 +471,28 @@ function truncateDescription(desc?: string): string {
   flex-shrink: 0;
 }
 
-/* Priority dot */
+/* Priority badge */
 .item-priority {
   flex-shrink: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-}
-
-.item-priority .priority-dot {
-  width: 8px;
-  height: 8px;
-  min-width: 8px;
-  min-height: 8px;
-  flex-shrink: 0;
-  border-radius: 50%;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: var(--tf-text-tertiary);
 }
 
-.item-priority.priority-critical .priority-dot { background: var(--tf-danger, #e53e3e); }
-.item-priority.priority-high .priority-dot { background: var(--tf-warning, #ed8936); }
-.item-priority.priority-normal .priority-dot { background: var(--tf-accent, #4299e1); }
-.item-priority.priority-low .priority-dot { background: var(--tf-text-tertiary, #a0aec0); }
+.item-priority.priority-critical { background: var(--tf-danger, #e53e3e); }
+.item-priority.priority-high { background: var(--tf-warning, #ed8936); }
+.item-priority.priority-normal { background: var(--tf-accent, #4299e1); }
+.item-priority.priority-low { background: var(--tf-text-tertiary, #a0aec0); }
 
 /* Issue key */
 .item-key {
