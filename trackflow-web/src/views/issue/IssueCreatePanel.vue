@@ -602,7 +602,7 @@ import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
-import { issueTypeLabelMap, localizeLinkType } from '@/utils/fieldLabels'
+import { localizeLinkType } from '@/utils/fieldLabels'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{

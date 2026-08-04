@@ -772,7 +772,7 @@
           </div>
         </template>
         <template #updatedAt="{ record }"><span class="time-ago">{{ formatTime(record.updatedAt) }}</span></template>
-        <template #issueType="{ record }"><span class="type-label">{{ localizeIssueType(record.issueType) }}</span></template>
+        <template #issueType="{ record }"><span class="type-label"><span class="type-color-dot" :style="{ background: getIssueTypeColorForRecord(record.issueType) }"></span>{{ getIssueTypeLabelForRecord(record.issueType) }}</span></template>
         <template #reporter="{ record }"><span class="reporter-name">{{ record.reporterName || '\u2014' }}</span></template>
         <template #createdAt="{ record }"><span class="time-ago">{{ formatTime(record.createdAt) }}</span></template>
         <template #dueDate="{ record }">
@@ -1003,7 +1003,7 @@ import type { IssueVO, IssueStatusVO, ProjectMemberVO, SprintVO, CustomFieldValu
 import type { TagPanelItemVO, AvailableTagVO } from '@/api/tag'
 import type { TableData } from '@arco-design/web-vue'
 import { useAuthStore } from '@/stores/auth'
-import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabelMap, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
+import { localizeStatusName, localizePriority, priorityLabelMap, priorityReverseLabelMap, queryFieldKeyToLabel, queryFieldLabelToKey } from '@/utils/fieldLabels'
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
@@ -1279,7 +1279,7 @@ const activeQueryReadonlyLabels = computed<string[]>(() => {
     if (Array.isArray(f.value)) {
       values = f.value.map((v: string) => {
         if (v === '${currentUser}') return '我'
-        if (f.field === 'type') return issueTypeLabelMap[v] || v
+        if (f.field === 'type') return getIssueTypeLabelForRecord(v)
         if (f.field === 'priority') return priorityLabelMap[v] || v
         if (f.field === 'status') {
           const st = statusCache.value.find(s => s.code === v || s.id === v)
@@ -1445,7 +1445,7 @@ function filtersToQueryText(filters: any[]): string {
     if (Array.isArray(f.value)) {
       values = f.value.map((v: string) => {
         if (v === '${currentUser}') return '我'
-        if (f.field === 'type') return issueTypeLabelMap[v] || v
+        if (f.field === 'type') return getIssueTypeLabelForRecord(v)
         if (f.field === 'priority') return priorityLabelMap[v] || v
         if (f.field === 'status') {
           const st = statusCache.value.find(s => s.code === v || s.id === v)
@@ -1577,8 +1577,8 @@ function resolveValueToId(fieldKey: string, v: string): string {
   }
   if (fieldKey === 'priority') return priorityReverseLabelMap[v] || v
   if (fieldKey === 'type') {
-    const entry = Object.entries(issueTypeLabelMap).find(([, label]) => label === v)
-    return entry ? entry[0] : v
+    const entry = issueTypeOptions.value.find(o => o.label === v || o.value === v)
+    return entry ? entry.value : v
   }
   if (fieldKey === 'status') {
     const st = statusCache.value.find(s => localizeStatusName(s.name) === v || s.name === v)
@@ -2449,6 +2449,20 @@ function getPriorityColorForRecord(priority: string | null | undefined): string 
   const p = priority || 'Normal'
   const opt = priorityOptions.value.find(o => o.value === p || o.value.toLowerCase() === p.toLowerCase())
   return opt?.color || '#6366f1'
+}
+
+/** 根据工单类型值从动态选项中获取颜色 */
+function getIssueTypeColorForRecord(issueType: string | null | undefined): string {
+  const t = issueType || 'Task'
+  const opt = issueTypeOptions.value.find(o => o.value === t || o.value.toLowerCase() === t.toLowerCase())
+  return opt?.color || '#6366f1'
+}
+
+/** 根据工单类型值从动态选项中获取中文标签 */
+function getIssueTypeLabelForRecord(issueType: string | null | undefined): string {
+  if (!issueType) return '未知'
+  const opt = issueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
+  return opt?.label || issueType
 }
 
 // Column widths — default values, user can resize via drag
@@ -3573,7 +3587,7 @@ function parseSavedQueryFilters(filtersRaw: string | any[] | null | undefined): 
           }
           case 'issueType': {
             values.push(resolvedValue)
-            valueLabels.push(issueTypeLabelMap[resolvedValue] || resolvedValue)
+            valueLabels.push(getIssueTypeLabelForRecord(resolvedValue))
             break
           }
           case 'priority': {
@@ -4453,7 +4467,8 @@ onBeforeRouteLeave((_to, _from, next) => {
 .issue-table :deep(.issue-resolved) .reporter-name { color: var(--tf-text-tertiary); }
 .issue-table :deep(.issue-resolved) .time-ago { color: var(--tf-text-quaternary); }
 .issue-table :deep(.issue-resolved) .cf-cell { color: var(--tf-text-tertiary); }
-.type-label { font-size: 12px; color: var(--tf-text-secondary); }
+.type-label { font-size: 12px; color: var(--tf-text-secondary); display: inline-flex; align-items: center; gap: 4px; }
+.type-color-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .reporter-name { font-size: 12px; color: var(--tf-text-secondary); }
 
 /* Editable cells */

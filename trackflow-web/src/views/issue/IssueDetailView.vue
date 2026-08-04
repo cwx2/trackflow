@@ -247,6 +247,7 @@ import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
 import { useRecentIssues } from './composables/useRecentIssues'
 import { loadPriorityOptions, getPriorityColor } from './composables/usePriorityOptions'
+import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import { useDrafts } from './composables/useDrafts'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
@@ -259,7 +260,7 @@ import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
-import { localizeFieldName, localizeFieldValue, localizeStatusName, issueTypeLabelMap, localizePriority, priorityLabelMap, localizeIssueType, localizeLinkType } from '@/utils/fieldLabels'
+import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, priorityLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
 const router = useRouter()
@@ -337,6 +338,15 @@ const dynamicPriorityOptions = ref<Array<{ value: string; label: string; color: 
   { value: 'High', label: '高', color: '#f59e0b' },
   { value: 'Normal', label: '普通', color: '#6366f1' },
   { value: 'Low', label: '低', color: '#64748b' },
+])
+
+// 工单类型选项（从自定义字段系统动态加载）
+const dynamicIssueTypeOptions = ref<Array<{ value: string; label: string; color: string }>>([
+  { value: 'Bug', label: '缺陷', color: '#ef4444' },
+  { value: 'Task', label: '任务', color: '#6366f1' },
+  { value: 'Feature', label: '需求', color: '#22c55e' },
+  { value: 'Epic', label: '史诗', color: '#a855f7' },
+  { value: 'Story', label: '故事', color: '#3b82f6' },
 ])
 
 // 归档状态
@@ -731,6 +741,11 @@ async function loadRelatedData() {
     dynamicPriorityOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
   })
 
+  // 加载工单类型选项（从自定义字段系统）
+  loadIssueTypeOptions(pid).then(opts => {
+    dynamicIssueTypeOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+  })
+
   // 先加载权限，决定是否需要加载编辑选项
   const perms = await loadProjectPermissions(pid)
   const isAdmin = authStore.hasGlobalPermission('system:admin')
@@ -938,7 +953,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
     { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: dynamicPriorityOptions.value.map(o => ({ value: o.value, label: o.label })) },
     { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
-    { key: 'issueType', label: '类型', value: localizeIssueType(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: Object.entries(issueTypeLabelMap).map(([value, label]) => ({ value, label })) },
+    { key: 'issueType', label: '类型', value: getDetailIssueTypeLabel(i.issueType), dot: getDetailIssueTypeColor(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: dynamicIssueTypeOptions.value.map(o => ({ value: o.value, label: o.label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true, readonlyReason: '报告人为工单创建者，不可修改' },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
@@ -1869,6 +1884,20 @@ function formatSize(bytes: number) {
 
 function priorityDot(p: string) {
   return getPriorityColor(p, issue.value?.projectId)
+}
+
+/** 从动态选项获取工单类型颜色 */
+function getDetailIssueTypeColor(issueType: string | null | undefined): string {
+  if (!issueType) return '#6366f1'
+  const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
+  return opt?.color || '#6366f1'
+}
+
+/** 从动态选项获取工单类型标签 */
+function getDetailIssueTypeLabel(issueType: string | null | undefined): string {
+  if (!issueType) return '未知'
+  const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
+  return opt?.label || issueType
 }
 
 // 路由守卫：离开时检查克隆创建面板是否有未保存数据
