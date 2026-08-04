@@ -744,7 +744,7 @@ public class CustomFieldValueService {
     }
 
     private String resolveDefaultValue(CustomFieldDefinition field) {
-        if ("list".equals(field.getFieldFormat())) {
+        if (CustomFieldOptionService.isEnumLikeFormat(field.getFieldFormat())) {
             List<com.trackflow.customfield.entity.CustomFieldOption> defaultOptions = optionMapper.selectList(
                     new LambdaQueryWrapper<com.trackflow.customfield.entity.CustomFieldOption>()
                             .eq(com.trackflow.customfield.entity.CustomFieldOption::getCustomFieldId, field.getId())

@@ -762,6 +762,8 @@ export interface CustomFieldOptionVO {
   color?: string | null
   /** 选项描述，在下拉选择时以 tooltip 形式展示 */
   description?: string | null
+  /** 仅 state 类型字段使用：标记该状态值是否视为"已解决" */
+  isResolved?: boolean
 }
 
 /** 选项集状态 VO */

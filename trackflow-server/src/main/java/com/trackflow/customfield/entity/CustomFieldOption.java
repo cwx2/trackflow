@@ -50,6 +50,9 @@ public class CustomFieldOption implements Serializable {
     /** 是否已归档（归档选项不出现在新值选择列表中，但已引用的值仍可正确展示） */
     private Boolean isArchived;
 
+    /** 仅 state 类型字段使用：标记该状态值是否视为"已解决"（对应 YouTrack 的 isResolved 属性） */
+    private Boolean isResolved;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

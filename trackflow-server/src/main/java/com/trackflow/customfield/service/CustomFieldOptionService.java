@@ -48,6 +48,13 @@ public class CustomFieldOptionService {
     private final CustomFieldValueMapper valueMapper;
     private final ProjectMapper projMapper;
 
+    /**
+     * 判断字段类型是否支持选项集（list 和 state 类型都有选项）。
+     */
+    public static boolean isEnumLikeFormat(String fieldFormat) {
+        return "list".equals(fieldFormat) || "state".equals(fieldFormat);
+    }
+
     // ========== 项目级选项集管理（Make Independent Copy）==========
 
     /**
@@ -58,7 +65,7 @@ public class CustomFieldOptionService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
         }
-        if (!"list".equals(field.getFieldFormat())) {
+        if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项集");
         }
 
@@ -102,7 +109,7 @@ public class CustomFieldOptionService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
         }
-        if (!"list".equals(field.getFieldFormat())) {
+        if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持独立选项集");
         }
 
@@ -297,7 +304,7 @@ public class CustomFieldOptionService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
         }
-        if (!"list".equals(field.getFieldFormat())) {
+        if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项排序");
         }
 
@@ -342,7 +349,7 @@ public class CustomFieldOptionService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
         }
-        if (!"list".equals(field.getFieldFormat())) {
+        if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持选项归档");
         }
 
@@ -389,7 +396,7 @@ public class CustomFieldOptionService {
         if (def == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "自定义字段不存在");
         }
-        if (!"list".equals(def.getFieldFormat())) {
+        if (!isEnumLikeFormat(def.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅枚举(list)类型字段支持逐选项统计");
         }
 
@@ -433,7 +440,7 @@ public class CustomFieldOptionService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
         }
-        if (!"list".equals(field.getFieldFormat())) {
+        if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "只有枚举类型字段支持添加选项值");
         }
 
@@ -624,6 +631,10 @@ public class CustomFieldOptionService {
                 }
                 // 更新描述字段（允许清空）
                 existing.setDescription(opt.getDescription());
+                // 更新 isResolved（state 类型字段用）
+                if (opt.getIsResolved() != null) {
+                    existing.setIsResolved(opt.getIsResolved());
+                }
                 // 如果之前是归档状态，恢复为活跃
                 if (Boolean.TRUE.equals(existing.getIsArchived())) {
                     existing.setIsArchived(false);
@@ -913,6 +924,9 @@ public class CustomFieldOptionService {
                 activeSameName.setColor(opt.getColor());
             }
             activeSameName.setDescription(opt.getDescription());
+            if (opt.getIsResolved() != null) {
+                activeSameName.setIsResolved(opt.getIsResolved());
+            }
             activeSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(activeSameName);
             return activeSameName.getId();
@@ -939,6 +953,9 @@ public class CustomFieldOptionService {
                 archivedSameName.setColor(opt.getColor());
             }
             archivedSameName.setDescription(opt.getDescription());
+            if (opt.getIsResolved() != null) {
+                archivedSameName.setIsResolved(opt.getIsResolved());
+            }
             archivedSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(archivedSameName);
             return archivedSameName.getId();
@@ -953,6 +970,7 @@ public class CustomFieldOptionService {
         newOption.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
         newOption.setColor(opt.getColor());
         newOption.setDescription(opt.getDescription());
+        newOption.setIsResolved(Boolean.TRUE.equals(opt.getIsResolved()));
         newOption.setIsArchived(false);
         newOption.setCreatedAt(LocalDateTime.now());
         newOption.setUpdatedAt(LocalDateTime.now());
@@ -1026,7 +1044,7 @@ public class CustomFieldOptionService {
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
         }
-        if (!"list".equals(field.getFieldFormat())) {
+        if (!isEnumLikeFormat(field.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅列表类型字段支持排序模式");
         }
 

@@ -60,13 +60,18 @@ public class CustomFieldService {
      *   <li>1000000000000000001 = Priority (V249)</li>
      *   <li>1000000000000000002 = Type (V251)</li>
      *   <li>1000000000000000003 = Due Date (V252)</li>
+     *   <li>1000000000000000004 = State (V253)</li>
      * </ul>
      */
     public static final java.util.Set<Long> BUILTIN_FIELD_IDS = java.util.Set.of(
             1000000000000000001L,
             1000000000000000002L,
-            1000000000000000003L
+            1000000000000000003L,
+            1000000000000000004L
     );
+
+    /** State 内置字段 ID，用于特殊处理逻辑 */
+    public static final Long STATE_FIELD_ID = 1000000000000000004L;
 
     private final CustomFieldDefinitionMapper definitionMapper;
     private final CustomFieldOptionMapper optionMapper;
@@ -125,7 +130,7 @@ public class CustomFieldService {
             throw ex;
         }
 
-        if ("list".equals(dto.getFieldFormat())) {
+        if (CustomFieldOptionService.isEnumLikeFormat(dto.getFieldFormat())) {
             if (dto.getCopyOptionsFromFieldId() != null && (dto.getOptions() == null || dto.getOptions().isEmpty())) {
                 optionService.copyOptionsFromField(entity.getId(), dto.getCopyOptionsFromFieldId());
             } else if (dto.getOptions() != null) {
@@ -138,6 +143,7 @@ public class CustomFieldService {
                     option.setIsDefault(Boolean.TRUE.equals(opt.getIsDefault()));
                     option.setColor(opt.getColor());
                     option.setDescription(opt.getDescription());
+                    option.setIsResolved(Boolean.TRUE.equals(opt.getIsResolved()));
                     option.setCreatedAt(LocalDateTime.now());
                     option.setUpdatedAt(LocalDateTime.now());
                     optionMapper.insert(option);
@@ -197,7 +203,7 @@ public class CustomFieldService {
         if (dto.getMinLength() != null) entity.setMinLength(dto.getMinLength());
         if (dto.getMaxLength() != null) entity.setMaxLength(dto.getMaxLength());
         if (dto.getRegexp() != null) entity.setRegexp(dto.getRegexp());
-        if (dto.getIsMulti() != null && "list".equals(entity.getFieldFormat())) {
+        if (dto.getIsMulti() != null && CustomFieldOptionService.isEnumLikeFormat(entity.getFieldFormat())) {
             boolean currentIsMulti = Boolean.TRUE.equals(entity.getIsMulti());
             if (dto.getIsMulti() != currentIsMulti) {
                 long valueCount = valueMapper.selectCount(
@@ -222,11 +228,11 @@ public class CustomFieldService {
             throw ex;
         }
 
-        if ("list".equals(entity.getFieldFormat()) && dto.getOptions() != null) {
+        if (CustomFieldOptionService.isEnumLikeFormat(entity.getFieldFormat()) && dto.getOptions() != null) {
             optionService.updateListOptions(id, dto.getOptions());
         }
 
-        if ("list".equals(entity.getFieldFormat()) && dto.getCopyOptionsFromFieldId() != null && dto.getOptions() == null) {
+        if (CustomFieldOptionService.isEnumLikeFormat(entity.getFieldFormat()) && dto.getCopyOptionsFromFieldId() != null && dto.getOptions() == null) {
             optionService.appendOptionsFromField(id, dto.getCopyOptionsFromFieldId());
         }
 
@@ -1389,7 +1395,7 @@ public class CustomFieldService {
     public List<CustomFieldDefinition> listEnumFields() {
         return definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
-                        .eq(CustomFieldDefinition::getFieldFormat, "list")
+                        .in(CustomFieldDefinition::getFieldFormat, "list", "state")
                         .orderByAsc(CustomFieldDefinition::getPosition));
     }
 

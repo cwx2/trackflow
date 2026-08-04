@@ -88,7 +88,7 @@
                 </a-table-column>
                 <a-table-column title="选项值" :width="220">
                   <template #cell="{ record }">
-                    <template v-if="record.fieldFormat === 'list' && record.options && record.options.length > 0">
+                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state') && record.options && record.options.length > 0">
                       <div class="options-inline">
                         <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
                           <span
@@ -334,9 +334,9 @@
           </a-form-item>
         </template>
 
-        <!-- list 类型选项管理 -->
-        <template v-if="form.fieldFormat === 'list'">
-          <a-form-item label="多值选择">
+        <!-- list/state 类型选项管理 -->
+        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state'">
+          <a-form-item v-if="form.fieldFormat === 'list'" label="多值选择">
             <a-switch v-model="form.isMulti" :disabled="isMultiDisabled" />
             <div class="form-help">
               <template v-if="isMultiDisabled">
@@ -477,6 +477,8 @@
                     <icon-info-circle />
                   </a-button>
                   <a-checkbox v-if="!opt.isArchived" v-model="opt.isDefault" size="small">默认</a-checkbox>
+                  <!-- state 类型显示 isResolved 开关 -->
+                  <a-checkbox v-if="!opt.isArchived && form.fieldFormat === 'state'" v-model="opt.isResolved" size="small">已解决</a-checkbox>
                   <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
                   <span
                     v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
@@ -697,6 +699,7 @@ const fieldTypeOptions = [
   { value: 'datetime', label: '日期时间' },
   { value: 'bool', label: '布尔' },
   { value: 'list', label: '列表(枚举)' },
+  { value: 'state', label: '状态(State)' },
   { value: 'user', label: '用户' },
   { value: 'period', label: '时间周期' }
 ]
@@ -888,7 +891,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   copyFromFieldId.value = null
   // 检查字段是否有数据——有则禁止切换 isMulti
   isMultiDisabled.value = false
-  if (record.fieldFormat === 'list') {
+  if (record.fieldFormat === 'list' || record.fieldFormat === 'state') {
     loadEnumFields()
     customFieldApi.getUsage(record.id).then(res => {
       if (res.data && res.data.valueCount > 0) {
@@ -1081,8 +1084,8 @@ async function handleSave() {
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
-        options: form.fieldFormat === 'list'
-          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state')
+          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes
@@ -1101,8 +1104,8 @@ async function handleSave() {
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
         isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
-        options: form.fieldFormat === 'list'
-          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined }))
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state')
+          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes

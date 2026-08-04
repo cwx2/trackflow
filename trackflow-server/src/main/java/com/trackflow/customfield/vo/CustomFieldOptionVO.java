@@ -16,4 +16,6 @@ public class CustomFieldOptionVO {
     private String color;
     /** 选项描述，在下拉选择时以 tooltip 形式展示 */
     private String description;
+    /** 仅 state 类型字段使用：标记该状态值是否视为"已解决" */
+    private Boolean isResolved;
 }

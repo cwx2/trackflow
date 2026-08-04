@@ -65,7 +65,7 @@ public class CustomFieldReplacementService {
                         .orderByAsc(CustomFieldDefinition::getPosition));
 
         // 如果是 list 类型，还需要匹配 isMulti 属性
-        if ("list".equals(currentField.getFieldFormat())) {
+        if (CustomFieldOptionService.isEnumLikeFormat(currentField.getFieldFormat())) {
             boolean isMulti = Boolean.TRUE.equals(currentField.getIsMulti());
             sameTypeFields = sameTypeFields.stream()
                     .filter(f -> Boolean.TRUE.equals(f.getIsMulti()) == isMulti)
@@ -91,7 +91,7 @@ public class CustomFieldReplacementService {
             rf.setProjectCount((int) projectCount);
 
             // 统计选项数量
-            if ("list".equals(field.getFieldFormat())) {
+            if (CustomFieldOptionService.isEnumLikeFormat(field.getFieldFormat())) {
                 long optionCount = optionMapper.selectCount(
                         new LambdaQueryWrapper<CustomFieldOption>()
                                 .eq(CustomFieldOption::getCustomFieldId, field.getId()));
@@ -140,7 +140,7 @@ public class CustomFieldReplacementService {
         }
 
         // 如果是 list 类型，验证 isMulti 一致
-        if ("list".equals(sourceField.getFieldFormat())) {
+        if (CustomFieldOptionService.isEnumLikeFormat(sourceField.getFieldFormat())) {
             boolean sourceIsMulti = Boolean.TRUE.equals(sourceField.getIsMulti());
             boolean targetIsMulti = Boolean.TRUE.equals(targetField.getIsMulti());
             if (sourceIsMulti != targetIsMulti) {
@@ -161,7 +161,7 @@ public class CustomFieldReplacementService {
         int mergedOptionCount = 0;
 
         // 如果是 list 类型，需要合并选项
-        if ("list".equals(sourceField.getFieldFormat())) {
+        if (CustomFieldOptionService.isEnumLikeFormat(sourceField.getFieldFormat())) {
             mergedOptionCount = mergeOptions(sourceFieldId, targetFieldId, issueIds);
         }
 

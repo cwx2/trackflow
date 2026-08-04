@@ -241,7 +241,7 @@
                   @input="onOverrideChange"
                 />
                 <a-select
-                  v-else-if="selectedField?.fieldFormat === 'list'"
+                  v-else-if="selectedField?.fieldFormat === 'list' || selectedField?.fieldFormat === 'state'"
                   v-model="overrideForm.defaultValue"
                   size="small"
                   placeholder="选择默认选项..."
@@ -540,7 +540,9 @@ const fieldTypeMap: Record<string, string> = {
   datetime: '日期时间',
   bool: '布尔',
   list: '列表',
-  user: '用户'
+  state: '状态(State)',
+  user: '用户',
+  period: '时间周期'
 }
 
 function formatFieldType(format: string): string {
@@ -564,8 +566,8 @@ function formatDefaultValue(field: CustomFieldDefinitionVO, useGlobalDefault = f
   const defaultValue = useGlobalDefault ? field.defaultValue : field.effectiveDefaultValue
   if (!defaultValue) return ''
 
-  // 列表类型：从 options 中查找选项名称
-  if (field.fieldFormat === 'list' && field.options && field.options.length > 0) {
+  // 列表/状态类型：从 options 中查找选项名称
+  if ((field.fieldFormat === 'list' || field.fieldFormat === 'state') && field.options && field.options.length > 0) {
     const option = field.options.find(opt => opt.id === defaultValue)
     if (option) {
       return option.value
@@ -594,7 +596,7 @@ const eligibleConditionFields = computed(() => {
   if (!selectedField.value) return []
   return fieldList.value.filter(f =>
     f.id !== selectedField.value!.id &&
-    f.fieldFormat === 'list' &&
+    (f.fieldFormat === 'list' || f.fieldFormat === 'state') &&
     !f.isMulti &&
     !f.conditionFieldId // 禁止链式
   )

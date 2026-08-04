@@ -137,7 +137,7 @@ public class CustomFieldDisplayService {
 
         // 5. 预加载 list 类型字段的选项映射
         Set<Long> listFieldIds = fieldDefMap.values().stream()
-                .filter(f -> "list".equals(f.getFieldFormat()))
+                .filter(f -> CustomFieldOptionService.isEnumLikeFormat(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
         Map<Long, String> optionTextMap = new HashMap<>();
@@ -204,7 +204,7 @@ public class CustomFieldDisplayService {
                         if (display != null) labels.add(display);
                     }
                     fieldDisplayMap.put(cfKey, String.join(", ", labels));
-                    if ("list".equals(fieldDef.getFieldFormat())) {
+                    if (CustomFieldOptionService.isEnumLikeFormat(fieldDef.getFieldFormat())) {
                         for (String v : values) {
                             String color = resolveOptionColor(v, optionColorMap);
                             if (color != null) {
@@ -216,7 +216,7 @@ public class CustomFieldDisplayService {
                 } else {
                     String displayValue = resolveDisplayValue(values.get(0), fieldDef, optionTextMap, userNameMap);
                     fieldDisplayMap.put(cfKey, displayValue);
-                    if ("list".equals(fieldDef.getFieldFormat())) {
+                    if (CustomFieldOptionService.isEnumLikeFormat(fieldDef.getFieldFormat())) {
                         String color = resolveOptionColor(values.get(0), optionColorMap);
                         if (color != null) {
                             fieldColorMap.put(cfKey, color);
@@ -314,7 +314,7 @@ public class CustomFieldDisplayService {
 
         // 5. 预加载 list 类型字段的选项映射
         Set<Long> listFieldIds = fieldDefMap.values().stream()
-                .filter(f -> "list".equals(f.getFieldFormat()))
+                .filter(f -> CustomFieldOptionService.isEnumLikeFormat(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
         Map<Long, String> optionTextMap = new HashMap<>();
@@ -438,7 +438,7 @@ public class CustomFieldDisplayService {
 
         // 批量预加载 list 类型字段的选项映射
         Set<Long> listFieldIds = fieldMap.values().stream()
-                .filter(f -> "list".equals(f.getFieldFormat()))
+                .filter(f -> CustomFieldOptionService.isEnumLikeFormat(f.getFieldFormat()))
                 .map(CustomFieldDefinition::getId)
                 .collect(Collectors.toSet());
         Map<Long, String> optionTextMap = new HashMap<>();
@@ -535,7 +535,7 @@ public class CustomFieldDisplayService {
             return null;
         }
         return switch (fieldDef.getFieldFormat()) {
-            case "list" -> {
+            case "list", "state" -> {
                 try {
                     Long optionId = Long.parseLong(rawValue);
                     yield optionTextMap.getOrDefault(optionId, rawValue);
@@ -575,7 +575,7 @@ public class CustomFieldDisplayService {
     public String resolveDisplayValue(CustomFieldDefinition field, String rawValue) {
         if (rawValue == null || rawValue.isBlank()) return "";
         switch (field.getFieldFormat()) {
-            case "list" -> {
+            case "list", "state" -> {
                 try {
                     Long optionId = Long.parseLong(rawValue);
                     CustomFieldOption option = optionMapper.selectById(optionId);
