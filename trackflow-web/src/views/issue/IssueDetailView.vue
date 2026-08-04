@@ -1056,7 +1056,14 @@ function getFilteredOptions(
     }
   }
 
-  return activeOptions.map(o => ({ value: o.id, label: o.value, description: o.description || undefined }))
+  return activeOptions.map(o => {
+    let label = o.value
+    // ownedField 类型：在标签中显示 owner 名称
+    if (cf.fieldFormat === 'ownedField' && o.ownerDisplayName) {
+      label = `${o.value} → ${o.ownerDisplayName}`
+    }
+    return { value: o.id, label, description: o.description || undefined }
+  })
 }
 
 /**
@@ -1127,6 +1134,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
 
     switch (cf.fieldFormat) {
       case 'list':
+      case 'ownedField':
         editType = isMulti ? 'multi-select' : 'select'
         // Only show active (non-archived) options in the selector;
         // if current value references an archived option, it's still displayed via displayValue
