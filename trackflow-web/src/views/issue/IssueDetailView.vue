@@ -63,6 +63,8 @@
         @upload="triggerUpload(false)"
         @upload-private="triggerUpload(true)"
         @upload-files="onDropFiles"
+        @delete-attachment="onDeleteAttachment"
+        @delete-all-attachments="onDeleteAllAttachments"
         @copy-id="onCopyId"
         @clone="onCloneIssue"
         @create-subtask="onCreateSubtask"
@@ -671,15 +673,41 @@ onMounted(() => {
     originalTitle.value = document.title.replace(/^\(\d+\)\s*/, '')
   }
   document.addEventListener('visibilitychange', onVisibilityChange)
+  document.addEventListener('paste', onPasteUpload)
 })
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('paste', onPasteUpload)
   // 恢复 title
   if (inactiveUpdateCount > 0) {
     document.title = originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')
   }
 })
+
+/** Ctrl+V 粘贴图片自动上传 */
+function onPasteUpload(e: ClipboardEvent) {
+  // 如果用户正在编辑文本输入框，不拦截
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+  if (!issue.value || !canEditIssueEffective.value) return
+
+  const items = e.clipboardData?.items
+  if (!items) return
+
+  for (const item of Array.from(items)) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) {
+        e.preventDefault()
+        const name = `paste-${Date.now()}.${item.type.split('/')[1] || 'png'}`
+        const namedFile = new File([file], name, { type: file.type })
+        doUploadFile(namedFile, false)
+      }
+      break
+    }
+  }
+}
 watch(() => route.params.id, () => loadAll())
 
 async function loadAll() {
@@ -856,7 +884,11 @@ const issueAttachments = computed(() => {
   return attachments.value.map(a => ({
     id: a.id,
     fileName: a.fileName,
-    sizeText: formatSize(a.fileSize),
+    filePath: a.filePath,
+    fileSize: a.fileSize,
+    contentType: a.contentType || '',
+    createdAt: a.createdAt,
+    uploadedBy: a.uploadedBy,
     isPrivate: a.isPrivate || false,
     visibleToGroupNames: a.visibleToGroupNames || []
   }))
@@ -1309,6 +1341,30 @@ async function doUploadFile(file: File, isPrivate: boolean) {
     loadAttachments()
   } catch (e: any) {
     Message.error(e.response?.data?.message || `${file.name} 上传失败`)
+  }
+}
+
+async function onDeleteAttachment(attachmentId: string) {
+  if (!issue.value) return
+  try {
+    await issueApi.deleteAttachment(issue.value.id, attachmentId)
+    Message.success('附件已删除')
+    loadAttachments()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '删除附件失败')
+  }
+}
+
+async function onDeleteAllAttachments() {
+  if (!issue.value || attachments.value.length === 0) return
+  try {
+    for (const att of attachments.value) {
+      await issueApi.deleteAttachment(issue.value.id, att.id)
+    }
+    Message.success('全部附件已删除')
+    loadAttachments()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '删除附件失败')
   }
 }
 
