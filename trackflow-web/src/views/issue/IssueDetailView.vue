@@ -59,7 +59,7 @@
         @add-tag="onAddTag"
         @add-tags="onAddTags"
         @create-tag="onCreateTag"
-        @add-link="() => {}"
+        @add-link="openAddLinkModal"
         @upload="triggerUpload(false)"
         @upload-private="triggerUpload(true)"
         @upload-files="onDropFiles"
@@ -132,6 +132,15 @@
   </div>
 
   <IssueCreatePanel ref="createPanelRef" :visible="showCreatePanel" :project-id="issue?.projectId" :parent-id="createSubtaskParentId" :clone-data="cloneData" @update:visible="onCreatePanelClose" @created="onIssueCreated" @expand-to-fullscreen="onCreatePanelExpand" />
+
+  <!-- Add Link Modal -->
+  <AddLinkModal
+    v-if="issue"
+    v-model:visible="showAddLinkModal"
+    :issue-id="issue.id"
+    :project-id="issue.projectId"
+    @linked="onLinked"
+  />
 
   <!-- Move Issue Modal -->
   <MoveIssueModal
@@ -232,6 +241,7 @@ import { ERROR_CODES } from '@/api/error-codes'
 import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
 import { useNavBadge } from '@/composables/useNavBadge'
 import { useIssueDetailSubscription } from '@/composables/useWebSocket'
+import AddLinkModal from './components/AddLinkModal.vue'
 import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
@@ -321,6 +331,17 @@ const issue = ref<IssueDetailVO | null>(null)
 
 // 归档状态
 const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
+
+// 添加关联弹窗
+const showAddLinkModal = ref(false)
+function openAddLinkModal() { showAddLinkModal.value = true }
+async function onLinked() {
+  // 刷新工单详情以更新关联列表
+  if (issue.value?.id) {
+    const res = await issueApi.getById(issue.value.id)
+    if (res.data) issue.value = res.data
+  }
+}
 
 // 权限控制（必须在 issue ref 声明之后）
 const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint, canLogTime, hasPermission: hasProjectPermission } = usePermission(

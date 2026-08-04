@@ -237,9 +237,22 @@ export const issueApi = {
 
   // ========== 关联 ==========
 
+  /** 获取所有关联类型（普通用户可用） */
+  listLinkTypes() {
+    return request.get<any, R<any[]>>('/issues/link-types')
+  },
+
   /** 获取关联列表 */
   listLinks(issueId: string) {
     return request.get<any, R<IssueLinkVO[]>>(`/issues/${issueId}/links`)
+  },
+
+  /** 添加关联（封装 createLink，参数更清晰） */
+  addLink(issueId: string, data: { targetIssueId: string; linkTypeId: string }) {
+    return request.post<any, R<void>>(`/issues/${issueId}/links`, {
+      targetIssueId: data.targetIssueId,
+      linkType: data.linkTypeId,   // 后端字段名为 linkType
+    })
   },
 
   /** 创建关联 */
