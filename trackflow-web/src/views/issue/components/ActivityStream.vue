@@ -425,12 +425,12 @@ function formatDurationMin(minutes?: number): string {
   return `${h}h ${m}m`
 }
 
-/** 将 ISO 日期字符串（"2026-07-20"）格式化为可读形式（"Jul 20, 2026"） */
+/** 将 ISO 日期字符串（"2026-07-20"）格式化为中文日期形式（"2026/07/20"） */
 function formatWorkDate(dateStr?: string): string {
   if (!dateStr) return ''
   try {
     const d = new Date(dateStr + 'T00:00:00')
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
   } catch {
     return dateStr
   }
