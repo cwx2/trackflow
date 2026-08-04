@@ -514,6 +514,7 @@ async function handleSubmit() {
       await transitionActionApi.create({
         projectId: Number(props.projectId),
         issueType: props.issueType || '*',
+        triggerType: 'transition',
         oldStatusId: Number(props.oldStatusId),
         newStatusId: Number(props.newStatusId),
         actionType: form.actionType,

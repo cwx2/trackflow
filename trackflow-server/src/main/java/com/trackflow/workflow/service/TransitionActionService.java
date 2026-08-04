@@ -93,7 +93,7 @@ public class TransitionActionService {
         validateTriggerType(dto.getTriggerType());
 
         // 校验 actionConfig 结构
-        List<String> errors = actionConfigValidator.validate(dto.getActionConfig());
+        List<String> errors = actionConfigValidator.validate(dto.getActionConfig(), dto.getActionType());
         if (!errors.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", errors));
         }
@@ -103,7 +103,7 @@ public class TransitionActionService {
 
         // 校验 actionConfig 中引用实体的存在性（用户/角色）
         List<String> entityErrors = actionConfigValidator.validateEntityExistence(
-                dto.getActionConfig(), effectiveProjectId);
+                dto.getActionConfig(), effectiveProjectId, dto.getActionType());
         if (!entityErrors.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", entityErrors));
         }
@@ -152,14 +152,16 @@ public class TransitionActionService {
 
         // 如果提供了 actionConfig，需要重新校验
         if (dto.getActionConfig() != null) {
-            List<String> errors = actionConfigValidator.validate(dto.getActionConfig());
+            // 确定当前有效的 actionType（可能被本次更新修改）
+            String effectiveActionType = dto.getActionType() != null ? dto.getActionType() : action.getActionType();
+            List<String> errors = actionConfigValidator.validate(dto.getActionConfig(), effectiveActionType);
             if (!errors.isEmpty()) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", errors));
             }
             // 校验引用实体存在性
             Long projectId = action.getProjectId();
             List<String> entityErrors = actionConfigValidator.validateEntityExistence(
-                    dto.getActionConfig(), projectId);
+                    dto.getActionConfig(), projectId, effectiveActionType);
             if (!entityErrors.isEmpty()) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, String.join("; ", entityErrors));
             }

@@ -46,24 +46,70 @@ public class ActionConfigValidator {
      * @return 错误消息列表，空列表表示校验通过
      */
     public List<String> validate(Map<String, Object> actionConfig) {
+        return validate(actionConfig, "auto_assign");
+    }
+
+    /**
+     * 校验 action_config 结构（根据动作类型分别校验）。
+     *
+     * @param actionConfig 原始 Map 格式的配置（来自前端 JSON）
+     * @param actionType   动作类型
+     * @return 错误消息列表，空列表表示校验通过
+     */
+    public List<String> validate(Map<String, Object> actionConfig, String actionType) {
         List<String> errors = new ArrayList<>();
 
         if (actionConfig == null || actionConfig.isEmpty()) {
+            // add_comment 允许空 config（使用默认模板）
+            if ("add_comment".equals(actionType)) {
+                return errors;
+            }
             errors.add("action_config 不能为空");
             return errors;
         }
 
+        // 非 auto_assign 类型有各自的校验逻辑
+        switch (actionType) {
+            case "auto_assign" -> validateAutoAssignConfig(actionConfig, errors);
+            case "add_comment" -> {
+                // add_comment：comment_template 可选，无必填字段
+            }
+            case "add_tag" -> {
+                Object tagName = actionConfig.get("tag_name");
+                Object tagId = actionConfig.get("tag_id");
+                if ((tagName == null || tagName.toString().isBlank()) && tagId == null) {
+                    errors.add("add_tag 动作必须提供 tag_name 或 tag_id");
+                }
+            }
+            case "require_field" -> {
+                Object fieldId = actionConfig.get("required_field_id");
+                if (fieldId == null) {
+                    errors.add("require_field 动作必须提供 required_field_id");
+                }
+            }
+            default -> {
+                // 未知类型不做额外校验（actionType 合法性由上层 Service 验证）
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * auto_assign 动作配置的结构校验
+     */
+    private void validateAutoAssignConfig(Map<String, Object> actionConfig, List<String> errors) {
         // 校验 strategy 字段
         Object strategyObj = actionConfig.get("strategy");
         if (strategyObj == null || strategyObj.toString().isBlank()) {
             errors.add("strategy 字段必须存在且不能为空");
-            return errors;
+            return;
         }
 
         String strategy = strategyObj.toString();
         if (!VALID_STRATEGIES.contains(strategy)) {
             errors.add("strategy 必须是以下值之一: " + VALID_STRATEGIES);
-            return errors;
+            return;
         }
 
         // 按策略类型校验附加字段
@@ -96,8 +142,6 @@ public class ActionConfigValidator {
                 errors.add("fallback_strategy 必须是以下值之一: " + VALID_STRATEGIES);
             }
         }
-
-        return errors;
     }
 
     /**
@@ -114,13 +158,34 @@ public class ActionConfigValidator {
      * @return 错误消息列表，空列表表示校验通过
      */
     public List<String> validateEntityExistence(Map<String, Object> actionConfig, Long projectId) {
+        return validateEntityExistence(actionConfig, projectId, "auto_assign");
+    }
+
+    /**
+     * 校验 action_config 中引用实体的存在性和有效性（根据动作类型）。
+     *
+     * @param actionConfig 原始 Map 格式的配置
+     * @param projectId    项目 ID（null 表示全局动作）
+     * @param actionType   动作类型
+     * @return 错误消息列表，空列表表示校验通过
+     */
+    public List<String> validateEntityExistence(Map<String, Object> actionConfig, Long projectId, String actionType) {
         List<String> errors = new ArrayList<>();
 
         if (actionConfig == null || actionConfig.isEmpty()) {
             return errors;
         }
 
-        String strategy = actionConfig.get("strategy").toString();
+        // 只有 auto_assign 类型需要校验引用实体
+        if (!"auto_assign".equals(actionType)) {
+            return errors;
+        }
+
+        Object strategyObj = actionConfig.get("strategy");
+        if (strategyObj == null) {
+            return errors;
+        }
+        String strategy = strategyObj.toString();
 
         switch (strategy) {
             case "specific_user" -> validateSpecificUser(actionConfig, projectId, errors);
