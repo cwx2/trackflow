@@ -83,15 +83,18 @@
                 </a-tooltip>
               </template>
             </div>
-            <span class="sprint-remaining" v-if="getRemainingDays(sprint) !== null">
-              <template v-if="(getRemainingDays(sprint) ?? 0) > 0">
-                <span class="remaining-icon">⏳</span> 还剩 {{ getRemainingDays(sprint) }} 天
+            <span class="sprint-remaining" v-if="getSprintTimeInfo(sprint)">
+              <template v-if="getSprintTimeInfo(sprint)!.type === 'not-started'">
+                <span class="remaining-icon not-started">📅</span> {{ getSprintTimeInfo(sprint)!.days }} 天后开始
               </template>
-              <template v-else-if="getRemainingDays(sprint) === 0">
+              <template v-else-if="getSprintTimeInfo(sprint)!.type === 'remaining'">
+                <span class="remaining-icon">⏳</span> 还剩 {{ getSprintTimeInfo(sprint)!.days }} 天
+              </template>
+              <template v-else-if="getSprintTimeInfo(sprint)!.type === 'today'">
                 <span class="remaining-icon warning">⚠️</span> 今天截止
               </template>
               <template v-else>
-                <span class="remaining-icon overdue">🚨</span> 已超期 {{ Math.abs(getRemainingDays(sprint) ?? 0) }} 天
+                <span class="remaining-icon overdue">🚨</span> 已超期 {{ getSprintTimeInfo(sprint)!.days }} 天
               </template>
             </span>
           </div>
@@ -1040,13 +1043,37 @@ function formatHours(hours: number): string {
   return `${Math.round(hours * 60)}m`
 }
 
-function getRemainingDays(sprint: SprintVO): number | null {
+interface SprintTimeInfo {
+  type: 'not-started' | 'remaining' | 'today' | 'overdue'
+  days: number
+}
+
+function getSprintTimeInfo(sprint: SprintVO): SprintTimeInfo | null {
   if (!sprint.endDate) return null
-  const end = new Date(sprint.endDate)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  const end = new Date(sprint.endDate)
   end.setHours(0, 0, 0, 0)
-  return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+  // 如果有开始日期且今天还没到开始日期，显示"X 天后开始"
+  if (sprint.startDate) {
+    const start = new Date(sprint.startDate)
+    start.setHours(0, 0, 0, 0)
+    if (today.getTime() < start.getTime()) {
+      const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      return { type: 'not-started', days: daysUntilStart }
+    }
+  }
+
+  // Sprint 已进入工作期（today >= startDate），正常计算剩余天数
+  const remainingDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (remainingDays > 0) {
+    return { type: 'remaining', days: remainingDays }
+  } else if (remainingDays === 0) {
+    return { type: 'today', days: 0 }
+  } else {
+    return { type: 'overdue', days: Math.abs(remainingDays) }
+  }
 }
 
 function getProgressPercent(sprint: SprintVO, type: 'done' | 'inProgress' | 'todo'): number {
@@ -1901,6 +1928,9 @@ function syncUrlProjectParam() {
 }
 .sprint-remaining .remaining-icon.overdue {
   color: rgb(var(--danger-6));
+}
+.sprint-remaining .remaining-icon.not-started {
+  color: var(--color-text-3);
 }
 
 .sprint-dates {
