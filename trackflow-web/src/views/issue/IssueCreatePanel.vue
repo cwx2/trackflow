@@ -401,6 +401,17 @@
               >
                 <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
               </a-select>
+              <!-- period (时间周期) -->
+              <a-input
+                v-else-if="cf.fieldFormat === 'period'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                placeholder="如: 2h30m, 1d, 1w2d"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
+                allow-clear
+                @input="clearFieldError(cf.id)"
+                @blur="validateFieldOnBlur(cf)"
+              />
               <!-- inline error message -->
               <span v-if="cfValidationErrors[cf.id]" class="field-error-msg">{{ cfValidationErrors[cf.id] }}</span>
             </div>
@@ -543,6 +554,14 @@
                 >
                   <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
                 </a-select>
+                <!-- period (时间周期) -->
+                <a-input
+                  v-else-if="cf.fieldFormat === 'period'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  placeholder="如: 2h30m, 1d, 1w2d"
+                  allow-clear
+                />
               </div>
             </template>
           </template>

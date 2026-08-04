@@ -307,7 +307,19 @@ public class CustomFieldValidationEngine {
     }
 
     /**
-     * 将周期表达式解析为分钟数
+     * 工作时间常量（可由系统配置覆盖，默认 Scrum 标准）
+     * 1 周 = 5 工作天, 1 天 = 8 工作小时
+     */
+    public static final int WORK_HOURS_PER_DAY = 8;
+    public static final int WORK_DAYS_PER_WEEK = 5;
+    public static final int MINUTES_PER_WORK_HOUR = 60;
+    public static final int MINUTES_PER_WORK_DAY = WORK_HOURS_PER_DAY * MINUTES_PER_WORK_HOUR;  // 480
+    public static final int MINUTES_PER_WORK_WEEK = WORK_DAYS_PER_WEEK * MINUTES_PER_WORK_DAY;  // 2400
+
+    /**
+     * 将周期表达式解析为分钟数（基于工作时间）
+     *
+     * 换算规则：1w = 5d = 40h = 2400m
      *
      * @param periodStr 周期表达式，如 "1w2d3h30m", "2h30m", "1d", "45m"
      * @return 总分钟数，解析失败返回 null
@@ -347,13 +359,13 @@ public class CustomFieldValidationEngine {
         }
 
         if (weeks != null) {
-            totalMinutes += Long.parseLong(weeks) * 7 * 24 * 60; // 1 week = 7 * 24 * 60 minutes
+            totalMinutes += Long.parseLong(weeks) * MINUTES_PER_WORK_WEEK; // 1w = 2400m
         }
         if (days != null) {
-            totalMinutes += Long.parseLong(days) * 24 * 60; // 1 day = 24 * 60 minutes
+            totalMinutes += Long.parseLong(days) * MINUTES_PER_WORK_DAY; // 1d = 480m
         }
         if (hours != null) {
-            totalMinutes += Long.parseLong(hours) * 60;
+            totalMinutes += Long.parseLong(hours) * MINUTES_PER_WORK_HOUR; // 1h = 60m
         }
         if (mins != null) {
             totalMinutes += Long.parseLong(mins);
@@ -363,43 +375,45 @@ public class CustomFieldValidationEngine {
     }
 
     /**
-     * 将分钟数格式化为人可读的周期字符串
+     * 将分钟数格式化为人可读的周期字符串（基于工作时间）
+     *
+     * 换算规则：1w = 5d = 40h = 2400m
      *
      * @param minutes 分钟数
-     * @return 格式化字符串，如 "1周 2天 3小时 30分钟"
+     * @return 格式化字符串，如 "1w 2d 3h 30m"
      */
     public static String formatMinutesToPeriod(long minutes) {
         if (minutes <= 0) {
-            return "0分钟";
+            return "0m";
         }
 
         long remaining = minutes;
         StringBuilder sb = new StringBuilder();
 
-        // 周 (1 week = 7 * 24 * 60 = 10080 minutes)
-        long weeks = remaining / 10080;
+        // 周 (1 week = 2400 minutes)
+        long weeks = remaining / MINUTES_PER_WORK_WEEK;
         if (weeks > 0) {
-            sb.append(weeks).append("周 ");
-            remaining %= 10080;
+            sb.append(weeks).append("w ");
+            remaining %= MINUTES_PER_WORK_WEEK;
         }
 
-        // 天 (1 day = 24 * 60 = 1440 minutes)
-        long days = remaining / 1440;
+        // 天 (1 day = 480 minutes)
+        long days = remaining / MINUTES_PER_WORK_DAY;
         if (days > 0) {
-            sb.append(days).append("天 ");
-            remaining %= 1440;
+            sb.append(days).append("d ");
+            remaining %= MINUTES_PER_WORK_DAY;
         }
 
-        // 小时
-        long hours = remaining / 60;
+        // 小时 (1 hour = 60 minutes)
+        long hours = remaining / MINUTES_PER_WORK_HOUR;
         if (hours > 0) {
-            sb.append(hours).append("小时 ");
-            remaining %= 60;
+            sb.append(hours).append("h ");
+            remaining %= MINUTES_PER_WORK_HOUR;
         }
 
         // 分钟
         if (remaining > 0) {
-            sb.append(remaining).append("分钟");
+            sb.append(remaining).append("m");
         }
 
         return sb.toString().trim();

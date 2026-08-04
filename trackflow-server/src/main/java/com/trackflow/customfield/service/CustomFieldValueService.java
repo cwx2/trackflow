@@ -260,6 +260,14 @@ public class CustomFieldValueService {
             boolean isMulti = Boolean.TRUE.equals(field.getIsMulti());
             String rawInput = entry.getValue();
 
+            // period 类型：标准化为分钟数字符串
+            if ("period".equals(field.getFieldFormat()) && rawInput != null && !rawInput.isBlank()) {
+                Long minutes = CustomFieldValidationEngine.parsePeriodToMinutes(rawInput);
+                if (minutes != null) {
+                    rawInput = String.valueOf(minutes);
+                }
+            }
+
             if (isMulti) {
                 List<String> oldValues = getMultiValues(issueId, entry.getKey());
                 List<String> newValues = parseMultiValueInput(rawInput);
@@ -350,6 +358,15 @@ public class CustomFieldValueService {
                             .collect(Collectors.joining("; ")));
         }
 
+        // period 类型：将周期表达式标准化为分钟数字符串存储
+        String normalizedValue = value;
+        if ("period".equals(field.getFieldFormat()) && value != null && !value.isBlank()) {
+            Long minutes = CustomFieldValidationEngine.parsePeriodToMinutes(value);
+            if (minutes != null) {
+                normalizedValue = String.valueOf(minutes);
+            }
+        }
+
         boolean isMulti = Boolean.TRUE.equals(field.getIsMulti());
 
         if (isMulti) {
@@ -390,7 +407,7 @@ public class CustomFieldValueService {
                             .eq(CustomFieldValue::getCustomFieldId, customFieldId));
             String oldValue = existing != null ? existing.getValue() : null;
 
-            if (value == null || value.isBlank()) {
+            if (normalizedValue == null || normalizedValue.isBlank()) {
                 if (effectiveRequired) {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, field.getName() + " 为必填项，不能清空");
                 }
@@ -398,21 +415,21 @@ public class CustomFieldValueService {
                     valueMapper.deleteById(existing.getId());
                 }
             } else if (existing != null) {
-                existing.setValue(value);
+                existing.setValue(normalizedValue);
                 existing.setUpdatedAt(LocalDateTime.now());
                 valueMapper.updateById(existing);
             } else {
                 CustomFieldValue cfv = new CustomFieldValue();
                 cfv.setIssueId(issueId);
                 cfv.setCustomFieldId(customFieldId);
-                cfv.setValue(value);
+                cfv.setValue(normalizedValue);
                 cfv.setIsMulti(false);
                 cfv.setCreatedAt(LocalDateTime.now());
                 cfv.setUpdatedAt(LocalDateTime.now());
                 valueMapper.insert(cfv);
             }
 
-            String newValue = (value == null || value.isBlank()) ? null : value;
+            String newValue = (normalizedValue == null || normalizedValue.isBlank()) ? null : normalizedValue;
             if (!Objects.equals(oldValue, newValue)) {
                 String displayOldValue = displayService.resolveDisplayValue(field, oldValue);
                 String displayNewValue = displayService.resolveDisplayValue(field, newValue);

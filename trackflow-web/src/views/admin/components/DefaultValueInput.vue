@@ -86,6 +86,15 @@
     @update:model-value="$emit('update:modelValue', $event)"
   />
 
+  <!-- period 类型：时间周期 -->
+  <a-input
+    v-else-if="fieldFormat === 'period'"
+    :model-value="modelValue"
+    placeholder="如: 2h30m, 1d, 1w2d（分钟数）"
+    style="width: 200px"
+    @update:model-value="$emit('update:modelValue', $event)"
+  />
+
   <!-- string 类型和其他：普通文本输入 -->
   <a-input
     v-else

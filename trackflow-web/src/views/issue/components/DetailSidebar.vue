@@ -533,8 +533,8 @@ function commitPeriodInput(field: SidebarField) {
     return
   }
 
-  // 解析周期表达式
-  const periodRegex = /^(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$/i
+  // 解析周期表达式（工作时间：1w=5d, 1d=8h）
+  const periodRegex = /^(?:(\d+)w)?\s*(?:(\d+)d)?\s*(?:(\d+)h)?\s*(?:(\d+)m)?$/i
   const match = raw.match(periodRegex)
   if (!match || (match[1] === undefined && match[2] === undefined && match[3] === undefined && match[4] === undefined)) {
     // 格式不正确，显示提示但仍然提交（后端会验证）
@@ -543,10 +543,11 @@ function commitPeriodInput(field: SidebarField) {
     return
   }
 
+  // 工作时间换算: 1w = 5d = 40h = 2400m
   let totalMinutes = 0
-  if (match[1]) totalMinutes += parseInt(match[1]) * 7 * 24 * 60 // weeks
-  if (match[2]) totalMinutes += parseInt(match[2]) * 24 * 60      // days
-  if (match[3]) totalMinutes += parseInt(match[3]) * 60           // hours
+  if (match[1]) totalMinutes += parseInt(match[1]) * 5 * 8 * 60 // 1w = 2400m
+  if (match[2]) totalMinutes += parseInt(match[2]) * 8 * 60      // 1d = 480m
+  if (match[3]) totalMinutes += parseInt(match[3]) * 60           // 1h = 60m
   if (match[4]) totalMinutes += parseInt(match[4])                 // minutes
 
   emit('edit-field', field.key, String(totalMinutes))
