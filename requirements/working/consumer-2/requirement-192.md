@@ -136,8 +136,8 @@ private Long statusId;  // 外键 → issue_status.id
 ## 自动化状态
 
 fix_status: DONE
-fix_commit: 8bdc725
-fix_round: 1
+fix_commit: 0310fd21
+fix_round: 2
 test_status: PENDING
 test_round: 0
 review_status: PENDING
@@ -148,58 +148,36 @@ review_round: 0
 ## Agent 交接上下文
 
 > 由 fix-requirement-auto 会话写入，供 e2e-test 和 code-review 会话读取。
-> 最后更新：2026-08-05 02:10
+> 最后更新：2026-08-05 02:31
 
 ### 本次改动摘要
-将 State（状态）字段注册到 TrackFlow 的自定义字段管理体系中，使其在管理界面统一展示，同时保留现有工作流引擎不变。
+第2轮修复：解决 code review 发现的 MUST 问题——State 内置字段的写入保护缺失。
 
-- V253 迁移脚本：添加 `is_resolved` 列到 `custom_field_option`，更新 CHECK 约束加入 `state` 类型，注册 State 内置字段（ID=1000000000000000004），从 `issue_status` 同步选项到 `custom_field_option`，将字段附加到所有现有项目
-- `CustomFieldOption` 实体：新增 `isResolved` 字段
-- `CustomFieldOptionVO`：新增 `isResolved` 字段
-- `CreateCustomFieldDTO.OptionItem` / `UpdateCustomFieldDTO.OptionItem`：新增 `isResolved` 字段
-- `CustomFieldService`：`BUILTIN_FIELD_IDS` 新增 ID 4（State），`STATE_FIELD_ID` 常量，`listEnumFields()` 使用 `IN ('list','state')` 查询，创建/更新逻辑用 `isEnumLikeFormat` 判断
-- `CustomFieldOptionService`：新增 `isEnumLikeFormat()` 静态方法，所有原来的 `"list".equals` 替换为此方法，选项更新/插入支持 `isResolved`
-- `CustomFieldDisplayService`：选项预加载和解析均支持 state 类型
-- `CustomFieldValidationEngine`：`SUPPORTED_FORMATS` 和 switch 都增加 state
-- `CustomFieldSortHelper`：`SORTABLE_FIELD_FORMATS` 和排序 SQL 都增加 state
-- `CustomFieldReplacementService`/`CustomFieldValueService`：`isEnumLikeFormat` 替换
-- 前端 `types.ts`：`CustomFieldOptionVO` 新增 `isResolved` 可选字段
-- 前端 `CustomFieldManage.vue`：`fieldTypeOptions` 新增 state 类型，选项列表显示/编辑模板支持 state 格式，选项 isResolved checkbox
-- 前端 `ProjectSettingsCustomFields.vue`：`fieldTypeMap` 新增 state/period，条件字段/默认值选择器支持 state
+- `CustomFieldService.java`：在所有委托给 `CustomFieldValueService` 的方法入口处，通过 `excludeStateField()` 过滤 applicableFields 列表（排除 State 字段），通过 `excludeStateFieldValue()` 过滤 fieldValues map（移除 State 字段 ID 对应的值）。`saveSingleValue()` 直接拒绝 State 字段写入并抛出明确的业务异常。
+- `CustomFieldValidationEngine.java`：合并 `case "list"` 和 `case "state"` 为 `case "list", "state"`（代码简洁性改进）。
+- `CustomFieldManage.vue`：修复 `openEdit()` 函数中选项映射遗漏 `isResolved` 字段的问题。
 
 ### 本次变更文件清单
-- `trackflow-server/src/main/java/com/trackflow/customfield/dto/CreateCustomFieldDTO.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/dto/UpdateCustomFieldDTO.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/entity/CustomFieldOption.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldDisplayService.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldOptionService.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldReplacementService.java`
 - `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldService.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldSortHelper.java`
 - `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldValidationEngine.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/service/CustomFieldValueService.java`
-- `trackflow-server/src/main/java/com/trackflow/customfield/vo/CustomFieldOptionVO.java`
-- `trackflow-server/src/main/resources/db/migration/V253__register_state_custom_field.sql`
-- `trackflow-web/src/api/types.ts`
 - `trackflow-web/src/views/admin/CustomFieldManage.vue`
-- `trackflow-web/src/views/project/settings/ProjectSettingsCustomFields.vue`
 
 ### 测试重点（给 e2e-test 会话）
 - **必须验证的核心路径**：
-  1. 以 testuser 登录 → 管理后台 → 自定义字段管理 → 验证 "State" 字段出现在列表中，标注"内置"标签，类型显示"状态(State)"
-  2. 点击 State 字段 → 验证侧边栏/抽屉显示选项列表（Open, In Progress, Code Review, Testing, Done 等），每个选项有颜色和"已解决"勾选状态
-  3. 进入项目设置 → 自定义字段 → 验证 State 字段出现在字段列表中，可查看/配置可见性和显示顺序
-  4. 验证 State 字段不可删除（内置字段保护）
+  1. 以 testuser 登录 → 管理后台 → 自定义字段管理 → 验证 "State" 字段出现在列表中，标注"内置"标签
+  2. 点击 State 字段 → 验证选项列表显示 isResolved 状态
+  3. 创建一个新工单（不传 State 字段值）→ 验证工单创建成功（不被 State 必填校验阻挡）
+  4. 尝试通过自定义字段 API 写入 State 字段值 → 验证被拒绝
 - **边界场景**：
-  - State 字段的"已解决"状态应与 issue_status.is_closed 值一致（Done/Cancelled 等应为 true）
-  - 内置字段不可改名验证
+  - 工单创建流程不应因 State 字段的 is_required=true 而报错
+  - State 字段在项目设置自定义字段页面可见但不可通过 CF 接口修改
 - **建议测试账号**：超级管理员 testuser
-- **注意事项**：需要重启后端以执行 V253 迁移脚本
+- **注意事项**：需重启后端以加载代码变更
 
 ### 审核重点（给 code-review 会话）
-- **重点关注文件**：CustomFieldOptionService.java（isEnumLikeFormat helper + isResolved 处理）、V253 迁移脚本（数据同步逻辑）
-- **潜在风险点**：state 类型字段的 custom_field_value 数据仍通过 issue.status_id 管理，不会写入 custom_field_value 表；确保不会有逻辑试图通过 CF value service 写入 state 字段值
-- **已知遗留项**：State 字段的实际状态值变更仍通过工作流引擎（issue.status_id），CF 体系仅做管理入口统一展示；未来可能需要添加 State 字段在工单侧边栏与工作流的桥接交互
+- **重点关注文件**：CustomFieldService.java — excludeStateField/excludeStateFieldValue 两个 helper 方法及其在所有委托方法中的应用
+- **潜在风险点**：确认所有通往 CustomFieldValueService 的路径都已加保护（5 个入口点已全部覆盖）
+- **已知遗留项**：STATE_FIELD_ID 常量现在被使用（用于过滤逻辑），SHOULD 级的注释和错误消息优化未处理（不影响功能正确性）
 
 ======================
 
