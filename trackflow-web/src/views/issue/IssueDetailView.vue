@@ -105,6 +105,7 @@
       </DetailMainContent>
 
       <DetailSidebar
+        ref="sidebarRef"
         :collapsed="sidebarCollapsed"
         :status="currentStatus"
         :transitions="availableTransitions"
@@ -218,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
@@ -268,6 +269,9 @@ function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed.value))
 }
+
+// Sidebar ref for programmatic field highlighting
+const sidebarRef = ref<InstanceType<typeof DetailSidebar> | null>(null)
 
 // Keep backward-compat: no longer needed, sidebarCollapsed drives the UI directly
 const showCreatePanel = ref(false)
@@ -1469,11 +1473,26 @@ async function executeTransition(
       // 检查是否为字段校验失败（状态转换被阻止）
       const actionResult = res.data?.actionResult
       if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
-        // 显示警告消息，提示用户先填写必填字段
+        // 显示警告消息，提供"前往填写"按钮引导用户定位字段
+        const fieldKey = actionResult.requiredFieldId ? `cf_${actionResult.requiredFieldId}` : null
         Modal.warning({
           title: '字段校验',
           content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
-          okText: '知道了'
+          okText: '前往填写',
+          cancelText: '知道了',
+          hideCancel: false,
+          onOk: () => {
+            // 引导到目标字段：展开侧边栏 → 展开折叠字段 → 滚动到目标 → 高亮
+            if (fieldKey) {
+              if (sidebarCollapsed.value) {
+                sidebarCollapsed.value = false
+                localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false')
+              }
+              nextTick(() => {
+                sidebarRef.value?.highlightField(fieldKey)
+              })
+            }
+          }
         })
         return
       }

@@ -45,8 +45,10 @@
       :class="{
         readonly: field.readonly || !field.editType,
         separator: field.key === '_sep',
-        editable: !field.readonly && field.editType
+        editable: !field.readonly && field.editType,
+        'field-highlight': highlightedFieldKey === field.key
       }"
+      :data-field-key="field.key"
     >
       <template v-if="field.key !== '_sep'">
         <div class="sb-label">{{ field.label }}</div>
@@ -594,6 +596,42 @@ function confirmAddOption(field: SidebarField) {
   newOptionValue.value = ''
   addOptionLoading.value = false
 }
+
+// ========== 字段高亮引导 ==========
+const highlightedFieldKey = ref<string | null>(null)
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 高亮指定字段：展开折叠的空字段区域（如目标在其中）、滚动到目标字段、闪烁高亮 2.5 秒。
+ * 由父组件通过 ref 调用（状态转换校验失败时引导用户定位字段）。
+ */
+function highlightField(fieldKey: string) {
+  // 1. 如果目标字段在折叠的空值区域，先展开
+  const targetField = props.fields.find(f => f.key === fieldKey)
+  if (targetField?.isEmptyCustomField && !showAllFields.value) {
+    showAllFields.value = true
+    localStorage.setItem(SHOW_ALL_FIELDS_KEY, 'true')
+  }
+
+  // 2. 等待 DOM 更新后滚动到目标字段并高亮
+  nextTick(() => {
+    const el = document.querySelector(`[data-field-key="${fieldKey}"]`) as HTMLElement | null
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    // 3. 设置高亮（触发 CSS 动画）
+    highlightedFieldKey.value = fieldKey
+
+    // 4. 2.5 秒后移除高亮
+    if (highlightTimer) clearTimeout(highlightTimer)
+    highlightTimer = setTimeout(() => {
+      highlightedFieldKey.value = null
+    }, 2500)
+  })
+}
+
+defineExpose({ highlightField })
 </script>
 
 <style scoped>
@@ -716,6 +754,19 @@ function confirmAddOption(field: SidebarField) {
   padding: 6px 6px;
   border-radius: 3px;
   transition: background 150ms;
+}
+
+/* 字段高亮引导动画：状态转换校验失败时闪烁提示用户 */
+.sb-field.field-highlight {
+  animation: field-highlight-pulse 0.6s ease-in-out 3;
+  outline: 2px solid var(--tf-accent, #58a6ff);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+@keyframes field-highlight-pulse {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(88, 166, 255, 0.12); }
 }
 
 /* 可编辑字段 hover 效果 */

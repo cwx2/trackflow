@@ -2880,11 +2880,16 @@ async function performStatusTransition(issue: IssueVO, status: IssueStatusVO, co
       if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
         // 回滚乐观更新
         issue.statusId = oldStatusId
-        // 显示警告消息
+        // 显示警告消息，提供跳转详情页按钮引导用户填写字段
         Modal.warning({
           title: '字段校验',
           content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
-          okText: '知道了'
+          okText: '打开详情填写',
+          cancelText: '知道了',
+          hideCancel: false,
+          onOk: () => {
+            router.push(`/issues/${issue.issueKey}`)
+          }
         })
         return
       }
