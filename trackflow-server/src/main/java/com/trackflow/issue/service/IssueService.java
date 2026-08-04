@@ -101,6 +101,7 @@ public class IssueService {
     private final com.trackflow.board.mapper.BoardGeneralConfigMapper boardGeneralConfigMapper;
     private final com.trackflow.issue.service.precheck.ClosePreCheckChain closePreCheckChain;
     private final com.trackflow.issue.mapper.IssueVisibilityUserMapper visibilityUserMapper;
+    private final PriorityFieldService priorityFieldService;
 
     /**
      * 创建 Issue
@@ -140,7 +141,7 @@ public class IssueService {
         issue.setDescription(dto.getDescription());
         issue.setIssueType(workflowService.normalizeIssueType(dto.getIssueType()));
         issue.setStatusId(resolvedStatusId);
-        issue.setPriority(dto.getPriority() != null ? dto.getPriority() : "Normal");
+        issue.setPriority(dto.getPriority() != null ? dto.getPriority() : priorityFieldService.getDefaultPriority(dto.getProjectId()));
         // 校验 assignee 是否为有效的项目成员
         validateAssignee(dto.getAssigneeId(), dto.getProjectId());
         issue.setAssigneeId(normalizeAssigneeId(dto.getAssigneeId()));

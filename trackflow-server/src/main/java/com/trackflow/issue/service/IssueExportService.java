@@ -392,10 +392,16 @@ public class IssueExportService {
     private String localizePriority(String priority) {
         if (priority == null) return "";
         return switch (priority) {
+            case "Show-stopper" -> "阻塞";
+            case "Critical" -> "紧急";
+            case "High" -> "高";
+            case "Normal" -> "普通";
+            case "Low" -> "低";
+            // 兼容旧版小写值
             case "critical" -> "紧急";
-            case "major" -> "重要";
+            case "high" -> "高";
             case "normal" -> "普通";
-            case "minor" -> "次要";
+            case "low" -> "低";
             default -> priority;
         };
     }

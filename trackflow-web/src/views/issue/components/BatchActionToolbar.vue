@@ -179,7 +179,7 @@
               class="dropdown-item"
               @click="handleBatchPriority(p.value)"
             >
-              <span class="priority-dot" :class="'priority-' + p.value.toLowerCase()"></span>
+              <span class="priority-badge" :style="{ background: p.color }"></span>
               <span>{{ p.label }}</span>
             </div>
           </div>
@@ -351,6 +351,7 @@ import { Modal, Message } from '@arco-design/web-vue'
 import { issueApi, projectApi, sprintApi, tagApi } from '@/api'
 import type { IssueVO, IssueTagVO, ProjectMemberVO, SprintVO, BatchAvailableStatusVO } from '@/api/types'
 import { localizeStatusName, linkTypeLabelMap } from '@/utils/fieldLabels'
+import { loadPriorityOptions } from '../composables/usePriorityOptions'
 
 const props = defineProps<{
   selectedCount: number
@@ -640,12 +641,21 @@ onMounted(async () => {
 
 // ========== 优先级下拉 ==========
 const showPriorityDropdown = ref(false)
-const priorityOptions = [
-  { value: 'Critical', label: '紧急' },
-  { value: 'High', label: '高' },
-  { value: 'Normal', label: '普通' },
-  { value: 'Low', label: '低' }
-]
+const priorityOptions = ref([
+  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
+  { value: 'Critical', label: '紧急', color: '#ef4444' },
+  { value: 'High', label: '高', color: '#f59e0b' },
+  { value: 'Normal', label: '普通', color: '#6366f1' },
+  { value: 'Low', label: '低', color: '#64748b' },
+])
+
+// Load dynamic priority options when project changes
+watch(() => props.activeProjectId, async (projectId) => {
+  if (projectId) {
+    const opts = await loadPriorityOptions(projectId)
+    priorityOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+  }
+}, { immediate: true })
 
 function handleBatchPriority(priority: string) {
   showPriorityDropdown.value = false
@@ -941,6 +951,13 @@ function confirmBatchDelete() {
   color: var(--tf-text-tertiary);
 }
 
+.priority-badge {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
 .priority-dot {
   display: inline-block;
   width: 8px;

@@ -194,10 +194,9 @@
           <div class="prop-row">
             <span class="prop-label">优先级</span>
             <a-select v-model="form.priority" size="small">
-              <a-option value="Critical"><span class="priority-dot critical"></span>紧急</a-option>
-              <a-option value="High"><span class="priority-dot high"></span>高</a-option>
-              <a-option value="Normal"><span class="priority-dot normal"></span>普通</a-option>
-              <a-option value="Low"><span class="priority-dot low"></span>低</a-option>
+              <a-option v-for="p in prioritySelectOptions" :key="p.value" :value="p.value">
+                <span class="priority-badge" :style="{ background: p.color }"></span>{{ p.label }}
+              </a-option>
             </a-select>
           </div>
           <div class="prop-row">
@@ -599,6 +598,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
 import { useDrafts } from './composables/useDrafts'
+import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
 import { issueTypeLabelMap, localizeLinkType } from '@/utils/fieldLabels'
@@ -834,6 +834,15 @@ const allProjectMembers = ref<any[]>([])
 const sprints = ref<any[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const projectTags = ref<any[]>([])
+
+// 优先级选项（从自定义字段系统动态加载）
+const prioritySelectOptions = ref([
+  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
+  { value: 'Critical', label: '紧急', color: '#ef4444' },
+  { value: 'High', label: '高', color: '#f59e0b' },
+  { value: 'Normal', label: '普通', color: '#6366f1' },
+  { value: 'Low', label: '低', color: '#64748b' },
+])
 
 // 工单模板
 const templates = ref<IssueTemplateVO[]>([])
@@ -1301,6 +1310,10 @@ async function onProjectChange(val: any) {
   try { const res = await tagApi.listProjectTags(pid, { _silent403: true }); projectTags.value = res.data || [] } catch { projectTags.value = [] }
   // 加载项目模板
   try { const res = await issueTemplateApi.list(pid); templates.value = res.data || [] } catch { templates.value = [] }
+  // 加载优先级选项（从自定义字段系统）
+  loadPriorityOptions(pid).then(opts => {
+    prioritySelectOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+  })
   selectedTemplateId.value = null
   // Apply sprintId prop after sprints are loaded (ensures select shows correct label)
   if (props.sprintId !== undefined && props.sprintId !== null && props.lockSprint) {
@@ -1933,6 +1946,7 @@ onMounted(() => {
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
+.priority-badge { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; flex-shrink: 0; }
 .priority-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .priority-dot.critical { background: #ef4444; }
 .priority-dot.high { background: #f59e0b; }

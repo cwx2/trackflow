@@ -644,10 +644,11 @@ async function loadValueOptions(fieldKey: string) {
 
       case 'priority':
         valueOptions.value = [
-          { id: 'Critical', label: priorityLabelMap['Critical'] || 'Critical', color: '#f85149' },
-          { id: 'High', label: priorityLabelMap['High'] || 'High', color: '#d29922' },
-          { id: 'Normal', label: priorityLabelMap['Normal'] || 'Normal', color: '#58a6ff' },
-          { id: 'Low', label: priorityLabelMap['Low'] || 'Low', color: '#6b7280' },
+          { id: 'Show-stopper', label: priorityLabelMap['Show-stopper'] || 'Show-stopper', color: '#b91c1c' },
+          { id: 'Critical', label: priorityLabelMap['Critical'] || 'Critical', color: '#ef4444' },
+          { id: 'High', label: priorityLabelMap['High'] || 'High', color: '#f59e0b' },
+          { id: 'Normal', label: priorityLabelMap['Normal'] || 'Normal', color: '#6366f1' },
+          { id: 'Low', label: priorityLabelMap['Low'] || 'Low', color: '#64748b' },
         ]
         break
 

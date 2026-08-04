@@ -605,10 +605,9 @@
             <a-option v-for="(label, value) in issueTypeLabelMap" :key="value" :value="value">{{ label }}</a-option>
           </a-select>
           <a-select v-model="quickForm.priority" size="small" style="width: 80px">
-            <a-option value="Normal">普通</a-option>
-            <a-option value="High">高</a-option>
-            <a-option value="Critical">紧急</a-option>
-            <a-option value="Low">低</a-option>
+            <a-option v-for="p in priorityOptions" :key="p.value" :value="p.value">
+              <span class="priority-badge" :style="{ background: p.color }"></span>{{ p.label }}
+            </a-option>
           </a-select>
           <a-button type="primary" size="small" :loading="quickCreating" :disabled="!quickForm.projectId || !quickForm.title" @click="quickCreate">
             创建
@@ -754,20 +753,20 @@
           <div @click.stop>
             <a-trigger v-if="canEditIssue(record)" v-model:popup-visible="priorityDropdowns[record.id]" trigger="click" position="bl" :popup-offset="4">
               <span class="editable-cell" @click="priorityDropdowns[record.id] = true">
-                <span class="priority-dot" :class="'priority-' + (record.priority || 'normal').toLowerCase()"></span>
+                <span class="priority-badge" :style="{ background: getPriorityColorForRecord(record.priority) }"></span>
                 {{ localizePriority(record.priority) }}
                 <icon-loading v-if="isCellEditing(record.id, 'priority')" class="cell-spinner" />
               </span>
               <template #content>
                 <div class="inline-dropdown">
                   <div v-for="p in priorityOptions" :key="p.value" class="dropdown-item" @click="selectPriority(record, p.value)">
-                    <span class="priority-dot" :class="'priority-' + p.value.toLowerCase()"></span><span>{{ p.label }}</span>
+                    <span class="priority-badge" :style="{ background: p.color }"></span><span>{{ p.label }}</span>
                   </div>
                 </div>
               </template>
             </a-trigger>
             <span v-else class="readonly-cell">
-              <span class="priority-dot" :class="'priority-' + (record.priority || 'normal').toLowerCase()"></span>
+              <span class="priority-badge" :style="{ background: getPriorityColorForRecord(record.priority) }"></span>
               {{ localizePriority(record.priority) }}
             </span>
           </div>
@@ -1008,6 +1007,7 @@ import { localizeStatusName, localizeIssueType, localizePriority, issueTypeLabel
 import { extractVersion, showActionFeedback } from '@/utils/transition'
 import { ERROR_CODES } from '@/api/error-codes'
 import { useIssueList, useSelection, useInlineEdit, useBatchOps, usePermission, useColumnConfig, useViewSettings, useManualOrder, useDrafts } from './composables'
+import { loadPriorityOptions } from './composables/usePriorityOptions'
 import type { IssueDraft } from './composables'
 import { useIssueProjectSubscription } from '@/composables/useWebSocket'
 import { useNavBadge } from '@/composables/useNavBadge'
@@ -2416,12 +2416,28 @@ const assigneeOptionsLoading = ref(false)
 const sprintOptionsLoading = reactive<Record<string, boolean>>({})
 const sprintOptionsCache = reactive<Record<string, SprintVO[]>>({})
 
-const priorityOptions = [
-  { value: 'Critical', label: '\u7D27\u6025' },
-  { value: 'High', label: '\u9AD8' },
-  { value: 'Normal', label: '\u666E\u901A' },
-  { value: 'Low', label: '\u4F4E' }
-]
+const priorityOptions = ref([
+  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
+  { value: 'Critical', label: '紧急', color: '#ef4444' },
+  { value: 'High', label: '高', color: '#f59e0b' },
+  { value: 'Normal', label: '普通', color: '#6366f1' },
+  { value: 'Low', label: '低', color: '#64748b' }
+])
+
+// Load priority options from custom field system when project changes
+watch(activeProjectId, async (projectId) => {
+  if (projectId) {
+    const loaded = await loadPriorityOptions(projectId)
+    priorityOptions.value = loaded.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+  }
+}, { immediate: true })
+
+/** 根据优先级值从动态选项中获取颜色 */
+function getPriorityColorForRecord(priority: string | null | undefined): string {
+  const p = priority || 'Normal'
+  const opt = priorityOptions.value.find(o => o.value === p || o.value.toLowerCase() === p.toLowerCase())
+  return opt?.color || '#6366f1'
+}
 
 // Column widths — default values, user can resize via drag
 const COLUMN_WIDTH_STORAGE_KEY = 'trackflow:issue-column-widths'
@@ -4442,6 +4458,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; color: #fff; font-weight: 500; }
+.priority-badge { display: inline-block; width: 10px; height: 10px; min-width: 10px; min-height: 10px; flex-shrink: 0; border-radius: 2px; }
 .priority-dot { display: inline-block; width: 8px; height: 8px; min-width: 8px; min-height: 8px; flex-shrink: 0; border-radius: 50%; }
 .priority-critical { background: var(--tf-danger); }
 .priority-high { background: var(--tf-warning); }

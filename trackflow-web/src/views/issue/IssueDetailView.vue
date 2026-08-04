@@ -246,6 +246,7 @@ import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
 import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
 import { useRecentIssues } from './composables/useRecentIssues'
+import { loadPriorityOptions, getPriorityColor } from './composables/usePriorityOptions'
 import { useDrafts } from './composables/useDrafts'
 import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
@@ -328,6 +329,15 @@ const loadError = ref<string | null>(null)
 
 // ============ 数据 ============
 const issue = ref<IssueDetailVO | null>(null)
+
+// 优先级选项（从自定义字段系统动态加载）
+const dynamicPriorityOptions = ref<Array<{ value: string; label: string; color: string }>>([
+  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
+  { value: 'Critical', label: '紧急', color: '#ef4444' },
+  { value: 'High', label: '高', color: '#f59e0b' },
+  { value: 'Normal', label: '普通', color: '#6366f1' },
+  { value: 'Low', label: '低', color: '#64748b' },
+])
 
 // 归档状态
 const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
@@ -716,6 +726,11 @@ async function loadRelatedData() {
   const id = issue.value.id
   const pid = issue.value.projectId
 
+  // 加载优先级选项（从自定义字段系统）
+  loadPriorityOptions(pid).then(opts => {
+    dynamicPriorityOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
+  })
+
   // 先加载权限，决定是否需要加载编辑选项
   const perms = await loadProjectPermissions(pid)
   const isAdmin = authStore.hasGlobalPermission('system:admin')
@@ -921,12 +936,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
 
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
-    { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: [
-      { value: 'Critical', label: priorityLabelMap['Critical'] || '紧急' },
-      { value: 'High', label: priorityLabelMap['High'] || '高' },
-      { value: 'Normal', label: priorityLabelMap['Normal'] || '普通' },
-      { value: 'Low', label: priorityLabelMap['Low'] || '低' },
-    ]},
+    { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: dynamicPriorityOptions.value.map(o => ({ value: o.value, label: o.label })) },
     { key: 'state', label: '状态', value: currentStatus.value.name, dot: currentStatus.value.color, editType: 'select' as const, rawValue: currentStatus.value.id, readonly: !canTransition || availableTransitions.value.length === 0, options: statusOptions },
     { key: 'issueType', label: '类型', value: localizeIssueType(i.issueType), editType: 'select' as const, rawValue: i.issueType, readonly: !canEdit, options: Object.entries(issueTypeLabelMap).map(([value, label]) => ({ value, label })) },
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
@@ -1858,8 +1868,7 @@ function formatSize(bytes: number) {
 }
 
 function priorityDot(p: string) {
-  const m: Record<string, string> = { Critical: '#f44336', High: '#ff9800', Normal: '#4caf50', Low: '#9e9e9e' }
-  return m[p] || '#666'
+  return getPriorityColor(p, issue.value?.projectId)
 }
 
 // 路由守卫：离开时检查克隆创建面板是否有未保存数据

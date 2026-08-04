@@ -17,6 +17,7 @@ import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueLinkTypeService;
 import com.trackflow.issue.service.IssueTagService;
+import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.issue.vo.*;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.ActionExecutionResult;
@@ -43,6 +44,7 @@ public class IssueController {
     private final IssueLinkTypeService linkTypeService;
     private final IssueTagService tagService;
     private final CustomFieldService customFieldService;
+    private final PriorityFieldService priorityFieldService;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
 
     @PostMapping
@@ -525,5 +527,30 @@ public class IssueController {
                                  @Valid @RequestBody com.trackflow.issue.dto.MoveIssueDTO dto) {
         Issue moved = issueService.moveToProject(id, dto);
         return R.ok(issueService.getDetail(moved.getId()));
+    }
+
+    // ========== 优先级选项 ==========
+
+    /**
+     * 获取项目的优先级选项列表。
+     * 优先级已纳入自定义字段体系（V249），本接口返回项目有效的优先级值列表（含颜色）。
+     */
+    @GetMapping("/priority-options")
+    public R<List<com.trackflow.customfield.vo.CustomFieldOptionVO>> getPriorityOptions(
+            @RequestParam("projectId") Long projectId) {
+        var options = priorityFieldService.getPriorityOptions(projectId);
+        return R.ok(options.stream().map(opt -> {
+            var vo = new com.trackflow.customfield.vo.CustomFieldOptionVO();
+            vo.setId(String.valueOf(opt.getId()));
+            vo.setCustomFieldId(String.valueOf(opt.getCustomFieldId()));
+            vo.setProjectId(opt.getProjectId() != null ? String.valueOf(opt.getProjectId()) : null);
+            vo.setValue(opt.getValue());
+            vo.setPosition(opt.getPosition());
+            vo.setIsDefault(opt.getIsDefault());
+            vo.setIsArchived(opt.getIsArchived());
+            vo.setColor(opt.getColor());
+            vo.setDescription(opt.getDescription());
+            return vo;
+        }).toList());
     }
 }

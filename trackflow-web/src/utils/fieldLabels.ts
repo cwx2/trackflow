@@ -77,10 +77,12 @@ export function localizeIssueType(type?: string | null): string {
  * 优先级英文值 → 中文映射
  */
 export const priorityLabelMap: Record<string, string> = {
+  'Show-stopper': '阻塞',
   Critical: '紧急',
   High: '高',
   Normal: '普通',
   Low: '低',
+  'show-stopper': '阻塞',
   critical: '紧急',
   high: '高',
   normal: '普通',
