@@ -174,6 +174,20 @@ public class ProjectController {
     }
 
     /**
+     * 按关键词搜索项目成员，用于 @ mention 懒加载场景。
+     * keyword 为空时返回前 limit 条（默认10）。
+     */
+    @GetMapping("/{id}/members/search")
+    @PreAuthorize("@perm.checkProject(#id, 'project:view')")
+    public R<List<ProjectMemberVO>> searchMembers(
+            @PathVariable("id") String id,
+            @RequestParam(value = "keyword", required = false, defaultValue = "") String keyword,
+            @RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
+        Long projectId = projectService.resolveProjectId(id);
+        return R.ok(projectService.searchMembersVO(projectId, keyword, limit));
+    }
+
+    /**
      * 获取可分配工单的成员列表（仅拥有 issue:edit 权限的成员）。
      * 用于负责人选择下拉列表，排除观察者等不可分配角色。
      */

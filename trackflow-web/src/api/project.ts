@@ -69,6 +69,13 @@ export const projectApi = {
     return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members`, config)
   },
 
+  /** 按关键词搜索项目成员，用于 @ mention 懒加载 */
+  searchMembers(projectId: string, keyword: string, limit = 10) {
+    return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/members/search`, {
+      params: { keyword, limit }
+    })
+  },
+
   /** 获取可分配工单的成员列表（排除观察者等不具备 issue:edit 权限的角色） */
   listAssignableMembers(projectId: string, config?: RequestOptions) {
     return request.get<any, R<ProjectMemberVO[]>>(`/projects/${projectId}/assignable-members`, config)

@@ -4,7 +4,6 @@ import tippy, { type Instance as TippyInstance } from 'tippy.js'
 import MentionList from '../components/MentionList.vue'
 import { projectApi } from '@/api'
 import type { ProjectMemberVO } from '@/api/types'
-import { ref } from 'vue'
 
 export interface MentionItem {
   id: string
@@ -12,34 +11,38 @@ export interface MentionItem {
   displayName?: string
 }
 
+function debounce<T extends (...args: any[]) => Promise<any>>(fn: T, delay: number): T {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let resolve: ((v: any) => void) | null = null
+  return ((...args: any[]) => {
+    if (timer) clearTimeout(timer)
+    return new Promise((res) => {
+      resolve = res
+      timer = setTimeout(async () => {
+        const result = await fn(...args)
+        resolve?.(result)
+      }, delay)
+    })
+  }) as T
+}
+
 /**
  * 创建 Tiptap Mention 扩展的 suggestion 配置
- * @param projectId 项目ID（用于获取项目成员列表）
+ * 采用按需搜索（懒加载）：每次输入关键词后请求后端，支持大规模成员列表。
+ * @param projectId 项目ID
  */
 export function useMentionSuggestion(projectId: () => string | undefined) {
-  // 缓存项目成员列表
-  const membersCache = ref<MentionItem[]>([])
-  let cacheProjectId: string | undefined = undefined
-
-  async function loadMembers(): Promise<MentionItem[]> {
+  async function fetchMembers(keyword: string): Promise<MentionItem[]> {
     const pid = projectId()
     if (!pid) return []
-    
-    // 如果缓存有效，直接返回
-    if (cacheProjectId === pid && membersCache.value.length > 0) {
-      return membersCache.value
-    }
-    
     try {
-      const res = await projectApi.listMembers(pid)
+      const res = await projectApi.searchMembers(pid, keyword, 10)
       if (res.code === 0 && res.data) {
-        membersCache.value = res.data.map((m: ProjectMemberVO) => ({
+        return res.data.map((m: ProjectMemberVO) => ({
           id: m.userId,
           username: m.username,
           displayName: m.displayName || m.username
         }))
-        cacheProjectId = pid
-        return membersCache.value
       }
     } catch {
       // 静默失败
@@ -47,23 +50,17 @@ export function useMentionSuggestion(projectId: () => string | undefined) {
     return []
   }
 
+  // debounce 300ms，避免每次击键都发请求
+  const debouncedFetch = debounce(fetchMembers, 300)
+
   const suggestion: Omit<SuggestionOptions<MentionItem>, 'editor'> = {
     char: '@',
     allowSpaces: false,
-    
-    // 获取候选项
+
     items: async ({ query }) => {
-      const members = await loadMembers()
-      const q = query.toLowerCase()
-      return members
-        .filter(item => 
-          item.username.toLowerCase().includes(q) || 
-          (item.displayName?.toLowerCase().includes(q) ?? false)
-        )
-        .slice(0, 20)
+      return debouncedFetch(query)
     },
-    
-    // 渲染下拉列表
+
     render: () => {
       let component: VueRenderer | null = null
       let popup: TippyInstance[] | null = null
@@ -112,8 +109,6 @@ export function useMentionSuggestion(projectId: () => string | undefined) {
             popup?.[0]?.hide()
             return true
           }
-
-          // 将键盘事件传递给 MentionList 组件
           return (component?.ref as any)?.onKeyDown?.(props) ?? false
         },
 
@@ -125,14 +120,5 @@ export function useMentionSuggestion(projectId: () => string | undefined) {
     }
   }
 
-  // 清空缓存（当 projectId 变化时调用）
-  function clearCache() {
-    membersCache.value = []
-    cacheProjectId = undefined
-  }
-
-  return {
-    suggestion,
-    clearCache
-  }
+  return { suggestion }
 }

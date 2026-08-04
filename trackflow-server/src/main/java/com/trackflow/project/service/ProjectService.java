@@ -828,6 +828,55 @@ public class ProjectService {
     }
 
     /**
+     * 按关键词搜索项目成员，用于 @ mention 懒加载场景。
+     * 在数据库层过滤，避免全量加载后内存过滤。
+     */
+    public List<ProjectMemberVO> searchMembersVO(Long projectId, String keyword, int limit) {
+        // 先拿项目成员的 userId 列表
+        List<ProjectMember> members = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>().eq(ProjectMember::getProjectId, projectId)
+        );
+        if (members.isEmpty()) return List.of();
+
+        List<Long> userIds = members.stream().map(ProjectMember::getUserId).distinct().toList();
+
+        // 在用户表按关键词过滤
+        String kw = keyword == null ? "" : keyword.trim();
+        List<com.trackflow.system.entity.SysUser> users;
+        if (kw.isEmpty()) {
+            users = userMapper.selectList(
+                    new LambdaQueryWrapper<com.trackflow.system.entity.SysUser>()
+                            .in(com.trackflow.system.entity.SysUser::getId, userIds)
+                            .orderByAsc(com.trackflow.system.entity.SysUser::getDisplayName)
+                            .last("LIMIT " + limit)
+            );
+        } else {
+            users = userMapper.selectList(
+                    new LambdaQueryWrapper<com.trackflow.system.entity.SysUser>()
+                            .in(com.trackflow.system.entity.SysUser::getId, userIds)
+                            .and(w -> w
+                                    .like(com.trackflow.system.entity.SysUser::getDisplayName, kw)
+                                    .or()
+                                    .like(com.trackflow.system.entity.SysUser::getUsername, kw)
+                            )
+                            .orderByAsc(com.trackflow.system.entity.SysUser::getDisplayName)
+                            .last("LIMIT " + limit)
+            );
+        }
+        if (users.isEmpty()) return List.of();
+
+        // 组装 VO（只需要 userId/username/displayName，mention 场景不需要角色详情）
+        return users.stream().map(user -> {
+            ProjectMemberVO vo = new ProjectMemberVO();
+            vo.setUserId(user.getId().toString());
+            vo.setUsername(user.getUsername());
+            vo.setDisplayName(user.getDisplayName());
+            vo.setEmail(user.getEmail());
+            return vo;
+        }).toList();
+    }
+
+    /**
      * 获取项目中通过用户组获得访问权的组成员列表。
      * 查询 user_group_role 表中 project_id 匹配的组角色记录，
      * 并展开组成员信息。
