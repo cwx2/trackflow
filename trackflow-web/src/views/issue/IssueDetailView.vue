@@ -60,6 +60,7 @@
         @add-tags="onAddTags"
         @create-tag="onCreateTag"
         @add-link="openAddLinkModal"
+        @delete-link="onDeleteLink"
         @upload="triggerUpload(false)"
         @upload-private="triggerUpload(true)"
         @upload-files="onDropFiles"
@@ -360,6 +361,17 @@ function openAddLinkModal() { showAddLinkModal.value = true }
 async function onLinked() {
   // 刷新关联列表（独立加载，不依赖工单主数据）
   await loadLinks()
+}
+
+async function onDeleteLink(linkId: string) {
+  if (!issue.value) return
+  try {
+    await issueApi.deleteLink(issue.value.id, linkId)
+    Message.success('关联已删除')
+    await loadLinks()
+  } catch (e: any) {
+    Message.error(e?.response?.data?.message || '删除关联失败')
+  }
 }
 
 // 权限控制（必须在 issue ref 声明之后）
