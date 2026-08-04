@@ -167,6 +167,13 @@
     @cancel="showTransitionModal = false"
   />
 
+  <!-- Attachment Privacy Modal (private upload group selection) -->
+  <AttachmentPrivacyModal
+    :visible="showPrivacyModal"
+    @update:visible="showPrivacyModal = $event"
+    @confirm="onPrivacyGroupConfirm"
+  />
+
   <!-- Add Time Entry Dialog -->
   <a-modal
     v-model:visible="showTimeDialog"
@@ -261,6 +268,7 @@ import CommentInput from './components/CommentInput.vue'
 import IssueCreatePanel from './IssueCreatePanel.vue'
 import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
+import AttachmentPrivacyModal from './components/AttachmentPrivacyModal.vue'
 import type { ActivityItem } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, priorityLabelMap, localizeLinkType } from '@/utils/fieldLabels'
@@ -714,7 +722,7 @@ function onPasteUpload(e: ClipboardEvent) {
         e.preventDefault()
         const name = `paste-${Date.now()}.${item.type.split('/')[1] || 'png'}`
         const namedFile = new File([file], name, { type: file.type })
-        doUploadFile(namedFile, false)
+        doUploadFile(namedFile, undefined)
       }
       break
     }
@@ -1318,17 +1326,32 @@ function onCreateSubtask() {
 
 // ========== 附件上传 ==========
 
-const pendingPrivateUpload = ref(false)
+const showPrivacyModal = ref(false)
 
 function triggerUpload(isPrivate: boolean) {
-  pendingPrivateUpload.value = isPrivate
+  if (isPrivate) {
+    // 私有上传：先弹出用户组选择弹窗
+    showPrivacyModal.value = true
+  } else {
+    // 普通上传：直接弹出文件选择器
+    openFilePicker(undefined)
+  }
+}
+
+/** 用户确认用户组选择后触发 */
+function onPrivacyGroupConfirm(groupIds: string[]) {
+  openFilePicker(groupIds)
+}
+
+/** 打开文件选择器 */
+function openFilePicker(visibleToGroupIds: string[] | undefined) {
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
   input.onchange = async () => {
     if (!input.files || input.files.length === 0) return
     for (const file of Array.from(input.files)) {
-      await doUploadFile(file, isPrivate)
+      await doUploadFile(file, visibleToGroupIds)
     }
   }
   input.click()
@@ -1338,16 +1361,13 @@ function triggerUpload(isPrivate: boolean) {
 async function onDropFiles(files: File[]) {
   if (!issue.value || files.length === 0) return
   for (const file of files) {
-    await doUploadFile(file, false)
+    await doUploadFile(file, undefined)
   }
 }
 
-async function doUploadFile(file: File, isPrivate: boolean) {
+async function doUploadFile(file: File, visibleToGroupIds: string[] | undefined) {
   if (!issue.value) return
   try {
-    // 对于私有上传，暂时使用空组列表（后续可弹窗让用户选择组）
-    // 简化实现：私有上传时先上传，然后通过编辑可见性来设置组
-    const visibleToGroupIds = isPrivate ? [] : undefined
     await issueApi.uploadAttachment(issue.value.id, file, undefined, visibleToGroupIds)
     Message.success(`${file.name} 上传成功`)
     loadAttachments()
