@@ -56,6 +56,8 @@ public class WorkflowConverterImpl implements WorkflowConverter {
         vo.setAssignee(entity.getAssignee());
         vo.setRequireComment(entity.getRequireComment());
         vo.setConditions(entity.getConditions());
+        vo.setTransitionName(entity.getTransitionName());
+        vo.setIsInitial(entity.getIsInitial());
         return vo;
     }
 

@@ -877,6 +877,10 @@ export interface WorkflowTransitionVO {
   requireComment?: boolean
   /** 守卫条件 JSON 字符串，{} 或 undefined 表示无条件限制 */
   conditions?: string
+  /** 转换显示名（如"开始处理"），为空时使用目标状态名 */
+  transitionName?: string
+  /** 是否标记为初始状态（新建工单默认状态） */
+  isInitial?: boolean
 }
 
 export interface UpdateWorkflowDTO {

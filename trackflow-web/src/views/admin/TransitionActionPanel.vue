@@ -187,7 +187,10 @@ function onFormSaved() {
 
 function actionTypeLabel(type: string): string {
   const map: Record<string, string> = {
-    auto_assign: '自动分配'
+    auto_assign: '自动分配',
+    add_comment: '添加评论',
+    add_tag: '添加标签',
+    require_field: '必填字段'
   }
   return map[type] || type
 }
@@ -204,6 +207,19 @@ function strategyLabel(strategy: string): string {
 }
 
 function strategyDescription(config: TransitionActionVO['actionConfig']): string {
+  // For non-auto_assign action types, show relevant config info
+  if (config.comment_template) {
+    const template = config.comment_template
+    return template.length > 30 ? template.substring(0, 30) + '...' : template
+  }
+  if (config.tag_name) {
+    return `标签: ${config.tag_name}`
+  }
+  if (config.required_field_id) {
+    return config.required_field_name || `字段 #${config.required_field_id}`
+  }
+
+  // auto_assign strategy description
   switch (config.strategy) {
     case 'specific_user':
       return '指定用户'
@@ -219,7 +235,7 @@ function strategyDescription(config: TransitionActionVO['actionConfig']): string
     case 'project_lead':
       return '分配给项目负责人'
     default:
-      return config.strategy || '未知策略'
+      return config.strategy || ''
   }
 }
 </script>

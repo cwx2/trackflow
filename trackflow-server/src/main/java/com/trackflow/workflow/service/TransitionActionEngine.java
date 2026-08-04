@@ -12,10 +12,14 @@ import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.entity.IssueTag;
+import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.IssueTagMapper;
+import com.trackflow.issue.mapper.IssueTagRelationMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.dto.ActionConfig;
@@ -58,6 +62,8 @@ public class TransitionActionEngine {
     private final List<AssignmentStrategy> strategyList;
     private final CustomFieldDefinitionMapper customFieldDefinitionMapper;
     private final CustomFieldValueMapper customFieldValueMapper;
+    private final IssueTagMapper issueTagMapper;
+    private final IssueTagRelationMapper issueTagRelationMapper;
 
     private Map<String, AssignmentStrategy> strategyMap;
 
@@ -299,6 +305,8 @@ public class TransitionActionEngine {
                 return executeAutoAssignAction(action, issue, triggeredBy, oldStatusId, newStatusId);
             case "add_comment":
                 return executeAddCommentAction(action, issue, triggeredBy, oldStatusId, newStatusId);
+            case "add_tag":
+                return executeAddTagAction(action, issue, triggeredBy);
             case "require_field":
                 // require_field 只在 validatePreTransition() 中执行，后置动作阶段无需再次执行。
                 return null;
@@ -448,6 +456,91 @@ public class TransitionActionEngine {
     }
 
     /**
+     * 执行 add_tag 动作：自动为工单添加指定标签。
+     * <p>
+     * action_config 格式：{"tag_name": "标签名"} 或 {"tag_id": "123456"}
+     * 如果 tag_name 在项目中不存在，则自动创建一个默认颜色的标签。
+     * 如果工单已有该标签，则跳过（幂等）。
+     */
+    private ActionExecutionResult executeAddTagAction(TransitionAction action, Issue issue, Long triggeredBy) {
+        ActionConfig config = actionConfigValidator.parseConfig(action.getActionConfig());
+        if (config == null) {
+            log.warn("[TransitionActionEngine] add_tag action {} action_config 解析失败", action.getId());
+            return null;
+        }
+
+        Long tagId = config.getTagId();
+        String tagName = config.getTagName();
+
+        // 优先通过 tag_id 查找，其次通过 tag_name 查找
+        IssueTag tag = null;
+        if (tagId != null) {
+            tag = issueTagMapper.selectById(tagId);
+        }
+        if (tag == null && tagName != null && !tagName.isBlank()) {
+            // 按项目+名称查找
+            tag = issueTagMapper.selectOne(
+                    new LambdaQueryWrapper<IssueTag>()
+                            .eq(IssueTag::getProjectId, issue.getProjectId())
+                            .eq(IssueTag::getName, tagName)
+                            .last("LIMIT 1"));
+
+            // 如果标签不存在，自动创建
+            if (tag == null) {
+                tag = new IssueTag();
+                tag.setProjectId(issue.getProjectId());
+                tag.setName(tagName);
+                tag.setColor("#6b7280"); // 默认灰色
+                tag.setCreatedBy(triggeredBy);
+                tag.setCreatedAt(LocalDateTime.now());
+                issueTagMapper.insert(tag);
+                log.info("[TransitionActionEngine] 自动创建标签: projectId={}, name={}",
+                        issue.getProjectId(), tagName);
+            }
+        }
+
+        if (tag == null) {
+            log.warn("[TransitionActionEngine] add_tag action {} 无法解析标签: tagId={}, tagName={}",
+                    action.getId(), tagId, tagName);
+            return null;
+        }
+
+        // 检查是否已有该标签（幂等）
+        Long existingCount = issueTagRelationMapper.selectCount(
+                new LambdaQueryWrapper<IssueTagRelation>()
+                        .eq(IssueTagRelation::getIssueId, issue.getId())
+                        .eq(IssueTagRelation::getTagId, tag.getId()));
+        if (existingCount > 0) {
+            log.debug("[TransitionActionEngine] Issue {} 已有标签 {}，跳过",
+                    issue.getId(), tag.getName());
+            return ActionExecutionResult.commentAdded(); // 复用已有的"已执行"结果类型
+        }
+
+        // 添加标签关联
+        IssueTagRelation relation = new IssueTagRelation();
+        relation.setIssueId(issue.getId());
+        relation.setTagId(tag.getId());
+        relation.setCreatedAt(LocalDateTime.now());
+        issueTagRelationMapper.insert(relation);
+
+        // 记录活动日志
+        IssueActivity activity = new IssueActivity();
+        activity.setIssueId(issue.getId());
+        activity.setUserId(triggeredBy);
+        activity.setAction("add_tag");
+        activity.setFieldName("tags");
+        activity.setOldValue(null);
+        activity.setNewValue(tag.getName());
+        activity.setCreatedAt(LocalDateTime.now());
+        issueActivityMapper.insert(activity);
+
+        log.info("[TransitionActionEngine] Issue {} auto add_tag '{}' via action_id={}",
+                issue.getId(), tag.getName(), action.getId());
+
+        return ActionExecutionResult.commentAdded(); // 复用"已执行"标记
+    }
+
+    /**
      * 执行创建时的单个动作。
      * <p>
      * 与 executeActionWithResult 区别：
@@ -463,6 +556,9 @@ public class TransitionActionEngine {
                 return executeCreateAutoAssignAction(action, issue, creatorId);
             case "add_comment":
                 return executeCreateAddCommentAction(action, issue, creatorId);
+            case "add_tag":
+                ActionExecutionResult tagResult = executeAddTagAction(action, issue, creatorId);
+                return tagResult != null && tagResult.isExecuted();
             default:
                 log.debug("[TransitionActionEngine] on-create 跳过未支持的动作类型: type={}, action_id={}",
                         actionType, action.getId());

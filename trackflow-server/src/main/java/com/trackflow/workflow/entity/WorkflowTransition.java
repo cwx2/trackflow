@@ -40,4 +40,10 @@ public class WorkflowTransition implements Serializable {
 
     /** 是否要求此转换必须附带评论/理由 */
     private Boolean requireComment;
+
+    /** 转换显示名（如"开始处理"），为空时前端使用目标状态名 */
+    private String transitionName;
+
+    /** 是否标记为初始状态（新建该类型工单时默认进入的状态） */
+    private Boolean isInitial;
 }

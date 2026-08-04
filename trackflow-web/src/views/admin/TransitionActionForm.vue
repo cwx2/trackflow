@@ -19,116 +19,188 @@
     >
       <!-- 动作类型 -->
       <a-form-item field="actionType" label="动作类型">
-        <a-select v-model="form.actionType" placeholder="选择动作类型">
+        <a-select v-model="form.actionType" placeholder="选择动作类型" @change="onActionTypeChange">
           <a-option value="auto_assign">自动分配负责人</a-option>
+          <a-option value="add_comment">自动添加评论</a-option>
+          <a-option value="add_tag">自动添加标签</a-option>
+          <a-option value="require_field">要求必填字段</a-option>
         </a-select>
       </a-form-item>
 
-      <!-- 分配策略 -->
-      <a-form-item field="strategy" label="分配策略">
-        <a-select v-model="form.strategy" placeholder="选择分配策略" @change="onStrategyChange">
-          <a-option value="specific_user">指定用户</a-option>
-          <a-option value="role_based">按角色分配</a-option>
-          <a-option value="previous_assignee">回退前负责人</a-option>
-          <a-option value="reporter">分配给报告人</a-option>
-          <a-option value="project_lead">分配给项目负责人</a-option>
-        </a-select>
-      </a-form-item>
+      <!-- ===== auto_assign 专用字段 ===== -->
+      <template v-if="form.actionType === 'auto_assign'">
+        <!-- 分配策略 -->
+        <a-form-item field="strategy" label="分配策略">
+          <a-select v-model="form.strategy" placeholder="选择分配策略" @change="onStrategyChange">
+            <a-option value="specific_user">指定用户</a-option>
+            <a-option value="role_based">按角色分配</a-option>
+            <a-option value="previous_assignee">回退前负责人</a-option>
+            <a-option value="reporter">分配给报告人</a-option>
+            <a-option value="project_lead">分配给项目负责人</a-option>
+          </a-select>
+        </a-form-item>
 
-      <!-- specific_user → 用户选择器 -->
-      <a-form-item
-        v-if="form.strategy === 'specific_user'"
-        field="userId"
-        label="指定用户"
-      >
-        <a-select
-          v-model="form.userId"
-          placeholder="搜索项目成员"
-          :loading="membersLoading"
-          allow-search
-          :filter-option="filterMembers"
+        <!-- specific_user → 用户选择器 -->
+        <a-form-item
+          v-if="form.strategy === 'specific_user'"
+          field="userId"
+          label="指定用户"
         >
-          <a-option
-            v-for="m in members"
-            :key="m.userId"
-            :value="Number(m.userId)"
-            :label="m.displayName"
+          <a-select
+            v-model="form.userId"
+            placeholder="搜索项目成员"
+            :loading="membersLoading"
+            allow-search
+            :filter-option="filterMembers"
           >
-            {{ m.displayName }}
-            <span style="font-size: 11px; color: var(--color-text-4); margin-left: 4px">
-              @{{ m.username }}
-            </span>
-          </a-option>
-        </a-select>
-      </a-form-item>
-
-      <!-- role_based → 角色选择器 + 模式 -->
-      <template v-if="form.strategy === 'role_based'">
-        <a-form-item field="roleId" label="角色">
-          <a-select v-model="form.roleId" placeholder="选择角色">
             <a-option
-              v-for="role in roles"
-              :key="role.id"
-              :value="Number(role.id)"
-              :label="role.name"
+              v-for="m in members"
+              :key="m.userId"
+              :value="Number(m.userId)"
+              :label="m.displayName"
             >
-              {{ role.name }}
+              {{ m.displayName }}
+              <span style="font-size: 11px; color: var(--color-text-4); margin-left: 4px">
+                @{{ m.username }}
+              </span>
             </a-option>
           </a-select>
         </a-form-item>
 
-        <a-form-item field="mode" label="分配模式">
-          <a-radio-group v-model="form.mode" type="button">
-            <a-radio value="round_robin">轮转分配</a-radio>
-            <a-radio value="least_loaded">最少负载</a-radio>
-            <a-radio value="weighted_round_robin">加权轮转</a-radio>
-          </a-radio-group>
-        </a-form-item>
+        <!-- role_based → 角色选择器 + 模式 -->
+        <template v-if="form.strategy === 'role_based'">
+          <a-form-item field="roleId" label="角色">
+            <a-select v-model="form.roleId" placeholder="选择角色">
+              <a-option
+                v-for="role in roles"
+                :key="role.id"
+                :value="Number(role.id)"
+                :label="role.name"
+              >
+                {{ role.name }}
+              </a-option>
+            </a-select>
+          </a-form-item>
 
-        <!-- 加权配置 -->
-        <a-form-item v-if="form.mode === 'weighted_round_robin'" label="成员权重">
-          <div class="weight-config">
-            <div v-for="m in roleMembers" :key="m.userId" class="weight-row">
-              <span class="weight-name">{{ m.displayName }}</span>
-              <a-input-number
-                v-model="weightMap[m.userId]"
-                :min="1"
-                :max="10"
-                size="small"
-                style="width: 80px"
-              />
+          <a-form-item field="mode" label="分配模式">
+            <a-radio-group v-model="form.mode" type="button">
+              <a-radio value="round_robin">轮转分配</a-radio>
+              <a-radio value="least_loaded">最少负载</a-radio>
+              <a-radio value="weighted_round_robin">加权轮转</a-radio>
+            </a-radio-group>
+          </a-form-item>
+
+          <!-- 加权配置 -->
+          <a-form-item v-if="form.mode === 'weighted_round_robin'" label="成员权重">
+            <div class="weight-config">
+              <div v-for="m in roleMembers" :key="m.userId" class="weight-row">
+                <span class="weight-name">{{ m.displayName }}</span>
+                <a-input-number
+                  v-model="weightMap[m.userId]"
+                  :min="1"
+                  :max="10"
+                  size="small"
+                  style="width: 80px"
+                />
+              </div>
+              <div v-if="roleMembers.length === 0" class="weight-empty">
+                请先选择角色以加载成员列表
+              </div>
             </div>
-            <div v-if="roleMembers.length === 0" class="weight-empty">
-              请先选择角色以加载成员列表
-            </div>
-          </div>
+            <template #extra>
+              <span style="font-size: 11px; color: var(--color-text-4)">
+                权重越高分配越多。例如权重 3:1 表示前者被分配的频率是后者的 3 倍
+              </span>
+            </template>
+          </a-form-item>
+        </template>
+
+        <!-- 回退策略 -->
+        <a-form-item field="fallbackStrategy" label="回退策略（可选）">
+          <a-select
+            v-model="form.fallbackStrategy"
+            placeholder="主策略失败时使用"
+            allow-clear
+          >
+            <a-option
+              v-for="opt in fallbackOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >{{ opt.label }}</a-option>
+          </a-select>
           <template #extra>
             <span style="font-size: 11px; color: var(--color-text-4)">
-              权重越高分配越多。例如权重 3:1 表示前者被分配的频率是后者的 3 倍
+              当主策略无法找到合适的用户时，尝试使用回退策略
             </span>
           </template>
         </a-form-item>
       </template>
 
-      <!-- 回退策略 -->
-      <a-form-item field="fallbackStrategy" label="回退策略（可选）">
-        <a-select
-          v-model="form.fallbackStrategy"
-          placeholder="主策略失败时使用"
-          allow-clear
-        >
-          <a-option
-            v-for="opt in fallbackOptions"
-            :key="opt.value"
-            :value="opt.value"
-          >{{ opt.label }}</a-option>
-        </a-select>
-        <template #extra>
-          <span style="font-size: 11px; color: var(--color-text-4)">
-            当主策略无法找到合适的用户时，尝试使用回退策略
-          </span>
-        </template>
-      </a-form-item>
+      <!-- ===== add_comment 专用字段 ===== -->
+      <template v-if="form.actionType === 'add_comment'">
+        <a-form-item field="commentTemplate" label="评论内容">
+          <a-textarea
+            v-model="form.commentTemplate"
+            placeholder="输入评论模板文本，支持占位符：{issue_key}, {old_status}, {new_status}"
+            :auto-size="{ minRows: 3, maxRows: 8 }"
+          />
+          <template #extra>
+            <span style="font-size: 11px; color: var(--color-text-4)">
+              留空则使用默认模板：「状态已从「旧状态」变更为「新状态」。」
+            </span>
+          </template>
+        </a-form-item>
+      </template>
+
+      <!-- ===== add_tag 专用字段 ===== -->
+      <template v-if="form.actionType === 'add_tag'">
+        <a-form-item field="tagName" label="标签名称">
+          <a-input
+            v-model="form.tagName"
+            placeholder="输入标签名（如项目中不存在将自动创建）"
+          />
+          <template #extra>
+            <span style="font-size: 11px; color: var(--color-text-4)">
+              当状态转换发生时，自动为工单添加此标签。如果标签不存在会自动创建。
+            </span>
+          </template>
+        </a-form-item>
+      </template>
+
+      <!-- ===== require_field 专用字段 ===== -->
+      <template v-if="form.actionType === 'require_field'">
+        <a-form-item field="requiredFieldId" label="必填字段">
+          <a-select
+            v-model="form.requiredFieldId"
+            placeholder="选择必须填写的字段"
+            :loading="fieldsLoading"
+          >
+            <a-option
+              v-for="f in customFields"
+              :key="f.id"
+              :value="Number(f.id)"
+              :label="f.name"
+            >
+              {{ f.name }}
+              <span style="font-size: 11px; color: var(--color-text-4); margin-left: 4px">
+                ({{ f.fieldType }})
+              </span>
+            </a-option>
+          </a-select>
+          <template #extra>
+            <span style="font-size: 11px; color: var(--color-text-4)">
+              转换时如果此字段为空，将阻止状态变更并显示警告。
+            </span>
+          </template>
+        </a-form-item>
+
+        <a-form-item field="warningMessage" label="警告消息（可选）">
+          <a-input
+            v-model="form.warningMessage"
+            placeholder="请先填写「{field_name}」字段"
+          />
+        </a-form-item>
+      </template>
 
       <!-- 启用开关 -->
       <a-form-item field="enabled" label="启用">
@@ -142,7 +214,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
-import { transitionActionApi, projectApi, workflowApi } from '@/api'
+import { transitionActionApi, projectApi, workflowApi, customFieldApi } from '@/api'
 import type { TransitionActionVO } from '@/api/transitionAction'
 import type { ProjectMemberVO, RoleVO } from '@/api/types'
 
@@ -163,16 +235,27 @@ const emit = defineEmits<{
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const membersLoading = ref(false)
+const fieldsLoading = ref(false)
 const members = ref<ProjectMemberVO[]>([])
 const roles = ref<RoleVO[]>([])
+const customFields = ref<Array<{ id: string; name: string; fieldType: string }>>([])
 
 const form = reactive({
-  actionType: 'auto_assign',
+  actionType: 'auto_assign' as string,
+  // auto_assign fields
   strategy: '' as string,
   userId: undefined as number | undefined,
   roleId: undefined as number | undefined,
   mode: 'round_robin' as string,
   fallbackStrategy: undefined as string | undefined,
+  // add_comment fields
+  commentTemplate: '' as string,
+  // add_tag fields
+  tagName: '' as string,
+  // require_field fields
+  requiredFieldId: undefined as number | undefined,
+  warningMessage: '' as string,
+  // common
   enabled: true
 })
 
@@ -181,19 +264,28 @@ const weightMap = reactive<Record<string, number>>({})
 /** 当前选中角色的成员列表（用于加权配置 UI） */
 const roleMembers = ref<ProjectMemberVO[]>([])
 
-const formRules = computed(() => ({
-  actionType: [{ required: true, message: '请选择动作类型' }],
-  strategy: [{ required: true, message: '请选择分配策略' }],
-  userId: form.strategy === 'specific_user'
-    ? [{ required: true, message: '请选择用户' }]
-    : [],
-  roleId: form.strategy === 'role_based'
-    ? [{ required: true, message: '请选择角色' }]
-    : [],
-  mode: form.strategy === 'role_based'
-    ? [{ required: true, message: '请选择分配模式' }]
-    : []
-}))
+const formRules = computed(() => {
+  const rules: Record<string, any[]> = {
+    actionType: [{ required: true, message: '请选择动作类型' }]
+  }
+
+  if (form.actionType === 'auto_assign') {
+    rules.strategy = [{ required: true, message: '请选择分配策略' }]
+    if (form.strategy === 'specific_user') {
+      rules.userId = [{ required: true, message: '请选择用户' }]
+    }
+    if (form.strategy === 'role_based') {
+      rules.roleId = [{ required: true, message: '请选择角色' }]
+      rules.mode = [{ required: true, message: '请选择分配模式' }]
+    }
+  } else if (form.actionType === 'add_tag') {
+    rules.tagName = [{ required: true, message: '请输入标签名称' }]
+  } else if (form.actionType === 'require_field') {
+    rules.requiredFieldId = [{ required: true, message: '请选择必填字段' }]
+  }
+
+  return rules
+})
 
 const fallbackOptions = computed(() => {
   const all = [
@@ -203,7 +295,6 @@ const fallbackOptions = computed(() => {
     { value: 'reporter', label: '报告人' },
     { value: 'project_lead', label: '项目负责人' }
   ]
-  // 排除当前选中的主策略
   return all.filter(o => o.value !== form.strategy)
 })
 
@@ -212,6 +303,9 @@ watch(() => props.visible, (val) => {
     initForm()
     loadMembers()
     loadRoles()
+    if (form.actionType === 'require_field') {
+      loadCustomFields()
+    }
   }
 })
 
@@ -229,6 +323,13 @@ watch(() => form.mode, (newMode) => {
   }
 })
 
+function onActionTypeChange() {
+  // 切换动作类型时加载必要数据
+  if (form.actionType === 'require_field' && customFields.value.length === 0) {
+    loadCustomFields()
+  }
+}
+
 function initForm() {
   // 清除权重配置
   Object.keys(weightMap).forEach(k => delete weightMap[k])
@@ -237,19 +338,28 @@ function initForm() {
   if (props.action) {
     const config = props.action.actionConfig
     form.actionType = props.action.actionType
-    form.strategy = config.strategy
-    form.userId = config.user_id
-    form.roleId = config.role_id
-    form.mode = config.mode || 'round_robin'
-    form.fallbackStrategy = config.fallback_strategy
     form.enabled = props.action.enabled
-    // 恢复权重配置
-    if ((config as any).weights) {
-      Object.assign(weightMap, (config as any).weights)
-    }
-    // 如果是 role_based 且有 roleId，加载成员列表
-    if (config.strategy === 'role_based' && config.role_id) {
-      loadRoleMembers(config.role_id)
+
+    if (props.action.actionType === 'auto_assign') {
+      form.strategy = config.strategy || ''
+      form.userId = config.user_id
+      form.roleId = config.role_id
+      form.mode = config.mode || 'round_robin'
+      form.fallbackStrategy = config.fallback_strategy
+      if ((config as any).weights) {
+        Object.assign(weightMap, (config as any).weights)
+      }
+      if (config.strategy === 'role_based' && config.role_id) {
+        loadRoleMembers(config.role_id)
+      }
+    } else if (props.action.actionType === 'add_comment') {
+      form.commentTemplate = config.comment_template || ''
+    } else if (props.action.actionType === 'add_tag') {
+      form.tagName = config.tag_name || ''
+    } else if (props.action.actionType === 'require_field') {
+      form.requiredFieldId = config.required_field_id
+      form.warningMessage = config.warning_message || ''
+      loadCustomFields()
     }
   } else {
     form.actionType = 'auto_assign'
@@ -258,12 +368,15 @@ function initForm() {
     form.roleId = undefined
     form.mode = 'round_robin'
     form.fallbackStrategy = undefined
+    form.commentTemplate = ''
+    form.tagName = ''
+    form.requiredFieldId = undefined
+    form.warningMessage = ''
     form.enabled = true
   }
 }
 
 function onStrategyChange() {
-  // 清除不相关字段
   if (form.strategy !== 'specific_user') {
     form.userId = undefined
   }
@@ -275,7 +388,6 @@ function onStrategyChange() {
   }
 }
 
-/** 当 roleId 变化时加载该角色的项目成员（用于加权配置） */
 async function loadRoleMembers(roleId?: number) {
   if (!roleId || !props.projectId || props.projectId === '0') {
     roleMembers.value = []
@@ -285,14 +397,11 @@ async function loadRoleMembers(roleId?: number) {
     const res = await projectApi.listMembers(props.projectId)
     const allMembers: ProjectMemberVO[] = res.data || []
     roleMembers.value = allMembers.filter((m: any) => {
-      // 多角色：检查 roleIds 数组是否包含目标角色
       if (m.roleIds && m.roleIds.length > 0) {
         return m.roleIds.includes(String(roleId))
       }
-      // 兼容：单角色 fallback
       return String(m.roleId) === String(roleId)
     })
-    // 初始化未配置的成员权重为 1
     for (const m of roleMembers.value) {
       if (!weightMap[m.userId]) {
         weightMap[m.userId] = 1
@@ -325,6 +434,23 @@ async function loadRoles() {
   }
 }
 
+async function loadCustomFields() {
+  if (!props.projectId || props.projectId === '0') return
+  fieldsLoading.value = true
+  try {
+    const res = await customFieldApi.list({ pageSize: 200 })
+    customFields.value = ((res.data as any)?.list || []).map((f: any) => ({
+      id: f.id,
+      name: f.name,
+      fieldType: f.fieldFormat || f.fieldType || 'text'
+    }))
+  } catch {
+    customFields.value = []
+  } finally {
+    fieldsLoading.value = false
+  }
+}
+
 function filterMembers(inputValue: string, option: any) {
   const label = (option.label || '').toLowerCase()
   return label.includes(inputValue.toLowerCase())
@@ -338,35 +464,46 @@ async function handleSubmit() {
   const valid = await formRef.value?.validate()
   if (valid) return
 
-  // 构建 actionConfig
-  const actionConfig: Record<string, any> = {
-    strategy: form.strategy
-  }
-  if (form.strategy === 'specific_user') {
-    actionConfig.user_id = form.userId
-  }
-  if (form.strategy === 'role_based') {
-    actionConfig.role_id = form.roleId
-    actionConfig.mode = form.mode
-    // 加权轮转时包含权重配置
-    if (form.mode === 'weighted_round_robin' && Object.keys(weightMap).length > 0) {
-      const weights: Record<string, number> = {}
-      for (const [uid, w] of Object.entries(weightMap)) {
-        if (w && w > 0) weights[uid] = w
-      }
-      if (Object.keys(weights).length > 0) {
-        actionConfig.weights = weights
+  // 构建 actionConfig 根据 actionType
+  const actionConfig: Record<string, any> = {}
+
+  if (form.actionType === 'auto_assign') {
+    actionConfig.strategy = form.strategy
+    if (form.strategy === 'specific_user') {
+      actionConfig.user_id = form.userId
+    }
+    if (form.strategy === 'role_based') {
+      actionConfig.role_id = form.roleId
+      actionConfig.mode = form.mode
+      if (form.mode === 'weighted_round_robin' && Object.keys(weightMap).length > 0) {
+        const weights: Record<string, number> = {}
+        for (const [uid, w] of Object.entries(weightMap)) {
+          if (w && w > 0) weights[uid] = w
+        }
+        if (Object.keys(weights).length > 0) {
+          actionConfig.weights = weights
+        }
       }
     }
-  }
-  if (form.fallbackStrategy) {
-    actionConfig.fallback_strategy = form.fallbackStrategy
+    if (form.fallbackStrategy) {
+      actionConfig.fallback_strategy = form.fallbackStrategy
+    }
+  } else if (form.actionType === 'add_comment') {
+    if (form.commentTemplate.trim()) {
+      actionConfig.comment_template = form.commentTemplate.trim()
+    }
+  } else if (form.actionType === 'add_tag') {
+    actionConfig.tag_name = form.tagName.trim()
+  } else if (form.actionType === 'require_field') {
+    actionConfig.required_field_id = form.requiredFieldId
+    if (form.warningMessage.trim()) {
+      actionConfig.warning_message = form.warningMessage.trim()
+    }
   }
 
   submitting.value = true
   try {
     if (props.action) {
-      // 编辑
       await transitionActionApi.update(props.action.id, {
         actionType: form.actionType,
         actionConfig,
@@ -374,7 +511,6 @@ async function handleSubmit() {
       })
       Message.success('动作已更新')
     } else {
-      // 新建
       await transitionActionApi.create({
         projectId: Number(props.projectId),
         issueType: props.issueType || '*',

@@ -137,4 +137,21 @@ public class ActionConfig {
      */
     @JsonProperty("warning_message")
     private String warningMessage;
+
+    // ===== add_tag 动作专用字段 =====
+
+    /**
+     * 标签 ID（action_type = add_tag 时可选）。
+     * 如果提供了 tag_id，则直接使用该标签。
+     */
+    @JsonProperty("tag_id")
+    private Long tagId;
+
+    /**
+     * 标签名称（action_type = add_tag 时可选）。
+     * 如果 tag_id 未提供或找不到，按项目+名称查找标签；
+     * 如果标签不存在则自动创建。
+     */
+    @JsonProperty("tag_name")
+    private String tagName;
 }

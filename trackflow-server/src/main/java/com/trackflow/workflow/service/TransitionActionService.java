@@ -38,7 +38,8 @@ public class TransitionActionService {
      * 2. 数据库 CHECK 约束（新增 Flyway 迁移）
      * 3. 前端 TransitionActionForm.vue 中的下拉选项
      */
-    private static final Set<String> VALID_ACTION_TYPES = Set.of("auto_assign");
+    private static final Set<String> VALID_ACTION_TYPES = Set.of(
+            "auto_assign", "add_comment", "require_field", "add_tag");
 
     /**
      * 支持的触发类型白名单。
@@ -244,6 +245,11 @@ public class TransitionActionService {
     private void checkDuplicateAction(Long projectId, String issueType,
                                       Long oldStatusId, Long newStatusId,
                                       String actionType, Long excludeId) {
+        // add_comment 和 add_tag 允许在同一路径上配置多个（多标签、多评论场景）
+        if ("add_comment".equals(actionType) || "add_tag".equals(actionType)) {
+            return;
+        }
+
         LambdaQueryWrapper<TransitionAction> wrapper = new LambdaQueryWrapper<>();
 
         if (projectId == null) {
