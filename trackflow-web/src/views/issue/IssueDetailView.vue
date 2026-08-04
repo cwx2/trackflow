@@ -1162,9 +1162,9 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
         break
     }
 
-    // 确定颜色（仅 list 类型且有颜色配置时）
+    // 确定颜色（仅 list/ownedField 类型且有颜色配置时）
     let fieldColor: string | undefined
-    if (cf.fieldFormat === 'list' && stored) {
+    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && stored) {
       if (isMulti && stored.colors?.length) {
         // 多值：取第一个有颜色的
         fieldColor = stored.colors.find(c => c != null) || undefined
@@ -1183,7 +1183,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       rawValues: isMulti ? rawValues : undefined,
       readonly: !canEdit || cf.editable === false,
       options,
-      canAddOption: cf.fieldFormat === 'list' && canManageCustomFieldsComputed.value,
+      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && canManageCustomFieldsComputed.value,
       customFieldId: cf.id,
       isSetValuePrompt,
       // 空值自定义字段（无 requiresExplicitSelection、无值）：默认折叠

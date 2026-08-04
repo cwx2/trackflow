@@ -16,6 +16,7 @@ import com.trackflow.customfield.entity.*;
 import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableColumnVO;
 import com.trackflow.customfield.vo.CustomFieldDefinitionVO;
+import com.trackflow.customfield.vo.CustomFieldOptionVO;
 import com.trackflow.customfield.vo.CustomFieldUsageVO;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.customfield.vo.OptionUsageItemVO;
@@ -26,6 +27,8 @@ import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectStatus;
 import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -89,6 +92,7 @@ public class CustomFieldService {
     private final CustomFieldOptionService optionService;
     private final CustomFieldValueService valueService;
     private final CustomFieldDisplayService displayService;
+    private final SysUserMapper sysUserMapper;
 
     // ========== 全局字段定义 CRUD ==========
 
@@ -117,7 +121,7 @@ public class CustomFieldService {
         entity.setMaxLength(dto.getMaxLength());
         entity.setRegexp(dto.getRegexp());
         entity.setPosition(position);
-        entity.setIsMulti("list".equals(dto.getFieldFormat()) && Boolean.TRUE.equals(dto.getIsMulti()));
+        entity.setIsMulti(("list".equals(dto.getFieldFormat()) || "ownedField".equals(dto.getFieldFormat())) && Boolean.TRUE.equals(dto.getIsMulti()));
         entity.setIsHiddenInList(Boolean.TRUE.equals(dto.getIsHiddenInList()));
         entity.setAliases(dto.getAliases());
         entity.setIsPrivate(Boolean.TRUE.equals(dto.getIsPrivate()));
@@ -144,6 +148,7 @@ public class CustomFieldService {
                     option.setColor(opt.getColor());
                     option.setDescription(opt.getDescription());
                     option.setIsResolved(Boolean.TRUE.equals(opt.getIsResolved()));
+                    option.setOwnerUserId(opt.getOwnerUserId());
                     option.setCreatedAt(LocalDateTime.now());
                     option.setUpdatedAt(LocalDateTime.now());
                     optionMapper.insert(option);
@@ -526,8 +531,8 @@ public class CustomFieldService {
 
     /** 委托给 {@link CustomFieldOptionService} */
     @Transactional(rollbackFor = Exception.class)
-    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color) {
-        return optionService.addOptionInline(projectId, fieldId, value, color);
+    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId) {
+        return optionService.addOptionInline(projectId, fieldId, value, color, ownerUserId);
     }
 
     // ========== 项目级独立选项集管理（Make Independent Copy）==========
@@ -997,7 +1002,7 @@ public class CustomFieldService {
         if (condField == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "条件源字段不存在");
         }
-        if (!"list".equals(condField.getFieldFormat())) {
+        if (!"list".equals(condField.getFieldFormat()) && !"ownedField".equals(condField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "条件源字段必须是列表(枚举)类型");
         }
         if (Boolean.TRUE.equals(condField.getIsMulti())) {
@@ -1185,7 +1190,7 @@ public class CustomFieldService {
         }
 
         // 目标字段必须是枚举类型
-        if (!"list".equals(targetField.getFieldFormat())) {
+        if (!"list".equals(targetField.getFieldFormat()) && !"ownedField".equals(targetField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "值过滤只适用于列表(枚举)类型字段");
         }
 
@@ -1220,7 +1225,7 @@ public class CustomFieldService {
         if (sourceField == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "源字段不存在");
         }
-        if (!"list".equals(sourceField.getFieldFormat())) {
+        if (!"list".equals(sourceField.getFieldFormat()) && !"ownedField".equals(sourceField.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "源字段必须是列表(枚举)类型");
         }
         if (Boolean.TRUE.equals(sourceField.getIsMulti())) {
@@ -1401,7 +1406,7 @@ public class CustomFieldService {
     public List<CustomFieldDefinition> listEnumFields() {
         return definitionMapper.selectList(
                 new LambdaQueryWrapper<CustomFieldDefinition>()
-                        .in(CustomFieldDefinition::getFieldFormat, "list", "state")
+                        .in(CustomFieldDefinition::getFieldFormat, "list", "state", "ownedField")
                         .orderByAsc(CustomFieldDefinition::getPosition));
     }
 
@@ -1561,7 +1566,9 @@ public class CustomFieldService {
             Long fieldId = fields.get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
             vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            List<CustomFieldOptionVO> optVOs = converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of()));
+            enrichOptionOwnerDisplayNames(optVOs);
+            vo.setOptions(optVOs);
         }
         return voList;
     }
@@ -1584,7 +1591,9 @@ public class CustomFieldService {
             CustomFieldProject mapping = conditionsMap.get(fieldId);
 
             vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            List<CustomFieldOptionVO> optVOs = converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of()));
+            enrichOptionOwnerDisplayNames(optVOs);
+            vo.setOptions(optVOs);
             enrichConditionInfo(vo, mapping);
             enrichEditableInfo(vo, mapping, userRoleIds);
             enrichEffectiveValues(vo, field, mapping);
@@ -1610,7 +1619,9 @@ public class CustomFieldService {
             CustomFieldProject mapping = conditionsMap.get(fieldId);
 
             vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            List<CustomFieldOptionVO> optVOs = converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of()));
+            enrichOptionOwnerDisplayNames(optVOs);
+            vo.setOptions(optVOs);
             vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
                     .map(String::valueOf).toList());
             vo.setIssueTypes(issueTypesMap.getOrDefault(fieldId, List.of()));
@@ -1765,7 +1776,9 @@ public class CustomFieldService {
             Long fieldId = entities.get(i).getId();
             CustomFieldDefinitionVO vo = voList.get(i);
             vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
-            vo.setOptions(converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of())));
+            List<CustomFieldOptionVO> optVOs = converter.toOptionVOList(optionsMap.getOrDefault(fieldId, List.of()));
+            enrichOptionOwnerDisplayNames(optVOs);
+            vo.setOptions(optVOs);
             vo.setProjectIds(projectIdsMap.getOrDefault(fieldId, List.of()).stream()
                     .map(String::valueOf).toList());
             vo.setIssueTypes(issueTypesMap.getOrDefault(fieldId, List.of()));
@@ -1774,9 +1787,32 @@ public class CustomFieldService {
 
     private void enrichAdminVO(CustomFieldDefinitionVO vo, Long fieldId) {
         vo.setIsBuiltIn(BUILTIN_FIELD_IDS.contains(fieldId));
-        vo.setOptions(converter.toOptionVOList(getOptions(fieldId)));
+        List<CustomFieldOptionVO> optVOs = converter.toOptionVOList(getOptions(fieldId));
+        enrichOptionOwnerDisplayNames(optVOs);
+        vo.setOptions(optVOs);
         vo.setProjectIds(getProjectIds(fieldId).stream().map(String::valueOf).toList());
         vo.setIssueTypes(getIssueTypes(fieldId));
+    }
+
+    /**
+     * 为选项 VO 列表填充 ownerDisplayName。
+     * 收集所有非空 ownerUserId，批量查询用户信息，设置显示名。
+     */
+    private void enrichOptionOwnerDisplayNames(List<CustomFieldOptionVO> optionVOs) {
+        if (optionVOs == null || optionVOs.isEmpty()) return;
+        Set<Long> ownerIds = optionVOs.stream()
+                .filter(o -> o.getOwnerUserId() != null && !o.getOwnerUserId().isBlank())
+                .map(o -> Long.parseLong(o.getOwnerUserId()))
+                .collect(Collectors.toSet());
+        if (ownerIds.isEmpty()) return;
+        Map<Long, String> userNameMap = sysUserMapper.selectBatchIds(ownerIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, SysUser::getDisplayName));
+        for (CustomFieldOptionVO vo : optionVOs) {
+            if (vo.getOwnerUserId() != null && !vo.getOwnerUserId().isBlank()) {
+                Long uid = Long.parseLong(vo.getOwnerUserId());
+                vo.setOwnerDisplayName(userNameMap.get(uid));
+            }
+        }
     }
 
     private void enrichConditionInfo(CustomFieldDefinitionVO vo, CustomFieldProject mapping) {
@@ -1824,8 +1860,8 @@ public class CustomFieldService {
                 ? (mapping.getDefaultValue().isEmpty() ? null : mapping.getDefaultValue())
                 : field.getDefaultValue();
         
-        // 对于 list 类型字段，如果没有显式默认值，检查选项表中是否有 isDefault=true 的选项
-        if ((effectiveDefault == null || effectiveDefault.isBlank()) && "list".equals(field.getFieldFormat())) {
+        // 对于 list/ownedField 类型字段，如果没有显式默认值，检查选项表中是否有 isDefault=true 的选项
+        if ((effectiveDefault == null || effectiveDefault.isBlank()) && ("list".equals(field.getFieldFormat()) || "ownedField".equals(field.getFieldFormat()))) {
             List<CustomFieldOption> defaultOptions = optionMapper.selectList(
                     new LambdaQueryWrapper<CustomFieldOption>()
                             .eq(CustomFieldOption::getCustomFieldId, field.getId())

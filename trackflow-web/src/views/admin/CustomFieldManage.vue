@@ -88,7 +88,7 @@
                 </a-table-column>
                 <a-table-column title="选项值" :width="220">
                   <template #cell="{ record }">
-                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state') && record.options && record.options.length > 0">
+                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField') && record.options && record.options.length > 0">
                       <div class="options-inline">
                         <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
                           <span
@@ -335,8 +335,8 @@
         </template>
 
         <!-- list/state 类型选项管理 -->
-        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state'">
-          <a-form-item v-if="form.fieldFormat === 'list'" label="多值选择">
+        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField'">
+          <a-form-item v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField'" label="多值选择">
             <a-switch v-model="form.isMulti" :disabled="isMultiDisabled" />
             <div class="form-help">
               <template v-if="isMultiDisabled">
@@ -479,6 +479,17 @@
                   <a-checkbox v-if="!opt.isArchived" v-model="opt.isDefault" size="small">默认</a-checkbox>
                   <!-- state 类型显示 isResolved 开关 -->
                   <a-checkbox v-if="!opt.isArchived && form.fieldFormat === 'state'" v-model="opt.isResolved" size="small">已解决</a-checkbox>
+                  <!-- ownedField 类型显示 owner 用户选择器 -->
+                  <a-select
+                    v-if="!opt.isArchived && form.fieldFormat === 'ownedField'"
+                    v-model="opt.ownerUserId"
+                    placeholder="Owner"
+                    allow-clear
+                    size="mini"
+                    style="width: 120px"
+                  >
+                    <a-option v-for="u in ownerUserList" :key="u.id" :value="u.id">{{ u.displayName }}</a-option>
+                  </a-select>
                   <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
                   <span
                     v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
@@ -571,8 +582,8 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
-import { customFieldApi, projectApi, workflowApi } from '@/api'
-import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO } from '@/api/types'
+import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
+import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, UserVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
@@ -676,7 +687,7 @@ const form = reactive({
   minLength: 0,
   maxLength: 0,
   regexp: '',
-  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean }>,
+  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; isResolved?: boolean; description?: string; ownerUserId?: string }>,
   projectIds: [] as string[],
   issueTypes: [] as string[],
   copyOptionsFromFieldId: undefined as string | undefined
@@ -699,6 +710,7 @@ const fieldTypeOptions = [
   { value: 'datetime', label: '日期时间' },
   { value: 'bool', label: '布尔' },
   { value: 'list', label: '列表(枚举)' },
+  { value: 'ownedField', label: '子系统(Owned Field)' },
   { value: 'state', label: '状态(State)' },
   { value: 'user', label: '用户' },
   { value: 'period', label: '时间周期' }
@@ -884,14 +896,14 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.maxLength = record.maxLength
   form.regexp = record.regexp || ''
   form.options = (record.options || [])
-    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false, isResolved: o.isResolved || false }))
+    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false, isResolved: o.isResolved || false, description: o.description || undefined, ownerUserId: o.ownerUserId || undefined }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
   form.copyOptionsFromFieldId = undefined
   copyFromFieldId.value = null
   // 检查字段是否有数据——有则禁止切换 isMulti
   isMultiDisabled.value = false
-  if (record.fieldFormat === 'list' || record.fieldFormat === 'state') {
+  if (record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField') {
     loadEnumFields()
     customFieldApi.getUsage(record.id).then(res => {
       if (res.data && res.data.valueCount > 0) {
@@ -1083,9 +1095,9 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
-        isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
-        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state')
-          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined }))
+        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField') ? form.isMulti : undefined,
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField')
+          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes
@@ -1103,9 +1115,9 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
-        isMulti: form.fieldFormat === 'list' ? form.isMulti : undefined,
-        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state')
-          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined }))
+        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField') ? form.isMulti : undefined,
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField')
+          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes
@@ -1252,10 +1264,21 @@ async function handleBatchDelete() {
   }
 }
 
+// ========== 用户列表（用于 ownedField 类型的 owner 选择器）==========
+const ownerUserList = ref<UserVO[]>([])
+
+async function loadOwnerUsers() {
+  try {
+    const res = await userApi.list({ pageSize: 500 })
+    ownerUserList.value = res.data?.list || []
+  } catch { /* ignore */ }
+}
+
 onMounted(() => {
   loadList()
   loadProjects()
   loadIssueTypes()
+  loadOwnerUsers()
 })
 </script>
 

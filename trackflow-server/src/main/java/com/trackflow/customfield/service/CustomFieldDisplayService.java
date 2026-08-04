@@ -535,7 +535,7 @@ public class CustomFieldDisplayService {
             return null;
         }
         return switch (fieldDef.getFieldFormat()) {
-            case "list", "state" -> {
+            case "list", "state", "ownedField" -> {
                 try {
                     Long optionId = Long.parseLong(rawValue);
                     yield optionTextMap.getOrDefault(optionId, rawValue);
@@ -575,7 +575,7 @@ public class CustomFieldDisplayService {
     public String resolveDisplayValue(CustomFieldDefinition field, String rawValue) {
         if (rawValue == null || rawValue.isBlank()) return "";
         switch (field.getFieldFormat()) {
-            case "list", "state" -> {
+            case "list", "state", "ownedField" -> {
                 try {
                     Long optionId = Long.parseLong(rawValue);
                     CustomFieldOption option = optionMapper.selectById(optionId);

@@ -24,7 +24,7 @@ export const customFieldApi = {
     minLength?: number
     maxLength?: number
     regexp?: string
-    options?: Array<{ value: string; isDefault?: boolean; color?: string }>
+    options?: Array<{ value: string; isDefault?: boolean; color?: string; isResolved?: boolean; ownerUserId?: string }>
     copyOptionsFromFieldId?: string
     projectIds?: string[]
     issueTypes?: string[]
@@ -43,7 +43,7 @@ export const customFieldApi = {
     minLength?: number
     maxLength?: number
     regexp?: string
-    options?: Array<{ id?: string; value: string; isDefault?: boolean; color?: string }>
+    options?: Array<{ id?: string; value: string; isDefault?: boolean; color?: string; isResolved?: boolean; ownerUserId?: string }>
     projectIds?: string[]
     issueTypes?: string[]
   }) {
@@ -209,7 +209,7 @@ export const customFieldApi = {
   // ========== 内联添加选项值 ==========
 
   /** 内联添加枚举字段选项值（工单详情页/创建表单快捷入口） */
-  addOption(projectId: string, fieldId: string, data: { value: string; color?: string }) {
+  addOption(projectId: string, fieldId: string, data: { value: string; color?: string; ownerUserId?: string }) {
     return request.post<any, R<CustomFieldOptionVO>>(`/projects/${projectId}/custom-fields/${fieldId}/options`, data)
   },
 

@@ -671,7 +671,7 @@ export interface SavedQueryVO {
 export interface CustomFieldDefinitionVO {
   id: string
   name: string
-  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user'
+  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user' | 'ownedField'
   isRequired: boolean
   isForAll: boolean
   isMulti: boolean
@@ -764,6 +764,10 @@ export interface CustomFieldOptionVO {
   description?: string | null
   /** 仅 state 类型字段使用：标记该状态值是否视为"已解决" */
   isResolved?: boolean
+  /** 选项负责人用户 ID（仅 ownedField 类型使用） */
+  ownerUserId?: string | null
+  /** 选项负责人显示名（后端填充） */
+  ownerDisplayName?: string | null
 }
 
 /** 选项集状态 VO */

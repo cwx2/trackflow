@@ -272,7 +272,7 @@ public class CustomFieldController {
             @PathVariable("projectId") Long projectId,
             @PathVariable("fieldId") Long fieldId,
             @Valid @RequestBody com.trackflow.customfield.dto.AddOptionDTO dto) {
-        CustomFieldOption option = customFieldService.addOptionInline(projectId, fieldId, dto.getValue(), dto.getColor());
+        CustomFieldOption option = customFieldService.addOptionInline(projectId, fieldId, dto.getValue(), dto.getColor(), dto.getOwnerUserId());
         return R.ok(converter.toOptionVO(option));
     }
 

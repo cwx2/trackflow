@@ -49,10 +49,10 @@ public class CustomFieldOptionService {
     private final ProjectMapper projMapper;
 
     /**
-     * 判断字段类型是否支持选项集（list 和 state 类型都有选项）。
+     * 判断字段类型是否支持选项集（list、state 和 ownedField 类型都有选项）。
      */
     public static boolean isEnumLikeFormat(String fieldFormat) {
-        return "list".equals(fieldFormat) || "state".equals(fieldFormat);
+        return "list".equals(fieldFormat) || "state".equals(fieldFormat) || "ownedField".equals(fieldFormat);
     }
 
     // ========== 项目级选项集管理（Make Independent Copy）==========
@@ -435,7 +435,7 @@ public class CustomFieldOptionService {
      * 如果项目有独立选项集，添加到独立选项集；否则添加到全局选项集。
      */
     @Transactional(rollbackFor = Exception.class)
-    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color) {
+    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
@@ -502,6 +502,7 @@ public class CustomFieldOptionService {
             if (color != null) {
                 archivedSameName.setColor(color);
             }
+            archivedSameName.setOwnerUserId(ownerUserId);
             archivedSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(archivedSameName);
             log.info("Inline add option: reactivated archived option {} (value='{}'), fieldId={}, projectId={}, targetScope={}",
@@ -519,6 +520,7 @@ public class CustomFieldOptionService {
         option.setPosition(insertPosition);
         option.setIsDefault(false);
         option.setColor(color);
+        option.setOwnerUserId(ownerUserId);
         option.setIsArchived(false);
         option.setCreatedAt(LocalDateTime.now());
         option.setUpdatedAt(LocalDateTime.now());
@@ -635,6 +637,8 @@ public class CustomFieldOptionService {
                 if (opt.getIsResolved() != null) {
                     existing.setIsResolved(opt.getIsResolved());
                 }
+                // 更新 ownerUserId（ownedField 类型字段用，允许清空）
+                existing.setOwnerUserId(opt.getOwnerUserId());
                 // 如果之前是归档状态，恢复为活跃
                 if (Boolean.TRUE.equals(existing.getIsArchived())) {
                     existing.setIsArchived(false);
@@ -927,6 +931,7 @@ public class CustomFieldOptionService {
             if (opt.getIsResolved() != null) {
                 activeSameName.setIsResolved(opt.getIsResolved());
             }
+            activeSameName.setOwnerUserId(opt.getOwnerUserId());
             activeSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(activeSameName);
             return activeSameName.getId();
@@ -956,6 +961,7 @@ public class CustomFieldOptionService {
             if (opt.getIsResolved() != null) {
                 archivedSameName.setIsResolved(opt.getIsResolved());
             }
+            archivedSameName.setOwnerUserId(opt.getOwnerUserId());
             archivedSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(archivedSameName);
             return archivedSameName.getId();
@@ -971,6 +977,7 @@ public class CustomFieldOptionService {
         newOption.setColor(opt.getColor());
         newOption.setDescription(opt.getDescription());
         newOption.setIsResolved(Boolean.TRUE.equals(opt.getIsResolved()));
+        newOption.setOwnerUserId(opt.getOwnerUserId());
         newOption.setIsArchived(false);
         newOption.setCreatedAt(LocalDateTime.now());
         newOption.setUpdatedAt(LocalDateTime.now());

@@ -65,5 +65,7 @@ public class CreateCustomFieldDTO {
         private String description;
         /** 仅 state 类型字段使用：标记该状态值是否视为"已解决" */
         private Boolean isResolved;
+        /** 仅 ownedField 类型使用：选项负责人用户 ID */
+        private Long ownerUserId;
     }
 }

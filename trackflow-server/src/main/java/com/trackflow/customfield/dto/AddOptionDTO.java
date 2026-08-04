@@ -17,4 +17,7 @@ public class AddOptionDTO {
 
     /** 选项颜色（HEX 格式，可选） */
     private String color;
+
+    /** 选项负责人用户 ID（仅 ownedField 类型使用，可选） */
+    private Long ownerUserId;
 }

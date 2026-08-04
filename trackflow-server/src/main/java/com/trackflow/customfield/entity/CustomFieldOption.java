@@ -53,6 +53,9 @@ public class CustomFieldOption implements Serializable {
     /** 仅 state 类型字段使用：标记该状态值是否视为"已解决"（对应 YouTrack 的 isResolved 属性） */
     private Boolean isResolved;
 
+    /** 选项负责人用户 ID（仅 ownedField 类型使用），指向 sys_user */
+    private Long ownerUserId;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

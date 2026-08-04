@@ -18,4 +18,8 @@ public class CustomFieldOptionVO {
     private String description;
     /** 仅 state 类型字段使用：标记该状态值是否视为"已解决" */
     private Boolean isResolved;
+    /** 选项负责人用户 ID（仅 ownedField 类型使用） */
+    private String ownerUserId;
+    /** 选项负责人显示名（后端填充，前端直接展示） */
+    private String ownerDisplayName;
 }

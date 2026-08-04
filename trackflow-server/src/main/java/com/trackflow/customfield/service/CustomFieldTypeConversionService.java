@@ -62,6 +62,9 @@ public class CustomFieldTypeConversionService {
         // list 可转换为 string（多值会变成逗号分隔字符串）
         CONVERSION_RULES.put("list", Set.of("string"));
 
+        // ownedField 可转换为 list（丢弃 owner 信息）或 string
+        CONVERSION_RULES.put("ownedField", Set.of("list", "string"));
+
         // bool 和 user 类型没有可用转换
         CONVERSION_RULES.put("bool", Set.of());
         CONVERSION_RULES.put("user", Set.of());

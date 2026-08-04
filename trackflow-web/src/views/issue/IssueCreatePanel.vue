@@ -335,9 +335,9 @@
                 size="small"
                 @change="(v: any) => { customFieldValues[cf.id] = String(v); clearFieldError(cf.id) }"
               />
-              <!-- list (多值模式) -->
+              <!-- list/ownedField (多值模式) -->
               <a-select
-                v-else-if="cf.fieldFormat === 'list' && cf.isMulti"
+                v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && cf.isMulti"
                 :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
                 @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(','); clearFieldError(cf.id) }"
                 size="small"
@@ -362,9 +362,9 @@
                   </div>
                 </template>
               </a-select>
-              <!-- list (单值模式) -->
+              <!-- list/ownedField (单值模式) -->
               <a-select
-                v-else-if="cf.fieldFormat === 'list'"
+                v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
                 :placeholder="getFieldPlaceholder(cf)"
@@ -483,9 +483,9 @@
                   size="small"
                   @change="(v: any) => { customFieldValues[cf.id] = String(v) }"
                 />
-                <!-- list (多值模式) -->
+                <!-- list/ownedField (多值模式) -->
                 <a-select
-                  v-else-if="cf.fieldFormat === 'list' && cf.isMulti"
+                  v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField') && cf.isMulti"
                   :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
                   @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(',') }"
                   size="small"
@@ -508,9 +508,9 @@
                     </div>
                   </template>
                 </a-select>
-                <!-- list (单值模式) -->
+                <!-- list/ownedField (单值模式) -->
                 <a-select
-                  v-else-if="cf.fieldFormat === 'list'"
+                  v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField'"
                   v-model="customFieldValues[cf.id]"
                   size="small"
                   :placeholder="getFieldPlaceholder(cf)"
@@ -977,7 +977,7 @@ function getFieldPlaceholder(cf: CustomFieldDefinitionVO): string {
   const hint = cf.effectiveDefaultValue ?? cf.defaultValue
   if (hint && cf.fieldFormat !== 'bool') {
     // 对于 list 类型，defaultValue 是 option ID，不适合作为 placeholder 文本
-    if (cf.fieldFormat !== 'list' && cf.fieldFormat !== 'user') {
+    if (cf.fieldFormat !== 'list' && cf.fieldFormat !== 'ownedField' && cf.fieldFormat !== 'user') {
       return hint
     }
   }
