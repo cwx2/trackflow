@@ -60,7 +60,7 @@ export function useMentionSuggestion(projectId: () => string | undefined) {
           item.username.toLowerCase().includes(q) || 
           (item.displayName?.toLowerCase().includes(q) ?? false)
         )
-        .slice(0, 10)
+        .slice(0, 20)
     },
     
     // 渲染下拉列表
