@@ -336,11 +336,8 @@ const isProjectArchived = computed(() => issue.value?.projectStatus === 'archive
 const showAddLinkModal = ref(false)
 function openAddLinkModal() { showAddLinkModal.value = true }
 async function onLinked() {
-  // 刷新工单详情以更新关联列表
-  if (issue.value?.id) {
-    const res = await issueApi.getById(issue.value.id)
-    if (res.data) issue.value = res.data
-  }
+  // 刷新关联列表（独立加载，不依赖工单主数据）
+  await loadLinks()
 }
 
 // 权限控制（必须在 issue ref 声明之后）
