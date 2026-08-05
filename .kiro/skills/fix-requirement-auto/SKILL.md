@@ -285,13 +285,14 @@ review_round: 0
 ```
 
 处理方式：
-1. 逐条处理 MUST 问题（SHOULD 级可选处理）
-2. **不要重新读需求文件、不要重新分析技术方案**，直接针对问题修复
-3. `getDiagnostics` 确认无错误
-4. `git commit`（追加 commit）
-5. 更新需求文件 `## 自动化状态` 区块：`fix_status: DONE`，`fix_commit` 更新为新 hash，`fix_round` 递增，`review_status: PENDING`（重置，等待下轮审核）
-6. 更新「Agent 交接上下文」（反映本轮修复内容）
-7. 输出 `FIX_DONE`
+1. **首先读取需求文件中的 `## 代码审核报告（第 N 轮）` 章节**，获取完整的 MUST 问题描述和修复建议（比 prompt 里的摘要更详细）
+2. 逐条处理 MUST 问题（SHOULD 级可选处理）
+3. **不要重新读需求文件全文、不要重新分析技术方案**，直接针对审核报告里的问题修复
+4. `getDiagnostics` 确认无错误
+5. `git commit`（追加 commit）
+6. 更新需求文件 `## 自动化状态` 区块：`fix_status: DONE`，`fix_commit` 更新为新 hash，`fix_round` 递增，`review_status: PENDING`（重置，等待下轮审核）
+7. 更新「Agent 交接上下文」（反映本轮修复内容）
+8. 输出 `FIX_DONE`
 
 > ⚠️ resume 时**不要**重走第一步到第三步的完整流程，直接针对反馈内容修复。
 
