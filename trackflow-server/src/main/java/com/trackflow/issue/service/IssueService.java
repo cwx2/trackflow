@@ -22,6 +22,7 @@ import com.trackflow.issue.dto.CreateIssueDTO;
 import com.trackflow.issue.dto.CreateIssueLinkDTO;
 import com.trackflow.issue.dto.IssueQuery;
 import com.trackflow.issue.dto.MoveIssueDTO;
+import com.trackflow.issue.dto.TransitStatusDTO;
 import com.trackflow.issue.dto.UpdateIssueDTO;
 import com.trackflow.issue.entity.*;
 import com.trackflow.issue.mapper.*;
@@ -788,6 +789,113 @@ public class IssueService {
     public TransitPreCheckResult checkTransitPreConditions(Issue issue, Long targetStatusId,
                                                            boolean forceWip, boolean forceClose) {
         return checkTransitPreConditions(issue, targetStatusId, forceWip, forceClose, false);
+    }
+
+    /**
+     * 获取指定工单的可用状态转换列表（已附加转换名、强制评论标记、阻塞信息）。
+     * 封装了 Controller 中的 enrichment 逻辑，确保 Controller 只做编排。
+     *
+     * @param issueId 工单 ID
+     * @return 已标注完整信息的可用状态 VO 列表
+     */
+    @Transactional(readOnly = true)
+    public List<IssueStatusVO> getAvailableTransitionsForIssue(Long issueId) {
+        Issue issue = getByIdWithAccessCheck(issueId);
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        // 查询可用转换列表和转换显示名
+        WorkflowService.TransitionResult result = workflowService.getAvailableTransitionsWithNames(issue, userId);
+        List<IssueStatus> statuses = result.statuses();
+        Map<Long, String> transitionNames = result.transitionNames();
+        List<IssueStatusVO> voList = issueConverter.toStatusVOList(statuses);
+
+        // 附加转换显示名
+        for (IssueStatusVO vo : voList) {
+            String tName = transitionNames.get(Long.valueOf(vo.getId()));
+            if (tName != null) {
+                vo.setTransitionName(tName);
+            }
+        }
+
+        // 附加强制评论标记
+        List<Long> targetStatusIds = statuses.stream().map(IssueStatus::getId).toList();
+        Set<Long> requireCommentIds = workflowService.getRequireCommentStatusIds(
+                issue.getStatusId(), targetStatusIds);
+        for (IssueStatusVO vo : voList) {
+            if (requireCommentIds.contains(Long.valueOf(vo.getId()))) {
+                vo.setRequireComment(true);
+            }
+        }
+
+        // 附加阻塞信息：有未解决 blocker 时标注关闭状态
+        List<String> blockerKeys = issueLinkService.getUnresolvedBlockerKeys(issueId);
+        if (!blockerKeys.isEmpty()) {
+            for (IssueStatusVO vo : voList) {
+                if (Boolean.TRUE.equals(vo.getIsClosed())) {
+                    vo.setBlocked(true);
+                    vo.setBlockedBy(blockerKeys);
+                }
+            }
+        }
+
+        return voList;
+    }
+
+    /**
+     * 执行状态转换完整业务流程（含所有前置校验）。
+     * 封装了工作流权限校验、强制评论校验、WIP/关闭/描述前置检查和最终状态变更。
+     *
+     * @param id  工单 ID
+     * @param dto 状态转换请求参数
+     * @return 包含更新后版本号和动作执行结果
+     * @throws BusinessException 当校验不通过时
+     */
+    public TransitStatusResultVO performTransition(Long id, TransitStatusDTO dto) {
+        Issue issue = getByIdWithAccessCheck(id);
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        // 工作流权限校验
+        if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
+            throw new BusinessException(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
+        }
+
+        // 强制评论校验
+        if (workflowService.isCommentRequired(issue.getStatusId(), dto.getStatusId())) {
+            if (dto.getComment() == null || dto.getComment().isBlank()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "此状态转换需要填写理由");
+            }
+        }
+
+        // WIP 限制 + 关闭前置检查 + 描述为空检查
+        TransitPreCheckResult preCheck = checkTransitPreConditions(
+                issue, dto.getStatusId(),
+                Boolean.TRUE.equals(dto.getForceWip()),
+                Boolean.TRUE.equals(dto.getForce()),
+                Boolean.TRUE.equals(dto.getForceDescEmpty()));
+
+        if (preCheck.wipWarning() != null) {
+            throw new BusinessException(ErrorCode.WIP_LIMIT_EXCEEDED, preCheck.wipWarning());
+        }
+        if (preCheck.closeWarning() != null) {
+            throw new BusinessException(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
+        }
+        if (preCheck.descEmptyWarning() != null) {
+            throw new BusinessException(ErrorCode.DESCRIPTION_EMPTY_WARNING, preCheck.descEmptyWarning());
+        }
+
+        // 执行状态变更（skipWorkflowCheck=true，因为此方法已完成工作流校验）
+        ActionExecutionResult actionResult = transitStatus(id, dto.getStatusId(), dto.getComment(),
+                dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
+                dto.getVersion(), true);
+
+        // 字段校验失败时，返回校验结果但不更新版本号
+        if (actionResult != null && actionResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
+            return TransitStatusResultVO.of(dto.getVersion(), actionResult);
+        }
+
+        // 返回更新后的版本号 + 动作执行结果
+        Issue updated = getById(id);
+        return TransitStatusResultVO.of(updated.getVersion(), actionResult);
     }
 
     /**

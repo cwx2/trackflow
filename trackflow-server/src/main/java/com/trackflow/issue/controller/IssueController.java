@@ -4,7 +4,6 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
-import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.customfield.converter.CustomFieldConverter;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
@@ -12,7 +11,6 @@ import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueComment;
-import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.service.IssueService;
 import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
@@ -21,8 +19,6 @@ import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.service.IssueTypeFieldService;
 import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.issue.vo.*;
-import com.trackflow.workflow.service.WorkflowService;
-import com.trackflow.workflow.vo.ActionExecutionResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,7 +38,6 @@ public class IssueController {
     private final IssueExportService issueExportService;
     private final IssueConverter issueConverter;
     private final CustomFieldConverter customFieldConverter;
-    private final WorkflowService workflowService;
     private final IssueLinkService linkService;
     private final IssueLinkTypeService linkTypeService;
     private final IssueTagService tagService;
@@ -259,93 +254,13 @@ public class IssueController {
     @GetMapping("/{id}/available-transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable("id") Long id) {
-        Issue issue = issueService.getByIdWithAccessCheck(id);
-        Long userId = SecurityUtils.getCurrentUserId();
-
-        // 单次查询获取状态列表和转换显示名
-        WorkflowService.TransitionResult result = workflowService.getAvailableTransitionsWithNames(issue, userId);
-        List<IssueStatus> statuses = result.statuses();
-        Map<Long, String> transitionNames = result.transitionNames();
-        List<IssueStatusVO> voList = issueConverter.toStatusVOList(statuses);
-
-        // 附加转换显示名（优先显示转换名而非目标状态名）
-        for (IssueStatusVO vo : voList) {
-            String tName = transitionNames.get(Long.valueOf(vo.getId()));
-            if (tName != null) {
-                vo.setTransitionName(tName);
-            }
-        }
-
-        // 查询哪些目标状态的转换需要强制评论
-        List<Long> targetStatusIds = statuses.stream().map(IssueStatus::getId).toList();
-        Set<Long> requireCommentIds = workflowService.getRequireCommentStatusIds(
-                issue.getStatusId(), targetStatusIds);
-        for (IssueStatusVO vo : voList) {
-            if (requireCommentIds.contains(Long.valueOf(vo.getId()))) {
-                vo.setRequireComment(true);
-            }
-        }
-
-        // 检查阻塞关系：如果有未解决的 blocker，标注关闭状态为 blocked
-        List<String> blockerKeys = linkService.getUnresolvedBlockerKeys(id);
-        if (!blockerKeys.isEmpty()) {
-            for (IssueStatusVO vo : voList) {
-                if (Boolean.TRUE.equals(vo.getIsClosed())) {
-                    vo.setBlocked(true);
-                    vo.setBlockedBy(blockerKeys);
-                }
-            }
-        }
-
-        return R.ok(voList);
+        return R.ok(issueService.getAvailableTransitionsForIssue(id));
     }
 
     @PostMapping("/{id}/transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<TransitStatusResultVO> transitStatus(@PathVariable("id") Long id, @Valid @RequestBody TransitStatusDTO dto) {
-        Issue issue = issueService.getByIdWithAccessCheck(id);
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!workflowService.isTransitionAllowed(issue, dto.getStatusId(), userId)) {
-            throw new BusinessException(ErrorCode.WORKFLOW_TRANSITION_DENIED, "当前角色不允许执行此状态转换");
-        }
-
-        // 强制评论校验：如果转换规则要求必须填写评论
-        if (workflowService.isCommentRequired(issue.getStatusId(), dto.getStatusId())) {
-            if (dto.getComment() == null || dto.getComment().isBlank()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "此状态转换需要填写理由");
-            }
-        }
-
-        // WIP 限制 + 关闭前置检查 + 描述为空检查（业务逻辑在 Service 层）
-        IssueService.TransitPreCheckResult preCheck = issueService.checkTransitPreConditions(
-                issue, dto.getStatusId(),
-                Boolean.TRUE.equals(dto.getForceWip()),
-                Boolean.TRUE.equals(dto.getForce()),
-                Boolean.TRUE.equals(dto.getForceDescEmpty()));
-
-        if (preCheck.wipWarning() != null) {
-            throw new BusinessException(ErrorCode.WIP_LIMIT_EXCEEDED, preCheck.wipWarning());
-        }
-        if (preCheck.closeWarning() != null) {
-            throw new BusinessException(ErrorCode.CLOSE_CONFIRMATION_REQUIRED, preCheck.closeWarning());
-        }
-        if (preCheck.descEmptyWarning() != null) {
-            throw new BusinessException(ErrorCode.DESCRIPTION_EMPTY_WARNING, preCheck.descEmptyWarning());
-        }
-
-        // Controller 已完成工作流校验，传入 skipWorkflowCheck=true 避免 Service 重复校验
-        ActionExecutionResult actionResult = issueService.transitStatus(id, dto.getStatusId(), dto.getComment(),
-                dto.getAssigneeId(), Boolean.TRUE.equals(dto.getAssigneeExplicit()),
-                dto.getVersion(), true);
-
-        // 字段校验失败时，返回校验结果但不更新版本号（状态未变更）
-        if (actionResult != null && actionResult.getOutcome() == ActionExecutionResult.Outcome.FIELD_VALIDATION_FAILED) {
-            return R.ok(TransitStatusResultVO.of(dto.getVersion(), actionResult));
-        }
-
-        // 返回更新后的版本号 + 动作执行结果
-        Issue updated = issueService.getById(id);
-        return R.ok(TransitStatusResultVO.of(updated.getVersion(), actionResult));
+        return R.ok(issueService.performTransition(id, dto));
     }
 
     @PostMapping("/{id}/transitions/undo")
