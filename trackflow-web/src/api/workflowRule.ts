@@ -57,6 +57,24 @@ export interface WorkflowRuleExecutionLogVO {
 }
 
 /**
+ * 规则有效性校验错误
+ */
+export interface WorkflowRuleValidationError {
+  location: string
+  message: string
+  resourceType: string | null
+  resourceRef: string | null
+}
+
+/**
+ * 规则有效性校验结果 VO
+ */
+export interface WorkflowRuleValidationVO {
+  valid: boolean
+  errors: WorkflowRuleValidationError[]
+}
+
+/**
  * 工作流规则 API
  */
 export const workflowRuleApi = {
@@ -88,6 +106,11 @@ export const workflowRuleApi = {
   /** 切换启用/禁用 */
   toggle(id: string) {
     return request.patch<any, R<WorkflowRuleVO>>(`/workflow-rules/${id}/toggle`)
+  },
+
+  /** 校验规则引用资源有效性 */
+  validate(id: string) {
+    return request.get<any, R<WorkflowRuleValidationVO>>(`/workflow-rules/${id}/validate`)
   },
 
   /** 手动触发执行（on_schedule 类型） */

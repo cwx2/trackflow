@@ -34,9 +34,10 @@
           v-for="rule in filteredRules"
           :key="rule.id"
           class="rule-card"
-          :class="{ disabled: !rule.enabled }"
+          :class="{ disabled: !rule.enabled, 'has-errors': ruleValidationErrors.has(rule.id) }"
         >
-          <div class="rule-main">
+          <div class="rule-card-top">
+            <div class="rule-main">
             <div class="rule-header">
               <span class="rule-name">{{ rule.name }}</span>
               <a-tag :color="eventColor(rule.triggerEvent)" size="small">
@@ -63,6 +64,15 @@
             </div>
           </div>
           <div class="rule-actions">
+            <a-tooltip content="校验规则引用资源有效性">
+              <a-button
+                size="mini"
+                :loading="validatingRuleId === rule.id"
+                @click="handleValidateRule(rule)"
+              >
+                <template #icon><icon-check-circle /></template>
+              </a-button>
+            </a-tooltip>
             <a-switch
               :model-value="rule.enabled"
               size="small"
@@ -76,6 +86,17 @@
             >
               <a-button size="mini" type="text" status="danger">删除</a-button>
             </a-popconfirm>
+          </div>
+          </div><!-- end rule-card-top -->
+          <!-- 有效性错误提示 -->
+          <div v-if="ruleValidationErrors.get(rule.id)" class="rule-validation-errors">
+            <icon-exclamation-circle-fill style="color: var(--color-warning-6); flex-shrink: 0" />
+            <div class="validation-error-list">
+              <span class="validation-error-title">配置问题：</span>
+              <ul>
+                <li v-for="(err, idx) in ruleValidationErrors.get(rule.id)" :key="idx">{{ err }}</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -899,10 +920,43 @@ function buildConditionLeaf(c: ConditionItem): any {
 // ==================== Actions ====================
 async function handleToggle(rule: WorkflowRuleVO) {
   try {
-    await workflowRuleApi.toggle(rule.id)
+    const res = await workflowRuleApi.toggle(rule.id)
+    if (res.code === 0) {
+      // 清除该规则的验证缓存
+      ruleValidationErrors.value.delete(rule.id)
+    }
     await loadRules()
   } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
+    const msg = e.response?.data?.message || '操作失败'
+    Message.error(msg)
+    // 如果启用失败（验证问题），自动触发验证来显示详情
+    if (!rule.enabled) {
+      await handleValidateRule(rule)
+    }
+  }
+}
+
+// ==================== Rule Validation ====================
+const ruleValidationErrors = ref<Map<string, string[]>>(new Map())
+const validatingRuleId = ref<string | null>(null)
+
+async function handleValidateRule(rule: WorkflowRuleVO) {
+  validatingRuleId.value = rule.id
+  try {
+    const res = await workflowRuleApi.validate(rule.id)
+    if (res.code === 0) {
+      if (res.data.valid) {
+        ruleValidationErrors.value.delete(rule.id)
+        Message.success(`规则 "${rule.name}" 配置有效`)
+      } else {
+        const messages = res.data.errors.map((err: any) => err.message)
+        ruleValidationErrors.value.set(rule.id, messages)
+      }
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '校验请求失败')
+  } finally {
+    validatingRuleId.value = null
   }
 }
 
@@ -1167,8 +1221,7 @@ watch(() => props.projectId, () => {
 
 .rule-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   padding: 12px 16px;
   border-radius: 6px;
   background: var(--color-bg-2);
@@ -1182,6 +1235,16 @@ watch(() => props.projectId, () => {
 
 .rule-card.disabled {
   opacity: 0.5;
+}
+
+.rule-card.has-errors {
+  border-color: var(--color-warning-6);
+}
+
+.rule-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .rule-main {
@@ -1403,5 +1466,36 @@ watch(() => props.projectId, () => {
 .empty-hint {
   font-size: 12px;
   color: var(--color-text-4);
+}
+
+/* Validation errors */
+.rule-validation-errors {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--color-warning-light-1);
+  font-size: 12px;
+}
+
+.validation-error-list {
+  flex: 1;
+}
+
+.validation-error-title {
+  font-weight: 500;
+  color: var(--color-warning-6);
+}
+
+.validation-error-list ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--color-text-2);
+}
+
+.validation-error-list ul li {
+  margin-bottom: 2px;
 }
 </style>

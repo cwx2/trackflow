@@ -1,17 +1,26 @@
 package com.trackflow.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.entity.IssueTag;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.IssueTagMapper;
+import com.trackflow.sprint.entity.Sprint;
+import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.workflow.converter.WorkflowRuleConverter;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
+import com.trackflow.workflow.vo.WorkflowRuleValidationVO;
+import com.trackflow.workflow.vo.WorkflowRuleValidationVO.ValidationError;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -20,7 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 工作流规则 CRUD 服务
@@ -32,6 +43,9 @@ public class WorkflowRuleService {
 
     private final WorkflowRuleMapper ruleMapper;
     private final IssueMapper issueMapper;
+    private final IssueStatusMapper issueStatusMapper;
+    private final IssueTagMapper issueTagMapper;
+    private final SprintMapper sprintMapper;
     private final ObjectMapper objectMapper;
     private final PermissionService permissionService;
     private final WorkflowRuleConverter workflowRuleConverter;
@@ -179,6 +193,20 @@ public class WorkflowRuleService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
         }
         checkRuleManagePermission(rule);
+
+        // 启用规则前必须通过有效性校验
+        if (!rule.getEnabled()) {
+            WorkflowRuleValidationVO validation = doValidateRule(rule);
+            if (!validation.isValid()) {
+                String errorSummary = validation.getErrors().stream()
+                        .map(ValidationError::getMessage)
+                        .reduce((a, b) -> a + "; " + b)
+                        .orElse("未知错误");
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        "规则配置有误，无法启用: " + errorSummary);
+            }
+        }
+
         rule.setEnabled(!rule.getEnabled());
         rule.setUpdatedAt(LocalDateTime.now());
         ruleMapper.updateById(rule);
@@ -388,6 +416,248 @@ public class WorkflowRuleService {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "命令 '" + command + "' 不可用（规则不存在、已禁用或条件不满足）");
         }
+    }
+
+    // ============ 规则有效性校验 ============
+
+    /** set_field 动作支持的系统字段 */
+    private static final Set<String> SUPPORTED_SET_FIELDS = Set.of(
+            "priority", "assignee", "assignee_id", "type", "issue_type",
+            "status", "status_id", "sprint", "sprint_id", "due_date", "dueDate"
+    );
+
+    /** 条件中 field 字段支持的值 */
+    private static final Set<String> SUPPORTED_CONDITION_FIELDS = Set.of(
+            "type", "issue_type", "priority", "status", "status_id",
+            "assignee", "assignee_id", "reporter", "reporter_id",
+            "sprint", "sprint_id", "due_date", "dueDate", "title", "description"
+    );
+
+    /**
+     * 校验规则引用的资源在目标项目中是否存在。
+     * <p>
+     * 检查内容：
+     * <ul>
+     *   <li>action 中 set_field 引用的字段名是否合法</li>
+     *   <li>action 中 set_field(status_id) 引用的状态 ID 是否存在</li>
+     *   <li>action 中 set_field(sprint_id) 引用的 Sprint 是否存在于目标项目</li>
+     *   <li>action 中 add_tag / remove_tag 引用的标签 ID 是否存在（项目级标签需匹配项目）</li>
+     *   <li>condition 中 field 引用的字段名是否合法</li>
+     *   <li>condition 中 issue_has_tag 引用的标签 ID 是否存在</li>
+     * </ul>
+     */
+    public WorkflowRuleValidationVO validateRule(Long ruleId) {
+        WorkflowRule rule = ruleMapper.selectById(ruleId);
+        if (rule == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在");
+        }
+        checkRuleViewPermission(rule);
+        return doValidateRule(rule);
+    }
+
+    /**
+     * 校验规则内容（供 toggle 时内部调用）。
+     */
+    public WorkflowRuleValidationVO doValidateRule(WorkflowRule rule) {
+        List<ValidationError> errors = new ArrayList<>();
+        Long projectId = rule.getProjectId();
+
+        // 校验动作 JSON
+        validateActions(rule.getActionJson(), projectId, errors);
+
+        // 校验条件 JSON
+        validateConditions(rule.getConditionJson(), projectId, errors);
+
+        if (errors.isEmpty()) {
+            return WorkflowRuleValidationVO.ok();
+        }
+        return WorkflowRuleValidationVO.fail(errors);
+    }
+
+    private void validateActions(String actionJson, Long projectId, List<ValidationError> errors) {
+        if (actionJson == null || actionJson.isBlank() || "[]".equals(actionJson.trim())) return;
+        try {
+            JsonNode arr = objectMapper.readTree(actionJson);
+            if (!arr.isArray()) return;
+            for (JsonNode act : arr) {
+                String type = textOf(act, "type");
+                if ("set_field".equals(type)) {
+                    validateSetFieldAction(act, projectId, errors);
+                } else if ("add_tag".equals(type) || "remove_tag".equals(type)) {
+                    validateTagAction(act, projectId, type, errors);
+                }
+            }
+        } catch (Exception e) {
+            errors.add(new ValidationError("action", "动作 JSON 解析失败: " + e.getMessage(), null, null));
+        }
+    }
+
+    private void validateSetFieldAction(JsonNode act, Long projectId, List<ValidationError> errors) {
+        String field = textOf(act, "field");
+        if (field == null) return;
+
+        // 检查字段名是否被系统支持
+        if (!SUPPORTED_SET_FIELDS.contains(field)) {
+            errors.add(new ValidationError("action",
+                    "set_field 引用了不支持的字段 '" + field + "'",
+                    "field", field));
+            return;
+        }
+
+        String value = textOf(act, "value");
+        if (value == null || value.isBlank() || "null".equals(value)) return;
+
+        // 检查 status_id 引用的状态是否存在
+        if ("status".equals(field) || "status_id".equals(field)) {
+            try {
+                Long statusId = Long.parseLong(value);
+                IssueStatus status = issueStatusMapper.selectById(statusId);
+                if (status == null) {
+                    errors.add(new ValidationError("action",
+                            "set_field(status) 引用了不存在的状态 ID=" + statusId,
+                            "status", value));
+                }
+            } catch (NumberFormatException e) {
+                errors.add(new ValidationError("action",
+                        "set_field(status) 的值不是有效数字: '" + value + "'",
+                        "status", value));
+            }
+        }
+
+        // 检查 sprint_id 引用的 Sprint 是否存在且属于正确项目
+        if ("sprint".equals(field) || "sprint_id".equals(field)) {
+            try {
+                Long sprintId = Long.parseLong(value);
+                Sprint sprint = sprintMapper.selectById(sprintId);
+                if (sprint == null) {
+                    errors.add(new ValidationError("action",
+                            "set_field(sprint) 引用了不存在的 Sprint ID=" + sprintId,
+                            "sprint", value));
+                } else if (projectId != null && !projectId.equals(sprint.getProjectId())) {
+                    errors.add(new ValidationError("action",
+                            "set_field(sprint) 引用的 Sprint ID=" + sprintId + " 不属于当前项目",
+                            "sprint", value));
+                }
+            } catch (NumberFormatException e) {
+                errors.add(new ValidationError("action",
+                        "set_field(sprint) 的值不是有效数字: '" + value + "'",
+                        "sprint", value));
+            }
+        }
+    }
+
+    private void validateTagAction(JsonNode act, Long projectId, String actionType, List<ValidationError> errors) {
+        String tagIdStr = textOf(act, "tagId");
+        if (tagIdStr == null || tagIdStr.isBlank()) return;
+        try {
+            Long tagId = Long.parseLong(tagIdStr);
+            IssueTag tag = issueTagMapper.selectById(tagId);
+            if (tag == null) {
+                errors.add(new ValidationError("action",
+                        actionType + " 引用了不存在的标签 ID=" + tagId,
+                        "tag", tagIdStr));
+            } else if (projectId != null && tag.getProjectId() != null
+                    && !projectId.equals(tag.getProjectId())) {
+                errors.add(new ValidationError("action",
+                        actionType + " 引用的标签 '" + tag.getName() + "' 不属于当前项目",
+                        "tag", tagIdStr));
+            }
+        } catch (NumberFormatException e) {
+            errors.add(new ValidationError("action",
+                    actionType + " 的 tagId 不是有效数字: '" + tagIdStr + "'",
+                    "tag", tagIdStr));
+        }
+    }
+
+    private void validateConditions(String conditionJson, Long projectId, List<ValidationError> errors) {
+        if (conditionJson == null || conditionJson.isBlank() || "[]".equals(conditionJson.trim())) return;
+        try {
+            JsonNode root = objectMapper.readTree(conditionJson);
+            if (root.isArray()) {
+                for (JsonNode cond : root) {
+                    validateConditionNode(cond, projectId, errors);
+                }
+            } else if (root.isObject()) {
+                validateConditionNode(root, projectId, errors);
+            }
+        } catch (Exception e) {
+            errors.add(new ValidationError("condition", "条件 JSON 解析失败: " + e.getMessage(), null, null));
+        }
+    }
+
+    private void validateConditionNode(JsonNode node, Long projectId, List<ValidationError> errors) {
+        String type = textOf(node, "type");
+        if (type == null) {
+            // 旧格式叶子节点
+            validateConditionLeaf(node, projectId, errors);
+            return;
+        }
+        switch (type) {
+            case "and", "or" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions != null && conditions.isArray()) {
+                    for (JsonNode child : conditions) {
+                        validateConditionNode(child, projectId, errors);
+                    }
+                }
+            }
+            case "not" -> {
+                JsonNode condition = node.get("condition");
+                if (condition != null) {
+                    validateConditionNode(condition, projectId, errors);
+                }
+            }
+            case "condition" -> validateConditionLeaf(node, projectId, errors);
+            default -> validateConditionLeaf(node, projectId, errors);
+        }
+    }
+
+    private void validateConditionLeaf(JsonNode cond, Long projectId, List<ValidationError> errors) {
+        // 检查 conditionType 方式的条件
+        String conditionType = textOf(cond, "conditionType");
+        if (conditionType != null) {
+            if ("issue_has_tag".equals(conditionType)) {
+                String tagId = textOf(cond, "tagId");
+                if (tagId != null && !tagId.isBlank()) {
+                    try {
+                        Long tid = Long.parseLong(tagId);
+                        IssueTag tag = issueTagMapper.selectById(tid);
+                        if (tag == null) {
+                            errors.add(new ValidationError("condition",
+                                    "issue_has_tag 引用了不存在的标签 ID=" + tid,
+                                    "tag", tagId));
+                        } else if (projectId != null && tag.getProjectId() != null
+                                && !projectId.equals(tag.getProjectId())) {
+                            errors.add(new ValidationError("condition",
+                                    "issue_has_tag 引用的标签 '" + tag.getName() + "' 不属于当前项目",
+                                    "tag", tagId));
+                        }
+                    } catch (NumberFormatException e) {
+                        errors.add(new ValidationError("condition",
+                                "issue_has_tag 的 tagId 不是有效数字: '" + tagId + "'",
+                                "tag", tagId));
+                    }
+                }
+            }
+            return;
+        }
+
+        // 标准 field/operator/value 格式的条件
+        String field = textOf(cond, "field");
+        if (field == null) return;
+
+        if (!SUPPORTED_CONDITION_FIELDS.contains(field)) {
+            errors.add(new ValidationError("condition",
+                    "条件引用了不支持的字段 '" + field + "'",
+                    "field", field));
+        }
+    }
+
+    private String textOf(JsonNode node, String field) {
+        if (node == null) return null;
+        JsonNode child = node.get(field);
+        if (child == null || child.isNull() || !child.isTextual()) return null;
+        return child.asText();
     }
 }
 

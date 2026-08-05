@@ -5,6 +5,7 @@ import com.trackflow.workflow.dto.WorkflowRuleDTO;
 import com.trackflow.workflow.service.ScheduledRuleService;
 import com.trackflow.workflow.service.WorkflowRuleService;
 import com.trackflow.workflow.vo.WorkflowRuleExecutionLogVO;
+import com.trackflow.workflow.vo.WorkflowRuleValidationVO;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +83,15 @@ public class WorkflowRuleController {
     @PreAuthorize("isAuthenticated()")
     public R<WorkflowRuleVO> toggleRule(@PathVariable("id") Long id) {
         return R.ok(ruleService.toggleRule(id));
+    }
+
+    /**
+     * 校验规则引用资源有效性
+     */
+    @GetMapping("/workflow-rules/{id}/validate")
+    @PreAuthorize("isAuthenticated()")
+    public R<WorkflowRuleValidationVO> validateRule(@PathVariable("id") Long id) {
+        return R.ok(ruleService.validateRule(id));
     }
 
     /**
