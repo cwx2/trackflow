@@ -288,12 +288,19 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
             for line in process.stdout:
                 line_stripped = line.rstrip("\r\n")
                 safe_line = _redact_sensitive_output(line_stripped)
-                # 只对非 JSON 行打印到控制台（减少日志噪音）
+                # JSON 行提取关键状态信息，非 JSON 行完整输出
                 if not line_stripped.startswith("{"):
                     print(f"  [{label}] {safe_line}")
-                    log.debug(f"[{label}] {strip_ansi(safe_line)}")
+                    log.info(f"[{label}] {strip_ansi(safe_line)}")
                 else:
-                    log.debug(f"[{label}] {strip_ansi(safe_line)[:200]}")
+                    # 只显示关键 JSON 状态信息（不打印完整 JSON 减少噪音）
+                    try:
+                        parsed = json.loads(line_stripped)
+                        if "result" in parsed or "is_error" in parsed:
+                            # 这是最终的 result 行，不在这里打印，等 _run_cli 统一输出
+                            pass
+                    except json.JSONDecodeError:
+                        pass
                 output_lines.append(safe_line)
                 last_output_at[0] = time.time()
                 if _is_forbidden_output(line_stripped):
@@ -374,11 +381,17 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     session_id = parsed.get("session_id", "")
     stop_reason = parsed.get("stop_reason", "")
     cost = parsed.get("total_cost_usd", 0)
+    turns = parsed.get("num_turns", 0)
 
     log.info(
         f"[{label}] Claude {'✅' if not is_error else '❌'} "
-        f"({elapsed:.0f}s, ${cost:.4f}, session={session_id[:8] if session_id else '?'}...)"
+        f"({elapsed:.0f}s, {turns}轮, ${cost:.4f}, session={session_id[:8] if session_id else '?'}...)"
     )
+
+    # 简短信息直接打出来方便监控
+    first_line = result_text.split("\n")[0].strip() if result_text else ""
+    if first_line and len(first_line) < 120:
+        log.info(f"[{label}] → {first_line}")
 
     if is_error:
         error_detail = parsed.get("api_error_status", "") or result_text[:200]

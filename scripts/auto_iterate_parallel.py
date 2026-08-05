@@ -67,7 +67,7 @@ import argparse
 import _config
 
 from _config import (
-    KIRO_MODEL, KIRO_MODEL_FIX, AI_PROVIDER, REVIEW_DIR, IMPLEMENT_DIR, log,
+    KIRO_MODEL, KIRO_MODEL_FIX, CLAUDE_MODEL, CLAUDE_MODEL_FIX, REVIEW_DIR, IMPLEMENT_DIR, log,
 )
 from _utils import count_develop, cleanup_screenshots, cleanup_working, AutomationInstanceLock
 from _playwright import kill_stale_playwright_processes, stop_all_playwright, cleanup_worker_envs
@@ -95,7 +95,7 @@ def main() -> None:
                         ))
     args = parser.parse_args()
 
-    # --claude 切换 AI 提供者
+    # --claude 切换 AI 提供者（必须在任何 import _workers 之前设置）
     if args.claude:
         _config.AI_PROVIDER = "claude"
 
@@ -116,9 +116,15 @@ def main() -> None:
         num_producers = 0
         num_consumers = args.consumers if args.consumers is not None else args.workers
 
+    provider = _config.AI_PROVIDER
+    if provider == "claude":
+        model_info = f"fix={CLAUDE_MODEL or '默认'} | test/review/produce={CLAUDE_MODEL or '默认'}"
+    else:
+        model_info = f"fix={KIRO_MODEL_FIX or '默认'} | test/review/produce={KIRO_MODEL or '默认'}"
+
     log.info("=" * 60)
     log.info(f"TrackFlow 并行迭代 | 生产者={num_producers} 消费者={num_consumers} 模式={_config.PARALLEL_MODE}")
-    log.info(f"AI 提供者: {AI_PROVIDER} | 模型: fix={KIRO_MODEL_FIX or '默认'} | test/review/produce={KIRO_MODEL or '默认'}")
+    log.info(f"AI 提供者: {provider} | 模型: {model_info}")
     log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
              f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
     log.info("永不停止，Ctrl+C 手动终止")
