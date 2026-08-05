@@ -1,0 +1,85 @@
+package com.trackflow.issue.util;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.trackflow.issue.entity.Issue;
+
+/**
+ * Issue 优先级排序工具 — 提供全局唯一的优先级语义排序表达式。
+ *
+ * <p>priority 是 VARCHAR 字段，按字母排序不符合业务语义。此工具将优先级值映射为
+ * 数值权重：Critical=1, High=2, Normal=3, Low=4, 其他=5。</p>
+ *
+ * <p>所有需要按 priority 排序的代码都必须使用本类提供的常量或方法，
+ * 确保排序逻辑唯一定义、一致行为。</p>
+ *
+ * @author TrackFlow
+ * @since 1.0
+ */
+public final class IssuePriorityHelper {
+
+    private IssuePriorityHelper() {
+        // 工具类禁止实例化
+    }
+
+    /**
+     * 优先级语义排序 CASE 表达式（SQL 片段）。
+     *
+     * <p>使用 LOWER() 确保不受数据库存储大小写差异影响。
+     * 数值越小代表优先级越高：Critical=1, High=2, Normal=3, Low=4, 其他=5。</p>
+     */
+    public static final String PRIORITY_ORDER_EXPR =
+            "CASE LOWER(priority) WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END";
+
+    /**
+     * 对 QueryWrapper 应用优先级排序（作为唯一排序条件，附带 updated_at 作为次级排序）。
+     *
+     * <p>适用于：需要把优先级排序 + 二级排序作为最终 ORDER BY 直接拼接的场景。
+     * 例如 DashboardService 的"分配给我的工单"列表。</p>
+     *
+     * @param wrapper    QueryWrapper 实例
+     * @param descPriority true=高优先级在前（Critical→Low），false=低优先级在前（Low→Critical）
+     * @param limit      结果限制行数，传 0 或负数表示不限制
+     */
+    public static void applyPrioritySortWithLimit(QueryWrapper<Issue> wrapper, boolean descPriority, int limit) {
+        StringBuilder sb = new StringBuilder("ORDER BY ");
+        sb.append(PRIORITY_ORDER_EXPR);
+        // descPriority=true 意味着高优先级在前 → 数值 ASC（1=Critical 排在前面）
+        sb.append(descPriority ? " ASC" : " DESC");
+        sb.append(", updated_at DESC");
+        if (limit > 0) {
+            sb.append(" LIMIT ").append(limit);
+        }
+        wrapper.last(sb.toString());
+    }
+
+    /**
+     * 对 QueryWrapper 应用优先级排序（作为唯一排序条件，附带 updated_at 作为次级排序）。
+     *
+     * <p>不带 LIMIT 版本，适用于分页查询场景。</p>
+     *
+     * @param wrapper    QueryWrapper 实例
+     * @param descPriority true=高优先级在前（Critical→Low），false=低优先级在前（Low→Critical）
+     */
+    public static void applyPrioritySort(QueryWrapper<Issue> wrapper, boolean descPriority) {
+        applyPrioritySortWithLimit(wrapper, descPriority, 0);
+    }
+
+    /**
+     * 对 QueryWrapper 应用优先级排序作为 orderBy（不使用 .last()）。
+     *
+     * <p>适用于：已有其他 .last() 调用、或需要和其他排序条件组合的场景。
+     * 此方法直接调用 orderByAsc/orderByDesc 传入 CASE 表达式。</p>
+     *
+     * @param wrapper    QueryWrapper 实例
+     * @param descPriority true=高优先级在前（Critical→Low），false=低优先级在前（Low→Critical）
+     */
+    public static void applyPriorityOrderBy(QueryWrapper<Issue> wrapper, boolean descPriority) {
+        if (descPriority) {
+            // 高优先级在前 → 数值 ASC（Critical=1 排前面）
+            wrapper.orderByAsc(PRIORITY_ORDER_EXPR);
+        } else {
+            // 低优先级在前 → 数值 DESC（Low=4 排前面）
+            wrapper.orderByDesc(PRIORITY_ORDER_EXPR);
+        }
+    }
+}

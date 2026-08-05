@@ -13,6 +13,7 @@ import com.trackflow.common.service.MinioService;
 import com.trackflow.issue.service.StatusCacheHelper;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
+import com.trackflow.issue.util.IssuePriorityHelper;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.service.CustomFieldSortHelper;
 import com.trackflow.customfield.service.CustomFieldValidateMode;
@@ -503,15 +504,13 @@ public class IssueService {
                     wrapper.last("ORDER BY (COALESCE(estimated_hours, 0) - COALESCE(spent_hours, 0)) ASC NULLS LAST");
                 }
             } else if ("priority".equals(sortField)) {
-                // priority 是 VARCHAR 字段，按字母排序不符合语义权重，需映射为数值排序
-                // 权重：Critical=1, High=2, Normal=3, Low=4（数值越小优先级越高）
+                // 使用 IssuePriorityHelper 统一优先级排序逻辑
                 // ASC = 优先级从高到低（紧急→低），DESC = 优先级从低到高（低→紧急）
                 hasSpecialSort = true;
-                String caseExpr = "CASE LOWER(priority) WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END";
                 if (desc) {
-                    wrapper.last("ORDER BY " + caseExpr + " DESC, updated_at DESC");
+                    wrapper.last("ORDER BY " + IssuePriorityHelper.PRIORITY_ORDER_EXPR + " DESC, updated_at DESC");
                 } else {
-                    wrapper.last("ORDER BY " + caseExpr + " ASC, updated_at DESC");
+                    wrapper.last("ORDER BY " + IssuePriorityHelper.PRIORITY_ORDER_EXPR + " ASC, updated_at DESC");
                 }
             }
         }

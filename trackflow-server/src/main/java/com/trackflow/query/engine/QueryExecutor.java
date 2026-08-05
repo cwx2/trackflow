@@ -7,6 +7,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.common.util.SqlUtils;
+import com.trackflow.issue.util.IssuePriorityHelper;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.customfield.mapper.CustomFieldDefinitionMapper;
@@ -236,17 +237,15 @@ public class QueryExecutor {
                         log.warn("非法排序字段被拦截: {}", field);
                         continue;
                     }
-                    // priority 是 VARCHAR 字段，按字母排序不符合语义权重，需映射为数值排序
-                    // 权重：Critical=1, High=2, Normal=3, Low=4（数值越小优先级越高）
+                    // 使用 IssuePriorityHelper 统一优先级排序逻辑
                     // 用户 "desc" = 最高优先级在前 = CASE ASC；用户 "asc" = 最低优先级在前 = CASE DESC
                     if ("priority".equals(columnName)) {
-                        String caseExpr = "CASE LOWER(priority) WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END";
                         if (asc) {
                             // 用户要求 asc = 低优先级在前（Low → Normal → High → Critical）
-                            wrapper.orderByDesc(caseExpr);
+                            wrapper.orderByDesc(IssuePriorityHelper.PRIORITY_ORDER_EXPR);
                         } else {
                             // 用户要求 desc = 高优先级在前（Critical → High → Normal → Low）
-                            wrapper.orderByAsc(caseExpr);
+                            wrapper.orderByAsc(IssuePriorityHelper.PRIORITY_ORDER_EXPR);
                         }
                     } else {
                         if (asc) {

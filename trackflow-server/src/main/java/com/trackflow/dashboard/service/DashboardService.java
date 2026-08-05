@@ -15,6 +15,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.entity.Project;
 import com.trackflow.project.entity.ProjectMember;
+import com.trackflow.issue.util.IssuePriorityHelper;
 import com.trackflow.report.service.ReportStatisticsService;
 import com.trackflow.report.vo.OverviewVO;
 import com.trackflow.system.entity.SysUser;
@@ -194,8 +195,8 @@ public class DashboardService {
         QueryWrapper<Issue> wrapper = new QueryWrapper<>();
         wrapper.isNull("deleted_at")
                 .eq("assignee_id", userId)
-                .notIn("status_id", closedStatusIds)
-                .last("ORDER BY CASE priority WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Normal' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, updated_at DESC LIMIT " + Math.min(limit, 50));
+                .notIn("status_id", closedStatusIds);
+        IssuePriorityHelper.applyPrioritySortWithLimit(wrapper, true, Math.min(limit, 50));
 
         List<Issue> issues = issueMapper.selectList(wrapper);
         List<IssueVO> voList = issueConverter.toVOList(issues);
