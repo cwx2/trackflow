@@ -2,27 +2,29 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { authApi } from '@/api'
 import type { AuthUser } from '@/api/types'
-import { decodeBase64Url, buildDisplayName } from '@/utils/jwt'
 import { usePermissionStore } from './permission'
+import {
+  KEYCLOAK_CONFIG,
+  parseJwtPayload,
+  getTokenRemainingTime,
+  exchangeCodeForToken,
+  refreshTokenRequest,
+  buildLogoutUrl,
+  buildLoginUrl
+} from '@/utils/keycloak'
 
 /**
  * 认证 Store — 管理用户会话和 Token 生命周期
  *
  * 职责：
  * - 用户信息存储（user、accessToken、refreshToken）
- * - Keycloak PKCE 认证流程（login、handleCallback）
+ * - Keycloak PKCE 认证流程编排（login、handleCallback）
  * - Token 主动刷新和定期检查
  * - 登出流程
  *
+ * PKCE 协议细节和 Token 解析已迁移至 utils/keycloak.ts
  * 全局权限管理已迁移至 stores/permission.ts
  */
-
-const KEYCLOAK_CONFIG = {
-  authority: 'http://localhost:8080/realms/trackflow',
-  clientId: 'trackflow-frontend',
-  redirectUri: window.location.origin + '/auth/callback',
-  logoutUri: window.location.origin + '/login'
-}
 
 const STORAGE_KEYS = {
   accessToken: 'tf_access_token',
@@ -79,19 +81,13 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   watch(refreshToken, (val) => {
-    if (val) {
-      localStorage.setItem(STORAGE_KEYS.refreshToken, val)
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.refreshToken)
-    }
+    if (val) localStorage.setItem(STORAGE_KEYS.refreshToken, val)
+    else localStorage.removeItem(STORAGE_KEYS.refreshToken)
   })
 
   watch(user, (val) => {
-    if (val) {
-      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(val))
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.user)
-    }
+    if (val) localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(val))
+    else localStorage.removeItem(STORAGE_KEYS.user)
   }, { deep: true, immediate: true })
 
   // 初始化时，如果有 token 则启动定时刷新
@@ -102,48 +98,23 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 认证状态变化时启动/停止 token 检查
   watch(isAuthenticated, (authenticated) => {
-    if (authenticated) {
-      startTokenCheckInterval()
-    } else {
-      stopTokenCheckInterval()
-    }
+    if (authenticated) startTokenCheckInterval()
+    else stopTokenCheckInterval()
   })
 
-  function getTokenRemainingTime(token: string): number {
-    try {
-      const parts = token.split('.')
-      if (parts.length !== 3) return -1
-      const payload = JSON.parse(decodeBase64Url(parts[1]))
-      const exp = payload.exp
-      if (!exp) return -1
-      return exp - Math.floor(Date.now() / 1000)
-    } catch {
-      return -1
-    }
-  }
+  // ===== Token 刷新调度 =====
 
   function scheduleTokenRefresh(token: string) {
     clearRefreshTimer()
-    try {
-      const parts = token.split('.')
-      if (parts.length !== 3) return
-      const payload = JSON.parse(decodeBase64Url(parts[1]))
-      const exp = payload.exp
-      if (!exp) return
+    const remaining = getTokenRemainingTime(token)
+    if (remaining < 0) return
 
-      const now = Math.floor(Date.now() / 1000)
-      const refreshAt = (exp - TOKEN_REFRESH_BUFFER) - now
-      if (refreshAt <= 0) {
-        performProactiveRefresh()
-        return
-      }
-
-      refreshTimer = setTimeout(() => {
-        performProactiveRefresh()
-      }, refreshAt * 1000)
-    } catch {
-      // 解析失败，不设置定时器
+    const refreshAt = remaining - TOKEN_REFRESH_BUFFER
+    if (refreshAt <= 0) {
+      performProactiveRefresh()
+      return
     }
+    refreshTimer = setTimeout(() => performProactiveRefresh(), refreshAt * 1000)
   }
 
   async function performProactiveRefresh(retries = 0): Promise<void> {
@@ -152,17 +123,12 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const success = await refresh()
-      if (success) {
-        isProactiveRefreshing = false
-        return
-      }
-
       isProactiveRefreshing = false
+      if (success) return
+
       if (retries < TOKEN_REFRESH_MAX_RETRIES) {
-        console.warn(`[auth] Proactive token refresh failed, retry ${retries + 1}/${TOKEN_REFRESH_MAX_RETRIES} in ${TOKEN_REFRESH_RETRY_DELAY / 1000}s`)
-        refreshTimer = setTimeout(() => {
-          performProactiveRefresh(retries + 1)
-        }, TOKEN_REFRESH_RETRY_DELAY)
+        console.warn(`[auth] Proactive token refresh failed, retry ${retries + 1}/${TOKEN_REFRESH_MAX_RETRIES}`)
+        refreshTimer = setTimeout(() => performProactiveRefresh(retries + 1), TOKEN_REFRESH_RETRY_DELAY)
       } else {
         console.error('[auth] Token refresh failed after all retries')
         showSessionExpiredNotification()
@@ -170,9 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       isProactiveRefreshing = false
       if (retries < TOKEN_REFRESH_MAX_RETRIES) {
-        refreshTimer = setTimeout(() => {
-          performProactiveRefresh(retries + 1)
-        }, TOKEN_REFRESH_RETRY_DELAY)
+        refreshTimer = setTimeout(() => performProactiveRefresh(retries + 1), TOKEN_REFRESH_RETRY_DELAY)
       } else {
         showSessionExpiredNotification()
       }
@@ -198,9 +162,7 @@ export const useAuthStore = defineStore('auth', () => {
       })
     }).catch(() => { /* ignore */ })
 
-    setTimeout(() => {
-      logout('会话已过期，请重新登录')
-    }, 2000)
+    setTimeout(() => logout('会话已过期，请重新登录'), 2000)
   }
 
   function startTokenCheckInterval() {
@@ -236,36 +198,21 @@ export const useAuthStore = defineStore('auth', () => {
         const now = Date.now()
         if (now - lastVisibilityCheck < 30000) return
         lastVisibilityCheck = now
-
         if (accessToken.value) {
           const remaining = getTokenRemainingTime(accessToken.value)
-          if (remaining < TOKEN_REFRESH_BUFFER) {
-            performProactiveRefresh()
-          }
+          if (remaining < TOKEN_REFRESH_BUFFER) performProactiveRefresh()
         }
       }
     })
   }
 
+  // ===== 认证流程 =====
+
   async function login() {
-    const codeVerifier = generateCodeVerifier()
+    const { url, codeVerifier, state } = await buildLoginUrl()
     sessionStorage.setItem('pkce_code_verifier', codeVerifier)
-
-    const codeChallenge = await generateCodeChallenge(codeVerifier)
-    const state = generateRandomString(16)
     sessionStorage.setItem('oauth_state', state)
-
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: KEYCLOAK_CONFIG.clientId,
-      redirect_uri: KEYCLOAK_CONFIG.redirectUri,
-      scope: 'openid profile email',
-      state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256'
-    })
-
-    window.location.href = `${KEYCLOAK_CONFIG.authority}/protocol/openid-connect/auth?${params}`
+    window.location.href = url
   }
 
   async function handleCallback(code: string, state: string) {
@@ -277,29 +224,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     const codeVerifier = sessionStorage.getItem('pkce_code_verifier') || ''
+    const data = await exchangeCodeForToken(code, codeVerifier)
 
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: KEYCLOAK_CONFIG.clientId,
-      redirect_uri: KEYCLOAK_CONFIG.redirectUri,
-      code,
-      code_verifier: codeVerifier
-    })
-
-    const response = await fetch(
-      `${KEYCLOAK_CONFIG.authority}/protocol/openid-connect/token`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error('Token exchange failed')
-    }
-
-    const data = await response.json()
     accessToken.value = data.access_token
     refreshToken.value = data.refresh_token
     user.value = parseJwtPayload(data.access_token)
@@ -310,51 +236,24 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function refresh(): Promise<boolean> {
     if (!refreshToken.value) return false
+    const data = await refreshTokenRequest(refreshToken.value)
+    if (!data) return false
 
-    const params = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: KEYCLOAK_CONFIG.clientId,
-      refresh_token: refreshToken.value
-    })
-
-    try {
-      const response = await fetch(
-        `${KEYCLOAK_CONFIG.authority}/protocol/openid-connect/token`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params
-        }
-      )
-
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}))
-        console.warn('[auth] Token refresh failed:', response.status, errBody.error, errBody.error_description)
-        return false
-      }
-
-      const data = await response.json()
-      accessToken.value = data.access_token
-      refreshToken.value = data.refresh_token
-      const existingUserId = user.value?.userId
-      user.value = parseJwtPayload(data.access_token)
-      if (user.value && existingUserId) {
-        user.value.userId = existingUserId
-      }
-      return true
-    } catch (e) {
-      console.warn('[auth] Token refresh exception:', e)
-      return false
+    accessToken.value = data.access_token
+    refreshToken.value = data.refresh_token
+    const existingUserId = user.value?.userId
+    user.value = parseJwtPayload(data.access_token)
+    if (user.value && existingUserId) {
+      user.value.userId = existingUserId
     }
+    return true
   }
 
   function logout(reason?: string) {
-    // 主动登出时通知后端（best-effort）
     if (!reason && accessToken.value) {
       authApi.notifyLogout().catch(() => { /* ignore */ })
     }
 
-    // 被动登出：保存当前页面路径用于登录后跳回
     if (reason) {
       const currentPath = window.location.pathname + window.location.search
       if (currentPath && currentPath !== '/' && currentPath !== '/login' && !currentPath.startsWith('/auth/')) {
@@ -369,21 +268,16 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = null
     user.value = null
 
-    // 清除权限状态（permission store 自身通过 watch isAuthenticated 也会清理，但显式调用更可靠）
-    import('./permission').then(({ usePermissionStore }) => {
-      const permStore = usePermissionStore()
-      permStore.clearPermissions()
+    import('./permission').then(({ usePermissionStore: getPermStore }) => {
+      getPermStore().clearPermissions()
     }).catch(() => { /* ignore */ })
 
-    // 清除项目权限缓存
     import('@/composables/usePermission').then(({ invalidateProjectPermissions }) => {
       invalidateProjectPermissions()
     }).catch(() => { /* ignore */ })
 
-    // 清除项目选择偏好的内存状态
     import('./project').then(({ useProjectStore }) => {
-      const projectStore = useProjectStore()
-      projectStore.selectProject(undefined)
+      useProjectStore().selectProject(undefined)
     }).catch(() => { /* ignore */ })
 
     if (reason) {
@@ -393,12 +287,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     sessionStorage.removeItem('tf_return_url')
-    const params = new URLSearchParams({
-      client_id: KEYCLOAK_CONFIG.clientId,
-      post_logout_redirect_uri: KEYCLOAK_CONFIG.logoutUri
-    })
-
-    window.location.href = `${KEYCLOAK_CONFIG.authority}/protocol/openid-connect/logout?${params}`
+    window.location.href = buildLogoutUrl()
   }
 
   function clearStorage() {
@@ -408,16 +297,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // ===== Backward-compatible delegations to permission store =====
-  // Consumers that still use authStore.hasGlobalPermission() etc. continue to work.
-  // New code should import usePermissionStore directly.
-  //
-  // Note: Circular import (auth ↔ permission) is safe here because:
-  // - Both modules use defineStore() which only registers factories at module level
-  // - Actual store instances are created lazily when first accessed
-  // - By the time any delegation function runs, both modules are fully loaded
 
   function _permStore() {
-    // Lazy access to avoid instantiation during auth store setup
     return usePermissionStore()
   }
 
@@ -442,12 +323,10 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken,
     user,
     isAuthenticated,
-    // Auth methods
     login,
     handleCallback,
     refresh,
     logout,
-    // Permission delegations (backward compat — prefer usePermissionStore for new code)
     permissionsLoaded,
     globalPermissions,
     canCreateIssue,
@@ -457,56 +336,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 })
 
-// ===== Helper functions (module-level, not exported from store) =====
+// ===== Module-level helpers =====
 
 function restoreUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.user)
+    const raw = localStorage.getItem('tf_user')
     return raw ? JSON.parse(raw) : null
   } catch {
-    localStorage.removeItem(STORAGE_KEYS.user)
-    return null
-  }
-}
-
-function generateCodeVerifier(): string {
-  return generateRandomString(43)
-}
-
-async function generateCodeChallenge(codeVerifier: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(codeVerifier)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
-}
-
-function generateRandomString(length: number): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
-  let result = ''
-  const array = new Uint8Array(length)
-  crypto.getRandomValues(array)
-  for (let i = 0; i < length; i++) {
-    result += chars[array[i] % chars.length]
-  }
-  return result
-}
-
-function parseJwtPayload(token: string): AuthUser | null {
-  try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    const payload = JSON.parse(decodeBase64Url(parts[1]))
-    return {
-      id: payload.sub,
-      username: payload.preferred_username,
-      displayName: buildDisplayName(payload),
-      email: payload.email || '',
-      roles: payload.realm_access?.roles || []
-    }
-  } catch {
+    localStorage.removeItem('tf_user')
     return null
   }
 }
