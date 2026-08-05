@@ -1,0 +1,8 @@
+export { default as NoteWidget } from './NoteWidget.vue'
+export { default as NumberCardWidget } from './NumberCardWidget.vue'
+export { default as ReportChartWidget } from './ReportChartWidget.vue'
+export { default as IssueListWidget } from './IssueListWidget.vue'
+export { default as ActivityFeedWidget } from './ActivityFeedWidget.vue'
+export { default as AgileChartWidget } from './AgileChartWidget.vue'
+export { default as BoardStatusWidget } from './BoardStatusWidget.vue'
+export { default as CalendarWidget } from './CalendarWidget.vue'
