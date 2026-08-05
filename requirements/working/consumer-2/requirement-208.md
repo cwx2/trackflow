@@ -159,7 +159,7 @@ private boolean evalCondition(JsonNode cond, Issue issue, String changedField, S
 
 fix_status: DONE
 fix_commit: 44b9e20
-fix_round: 1
+fix_round: 2
 test_status: PENDING
 test_round: 0
 review_status: PENDING
@@ -177,11 +177,13 @@ review_round: 0
 - 改动2：`TransitionGuardService.java` — 同样新增 `evalConditionNode()` 递归方法。`evaluate()` 方法现在支持三种格式：`{conditions:[...]}` 旧格式、直接数组旧格式、以及 `{type:"and"/"or"/"not",...}` 新格式。
 - 改动3：`ScheduledRuleService.java` — 新增 `evalConditionNode()` 递归方法。`findMatchingIssues()` 检测新格式时跳过 SQL 下推，全部在 Java 层递归评估。
 - 改动4：`WorkflowRulePanel.vue` — 条件区域增加 AND/OR 顶层逻辑切换（radio group）、每个条件行增加 NOT 切换按钮（取反）。提交时根据是否使用 OR/NOT 决定序列化为旧格式（纯数组）或新格式（递归节点）。编辑回显时 `parseConditionJson()` 支持两种格式反序列化。`conditionSummary()` 更新为递归显示。
+- 改动5（Round 2）：`WorkflowRuleService.java` — 修复 `validateJson()` 方法，从仅接受 JSON 数组改为同时接受数组（旧格式）和递归条件节点对象（`{type:"and"/"or"/"not"/"condition",...}`）。这是阻止新格式规则保存的根因。
 
 ### 本次变更文件清单
 - `trackflow-server/src/main/java/com/trackflow/workflow/service/WorkflowRuleEngine.java`
 - `trackflow-server/src/main/java/com/trackflow/workflow/service/TransitionGuardService.java`
 - `trackflow-server/src/main/java/com/trackflow/workflow/service/ScheduledRuleService.java`
+- `trackflow-server/src/main/java/com/trackflow/workflow/service/WorkflowRuleService.java` (Round 2: validateJson fix)
 - `trackflow-web/src/views/admin/WorkflowRulePanel.vue`
 
 ### 测试重点（给 e2e-test 会话）

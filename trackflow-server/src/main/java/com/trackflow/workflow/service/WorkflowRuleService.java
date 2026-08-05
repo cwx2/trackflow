@@ -287,15 +287,34 @@ public class WorkflowRuleService {
         }
     }
 
+    /** 条件节点允许的 type 值 */
+    private static final java.util.Set<String> VALID_CONDITION_NODE_TYPES =
+            java.util.Set.of("and", "or", "not", "condition");
+
     private void validateJson(String json, String fieldLabel) {
         if (json == null || json.isBlank()) {
             return;
         }
         try {
             var node = objectMapper.readTree(json);
-            if (!node.isArray()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, fieldLabel + "必须为 JSON 数组格式");
+            if (node.isArray()) {
+                // 旧格式：条件数组，向后兼容
+                return;
             }
+            if (node.isObject()) {
+                // 新格式：递归条件节点 {"type":"and"/"or"/"not"/"condition", ...}
+                var typeNode = node.get("type");
+                if (typeNode != null && typeNode.isTextual()
+                        && VALID_CONDITION_NODE_TYPES.contains(typeNode.asText())) {
+                    return;
+                }
+                // 动作 JSON 也可能是对象格式，允许通过
+                if (node.has("action") || node.has("actions")) {
+                    return;
+                }
+            }
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    fieldLabel + "必须为 JSON 数组格式或有效的条件节点对象（type: and/or/not/condition）");
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
