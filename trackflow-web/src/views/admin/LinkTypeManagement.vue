@@ -14,23 +14,18 @@
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="lt-loading">
-      <a-spin :size="20" />
-      <span>加载中...</span>
-    </div>
-
-    <!-- Table -->
-    <div v-else>
-      <div v-if="linkTypes.length === 0" class="lt-empty">
-        <div class="empty-icon">🔗</div>
-        <h3 class="empty-title">暂无自定义关联类型</h3>
-        <p class="empty-desc">系统内置了 7 种标准关联类型。你可以创建自定义类型以满足特殊业务需求。</p>
-        <a-button type="primary" @click="openCreateDialog">创建第一个关联类型</a-button>
-      </div>
-
+    <!-- List with DataContainer for loading / empty states -->
+    <DataContainer
+      :loading="loading"
+      :error="error"
+      :is-empty="linkTypes.length === 0"
+      :retry="loadLinkTypes"
+      empty-title="暂无自定义关联类型"
+      empty-description="系统内置了 7 种标准关联类型。你可以创建自定义类型以满足特殊业务需求。"
+      create-action="创建第一个关联类型"
+      @create="openCreateDialog"
+    >
       <a-table
-        v-else
         :data="linkTypes"
         :pagination="false"
         :bordered="false"
@@ -74,7 +69,7 @@
           </a-table-column>
         </template>
       </a-table>
-    </div>
+    </DataContainer>
 
     <!-- Create / Edit Dialog -->
     <a-modal
@@ -155,8 +150,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { linkTypeApi } from '@/api'
 import type { IssueLinkTypeVO } from '@/api/types'
+import { useRequest } from '@/composables/useRequest'
+import DataContainer from '@/components/base/DataContainer.vue'
 
-const loading = ref(true)
 const saving = ref(false)
 const deleting = ref(false)
 
@@ -166,6 +162,16 @@ const showDeleteDialog = ref(false)
 const editingId = ref<string | null>(null)
 const deletingItem = ref<IssueLinkTypeVO | null>(null)
 const deleteUsageCount = ref<number | null>(null)
+
+const { loading, error, execute: loadLinkTypes } = useRequest(
+  () => linkTypeApi.list(),
+  {
+    immediate: false,
+    onSuccess: (data) => {
+      linkTypes.value = data as IssueLinkTypeVO[]
+    }
+  }
+)
 
 const form = reactive({
   name: '',
@@ -190,20 +196,6 @@ function directionClass(direction: string): string {
     AGGREGATION: 'aggregation'
   }
   return map[direction] || ''
-}
-
-async function loadLinkTypes() {
-  loading.value = true
-  try {
-    const res = await linkTypeApi.list()
-    if (res.code === 0 && res.data) {
-      linkTypes.value = res.data
-    }
-  } catch {
-    Message.error('加载关联类型失败')
-  } finally {
-    loading.value = false
-  }
 }
 
 function openCreateDialog() {
@@ -322,7 +314,7 @@ async function executeDelete() {
   }
 }
 
-onMounted(loadLinkTypes)
+onMounted(() => loadLinkTypes())
 </script>
 
 <style scoped>
@@ -368,38 +360,6 @@ onMounted(loadLinkTypes)
   font-size: 13px;
   color: var(--tf-text-tertiary);
   margin: 0;
-}
-
-.lt-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 24px 0;
-  color: var(--tf-text-tertiary);
-  font-size: 13px;
-}
-
-.lt-empty {
-  text-align: center;
-  padding: 48px 24px;
-}
-
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px 0;
-}
-
-.empty-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0 0 16px 0;
 }
 
 .lt-table {

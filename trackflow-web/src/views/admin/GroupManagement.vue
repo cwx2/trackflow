@@ -21,13 +21,17 @@
         <div class="col" style="width:200px">操作</div>
       </div>
       <div class="table-body">
-        <div v-if="loading" class="table-empty">加载中...</div>
-        <div v-else-if="groups.length === 0" class="table-empty">
-          <div class="empty-icon">👥</div>
-          <p class="empty-title">暂无用户组</p>
-          <p class="empty-desc">创建用户组来批量管理团队权限</p>
-          <button class="btn-create-sm" @click="openCreateDialog">创建用户组</button>
-        </div>
+        <DataContainer
+          :loading="loading"
+          :error="loadError"
+          :is-empty="groups.length === 0"
+          :retry="loadGroups"
+          loading-text="加载中..."
+          empty-title="暂无用户组"
+          empty-description="创建用户组来批量管理团队权限"
+          create-action="创建用户组"
+          @create="openCreateDialog"
+        >
         <div v-for="group in groups" :key="group.id" class="table-row" @click="openDetail(group)">
           <div class="col" style="width:200px">
             <span class="group-name">{{ group.name }}</span>
@@ -46,6 +50,7 @@
             <button class="btn-sm danger" @click="confirmDelete(group)">删除</button>
           </div>
         </div>
+        </DataContainer>
       </div>
     </div>
 
@@ -262,11 +267,22 @@ import { groupApi, userApi, projectApi } from '@/api'
 import type { UserGroupVO, UserGroupDetailVO } from '@/api/group'
 import type { UserVO, ProjectVO } from '@/api/types'
 import { Message } from '@arco-design/web-vue'
+import { useRequest } from '@/composables/useRequest'
+import DataContainer from '@/components/base/DataContainer.vue'
 
 // ===== 列表数据 =====
 const groups = ref<UserGroupVO[]>([])
-const loading = ref(false)
 const keyword = ref('')
+
+const { loading, error: loadError, execute: loadGroups } = useRequest(
+  () => groupApi.list({ keyword: keyword.value || undefined, page: 1, pageSize: 100 }),
+  {
+    immediate: false,
+    onSuccess: (data: any) => {
+      groups.value = data?.list ?? []
+    }
+  }
+)
 
 // ===== 创建/编辑 =====
 const showFormDialog = ref(false)
@@ -309,20 +325,6 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 function debouncedSearch() {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => loadGroups(), 300)
-}
-
-async function loadGroups() {
-  loading.value = true
-  try {
-    const res = await groupApi.list({ keyword: keyword.value || undefined, page: 1, pageSize: 100 })
-    if (res.code === 0) {
-      groups.value = res.data.list
-    }
-  } catch (e) {
-    console.error('Failed to load groups', e)
-  } finally {
-    loading.value = false
-  }
 }
 
 function openCreateDialog() {
