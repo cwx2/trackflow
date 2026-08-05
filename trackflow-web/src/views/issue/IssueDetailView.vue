@@ -238,28 +238,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
+/**
+ * IssueDetailView — 工单详情页面
+ *
+ * 拆分说明（REQ-241）：
+ * - composables/useIssueDetailData.ts：数据加载、状态管理、WebSocket、权限
+ * - composables/useIssueDetailActions.ts：所有操作处理函数
+ * - 本文件：模板 + 计算属性 + 样式
+ */
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
 import { renderMarkdown } from '@/utils/markdown'
-import { showActionFeedback } from '@/utils/transition'
-import { issueApi, projectApi, sprintApi, tagApi, timeEntryApi, customFieldApi } from '@/api'
-import { workItemAttributeApi } from '@/api/timeEntry'
-import type { WorkItemAttributeVO, AttributeValueVO } from '@/api/timeEntry'
-import { ERROR_CODES } from '@/api/error-codes'
-import { usePermission, loadProjectPermissions } from '@/composables/usePermission'
-import { useNavBadge } from '@/composables/useNavBadge'
-import { useIssueDetailSubscription } from '@/composables/useWebSocket'
-import AddLinkModal from './components/AddLinkModal.vue'
-import type { IssueRealtimeEvent } from '@/composables/useWebSocket'
-import { useTabStore } from '@/stores/tabs'
 import { useTimerStore } from '@/stores/timer'
-import { useRecentIssues } from './composables/useRecentIssues'
-import { loadPriorityOptions, getPriorityColor } from './composables/usePriorityOptions'
-import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
-import { useDrafts } from './composables/useDrafts'
-import type { IssueDetailVO, IssueStatusVO, IssueCommentVO, IssueActivityVO, IssueAttachmentVO, IssueLinkVO, IssueTagVO, ProjectMemberVO, SprintVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
+import { useIssueDetailData } from './composables/useIssueDetailData'
+import { useIssueDetailActions } from './composables/useIssueDetailActions'
+import { getPriorityColor } from './composables/usePriorityOptions'
+import type { IssueDetailVO, CustomFieldDefinitionVO, FilterRule } from '@/api/types'
 import DetailTopBar from './components/DetailTopBar.vue'
 import DetailMainContent from './components/DetailMainContent.vue'
 import DetailSidebar from './components/DetailSidebar.vue'
@@ -269,624 +265,90 @@ import IssueCreatePanel from './IssueCreatePanel.vue'
 import MoveIssueModal from './components/MoveIssueModal.vue'
 import TransitionCommentModal from './components/TransitionCommentModal.vue'
 import AttachmentPrivacyModal from './components/AttachmentPrivacyModal.vue'
+import AddLinkModal from './components/AddLinkModal.vue'
 import type { ActivityItem, RelatedChange } from './components/ActivityStream.vue'
 import type { SidebarField, StatusInfo } from './components/DetailSidebar.vue'
 import { localizeFieldName, localizeFieldValue, localizeStatusName, localizePriority, priorityLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
-const router = useRouter()
-const tabStore = useTabStore()
 const timerStore = useTimerStore()
-const { recordVisit: recordRecentVisit } = useRecentIssues()
-const { saveDraft: saveIssueDraft } = useDrafts()
 
-// localStorage key for sidebar collapsed state
+// ============ Composables ============
+const data = useIssueDetailData()
+const {
+  loading, loadError, issue,
+  transitions, comments, activities, activityTotal, activityHasMore, activityLoadingMore,
+  attachments, links, projectTagList, members, allProjectMembers, sprints, customFieldDefs,
+  dynamicPriorityOptions, dynamicIssueTypeOptions,
+  projectTimeTrackingEnabled, issueProjectAttributes, issueWorkTypeValues, issueExtraAttributes,
+  timeFormCanLogForOthers, timeFormProjectMembers,
+  isProjectArchived, currentUserId,
+  canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment,
+  canAssignIssue, canEditSprint, canLogTime, hasProjectPermission,
+  canManageComments, canManageCustomFieldsComputed,
+  isReporter, isAssignee,
+  canEditIssueEffective, canChangeStatusEffective, canCommentEffective, canMoveIssue,
+  activityStreamRef, realtimeUpdateBanner, scrollToActivity,
+  loadAll, loadMoreActivities, loadAttachments, loadLinks,
+  loadIssueProjectAttributes, loadTimeFormPermissions,
+} = data
+
+// Sidebar state
 const SIDEBAR_COLLAPSED_KEY = 'tf_issue_detail_sidebar_collapsed'
-
-// Read initial value from localStorage (default: false = expanded)
-const sidebarCollapsed = ref<boolean>(
-  localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
-)
+const sidebarCollapsed = ref<boolean>(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed.value))
 }
 
-// Sidebar ref for programmatic field highlighting
 const sidebarRef = ref<InstanceType<typeof DetailSidebar> | null>(null)
-
-// Keep backward-compat: no longer needed, sidebarCollapsed drives the UI directly
-const showCreatePanel = ref(false)
 const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
-const cloneData = ref<{ projectId: string; title: string; description: string; issueType: string; priority: string } | undefined>(undefined)
-const createSubtaskParentId = ref<string | null>(null)
-const showTimeDialog = ref(false)
-const timeSaving = ref(false)
 
-/** 工时记录弹窗：是否有权为他人记录工时 */
-const timeFormCanLogForOthers = ref(false)
-/** 工时记录弹窗：选择的记录人 ID（空=默认为自己） */
-const timeFormAuthorId = ref<string>('')
-/** 工时记录弹窗：项目成员列表（用于 Author 选择器） */
-const timeFormProjectMembers = ref<{ userId: string; username?: string; displayName: string }[]>([])
-
-const timeForm = ref({
-  workDate: new Date().toISOString().slice(0, 10),
-  durationText: '',
-  description: ''
+// ============ Actions composable ============
+const actions = useIssueDetailActions({
+  issue, loadAll, loadAttachments, loadLinks,
+  canEditIssueEffective, hasProjectPermission,
+  currentUserId, sidebarCollapsed, sidebarRef,
 })
-const timeFormAttrValues = ref<Record<string, string>>({})
-const issueProjectAttributes = ref<WorkItemAttributeVO[]>([])
-const projectTimeTrackingEnabled = ref(true)
-const issueWorkTypeValues = computed(() => {
-  // Find the "Work type" built-in attribute values
-  const wt = issueProjectAttributes.value.find(a => a.name === 'Work type' || a.isBuiltin)
-  return wt?.values || [
-    { id: 'Development', name: '开发', color: '#58a6ff' },
-    { id: 'Testing', name: '测试', color: '#3fb950' },
-    { id: 'Documentation', name: '文档', color: '#d29922' },
-    { id: 'Design', name: '设计', color: '#a371f7' },
-    { id: 'Review', name: '代码审查', color: '#f0883e' },
-    { id: 'Meeting', name: '会议', color: '#8b949e' },
-    { id: 'Other', name: '其他', color: '#6e7681' }
-  ]
-})
-const issueExtraAttributes = computed(() => {
-  // Extra attributes beyond the built-in "Work type"
-  return issueProjectAttributes.value.filter(a => !a.isBuiltin && a.name !== 'Work type')
-})
-const loading = ref(false)
-const loadError = ref<string | null>(null)
+const {
+  showTransitionModal, transitionTarget, transitionRequireComment,
+  showCreatePanel, cloneData, createSubtaskParentId,
+  showAddLinkModal, showMoveModal, moveModalRef, showPrivacyModal,
+  showTimeDialog, timeSaving, timeForm, timeFormAttrValues, timeFormAuthorId,
+  copyIssue, onCopyId, onCloneIssue, onCreateSubtask,
+  openAddLinkModal, onLinked, onDeleteLink,
+  triggerUpload, onPrivacyGroupConfirm, onDropFiles, onDeleteAttachment, onDeleteAllAttachments,
+  onDeleteIssue, onMoveIssue, onMoveConfirm,
+  onCreatePanelClose, onIssueCreated, onCreatePanelExpand,
+  onUpdateTitle, onUpdateDesc,
+  onRemoveTag, onAddTag, onAddTags, onCreateTag,
+  onAddComment, onEditComment, onDeleteComment, onRestoreComment, onPermanentlyDeleteComment,
+  onQuickActionExecuted, onTransition, onTransitionConfirm,
+  onEditField, onClearField, onAddOption,
+  openTimeDialog, handleStartTimer, handleStopTimerFromDetail, submitTimeEntry,
+  onPasteUpload,
+} = actions
 
-// ============ 数据 ============
-const issue = ref<IssueDetailVO | null>(null)
-
-// 优先级选项（从自定义字段系统动态加载）
-const dynamicPriorityOptions = ref<Array<{ value: string; label: string; color: string }>>([
-  { value: 'Show-stopper', label: '阻塞', color: '#b91c1c' },
-  { value: 'Critical', label: '紧急', color: '#ef4444' },
-  { value: 'High', label: '高', color: '#f59e0b' },
-  { value: 'Normal', label: '普通', color: '#6366f1' },
-  { value: 'Low', label: '低', color: '#64748b' },
-])
-
-// 工单类型选项（从自定义字段系统动态加载）
-const dynamicIssueTypeOptions = ref<Array<{ value: string; label: string; color: string }>>([
-  { value: 'Bug', label: '缺陷', color: '#ef4444' },
-  { value: 'Task', label: '任务', color: '#6366f1' },
-  { value: 'Feature', label: '需求', color: '#22c55e' },
-  { value: 'Epic', label: '史诗', color: '#a855f7' },
-  { value: 'Story', label: '故事', color: '#3b82f6' },
-])
-
-// 归档状态
-const isProjectArchived = computed(() => issue.value?.projectStatus === 'archived')
-
-// 添加关联弹窗
-const showAddLinkModal = ref(false)
-function openAddLinkModal() { showAddLinkModal.value = true }
-async function onLinked() {
-  // 刷新关联列表（独立加载，不依赖工单主数据）
-  await loadLinks()
-}
-
-async function onDeleteLink(linkId: string) {
-  if (!issue.value) return
-  try {
-    await issueApi.deleteLink(issue.value.id, linkId)
-    Message.success('关联已删除')
-    await loadLinks()
-  } catch (e: any) {
-    Message.error(e?.response?.data?.message || '删除关联失败')
-  }
-}
-
-// 权限控制（必须在 issue ref 声明之后）
-const { canCreateIssue, canEditIssue, canDeleteIssue, canChangeStatus, canComment, canAssignIssue, canEditSprint, canLogTime, hasPermission: hasProjectPermission } = usePermission(
-  () => issue.value?.projectId,
-  { isProjectArchived: () => isProjectArchived.value }
-)
-
-// 资源级权限覆盖：reporter 需 issue:edit_own，assignee 需 issue:edit_assigned
-import { useAuthStore } from '@/stores/auth'
-const authStore = useAuthStore()
-
-/** 当前用户数据库 ID */
-const currentUserId = computed(() => authStore.user?.userId || '')
-
-/** 是否可以管理他人评论 */
-const canManageComments = computed(() => hasProjectPermission('issue:manage_comments'))
-
-/** 是否可以管理自定义字段（用于内联添加选项） */
-const canManageCustomFieldsComputed = computed(() => hasProjectPermission('project:manage_custom_fields'))
-
-/** 是否为 Issue 的创建者 */
-const isReporter = computed(() => {
-  const dbUserId = authStore.user?.userId
-  if (!dbUserId || !issue.value) return false
-  return dbUserId === issue.value.reporterId
-})
-
-/** 是否为 Issue 的负责人 */
-const isAssignee = computed(() => {
-  const dbUserId = authStore.user?.userId
-  if (!dbUserId || !issue.value) return false
-  return dbUserId === issue.value.assigneeId
-})
-
-/**
- * 综合权限：项目级 issue:edit OR 资源级（reporter + edit_own / assignee + edit_assigned）
- * 
- * 权限模型说明：
- * - 项目级 issue:edit：有此权限可编辑项目内所有工单
- * - 资源级 issue:edit_own：Reporter 需要此权限才能编辑自己创建的工单
- * - 资源级 issue:edit_assigned：Assignee 需要此权限才能编辑分配给自己的工单
- * 
- * 注意：Observer 角色不应有任何编辑权限（参考 YouTrack 文档）。
- * 因此 reporter 的"固有权限"已移除，必须配合 issue:edit_own 权限才能编辑。
- */
-const canEditIssueEffective = computed(() => {
-  if (isProjectArchived.value) return false
-  // 项目级：有 issue:edit 权限可编辑所有工单
-  if (canEditIssue.value) return true
-  // 资源级：reporter 需要 issue:edit_own 权限
-  if (isReporter.value && hasProjectPermission('issue:edit_own')) return true
-  // 资源级：assignee 需要 issue:edit_assigned 权限
-  if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
-  return false
-})
-
-/**
- * 综合状态变更权限：项目级 issue:change_status OR assignee + edit_assigned
- * 注意：Reporter 的固有权限不包含 change_status，状态变更需要明确的角色权限授权。
- */
-const canChangeStatusEffective = computed(() => {
-  if (isProjectArchived.value) return false
-  if (canChangeStatus.value) return true
-  // 资源级：assignee 需要 issue:edit_assigned 权限
-  if (isAssignee.value && hasProjectPermission('issue:edit_assigned')) return true
-  return false
-})
-
-/**
- * 综合评论权限：项目级 issue:comment OR 固有权限（reporter 无条件）
- */
-const canCommentEffective = computed(() => {
-  if (isProjectArchived.value) return false
-  if (canComment.value) return true
-  // 固有权限：reporter 无条件拥有 comment 权限
-  if (isReporter.value) return true
-  return false
-})
-
-/** 是否可以移动工单到其他项目 */
-const canMoveIssue = computed(() => {
-  if (isProjectArchived.value) return false
-  return hasProjectPermission('issue:move')
-})
-
-// Move modal state
-const showMoveModal = ref(false)
-const moveModalRef = ref<InstanceType<typeof MoveIssueModal> | null>(null)
-
-// Transition comment modal state
-const showTransitionModal = ref(false)
-const transitionTarget = ref<StatusInfo | null>(null)
-const transitionRequireComment = ref(false)
-
-const transitions = ref<IssueStatusVO[]>([])
-const comments = ref<IssueCommentVO[]>([])
-const activities = ref<IssueActivityVO[]>([])
-const activityPage = ref(1)
-const activityTotal = ref(0)
-const activityHasMore = ref(false)
-const activityLoadingMore = ref(false)
-const attachments = ref<IssueAttachmentVO[]>([])
-const links = ref<IssueLinkVO[]>([])
-const projectTagList = ref<IssueTagVO[]>([])
-const members = ref<ProjectMemberVO[]>([])
-const allProjectMembers = ref<ProjectMemberVO[]>([])
-const sprints = ref<SprintVO[]>([])
-const customFieldDefs = ref<CustomFieldDefinitionVO[]>([])
-
-const issueId = computed(() => route.params.id as string || '')
-
-// ===== WebSocket 实时更新（详情页） =====
-const hasRealtimeUpdates = ref(false)
-
-/**
- * 活动流区域的 DOM 引用（用于检测是否在视口内）
- */
-const activityStreamRef = ref<HTMLElement | null>(null)
-
-/**
- * 实时更新提示 banner 状态
- */
-const realtimeUpdateBanner = ref<{ visible: boolean; message: string }>({
-  visible: false,
-  message: ''
-})
-
-/**
- * 非活动标签页期间积累的更新计数
- */
-let inactiveUpdateCount = 0
-const originalTitle = ref('')
-
-/**
- * 检测活动流区域是否在视口内
- */
-function isActivityStreamVisible(): boolean {
-  const el = activityStreamRef.value
-  if (!el) return true // 找不到元素时保守处理，不显示 banner
-  const rect = el.getBoundingClientRect()
-  const viewHeight = window.innerHeight || document.documentElement.clientHeight
-  // 元素顶部在视口内或部分可见
-  return rect.top < viewHeight && rect.bottom > 0
-}
-
-/**
- * 滚动到活动流区域
- */
-function scrollToActivity() {
-  realtimeUpdateBanner.value.visible = false
-  const el = activityStreamRef.value
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-}
-
-/**
- * 显示实时更新 banner（若活动流不在视口内）或直接 Message 提示
- */
-function showRealtimeNotification(message: string, isActivityUpdate: boolean) {
-  // 非活动标签页：修改 title 提示
-  if (document.hidden) {
-    inactiveUpdateCount++
-    document.title = `(${inactiveUpdateCount}) ${originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')}`
-    return
-  }
-
-  // 活动类更新（评论、附件、关联）：若活动流不在视口内，显示 banner
-  if (isActivityUpdate && !isActivityStreamVisible()) {
-    realtimeUpdateBanner.value = { visible: true, message }
-    // 10 秒后自动消失
-    setTimeout(() => {
-      realtimeUpdateBanner.value.visible = false
-    }, 10000)
-  } else {
-    // 字段更新或活动流已可见：使用 Message 提示
-    Message.info({ content: message, duration: 3000 })
-  }
-}
-
-/**
- * 当用户重新激活标签页时，清除 title 中的未读计数
- */
-function onVisibilityChange() {
-  if (!document.hidden && inactiveUpdateCount > 0) {
-    inactiveUpdateCount = 0
-    document.title = originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')
-  }
-}
-
-onMounted(() => {
-  originalTitle.value = document.title.replace(/^\(\d+\)\s*/, '')
-  document.addEventListener('visibilitychange', onVisibilityChange)
-})
-
-useIssueDetailSubscription(
-  () => issue.value?.id,
-  (event: IssueRealtimeEvent) => {
-    // 忽略自己的操作
-    const myUserId = authStore.user?.userId
-    if (myUserId && String(event.operatorId) === String(myUserId)) return
-
-    if (event.action === 'FIELD_UPDATED' && issue.value) {
-      // 实时更新当前工单字段
-      for (const [key, value] of Object.entries(event.changes)) {
-        ;(issue.value as any)[key] = value
-      }
-      // 如果状态变更，重新加载可用转换
-      if ('statusId' in event.changes) {
-        loadTransitions()
-      }
-      showRealtimeNotification(
-        `${event.operatorName || '其他用户'} 更新了此工单`,
-        false
-      )
-    } else if (event.action === 'COMMENT_ADDED') {
-      // 有新评论 → 重新加载评论和活动列表
-      loadCommentsAndActivities()
-      showRealtimeNotification(
-        `${event.operatorName || '其他用户'} 添加了新评论`,
-        true
-      )
-    } else if (event.action === 'ATTACHMENT_CHANGED') {
-      // 附件变更 → 重新加载附件列表
-      loadAttachments()
-      showRealtimeNotification(
-        `${event.operatorName || '其他用户'} 更新了附件`,
-        true
-      )
-    } else if (event.action === 'LINK_CHANGED') {
-      // 关联变更 → 重新加载关联列表
-      loadLinks()
-      showRealtimeNotification(
-        `${event.operatorName || '其他用户'} 更新了关联工单`,
-        true
-      )
-    } else if (event.action === 'DELETED') {
-      // 工单被删除 → 提示用户并导航回列表
-      Message.warning({ content: '此工单已被删除', duration: 5000 })
-      router.push({ name: 'issues' })
-    }
-  }
-)
-
-// 辅助加载函数（用于实时更新时局部刷新）
-async function loadTransitions() {
-  if (!issue.value) return
-  try {
-    const res = await issueApi.getAvailableTransitions(issue.value.id)
-    if (res.code === 0) transitions.value = res.data || []
-  } catch { /* ignore */ }
-}
-
-async function loadCommentsAndActivities() {
-  if (!issue.value) return
-  try {
-    const [commRes, actRes] = await Promise.all([
-      issueApi.listComments(issue.value.id),
-      issueApi.listActivities(issue.value.id, { page: 1, pageSize: 20 })
-    ])
-    if (commRes.code === 0) comments.value = commRes.data || []
-    if (actRes.code === 0) {
-      const pageData = actRes.data
-      activities.value = pageData.list || []
-      activityPage.value = 1
-      activityTotal.value = pageData.pagination.total
-      activityHasMore.value = pageData.pagination.page < pageData.pagination.totalPages
-    }
-  } catch { /* ignore */ }
-}
-
-async function loadMoreActivities() {
-  if (!issue.value || !activityHasMore.value || activityLoadingMore.value) return
-  activityLoadingMore.value = true
-  try {
-    const nextPage = activityPage.value + 1
-    const res = await issueApi.listActivities(issue.value.id, { page: nextPage, pageSize: 20 })
-    if (res.code === 0) {
-      const pageData = res.data
-      activities.value = [...activities.value, ...(pageData.list || [])]
-      activityPage.value = nextPage
-      activityHasMore.value = pageData.pagination.page < pageData.pagination.totalPages
-    }
-  } catch { /* ignore */ }
-  finally { activityLoadingMore.value = false }
-}
-
-async function loadAttachments() {
-  if (!issue.value) return
-  try {
-    const res = await issueApi.listAttachments(issue.value.id)
-    if (res.code === 0) attachments.value = res.data || []
-  } catch { /* ignore */ }
-}
-
-async function loadLinks() {
-  if (!issue.value) return
-  try {
-    const res = await issueApi.listLinks(issue.value.id)
-    if (res.code === 0) links.value = res.data || []
-  } catch { /* ignore */ }
-}
-// ===== End WebSocket =====
-
-// ============ 加载数据 ============
+// ============ Lifecycle ============
 onMounted(() => {
   loadAll()
-  // 记录原始页面标题（供实时更新未读计数使用）
-  if (!originalTitle.value) {
-    originalTitle.value = document.title.replace(/^\(\d+\)\s*/, '')
-  }
-  document.addEventListener('visibilitychange', onVisibilityChange)
   document.addEventListener('paste', onPasteUpload)
+  if (issue.value?.projectId) {
+    loadIssueProjectAttributes(issue.value.projectId)
+    loadTimeFormPermissions(issue.value.projectId)
+  }
 })
 
 onUnmounted(() => {
-  document.removeEventListener('visibilitychange', onVisibilityChange)
   document.removeEventListener('paste', onPasteUpload)
-  // 恢复 title
-  if (inactiveUpdateCount > 0) {
-    document.title = originalTitle.value || document.title.replace(/^\(\d+\)\s*/, '')
-  }
 })
 
-/** Ctrl+V 粘贴图片自动上传 */
-function onPasteUpload(e: ClipboardEvent) {
-  // 如果用户正在编辑文本输入框，不拦截
-  const target = e.target as HTMLElement
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-  if (!issue.value || !canEditIssueEffective.value) return
-
-  const items = e.clipboardData?.items
-  if (!items) return
-
-  for (const item of Array.from(items)) {
-    if (item.type.startsWith('image/')) {
-      const file = item.getAsFile()
-      if (file) {
-        e.preventDefault()
-        const name = `paste-${Date.now()}.${item.type.split('/')[1] || 'png'}`
-        const namedFile = new File([file], name, { type: file.type })
-        doUploadFile(namedFile, undefined)
-      }
-      break
-    }
-  }
-}
-watch(() => route.params.id, () => loadAll())
-
-async function loadAll() {
-  const id = issueId.value
-  if (!id) {
-    loadError.value = '缺少工单 ID'
-    return
-  }
-
-  loading.value = true
-  loadError.value = null
-
-  try {
-    // 判断 ID 格式：包含连字符且非纯数字 → issue key，否则 → numeric ID
-    const isKey = id.includes('-') && !/^\d+$/.test(id)
-    const res = isKey ? await issueApi.getByKey(id) : await issueApi.getById(id)
-    if (res.code === 0 && res.data) {
-      issue.value = res.data
-      // 记录最近浏览
-      recordRecentVisit({
-        id: res.data.id,
-        issueKey: res.data.issueKey,
-        title: res.data.title,
-      })
-      // 更新标签标题为工单编号（替代路由守卫中的占位标题）
-      tabStore.openTab({
-        id: `issue-${id}`,
-        title: res.data.issueKey,
-        path: route.fullPath,
-        closable: true,
-        issueId: id
-      })
-      await loadRelatedData()
-    } else {
-      loadError.value = res.message || '加载工单失败'
-    }
-  } catch (e: any) {
-    const status = e.response?.status
-    if (status === 404) {
-      loadError.value = `工单 ${id} 不存在`
-    } else if (status === 403) {
-      loadError.value = '无权访问此工单'
-    } else {
-      loadError.value = e.response?.data?.message || '网络错误，请稍后重试'
-    }
-    console.warn('[IssueDetail] Failed to load issue:', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadRelatedData() {
-  if (!issue.value) return
-  const id = issue.value.id
-  const pid = issue.value.projectId
-
-  // 加载优先级选项（从自定义字段系统）
-  loadPriorityOptions(pid).then(opts => {
-    dynamicPriorityOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
-  })
-
-  // 加载工单类型选项（从自定义字段系统）
-  loadIssueTypeOptions(pid).then(opts => {
-    dynamicIssueTypeOptions.value = opts.map(o => ({ value: o.value, label: o.label, color: o.color || '#6366f1' }))
-  })
-
-  // 先加载权限，决定是否需要加载编辑选项
-  const perms = await loadProjectPermissions(pid)
-  const isAdmin = authStore.hasGlobalPermission('system:admin')
-  const needTransitions = isAdmin || perms.has('issue:change_status')
-  const needSprintOptions = isAdmin || perms.has('sprint:edit')
-  const needMemberOptions = isAdmin || perms.has('issue:assign')
-
-  // 加载项目时间追踪开关（静默处理 403，观察者等低权限角色可能无权访问）
-  try {
-    const ttRes = await projectApi.getTimeTrackingSettings(pid, { _silent403: true })
-    if (ttRes.code === 0 && ttRes.data) {
-      projectTimeTrackingEnabled.value = ttRes.data.enabled
-    }
-  } catch {
-    projectTimeTrackingEnabled.value = false // 403 时默认禁用（不展示无权限功能入口）
-  }
-
-  // 无状态变更权限时清空 transitions（确保 UI 渲染为只读）
-  if (!needTransitions) {
-    transitions.value = []
-  }
-
-  try {
-    // 核心数据：始终加载（comments, activities, attachments, links, tags, custom fields）
-    // tags 使用 _silent403：观察者等低权限角色可能触发 403，不应弹出提示
-    const promises: Promise<any>[] = [
-      issueApi.listComments(id),
-      issueApi.listActivities(id, { page: 1, pageSize: 20 }),
-      issueApi.listAttachments(id),
-      issueApi.listLinks(id),
-      tagApi.listProjectTags(pid, { _silent403: true }),
-      customFieldApi.listByProject(pid, issue.value!.issueType),
-    ]
-    // 仅在有状态变更权限时加载可用转换（避免无权限用户触发 403）
-    if (needTransitions) {
-      promises.push(issueApi.getAvailableTransitions(id))
-    }
-    // 仅在有分配权限时加载可分配成员列表（编辑负责人的下拉选项，排除观察者等角色）
-    if (needMemberOptions) {
-      promises.push(projectApi.listAssignableMembers(pid))
-    }
-    // 仅在有迭代编辑权限时加载 Sprint 列表（编辑迭代的下拉选项）
-    if (needSprintOptions) {
-      promises.push(sprintApi.listByProject(pid))
-    }
-    // 始终加载全部项目成员（user 类型自定义字段需要完整成员列表，不按权限过滤）
-    promises.push(projectApi.listMembers(pid))
-
-    const results = await Promise.allSettled(promises)
-
-    let idx = 0
-    if (results[idx].status === 'fulfilled') comments.value = (results[idx] as any).value.data || []
-    idx++
-    if (results[idx].status === 'fulfilled') {
-      const pageData = (results[idx] as any).value.data
-      activities.value = pageData?.list || []
-      activityPage.value = 1
-      activityTotal.value = pageData?.pagination?.total || 0
-      activityHasMore.value = (pageData?.pagination?.page || 0) < (pageData?.pagination?.totalPages || 0)
-    }
-    idx++
-    if (results[idx].status === 'fulfilled') attachments.value = (results[idx] as any).value.data || []
-    idx++
-    if (results[idx].status === 'fulfilled') links.value = (results[idx] as any).value.data || []
-    idx++
-    if (results[idx].status === 'fulfilled') projectTagList.value = (results[idx] as any).value.data || []
-    idx++
-    if (results[idx].status === 'fulfilled') customFieldDefs.value = (results[idx] as any).value.data || []
-    idx++
-    if (needTransitions) {
-      if (results[idx].status === 'fulfilled') transitions.value = (results[idx] as any).value.data || []
-      idx++
-    }
-    if (needMemberOptions) {
-      if (results[idx].status === 'fulfilled') members.value = (results[idx] as any).value.data || []
-      idx++
-    }
-    if (needSprintOptions) {
-      if (results[idx].status === 'fulfilled') sprints.value = (results[idx] as any).value.data?.list || []
-      idx++
-    }
-    // 全部项目成员（供 user 类型自定义字段使用）
-    if (results[idx].status === 'fulfilled') allProjectMembers.value = (results[idx] as any).value.data || []
-    idx++
-  } catch { /* ignore partial failures */ }
-}
-
-// ============ Computed ============
+// ============ Computed (view-specific) ============
 const projectName = computed(() => issue.value?.projectName || '')
 const reporterName = computed(() => issue.value?.reporterName || '未知')
 const createdByName = computed(() => issue.value?.createdByName || issue.value?.reporterName || '未知')
 const updatedByName = computed(() => issue.value?.updatedByName || '未知')
-
 const issueTags = computed(() => issue.value?.tags || [])
 const projectTags = computed(() => projectTagList.value)
 
@@ -905,15 +367,9 @@ const issueLinks = computed(() => {
 
 const issueAttachments = computed(() => {
   return attachments.value.map(a => ({
-    id: a.id,
-    fileName: a.fileName,
-    filePath: a.filePath,
-    fileSize: a.fileSize,
-    contentType: a.contentType || '',
-    createdAt: a.createdAt,
-    uploadedBy: a.uploadedBy,
-    isPrivate: a.isPrivate || false,
-    visibleToGroupNames: a.visibleToGroupNames || []
+    id: a.id, fileName: a.fileName, filePath: a.filePath, fileSize: a.fileSize,
+    contentType: a.contentType || '', createdAt: a.createdAt, uploadedBy: a.uploadedBy,
+    isPrivate: a.isPrivate || false, visibleToGroupNames: a.visibleToGroupNames || []
   }))
 })
 
@@ -924,33 +380,29 @@ const currentStatus = computed<StatusInfo>(() => {
   return { id: '', name: '未知', color: '#666' }
 })
 
-/**
- * 计算截止日期状态：过期/即将到期/正常
- * 关闭的工单不显示警告颜色
- */
+const availableTransitions = computed<StatusInfo[]>(() => {
+  return transitions.value.map(s => ({
+    id: s.id, name: localizeStatusName(s.name), color: s.color,
+    blocked: s.blocked || false, blockedBy: s.blockedBy || [],
+    requireComment: s.requireComment || false, transitionName: s.transitionName || undefined
+  }))
+})
+
 function getDueDateStatus(dueDate: string | undefined | null): 'overdue' | 'due-soon' | 'normal' {
   if (!dueDate) return 'normal'
-  // 关闭的工单不显示警告颜色
   if (issue.value?.status?.isClosed) return 'normal'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDate)
-  due.setHours(0, 0, 0, 0)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate); due.setHours(0, 0, 0, 0)
   const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
   if (diffDays < 0) return 'overdue'
   if (diffDays <= 3) return 'due-soon'
   return 'normal'
 }
 
-/**
- * 获取截止日期 tooltip 提示文本
- */
 function getDueDateTooltip(dueDate: string | undefined | null): string {
   if (!dueDate) return ''
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDate)
-  due.setHours(0, 0, 0, 0)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate); due.setHours(0, 0, 0, 0)
   const diffDays = Math.floor((due.getTime() - today.getTime()) / 86400000)
   if (diffDays < 0) return `已逾期 ${Math.abs(diffDays)} 天`
   if (diffDays === 0) return '今天到期'
@@ -958,53 +410,124 @@ function getDueDateTooltip(dueDate: string | undefined | null): string {
   return `${diffDays} 天后到期`
 }
 
-const availableTransitions = computed<StatusInfo[]>(() => {
-  return transitions.value.map(s => ({
-    id: s.id,
-    name: localizeStatusName(s.name),
-    color: s.color,
-    blocked: s.blocked || false,
-    blockedBy: s.blockedBy || [],
-    requireComment: s.requireComment || false,
-    transitionName: s.transitionName || undefined
-  }))
-})
+function priorityDot(p: string) {
+  return getPriorityColor(p, issue.value?.projectId)
+}
+
+function getDetailIssueTypeColor(issueType: string | null | undefined): string {
+  if (!issueType) return '#6366f1'
+  const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
+  return opt?.color || '#6366f1'
+}
+
+function getDetailIssueTypeLabel(issueType: string | null | undefined): string {
+  if (!issueType) return '未知'
+  const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
+  return opt?.label || issueType
+}
+
+function getFilteredOptions(
+  cf: CustomFieldDefinitionVO,
+  valuesMap: Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>
+): { value: string; label: string; description?: string }[] {
+  let activeOptions = (cf.options || []).filter(o => !o.isArchived)
+  if (cf.filterFieldId && cf.filterRules) {
+    try {
+      const rules: FilterRule[] = JSON.parse(cf.filterRules)
+      if (rules?.length) {
+        const sourceStored = valuesMap.get(cf.filterFieldId)
+        const sourceValue = sourceStored?.value || ''
+        if (sourceValue) {
+          const matchedRule = rules.find(r => r.whenValue === sourceValue)
+          if (matchedRule?.showOnly?.length) {
+            activeOptions = activeOptions.filter(o => matchedRule.showOnly.includes(o.id))
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  return activeOptions.map(o => {
+    let label = o.value
+    if (cf.fieldFormat === 'ownedField' && o.ownerDisplayName) { label = `${o.value} → ${o.ownerDisplayName}` }
+    return { value: o.id, label, description: o.description || undefined }
+  })
+}
+
+function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
+  if (!customFieldDefs.value.length) return []
+  const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>()
+  if (i.customFieldDetails) {
+    for (const v of i.customFieldDetails) {
+      valuesMap.set(v.customFieldId, { value: v.value || '', values: v.values, displayValue: v.displayValue || v.value || '', displayValues: v.displayValues, isMulti: v.isMulti, color: v.color, colors: v.colors })
+    }
+  }
+  const visibleDefs = customFieldDefs.value.filter(cf => {
+    if (!cf.conditionFieldId || !cf.conditionValues || cf.conditionValues.length === 0) return true
+    const condStored = valuesMap.get(cf.conditionFieldId)
+    const condValue = condStored?.value || ''
+    if (!condValue) return false
+    return cf.conditionValues.includes(condValue)
+  })
+  return visibleDefs.map(cf => {
+    const stored = valuesMap.get(cf.id)
+    const isMulti = cf.isMulti || stored?.isMulti
+    const rawValue = stored?.value || ''
+    const rawValues = stored?.values || []
+    let displayValue: string
+    if (isMulti && stored?.displayValues?.length) { displayValue = stored.displayValues.join(', ') }
+    else if (stored?.displayValue) { displayValue = stored.displayValue }
+    else if (cf.requiresExplicitSelection) { displayValue = '设置值' }
+    else { displayValue = '-' }
+    const isSetValuePrompt = !stored?.displayValue && !stored?.value && cf.requiresExplicitSelection
+    let editType: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | 'period' | undefined
+    let options: { value: string; label: string }[] | undefined
+    switch (cf.fieldFormat) {
+      case 'list': case 'ownedField': case 'version':
+        editType = isMulti ? 'multi-select' : 'select'
+        options = getFilteredOptions(cf, valuesMap)
+        break
+      case 'user':
+        editType = 'user-select'
+        options = allProjectMembers.value.map(m => ({ value: m.userId, label: m.displayName }))
+        break
+      case 'date': editType = 'date'; break
+      case 'datetime': editType = 'datetime'; break
+      case 'int': case 'float': editType = 'number'; break
+      case 'bool': editType = 'select'; options = [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]; break
+      case 'period': editType = 'period'; break
+      default: editType = 'text'; break
+    }
+    let fieldColor: string | undefined
+    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && stored) {
+      if (isMulti && stored.colors?.length) { fieldColor = stored.colors.find(c => c != null) || undefined }
+      else if (stored.color) { fieldColor = stored.color }
+    }
+    return {
+      key: `cf_${cf.id}`, label: cf.name, value: displayValue, dot: fieldColor,
+      editType: editType as any, rawValue, rawValues: isMulti ? rawValues : undefined,
+      readonly: !canEdit || cf.editable === false, options,
+      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && canManageCustomFieldsComputed.value,
+      customFieldId: cf.id, isSetValuePrompt,
+      isEmptyCustomField: !isSetValuePrompt && !rawValue && !(isMulti && rawValues.length > 0)
+    }
+  })
+}
 
 const sidebarFields = computed<SidebarField[]>(() => {
   const i = issue.value
   if (!i) return []
-
-  // 权限判断（使用资源级覆盖后的综合权限）
   const canEdit = canEditIssueEffective.value
   const canEditCF = canEdit || hasProjectPermission('issue:edit_custom_fields')
   const canTransition = canChangeStatusEffective.value
   const canAssign = canAssignIssue.value
   const canSprint = canEditSprint.value
-
-  // 状态选项
   const statusOptions = [
     { value: currentStatus.value.id, label: `${currentStatus.value.name}（当前）`, dot: currentStatus.value.color },
-    ...availableTransitions.value.map(s => ({
-      value: s.id,
-      label: s.blocked ? `⚠ ${s.transitionName || s.name}` : (s.transitionName || s.name),
-      dot: s.color,
-      badge: s.blocked ? '被阻塞' : undefined,
-      badgeColor: s.blocked ? '#d29922' : undefined
-    }))
+    ...availableTransitions.value.map(s => ({ value: s.id, label: s.blocked ? `⚠ ${s.transitionName || s.name}` : (s.transitionName || s.name), dot: s.color, badge: s.blocked ? '被阻塞' : undefined, badgeColor: s.blocked ? '#d29922' : undefined }))
   ]
-
-  // 人员选项（仅在有分配权限时提供）
   const userOptions = canAssign ? members.value.map(m => ({ value: m.userId, label: m.displayName })) : []
-
-  // Sprint 选项（仅在有编辑权限时提供，排除已归档 Sprint）
-  const sprintOptions = canSprint ? [
-    { value: '', label: '未排期' },
-    ...sprints.value.filter(s => s.projectId === i.projectId && s.status !== 'archived' && s.status !== 'Archived').map(s => ({ value: s.id, label: s.name }))
-  ] : []
-
-  // Sprint 显示值：优先使用 issue 自带的 sprintName，不依赖 sprints 列表
+  const sprintOptions = canSprint ? [{ value: '', label: '未排期' }, ...sprints.value.filter(s => s.projectId === i.projectId && s.status !== 'archived' && s.status !== 'Archived').map(s => ({ value: s.id, label: s.name }))] : []
   const sprintDisplayName = i.sprintName || (i.sprintId ? sprints.value.find(s => s.id === i.sprintId)?.name : null) || '未排期'
-
   return [
     { key: 'project', label: '项目', value: projectName.value, readonly: true, readonlyReason: '工单创建后不可变更项目' },
     { key: 'priority', label: '优先级', value: localizePriority(i.priority), dot: priorityDot(i.priority), editType: 'select' as const, rawValue: i.priority, readonly: !canEdit, options: dynamicPriorityOptions.value.map(o => ({ value: o.value, label: o.label })) },
@@ -1013,1000 +536,57 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { key: 'assignee', label: '负责人', value: i.assigneeName || '未分配', editType: 'user-select' as const, rawValue: i.assigneeId || '', readonly: !canAssign, options: userOptions },
     { key: 'reporter', label: '报告人', value: reporterName.value, readonly: true, readonlyReason: '报告人为工单创建者，不可修改' },
     { key: 'sprint', label: '迭代', value: sprintDisplayName, editType: 'select' as const, rawValue: i.sprintId || '', readonly: !canSprint, options: sprintOptions },
-    { 
-      key: 'dueDate', 
-      label: '截止日期', 
-      value: i.dueDate || '-', 
-      editType: 'date' as const, 
-      rawValue: i.dueDate || '', 
-      readonly: !canEdit,
-      class: getDueDateStatus(i.dueDate) !== 'normal' ? `due-${getDueDateStatus(i.dueDate)}` : undefined,
-      tooltip: getDueDateStatus(i.dueDate) !== 'normal' ? getDueDateTooltip(i.dueDate) : undefined
-    },
+    { key: 'dueDate', label: '截止日期', value: i.dueDate || '-', editType: 'date' as const, rawValue: i.dueDate || '', readonly: !canEdit, class: getDueDateStatus(i.dueDate) !== 'normal' ? `due-${getDueDateStatus(i.dueDate)}` : undefined, tooltip: getDueDateStatus(i.dueDate) !== 'normal' ? getDueDateTooltip(i.dueDate) : undefined },
     ...(projectTimeTrackingEnabled.value ? [
       { key: 'estimatedHours', label: '预估工时', value: i.estimatedHours ? `${i.estimatedHours}h` : '-', editType: 'number' as const, rawValue: i.estimatedHours ? String(i.estimatedHours) : '', readonly: !canEdit, progress: i.estimatedHours ? { spent: i.spentHours || 0, estimated: i.estimatedHours } : undefined },
-      { 
-        key: 'spentHours', 
-        label: '已花时间', 
-        value: i.spentHours ? `${i.spentHours}h` : '-', 
-        readonly: true,
-        readonlyReason: 'computed',
-        // 超出预估时显示红色警告
-        class: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) ? 'time-over-budget' : undefined,
-        tooltip: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) 
-          ? `已超出预估 ${((i.spentHours || 0) - i.estimatedHours).toFixed(1)}h` 
-          : undefined
-      },
+      { key: 'spentHours', label: '已花时间', value: i.spentHours ? `${i.spentHours}h` : '-', readonly: true, readonlyReason: 'computed', class: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) ? 'time-over-budget' : undefined, tooltip: (i.estimatedHours && i.estimatedHours > 0 && (i.spentHours || 0) > i.estimatedHours) ? `已超出预估 ${((i.spentHours || 0) - i.estimatedHours).toFixed(1)}h` : undefined },
     ] : []),
     ...(projectTimeTrackingEnabled.value && i.derivedEstimatedHours != null ? [{ key: 'derivedEstimatedHours', label: '总预估工时', value: `${i.derivedEstimatedHours}h`, readonly: true, readonlyReason: 'derived' }] : []),
-    ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [
-      { 
-        key: 'derivedSpentHours', 
-        label: '总花费时间', 
-        value: `${i.derivedSpentHours}h`, 
-        readonly: true,
-        readonlyReason: 'derived',
-        // 总花费时间超出总预估时也显示警告
-        class: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? 'time-over-budget' : undefined,
-        tooltip: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours)
-          ? `已超出预估 ${(i.derivedSpentHours - i.derivedEstimatedHours).toFixed(1)}h`
-          : undefined
-      }
-    ] : []),
-    // 自定义字段
+    ...(projectTimeTrackingEnabled.value && i.derivedSpentHours != null ? [{ key: 'derivedSpentHours', label: '总花费时间', value: `${i.derivedSpentHours}h`, readonly: true, readonlyReason: 'derived', class: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? 'time-over-budget' : undefined, tooltip: (i.derivedEstimatedHours && i.derivedEstimatedHours > 0 && i.derivedSpentHours > i.derivedEstimatedHours) ? `已超出预估 ${(i.derivedSpentHours - i.derivedEstimatedHours).toFixed(1)}h` : undefined }] : []),
     ...buildCustomFieldSidebarEntries(i, canEditCF),
     { key: '_sep', label: '', value: '', readonly: true },
-    // 可见性字段（需要编辑权限或项目管理员）
-    {
-      key: 'visibility',
-      label: '可见性',
-      value: i.visibility === 'restricted' ? '受限访问' : '所有成员',
-      editType: 'select' as const,
-      rawValue: i.visibility || 'public',
-      readonly: !(canEdit || hasProjectPermission('project:admin')),
-      options: [
-        { value: 'public', label: '所有成员' },
-        { value: 'restricted', label: '受限访问（仅指定用户）' },
-      ]
-    },
+    { key: 'visibility', label: '可见性', value: i.visibility === 'restricted' ? '受限访问' : '所有成员', editType: 'select' as const, rawValue: i.visibility || 'public', readonly: !(canEdit || hasProjectPermission('project:admin')), options: [{ value: 'public', label: '所有成员' }, { value: 'restricted', label: '受限访问（仅指定用户）' }] },
     { key: 'createdAt', label: '创建时间', value: formatDateTime(i.createdAt), readonly: true },
     { key: 'updatedAt', label: '更新时间', value: formatDateTime(i.updatedAt), readonly: true },
   ]
 })
 
-/**
- * 获取自定义字段（list 类型）经过 filterRules 过滤后的可选项。
- * 实现 YouTrack "Filter values based on" 功能：
- * - 如果字段配置了 filterFieldId 和 filterRules，根据源字段当前值过滤选项
- * - 如果未配置，则仅过滤归档选项
- */
-function getFilteredOptions(
-  cf: CustomFieldDefinitionVO,
-  valuesMap: Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>
-): { value: string; label: string; description?: string }[] {
-  // 基础过滤：排除归档选项
-  let activeOptions = (cf.options || []).filter(o => !o.isArchived)
-
-  // 值依赖过滤：如果配置了 filterFieldId 和 filterRules
-  if (cf.filterFieldId && cf.filterRules) {
-    try {
-      const rules: FilterRule[] = JSON.parse(cf.filterRules)
-      if (rules && rules.length > 0) {
-        // 获取源字段的当前值
-        const sourceStored = valuesMap.get(cf.filterFieldId)
-        const sourceValue = sourceStored?.value || ''
-
-        if (sourceValue) {
-          // 查找匹配当前源字段值的规则
-          const matchedRule = rules.find(r => r.whenValue === sourceValue)
-          if (matchedRule && matchedRule.showOnly && matchedRule.showOnly.length > 0) {
-            // 只显示规则中允许的选项
-            activeOptions = activeOptions.filter(o => matchedRule.showOnly.includes(o.id))
-          }
-          // 如果没有匹配的规则，显示所有非归档选项（无限制）
-        }
-        // 如果源字段无值，显示所有非归档选项
-      }
-    } catch {
-      // filterRules 解析失败时回退到显示所有非归档选项
-    }
-  }
-
-  return activeOptions.map(o => {
-    let label = o.value
-    // ownedField 类型：在标签中显示 owner 名称
-    if (cf.fieldFormat === 'ownedField' && o.ownerDisplayName) {
-      label = `${o.value} → ${o.ownerDisplayName}`
-    }
-    return { value: o.id, label, description: o.description || undefined }
-  })
-}
-
-/**
- * 将自定义字段定义 + 已存储的值转为 SidebarField 数组
- * 支持条件显示：根据条件源字段的当前值动态过滤
- */
-function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): SidebarField[] {
-  if (!customFieldDefs.value.length) return []
-
-  // 已存储的值 map: fieldId → { value, values, displayValue, displayValues, isMulti, color, colors }
-  const valuesMap = new Map<string, { value: string; values?: string[]; displayValue: string; displayValues?: string[]; isMulti?: boolean; color?: string | null; colors?: (string | null)[] }>()
-  if (i.customFieldDetails) {
-    for (const v of i.customFieldDetails) {
-      valuesMap.set(v.customFieldId, {
-        value: v.value || '',
-        values: v.values,
-        displayValue: v.displayValue || v.value || '',
-        displayValues: v.displayValues,
-        isMulti: v.isMulti,
-        color: v.color,
-        colors: v.colors
-      })
-    }
-  }
-
-  // 条件过滤：只显示条件满足的字段
-  const visibleDefs = customFieldDefs.value.filter(cf => {
-    if (!cf.conditionFieldId || !cf.conditionValues || cf.conditionValues.length === 0) {
-      return true // 无条件，始终显示
-    }
-    // 查找条件源字段的当前值
-    const condStored = valuesMap.get(cf.conditionFieldId)
-    const condValue = condStored?.value || ''
-    if (!condValue) return false // 条件源字段无值 → 隐藏
-    return cf.conditionValues.includes(condValue)
-  })
-
-  return visibleDefs.map(cf => {
-    const stored = valuesMap.get(cf.id)
-    const isMulti = cf.isMulti || stored?.isMulti
-    const rawValue = stored?.value || ''
-    const rawValues = stored?.values || []
-    
-    // 确定显示值：
-    // 1. 有多个值时显示逗号分隔
-    // 2. 有单值时显示 displayValue
-    // 3. 无值时：
-    //    - requiresExplicitSelection=true（无默认值但必填）→ 显示"设置值"提示
-    //    - 其他情况 → 显示"-"
-    let displayValue: string
-    if (isMulti && stored?.displayValues?.length) {
-      displayValue = stored.displayValues.join(', ')
-    } else if (stored?.displayValue) {
-      displayValue = stored.displayValue
-    } else if (cf.requiresExplicitSelection) {
-      // 无默认值但必填模式：显示醒目的"设置值"提示
-      displayValue = '设置值'
-    } else {
-      displayValue = '-'
-    }
-    
-    // 标记是否为"设置值"提示状态（用于前端样式区分）
-    const isSetValuePrompt = !stored?.displayValue && !stored?.value && cf.requiresExplicitSelection
-
-    // 根据字段类型确定 editType
-    let editType: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | 'period' | undefined
-    let options: { value: string; label: string }[] | undefined
-
-    switch (cf.fieldFormat) {
-      case 'list':
-      case 'ownedField':
-      case 'version':
-        editType = isMulti ? 'multi-select' : 'select'
-        // Only show active (non-archived) options in the selector;
-        // if current value references an archived option, it's still displayed via displayValue
-        options = getFilteredOptions(cf, valuesMap)
-        break
-      case 'user':
-        editType = 'user-select'
-        options = allProjectMembers.value.map(m => ({ value: m.userId, label: m.displayName }))
-        break
-      case 'date':
-        editType = 'date'
-        break
-      case 'datetime':
-        editType = 'datetime'
-        break
-      case 'int':
-      case 'float':
-        editType = 'number'
-        break
-      case 'bool':
-        editType = 'select'
-        options = [{ value: 'true', label: '是' }, { value: 'false', label: '否' }]
-        break
-      case 'period':
-        editType = 'period'
-        break
-      case 'text':
-        editType = 'text'
-        break
-      case 'string':
-      default:
-        editType = 'text'
-        break
-    }
-
-    // 确定颜色（仅 list/ownedField 类型且有颜色配置时）
-    let fieldColor: string | undefined
-    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && stored) {
-      if (isMulti && stored.colors?.length) {
-        // 多值：取第一个有颜色的
-        fieldColor = stored.colors.find(c => c != null) || undefined
-      } else if (stored.color) {
-        fieldColor = stored.color
-      }
-    }
-
-    return {
-      key: `cf_${cf.id}`,
-      label: cf.name,
-      value: displayValue,
-      dot: fieldColor,
-      editType: editType as any,
-      rawValue,
-      rawValues: isMulti ? rawValues : undefined,
-      readonly: !canEdit || cf.editable === false,
-      options,
-      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && canManageCustomFieldsComputed.value,
-      customFieldId: cf.id,
-      isSetValuePrompt,
-      // 空值自定义字段（无 requiresExplicitSelection、无值）：默认折叠
-      isEmptyCustomField: !isSetValuePrompt && !rawValue && !(isMulti && rawValues.length > 0)
-    }
-  })
-}
-
+// ============ Activity items ============
 const activityItems = computed<ActivityItem[]>(() => {
   const items: ActivityItem[] = []
-  const MERGE_WINDOW_MS = 60_000 // 1 minute
-
-  // Build comment items first
+  const MERGE_WINDOW_MS = 60_000
   const commentItems: ActivityItem[] = []
   for (const c of comments.value) {
     const isDeleted = !!c.deletedAt
     const content = c.content || ''
     const isHtml = content.trim().startsWith('<')
-    commentItems.push({
-      id: 'c_' + c.id,
-      type: 'comment',
-      user: c.userName || '用户',
-      userId: c.userId,
-      userAvatar: c.userAvatar || undefined,
-      commentId: c.id,
-      isEdited: c.isEdited || false,
-      isDeleted,
-      rawContent: content,
-      visibleToGroupNames: c.visibleToGroupNames || undefined,
-      html: isDeleted ? '' : (isHtml ? content : renderMarkdown(content)),
-      timeAgo: timeAgo(c.createdAt),
-      ts: new Date(c.createdAt).getTime(),
-      relatedChanges: []
-    })
+    commentItems.push({ id: 'c_' + c.id, type: 'comment', user: c.userName || '用户', userId: c.userId, userAvatar: c.userAvatar || undefined, commentId: c.id, isEdited: c.isEdited || false, isDeleted, rawContent: content, visibleToGroupNames: c.visibleToGroupNames || undefined, html: isDeleted ? '' : (isHtml ? content : renderMarkdown(content)), timeAgo: timeAgo(c.createdAt), ts: new Date(c.createdAt).getTime(), relatedChanges: [] })
   }
-
-  // Set of activity IDs that are merged into a comment (to exclude from standalone rendering)
   const mergedActivityIds = new Set<string>()
-
-  // For each field-change activity, check if it falls within 1 minute AFTER a comment by the same user.
-  // When multiple comments qualify, merge into the closest preceding comment (smallest time diff).
   for (const a of activities.value) {
-    if (a.action === 'commented') continue
-    // Only merge field_changed / status_changed type activities (ones that have fieldName)
-    if (!a.fieldName) continue
-
+    if (a.action === 'commented' || !a.fieldName) continue
     const activityTs = new Date(a.createdAt).getTime()
-    const activityUserId = a.userId
-
     let bestComment: ActivityItem | null = null
     let bestTimeDiff = Infinity
-
     for (const ci of commentItems) {
-      if (ci.userId !== activityUserId) continue
-      if (ci.isDeleted) continue
+      if (ci.userId !== a.userId || ci.isDeleted) continue
       const timeDiff = activityTs - ci.ts
-      if (timeDiff >= 0 && timeDiff <= MERGE_WINDOW_MS && timeDiff < bestTimeDiff) {
-        bestComment = ci
-        bestTimeDiff = timeDiff
-      }
+      if (timeDiff >= 0 && timeDiff <= MERGE_WINDOW_MS && timeDiff < bestTimeDiff) { bestComment = ci; bestTimeDiff = timeDiff }
     }
-
     if (bestComment) {
-      const change: RelatedChange = {
-        field: localizeFieldName(a.fieldName) || a.fieldName,
-        from: localizeFieldValue(a.fieldName, a.oldValue) || undefined,
-        to: localizeFieldValue(a.fieldName, a.newValue) || undefined
-      }
-      bestComment.relatedChanges!.push(change)
+      bestComment.relatedChanges!.push({ field: localizeFieldName(a.fieldName) || a.fieldName, from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined })
       mergedActivityIds.add(a.id)
     }
   }
-
-  // Add all comment items
   items.push(...commentItems)
-
-  // Add non-merged activity items
   for (const a of activities.value) {
-    if (a.action === 'commented') continue
-    if (mergedActivityIds.has(a.id)) continue
-    // 解析 detail 字段（JSON 字符串 → 对象），解析失败时置为 undefined
+    if (a.action === 'commented' || mergedActivityIds.has(a.id)) continue
     let detail: Record<string, any> | undefined
-    if (a.detail) {
-      try {
-        detail = JSON.parse(a.detail)
-      } catch {
-        detail = undefined
-      }
-    }
+    if (a.detail) { try { detail = JSON.parse(a.detail) } catch { detail = undefined } }
     items.push({ id: 'a_' + a.id, type: 'change', user: a.userName || '用户', userId: a.userId, userAvatar: a.userAvatar || undefined, action: a.action, field: localizeFieldName(a.fieldName), from: localizeFieldValue(a.fieldName, a.oldValue) || undefined, to: localizeFieldValue(a.fieldName, a.newValue) || undefined, detail, timeAgo: timeAgo(a.createdAt), ts: new Date(a.createdAt).getTime() })
   }
   return items
 })
-
-// ============ Actions ============
-function copyIssue() {
-  navigator.clipboard.writeText(`${issue.value?.issueKey} ${issue.value?.title}`)
-  Message.success('已复制')
-}
-
-function onCopyId() {
-  if (!issue.value) return
-  navigator.clipboard.writeText(issue.value.issueKey)
-  Message.success(`已复制 ${issue.value.issueKey}`)
-}
-
-function onCloneIssue() {
-  if (!issue.value) return
-  showCreatePanel.value = true
-  // Defer pre-filling the clone data — IssueCreatePanel watches `visible`
-  // We use a custom event approach via a ref to pass clone data
-  cloneData.value = {
-    projectId: issue.value.projectId,
-    title: `[Clone] ${issue.value.title}`,
-    description: issue.value.description || '',
-    issueType: issue.value.issueType,
-    priority: issue.value.priority
-  }
-}
-
-function onCreateSubtask() {
-  if (!issue.value) return
-  createSubtaskParentId.value = issue.value.id
-  cloneData.value = undefined
-  showCreatePanel.value = true
-}
-
-// ========== 附件上传 ==========
-
-const showPrivacyModal = ref(false)
-
-function triggerUpload(isPrivate: boolean) {
-  if (isPrivate) {
-    // 私有上传：先弹出用户组选择弹窗
-    showPrivacyModal.value = true
-  } else {
-    // 普通上传：直接弹出文件选择器
-    openFilePicker(undefined)
-  }
-}
-
-/** 用户确认用户组选择后触发 */
-function onPrivacyGroupConfirm(groupIds: string[]) {
-  openFilePicker(groupIds)
-}
-
-/** 打开文件选择器 */
-function openFilePicker(visibleToGroupIds: string[] | undefined) {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.multiple = true
-  input.onchange = async () => {
-    if (!input.files || input.files.length === 0) return
-    for (const file of Array.from(input.files)) {
-      await doUploadFile(file, visibleToGroupIds)
-    }
-  }
-  input.click()
-}
-
-/** 处理拖拽上传的文件 */
-async function onDropFiles(files: File[]) {
-  if (!issue.value || files.length === 0) return
-  for (const file of files) {
-    await doUploadFile(file, undefined)
-  }
-}
-
-async function doUploadFile(file: File, visibleToGroupIds: string[] | undefined) {
-  if (!issue.value) return
-  try {
-    await issueApi.uploadAttachment(issue.value.id, file, undefined, visibleToGroupIds)
-    Message.success(`${file.name} 上传成功`)
-    loadAttachments()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || `${file.name} 上传失败`)
-  }
-}
-
-async function onDeleteAttachment(attachmentId: string) {
-  if (!issue.value) return
-  try {
-    await issueApi.deleteAttachment(issue.value.id, attachmentId)
-    Message.success('附件已删除')
-    loadAttachments()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除附件失败')
-  }
-}
-
-async function onDeleteAllAttachments() {
-  if (!issue.value || attachments.value.length === 0) return
-  try {
-    for (const att of attachments.value) {
-      await issueApi.deleteAttachment(issue.value.id, att.id)
-    }
-    Message.success('全部附件已删除')
-    loadAttachments()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除附件失败')
-  }
-}
-
-function onDeleteIssue() {
-  if (!issue.value) return
-  Modal.warning({
-    title: '删除工单',
-    content: `确定要删除工单 ${issue.value.issueKey} 吗？删除后可在回收站恢复。`,
-    okText: '删除',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
-      try {
-        await issueApi.delete(issue.value!.id)
-        Message.success('工单已删除')
-        router.push('/issues')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
-      }
-    }
-  })
-}
-
-function onMoveIssue() {
-  showMoveModal.value = true
-}
-
-async function onMoveConfirm(targetProjectId: string) {
-  if (!issue.value) return
-  try {
-    const res = await issueApi.move(issue.value.id, targetProjectId)
-    if (res.code === 0 && res.data) {
-      const newKey = res.data.issueKey
-      Message.success(`已移动到项目，新编号：${newKey}`)
-      showMoveModal.value = false
-      // 跳转到新 issue_key 详情页
-      router.replace(`/issues/${newKey}`)
-    } else {
-      Message.error(res.message || '移动失败')
-      moveModalRef.value?.resetSubmitting()
-    }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '移动失败')
-    moveModalRef.value?.resetSubmitting()
-  }
-}
-
-function onCreatePanelClose(val: boolean) {
-  showCreatePanel.value = val
-  if (!val) {
-    cloneData.value = undefined
-    createSubtaskParentId.value = null
-  }
-}
-
-function onIssueCreated() {
-  const wasSubtask = !!createSubtaskParentId.value
-  showCreatePanel.value = false
-  cloneData.value = undefined
-  createSubtaskParentId.value = null
-
-  // 如果创建的是子工单，重新加载父工单详情以刷新子任务列表
-  if (wasSubtask) {
-    loadAll()
-  }
-}
-
-/**
- * 用户点击创建面板的「全屏」按钮，跳转到全屏创建页面
- */
-function onCreatePanelExpand(formData: any) {
-  showCreatePanel.value = false
-  cloneData.value = undefined
-  if (formData && (formData.title?.trim() || formData.description?.trim())) {
-    const draftId = saveIssueDraft(formData)
-    if (draftId) {
-      router.push({ name: 'IssueCreate', query: { draftId } })
-      return
-    }
-  }
-  router.push({ name: 'IssueCreate' })
-}
-
-async function onUpdateTitle(val: string) {
-  try { await issueApi.update(issue.value!.id, { title: val, version: issue.value!.version }); await loadAll() } catch (e: any) { handleUpdateError(e) }
-}
-
-async function onUpdateDesc(val: string) {
-  try { await issueApi.update(issue.value!.id, { description: val, version: issue.value!.version }); await loadAll() } catch (e: any) { handleUpdateError(e) }
-}
-
-async function onRemoveTag(tagId: string) {
-  try { await issueApi.removeTag(issue.value!.id, tagId); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
-}
-
-async function onAddTag(tag: { id: string }) {
-  try { await issueApi.addTag(issue.value!.id, tag.id); await loadAll() } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
-}
-
-async function onAddTags(tags: { id: string }[]) {
-  try {
-    const tagIds = tags.map(t => t.id)
-    await issueApi.addTags(issue.value!.id, tagIds)
-    await loadAll()
-  } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
-}
-
-async function onCreateTag(name: string) {
-  try {
-    const res = await tagApi.createProjectTag(issue.value!.projectId, { name })
-    if (res.data) await issueApi.addTag(issue.value!.id, res.data.id)
-    await loadAll()
-  } catch (e: any) { Message.error(e.response?.data?.message || '操作失败') }
-}
-
-async function onAddComment(content: string, visibleToGroupIds?: string[]) {
-  try {
-    await issueApi.addComment(issue.value!.id, content, visibleToGroupIds)
-    await loadAll()
-    Message.success('评论已发布')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '评论失败')
-  }
-}
-
-async function onEditComment(commentId: string, content: string) {
-  try {
-    await issueApi.updateComment(issue.value!.id, commentId, content)
-    await loadAll()
-    Message.success('评论已更新')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '编辑评论失败')
-  }
-}
-
-async function onDeleteComment(commentId: string) {
-  try {
-    await issueApi.deleteComment(issue.value!.id, commentId)
-    await loadAll()
-    Message.success('评论已删除')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除评论失败')
-  }
-}
-
-async function onRestoreComment(commentId: string) {
-  try {
-    await issueApi.restoreComment(issue.value!.id, commentId)
-    await loadAll()
-    Message.success('评论已还原')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '还原评论失败')
-  }
-}
-
-async function onPermanentlyDeleteComment(commentId: string) {
-  try {
-    await issueApi.permanentlyDeleteComment(issue.value!.id, commentId)
-    await loadAll()
-    Message.success('评论已永久删除')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '永久删除评论失败')
-  }
-}
-
-/** 快捷动作执行完成后刷新详情 */
-async function onQuickActionExecuted() {
-  await loadAll()
-}
-
-async function onTransition(target: StatusInfo) {
-  // If the transition requires a comment, show the modal first
-  if (target.requireComment) {
-    transitionTarget.value = target
-    transitionRequireComment.value = true
-    showTransitionModal.value = true
-    return
-  }
-
-  // Otherwise execute directly
-  await executeTransition(target, undefined)
-}
-
-/** Called when user confirms the transition comment modal */
-async function onTransitionConfirm(comment: string, assigneeId: string | undefined, assigneeExplicit: boolean) {
-  showTransitionModal.value = false
-  if (transitionTarget.value) {
-    await executeTransition(transitionTarget.value, comment || undefined, undefined, assigneeId, assigneeExplicit)
-  }
-}
-
-/** Execute the actual status transition API call (recursive pattern for handling multiple warnings) */
-async function executeTransition(
-  target: StatusInfo,
-  comment: string | undefined,
-  forceFlags?: { force?: boolean; forceWip?: boolean; forceDescEmpty?: boolean },
-  assigneeId?: string,
-  assigneeExplicit?: boolean
-) {
-  const { refresh: refreshNavBadge } = useNavBadge()
-  try {
-    const res = await issueApi.transitStatus(
-      issue.value!.id,
-      target.id,
-      comment,
-      issue.value!.version,
-      forceFlags?.force,
-      forceFlags?.forceWip,
-      forceFlags?.forceDescEmpty,
-      assigneeId,
-      assigneeExplicit
-    )
-    if (res.code === 0) {
-      // 检查是否为字段校验失败（状态转换被阻止）
-      const actionResult = res.data?.actionResult
-      if (actionResult?.outcome === 'FIELD_VALIDATION_FAILED') {
-        // 显示警告消息，提供"前往填写"按钮引导用户定位字段
-        const fieldKey = actionResult.requiredFieldId ? `cf_${actionResult.requiredFieldId}` : null
-        Modal.warning({
-          title: '字段校验',
-          content: actionResult.warningMessage || `请先填写「${actionResult.requiredFieldName}」字段`,
-          okText: '前往填写',
-          cancelText: '知道了',
-          hideCancel: false,
-          onOk: () => {
-            // 引导到目标字段：展开侧边栏 → 展开折叠字段 → 滚动到目标 → 高亮
-            if (fieldKey) {
-              if (sidebarCollapsed.value) {
-                sidebarCollapsed.value = false
-                localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false')
-              }
-              nextTick(() => {
-                sidebarRef.value?.highlightField(fieldKey)
-              })
-            }
-          }
-        })
-        return
-      }
-
-      await loadAll()
-      Message.success(`状态已变更为 ${target.name}`)
-      showActionFeedback(res.data)
-      refreshNavBadge()
-    } else if (res.code === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
-      // WIP 超限警告 — 弹确认框
-      Modal.warning({
-        title: 'WIP 限制',
-        content: res.message,
-        okText: '继续移入',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true }, assigneeId, assigneeExplicit)
-      })
-    } else if (res.code === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
-      // 关闭前置检查警告（子任务未完成 / 被阻塞 / 组合）— 统一弹窗
-      Modal.warning({
-        title: '确认关闭',
-        content: res.message,
-        okText: '强制关闭',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true }, assigneeId, assigneeExplicit)
-      })
-    } else if (res.code === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
-      // 描述为空警告 — 转换到 Testing 状态时如果描述为空
-      Modal.warning({
-        title: '工单描述为空',
-        content: res.message,
-        okText: '继续变更',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true }, assigneeId, assigneeExplicit)
-      })
-    } else {
-      Message.error(res.message || '变更失败')
-    }
-  } catch (e: any) {
-    // 处理特殊错误码（后端以 4xx 状态码返回但需要前端交互处理的场景）
-    const errorCode = e.response?.data?.code
-    const errorMessage = e.response?.data?.message
-
-    if (errorCode === ERROR_CODES.WIP_LIMIT_EXCEEDED) {
-      Modal.warning({
-        title: 'WIP 限制',
-        content: errorMessage,
-        okText: '继续移入',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceWip: true }, assigneeId, assigneeExplicit)
-      })
-    } else if (errorCode === ERROR_CODES.CLOSE_CONFIRMATION_REQUIRED) {
-      Modal.warning({
-        title: '确认关闭',
-        content: errorMessage,
-        okText: '强制关闭',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, force: true }, assigneeId, assigneeExplicit)
-      })
-    } else if (errorCode === ERROR_CODES.DESCRIPTION_EMPTY_WARNING) {
-      Modal.warning({
-        title: '工单描述为空',
-        content: errorMessage,
-        okText: '继续变更',
-        cancelText: '取消',
-        hideCancel: false,
-        onOk: () => executeTransition(target, comment, { ...forceFlags, forceDescEmpty: true }, assigneeId, assigneeExplicit)
-      })
-    } else {
-      handleUpdateError(e, '变更失败')
-    }
-  }
-}
-
-function openTimeDialog() {
-  timeForm.value = {
-    workDate: new Date().toISOString().slice(0, 10),
-    durationText: '',
-    description: ''
-  }
-  timeFormAttrValues.value = {}
-  timeFormAuthorId.value = ''
-  // Load attributes for this issue's project
-  if (issue.value?.projectId) {
-    loadIssueProjectAttributes(issue.value.projectId)
-    loadTimeFormPermissions(issue.value.projectId)
-  }
-  showTimeDialog.value = true
-}
-
-async function handleStartTimer() {
-  if (!issue.value) return
-  if (timerStore.isRunning) {
-    Message.warning('已有活跃计时器，请先停止当前计时器')
-    return
-  }
-  const result = await timerStore.startTimer(issue.value.id)
-  if (result.success) {
-    Message.success('计时器已启动')
-  } else {
-    Message.error(result.message || '启动计时器失败')
-  }
-}
-
-async function handleStopTimerFromDetail() {
-  const result = await timerStore.stopTimer()
-  if (result.success) {
-    Message.success('计时器已停止')
-    // Reload issue to refresh spent time
-    await loadAll()
-  } else {
-    Message.error(result.message || '停止计时器失败')
-  }
-}
-
-async function loadIssueProjectAttributes(projectId: string) {
-  try {
-    const res = await workItemAttributeApi.listByProject(projectId)
-    if (res.code === 0 && res.data) {
-      issueProjectAttributes.value = res.data
-    }
-  } catch { /* silent */ }
-}
-
-/**
- * 加载工时弹窗所需的权限 + 项目成员列表
- * 若当前用户具备 time:log_for_others 权限，则展示 Author 字段并加载成员列表
- */
-async function loadTimeFormPermissions(projectId: string) {
-  try {
-    const res = await timeEntryApi.canLogForOthers()
-    timeFormCanLogForOthers.value = res.code === 0 ? (res.data ?? false) : false
-  } catch {
-    timeFormCanLogForOthers.value = false
-  }
-  if (timeFormCanLogForOthers.value) {
-    try {
-      const res = await projectApi.listAssignableMembers(projectId)
-      if (res.code === 0 && res.data) {
-        timeFormProjectMembers.value = res.data.map((m: ProjectMemberVO) => ({
-          userId: m.userId,
-          username: m.username || m.displayName,
-          displayName: m.displayName || m.username || ''
-        }))
-      }
-    } catch { /* silent */ }
-  }
-}
-
-async function submitTimeEntry() {
-  if (!timeForm.value.durationText) {
-    Message.warning('请输入时长')
-    return
-  }
-  const duration = parseDurationText(timeForm.value.durationText)
-  if (!duration || duration <= 0) {
-    Message.warning('时长格式无效，请使用如 2h30m, 1h, 45m')
-    return
-  }
-
-  // Build attributeValues from timeFormAttrValues
-  const attrVals = Object.keys(timeFormAttrValues.value).length > 0
-    ? Object.fromEntries(Object.entries(timeFormAttrValues.value).filter(([, v]) => v))
-    : undefined
-
-  // 确定 forUserId：仅在 Author 字段可见且选择了他人时传入
-  const forUserId = (timeFormCanLogForOthers.value && timeFormAuthorId.value && timeFormAuthorId.value !== currentUserId.value)
-    ? timeFormAuthorId.value
-    : undefined
-
-  timeSaving.value = true
-  try {
-    await timeEntryApi.create({
-      issueId: issue.value!.id,
-      workDate: timeForm.value.workDate,
-      duration,
-      description: timeForm.value.description || undefined,
-      forUserId,
-      attributeValues: attrVals
-    })
-    Message.success('工时已记录')
-    showTimeDialog.value = false
-    await loadAll()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '记录失败')
-  } finally {
-    timeSaving.value = false
-  }
-}
-
-function parseDurationText(text: string): number | null {
-  const cleaned = text.trim().toLowerCase()
-  let total = 0
-  const weekMatch = cleaned.match(/(\d+)\s*w/)
-  const dayMatch = cleaned.match(/(\d+)\s*d/)
-  const hourMatch = cleaned.match(/(\d+)\s*h/)
-  const minMatch = cleaned.match(/(\d+)\s*m/)
-  if (weekMatch) total += parseInt(weekMatch[1]) * 5 * 8 * 60
-  if (dayMatch) total += parseInt(dayMatch[1]) * 8 * 60
-  if (hourMatch) total += parseInt(hourMatch[1]) * 60
-  if (minMatch) total += parseInt(minMatch[1])
-  if (!weekMatch && !dayMatch && !hourMatch && !minMatch) {
-    const num = parseFloat(cleaned)
-    if (!isNaN(num)) total = Math.round(num * 60)
-  }
-  return total > 0 ? total : null
-}
-
-async function onAddOption(fieldId: string, value: string) {
-  if (!issue.value) return
-  try {
-    await customFieldApi.addOption(issue.value.projectId, fieldId, { value })
-    // Reload custom field definitions to get the new option in the list
-    const pid = issue.value.projectId
-    const cfRes = await customFieldApi.listByProject(pid, issue.value.issueType)
-    customFieldDefs.value = cfRes.data || []
-    Message.success(`已添加选项"${value}"`)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加选项失败')
-  }
-}
-
-async function onEditField(key: string, newValue: string | string[]) {
-  // 自定义字段编辑（key 格式: cf_{fieldId}）
-  if (key.startsWith('cf_')) {
-    const fieldId = key.substring(3)
-    try {
-      const res = await issueApi.updateCustomFieldValue(issue.value!.id, fieldId, newValue)
-      await loadAll()
-      // 显示级联清除警告（源字段值变更导致依赖字段值被自动清除）
-      if (res.warnings?.length) {
-        res.warnings.forEach((w: string) => Message.info({ content: w, duration: 5000 }))
-      }
-      Message.success('已更新')
-    } catch (e: any) { handleUpdateError(e) }
-    return
-  }
-
-  // 可见性字段：切换到 restricted 时需要额外配置（当前版本简单切换，受限用户需后续通过弹窗指定）
-  if (key === 'visibility') {
-    const visValue = Array.isArray(newValue) ? newValue[0] : newValue
-    await onUpdateVisibility(visValue as string, [])
-    return
-  }
-
-  const fieldMap: Record<string, string> = { priority: 'priority', issueType: 'issueType', assignee: 'assigneeId', sprint: 'sprintId', dueDate: 'dueDate', estimatedHours: 'estimatedHours' }
-  const prop = fieldMap[key]
-  if (!prop) return
-
-  const val = prop === 'estimatedHours' ? (newValue ? Number(newValue) : null) : (newValue || null)
-
-  try {
-    if (key === 'assignee' && newValue) { await issueApi.assign(issue.value!.id, newValue) }
-    else {
-      const res = await issueApi.update(issue.value!.id, { [prop]: val, version: issue.value!.version })
-      if (res.data?.statusAutoReset) {
-        Message.warning({ content: '类型变更导致状态与工作流不兼容，已自动重置为默认状态', duration: 5000 })
-      }
-      if (res.warnings?.length) {
-        res.warnings.forEach((w: string) => Message.warning({ content: w, duration: 5000 }))
-      }
-    }
-    await loadAll()
-    Message.success('已更新')
-  } catch (e: any) { handleUpdateError(e) }
-}
-
-/**
- * 修改工单可见性
- * @param visibility 新的可见性值：'public' 或 'restricted'
- * @param userIds 受限可见用户 ID 列表（visibility=restricted 时有效）
- */
-async function onUpdateVisibility(visibility: string, userIds: string[] = []) {
-  if (!issue.value) return
-  try {
-    await issueApi.update(issue.value.id, {
-      visibility,
-      visibilityUserIds: userIds.map(Number),
-      version: issue.value.version
-    })
-    await loadAll()
-    Message.success('可见性已更新')
-  } catch (e: any) {
-    handleUpdateError(e, '更新可见性失败')
-  }
-}
-
-/**
- * 统一处理更新错误：409 冲突时显示特殊提示 + 自动刷新
- */
-function handleUpdateError(e: any, fallbackMsg = '更新失败') {
-  if (e.response?.status === 409) {
-    Message.warning({ content: '该工单已被其他人修改，正在刷新...', duration: 3000 })
-    loadAll()
-  } else {
-    Message.error(e.response?.data?.message || fallbackMsg)
-  }
-}
-
-/**
- * 清空字段处理：发送 clear 标志位给后端
- */
-async function onClearField(key: string) {
-  if (!issue.value) return
-  const clearKeyMap: Record<string, string> = {
-    dueDate: 'clearDueDate',
-    estimatedHours: 'clearEstimatedHours',
-  }
-  const clearProp = clearKeyMap[key]
-  if (!clearProp) return
-
-  try {
-    await issueApi.update(issue.value.id, { [clearProp]: true, version: issue.value.version })
-    await loadAll()
-    Message.success('已清除')
-  } catch (e: any) { handleUpdateError(e) }
-}
 
 // ============ Utils ============
 function timeAgo(dt: string | number) {
@@ -2025,46 +605,12 @@ function formatDateTime(dt?: string) {
   return new Date(dt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function formatSize(bytes: number) {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1048576).toFixed(1) + ' MB'
-}
-
-function priorityDot(p: string) {
-  return getPriorityColor(p, issue.value?.projectId)
-}
-
-/** 从动态选项获取工单类型颜色 */
-function getDetailIssueTypeColor(issueType: string | null | undefined): string {
-  if (!issueType) return '#6366f1'
-  const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
-  return opt?.color || '#6366f1'
-}
-
-/** 从动态选项获取工单类型标签 */
-function getDetailIssueTypeLabel(issueType: string | null | undefined): string {
-  if (!issueType) return '未知'
-  const opt = dynamicIssueTypeOptions.value.find(o => o.value === issueType || o.value.toLowerCase() === issueType.toLowerCase())
-  return opt?.label || issueType
-}
-
-// 路由守卫：离开时检查克隆创建面板是否有未保存数据
+// Route guard
 onBeforeRouteLeave((_to, _from, next) => {
   const panel = createPanelRef.value
-  if (showCreatePanel.value && panel && panel.isDirty) {
-    Modal.confirm({
-      title: '有未保存的更改',
-      content: '创建工单表单中有未保存的内容，确定要离开吗？',
-      okText: '放弃更改',
-      cancelText: '继续编辑',
-      simple: false,
-      onOk: () => { next() },
-      onCancel: () => { next(false) }
-    })
-  } else {
-    next()
-  }
+  if (showCreatePanel.value && panel && (panel as any).isDirty) {
+    Modal.confirm({ title: '有未保存的更改', content: '创建工单表单中有未保存的内容，确定要离开吗？', okText: '放弃更改', cancelText: '继续编辑', simple: false, onOk: () => { next() }, onCancel: () => { next(false) } })
+  } else { next() }
 })
 </script>
 
