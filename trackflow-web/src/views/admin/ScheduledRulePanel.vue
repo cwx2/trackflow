@@ -233,6 +233,49 @@
                 />
               </template>
 
+              <!-- copy_issue -->
+              <template v-else-if="act.type === 'copy_issue'">
+                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
+                  <a-select v-model="act.targetProjectId" style="width: 100%" placeholder="目标项目（same=同项目）" allow-search>
+                    <a-option value="same">同项目</a-option>
+                    <a-option
+                      v-for="p in allProjects"
+                      :key="p.id"
+                      :value="p.id"
+                    >{{ p.name }} ({{ p.key }})</a-option>
+                  </a-select>
+                  <a-input v-model="act.summaryPrefix" placeholder="标题前缀（如 [COPY] ，支持变量）" />
+                  <a-space>
+                    <a-checkbox v-model="act.copyAttachments">复制附件</a-checkbox>
+                    <a-checkbox v-model="act.copySprint">复制 Sprint</a-checkbox>
+                  </a-space>
+                </div>
+              </template>
+
+              <!-- move_to_project -->
+              <template v-else-if="act.type === 'move_to_project'">
+                <a-select v-model="act.targetProjectId" style="flex: 1" placeholder="目标项目" allow-search>
+                  <a-option
+                    v-for="p in allProjects"
+                    :key="p.id"
+                    :value="p.id"
+                  >{{ p.name }} ({{ p.key }})</a-option>
+                </a-select>
+              </template>
+
+              <!-- add_work_item -->
+              <template v-else-if="act.type === 'add_work_item'">
+                <div style="display: flex; gap: 8px; flex: 1">
+                  <a-input-number v-model="act.duration" :min="1" :max="1440" style="width: 120px" placeholder="分钟" />
+                  <a-input v-model="act.description" style="flex: 1" placeholder="工时描述（支持变量）" />
+                </div>
+              </template>
+
+              <!-- add_vote / remove_vote -->
+              <template v-else-if="act.type === 'add_vote' || act.type === 'remove_vote'">
+                <span class="action-hint">以规则创建者身份{{ act.type === 'add_vote' ? '投票' : '取消投票' }}</span>
+              </template>
+
               <a-button type="text" status="danger" size="mini" @click="removeAction(idx)">
                 <icon-delete />
               </a-button>
@@ -284,7 +327,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import cronstrue from 'cronstrue/i18n'
 import { CronExpressionParser } from 'cron-parser'
-import { workflowRuleApi } from '@/api'
+import { workflowRuleApi, projectApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
 import VariableInput from './components/VariableInput.vue'
 
@@ -330,6 +373,14 @@ interface ActionItem {
   value?: string
   tagId?: string
   content?: string
+  // copy_issue / move_to_project
+  targetProjectId?: string
+  summaryPrefix?: string
+  copyAttachments?: boolean
+  copySprint?: boolean
+  // add_work_item
+  duration?: number
+  description?: string
 }
 
 const formData = reactive({
@@ -426,6 +477,25 @@ async function loadRules() {
   }
 }
 
+// ==================== Project Data (for copy_issue / move_to_project) ====================
+const allProjects = ref<Array<{ id: string; name: string; key: string }>>([])
+
+async function loadProjects() {
+  if (allProjects.value.length > 0) return
+  try {
+    const res = await projectApi.list({ page: 1, pageSize: 200 })
+    if (res.code === 0) {
+      allProjects.value = (res.data?.list || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        key: p.key
+      }))
+    }
+  } catch {
+    // silent
+  }
+}
+
 // ==================== Form ====================
 function showCreateModal() {
   editingRule.value = null
@@ -442,6 +512,7 @@ function showCreateModal() {
   modalVisible.value = true
   // Parse default expression
   parseCronExpression()
+  loadProjects()
 }
 
 function handleEdit(rule: WorkflowRuleVO) {
@@ -467,6 +538,7 @@ function handleEdit(rule: WorkflowRuleVO) {
   })
   modalVisible.value = true
   parseCronExpression()
+  loadProjects()
 }
 
 function addCondition() {
@@ -789,6 +861,12 @@ watch(() => props.projectId, loadRules)
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.action-hint {
+  color: var(--color-text-3);
+  font-size: 12px;
+  font-style: italic;
 }
 
 /* Logs */
