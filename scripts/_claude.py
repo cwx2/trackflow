@@ -55,28 +55,71 @@ if not CLAUDE_CLI:
 log.debug(f"Claude CLI: {CLAUDE_CLI}")
 MCP_CONFIG_PATH = ".claude/mcp.json"
 
-# 单次调用最大预算（美元）。修复阶段可用更高预算。
-DEFAULT_MAX_BUDGET_USD = 0.75
-FIX_MAX_BUDGET_USD = 1.0
-
-# 构建 Claude Code 所需的环境变量（抑制交互式行为）
-_BASE_ENV = {
-    "GIT_TERMINAL_PROMPT": "0",
-    "GIT_EDITOR": "true",
-    "EDITOR": "true",
-    "VISUAL": "true",
-    "CI": "true",
-    "NPM_CONFIG_YES": "true",
-    "DEBIAN_FRONTEND": "noninteractive",
-    "NO_COLOR": "1",
-    "FORCE_COLOR": "0",
+# Skill 文件映射：prompt 中的 skill 名 → .kiro/skills/ 下的 SKILL.md 路径
+_SKILL_FILES: dict[str, str] = {
+    "fix-requirement-auto": ".kiro/skills/fix-requirement-auto/SKILL.md",
+    "fix-requirement": ".kiro/skills/fix-requirement/SKILL.md",
+    "e2e-test": ".kiro/skills/e2e-test/SKILL.md",
+    "code-review": ".kiro/skills/code-review/SKILL.md",
+    "review-requirement": ".kiro/skills/review-requirement/SKILL.md",
+    "write-requirement": ".kiro/skills/write-requirement/SKILL.md",
+    "tech-requirement": ".kiro/skills/tech-requirement/SKILL.md",
+    "frontend-enterprise": ".kiro/skills/frontend-enterprise/SKILL.md",
+    "java-enterprise": ".kiro/skills/java-enterprise/SKILL.md",
 }
+_skill_cache: dict[str, str] = {}
 
-# 运行时约束提示（追加到每条 prompt 前面）
-# Claude Code 自动遵守 .claude/settings.json 权限配置，这里只保留关键行为约束
-_RUNTIME_GUARD = ""  # 项目规范通过 CLAUDE.md 加载，不在此处重复
 
-# ============ 瞬态错误检测 ============
+def _load_skill_content(skill_name: str) -> str:
+    """读取 SKILL.md 文件内容，缓存在内存中。"""
+    if skill_name in _skill_cache:
+        return _skill_cache[skill_name]
+
+    skill_path = _SKILL_FILES.get(skill_name)
+    if not skill_path:
+        return ""
+
+    full_path = WORKSPACE / skill_path
+    try:
+        content = full_path.read_text(encoding="utf-8")
+        _skill_cache[skill_name] = content
+        return content
+    except Exception as e:
+        log.warning(f"[skill] 读取 {skill_path} 失败: {e}")
+        return ""
+
+
+def _inject_skills(prompt: str) -> str:
+    """
+    检测 prompt 中的 [使用 skill: xxx] 标记，自动注入对应 SKILL.md 内容。
+
+    Kiro CLI 内置了此机制，Claude Code 需要手动注入。
+    """
+    import re as _skill_re
+    matches = _skill_re.findall(r'\[使用 skill:\s*(\S+)\]', prompt)
+    if not matches:
+        return prompt
+
+    injected_parts: list[str] = []
+    seen: set[str] = set()
+
+    for skill_name in matches:
+        skill_name = skill_name.strip()
+        if skill_name in seen:
+            continue
+        seen.add(skill_name)
+
+        content = _load_skill_content(skill_name)
+        if content:
+            injected_parts.append(f"---\n## 以下是 {skill_name} 的 SKILL 指令（必须严格遵守）\n---\n\n{content}")
+            log.info(f"[skill] 注入 {skill_name} ({len(content)} 字符)")
+
+    if injected_parts:
+        injected = "\n\n".join(injected_parts)
+        # SKILL 放在前面，prompt 在后面（prompt 中的指令优先级更高）
+        return f"{injected}\n\n---\n\n## 以下是具体的任务指令\n---\n\n{prompt}"
+
+    return prompt
 
 _TRANSIENT_OUTPUT_MARKERS = (
     "dispatch failure",
@@ -451,6 +494,9 @@ def run_claude(prompt: str, label: str,
     budget = FIX_MAX_BUDGET_USD if is_fix else DEFAULT_MAX_BUDGET_USD
     cmd = _build_base_cmd(budget)
 
+    # 自动注入 SKILL 内容（替代 Kiro CLI 的 skill 加载机制）
+    prompt = _inject_skills(prompt)
+
     effective_model = model or KIRO_MODEL
     if effective_model and effective_model != "auto":
         # Claude Code 接受 opus/sonnet/haiku/fable 作为 --model 参数
@@ -480,6 +526,9 @@ def run_claude_resume(session_id: str, prompt: str, label: str,
     """
     budget = DEFAULT_MAX_BUDGET_USD
     cmd = _build_base_cmd(budget)
+
+    # 自动注入 SKILL 内容（resume 模式也需要）
+    prompt = _inject_skills(prompt)
 
     effective_model = model or KIRO_MODEL_FIX
     if effective_model and effective_model != "auto":
