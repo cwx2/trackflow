@@ -21,46 +21,68 @@ from _config import (
     log,
 )
 
-# 根据 AI_PROVIDER 选择底层调用模块
-if AI_PROVIDER == "claude":
-    from _claude import run_claude, run_claude_resume, get_current_commit, get_latest_session_id
-    _ai_run = run_claude
-    _ai_run_resume = run_claude_resume
-    _ai_model = CLAUDE_MODEL or None   # 空字符串 → None，使用 claude 默认
-    _ai_model_fix = CLAUDE_MODEL_FIX or None
-else:
-    from _kiro import run_kiro, run_kiro_resume, get_current_commit, get_latest_session_id
-    _ai_run = run_kiro
-    _ai_run_resume = run_kiro_resume
-    _ai_model = KIRO_MODEL_FIX
-    _ai_model_fix = KIRO_MODEL_FIX
+# 同时导入两个 AI 后端，运行时根据 AI_PROVIDER 动态派发
+from _kiro import run_kiro, run_kiro_resume as _kiro_resume, get_current_commit as _kiro_current_commit, get_latest_session_id as _kiro_latest_session
+try:
+    from _claude import run_claude, run_claude_resume as _claude_resume, get_current_commit as _claude_current_commit, get_latest_session_id as _claude_latest_session
+    _has_claude = True
+except ImportError:
+    _has_claude = False
+    run_claude = None  # type: ignore[assignment]
+    _claude_resume = None  # type: ignore[assignment]
+    _claude_current_commit = None  # type: ignore[assignment]
+    _claude_latest_session = None  # type: ignore[assignment]
 
-_AI_LABEL = AI_PROVIDER.upper()  # "CLAUDE" 或 "KIRO"
+
+def get_current_commit() -> str:
+    """运行时派发 get_current_commit。"""
+    if _get_provider() == "claude" and _has_claude and _claude_current_commit:
+        return _claude_current_commit()
+    return _kiro_current_commit()
+
+
+def get_latest_session_id(req_stem: str | None = None, worker_id: str | None = None) -> str | None:
+    """运行时派发 get_latest_session_id。"""
+    if _get_provider() == "claude" and _has_claude and _claude_latest_session:
+        return _claude_latest_session(req_stem, worker_id=worker_id)
+    return _kiro_latest_session(req_stem, worker_id=worker_id)
+
+
+def _get_provider():
+    """每次调用时读取最新的 AI_PROVIDER（支持 --claude 运行时切换）。"""
+    import _config as _cfg
+    return _cfg.AI_PROVIDER
 
 
 def _call_ai(prompt: str, label: str, model: str | None = None,
              req_stem: str | None = None, *, is_fix: bool = False,
              worker_id: str | None = None) -> tuple[bool, str]:
-    """统一的 AI 调用包装，自动处理 provider 差异。"""
-    kwargs: dict = {}
-    if AI_PROVIDER == "claude":
+    """统一的 AI 调用包装，运行时根据 AI_PROVIDER 派发。"""
+    provider = _get_provider()
+    if provider == "claude" and _has_claude:
+        kwargs: dict = {}
         if req_stem:
             kwargs["req_stem"] = req_stem
         if is_fix:
             kwargs["is_fix"] = True
-    return _ai_run(prompt, label, model=model, worker_id=worker_id, **kwargs)  # type: ignore[call-arg]
+        return run_claude(prompt, label, model=model, worker_id=worker_id, **kwargs)  # type: ignore[misc]
+    else:
+        return run_kiro(prompt, label, model=model, worker_id=worker_id)
 
 
 def _call_ai_resume(session_id: str, prompt: str, label: str,
                     model: str | None = None,
                     req_stem: str | None = None,
                     worker_id: str | None = None) -> tuple[bool, str]:
-    """统一的 AI resume 调用包装。"""
-    kwargs: dict = {}
-    if AI_PROVIDER == "claude":
+    """统一的 AI resume 调用包装，运行时根据 AI_PROVIDER 派发。"""
+    provider = _get_provider()
+    if provider == "claude" and _has_claude:
+        kwargs: dict = {}
         if req_stem:
             kwargs["req_stem"] = req_stem
-    return _ai_run_resume(session_id, prompt, label, model=model, worker_id=worker_id, **kwargs)  # type: ignore[call-arg]
+        return _claude_resume(session_id, prompt, label, model=model, worker_id=worker_id, **kwargs)  # type: ignore[misc]
+    else:
+        return _kiro_resume(session_id, prompt, label, model=model, worker_id=worker_id)
 
 from _parsers import (
     parse_fix_result, parse_test_result, parse_review_result,
@@ -524,14 +546,14 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             "本轮只做分析、修复、精确提交和状态更新；不要自行跑完整 e2e、代码审核或 git push。"
         )
         success, fix_output = _call_ai(
-            fix_prompt, label, model=_ai_model_fix, req_stem=req_file.stem, is_fix=True,
+            fix_prompt, label, model=None, req_stem=req_file.stem, is_fix=True,
             worker_id=worker_id
         )
 
     # 启动失败（<30s 退出）→ 放回 develop/，等待环境恢复，不累积重试次数
     if fix_output == "STARTUP_FAIL":
         _move_back_to_develop(req_file)
-        log.warning(f"[{label}] {_AI_LABEL} CLI 启动失败，{req_file.name} 放回 develop/，等待 60s")
+        log.warning(f"[{label}] CLI 启动失败，{req_file.name} 放回 develop/，等待 60s")
         time.sleep(60)
         return ConsumeOutcome(None, transient=True)
 
@@ -662,7 +684,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                     f"继续处理 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n{prev_test_summary}"
                 )
                 _, fb_out = _call_ai(fallback, f"{label}-fix{test_round}",
-                                     model=_ai_model_fix, req_stem=req_file.stem, is_fix=True, worker_id=worker_id)
+                                     model=None, req_stem=req_file.stem, is_fix=True, worker_id=worker_id)
             if _is_transient_cli_output(fb_out):
                 _move_back_to_develop(req_file)
                 log.warning(f"[{label}] 测试修复环境故障（{fb_out}），不消耗需求重试次数")
@@ -775,7 +797,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                     f"继续处理 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n{prev_review_summary}"
                 )
                 _, rv_out = _call_ai(fallback, f"{label}-fixr{review_round}",
-                                     model=_ai_model_fix, req_stem=req_file.stem, is_fix=True, worker_id=worker_id)
+                                     model=None, req_stem=req_file.stem, is_fix=True, worker_id=worker_id)
             if _is_transient_cli_output(rv_out):
                 _move_back_to_develop(req_file)
                 log.warning(f"[{label}] 审核修复环境故障（{rv_out}），不消耗需求重试次数")
