@@ -1209,8 +1209,7 @@ const {
   handleRestoreArchivedSprint, handleDeleteArchivedSprint, confirmDeleteArchivedSprint,
   // No active sprint guidance
   guidanceDismissed, showSprintModeNoActiveState,
-  nextPlannedSprint, handleStartSprintFromGuidance, handleCreateSprintFromGuidance,
-  dismissGuidance,
+  nextPlannedSprint, dismissGuidance,
   // Card config
   cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
   getCardColorClass, getCardProjectColorStyle, getCardDueDateClass, getCardDueDateTooltip,
