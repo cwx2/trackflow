@@ -880,9 +880,9 @@ public class WorkflowRuleEngine {
     private void logActivity(Long issueId, WorkflowRule rule, String action, String field, String oldVal, String newVal) {
         IssueActivity a = new IssueActivity();
         a.setIssueId(issueId);
-        // 自动化规则操作不归属具体用户，userId = null
-        // 使用规则创建者 ID 会造成活动流显示该用户名，产生误导（REQ-630）
-        a.setUserId(null);
+        // issue_activity.user_id 为 NOT NULL，使用规则创建者作为操作者
+        // 前端通过 source="automation" 字段来区分是人工操作还是自动规则触发
+        a.setUserId(rule.getCreatedBy());
         a.setAction(action);
         a.setFieldName(field);
         a.setOldValue(oldVal);
@@ -919,6 +919,13 @@ public class WorkflowRuleEngine {
 
     private String textOf(JsonNode node, String key) {
         JsonNode child = node.get(key);
+        if (child == null || child.isNull()) {
+            // Fallback: look inside "params" sub-object (action blocks may nest params)
+            JsonNode params = node.get("params");
+            if (params != null && params.isObject()) {
+                child = params.get(key);
+            }
+        }
         if (child == null || child.isNull()) return null;
         return child.asText();
     }
