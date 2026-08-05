@@ -93,55 +93,38 @@ YouTrack 状态下拉会优先显示转换名（如果已配置），未配置�
 ## 自动化状态
 
 fix_status: DONE
-fix_commit: f186e1d
-fix_round: 1
-test_status: PENDING
-test_round: 0
+fix_commit: 69c5b73a
+fix_round: 3
+test_status: PASS
+test_round: 2
 review_status: PENDING
-review_round: 0
+review_round: 1
 
 ======================
 
 ## Agent 交接上下文
 
 > 由 fix-requirement-auto 会话写入，供 e2e-test 和 code-review 会话读取。
-> 最后更新：2026-08-05 15:55
+> 最后更新：2026-08-05 16:42
 
 ### 本次改动摘要
-- 改动1：`WorkflowTransitionMapper.xml` — 在 findAllowedNewStatusIdsWithPriority SQL 中增加 `transition_name` 列
-- 改动2：`WorkflowService.java` — 新增 `resolveAllowedStatusMap()` 返回 Map<Long, String>（statusId→transitionName），新增 `getAvailableTransitionsWithNames()` 合并方法避免双查询，新增 `updateTransitionName()` 方法
-- 改动3：`IssueController.java` — 使用 `getAvailableTransitionsWithNames()` 一次查询获取状态+转换名，附加 transitionName 到 IssueStatusVO
-- 改动4：`WorkflowController.java` — 新增 PATCH `/workflows/transitions/{id}/name` 端点，允许管理员配置转换名称
-- 改动5：`IssueStatusVO.java` — 新增 `transitionName` 字段
-- 改动6：`types.ts` — 前端 IssueStatusVO 接口新增 `transitionName?: string`
-- 改动7：`workflow.ts` — 新增 `updateTransitionName()` API 方法
-- 改动8：`DetailSidebar.vue` — StatusInfo 接口新增 `transitionName`
-- 改动9：`IssueDetailView.vue` — 状态选项 label 使用 `transitionName || name`
-- 改动10：`IssueListView.vue` — 列表行内状态下拉使用 `transitionName || localizeStatusName(name)`
-- 改动11：`IssuePreviewDrawer.vue` — 看板预览抽屉状态列表使用 transitionName
-- 改动12：`BatchActionToolbar.vue` — 批量操作单选模式使用 transitionName
-- 改动13：`WorkflowEditor.vue` — 新增 transitionNameMap 跟踪每个转换路径的显示名，传递给 TransitionActionPanel
-- 改动14：`TransitionActionPanel.vue` — 新增转换名称编辑 UI（输入框+保存按钮），调用 workflowApi.updateTransitionName
+- **Round 3 修复（code review MUST-1 + SHOULD T2/T3）**：
+- 改动1：新增 `UpdateTransitionNameDTO.java` — 替代 `Map<String, String>` 作为 `PATCH /workflows/transitions/{id}/name` 的 RequestBody，包含 `@Size(max=100)` 校验
+- 改动2：`WorkflowController.java` — `updateTransitionName` 方法改为接收 `@Valid @RequestBody UpdateTransitionNameDTO dto`
+- 改动3：`BatchActionToolbar.vue` — 单选模式下不再覆盖 `name` 字段为 `transitionName`，而是将 `transitionName` 存为独立可选字段；模板渲染使用 `status.transitionName || localizeStatusName(status.name)` fallback
+- 改动4：`types.ts` — `BatchAvailableStatusVO` 接口新增可选 `transitionName` 字段
+- 改动5：`TransitionActionPanel.vue` — 保存按钮添加 `:disabled="nameSaving"` 防止快速双击重复请求
 
 ### 本次变更文件清单
-- `trackflow-server/src/main/java/com/trackflow/issue/controller/IssueController.java`
-- `trackflow-server/src/main/java/com/trackflow/issue/vo/IssueStatusVO.java`
 - `trackflow-server/src/main/java/com/trackflow/workflow/controller/WorkflowController.java`
-- `trackflow-server/src/main/java/com/trackflow/workflow/service/WorkflowService.java`
-- `trackflow-server/src/main/resources/mapper/workflow/WorkflowTransitionMapper.xml`
+- `trackflow-server/src/main/java/com/trackflow/workflow/dto/UpdateTransitionNameDTO.java`
 - `trackflow-web/src/api/types.ts`
-- `trackflow-web/src/api/workflow.ts`
 - `trackflow-web/src/views/admin/TransitionActionPanel.vue`
-- `trackflow-web/src/views/admin/WorkflowEditor.vue`
-- `trackflow-web/src/views/board/IssuePreviewDrawer.vue`
-- `trackflow-web/src/views/issue/IssueDetailView.vue`
-- `trackflow-web/src/views/issue/IssueListView.vue`
 - `trackflow-web/src/views/issue/components/BatchActionToolbar.vue`
-- `trackflow-web/src/views/issue/components/DetailSidebar.vue`
 
 ### 测试重点（给 e2e-test 会话）
 - **必须验证的核心路径**：
-  1. 以 testuser（系统管理员）登录 → 进入管理 → 工作流编辑器 → 选择项目 DE4、角色 project_admin → 点击已勾选的转换格子（如"待处理→进行中"）→ 在弹出的动作配置面板顶部"转换名称"框内输入"开始处理"→ 点保存 → 确认成功提示
+  1. 以 testuser 登录 → 管理 → 工作流编辑器 → 选择项目 DE4、角色 project_admin → 点击已勾选的转换格子（如"待处理→进行中"）→ 在"转换名称"框内输入"开始处理"→ 点保存 → 确认成功提示
   2. 切换到工单列表 → 找到一个"待处理"状态的工单 → 点击状态 badge 打开下拉 → 验证显示"开始处理"而非"进行中"
   3. 打开工单详情页 → 侧边栏状态字段下拉中也应显示"开始处理"
   4. 选择"开始处理"执行转换 → 工单状态变为"进行中"
@@ -149,12 +132,12 @@ review_round: 0
   - 未配置 transitionName 的转换仍显示目标状态名（如"已完成"）
   - 清除转换名称（清空输入框+保存）后回退到状态名显示
 - **建议测试账号**：testuser（有管理员权限配置工作流）
-- **注意事项**：需要先在工作流编辑器配置转换名称，然后验证工单页面展示效果；API `PATCH /api/v1/workflows/transitions/{id}/name` 需要 system:admin 权限
+- **注意事项**：API `PATCH /api/v1/workflows/transitions/{id}/name` 现在接收 `{"transitionName": "..."}` JSON body（与之前格式相同，但后端改用 DTO 接收）；前端 `workflowApi.updateTransitionName` 发送格式未变
 
 ### 审核重点（给 code-review 会话）
-- **重点关注文件**：WorkflowService.java（resolveAllowedStatusMap 逻辑）、IssueController.java（TransitionResult 使用）
-- **潜在风险点**：resolveAllowedStatusMap 中同一 statusId 有多条规则时取第一个非空 transitionName，如果不同角色对同一转换配置了不同名称，只取第一个匹配的
-- **已知遗留项**：无
+- **重点关注文件**：UpdateTransitionNameDTO.java（新增 DTO）、WorkflowController.java（Map→DTO 替换）、BatchActionToolbar.vue（name 字段不再被覆盖）
+- **潜在风险点**：无，此轮修改范围很小且定向
+- **已知遗留项**：T1（TransitionResult 内部类提取到独立文件）为 SUGGESTION 级，当前规模可接受，不阻塞
 
 ======================
 
