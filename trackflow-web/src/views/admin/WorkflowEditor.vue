@@ -155,7 +155,8 @@
       <span>已修改 {{ pendingChangesCount }} 条转换规则，尚未保存</span>
     </div>
 
-    <a-spin v-show="activeMainTab === 'matrix'" :loading="loading" tip="加载中...">
+    <div v-show="activeMainTab === 'matrix'" class="matrix-grow-area">
+    <a-spin :loading="loading" tip="加载中...">
       <!-- 转换矩阵 -->
       <div class="matrix-container" v-if="filteredStatuses.length > 0">
         <table class="matrix-table">
@@ -311,7 +312,7 @@
       </div>
     </a-spin>
 
-    <div v-show="activeMainTab === 'matrix'" class="help-text" v-if="statuses.length > 0">
+    <div class="help-text" v-if="statuses.length > 0">
       <icon-info-circle />
       <template v-if="selectedMode === 'normal'">
         勾选单元格表示允许从行状态转换到列状态（针对当前选择的角色，对所有拥有该角色的用户生效）。
@@ -325,6 +326,7 @@
       <span style="color: rgb(var(--arcoblue-6))">■</span> 蓝点=已配置动作（左键）；
       <span style="color: #d29922">■</span> 橙点=已配置守卫条件（右键）。
       hover 单元格高亮对应行列。
+    </div>
     </div>
 
     <!-- 自动化规则面板 -->
@@ -1187,6 +1189,8 @@ onBeforeRouteLeave(() => {
   padding: 24px;
   height: 100%;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 面包屑导航 */
@@ -1280,12 +1284,14 @@ onBeforeRouteLeave(() => {
 
 .matrix-container {
   overflow-x: auto;
+  flex: 1;
 }
 
 .matrix-table {
   border-collapse: collapse;
   width: 100%;
   min-width: max-content;
+  table-layout: auto;
 }
 
 .matrix-table th,
@@ -1339,7 +1345,6 @@ onBeforeRouteLeave(() => {
   font-weight: 500;
   white-space: nowrap;
   font-size: 11px;
-  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   transition: background-color 100ms ease;
@@ -1351,7 +1356,7 @@ onBeforeRouteLeave(() => {
 
 .col-header-name {
   display: inline-block;
-  max-width: 60px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
@@ -1533,6 +1538,26 @@ onBeforeRouteLeave(() => {
 }
 
 /* 未保存变更提示条 */
+/* 矩阵区域 flex 填充 */
+.matrix-grow-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.matrix-grow-area :deep(.arco-spin) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.matrix-grow-area :deep(.arco-spin-children) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .dirty-banner {
   display: flex;
   align-items: center;
