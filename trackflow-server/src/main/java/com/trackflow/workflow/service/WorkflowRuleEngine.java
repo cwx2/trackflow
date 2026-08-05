@@ -4,21 +4,25 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.event.WorkflowRuleEvent;
+import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.integration.entity.Notification;
 import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.integration.service.EmailSendService;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
+import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueLink;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.entity.IssueTagRelation;
 import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.issue.mapper.IssueAttachmentMapper;
 import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
@@ -54,8 +58,10 @@ public class WorkflowRuleEngine {
     private final IssueTagRelationMapper tagRelationMapper;
     private final IssueLinkMapper issueLinkMapper;
     private final IssueStatusMapper statusMapper;
+    private final IssueAttachmentMapper attachmentMapper;
     private final SysUserMapper sysUserMapper;
     private final SprintMapper sprintMapper;
+    private final ProjectMemberMapper projectMemberMapper;
     private final NotificationMapper notificationMapper;
     private final ProjectService projectService;
     private final EmailSendService emailSendService;
@@ -334,10 +340,14 @@ public class WorkflowRuleEngine {
     }
 
     private boolean evalConditionWithComment(JsonNode cond, Issue issue, String commentContent) {
-        // 新格式：conditionType = "keyword_contains" — 关键词检测
+        // 新格式：conditionType 字段区分条件类型
         String conditionType = textOf(cond, "conditionType");
-        if ("keyword_contains".equals(conditionType)) {
-            return evaluateKeywordContains(cond, issue, commentContent);
+        if (conditionType != null) {
+            // keyword_contains 在评论场景需要传递 commentContent
+            if ("keyword_contains".equals(conditionType)) {
+                return evaluateKeywordContains(cond, issue, commentContent);
+            }
+            return evaluateTypedCondition(conditionType, cond, issue);
         }
 
         String field = textOf(cond, "field");
@@ -435,10 +445,10 @@ public class WorkflowRuleEngine {
     }
 
     private boolean evalCondition(JsonNode cond, Issue issue, String changedField, String oldValue) {
-        // 新格式：conditionType = "keyword_contains" — 关键词检测（标题/描述/关联工单标题）
+        // 新格式：conditionType 字段区分条件类型
         String conditionType = textOf(cond, "conditionType");
-        if ("keyword_contains".equals(conditionType)) {
-            return evaluateKeywordContains(cond, issue, null);
+        if (conditionType != null) {
+            return evaluateTypedCondition(conditionType, cond, issue);
         }
 
         String field = textOf(cond, "field");
@@ -497,6 +507,160 @@ public class WorkflowRuleEngine {
             }
         }
         return true;
+    }
+
+    /**
+     * 统一处理 conditionType 分发的条件评估。
+     * 支持：issue_resolved, issue_has_tag, issue_attribute_count,
+     * issue_created_within, issue_updated_within, created_by, updated_by,
+     * user_has_role, issue_in_project, keyword_contains。
+     */
+    private boolean evaluateTypedCondition(String conditionType, JsonNode cond, Issue issue) {
+        return switch (conditionType) {
+            case "keyword_contains" -> evaluateKeywordContains(cond, issue, null);
+            case "issue_resolved" -> {
+                if (issue.getStatusId() == null) yield false;
+                IssueStatus status = statusMapper.selectById(issue.getStatusId());
+                yield status != null && Boolean.TRUE.equals(status.getIsClosed());
+            }
+            case "issue_has_tag" -> {
+                String tagId = textOf(cond, "tagId");
+                if (tagId == null || tagId.isBlank()) yield false;
+                try {
+                    long tid = Long.parseLong(tagId);
+                    long count = tagRelationMapper.selectCount(
+                            new LambdaQueryWrapper<IssueTagRelation>()
+                                    .eq(IssueTagRelation::getIssueId, issue.getId())
+                                    .eq(IssueTagRelation::getTagId, tid)
+                    );
+                    yield count > 0;
+                } catch (NumberFormatException e) {
+                    log.warn("[RuleEngine] issue_has_tag: tagId 非法: {}", tagId);
+                    yield false;
+                }
+            }
+            case "issue_attribute_count" -> evaluateAttributeCount(cond, issue);
+            case "issue_created_within" -> {
+                String days = textOf(cond, "days");
+                if (days == null || issue.getCreatedAt() == null) yield false;
+                try {
+                    int d = Integer.parseInt(days);
+                    yield issue.getCreatedAt().isAfter(LocalDateTime.now().minusDays(d));
+                } catch (NumberFormatException e) {
+                    log.warn("[RuleEngine] issue_created_within: days 非法: {}", days);
+                    yield false;
+                }
+            }
+            case "issue_updated_within" -> {
+                String days = textOf(cond, "days");
+                if (days == null || issue.getUpdatedAt() == null) yield false;
+                try {
+                    int d = Integer.parseInt(days);
+                    yield issue.getUpdatedAt().isAfter(LocalDateTime.now().minusDays(d));
+                } catch (NumberFormatException e) {
+                    log.warn("[RuleEngine] issue_updated_within: days 非法: {}", days);
+                    yield false;
+                }
+            }
+            case "created_by" -> {
+                String userId = textOf(cond, "userId");
+                if (userId == null || issue.getCreatedBy() == null) yield false;
+                if ("current_user".equals(userId)) {
+                    Long currentUserId = SecurityUtils.getCurrentUserId();
+                    yield currentUserId != null && currentUserId.equals(issue.getCreatedBy());
+                }
+                try {
+                    yield Long.parseLong(userId) == issue.getCreatedBy();
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            case "updated_by" -> {
+                String userId = textOf(cond, "userId");
+                if (userId == null || issue.getUpdatedBy() == null) yield false;
+                if ("current_user".equals(userId)) {
+                    Long currentUserId = SecurityUtils.getCurrentUserId();
+                    yield currentUserId != null && currentUserId.equals(issue.getUpdatedBy());
+                }
+                try {
+                    yield Long.parseLong(userId) == issue.getUpdatedBy();
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            case "user_has_role" -> {
+                String role = textOf(cond, "role");
+                if (role == null || role.isBlank()) yield false;
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                if (currentUserId == null || issue.getProjectId() == null) yield false;
+                List<String> roleCodes = projectMemberMapper.selectRoleCodesByUserAndProject(
+                        currentUserId, issue.getProjectId());
+                yield roleCodes.contains(role);
+            }
+            case "issue_in_project" -> {
+                String projectId = textOf(cond, "projectId");
+                if (projectId == null || issue.getProjectId() == null) yield false;
+                try {
+                    yield Long.parseLong(projectId) == issue.getProjectId();
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            default -> {
+                log.warn("[RuleEngine] 未知 conditionType: {}", conditionType);
+                yield true; // 未知条件类型降级为通过
+            }
+        };
+    }
+
+    /**
+     * 评估 issue_attribute_count 条件。
+     * 支持 attribute: comments / links / attachments，operator: greater_than / less_than / equals，value: 数字。
+     */
+    private boolean evaluateAttributeCount(JsonNode cond, Issue issue) {
+        String attribute = textOf(cond, "attribute");
+        String operator = textOf(cond, "operator");
+        String valueStr = textOf(cond, "value");
+        if (attribute == null || operator == null || valueStr == null) return false;
+
+        int threshold;
+        try {
+            threshold = Integer.parseInt(valueStr);
+        } catch (NumberFormatException e) {
+            log.warn("[RuleEngine] issue_attribute_count: value 非法: {}", valueStr);
+            return false;
+        }
+
+        long actualCount = switch (attribute) {
+            case "comments" -> commentMapper.selectCount(
+                    new LambdaQueryWrapper<IssueComment>().eq(IssueComment::getIssueId, issue.getId()));
+            case "links" -> issueLinkMapper.selectCount(
+                    new LambdaQueryWrapper<IssueLink>()
+                            .eq(IssueLink::getSourceIssueId, issue.getId())
+                            .or()
+                            .eq(IssueLink::getTargetIssueId, issue.getId()));
+            case "attachments" -> attachmentMapper.selectCount(
+                    new LambdaQueryWrapper<com.trackflow.issue.entity.IssueAttachment>()
+                            .eq(com.trackflow.issue.entity.IssueAttachment::getIssueId, issue.getId()));
+            default -> {
+                log.warn("[RuleEngine] issue_attribute_count: 未知 attribute: {}", attribute);
+                yield -1L;
+            }
+        };
+
+        if (actualCount < 0) return false;
+
+        return switch (operator) {
+            case "greater_than" -> actualCount > threshold;
+            case "less_than" -> actualCount < threshold;
+            case "equals" -> actualCount == threshold;
+            case "greater_than_or_equals" -> actualCount >= threshold;
+            case "less_than_or_equals" -> actualCount <= threshold;
+            default -> {
+                log.warn("[RuleEngine] issue_attribute_count: 未知 operator: {}", operator);
+                yield false;
+            }
+        };
     }
 
     /**

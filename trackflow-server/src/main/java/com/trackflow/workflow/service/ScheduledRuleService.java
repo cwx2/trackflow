@@ -5,9 +5,18 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueAttachment;
+import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueLink;
+import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.entity.IssueTagRelation;
+import com.trackflow.issue.mapper.IssueAttachmentMapper;
+import com.trackflow.issue.mapper.IssueCommentMapper;
 import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
+import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.issue.mapper.IssueTagRelationMapper;
+import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.entity.WorkflowRuleExecutionLog;
 import com.trackflow.workflow.mapper.WorkflowRuleExecutionLogMapper;
@@ -40,6 +49,11 @@ public class ScheduledRuleService {
     private final WorkflowRuleExecutionLogMapper logMapper;
     private final IssueMapper issueMapper;
     private final IssueLinkMapper issueLinkMapper;
+    private final IssueCommentMapper commentMapper;
+    private final IssueTagRelationMapper tagRelationMapper;
+    private final IssueAttachmentMapper attachmentMapper;
+    private final IssueStatusMapper statusMapper;
+    private final ProjectMemberMapper projectMemberMapper;
     private final WorkflowRuleEngine ruleEngine;
     private final ObjectMapper objectMapper;
     private final DistributedLockService distributedLockService;
@@ -411,10 +425,10 @@ public class ScheduledRuleService {
     }
 
     private boolean evalSingleCondition(JsonNode cond, Issue issue) {
-        // 新格式：conditionType = "keyword_contains" — 关键词检测
+        // 新格式：conditionType 字段区分高级条件类型
         String conditionType = textOf(cond, "conditionType");
-        if ("keyword_contains".equals(conditionType)) {
-            return evaluateKeywordContains(cond, issue);
+        if (conditionType != null) {
+            return evaluateTypedCondition(conditionType, cond, issue);
         }
 
         String field = textOf(cond, "field");
@@ -436,6 +450,134 @@ public class ScheduledRuleService {
             case "overdue" -> isOverdue(issue);
             case "due_within_days" -> isDueWithinDays(issue, expected);
             default -> true;
+        };
+    }
+
+    /**
+     * 处理 conditionType 分发的高级条件（On-schedule 场景）。
+     */
+    private boolean evaluateTypedCondition(String conditionType, JsonNode cond, Issue issue) {
+        return switch (conditionType) {
+            case "keyword_contains" -> evaluateKeywordContains(cond, issue);
+            case "issue_resolved" -> {
+                if (issue.getStatusId() == null) yield false;
+                IssueStatus status = statusMapper.selectById(issue.getStatusId());
+                yield status != null && Boolean.TRUE.equals(status.getIsClosed());
+            }
+            case "issue_has_tag" -> {
+                String tagId = textOf(cond, "tagId");
+                if (tagId == null || tagId.isBlank()) yield false;
+                try {
+                    long tid = Long.parseLong(tagId);
+                    long count = tagRelationMapper.selectCount(
+                            new LambdaQueryWrapper<IssueTagRelation>()
+                                    .eq(IssueTagRelation::getIssueId, issue.getId())
+                                    .eq(IssueTagRelation::getTagId, tid));
+                    yield count > 0;
+                } catch (NumberFormatException e) {
+                    log.warn("[ScheduledRule] issue_has_tag: tagId 非法: {}", tagId);
+                    yield false;
+                }
+            }
+            case "issue_attribute_count" -> evaluateAttributeCount(cond, issue);
+            case "issue_created_within" -> {
+                String days = textOf(cond, "days");
+                if (days == null || issue.getCreatedAt() == null) yield false;
+                try {
+                    int d = Integer.parseInt(days);
+                    yield issue.getCreatedAt().isAfter(LocalDateTime.now().minusDays(d));
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            case "issue_updated_within" -> {
+                String days = textOf(cond, "days");
+                if (days == null || issue.getUpdatedAt() == null) yield false;
+                try {
+                    int d = Integer.parseInt(days);
+                    yield issue.getUpdatedAt().isAfter(LocalDateTime.now().minusDays(d));
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            case "created_by" -> {
+                String userId = textOf(cond, "userId");
+                if (userId == null || issue.getCreatedBy() == null) yield false;
+                try {
+                    yield Long.parseLong(userId) == issue.getCreatedBy();
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            case "updated_by" -> {
+                String userId = textOf(cond, "userId");
+                if (userId == null || issue.getUpdatedBy() == null) yield false;
+                try {
+                    yield Long.parseLong(userId) == issue.getUpdatedBy();
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            case "user_has_role" -> {
+                // On-schedule 场景没有"当前用户"上下文，条件不适用
+                log.debug("[ScheduledRule] user_has_role 条件在 On-schedule 场景不适用，跳过");
+                yield true;
+            }
+            case "issue_in_project" -> {
+                String projectId = textOf(cond, "projectId");
+                if (projectId == null || issue.getProjectId() == null) yield false;
+                try {
+                    yield Long.parseLong(projectId) == issue.getProjectId();
+                } catch (NumberFormatException e) {
+                    yield false;
+                }
+            }
+            default -> {
+                log.warn("[ScheduledRule] 未知 conditionType: {}", conditionType);
+                yield true;
+            }
+        };
+    }
+
+    /**
+     * 评估 issue_attribute_count 条件（On-schedule 场景）。
+     */
+    private boolean evaluateAttributeCount(JsonNode cond, Issue issue) {
+        String attribute = textOf(cond, "attribute");
+        String operator = textOf(cond, "operator");
+        String valueStr = textOf(cond, "value");
+        if (attribute == null || operator == null || valueStr == null) return false;
+
+        int threshold;
+        try {
+            threshold = Integer.parseInt(valueStr);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+
+        long actualCount = switch (attribute) {
+            case "comments" -> commentMapper.selectCount(
+                    new LambdaQueryWrapper<IssueComment>().eq(IssueComment::getIssueId, issue.getId()));
+            case "links" -> issueLinkMapper.selectCount(
+                    new LambdaQueryWrapper<IssueLink>()
+                            .eq(IssueLink::getSourceIssueId, issue.getId())
+                            .or()
+                            .eq(IssueLink::getTargetIssueId, issue.getId()));
+            case "attachments" -> attachmentMapper.selectCount(
+                    new LambdaQueryWrapper<IssueAttachment>()
+                            .eq(IssueAttachment::getIssueId, issue.getId()));
+            default -> -1L;
+        };
+
+        if (actualCount < 0) return false;
+
+        return switch (operator) {
+            case "greater_than" -> actualCount > threshold;
+            case "less_than" -> actualCount < threshold;
+            case "equals" -> actualCount == threshold;
+            case "greater_than_or_equals" -> actualCount >= threshold;
+            case "less_than_or_equals" -> actualCount <= threshold;
+            default -> false;
         };
     }
 

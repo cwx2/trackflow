@@ -175,46 +175,124 @@
                   NOT
                 </a-button>
               </a-tooltip>
-              <a-select v-model="cond.field" style="width: 140px" placeholder="字段">
-                <a-option value="type">工单类型</a-option>
-                <a-option value="priority">优先级</a-option>
-                <a-option value="assignee">负责人</a-option>
-                <a-option value="status">状态</a-option>
-                <a-option value="sprint">迭代</a-option>
-                <a-option value="due_date">截止日期</a-option>
+
+              <!-- 条件类型选择 -->
+              <a-select v-model="cond.conditionType" style="width: 160px" placeholder="条件类型" @change="() => onConditionTypeChange(cond)">
+                <a-optgroup label="字段匹配">
+                  <a-option value="field_check">字段值检查</a-option>
+                </a-optgroup>
+                <a-optgroup label="工单状态类">
+                  <a-option value="issue_resolved">工单已解决</a-option>
+                  <a-option value="issue_has_tag">工单有标签</a-option>
+                  <a-option value="issue_attribute_count">工单属性数量</a-option>
+                  <a-option value="issue_created_within">创建于 N 天内</a-option>
+                  <a-option value="issue_updated_within">更新于 N 天内</a-option>
+                </a-optgroup>
+                <a-optgroup label="用户类">
+                  <a-option value="created_by">创建者是</a-option>
+                  <a-option value="updated_by">更新者是</a-option>
+                  <a-option value="user_has_role">触发者角色</a-option>
+                </a-optgroup>
+                <a-optgroup label="项目类">
+                  <a-option value="issue_in_project">属于项目</a-option>
+                </a-optgroup>
               </a-select>
-              <a-select v-model="cond.operator" style="width: 150px" placeholder="操作符" @change="() => { cond.value = '' }">
-                <a-optgroup label="当前值匹配">
+
+              <!-- field_check: 旧的字段+操作符+值模式 -->
+              <template v-if="cond.conditionType === 'field_check'">
+                <a-select v-model="cond.field" style="width: 120px" placeholder="字段">
+                  <a-option value="type">工单类型</a-option>
+                  <a-option value="priority">优先级</a-option>
+                  <a-option value="assignee">负责人</a-option>
+                  <a-option value="status">状态</a-option>
+                  <a-option value="sprint">迭代</a-option>
+                  <a-option value="due_date">截止日期</a-option>
+                </a-select>
+                <a-select v-model="cond.operator" style="width: 140px" placeholder="操作符" @change="() => { cond.value = '' }">
+                  <a-optgroup label="当前值匹配">
+                    <a-option value="equals">等于</a-option>
+                    <a-option value="not_equals">不等于</a-option>
+                    <a-option value="contains">包含</a-option>
+                    <a-option value="in">属于（逗号分隔）</a-option>
+                    <a-option value="is_empty">为空</a-option>
+                    <a-option value="is_not_empty">不为空</a-option>
+                  </a-optgroup>
+                  <a-optgroup label="时间条件">
+                    <a-option value="overdue">已逾期</a-option>
+                    <a-option value="due_within_days">N天内到期</a-option>
+                  </a-optgroup>
+                  <a-optgroup
+                    v-if="formData.triggerEvent === 'field_changed' && formData.triggerField"
+                    label="变更前值匹配（旧值）"
+                  >
+                    <a-option value="old_value_equals">旧值等于</a-option>
+                    <a-option value="old_value_not_equals">旧值不等于</a-option>
+                    <a-option value="old_value_in">旧值属于</a-option>
+                    <a-option value="old_value_is_empty">旧值为空</a-option>
+                    <a-option value="old_value_is_not_empty">旧值不为空</a-option>
+                  </a-optgroup>
+                </a-select>
+                <a-input
+                  v-if="!['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty', 'overdue'].includes(cond.operator)"
+                  v-model="cond.value"
+                  style="flex: 1"
+                  :placeholder="cond.operator === 'due_within_days' ? '天数（如 3）' : '值（如 Bug, Critical）'"
+                />
+              </template>
+
+              <!-- issue_resolved: 无额外参数 -->
+              <!-- issue_has_tag: 标签选择 -->
+              <template v-else-if="cond.conditionType === 'issue_has_tag'">
+                <a-input v-model="cond.tagId" style="flex: 1" placeholder="标签 ID" />
+              </template>
+
+              <!-- issue_attribute_count: 属性 + 操作符 + 值 -->
+              <template v-else-if="cond.conditionType === 'issue_attribute_count'">
+                <a-select v-model="cond.attribute" style="width: 100px" placeholder="属性">
+                  <a-option value="comments">评论数</a-option>
+                  <a-option value="links">关联数</a-option>
+                  <a-option value="attachments">附件数</a-option>
+                </a-select>
+                <a-select v-model="cond.operator" style="width: 100px" placeholder="操作符">
+                  <a-option value="greater_than">大于</a-option>
+                  <a-option value="less_than">小于</a-option>
                   <a-option value="equals">等于</a-option>
-                  <a-option value="not_equals">不等于</a-option>
-                  <a-option value="contains">包含</a-option>
-                  <a-option value="in">属于（逗号分隔）</a-option>
-                  <a-option value="is_empty">为空</a-option>
-                  <a-option value="is_not_empty">不为空</a-option>
-                </a-optgroup>
-                <!-- 时间条件操作符（适用于 due_date 字段的条件） -->
-                <a-optgroup label="时间条件">
-                  <a-option value="overdue">已逾期（截止日期 &lt; 今天）</a-option>
-                  <a-option value="due_within_days">N天内到期</a-option>
-                </a-optgroup>
-                <!-- 仅当触发事件为 field_changed 且选择了监听字段时，显示旧值匹配操作符 -->
-                <a-optgroup
-                  v-if="formData.triggerEvent === 'field_changed' && formData.triggerField"
-                  label="变更前值匹配（旧值）"
-                >
-                  <a-option value="old_value_equals">旧值等于</a-option>
-                  <a-option value="old_value_not_equals">旧值不等于</a-option>
-                  <a-option value="old_value_in">旧值属于（逗号分隔）</a-option>
-                  <a-option value="old_value_is_empty">旧值为空</a-option>
-                  <a-option value="old_value_is_not_empty">旧值不为空</a-option>
-                </a-optgroup>
-              </a-select>
-              <a-input
-                v-if="!['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty', 'overdue'].includes(cond.operator)"
-                v-model="cond.value"
-                style="flex: 1"
-                :placeholder="cond.operator === 'due_within_days' ? '天数（如 3）' : '值（如 Bug, Critical）'"
-              />
+                  <a-option value="greater_than_or_equals">≥</a-option>
+                  <a-option value="less_than_or_equals">≤</a-option>
+                </a-select>
+                <a-input-number v-model="cond.value" style="width: 80px" placeholder="数量" :min="0" />
+              </template>
+
+              <!-- issue_created_within / issue_updated_within: 天数 -->
+              <template v-else-if="cond.conditionType === 'issue_created_within' || cond.conditionType === 'issue_updated_within'">
+                <a-input-number v-model="cond.days" style="width: 100px" placeholder="天数" :min="1" />
+                <span class="condition-suffix">天内</span>
+              </template>
+
+              <!-- created_by / updated_by: 用户选择 -->
+              <template v-else-if="cond.conditionType === 'created_by' || cond.conditionType === 'updated_by'">
+                <a-select v-model="cond.userId" style="flex: 1" placeholder="选择用户" allow-search>
+                  <a-option value="current_user">当前操作用户</a-option>
+                </a-select>
+              </template>
+
+              <!-- user_has_role: 角色选择 -->
+              <template v-else-if="cond.conditionType === 'user_has_role'">
+                <a-select v-model="cond.role" style="flex: 1" placeholder="选择角色">
+                  <a-option value="project_admin">项目管理员</a-option>
+                  <a-option value="tech_lead">技术负责人</a-option>
+                  <a-option value="developer">开发人员</a-option>
+                  <a-option value="product_manager">产品经理</a-option>
+                  <a-option value="tester">测试人员</a-option>
+                  <a-option value="observer">观察者</a-option>
+                </a-select>
+              </template>
+
+              <!-- issue_in_project: 项目选择 -->
+              <template v-else-if="cond.conditionType === 'issue_in_project'">
+                <a-input v-model="cond.projectId" style="flex: 1" placeholder="项目 ID" />
+              </template>
+
               <a-button type="text" status="danger" size="mini" @click="removeCondition(idx)">
                 <icon-delete />
               </a-button>
@@ -402,10 +480,18 @@ const submitting = ref(false)
 const formRef = ref()
 
 interface ConditionItem {
+  conditionType: string
   field: string
   operator: string
   value: string
   negated: boolean
+  // Advanced condition fields
+  tagId?: string
+  attribute?: string
+  days?: number
+  userId?: string
+  role?: string
+  projectId?: string
 }
 
 interface ActionItem {
@@ -546,12 +632,7 @@ function parseConditionJson(json: string): { conditions: ConditionItem[]; logic:
     // 旧格式：直接是数组
     if (Array.isArray(parsed)) {
       return {
-        conditions: parsed.map((c: any) => ({
-          field: c.field || '',
-          operator: c.operator || 'equals',
-          value: c.value || '',
-          negated: false
-        })),
+        conditions: parsed.map((c: any) => parseLeafToConditionItem(c, false)),
         logic: 'and'
       }
     }
@@ -561,20 +642,9 @@ function parseConditionJson(json: string): { conditions: ConditionItem[]; logic:
       const childNodes: any[] = parsed.conditions || []
       const conditions: ConditionItem[] = childNodes.map((node: any) => {
         if (node.type === 'not' && node.condition) {
-          const leaf = node.condition
-          return {
-            field: leaf.field || '',
-            operator: leaf.operator || 'equals',
-            value: leaf.value || '',
-            negated: true
-          }
+          return parseLeafToConditionItem(node.condition, true)
         }
-        return {
-          field: node.field || '',
-          operator: node.operator || 'equals',
-          value: node.value || '',
-          negated: false
-        }
+        return parseLeafToConditionItem(node, false)
       })
       return { conditions, logic }
     }
@@ -584,8 +654,40 @@ function parseConditionJson(json: string): { conditions: ConditionItem[]; logic:
   }
 }
 
+function parseLeafToConditionItem(leaf: any, negated: boolean): ConditionItem {
+  const conditionType = leaf.conditionType || 'field_check'
+  const item: ConditionItem = {
+    conditionType,
+    field: leaf.field || '',
+    operator: leaf.operator || 'equals',
+    value: leaf.value || '',
+    negated
+  }
+  // 解析高级字段
+  if (leaf.tagId) item.tagId = leaf.tagId
+  if (leaf.attribute) item.attribute = leaf.attribute
+  if (leaf.days) item.days = Number(leaf.days)
+  if (leaf.userId) item.userId = leaf.userId
+  if (leaf.role) item.role = leaf.role
+  if (leaf.projectId) item.projectId = leaf.projectId
+  return item
+}
+
 function addCondition() {
-  formData.conditions.push({ field: '', operator: 'equals', value: '', negated: false })
+  formData.conditions.push({ conditionType: 'field_check', field: '', operator: 'equals', value: '', negated: false })
+}
+
+function onConditionTypeChange(cond: ConditionItem) {
+  // Reset all fields when condition type changes
+  cond.field = ''
+  cond.operator = ''
+  cond.value = ''
+  cond.tagId = undefined
+  cond.attribute = undefined
+  cond.days = undefined
+  cond.userId = undefined
+  cond.role = undefined
+  cond.projectId = undefined
 }
 
 function removeCondition(idx: number) {
@@ -643,38 +745,72 @@ async function handleSubmit() {
 
 /**
  * 构建条件 JSON。
- * - 如果所有条件都是简单 AND 且无 NOT，则使用旧格式（平铺数组）以保持兼容
- * - 否则使用新格式（递归逻辑节点）
+ * - field_check 类型：保留旧的 field/operator/value 格式
+ * - 高级类型：使用 conditionType + 类型专属字段
  */
 function buildConditionJson(): string {
-  const validConditions = formData.conditions.filter(c => c.field)
+  const validConditions = formData.conditions.filter(c => c.conditionType)
   if (validConditions.length === 0) return '[]'
 
   const hasNegated = validConditions.some(c => c.negated)
   const isOr = formData.conditionLogic === 'or'
+  const hasAdvanced = validConditions.some(c => c.conditionType !== 'field_check')
 
-  // 简单 AND + 无 NOT = 旧格式（向后兼容）
-  if (!isOr && !hasNegated) {
-    return JSON.stringify(validConditions.map(c => ({
-      field: c.field,
-      operator: c.operator,
-      value: c.value
-    })))
+  // 如果有高级条件或 OR 逻辑或 NOT，统一使用新格式
+  if (isOr || hasNegated || hasAdvanced) {
+    const leafNodes = validConditions.map(c => {
+      const leaf = buildConditionLeaf(c)
+      if (c.negated) {
+        return { type: 'not', condition: leaf }
+      }
+      return leaf
+    })
+    return JSON.stringify({
+      type: formData.conditionLogic,
+      conditions: leafNodes
+    })
   }
 
-  // 新格式：构建逻辑节点树
-  const leafNodes = validConditions.map(c => {
-    const leaf: any = { type: 'condition', field: c.field, operator: c.operator, value: c.value }
-    if (c.negated) {
-      return { type: 'not', condition: leaf }
-    }
-    return leaf
-  })
+  // 全部是 field_check + AND + 无 NOT = 旧格式（向后兼容）
+  return JSON.stringify(validConditions.map(c => ({
+    field: c.field,
+    operator: c.operator,
+    value: c.value
+  })))
+}
 
-  return JSON.stringify({
-    type: formData.conditionLogic,
-    conditions: leafNodes
-  })
+function buildConditionLeaf(c: ConditionItem): any {
+  if (c.conditionType === 'field_check') {
+    return { type: 'condition', field: c.field, operator: c.operator, value: c.value }
+  }
+  // 高级条件类型
+  const leaf: any = { type: 'condition', conditionType: c.conditionType }
+  switch (c.conditionType) {
+    case 'issue_has_tag':
+      leaf.tagId = c.tagId || ''
+      break
+    case 'issue_attribute_count':
+      leaf.attribute = c.attribute || ''
+      leaf.operator = c.operator || 'greater_than'
+      leaf.value = String(c.value ?? '')
+      break
+    case 'issue_created_within':
+    case 'issue_updated_within':
+      leaf.days = String(c.days ?? '')
+      break
+    case 'created_by':
+    case 'updated_by':
+      leaf.userId = c.userId || 'current_user'
+      break
+    case 'user_has_role':
+      leaf.role = c.role || ''
+      break
+    case 'issue_in_project':
+      leaf.projectId = c.projectId || ''
+      break
+    // issue_resolved: 无额外参数
+  }
+  return leaf
 }
 
 // ==================== Actions ====================
@@ -789,6 +925,25 @@ function formatLogicNode(node: any): string {
 }
 
 function formatLeafCondition(c: any): string {
+  // Advanced condition types
+  if (c.conditionType) {
+    switch (c.conditionType) {
+      case 'issue_resolved': return '工单已解决'
+      case 'issue_has_tag': return `有标签 #${c.tagId || '?'}`
+      case 'issue_attribute_count': {
+        const attrLabel: Record<string, string> = { comments: '评论数', links: '关联数', attachments: '附件数' }
+        const opLabel: Record<string, string> = { greater_than: '>', less_than: '<', equals: '=', greater_than_or_equals: '≥', less_than_or_equals: '≤' }
+        return `${attrLabel[c.attribute] || c.attribute} ${opLabel[c.operator] || c.operator} ${c.value || '?'}`
+      }
+      case 'issue_created_within': return `创建于 ${c.days || '?'} 天内`
+      case 'issue_updated_within': return `更新于 ${c.days || '?'} 天内`
+      case 'created_by': return `创建者是 ${c.userId === 'current_user' ? '当前用户' : c.userId || '?'}`
+      case 'updated_by': return `更新者是 ${c.userId === 'current_user' ? '当前用户' : c.userId || '?'}`
+      case 'user_has_role': return `触发者角色 = ${c.role || '?'}`
+      case 'issue_in_project': return `属于项目 ${c.projectId || '?'}`
+    }
+  }
+  // field_check or legacy format
   if (c.operator === 'overdue') return `${fieldLabel(c.field)} 已逾期`
   if (c.operator === 'due_within_days') return `${fieldLabel(c.field)} ${c.value || '?'}天内到期`
   const isEmptyOp = ['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(c.operator)
@@ -988,5 +1143,11 @@ watch(() => props.projectId, () => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.condition-suffix {
+  font-size: 13px;
+  color: var(--color-text-3);
+  white-space: nowrap;
 }
 </style>

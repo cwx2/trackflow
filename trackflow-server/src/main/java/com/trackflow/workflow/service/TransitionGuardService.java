@@ -123,6 +123,13 @@ public class TransitionGuardService {
     }
 
     private boolean evalCondition(JsonNode cond, Issue issue) {
+        // 支持高级 conditionType 条件：降级为通过（守卫场景暂不阻塞复杂条件）
+        String conditionType = textOf(cond, "conditionType");
+        if (conditionType != null) {
+            log.debug("[TransitionGuard] conditionType={} 在守卫场景中降级为允许", conditionType);
+            return true;
+        }
+
         String field = textOf(cond, "field");
         String op = textOf(cond, "operator");
         String expected = textOf(cond, "value");
