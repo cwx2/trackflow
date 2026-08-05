@@ -21,12 +21,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 自定义仪表盘 API
+ * 自定义仪表盘 API - 用户可自定义的 Widget 看板（报表模块）
+ *
+ * @author TrackFlow
+ * @since 1.0
  */
-@RestController("reportDashboardController")
+@RestController
 @RequestMapping("/api/v1/dashboards")
 @RequiredArgsConstructor
-public class DashboardController {
+public class CustomDashboardController {
 
     private final CustomDashboardService dashboardService;
 
@@ -81,7 +84,7 @@ public class DashboardController {
         return R.ok();
     }
 
-    // ─── 共享管理 ────────────────────────────────────────
+    // ─── 收藏与默认 ────────────────────────────────────────
 
     /**
      * 切换仪表盘收藏状态
@@ -137,7 +140,7 @@ public class DashboardController {
         return R.ok(systemDefaultId != null ? String.valueOf(systemDefaultId) : null);
     }
 
-    // ─── 共享管理（精细化） ────────────────────────────────
+    // ─── 共享管理 ────────────────────────────────────────
 
     /**
      * 获取仪表盘的共享列表
