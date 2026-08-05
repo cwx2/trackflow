@@ -107,6 +107,7 @@ public class IssueService {
     private final IssueActivityService activityService;
     private final IssueCommentService commentService;
     private final IssueAttachmentService attachmentService;
+    private final IssueVOAssembler issueVOAssembler;
 
     /**
      * 创建 Issue
@@ -540,13 +541,7 @@ public class IssueService {
         Page<Issue> result = listByQuery(query);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
 
-        fillUserInfo(result.getRecords(), voList);
-        fillChildProgress(result.getRecords(), voList);
-        fillStatusInfo(result.getRecords(), voList);
-        fillSprintInfo(result.getRecords(), voList);
-        fillMultiSprintInfo(result.getRecords(), voList);
-        fillCustomFieldValues(result.getRecords(), voList);
-        fillTagInfo(result.getRecords(), voList);
+        issueVOAssembler.assemble(result.getRecords(), voList);
 
         return new PageResult<>(voList, result.getTotal(),
                 (int) result.getCurrent(), (int) result.getSize());
@@ -635,141 +630,6 @@ public class IssueService {
     }
 
     /**
-     * 批量填充 assigneeName/assigneeAvatarUrl/reporterName
-     */
-    private void fillUserInfo(List<Issue> issues, List<IssueVO> voList) {
-        Set<Long> userIds = new java.util.HashSet<>();
-        for (Issue issue : issues) {
-            if (issue.getAssigneeId() != null) userIds.add(issue.getAssigneeId());
-            if (issue.getReporterId() != null) userIds.add(issue.getReporterId());
-        }
-        if (userIds.isEmpty()) return;
-
-        Map<Long, com.trackflow.system.entity.SysUser> userMap = sysUserMapper.selectBatchIds(userIds).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        com.trackflow.system.entity.SysUser::getId, u -> u, (a, b) -> a));
-
-        for (int i = 0; i < issues.size(); i++) {
-            Issue issue = issues.get(i);
-            if (issue.getAssigneeId() != null) {
-                com.trackflow.system.entity.SysUser user = userMap.get(issue.getAssigneeId());
-                if (user != null) {
-                    voList.get(i).setAssigneeName(user.getDisplayName());
-                    voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
-                }
-            }
-            if (issue.getReporterId() != null) {
-                com.trackflow.system.entity.SysUser user = userMap.get(issue.getReporterId());
-                if (user != null) {
-                    voList.get(i).setReporterName(user.getDisplayName());
-                }
-            }
-        }
-    }
-
-    /**
-     * 填充子任务进度字段（childCount / childClosedCount）
-     */
-    private void fillChildProgress(List<Issue> issues, List<IssueVO> voList) {
-        for (int i = 0; i < issues.size(); i++) {
-            voList.get(i).setChildCount(issues.get(i).getChildCount());
-            voList.get(i).setChildClosedCount(issues.get(i).getChildClosedCount());
-        }
-    }
-
-    /**
-     * 批量填充 statusName/statusColor（status 表数据极少，全量缓存查出）
-     */
-    private void fillStatusInfo(List<Issue> issues, List<IssueVO> voList) {
-        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
-                .collect(java.util.stream.Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
-
-        for (int i = 0; i < issues.size(); i++) {
-            Issue issue = issues.get(i);
-            if (issue.getStatusId() != null) {
-                IssueStatus status = statusMap.get(issue.getStatusId());
-                if (status != null) {
-                    voList.get(i).setStatusName(status.getName());
-                    voList.get(i).setStatusColor(status.getColor());
-                }
-            }
-        }
-    }
-
-    /**
-     * 批量填充 sprintName 和 sprintStatus（仅查询用到的 Sprint）
-     */
-    private void fillSprintInfo(List<Issue> issues, List<IssueVO> voList) {
-        Set<Long> sprintIds = new java.util.HashSet<>();
-        for (Issue issue : issues) {
-            if (issue.getSprintId() != null) sprintIds.add(issue.getSprintId());
-        }
-        if (sprintIds.isEmpty()) return;
-
-        Map<Long, com.trackflow.sprint.entity.Sprint> sprintMap = sprintMapper.selectBatchIds(sprintIds).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        com.trackflow.sprint.entity.Sprint::getId, s -> s, (a, b) -> a));
-
-        for (int i = 0; i < issues.size(); i++) {
-            Issue issue = issues.get(i);
-            if (issue.getSprintId() != null) {
-                com.trackflow.sprint.entity.Sprint sprint = sprintMap.get(issue.getSprintId());
-                if (sprint != null) {
-                    voList.get(i).setSprintName(sprint.getName());
-                    if (sprint.getStatus() != null) {
-                        voList.get(i).setSprintStatus(sprint.getStatus().getValue());
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * 批量填充多 Sprint 信息（issue_sprint 关联表）
-     */
-    private void fillMultiSprintInfo(List<Issue> issues, List<IssueVO> voList) {
-        List<Long> issueIds = issues.stream().map(Issue::getId).toList();
-        if (issueIds.isEmpty()) return;
-
-        List<IssueSprint> allRelations = issueSprintMapper.selectByIssueIds(issueIds);
-        if (allRelations.isEmpty()) return;
-
-        // 按 issueId 分组
-        Map<Long, List<Long>> issueSprintMap = new java.util.HashMap<>();
-        Set<Long> allSprintIds = new java.util.HashSet<>();
-        for (IssueSprint rel : allRelations) {
-            issueSprintMap.computeIfAbsent(rel.getIssueId(), k -> new java.util.ArrayList<>()).add(rel.getSprintId());
-            allSprintIds.add(rel.getSprintId());
-        }
-
-        // 批量查询 Sprint 名称
-        Map<Long, String> sprintNameMap = java.util.Collections.emptyMap();
-        if (!allSprintIds.isEmpty()) {
-            sprintNameMap = sprintMapper.selectBatchIds(allSprintIds).stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            com.trackflow.sprint.entity.Sprint::getId,
-                            com.trackflow.sprint.entity.Sprint::getName,
-                            (a, b) -> a));
-        }
-
-        // 仅填充有多个 Sprint 关联的工单
-        for (int i = 0; i < issues.size(); i++) {
-            Long issueId = issues.get(i).getId();
-            List<Long> sprintIds = issueSprintMap.get(issueId);
-            if (sprintIds != null && sprintIds.size() > 1) {
-                List<String> ids = new java.util.ArrayList<>();
-                List<String> names = new java.util.ArrayList<>();
-                for (Long sid : sprintIds) {
-                    ids.add(String.valueOf(sid));
-                    names.add(sprintNameMap.getOrDefault(sid, ""));
-                }
-                voList.get(i).setSprintIds(ids);
-                voList.get(i).setSprintNames(names);
-            }
-        }
-    }
-
-    /**
      * 查询项目看板是否开启了 allowMultipleSprints 配置
      */
     private boolean isAllowMultipleSprints(Long projectId) {
@@ -777,71 +637,6 @@ public class IssueService {
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.trackflow.board.entity.BoardGeneralConfig>()
                         .eq(com.trackflow.board.entity.BoardGeneralConfig::getProjectId, projectId));
         return config != null && Boolean.TRUE.equals(config.getAllowMultipleSprints());
-    }
-
-    /**
-     * 批量填充自定义字段展示值和颜色
-     */
-    private void fillCustomFieldValues(List<Issue> issues, List<IssueVO> voList) {
-        List<Long> issueIds = issues.stream().map(Issue::getId).toList();
-        if (issueIds.isEmpty()) return;
-
-        // 使用结构化详情填充（支持多值字段独立渲染）
-        Map<Long, List<com.trackflow.customfield.vo.CustomFieldValueVO>> cfDetailsMap =
-                customFieldService.getBatchCustomFieldDetails(issueIds);
-
-        for (int i = 0; i < issues.size(); i++) {
-            Long issueId = issues.get(i).getId();
-            List<com.trackflow.customfield.vo.CustomFieldValueVO> details = cfDetailsMap.get(issueId);
-            if (details != null && !details.isEmpty()) {
-                voList.get(i).setCustomFieldDetails(details);
-
-                // 兼容：继续填充旧的 Map 字段（前端逐步迁移后移除）
-                Map<String, String> cfValues = new java.util.HashMap<>();
-                Map<String, String> cfColors = new java.util.HashMap<>();
-                for (com.trackflow.customfield.vo.CustomFieldValueVO detail : details) {
-                    String cfKey = "cf_" + detail.getCustomFieldId();
-                    cfValues.put(cfKey, detail.getDisplayValue());
-                    if (detail.getColor() != null) {
-                        cfColors.put(cfKey, detail.getColor());
-                    } else if (detail.getColors() != null) {
-                        // 多值字段兼容：取第一个有效颜色
-                        detail.getColors().stream()
-                                .filter(java.util.Objects::nonNull)
-                                .findFirst()
-                                .ifPresent(c -> cfColors.put(cfKey, c));
-                    }
-                }
-                voList.get(i).setCustomFieldValues(cfValues);
-                if (!cfColors.isEmpty()) {
-                    voList.get(i).setCustomFieldColors(cfColors);
-                }
-            }
-        }
-    }
-
-    /**
-     * 批量填充工单标签信息（list 查询使用）。
-     */
-    private void fillTagInfo(List<Issue> issues, List<IssueVO> voList) {
-        List<Long> issueIds = issues.stream().map(Issue::getId).toList();
-        if (issueIds.isEmpty()) return;
-
-        Map<Long, List<IssueTag>> tagMap = tagService.batchListIssueTags(issueIds);
-        for (int i = 0; i < issues.size(); i++) {
-            Long issueId = issues.get(i).getId();
-            List<IssueTag> tags = tagMap.get(issueId);
-            if (tags != null && !tags.isEmpty()) {
-                List<IssueTagVO> tagVOs = tags.stream().map(tag -> {
-                    IssueTagVO vo = new IssueTagVO();
-                    vo.setId(String.valueOf(tag.getId()));
-                    vo.setName(tag.getName());
-                    vo.setColor(tag.getColor());
-                    return vo;
-                }).toList();
-                voList.get(i).setTags(tagVOs);
-            }
-        }
     }
 
     /**
