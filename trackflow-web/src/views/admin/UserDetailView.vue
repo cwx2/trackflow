@@ -274,9 +274,8 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
-import { userApi, projectApi } from '@/api'
+import { userApi, projectApi, roleApi } from '@/api'
 import type { UserProfileVO, UserProfileProjectRoleInfo } from '@/api/user'
-import request from '@/api/request'
 import { localizeActionShort, fieldLabelMap, localizeLinkType } from '@/utils/fieldLabels'
 
 const route = useRoute()
@@ -324,7 +323,7 @@ async function loadProfile() {
 
 async function loadGlobalRoles() {
   try {
-    const res: any = await request.get('/roles', { params: { roleType: 'global', pageSize: 50 } })
+    const res = await roleApi.list({ roleType: 'global', pageSize: 50 })
     globalRoles.value = res.data?.list || []
   } catch (e) { globalRoles.value = [] }
 }
@@ -528,7 +527,7 @@ function formatAction(activity: { action: string; fieldName?: string; oldValue?:
 
 async function loadProjectRoles() {
   try {
-    const res: any = await request.get('/roles', { params: { roleType: 'project', pageSize: 50 } })
+    const res = await roleApi.list({ roleType: 'project', pageSize: 50 })
     projectRoles.value = res.data?.list || []
   } catch (e) { projectRoles.value = [] }
 }

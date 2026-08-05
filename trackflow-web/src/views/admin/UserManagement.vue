@@ -346,10 +346,9 @@
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, Message } from '@arco-design/web-vue'
-import { userApi, projectApi, globalMemberApi } from '@/api'
+import { userApi, projectApi, globalMemberApi, roleApi } from '@/api'
 import type { UserProfileProjectRoleInfo } from '@/api/user'
 import type { GlobalMemberVO } from '@/api/globalMember'
-import request from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -815,14 +814,14 @@ async function refreshProjectRoles() {
 
 async function loadGlobalRoles() {
   try {
-    const res: any = await request.get('/roles', { params: { roleType: 'global', pageSize: 50 } })
+    const res = await roleApi.list({ roleType: 'global', pageSize: 50 })
     globalRoles.value = res.data?.list || []
   } catch (e) { globalRoles.value = [] }
 }
 
 async function loadProjectRoles() {
   try {
-    const res: any = await request.get('/roles', { params: { roleType: 'project', pageSize: 50 } })
+    const res = await roleApi.list({ roleType: 'project', pageSize: 50 })
     const roles = res.data?.list || []
     // 排除 non_member 和 anonymous 等不可分配的角色
     projectRoles.value = roles.filter((r: any) => !['non_member', 'anonymous'].includes(r.code))

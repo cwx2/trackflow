@@ -226,20 +226,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { Modal, Message } from '@arco-design/web-vue'
-import request from '@/api/request'
-import type { RoleUsersVO } from '@/api/types'
-
-interface PermissionItem {
-  code: string
-  name: string
-  description: string
-  scope: string
-}
-
-interface PermissionGroup {
-  category: string
-  permissions: PermissionItem[]
-}
+import { roleApi } from '@/api'
+import type { RoleVO, RoleUsersVO } from '@/api/types'
+import type { PermissionItem, PermissionGroup } from '@/api/role'
 
 const CATEGORY_LABELS: Record<string, string> = {
   system: '系统权限',
@@ -253,13 +242,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   rule: '规则权限',
 }
 
-const roles = ref<any[]>([])
+const roles = ref<RoleVO[]>([])
 const showCreateDialog = ref(false)
-const editingRole = ref<any>(null)
+const editingRole = ref<RoleVO | null>(null)
 const roleForm = reactive({ name: '', code: '', roleType: 'project', description: '' })
 
 const showPermDialog = ref(false)
-const permRole = ref<any>(null)
+const permRole = ref<RoleVO | null>(null)
 const rolePerms = ref<string[]>([])
 const permissionGroups = ref<PermissionGroup[]>([])
 const grantablePermissions = ref<Set<string>>(new Set())
@@ -288,7 +277,7 @@ const filteredPermissionGroups = computed(() => {
 })
 
 const showCloneDialog = ref(false)
-const cloneSource = ref<any>(null)
+const cloneSource = ref<RoleVO | null>(null)
 const cloneForm = reactive({ name: '', code: '' })
 const cloneLoading = ref(false)
 
@@ -299,21 +288,21 @@ const usersLoading = ref(false)
 
 async function loadRoles() {
   try {
-    const res: any = await request.get('/roles', { params: { pageSize: 100 } })
+    const res = await roleApi.list({ pageSize: 100 })
     roles.value = res.data?.list || []
   } catch (e) { roles.value = [] }
 }
 
 async function loadPermissionDefinitions() {
   try {
-    const res: any = await request.get('/roles/permission-definitions')
+    const res = await roleApi.listPermissionDefinitions()
     permissionGroups.value = res.data || []
   } catch (e) { permissionGroups.value = [] }
 }
 
 async function loadGrantablePermissions() {
   try {
-    const res: any = await request.get('/roles/my-grantable-permissions')
+    const res = await roleApi.listGrantablePermissions()
     const perms: string[] = res.data || []
     if (perms.includes('*')) {
       isFullAdmin.value = true
@@ -355,7 +344,7 @@ function openCreateDialog() {
   showCreateDialog.value = true
 }
 
-function editRole(role: any) {
+function editRole(role: RoleVO) {
   editingRole.value = role
   roleForm.name = role.name; roleForm.code = role.code; roleForm.roleType = role.roleType; roleForm.description = role.description || ''
   showCreateDialog.value = true
@@ -363,15 +352,15 @@ function editRole(role: any) {
 
 async function submitRole() {
   if (editingRole.value) {
-    await request.put(`/roles/${editingRole.value.id}`, { name: roleForm.name, description: roleForm.description })
+    await roleApi.update(editingRole.value.id, { name: roleForm.name, description: roleForm.description })
   } else {
-    await request.post('/roles', roleForm)
+    await roleApi.create({ name: roleForm.name, code: roleForm.code, roleType: roleForm.roleType, description: roleForm.description })
   }
   showCreateDialog.value = false
   loadRoles()
 }
 
-async function deleteRole(role: any) {
+async function deleteRole(role: RoleVO) {
   Modal.confirm({
     title: '确认删除角色',
     content: `确定要删除角色"${role.name}"吗？此操作不可撤销。`,
@@ -380,7 +369,7 @@ async function deleteRole(role: any) {
     okButtonProps: { status: 'danger' },
     async onOk() {
       try {
-        await request.delete(`/roles/${role.id}`)
+        await roleApi.delete(role.id)
         Message.success('角色已删除')
         loadRoles()
       } catch (e: any) {
@@ -390,7 +379,7 @@ async function deleteRole(role: any) {
   })
 }
 
-function openCloneDialog(role: any) {
+function openCloneDialog(role: RoleVO) {
   cloneSource.value = role
   cloneForm.name = `${role.name} (副本)`
   cloneForm.code = `${role.code}_copy`
@@ -404,7 +393,7 @@ async function submitClone() {
   }
   cloneLoading.value = true
   try {
-    await request.post(`/roles/${cloneSource.value.id}/clone`, {
+    await roleApi.clone(cloneSource.value!.id, {
       name: cloneForm.name.trim(),
       code: cloneForm.code.trim()
     })
@@ -418,11 +407,11 @@ async function submitClone() {
   }
 }
 
-async function openPermDialog(role: any) {
+async function openPermDialog(role: RoleVO) {
   permRole.value = role
   showPermDialog.value = true
   try {
-    const res: any = await request.get(`/roles/${role.id}/permissions`)
+    const res = await roleApi.getPermissions(role.id)
     rolePerms.value = res.data || []
   } catch (e) { rolePerms.value = [] }
 }
@@ -438,17 +427,17 @@ function togglePerm(perm: string) {
 }
 
 async function savePermissions() {
-  await request.put(`/roles/${permRole.value.id}/permissions`, rolePerms.value)
+  await roleApi.updatePermissions(permRole.value!.id, rolePerms.value)
   showPermDialog.value = false
   Message.success('权限保存成功')
 }
 
-async function openUsersDialog(role: any) {
+async function openUsersDialog(role: RoleVO) {
   showUsersDialog.value = true
   usersLoading.value = true
   usersData.value = null
   try {
-    const res: any = await request.get(`/roles/${role.id}/users`)
+    const res = await roleApi.getUsers(role.id)
     usersData.value = res.data || null
   } catch (e: any) {
     Message.error(e.response?.data?.message || '获取用户列表失败')

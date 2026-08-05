@@ -72,16 +72,17 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { Modal, Message } from '@arco-design/web-vue'
-import request from '@/api/request'
+import { organizationApi } from '@/api'
+import type { OrgVO } from '@/api/organization'
 
-const organizations = ref<any[]>([])
+const organizations = ref<OrgVO[]>([])
 const showDialog = ref(false)
-const editing = ref<any>(null)
+const editing = ref<OrgVO | null>(null)
 const form = reactive({ name: '', code: '', description: '' })
 
 async function loadOrgs() {
   try {
-    const res: any = await request.get('/organizations', { params: { pageSize: 100 } })
+    const res = await organizationApi.list({ pageSize: 100 })
     organizations.value = res.data?.list || []
   } catch (e) { organizations.value = [] }
 }
@@ -92,7 +93,7 @@ function openCreateDialog() {
   showDialog.value = true
 }
 
-function editOrg(org: any) {
+function editOrg(org: OrgVO) {
   editing.value = org
   form.name = org.name; form.code = org.code; form.description = org.description || ''
   showDialog.value = true
@@ -100,15 +101,15 @@ function editOrg(org: any) {
 
 async function submitOrg() {
   if (editing.value) {
-    await request.put(`/organizations/${editing.value.id}`, { name: form.name, description: form.description })
+    await organizationApi.update(editing.value.id, { name: form.name, description: form.description })
   } else {
-    await request.post('/organizations', form)
+    await organizationApi.create({ name: form.name, code: form.code, description: form.description })
   }
   showDialog.value = false
   loadOrgs()
 }
 
-async function deleteOrg(org: any) {
+async function deleteOrg(org: OrgVO) {
   Modal.confirm({
     title: '确认删除组织',
     content: `确定要删除组织"${org.name}"吗？此操作不可撤销。`,
@@ -117,7 +118,7 @@ async function deleteOrg(org: any) {
     okButtonProps: { status: 'danger' },
     async onOk() {
       try {
-        await request.delete(`/organizations/${org.id}`)
+        await organizationApi.delete(org.id)
         Message.success('组织已删除')
         loadOrgs()
       } catch (e: any) {
