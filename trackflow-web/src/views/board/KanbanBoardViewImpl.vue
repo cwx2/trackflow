@@ -1172,6 +1172,7 @@ const {
   hiddenIssueColumns, showAllColumns,
   boardColumnField, isMultiProjectBoard,
   getColumnIssues, getEffectiveColumnIssues,
+  getSwimlaneEffectiveColumnIssues, isEffectiveColumnClosed,
   getEffectiveColumnWipClass, getEffectiveColumnWipMax, getEffectiveColumnWipWarning,
   getEffectiveColumnEstimation,
   getWipTooltip, getColumnConfig, getWipWarning,
@@ -1257,14 +1258,15 @@ const {
   // Undo
   undoStack,
   // Progress
-  progressColumns, closedIssueCount, getClosedProgressBarHeight,
+  activeStatuses, closedIssueCount, closedIssueDetail,
+  progressIndicatorAriaLabel, getProgressBarHeight, getClosedProgressBarHeight,
   scrollToColumn,
   // Hidden columns
   onHiddenStatusTagClick,
   // Settings saved
   onSettingsSaved,
   // Board truncated
-  boardTruncated, boardTotalCount,
+  boardTruncated, boardTotalCount, boardTotalEstimation,
   // Helper functions
   getInitials, getSprintName,
   priorityIcon, typeLabel, typeInitial, getActiveSprintId,

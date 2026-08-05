@@ -3753,6 +3753,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
     hiddenIssueColumns, showAllColumns,
     boardColumnField, isMultiProjectBoard,
     getColumnIssues, getEffectiveColumnIssues,
+    getSwimlaneEffectiveColumnIssues, isEffectiveColumnClosed,
     getEffectiveColumnWipClass, getEffectiveColumnWipMax, getEffectiveColumnWipWarning,
     getEffectiveColumnEstimation,
     getWipTooltip, getColumnConfig, getWipWarning,
@@ -3846,7 +3847,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
     // Settings saved
     onSettingsSaved,
     // Board truncated
-    boardTruncated, boardTotalCount,
+    boardTruncated, boardTotalCount, boardTotalEstimation,
     // Helper functions
     localizeStatusName, localizePriority, localizeIssueType,
     getInitials, getSprintName,
