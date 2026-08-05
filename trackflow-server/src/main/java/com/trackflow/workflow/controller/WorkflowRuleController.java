@@ -107,6 +107,17 @@ public class WorkflowRuleController {
     }
 
     /**
+     * 清空规则执行日志
+     */
+    @DeleteMapping("/workflow-rules/{id}/execution-logs")
+    @PreAuthorize("isAuthenticated()")
+    public R<Void> clearExecutionLogs(@PathVariable("id") Long id) {
+        ruleService.getRule(id);
+        scheduledRuleService.clearExecutionLogs(id);
+        return R.ok();
+    }
+
+    /**
      * 获取指定工单可用的 Action Rule 命令列表（Guard 条件已通过的）
      */
     @GetMapping("/issues/{issueId}/action-rules")

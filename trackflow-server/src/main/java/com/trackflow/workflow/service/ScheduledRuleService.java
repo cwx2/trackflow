@@ -105,6 +105,15 @@ public class ScheduledRuleService {
         return logs.stream().map(this::toLogVO).toList();
     }
 
+    /**
+     * 清空指定规则的所有执行日志。
+     */
+    public void clearExecutionLogs(Long ruleId) {
+        logMapper.delete(new LambdaQueryWrapper<WorkflowRuleExecutionLog>()
+                .eq(WorkflowRuleExecutionLog::getRuleId, ruleId));
+        log.info("[ScheduledRule] 清空规则 id={} 的执行日志", ruleId);
+    }
+
     // ============ 核心执行逻辑 ============
 
     @Transactional(rollbackFor = Exception.class)
@@ -792,6 +801,7 @@ public class ScheduledRuleService {
         vo.setFailureCount(logEntry.getFailureCount());
         vo.setErrorMessage(logEntry.getErrorMessage());
         vo.setDurationMs(logEntry.getDurationMs());
+        vo.setIssueKey(logEntry.getIssueKey());
         return vo;
     }
 }

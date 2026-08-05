@@ -18,4 +18,5 @@ public class WorkflowRuleExecutionLogVO {
     private Integer failureCount;
     private String errorMessage;
     private Integer durationMs;
+    private String issueKey;
 }

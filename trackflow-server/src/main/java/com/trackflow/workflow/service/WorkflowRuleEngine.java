@@ -29,8 +29,10 @@ import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
+import com.trackflow.workflow.entity.WorkflowRuleExecutionLog;
 import com.trackflow.workflow.entity.WorkflowInitialStatus;
 import com.trackflow.workflow.mapper.WorkflowInitialStatusMapper;
+import com.trackflow.workflow.mapper.WorkflowRuleExecutionLogMapper;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,6 +73,7 @@ public class WorkflowRuleEngine {
     private final ApplicationEventPublisher eventPublisher;
     private final StringRedisTemplate redisTemplate;
     private final WorkflowInitialStatusMapper initialStatusMapper;
+    private final WorkflowRuleExecutionLogMapper executionLogMapper;
 
     /** Valid priority values recognized by the system. */
     private static final Set<String> VALID_PRIORITIES = Set.of(
@@ -376,14 +379,41 @@ public class WorkflowRuleEngine {
 
     private void evaluateAndExecute(List<WorkflowRule> rules, Issue issue, String changedField, String oldValue) {
         for (WorkflowRule rule : rules) {
+            long startTime = System.currentTimeMillis();
             try {
                 if (evaluateConditions(rule, issue, changedField, oldValue)) {
                     executeActions(rule, issue);
+                    recordExecutionLog(rule, issue, (int)(System.currentTimeMillis() - startTime), true, null);
+                } else {
+                    // Condition not met — record as skipped (matched=0)
+                    recordExecutionLog(rule, issue, (int)(System.currentTimeMillis() - startTime), false, null);
                 }
             } catch (Exception e) {
                 log.warn("[RuleEngine] Rule '{}' (id={}) failed for issue {}: {}",
                         rule.getName(), rule.getId(), issue.getId(), e.getMessage());
+                recordExecutionLog(rule, issue, (int)(System.currentTimeMillis() - startTime), false, e.getMessage());
             }
+        }
+    }
+
+    /**
+     * 记录 on-change 规则执行日志。
+     */
+    private void recordExecutionLog(WorkflowRule rule, Issue issue, int durationMs, boolean success, String errorMessage) {
+        try {
+            WorkflowRuleExecutionLog logEntry = new WorkflowRuleExecutionLog();
+            logEntry.setRuleId(rule.getId());
+            logEntry.setExecutedAt(LocalDateTime.now());
+            logEntry.setMatchedCount(1);
+            logEntry.setSuccessCount(success ? 1 : 0);
+            logEntry.setFailureCount(errorMessage != null ? 1 : 0);
+            logEntry.setErrorMessage(errorMessage);
+            logEntry.setDurationMs(durationMs);
+            logEntry.setIssueKey(issue.getIssueKey());
+            executionLogMapper.insert(logEntry);
+        } catch (Exception e) {
+            log.warn("[RuleEngine] 记录执行日志失败: ruleId={}, issueKey={}, error={}",
+                    rule.getId(), issue.getIssueKey(), e.getMessage());
         }
     }
 

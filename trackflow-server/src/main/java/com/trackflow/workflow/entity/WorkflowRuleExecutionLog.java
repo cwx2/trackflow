@@ -36,4 +36,7 @@ public class WorkflowRuleExecutionLog implements Serializable {
 
     /** 执行耗时（毫秒） */
     private Integer durationMs;
+
+    /** 触发规则的工单 Key（on-change 规则为单个工单，on-schedule 规则为 NULL） */
+    private String issueKey;
 }

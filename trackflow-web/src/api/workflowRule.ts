@@ -53,6 +53,7 @@ export interface WorkflowRuleExecutionLogVO {
   failureCount: number
   errorMessage: string | null
   durationMs: number
+  issueKey: string | null
 }
 
 /**
@@ -95,10 +96,15 @@ export const workflowRuleApi = {
   },
 
   /** 获取执行日志 */
-  getExecutionLogs(id: string, limit = 20) {
+  getExecutionLogs(id: string, limit = 50) {
     return request.get<any, R<WorkflowRuleExecutionLogVO[]>>(`/workflow-rules/${id}/execution-logs`, {
       params: { limit }
     })
+  },
+
+  /** 清空执行日志 */
+  clearExecutionLogs(id: string) {
+    return request.delete<any, R<void>>(`/workflow-rules/${id}/execution-logs`)
   },
 
   /** 获取指定工单可用的 Action Rule 列表 */

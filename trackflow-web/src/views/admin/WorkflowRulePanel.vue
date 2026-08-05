@@ -68,6 +68,7 @@
               size="small"
               @change="handleToggle(rule)"
             />
+            <a-button size="mini" @click="handleViewLogs(rule)">日志</a-button>
             <a-button size="mini" @click="handleEdit(rule)">编辑</a-button>
             <a-popconfirm
               content="确定删除此规则？"
@@ -455,6 +456,80 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 执行日志弹窗 -->
+    <a-modal
+      v-model:visible="logsVisible"
+      :title="'执行日志 — ' + (logsRuleName || '')"
+      :width="720"
+      :footer="false"
+      unmount-on-close
+    >
+      <div class="log-toolbar">
+        <a-input
+          v-model="logFilter"
+          placeholder="按工单 ID 或错误信息过滤..."
+          style="width: 240px"
+          allow-clear
+        >
+          <template #prefix><icon-search /></template>
+        </a-input>
+        <a-space>
+          <a-button size="small" @click="refreshLogs">
+            <template #icon><icon-refresh /></template>
+            刷新
+          </a-button>
+          <a-button size="small" @click="downloadLogs">
+            <template #icon><icon-download /></template>
+            下载
+          </a-button>
+          <a-popconfirm
+            content="确定清空此规则的所有执行日志？此操作不可撤销。"
+            @ok="clearLogs"
+          >
+            <a-button size="small" status="danger">
+              <template #icon><icon-delete /></template>
+              清空
+            </a-button>
+          </a-popconfirm>
+        </a-space>
+      </div>
+
+      <a-spin :loading="logsLoading">
+        <div v-if="filteredLogs.length > 0" class="logs-list">
+          <div
+            v-for="logEntry in filteredLogs"
+            :key="logEntry.id"
+            class="log-entry"
+            :class="{ 'log-error-entry': logEntry.failureCount > 0, 'log-skipped-entry': logEntry.successCount === 0 && logEntry.failureCount === 0 }"
+          >
+            <div class="log-header">
+              <span class="log-time">{{ formatLogTime(logEntry.executedAt) }}</span>
+              <span class="log-result-icon">
+                <template v-if="logEntry.failureCount > 0">❌</template>
+                <template v-else-if="logEntry.successCount > 0">✅</template>
+                <template v-else>⏭</template>
+              </span>
+              <span v-if="logEntry.issueKey" class="log-issue-key">
+                <a :href="'/issues?key=' + logEntry.issueKey" target="_blank">{{ logEntry.issueKey }}</a>
+              </span>
+              <span v-else class="log-issue-key log-batch">
+                匹配 {{ logEntry.matchedCount }} 个工单
+              </span>
+              <span class="log-duration">({{ logEntry.durationMs }}ms)</span>
+            </div>
+            <div v-if="logEntry.errorMessage" class="log-error-msg">
+              {{ logEntry.errorMessage }}
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!logsLoading" class="empty-logs">
+          <icon-history style="font-size: 32px; color: var(--color-text-4)" />
+          <p>暂无执行记录</p>
+          <span class="empty-hint">规则触发后将自动记录执行日志</span>
+        </div>
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
@@ -462,7 +537,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { workflowRuleApi, issueApi, sprintApi } from '@/api'
-import type { WorkflowRuleVO, WorkflowRuleDTO } from '@/api/workflowRule'
+import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
 
 const props = defineProps<{
@@ -478,6 +553,14 @@ const modalVisible = ref(false)
 const editingRule = ref<WorkflowRuleVO | null>(null)
 const submitting = ref(false)
 const formRef = ref()
+
+// ==================== Execution Logs State ====================
+const logsVisible = ref(false)
+const logsLoading = ref(false)
+const executionLogs = ref<WorkflowRuleExecutionLogVO[]>([])
+const logFilter = ref('')
+const logsRuleId = ref('')
+const logsRuleName = ref('')
 
 interface ConditionItem {
   conditionType: string
@@ -833,6 +916,79 @@ async function handleDelete(rule: WorkflowRuleVO) {
   }
 }
 
+// ==================== Execution Logs ====================
+const filteredLogs = computed(() => {
+  if (!logFilter.value) return executionLogs.value
+  const kw = logFilter.value.toLowerCase()
+  return executionLogs.value.filter(log =>
+    (log.issueKey && log.issueKey.toLowerCase().includes(kw)) ||
+    (log.errorMessage && log.errorMessage.toLowerCase().includes(kw))
+  )
+})
+
+async function handleViewLogs(rule: WorkflowRuleVO) {
+  logsRuleId.value = rule.id
+  logsRuleName.value = rule.name
+  logsVisible.value = true
+  logFilter.value = ''
+  await refreshLogs()
+}
+
+async function refreshLogs() {
+  logsLoading.value = true
+  try {
+    const res = await workflowRuleApi.getExecutionLogs(logsRuleId.value, 50)
+    if (res.code === 0) {
+      executionLogs.value = res.data
+    }
+  } catch {
+    // silent
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+function downloadLogs() {
+  const logs = filteredLogs.value
+  if (logs.length === 0) {
+    Message.warning('没有日志可下载')
+    return
+  }
+  const lines = logs.map(log => {
+    const time = formatLogTime(log.executedAt)
+    const result = log.failureCount > 0 ? 'FAILED' : log.successCount > 0 ? 'SUCCESS' : 'SKIPPED'
+    const issue = log.issueKey || `batch(${log.matchedCount})`
+    const error = log.errorMessage ? ` — ${log.errorMessage}` : ''
+    return `${time}  ${result}  ${issue}  (${log.durationMs}ms)${error}`
+  })
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `rule-logs-${logsRuleName.value}-${new Date().toISOString().slice(0, 10)}.txt`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function clearLogs() {
+  try {
+    await workflowRuleApi.clearExecutionLogs(logsRuleId.value)
+    executionLogs.value = []
+    Message.success('执行日志已清空')
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '清空失败')
+  }
+}
+
+function formatLogTime(dateStr: string) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  })
+}
+
 // ==================== Helpers ====================
 function eventLabel(event: string) {
   const map: Record<string, string> = {
@@ -1149,5 +1305,103 @@ watch(() => props.projectId, () => {
   font-size: 13px;
   color: var(--color-text-3);
   white-space: nowrap;
+}
+
+/* Execution Logs */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--color-fill-2);
+  border-left: 3px solid var(--color-success-6);
+}
+
+.log-entry.log-error-entry {
+  border-left-color: var(--color-danger-6);
+}
+
+.log-entry.log-skipped-entry {
+  border-left-color: var(--color-text-4);
+  opacity: 0.7;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.log-time {
+  color: var(--color-text-2);
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.log-result-icon {
+  font-size: 12px;
+}
+
+.log-issue-key a {
+  color: var(--color-primary-6);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.log-issue-key a:hover {
+  text-decoration: underline;
+}
+
+.log-issue-key.log-batch {
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.log-duration {
+  color: var(--color-text-4);
+  font-size: 11px;
+}
+
+.log-error-msg {
+  font-size: 12px;
+  color: var(--color-danger-6);
+  padding-left: 24px;
+}
+
+.empty-logs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.empty-logs p {
+  margin: 12px 0 4px;
+  font-size: 14px;
+  color: var(--color-text-2);
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--color-text-4);
 }
 </style>
