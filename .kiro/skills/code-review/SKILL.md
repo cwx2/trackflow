@@ -128,6 +128,128 @@ git diff --cached -- <file>
 | 组件 | `<script setup lang="ts">`，优先 Arco Design 组件 |
 | 响应处理 | `res.code === 0`，`Message.error()` 提示 |
 
+---
+
+#### Vue 3 企业级前端深度审查（核心）
+
+##### 1. 组件设计规范
+
+| 检查项 | ❌ MUST / SHOULD | 说明 |
+|--------|-----------------|------|
+| Props/Emits 必须有 TypeScript 类型 | MUST | `defineProps<Interface>()` + `defineEmits<{...}>()` |
+| 不得直接 mutate props | MUST | 单向数据流，违反会导致不可预期的渲染 |
+| 组件 >500 行必须拆分 | SHOULD | 模板 <150 行，script setup <200 行为佳 |
+| Smart/Dumb 组件分离 | SHOULD | 展示型组件不直接调 API，由容器组件传入数据 |
+| `v-for` 必须有 `:key` 且不得用 index | MUST | 用稳定唯一 ID；用 index 在排序/删除时 diff 错乱 |
+| `v-html` 不得渲染用户输入内容 | MUST（安全） | XSS 风险，必须先 DOMPurify 处理 |
+| `$parent` / `$root` 不得使用 | SHOULD | 破坏封装，改用 provide/inject 或 emits |
+| Prop drilling >3 层改用 provide/inject | SHOULD | 超过 3 层组件传参，应提升到 Pinia store 或 provide |
+
+##### 2. 响应式和性能规范
+
+**watch vs computed 识别（最常见错误）**：
+
+```typescript
+// ❌ 用 watch 计算派生数据（常见错误）
+watch(user, (u) => { fullName.value = u.firstName + ' ' + u.lastName })
+
+// ✅ 派生数据必须用 computed（有缓存，避免重复计算）
+const fullName = computed(() => `${user.value.firstName} ${user.value.lastName}`)
+```
+
+规则：
+- **派生数据**（基于已有状态计算出的值）→ 必须用 `computed`，不得用 `watch`
+- **副作用**（调 API、写 localStorage、修改 DOM）→ 用 `watch` 或 `watchEffect`
+- `watch(obj, fn, { deep: true })` 对大对象代价高 → 优先 watch 具体字段，或用 `watchEffect`
+
+**内存泄漏防护**（每次审核必查）：
+
+```typescript
+// ❌ onUnmounted 没有清理，组件卸载后仍在监听
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  emitter.on('issue-updated', handler)
+})
+
+// ✅ 必须配套 cleanup
+onMounted(() => window.addEventListener('resize', handleResize))
+onUnmounted(() => window.removeEventListener('resize', handleResize))
+// 或用 VueUse 的 useEventListener（自动清理）
+```
+
+规则：
+- `addEventListener` / `setInterval` / `setTimeout` / 全局事件总线订阅 → 必须在 `onUnmounted` 清理
+- WebSocket 连接、第三方库实例 → 必须在 `onUnmounted` / `onBeforeUnmount` 销毁
+
+##### 3. Composable 设计规范
+
+Composable 是 Vue 3 最重要的复用单元，审核时重点看是否提取了应该复用的逻辑：
+
+**识别信号**：多个组件都有类似的 `loading/error/data + fetch()` 模式 → 必须提取为 composable
+
+**标准写法**：
+```typescript
+// composables/useIssueList.ts
+export function useIssueList(projectId: Ref<string>) {
+  const issues = ref<IssueVO[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  async function fetch() {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await issueApi.list({ projectId: projectId.value })
+      issues.value = res.data ?? []
+    } catch (e: any) {
+      error.value = e.message ?? '加载失败'
+      Message.error(error.value)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  watch(projectId, () => fetch(), { immediate: true })
+  return { issues, loading, error, refetch: fetch }
+}
+```
+
+规则：
+- Composable 必须以 `use` 开头，放 `src/composables/` 目录
+- 接受响应式参数（`Ref<T>` 或 `ComputedRef<T>`），不接受原始值
+- 内部副作用（watch、事件监听）必须在 composable 内部清理，不依赖外部组件
+- 3 个以上组件有相同的 data fetch 模式 → 必须提取 composable（SHOULD）
+
+##### 4. 模板质量规范
+
+| 检查项 | 示例 | 严重程度 |
+|--------|------|---------|
+| 模板内不写复杂逻辑 | `v-if="list.filter(i => !i.done).length > 0"` 改为 computed | SHOULD |
+| 条件渲染用 `v-show` vs `v-if` 选对 | 频繁切换用 `v-show`，条件渲染重内容用 `v-if` | ⚠️ |
+| 长列表用虚拟滚动 | >200 条数据不虚拟化 → 卡顿 | SHOULD |
+| 异步组件用 `defineAsyncComponent` | 大型组件路由懒加载 | ⚠️ |
+
+##### 5. 状态管理规范（Pinia）
+
+| 规则 | 说明 |
+|------|------|
+| 短暂 UI 状态不入 store | `loading`、`error`、弹窗 `visible` 用组件内 `ref`，不放 Pinia |
+| 跨页面共享状态才入 store | 用户信息、权限、全局配置 → Pinia；单页面内状态 → 组件内 |
+| store action 必须有错误处理 | action 中 try-catch，不让错误静默消失 |
+| 不在 template 直接用 `$store` | 通过 `useXxxStore()` 解构，保持响应性 |
+
+##### 6. 前端反模式速查
+
+| 反模式 | 严重程度 | 正确做法 |
+|--------|---------|---------|
+| 组件内直接写 `axios.get('/api/xxx')` | MUST | 统一从 `@/api/xxx` 导入 |
+| `any` 类型泛滥（新增代码中 `any` > 3 处） | SHOULD | 定义具体 interface |
+| `console.log` 遗留在 diff 里 | SHOULD | 提交前清理 |
+| 空 catch 块（吞异常） | MUST | 至少 `Message.error()` + `console.error()` |
+| 图片/静态资源硬编码路径 | ⚠️ | 用 `@/assets/` 或 CDN 变量 |
+| 同一段 API 调用在 3+ 组件复制粘贴 | SHOULD | 提取 composable |
+| `watch` 里修改被 watch 的值（循环触发） | MUST | 找根因，用 computed 或加 guard 条件 |
+
 #### Arco Design 组件使用例外
 
 允许原生 HTML 的场景（代码中应有注释说明原因）：
