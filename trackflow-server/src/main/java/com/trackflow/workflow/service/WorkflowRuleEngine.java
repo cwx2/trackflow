@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.event.WorkflowRuleEvent;
+import com.trackflow.integration.entity.Notification;
+import com.trackflow.integration.mapper.NotificationMapper;
+import com.trackflow.integration.service.EmailSendService;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
 import com.trackflow.issue.entity.IssueComment;
@@ -53,7 +56,9 @@ public class WorkflowRuleEngine {
     private final IssueStatusMapper statusMapper;
     private final SysUserMapper sysUserMapper;
     private final SprintMapper sprintMapper;
+    private final NotificationMapper notificationMapper;
     private final ProjectService projectService;
+    private final EmailSendService emailSendService;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final StringRedisTemplate redisTemplate;
@@ -527,12 +532,24 @@ public class WorkflowRuleEngine {
                 String type = textOf(act, "type");
                 if ("set_field".equals(type)) modified |= doSetField(act, issue, rule);
                 else if ("add_tag".equals(type)) doAddTag(act, issue, rule);
+                else if ("remove_tag".equals(type)) doRemoveTag(act, issue, rule);
                 else if ("add_comment".equals(type)) doAddComment(act, issue, rule);
                 else if ("create_issue".equals(type)) {
                     Issue created = doCreateIssue(act, issue, rule);
                     if (created != null) createdIssues.add(created);
                 }
                 else if ("link_issue".equals(type)) doLinkIssue(act, issue, rule, createdIssues);
+                else if ("require_field".equals(type)) {
+                    if (!doRequireField(act, issue, rule)) {
+                        log.info("[RuleEngine] require_field blocked remaining actions in rule '{}' (id={})",
+                                rule.getName(), rule.getId());
+                        break; // 阻断后续动作
+                    }
+                }
+                else if ("send_email".equals(type)) doSendEmail(act, issue, rule);
+                else if ("show_alert".equals(type)) doShowAlert(act, issue, rule);
+                else if ("update_summary".equals(type)) modified |= doUpdateSummary(act, issue, rule);
+                else if ("update_description".equals(type)) modified |= doUpdateDescription(act, issue, rule);
             }
             if (modified) issueMapper.updateById(issue);
         } catch (Exception e) {
@@ -792,6 +809,314 @@ public class WorkflowRuleEngine {
         c.setUpdatedAt(LocalDateTime.now());
         commentMapper.insert(c);
         logActivity(issue.getId(), rule, "commented", null, null, null);
+    }
+
+    /**
+     * Action: remove_tag — 从工单移除指定标签。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "remove_tag", "tagId": "12345"}
+     * <p>
+     * 幂等操作：如果标签不存在则静默跳过。
+     */
+    private void doRemoveTag(JsonNode act, Issue issue, WorkflowRule rule) {
+        String tagIdStr = textOf(act, "tagId");
+        if (tagIdStr == null || tagIdStr.isBlank()) return;
+        try {
+            Long tagId = Long.parseLong(tagIdStr);
+            int deleted = tagRelationMapper.delete(new LambdaQueryWrapper<IssueTagRelation>()
+                    .eq(IssueTagRelation::getIssueId, issue.getId())
+                    .eq(IssueTagRelation::getTagId, tagId));
+            if (deleted > 0) {
+                logActivity(issue.getId(), rule, "tag_removed", "tag", tagIdStr, null);
+                log.info("[RuleEngine] remove_tag: removed tag {} from issue {} by rule '{}' (id={})",
+                        tagId, issue.getIssueKey(), rule.getName(), rule.getId());
+            }
+        } catch (NumberFormatException e) {
+            log.warn("[RuleEngine] remove_tag: invalid tagId '{}' in rule '{}' (id={})",
+                    tagIdStr, rule.getName(), rule.getId());
+        }
+    }
+
+    /**
+     * Action: require_field — 检查指定字段是否已填写，否则阻断后续动作执行。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "require_field", "field": "assignee", "errorMessage": "请先分配负责人"}
+     * <p>
+     * 注意：由于规则引擎在事务提交后异步执行，此动作无法阻断用户原始操作，
+     * 而是阻断本规则中后续动作的执行，并记录审计日志。
+     *
+     * @return true = 字段已填写，继续执行；false = 字段为空，阻断后续动作
+     */
+    private boolean doRequireField(JsonNode act, Issue issue, WorkflowRule rule) {
+        String field = textOf(act, "field");
+        if (field == null || field.isBlank()) {
+            log.warn("[RuleEngine] require_field: field is not specified in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return true; // 配置错误不阻断
+        }
+        String actual = fieldValue(issue, field);
+        if (actual == null || actual.isBlank()) {
+            String errorMessage = textOf(act, "errorMessage");
+            if (errorMessage == null || errorMessage.isBlank()) {
+                errorMessage = "字段 '" + field + "' 为空，规则动作被阻断";
+            }
+            errorMessage = interpolateVariables(errorMessage, issue, rule);
+            logActivity(issue.getId(), rule, "action_blocked", field, null, errorMessage);
+            log.info("[RuleEngine] require_field: field '{}' is empty on issue {}, blocking actions in rule '{}' (id={})",
+                    field, issue.getIssueKey(), rule.getName(), rule.getId());
+
+            // 发送站内通知给规则创建者，告知阻断发生
+            createAlertNotification(rule.getCreatedBy(), issue, rule,
+                    "规则阻断: " + errorMessage, "error");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Action: send_email — 向指定用户发送邮件通知。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "send_email", "target": "reporter", "subject": "[TrackFlow] {issue.key} 状态变更", "body": "工单已解决"}
+     * <p>
+     * target 支持：
+     * - "reporter" — 工单报告人
+     * - "assignee" — 当前负责人
+     * - "creator" — 规则创建者
+     * - 具体邮箱地址（包含 @）
+     */
+    private void doSendEmail(JsonNode act, Issue issue, WorkflowRule rule) {
+        String target = textOf(act, "target");
+        String subject = textOf(act, "subject");
+        String body = textOf(act, "body");
+
+        if (target == null || target.isBlank()) {
+            log.warn("[RuleEngine] send_email: target not specified in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return;
+        }
+        if (subject == null || subject.isBlank()) {
+            subject = "[TrackFlow] 工单 " + issue.getIssueKey() + " 规则通知";
+        }
+        if (body == null || body.isBlank()) {
+            body = "规则 '" + rule.getName() + "' 触发了邮件通知。";
+        }
+
+        subject = interpolateVariables(subject, issue, rule);
+        body = interpolateVariables(body, issue, rule);
+
+        String toAddress = resolveEmailTarget(target, issue, rule);
+        if (toAddress == null || toAddress.isBlank()) {
+            log.warn("[RuleEngine] send_email: cannot resolve email for target '{}' in rule '{}' (id={})",
+                    target, rule.getName(), rule.getId());
+            return;
+        }
+
+        // 检查邮件服务是否可用
+        if (!emailSendService.isEmailAvailable()) {
+            log.warn("[RuleEngine] send_email: email service not available, skipping in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return;
+        }
+
+        // 构建 HTML 邮件内容
+        String htmlBody = buildRuleEmailHtml(subject, body, issue, rule);
+        emailSendService.sendNotificationEmail(toAddress, subject, htmlBody);
+        logActivity(issue.getId(), rule, "email_sent", null, null, toAddress);
+        log.info("[RuleEngine] send_email: sent to {} for issue {} by rule '{}' (id={})",
+                toAddress, issue.getIssueKey(), rule.getName(), rule.getId());
+    }
+
+    /**
+     * Action: show_alert — 创建站内通知提示。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "show_alert", "style": "acknowledgment", "message": "工单已自动分配"}
+     * <p>
+     * style 支持: "acknowledgment"（普通提示）和 "error"（错误提示）
+     * 通过创建站内通知实现，前端通知面板实时展示。
+     */
+    private void doShowAlert(JsonNode act, Issue issue, WorkflowRule rule) {
+        String style = textOf(act, "style");
+        if (style == null || style.isBlank()) style = "acknowledgment";
+        String message = textOf(act, "message");
+        if (message == null || message.isBlank()) {
+            message = "规则 '" + rule.getName() + "' 已执行";
+        }
+        message = interpolateVariables(message, issue, rule);
+
+        // 通知目标：规则创建者（管理员）
+        String targetStr = textOf(act, "target");
+        Long targetUserId = resolveAlertTarget(targetStr, issue, rule);
+
+        createAlertNotification(targetUserId, issue, rule, message, style);
+        logActivity(issue.getId(), rule, "alert_shown", null, null, style + ": " + message);
+        log.info("[RuleEngine] show_alert: '{}' for issue {} by rule '{}' (id={})",
+                message, issue.getIssueKey(), rule.getName(), rule.getId());
+    }
+
+    /**
+     * Action: update_summary — 修改工单标题（支持变量插值）。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "update_summary", "value": "[BUG] {issue.summary}"}
+     */
+    private boolean doUpdateSummary(JsonNode act, Issue issue, WorkflowRule rule) {
+        String value = textOf(act, "value");
+        if (value == null || value.isBlank()) {
+            log.warn("[RuleEngine] update_summary: value is empty in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return false;
+        }
+        value = interpolateVariables(value, issue, rule);
+        String oldTitle = issue.getTitle();
+        if (Objects.equals(oldTitle, value)) return false;
+
+        issue.setTitle(value);
+        logActivity(issue.getId(), rule, "updated", "title", oldTitle, value);
+        log.info("[RuleEngine] update_summary: changed title on issue {} by rule '{}' (id={})",
+                issue.getIssueKey(), rule.getName(), rule.getId());
+        return true;
+    }
+
+    /**
+     * Action: update_description — 修改工单描述（支持变量插值）。
+     * <p>
+     * JSON 格式示例:
+     * {"type": "update_description", "value": "自动生成描述: {issue.type} - {issue.priority}"}
+     */
+    private boolean doUpdateDescription(JsonNode act, Issue issue, WorkflowRule rule) {
+        String value = textOf(act, "value");
+        if (value == null) {
+            log.warn("[RuleEngine] update_description: value is null in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return false;
+        }
+        value = interpolateVariables(value, issue, rule);
+        String oldDesc = issue.getDescription();
+        if (Objects.equals(oldDesc, value)) return false;
+
+        issue.setDescription(value);
+        logActivity(issue.getId(), rule, "updated", "description", oldDesc, value);
+        log.info("[RuleEngine] update_description: changed description on issue {} by rule '{}' (id={})",
+                issue.getIssueKey(), rule.getName(), rule.getId());
+        return true;
+    }
+
+    // ===== Helper methods for new actions =====
+
+    /**
+     * 解析邮件目标地址。
+     * 支持: "reporter", "assignee", "creator", 或直接的邮箱地址。
+     */
+    private String resolveEmailTarget(String target, Issue issue, WorkflowRule rule) {
+        if (target.contains("@")) {
+            // 直接是邮箱地址
+            return target;
+        }
+        Long userId = switch (target.toLowerCase()) {
+            case "reporter" -> issue.getReporterId();
+            case "assignee" -> issue.getAssigneeId();
+            case "creator" -> rule.getCreatedBy();
+            default -> {
+                // 尝试作为用户名解析
+                LambdaQueryWrapper<SysUser> qw = new LambdaQueryWrapper<>();
+                qw.eq(SysUser::getUsername, target);
+                SysUser user = sysUserMapper.selectOne(qw);
+                yield user != null ? user.getId() : null;
+            }
+        };
+        if (userId == null) return null;
+        SysUser user = sysUserMapper.selectById(userId);
+        return user != null ? user.getEmail() : null;
+    }
+
+    /**
+     * 解析 show_alert 的目标用户。
+     * 支持: "reporter", "assignee", "creator"(默认), 或数字 ID。
+     */
+    private Long resolveAlertTarget(String target, Issue issue, WorkflowRule rule) {
+        if (target == null || target.isBlank() || "creator".equals(target)) {
+            return rule.getCreatedBy();
+        }
+        return switch (target.toLowerCase()) {
+            case "reporter" -> issue.getReporterId() != null ? issue.getReporterId() : rule.getCreatedBy();
+            case "assignee" -> issue.getAssigneeId() != null ? issue.getAssigneeId() : rule.getCreatedBy();
+            default -> {
+                try {
+                    yield Long.parseLong(target);
+                } catch (NumberFormatException e) {
+                    yield rule.getCreatedBy();
+                }
+            }
+        };
+    }
+
+    /**
+     * 创建站内通知（用于 show_alert 和 require_field 阻断通知）。
+     */
+    private void createAlertNotification(Long userId, Issue issue, WorkflowRule rule, String message, String style) {
+        if (userId == null) return;
+        Notification notification = new Notification();
+        notification.setUserId(userId);
+        notification.setActorId(rule.getCreatedBy());
+        notification.setProjectId(issue.getProjectId());
+        notification.setTitle("⚡ " + rule.getName());
+        notification.setContent(message);
+        notification.setType("workflow_alert_" + style);
+        notification.setResourceType("issue");
+        notification.setResourceId(issue.getId());
+        notification.setResourceUrl("/issues/" + issue.getIssueKey());
+        notification.setReason("automation");
+        notification.setIsRead(false);
+        notification.setCreatedAt(LocalDateTime.now());
+        notification.setUpdatedAt(LocalDateTime.now());
+        notification.setAggregationCount(1);
+        notification.setMailSent(true); // alert 不需要额外发邮件
+        notificationMapper.insert(notification);
+    }
+
+    /**
+     * 构建规则动作邮件的 HTML 内容。
+     */
+    private String buildRuleEmailHtml(String subject, String body, Issue issue, WorkflowRule rule) {
+        return """
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+                  <h2 style="color: #1f2328; margin: 0 0 16px 0;">%s</h2>
+                  <div style="color: #57606a; font-size: 14px; line-height: 1.6; margin-bottom: 16px;">
+                    %s
+                  </div>
+                  <div style="background: #f6f8fa; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px;">
+                    <p style="margin: 0; font-size: 13px; color: #57606a;">
+                      <strong>工单:</strong> %s - %s<br/>
+                      <strong>触发规则:</strong> %s
+                    </p>
+                  </div>
+                  <hr style="border: none; border-top: 1px solid #d1d9e0; margin: 24px 0;" />
+                  <p style="color: #8b949e; font-size: 12px;">
+                    此邮件由 TrackFlow 工作流规则自动发送。
+                  </p>
+                </div>
+                """.formatted(
+                escapeHtml(subject),
+                escapeHtml(body).replace("\n", "<br/>"),
+                escapeHtml(issue.getIssueKey() != null ? issue.getIssueKey() : ""),
+                escapeHtml(issue.getTitle() != null ? issue.getTitle() : ""),
+                escapeHtml(rule.getName())
+        );
+    }
+
+    /**
+     * 简易 HTML 转义（防止 XSS）。
+     */
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     /**

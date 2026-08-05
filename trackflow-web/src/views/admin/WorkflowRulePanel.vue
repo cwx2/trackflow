@@ -233,7 +233,13 @@
               <a-select v-model="act.type" style="width: 140px" placeholder="动作类型">
                 <a-option value="set_field">设置字段</a-option>
                 <a-option value="add_tag">添加标签</a-option>
+                <a-option value="remove_tag">移除标签</a-option>
                 <a-option value="add_comment">添加评论</a-option>
+                <a-option value="require_field">要求必填字段</a-option>
+                <a-option value="send_email">发送邮件通知</a-option>
+                <a-option value="show_alert">显示提示消息</a-option>
+                <a-option value="update_summary">修改工单标题</a-option>
+                <a-option value="update_description">修改工单描述</a-option>
               </a-select>
 
               <!-- set_field -->
@@ -310,6 +316,55 @@
                 <a-input v-model="act.content" style="flex: 1" placeholder="评论内容（支持 {{rule_name}}、{{issue_key}}）" />
               </template>
 
+              <!-- remove_tag -->
+              <template v-else-if="act.type === 'remove_tag'">
+                <a-input v-model="act.tagId" style="flex: 1" placeholder="标签 ID" />
+              </template>
+
+              <!-- require_field -->
+              <template v-else-if="act.type === 'require_field'">
+                <a-select v-model="act.field" style="width: 120px" placeholder="检查字段">
+                  <a-option value="assignee">负责人</a-option>
+                  <a-option value="priority">优先级</a-option>
+                  <a-option value="due_date">截止日期</a-option>
+                  <a-option value="sprint">迭代</a-option>
+                  <a-option value="description">描述</a-option>
+                </a-select>
+                <a-input v-model="act.errorMessage" style="flex: 1" placeholder="阻断提示消息（如：请先分配负责人）" />
+              </template>
+
+              <!-- send_email -->
+              <template v-else-if="act.type === 'send_email'">
+                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
+                  <a-select v-model="act.target" style="width: 100%" placeholder="收件人">
+                    <a-option value="reporter">报告人</a-option>
+                    <a-option value="assignee">负责人</a-option>
+                    <a-option value="creator">规则创建者</a-option>
+                  </a-select>
+                  <a-input v-model="act.subject" placeholder="邮件主题（支持 {issue.key}、{issue.summary} 等变量）" />
+                  <a-textarea v-model="act.body" :auto-size="{ minRows: 2, maxRows: 4 }" placeholder="邮件正文（支持变量插值）" />
+                </div>
+              </template>
+
+              <!-- show_alert -->
+              <template v-else-if="act.type === 'show_alert'">
+                <a-select v-model="act.style" style="width: 100px" placeholder="样式">
+                  <a-option value="acknowledgment">普通提示</a-option>
+                  <a-option value="error">错误提示</a-option>
+                </a-select>
+                <a-input v-model="act.message" style="flex: 1" placeholder="提示消息（支持变量插值）" />
+              </template>
+
+              <!-- update_summary -->
+              <template v-else-if="act.type === 'update_summary'">
+                <a-input v-model="act.value" style="flex: 1" placeholder="新标题模板（支持 {issue.summary}、{issue.type} 等变量）" />
+              </template>
+
+              <!-- update_description -->
+              <template v-else-if="act.type === 'update_description'">
+                <a-textarea v-model="act.value" :auto-size="{ minRows: 2, maxRows: 4 }" style="flex: 1" placeholder="新描述模板（支持变量插值）" />
+              </template>
+
               <a-button type="text" status="danger" size="mini" @click="removeAction(idx)">
                 <icon-delete />
               </a-button>
@@ -359,6 +414,12 @@ interface ActionItem {
   value?: string
   tagId?: string
   content?: string
+  errorMessage?: string
+  target?: string
+  subject?: string
+  body?: string
+  style?: string
+  message?: string
 }
 
 const formData = reactive({
@@ -744,7 +805,13 @@ function actionSummary(json: string): string {
     switch (a.type) {
       case 'set_field': return `设置 ${fieldLabel(a.field)}=${a.value}`
       case 'add_tag': return `添加标签 #${a.tagId}`
+      case 'remove_tag': return `移除标签 #${a.tagId}`
       case 'add_comment': return '添加评论'
+      case 'require_field': return `要求 ${fieldLabel(a.field)} 必填`
+      case 'send_email': return `发邮件→${a.target || '?'}`
+      case 'show_alert': return `提示: ${a.message || '?'}`
+      case 'update_summary': return '修改标题'
+      case 'update_description': return '修改描述'
       default: return a.type
     }
   }).join(', ')
