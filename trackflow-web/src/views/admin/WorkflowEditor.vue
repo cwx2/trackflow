@@ -19,63 +19,13 @@
     
     <div class="page-header">
       <h2 class="page-title">工作流编辑器</h2>
-      <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
-        <a-tab-pane key="matrix" title="状态转换矩阵" />
-        <a-tab-pane key="rules" title="自动化规则" />
-      </a-tabs>
-      <div class="header-filters" v-show="activeMainTab === 'matrix'">
-        <a-select
-          v-model="selectedProject"
-          placeholder="选择项目"
-          style="width: 180px"
-          @change="onFilterChange"
-        >
-          <a-option value="0">全局（默认）</a-option>
-          <a-option
-            v-for="p in projects"
-            :key="p.id"
-            :value="p.id"
-          >{{ p.name }}</a-option>
-        </a-select>
-
-        <a-select
-          v-model="selectedType"
-          placeholder="工单类型"
-          style="width: 140px"
-          @change="onFilterChange"
-        >
-          <a-option value="*">所有类型</a-option>
-          <a-option
-            v-for="t in issueTypes"
-            :key="t"
-            :value="t"
-          >{{ t }}</a-option>
-        </a-select>
-
-        <a-select
-          v-model="selectedRole"
-          placeholder="请选择角色（必填）"
-          style="width: 160px"
-          :status="roleLoadingError ? 'error' : undefined"
-          @change="onFilterChange"
-        >
-          <a-option
-            v-for="role in roles"
-            :key="role.id"
-            :value="role.id"
-          >{{ role.name }}</a-option>
-          <template v-if="roles.length === 0 && !roleLoadingError" #empty>
-            <div style="padding: 8px 12px; text-align: center; color: var(--color-text-3);">
-              暂无角色，请先配置项目角色
-            </div>
-          </template>
-        </a-select>
-        <a-tooltip v-if="roleLoadingError" content="角色加载失败，点击重试">
-          <a-button type="text" size="small" @click="retryLoadRoles">
-            <template #icon><icon-refresh /></template>
-          </a-button>
-        </a-tooltip>
-
+      <div class="header-center">
+        <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
+          <a-tab-pane key="matrix" title="状态转换矩阵" />
+          <a-tab-pane key="rules" title="自动化规则" />
+        </a-tabs>
+      </div>
+      <div class="header-actions">
         <a-button
           :type="isDirty ? 'primary' : 'secondary'"
           :loading="saving"
@@ -92,6 +42,61 @@
           变更历史
         </a-button>
       </div>
+    </div>
+
+    <!-- 状态转换矩阵的筛选器（下沉到内容区顶部） -->
+    <div class="content-filters" v-show="activeMainTab === 'matrix'">
+      <a-select
+        v-model="selectedProject"
+        placeholder="选择项目"
+        style="width: 180px"
+        @change="onFilterChange"
+      >
+        <a-option value="0">全局（默认）</a-option>
+        <a-option
+          v-for="p in projects"
+          :key="p.id"
+          :value="p.id"
+        >{{ p.name }}</a-option>
+      </a-select>
+
+      <a-select
+        v-model="selectedType"
+        placeholder="工单类型"
+        style="width: 140px"
+        @change="onFilterChange"
+      >
+        <a-option value="*">所有类型</a-option>
+        <a-option
+          v-for="t in issueTypes"
+          :key="t"
+          :value="t"
+        >{{ t }}</a-option>
+      </a-select>
+
+      <a-select
+        v-model="selectedRole"
+        placeholder="请选择角色（必填）"
+        style="width: 160px"
+        :status="roleLoadingError ? 'error' : undefined"
+        @change="onFilterChange"
+      >
+        <a-option
+          v-for="role in roles"
+          :key="role.id"
+          :value="role.id"
+        >{{ role.name }}</a-option>
+        <template v-if="roles.length === 0 && !roleLoadingError" #empty>
+          <div style="padding: 8px 12px; text-align: center; color: var(--color-text-3);">
+            暂无角色，请先配置项目角色
+          </div>
+        </template>
+      </a-select>
+      <a-tooltip v-if="roleLoadingError" content="角色加载失败，点击重试">
+        <a-button type="text" size="small" @click="retryLoadRoles">
+          <template #icon><icon-refresh /></template>
+        </a-button>
+      </a-tooltip>
     </div>
 
     <!-- Author/Assignee 模式 Tab -->
@@ -1234,10 +1239,15 @@ onBeforeRouteLeave(() => {
 .page-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   margin-bottom: 16px;
-  flex-wrap: wrap;
   gap: 12px;
+  min-height: 40px;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
 }
 
 .workflow-main-tabs {
@@ -1252,12 +1262,25 @@ onBeforeRouteLeave(() => {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-bright);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.header-filters {
+.header-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.content-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
 }
 
 /* 矩阵工具栏 */
