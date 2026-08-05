@@ -6,7 +6,7 @@ scripts/worker-envs/
 youtrack-docs
 
 
-requirements
+requirements/
 
 # === Kiro / 文档 ===
 .kiro/

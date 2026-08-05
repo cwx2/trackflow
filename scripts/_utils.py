@@ -5,6 +5,7 @@
 import re
 import shutil
 import os
+import subprocess
 from pathlib import Path
 
 from _config import (
@@ -135,9 +136,10 @@ def cleanup_screenshots(keep_count: int = 200) -> None:
 
 
 def cleanup_working() -> None:
-    """将 working/ 中的残留文件放回 develop/"""
+    """将 working/ 中的残留文件放回 develop/，并用 git mv 提交路径变化。"""
     if not WORKING_DIR.exists():
         return
+    moved: list[tuple[str, str]] = []  # (old_rel, new_rel)
     for worker_dir in WORKING_DIR.iterdir():
         if worker_dir.is_dir():
             for f in worker_dir.glob("requirement-*.md"):
@@ -145,12 +147,31 @@ def cleanup_working() -> None:
                 if destination.exists():
                     log.error(f"[清理] 跳过 {f.name}：develop/ 已存在同名文件，避免覆盖")
                     continue
+                old_rel = str(f.relative_to(WORKSPACE)).replace("\\", "/")
+                new_rel = str(destination.relative_to(WORKSPACE)).replace("\\", "/")
                 shutil.move(str(f), str(destination))
+                moved.append((old_rel, new_rel))
                 log.info(f"[清理] {f.name} → develop/")
             try:
                 worker_dir.rmdir()
             except OSError:
                 pass
+
+    if moved:
+        try:
+            all_paths = [p for pair in moved for p in pair]
+            subprocess.run(
+                ["git", "add", "--"] + all_paths,
+                capture_output=True, cwd=str(WORKSPACE), timeout=15,
+            )
+            names = ", ".join(old.split("/")[-1] for old, _ in moved)
+            subprocess.run(
+                ["git", "commit", "-m", f"chore: recover {len(moved)} working req(s) to develop/ [{names}]"],
+                capture_output=True, cwd=str(WORKSPACE), timeout=30,
+            )
+            log.info(f"[清理] ✅ 已提交 {len(moved)} 个需求文件的路径归还记录")
+        except Exception as e:
+            log.warning(f"[清理] git 提交失败（文件已移动）: {e}")
 
 
 class AutomationInstanceLock:

@@ -46,6 +46,48 @@ def _is_transient_cli_output(output: str) -> bool:
     return output in {"STARTUP_FAIL", "TIMEOUT", "IDLE_TIMEOUT", "PROCESS_ERROR", "POLICY_BLOCKED"}
 
 
+def _git_archive_req(req_file: Path, target_dir: Path, commit_msg: str) -> bool:
+    """
+    用 git mv 把需求文件从 working/ 移到目标目录并提交，确保路径变化进入 git 历史。
+    返回 True 表示成功，False 表示降级为 shutil.move（git 操作失败时的兜底）。
+    """
+    if not req_file.exists():
+        return False
+    destination = target_dir / req_file.name
+    if destination.exists():
+        log.warning(f"[队列] 目标已存在同名文件 {destination.name}，跳过归档")
+        return False
+
+    # 先用 shutil.move 移动文件（git mv 要求目标不存在，且文件必须在 git 工作区内）
+    try:
+        shutil.move(str(req_file), str(destination))
+    except Exception as e:
+        log.warning(f"[队列] 移动文件失败: {e}")
+        return False
+
+    # git add 旧路径（标记为删除）+ 新路径（标记为新增）
+    old_rel = str(req_file.relative_to(WORKSPACE)).replace("\\", "/")
+    new_rel = str(destination.relative_to(WORKSPACE)).replace("\\", "/")
+    try:
+        subprocess.run(
+            ["git", "add", old_rel, new_rel],
+            capture_output=True, cwd=str(WORKSPACE), timeout=15,
+        )
+        result = subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            capture_output=True, text=True, cwd=str(WORKSPACE), timeout=30,
+        )
+        if result.returncode == 0:
+            log.info(f"[队列] ✅ 归档提交成功: {req_file.name} → {target_dir.name}/")
+            return True
+        else:
+            log.warning(f"[队列] git commit 失败（可能无变更）: {result.stderr.strip()}")
+            return True  # 文件已移动成功，commit 失败不影响功能
+    except Exception as e:
+        log.warning(f"[队列] git 归档操作异常: {e}，文件已移动但未提交")
+        return False
+
+
 def _move_back_to_develop(req_file: Path) -> None:
     if not req_file.exists():
         return
@@ -53,7 +95,7 @@ def _move_back_to_develop(req_file: Path) -> None:
     if destination.exists():
         log.error(f"[队列] 无法回滚 {req_file.name}：develop/ 已存在同名文件，保留 working/ 原文件")
         return
-    shutil.move(str(req_file), str(destination))
+    _git_archive_req(req_file, DEVELOP_DIR, f"chore: return {req_file.stem} to develop/")
 
 
 def _git_has_unrelated_changes() -> bool:
@@ -428,8 +470,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
     fix_done, blocked, block_reason = parse_fix_result(fix_output)
     if blocked:
         log.warning(f"[{label}] ⛔ {req_file.name} 被拦截: {block_reason}")
-        if req_file.exists():
-            shutil.move(str(req_file), str(REJECTED_DIR / req_file.name))
+        _git_archive_req(req_file, REJECTED_DIR, f"chore: reject {req_file.stem} (blocked)")
         return ConsumeOutcome(req_file.name)
 
     if not success or not fix_done:
@@ -712,7 +753,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             return ConsumeOutcome(None, transient=True)
 
         if req_file.exists():
-            shutil.move(str(req_file), str(IMPLEMENT_DIR / req_file.name))
+            _git_archive_req(req_file, IMPLEMENT_DIR, f"chore: implement {req_file.stem}")
         log.info(f"[{label}] ✅ {req_file.name} 全流程完成，已归档")
 
         # ── 步骤 6：检测并触发架构审计（可选）──
@@ -757,7 +798,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             status.append(f"审核未全通({MAX_REVIEW_RETRIES}轮)")
         log.warning(f"[{label}] ❌ {req_file.name} 未通过（{', '.join(status)}），放回 develop/")
         if req_file.exists():
-            shutil.move(str(req_file), str(DEVELOP_DIR / req_file.name))
+            _git_archive_req(req_file, DEVELOP_DIR, f"chore: return {req_file.stem} to develop/ (test/review failed)")
         return ConsumeOutcome(None)
 
     return ConsumeOutcome(req_file.name)
