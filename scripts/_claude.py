@@ -55,6 +55,23 @@ if not CLAUDE_CLI:
 log.debug(f"Claude CLI: {CLAUDE_CLI}")
 MCP_CONFIG_PATH = ".claude/mcp.json"
 
+# 单次调用最大预算（美元）。修复阶段可用更高预算。
+DEFAULT_MAX_BUDGET_USD = 0.75
+FIX_MAX_BUDGET_USD = 1.0
+
+# 构建 Claude Code 所需的环境变量（抑制交互式行为）
+_BASE_ENV = {
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_EDITOR": "true",
+    "EDITOR": "true",
+    "VISUAL": "true",
+    "CI": "true",
+    "NPM_CONFIG_YES": "true",
+    "DEBIAN_FRONTEND": "noninteractive",
+    "NO_COLOR": "1",
+    "FORCE_COLOR": "0",
+}
+
 # Skill 文件映射：prompt 中的 skill 名 → .kiro/skills/ 下的 SKILL.md 路径
 _SKILL_FILES: dict[str, str] = {
     "fix-requirement-auto": ".kiro/skills/fix-requirement-auto/SKILL.md",
@@ -245,18 +262,19 @@ def _build_env(worker_id: str | None = None) -> dict:
 
 # ============ 核心：运行 Claude Code ============
 
-def _build_base_cmd(budget_usd: float | None = None) -> list[str]:
-    """构建基础命令行参数。"""
+def _build_base_cmd(budget_usd: float | None = None, *, use_stdin: bool = False) -> list[str]:
+    """构建基础命令行参数。use_stdin=True 时不传 prompt 参数，改为通过 stdin 传入。"""
     budget = budget_usd or DEFAULT_MAX_BUDGET_USD
-    return [
+    cmd = [
         CLAUDE_CLI,
         "--print",
         "--dangerously-skip-permissions",
         "--permission-mode", "bypassPermissions",
         "--output-format", "json",
         "--max-budget-usd", str(budget),
-        f"--mcp-config={MCP_CONFIG_PATH}",   # use = form to prevent consuming prompt as additional config path
+        f"--mcp-config={MCP_CONFIG_PATH}",
     ]
+    return cmd
 
 
 def _parse_claude_output(stdout: str) -> dict | None:
@@ -292,9 +310,10 @@ def _is_transient_stop_reason(stop_reason: str) -> bool:
 
 
 def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
-             worker_id: str | None = None) -> tuple[bool, str]:
+             worker_id: str | None = None, stdin_data: bytes | None = None) -> tuple[bool, str]:
     """运行 Claude Code CLI，管理超时、熔断、输出解析。
 
+    如果 stdin_data 不为 None，通过 stdin 传入 prompt（避免 Windows 命令行长度限制）。
     返回 (success, output_text)。
     output_text 可能是:
       - 正常 AI 输出文本
@@ -314,9 +333,9 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     try:
         process = subprocess.Popen(
             cmd,
+            stdin=subprocess.PIPE if stdin_data else None,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=str(WORKSPACE),
-            encoding="utf-8", errors="replace",
+            text=False, cwd=str(WORKSPACE),
             env=_build_env(worker_id),
         )
     except Exception as e:
@@ -324,12 +343,26 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         _open_circuit(label)
         return False, "STARTUP_FAIL"
 
+    # 写入 stdin 数据（prompt 通过管道传入）
+    if stdin_data and process.stdin:
+        try:
+            process.stdin.write(stdin_data)
+            process.stdin.flush()
+            process.stdin.close()
+        except Exception as e:
+            log.warning(f"[{label}] stdin 写入异常: {e}")
+            try:
+                process.kill()
+            except Exception:
+                pass
+            return False, "STARTUP_FAIL"
+
     def read_output() -> None:
         try:
             if process.stdout is None:
                 return
-            for line in process.stdout:
-                line_stripped = line.rstrip("\r\n")
+            for raw_line in process.stdout:
+                line_stripped = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
                 safe_line = _redact_sensitive_output(line_stripped)
                 # JSON 行提取关键状态信息，非 JSON 行完整输出
                 if not line_stripped.startswith("{"):
@@ -502,8 +535,9 @@ def run_claude(prompt: str, label: str,
         # Claude Code 接受 opus/sonnet/haiku/fable 作为 --model 参数
         cmd += ["--model", effective_model]
 
-    cmd.append(prompt)
-    return _run_cli(cmd, label, req_stem=req_stem, worker_id=worker_id)
+    # Prompt 通过 stdin 传入（避免 Windows 命令行长度限制截断中文）
+    prompt_bytes = prompt.encode("utf-8")
+    return _run_cli(cmd, label, req_stem=req_stem, worker_id=worker_id, stdin_data=prompt_bytes)
 
 
 def run_claude_resume(session_id: str, prompt: str, label: str,
@@ -535,8 +569,9 @@ def run_claude_resume(session_id: str, prompt: str, label: str,
         cmd += ["--model", effective_model]
 
     cmd += ["--resume", session_id]
-    cmd.append(prompt)
-    return _run_cli(cmd, label, req_stem=req_stem, worker_id=worker_id)
+    # Prompt 通过 stdin 传入
+    prompt_bytes = prompt.encode("utf-8")
+    return _run_cli(cmd, label, req_stem=req_stem, worker_id=worker_id, stdin_data=prompt_bytes)
 
 
 def get_current_commit() -> str:
