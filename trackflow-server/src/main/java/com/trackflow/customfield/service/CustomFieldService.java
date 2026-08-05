@@ -97,12 +97,13 @@ public class CustomFieldService {
     private final CustomFieldValueService valueService;
     private final CustomFieldDisplayService displayService;
     private final SysUserMapper sysUserMapper;
+    private final com.trackflow.customfield.handler.CustomFieldHandlerRegistry handlerRegistry;
 
     // ========== 全局字段定义 CRUD ==========
 
     @Transactional(rollbackFor = Exception.class)
     public CustomFieldDefinition create(CreateCustomFieldDTO dto) {
-        if (!CustomFieldValidationEngine.SUPPORTED_FORMATS.contains(dto.getFieldFormat())) {
+        if (!handlerRegistry.getSupportedFormats().contains(dto.getFieldFormat())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的字段类型: " + dto.getFieldFormat());
         }
 

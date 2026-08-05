@@ -7,6 +7,9 @@ import com.trackflow.customfield.entity.CustomFieldDefinition;
 import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.customfield.entity.CustomFieldProject;
 import com.trackflow.customfield.entity.CustomFieldValue;
+import com.trackflow.customfield.handler.CustomFieldHandlerRegistry;
+import com.trackflow.customfield.handler.CustomFieldTypeHandler;
+import com.trackflow.customfield.handler.DisplayContext;
 import com.trackflow.customfield.mapper.CustomFieldDefinitionMapper;
 import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
 import com.trackflow.customfield.mapper.CustomFieldProjectMapper;
@@ -43,6 +46,7 @@ public class CustomFieldDisplayService {
     private final IssueMapper issueMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final PermissionService permissionService;
+    private final CustomFieldHandlerRegistry handlerRegistry;
 
     /**
      * 批量获取多个 Issue 的自定义字段展示值（不含颜色）
@@ -527,88 +531,73 @@ public class CustomFieldDisplayService {
     // ========== 展示值解析方法 ==========
 
     /**
-     * 将原始值转换为用户可读的展示值（批量版，使用预加载 Map）
+     * 将原始值转换为用户可读的展示值（批量版，使用预加载 Map）。
+     * 通过 HandlerRegistry 委托给对应类型 Handler 实现。
      */
     public String resolveDisplayValue(String rawValue, CustomFieldDefinition fieldDef,
                                        Map<Long, String> optionTextMap, Map<Long, String> userNameMap) {
         if (rawValue == null || rawValue.isBlank()) {
             return null;
         }
-        return switch (fieldDef.getFieldFormat()) {
-            case "list", "state", "ownedField", "version" -> {
-                try {
-                    Long optionId = Long.parseLong(rawValue);
-                    yield optionTextMap.getOrDefault(optionId, rawValue);
-                } catch (NumberFormatException e) {
-                    yield rawValue;
-                }
-            }
-            case "user" -> {
-                try {
-                    Long userId = Long.parseLong(rawValue);
-                    yield userNameMap.getOrDefault(userId, rawValue);
-                } catch (NumberFormatException e) {
-                    yield rawValue;
-                }
-            }
-            case "bool" -> "true".equals(rawValue) ? "是" : "否";
-            case "period" -> {
-                try {
-                    long minutes = Long.parseLong(rawValue);
-                    yield CustomFieldValidationEngine.formatMinutesToPeriod(minutes);
-                } catch (NumberFormatException e) {
-                    yield rawValue;
-                }
-            }
-            case "string", "text", "int", "float", "date", "datetime" -> rawValue;
-            default -> {
-                log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
-                        fieldDef.getFieldFormat(), fieldDef.getName(), fieldDef.getId());
-                yield rawValue;
-            }
-        };
+        var handler = handlerRegistry.getHandler(fieldDef.getFieldFormat());
+        if (handler.isPresent()) {
+            return handler.get().toDisplayValue(rawValue, fieldDef, DisplayContext.of(optionTextMap, userNameMap));
+        } else {
+            log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
+                    fieldDef.getFieldFormat(), fieldDef.getName(), fieldDef.getId());
+            return rawValue;
+        }
     }
 
     /**
-     * 将存储值转为前端可读展示值（单次查询版，用于活动日志）
+     * 将存储值转为前端可读展示值（单次查询版，用于活动日志）。
+     * 通过 HandlerRegistry 委托给对应类型 Handler 实现，
+     * 对需要外部数据的类型（list/user）单次查库构建上下文。
      */
     public String resolveDisplayValue(CustomFieldDefinition field, String rawValue) {
         if (rawValue == null || rawValue.isBlank()) return "";
-        switch (field.getFieldFormat()) {
-            case "list", "state", "ownedField", "version" -> {
-                try {
-                    Long optionId = Long.parseLong(rawValue);
-                    CustomFieldOption option = optionMapper.selectById(optionId);
-                    return option != null ? option.getValue() : rawValue;
-                } catch (NumberFormatException e) {
-                    return rawValue;
-                }
-            }
-            case "user" -> {
-                try {
-                    Long userId = Long.parseLong(rawValue);
-                    var user = userMapper.selectById(userId);
-                    return user != null ? user.getDisplayName() : rawValue;
-                } catch (NumberFormatException e) {
-                    return rawValue;
-                }
-            }
-            case "bool" -> { return "true".equals(rawValue) ? "是" : "否"; }
-            case "period" -> {
-                try {
-                    long minutes = Long.parseLong(rawValue);
-                    return CustomFieldValidationEngine.formatMinutesToPeriod(minutes);
-                } catch (NumberFormatException e) {
-                    return rawValue;
-                }
-            }
-            case "string", "text", "int", "float", "date", "datetime" -> { return rawValue; }
-            default -> {
-                log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
-                        field.getFieldFormat(), field.getName(), field.getId());
-                return rawValue;
-            }
+
+        var handler = handlerRegistry.getHandler(field.getFieldFormat());
+        if (handler.isEmpty()) {
+            log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
+                    field.getFieldFormat(), field.getName(), field.getId());
+            return rawValue;
         }
+
+        // 对需要外部数据的类型构建单次查询上下文
+        DisplayContext ctx = buildSingleQueryContext(field, rawValue);
+        return handler.get().toDisplayValue(rawValue, field, ctx);
+    }
+
+    /**
+     * 为单次查询版构建 DisplayContext（仅在 list/user 类型时查库）
+     */
+    private DisplayContext buildSingleQueryContext(CustomFieldDefinition field, String rawValue) {
+        String format = field.getFieldFormat();
+        if (CustomFieldOptionService.isEnumLikeFormat(format)) {
+            try {
+                Long optionId = Long.parseLong(rawValue);
+                CustomFieldOption option = optionMapper.selectById(optionId);
+                if (option != null) {
+                    return DisplayContext.of(Map.of(optionId, option.getValue()), Map.of());
+                }
+            } catch (NumberFormatException e) {
+                // fall through
+            }
+            return DisplayContext.EMPTY;
+        } else if ("user".equals(format)) {
+            try {
+                Long userId = Long.parseLong(rawValue);
+                var user = userMapper.selectById(userId);
+                if (user != null) {
+                    return DisplayContext.of(Map.of(), Map.of(userId, user.getDisplayName()));
+                }
+            } catch (NumberFormatException e) {
+                // fall through
+            }
+            return DisplayContext.EMPTY;
+        }
+        return DisplayContext.EMPTY;
     }
 
     /**

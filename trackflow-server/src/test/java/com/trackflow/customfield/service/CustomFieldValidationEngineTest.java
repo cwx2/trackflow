@@ -2,6 +2,7 @@ package com.trackflow.customfield.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
+import com.trackflow.customfield.handler.*;
 import com.trackflow.customfield.mapper.CustomFieldOptionMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.entity.SysUser;
@@ -34,7 +35,24 @@ class CustomFieldValidationEngineTest {
 
     @BeforeEach
     void setUp() {
-        engine = new CustomFieldValidationEngine(optionMapper, userMapper, projectMemberMapper);
+        // 构建所有 Handler 实例
+        List<CustomFieldTypeHandler> handlers = List.of(
+                new StringFieldHandler(),
+                new TextFieldHandler(),
+                new IntFieldHandler(),
+                new FloatFieldHandler(),
+                new DateFieldHandler(),
+                new DateTimeFieldHandler(),
+                new BoolFieldHandler(),
+                new ListFieldHandler(optionMapper),
+                new StateFieldHandler(optionMapper),
+                new OwnedFieldHandler(optionMapper),
+                new VersionFieldHandler(optionMapper),
+                new UserFieldHandler(userMapper, projectMemberMapper),
+                new PeriodFieldHandler()
+        );
+        CustomFieldHandlerRegistry registry = new CustomFieldHandlerRegistry(handlers);
+        engine = new CustomFieldValidationEngine(registry);
     }
 
     private CustomFieldDefinition field(String name, String format) {

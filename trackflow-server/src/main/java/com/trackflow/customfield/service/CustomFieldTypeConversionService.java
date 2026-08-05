@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.customfield.entity.*;
+import com.trackflow.customfield.handler.CustomFieldHandlerRegistry;
 import com.trackflow.customfield.mapper.*;
 import com.trackflow.customfield.vo.AvailableConversionsVO;
 import com.trackflow.customfield.vo.ConversionResultVO;
@@ -37,6 +38,7 @@ public class CustomFieldTypeConversionService {
     private final CustomFieldDefinitionMapper definitionMapper;
     private final CustomFieldValueMapper valueMapper;
     private final CustomFieldOptionMapper optionMapper;
+    private final CustomFieldHandlerRegistry handlerRegistry;
 
     /**
      * 类型转换规则映射表（sourceFormat -> Set<targetFormat>）
@@ -537,19 +539,8 @@ public class CustomFieldTypeConversionService {
     }
 
     private String getFormatDisplayName(String format) {
-        return switch (format) {
-            case "string" -> "文本（单行）";
-            case "text" -> "文本（多行）";
-            case "int" -> "整数";
-            case "float" -> "浮点数";
-            case "date" -> "日期";
-            case "datetime" -> "日期时间";
-            case "period" -> "时间周期";
-            case "bool" -> "布尔值";
-            case "list" -> "枚举列表";
-            case "user" -> "用户";
-            case "version" -> "版本";
-            default -> format;
-        };
+        return handlerRegistry.getHandler(format)
+                .map(h -> h.typeLabel())
+                .orElse(format);
     }
 }
