@@ -322,6 +322,7 @@ const selectedSprint = ref<string | undefined>(undefined)
 let userExplicitlySelectedAll = false
 const keyword = ref('')
 const loading = ref(false)
+const issues = ref<BoardIssue[]>([])
 const { projects, projectLoadState, loadProjects } = useProjectList()
 
 // ===== 负责人筛选 =====
@@ -1451,7 +1452,6 @@ function onSprintChange() {
 }
 const sprints = ref<SprintVO[]>([])
 const statuses = ref<IssueStatusVO[]>([])
-const issues = ref<BoardIssue[]>([])
 
 // ===== 卡片多选 =====
 const {
