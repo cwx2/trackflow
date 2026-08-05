@@ -307,7 +307,8 @@ const createPanelRef = ref<InstanceType<typeof IssueCreatePanel> | null>(null)
 
 // ============ Actions composable ============
 const actions = useIssueDetailActions({
-  issue, loadAll, loadAttachments, loadLinks,
+  issue, attachments, loadAll, loadAttachments, loadLinks,
+  loadIssueProjectAttributes, loadTimeFormPermissions,
   canEditIssueEffective, hasProjectPermission,
   currentUserId, sidebarCollapsed, sidebarRef,
 })
@@ -334,10 +335,6 @@ const {
 onMounted(() => {
   loadAll()
   document.addEventListener('paste', onPasteUpload)
-  if (issue.value?.projectId) {
-    loadIssueProjectAttributes(issue.value.projectId)
-    loadTimeFormPermissions(issue.value.projectId)
-  }
 })
 
 onUnmounted(() => {

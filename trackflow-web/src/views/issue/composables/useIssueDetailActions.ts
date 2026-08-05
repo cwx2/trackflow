@@ -18,14 +18,17 @@ import { ERROR_CODES } from '@/api/error-codes'
 import { useNavBadge } from '@/composables/useNavBadge'
 import { useTimerStore } from '@/stores/timer'
 import { useDrafts } from './useDrafts'
-import type { IssueDetailVO, ProjectMemberVO } from '@/api/types'
+import type { IssueDetailVO, IssueAttachmentVO, ProjectMemberVO } from '@/api/types'
 import type { StatusInfo } from '../components/DetailSidebar.vue'
 
 interface ActionDeps {
   issue: { value: IssueDetailVO | null }
+  attachments: { value: IssueAttachmentVO[] }
   loadAll: () => Promise<void>
   loadAttachments: () => Promise<void>
   loadLinks: () => Promise<void>
+  loadIssueProjectAttributes: (projectId: string) => Promise<void>
+  loadTimeFormPermissions: (projectId: string) => Promise<void>
   canEditIssueEffective: { value: boolean }
   hasProjectPermission: (perm: string) => boolean
   currentUserId: { value: string }
@@ -152,9 +155,12 @@ export function useIssueDetailActions(deps: ActionDeps) {
   async function onDeleteAllAttachments() {
     if (!deps.issue.value) return
     try {
-      for (const att of []) { /* placeholder - caller passes attachments */ }
-      // This needs the attachments list - call from component
-    } catch { /* ignore */ }
+      for (const att of deps.attachments.value) {
+        await issueApi.deleteAttachment(deps.issue.value.id, att.id)
+      }
+      Message.success('所有附件已删除')
+      deps.loadAttachments()
+    } catch (e: any) { Message.error(e.response?.data?.message || '删除附件失败') }
   }
 
   // ============ Delete / Move ============
@@ -451,6 +457,11 @@ export function useIssueDetailActions(deps: ActionDeps) {
     timeFormAttrValues.value = {}
     timeFormAuthorId.value = ''
     showTimeDialog.value = true
+    // Load time-related project attributes on demand
+    if (deps.issue.value?.projectId) {
+      deps.loadIssueProjectAttributes(deps.issue.value.projectId)
+      deps.loadTimeFormPermissions(deps.issue.value.projectId)
+    }
   }
 
   async function handleStartTimer() {
