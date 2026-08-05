@@ -63,7 +63,8 @@ public class FileController {
             if (isInlinePreviewAllowed(contentType)) {
                 response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline");
             } else {
-                String fileName = objectName.substring(objectName.lastIndexOf('/') + 1);
+                // 尝试从 DB 获取原始文件名（附件可能使用 UUID 存储路径）
+                String fileName = resolveOriginalFileName(objectName);
                 response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
             }
@@ -89,6 +90,21 @@ public class FileController {
         }
         // 允许 PDF 内联
         return "application/pdf".equals(contentType);
+    }
+
+    /**
+     * 从数据库查询附件的原始文件名。
+     * 如果路径不是附件路径或 DB 中找不到记录，则降级为从路径截取。
+     */
+    private String resolveOriginalFileName(String objectName) {
+        if (objectName.startsWith("issues/") && objectName.contains("/attachments/")) {
+            IssueAttachment attachment = issueService.findByFilePath(objectName);
+            if (attachment != null && attachment.getFileName() != null && !attachment.getFileName().isBlank()) {
+                return attachment.getFileName();
+            }
+        }
+        // 降级：从路径截取文件名
+        return objectName.substring(objectName.lastIndexOf('/') + 1);
     }
 
     private String guessContentType(String filename) {

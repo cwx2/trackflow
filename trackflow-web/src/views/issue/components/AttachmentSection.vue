@@ -57,13 +57,17 @@
             <!-- Image thumbnail -->
             <div v-if="isImage(att)" class="att-thumb">
               <a-image
-                :src="getFileUrl(att.filePath)"
+                v-if="getImageSrc(att.filePath)"
+                :src="getImageSrc(att.filePath)"
                 :alt="att.fileName"
                 width="100%"
                 height="100%"
                 fit="cover"
                 :preview-props="{ actionsLayout: ['zoomIn', 'zoomOut', 'originalSize', 'rotateLeft', 'rotateRight'] }"
               />
+              <div v-else class="att-thumb-loading">
+                <a-spin :size="16" />
+              </div>
               <!-- Hover overlay -->
               <div class="att-overlay" @click.stop>
                 <button class="att-ov-btn" @click="download(att)" title="下载">
@@ -151,12 +155,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Modal } from '@arco-design/web-vue'
 import {
   IconUpload, IconMore, IconDownload, IconDelete, IconLock,
   IconApps, IconList, IconFile, IconSortDescending, IconSortAscending
 } from '@arco-design/web-vue/es/icon'
+import { useAttachmentThumbnails, useAuthenticatedFile } from '@/composables/useAuthenticatedFile'
 
 export interface AttachmentItem {
   id: string
@@ -191,6 +196,28 @@ const viewMode = ref<'grid' | 'list'>(
 const sortMode = ref<'date-desc' | 'date-asc' | 'type'>(
   (localStorage.getItem('tf-att-sort') as any) || 'date-desc'
 )
+
+// ========== Authenticated File Loading ==========
+const { thumbnailMap, loadThumbnails } = useAttachmentThumbnails()
+const { downloadFile } = useAuthenticatedFile()
+
+// 当附件列表变化时，加载图片缩略图
+watch(() => props.attachments, (atts) => {
+  const imageFilePaths = atts
+    .filter(a => isImage(a))
+    .map(a => a.filePath)
+  if (imageFilePaths.length > 0) {
+    loadThumbnails(imageFilePaths)
+  }
+}, { immediate: true })
+
+/**
+ * 获取图片的已认证 Blob URL（用于 <img> 标签）
+ * 如果尚未加载完成，返回空字符串（不渲染图片）
+ */
+function getImageSrc(filePath: string): string {
+  return thumbnailMap.value[filePath] || ''
+}
 
 // ========== Drag & Drop ==========
 const isDragOver = ref(false)
@@ -286,10 +313,13 @@ function handleClick(att: AttachmentItem) {
 }
 
 function download(att: AttachmentItem) {
-  const a = document.createElement('a')
-  a.href = getFileUrl(att.filePath)
-  a.download = att.fileName
-  a.click()
+  downloadFile(att.filePath, att.fileName).catch(() => {
+    // fallback: 如果 blob 下载失败，尝试直接链接（可能也会失败）
+    const a = document.createElement('a')
+    a.href = getFileUrl(att.filePath)
+    a.download = att.fileName
+    a.click()
+  })
 }
 
 function downloadAll() {
@@ -420,6 +450,14 @@ function confirmDeleteAll() {
   height: 100%;
 }
 .att-thumb--file {
+  background: var(--tf-bg-surface);
+}
+.att-thumb-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   background: var(--tf-bg-surface);
 }
 .att-file-icon {
