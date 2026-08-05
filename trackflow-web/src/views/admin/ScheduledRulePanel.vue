@@ -51,9 +51,12 @@
             </div>
             <div class="rule-meta">
               <span v-if="rule.lastExecutedAt" class="meta-item">
-                上次执行: {{ formatTime(rule.lastExecutedAt) }}
+                <icon-history /> 上次: {{ formatTime(rule.lastExecutedAt) }}
               </span>
               <span v-else class="meta-item">尚未执行</span>
+              <span v-if="getNextExecution(rule.cronExpression)" class="meta-item meta-next">
+                <icon-clock-circle /> 下次: {{ getNextExecution(rule.cronExpression) }}
+              </span>
             </div>
           </div>
           <div class="rule-actions">
@@ -111,24 +114,48 @@
           <a-textarea v-model="formData.description" placeholder="规则功能说明（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
         </a-form-item>
 
-        <a-form-item label="执行频率" field="cronExpression" :rules="[{ required: true, message: '请选择执行频率' }]">
-          <a-select v-model="formData.cronExpression">
-            <a-option value="hourly">每小时</a-option>
-            <a-option value="daily">每天</a-option>
-            <a-option value="weekly">每周</a-option>
-            <a-option value="custom">自定义 Cron</a-option>
-          </a-select>
+        <a-form-item label="常用周期">
+          <a-space wrap>
+            <a-tag
+              v-for="preset in CRON_PRESETS"
+              :key="preset.value"
+              :color="formData.cronExpression === preset.value ? 'arcoblue' : undefined"
+              class="cron-preset-tag"
+              @click="applyCronPreset(preset.value)"
+            >
+              {{ preset.label }}
+            </a-tag>
+          </a-space>
         </a-form-item>
 
         <a-form-item
-          v-if="formData.cronExpression === 'custom'"
           label="Cron 表达式"
-          field="customCron"
+          field="cronExpression"
           :rules="[{ required: true, message: '请输入 Cron 表达式' }]"
         >
-          <a-input v-model="formData.customCron" placeholder="如：0 9 * * * （每天 9 点）" />
+          <a-input
+            v-model="formData.cronExpression"
+            placeholder="如：0 9 * * 1（每周一 09:00）"
+            @input="parseCronExpression"
+          />
           <template #extra>标准 5 段 cron 格式：分 时 日 月 周</template>
         </a-form-item>
+
+        <!-- Cron 人类可读描述 -->
+        <div v-if="cronDescription" class="cron-feedback cron-description">
+          <icon-clock-circle /> {{ cronDescription }}
+        </div>
+        <div v-if="cronError" class="cron-feedback cron-error">
+          <icon-exclamation-circle /> Cron 表达式格式有误
+        </div>
+
+        <!-- 下次执行时间预览 -->
+        <div v-if="nextExecutions.length > 0" class="cron-next-executions">
+          <div class="cron-next-label">接下来的 5 次执行：</div>
+          <div v-for="(t, i) in nextExecutions" :key="i" class="cron-next-time">
+            {{ t }}
+          </div>
+        </div>
 
         <!-- 工单匹配条件 -->
         <a-form-item label="工单匹配条件">
@@ -250,6 +277,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import cronstrue from 'cronstrue/i18n'
+import { CronExpressionParser } from 'cron-parser'
 import { workflowRuleApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
 import VariableInput from './components/VariableInput.vue'
@@ -270,6 +299,20 @@ const logsVisible = ref(false)
 const logsLoading = ref(false)
 const executionLogs = ref<WorkflowRuleExecutionLogVO[]>([])
 
+// ==================== Cron Presets ====================
+const CRON_PRESETS = [
+  { label: '每小时', value: '0 * * * *' },
+  { label: '每天 09:00', value: '0 9 * * *' },
+  { label: '每周一 09:00', value: '0 9 * * 1' },
+  { label: '每周五 18:00', value: '0 18 * * 5' },
+  { label: '每月1日 09:00', value: '0 9 1 * *' },
+]
+
+// ==================== Cron Parsing State ====================
+const cronDescription = ref('')
+const cronError = ref(false)
+const nextExecutions = ref<string[]>([])
+
 interface ConditionItem {
   field: string
   operator: string
@@ -287,8 +330,7 @@ interface ActionItem {
 const formData = reactive({
   name: '',
   description: '',
-  cronExpression: 'daily',
-  customCron: '',
+  cronExpression: '0 9 * * *',
   conditions: [] as ConditionItem[],
   actions: [] as ActionItem[]
 })
@@ -302,6 +344,67 @@ const filteredRules = computed(() => {
   }
   return list
 })
+
+// ==================== Cron Parsing ====================
+function parseCronExpression() {
+  const expr = formData.cronExpression?.trim()
+  if (!expr) {
+    cronDescription.value = ''
+    cronError.value = false
+    nextExecutions.value = []
+    return
+  }
+  try {
+    cronDescription.value = cronstrue.toString(expr, { locale: 'zh_CN' })
+    const interval = CronExpressionParser.parse(expr)
+    const times: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const next = interval.next()
+      times.push(formatDateTime(next.toDate()))
+    }
+    nextExecutions.value = times
+    cronError.value = false
+  } catch {
+    cronDescription.value = ''
+    nextExecutions.value = []
+    cronError.value = true
+  }
+}
+
+function applyCronPreset(value: string) {
+  formData.cronExpression = value
+  parseCronExpression()
+}
+
+function getNextExecution(cronExpr: string | null): string {
+  if (!cronExpr) return ''
+  // Skip named presets (legacy data)
+  if (['hourly', 'daily', 'weekly'].includes(cronExpr)) {
+    const map: Record<string, string> = {
+      hourly: '0 * * * *',
+      daily: '0 9 * * *',
+      weekly: '0 9 * * 1'
+    }
+    cronExpr = map[cronExpr]
+  }
+  try {
+    const interval = CronExpressionParser.parse(cronExpr)
+    return formatDateTime(interval.next().toDate())
+  } catch {
+    return ''
+  }
+}
+
+function formatDateTime(date: Date): string {
+  const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  const w = weekDays[date.getDay()]
+  return `${y}-${m}-${d} ${h}:${min} (周${w})`
+}
 
 // ==================== Data Loading ====================
 async function loadRules() {
@@ -324,29 +427,41 @@ function showCreateModal() {
   Object.assign(formData, {
     name: '',
     description: '',
-    cronExpression: 'daily',
-    customCron: '',
+    cronExpression: '0 9 * * *',
     conditions: [],
     actions: []
   })
+  cronDescription.value = ''
+  cronError.value = false
+  nextExecutions.value = []
   modalVisible.value = true
+  // Parse default expression
+  parseCronExpression()
 }
 
 function handleEdit(rule: WorkflowRuleVO) {
   editingRule.value = rule
   const conditions = parseJson(rule.conditionJson, [])
   const actions = parseJson(rule.actionJson, [])
-  const cron = rule.cronExpression || 'daily'
-  const isPreset = ['hourly', 'daily', 'weekly'].includes(cron)
+  // Convert legacy preset names to cron expressions
+  let cronExpr = rule.cronExpression || '0 9 * * *'
+  const legacyMap: Record<string, string> = {
+    hourly: '0 * * * *',
+    daily: '0 9 * * *',
+    weekly: '0 9 * * 1'
+  }
+  if (legacyMap[cronExpr]) {
+    cronExpr = legacyMap[cronExpr]
+  }
   Object.assign(formData, {
     name: rule.name,
     description: rule.description || '',
-    cronExpression: isPreset ? cron : 'custom',
-    customCron: isPreset ? '' : cron,
+    cronExpression: cronExpr,
     conditions,
     actions
   })
   modalVisible.value = true
+  parseCronExpression()
 }
 
 function addCondition() {
@@ -379,7 +494,6 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const cronExpr = formData.cronExpression === 'custom' ? formData.customCron : formData.cronExpression
     const dto: WorkflowRuleDTO = {
       name: formData.name,
       description: formData.description || undefined,
@@ -388,7 +502,7 @@ async function handleSubmit() {
       conditionJson: JSON.stringify(formData.conditions.filter(c => c.field)),
       actionJson: JSON.stringify(formData.actions.filter(a => a.type)),
       enabled: true,
-      cronExpression: cronExpr
+      cronExpression: formData.cronExpression.trim()
     }
 
     if (editingRule.value) {
@@ -457,12 +571,18 @@ async function handleViewLogs(rule: WorkflowRuleVO) {
 
 // ==================== Helpers ====================
 function scheduleLabel(cron: string | null) {
-  const map: Record<string, string> = {
-    hourly: '每小时',
-    daily: '每天',
-    weekly: '每周'
+  if (!cron) return '未设置'
+  const legacyMap: Record<string, string> = {
+    hourly: '0 * * * *',
+    daily: '0 9 * * *',
+    weekly: '0 9 * * 1'
   }
-  return cron ? (map[cron] || `cron: ${cron}`) : '未设置'
+  const expr = legacyMap[cron] || cron
+  try {
+    return cronstrue.toString(expr, { locale: 'zh_CN' })
+  } catch {
+    return `cron: ${cron}`
+  }
 }
 
 function conditionSummary(json: string): string {
@@ -608,6 +728,18 @@ watch(() => props.projectId, loadRules)
   margin-top: 4px;
   font-size: 11px;
   color: var(--color-text-4);
+  display: flex;
+  gap: 16px;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-next {
+  color: var(--color-primary-light-4);
 }
 
 .rule-actions {
@@ -699,5 +831,58 @@ watch(() => props.projectId, loadRules)
   text-align: center;
   padding: 24px;
   color: var(--color-text-3);
+}
+
+/* Cron Feedback */
+.cron-feedback {
+  margin: -8px 0 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.cron-description {
+  color: var(--color-success-6);
+  background: var(--color-success-light-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cron-error {
+  color: var(--color-danger-6);
+  background: var(--color-danger-light-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cron-next-executions {
+  margin: -4px 0 16px;
+  padding: 8px 12px;
+  background: var(--color-fill-2);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.cron-next-label {
+  font-weight: 500;
+  color: var(--color-text-2);
+  margin-bottom: 4px;
+}
+
+.cron-next-time {
+  color: var(--color-text-3);
+  line-height: 1.8;
+  padding-left: 8px;
+}
+
+.cron-preset-tag {
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.cron-preset-tag:hover {
+  opacity: 0.8;
 }
 </style>
