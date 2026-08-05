@@ -362,21 +362,15 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
             if process.stdout is None:
                 return
             for raw_line in process.stdout:
-                line_stripped = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                try:
+                    line_stripped = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                except Exception:
+                    line_stripped = str(raw_line, errors="replace").rstrip("\r\n")
                 safe_line = _redact_sensitive_output(line_stripped)
                 # JSON 行提取关键状态信息，非 JSON 行完整输出
                 if not line_stripped.startswith("{"):
                     print(f"  [{label}] {safe_line}")
                     log.info(f"[{label}] {strip_ansi(safe_line)}")
-                else:
-                    # 只显示关键 JSON 状态信息（不打印完整 JSON 减少噪音）
-                    try:
-                        parsed = json.loads(line_stripped)
-                        if "result" in parsed or "is_error" in parsed:
-                            # 这是最终的 result 行，不在这里打印，等 _run_cli 统一输出
-                            pass
-                    except json.JSONDecodeError:
-                        pass
                 output_lines.append(safe_line)
                 last_output_at[0] = time.time()
                 if _is_forbidden_output(line_stripped):
