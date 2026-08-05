@@ -3,6 +3,13 @@
 // TypeScript strict checking is disabled because the code uses patterns
 // (like accessing .version on a union type) that work in Vue SFC context
 // but would require extensive type narrowing in a standalone .ts file.
+//
+// Sub-composables (REQ-242 refactoring):
+// - useBoardFullscreen.ts — TV 模式/全屏切换
+// - useBoardKeyboard.ts  — 键盘快捷键
+// - useBoardFilter.ts    — 搜索/过滤/防抖
+// - useBoardDrag.ts      — 拖拽状态和事件
+// - useBoardData.ts      — 数据加载
 import { ref, computed, watch, onMounted, onUnmounted, h, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal, Notification } from '@arco-design/web-vue'
@@ -16,6 +23,11 @@ import { useNavBadge } from '@/composables/useNavBadge'
 import { useProjectList } from '@/composables/useProjectList'
 import { useSelection } from '@/views/issue/composables/useSelection'
 import { useBatchOps } from '@/views/issue/composables/useBatchOps'
+import { useBoardFullscreen } from './useBoardFullscreen'
+import { useBoardKeyboard } from './useBoardKeyboard'
+import { useBoardFilter } from './useBoardFilter'
+import { useBoardDrag, UNDO_TIMEOUT } from './useBoardDrag'
+import type { UndoEntry } from './useBoardDrag'
 
 /** 看板中使用的工单类型 — 可以是精简卡片 VO（聚合 API）或完整 IssueVO（Legacy fallback） */
 export type BoardIssue = IssueVO | BoardCardVO
@@ -63,56 +75,7 @@ function setCardSize(size: CardSize) {
 }
 
 // ===== TV 模式（全屏大屏显示） =====
-const isTvMode = ref(false)
-const TV_MODE_KEY = 'tf_kanban_tv_mode'
-
-function toggleTvMode() {
-  if (!isTvMode.value) {
-    // 进入 TV 模式
-    const el = document.documentElement
-    if (el.requestFullscreen) {
-      el.requestFullscreen().then(() => {
-        isTvMode.value = true
-        cardSize.value = 'XL'
-        localStorage.setItem(TV_MODE_KEY, 'true')
-      }).catch(() => {
-        // Fullscreen denied — fallback to just large card mode
-        isTvMode.value = true
-        cardSize.value = 'XL'
-      })
-    } else {
-      isTvMode.value = true
-      cardSize.value = 'XL'
-    }
-  } else {
-    // 退出 TV 模式
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => { /* ignore */ })
-    }
-    isTvMode.value = false
-    // 恢复之前的卡片尺寸
-    const saved = localStorage.getItem(CARD_SIZE_KEY) as CardSize
-    cardSize.value = saved || 'M'
-    localStorage.removeItem(TV_MODE_KEY)
-  }
-}
-
-// 监听全屏退出事件（用户按 Esc 退出）
-function onFullscreenChange() {
-  if (!document.fullscreenElement && isTvMode.value) {
-    isTvMode.value = false
-    const saved = localStorage.getItem(CARD_SIZE_KEY) as CardSize
-    cardSize.value = saved || 'M'
-    localStorage.removeItem(TV_MODE_KEY)
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('fullscreenchange', onFullscreenChange)
-})
-onUnmounted(() => {
-  document.removeEventListener('fullscreenchange', onFullscreenChange)
-})
+const { isTvMode, toggleTvMode } = useBoardFullscreen(cardSize, CARD_SIZE_KEY)
 
 // ===== 未解决/未匹配列工单（Orphan Issues） =====
 const showOrphanPanel = ref(false)
@@ -1410,11 +1373,14 @@ const effectiveDoneRetentionDays = computed(() => {
 })
 
 // 搜索相关
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
-const isSearchActive = computed(() => keyword.value.trim().length > 0)
-const showNoSearchResults = computed(() =>
-  isSearchActive.value && selectedProject.value && issues.value.length === 0 && !loading.value
-)
+// ===== 搜索过滤逻辑（委托到 useBoardFilter composable） =====
+const {
+  isSearchActive, showNoSearchResults,
+  onSearchInput, onSearchClear, clearSearch,
+  loadIssuesWithLoading, clearDebounceTimer
+} = useBoardFilter({
+  keyword, selectedProject, issues, loading, loadIssues
+})
 
 /** 是否显示 Sprint 模式无活跃迭代的空状态 */
 const showSprintModeNoActiveState = computed(() =>
@@ -1456,42 +1422,6 @@ function openSettingsToGeneral() {
   showSettings.value = true
 }
 
-function onSearchInput() {
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    loadIssuesWithLoading()
-  }, 350)
-}
-
-function onSearchClear() {
-  keyword.value = ''
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  loadIssuesWithLoading()
-}
-
-function clearSearch() {
-  keyword.value = ''
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  loadIssuesWithLoading()
-}
-
-/** 带 loading 状态的工单刷新 */
-async function loadIssuesWithLoading() {
-  if (!selectedProject.value) return
-  loading.value = true
-  try {
-    await loadIssues()
-  } catch (e: any) {
-    // 会话过期（axios.Cancel from request.ts）时不显示"搜索失败"——已有过期提示和跳转
-    const isSessionExpired = e?.message === '会话已过期' || e?.code === 'ERR_CANCELED'
-    if (isSessionExpired) return
-    issues.value = []
-    Message.error('搜索失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 function onProjectChange() {
   keyword.value = ''
   selectedSprint.value = undefined
@@ -1506,7 +1436,7 @@ function onProjectChange() {
     assigneeFilter.value = undefined
     localStorage.removeItem(ASSIGNEE_FILTER_KEY)
   }
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  clearDebounceTimer()
   syncUrlState()
   loadBoard()
 }
@@ -1992,31 +1922,22 @@ function scrollToColumn(statusId: string) {
   }, 50)
 }
 
-// ===== 拖拽状态 =====
-const draggingIssue = ref<BoardIssue | null>(null)
-const dragOverColumnId = ref<string | null>(null)
-const allowedTargetStatuses = ref<Set<string>>(new Set())
-const requireCommentStatuses = ref<Set<string>>(new Set())
-const transitioningIssueIds = ref<Set<string>>(new Set())
+// ===== 拖拽逻辑（委托到 useBoardDrag composable） =====
+const {
+  draggingIssue, dragOverColumnId, allowedTargetStatuses, requireCommentStatuses,
+  transitioningIssueIds, transitionableSourceStatuses, isDragging, undoStack,
+  isCardDraggable, onDragStart, onDragEnd, onDragOver, onDragLeave, isDropAllowed
+} = useBoardDrag({
+  statuses,
+  boardColumnField,
+  visibleStatuses,
+  isManualSortDisabled,
+  canChangeStatus,
+  backlogDraggingIssue,
+  dragOverSwimlaneKey
+})
 
-// Combined dragging state (from board card or backlog)
-const isDragging = computed(() => !!draggingIssue.value || !!backlogDraggingIssue.value)
-
-// ===== 可拖拽源状态 =====
-const transitionableSourceStatuses = ref<Set<string>>(new Set())
-
-// ===== 撤销历史 =====
-interface UndoEntry {
-  issueId: string
-  issueKey: string
-  oldStatusId: string
-  newStatusId: string
-  oldStatusName: string
-  newStatusName: string
-  timestamp: number
-}
-const undoStack = ref<UndoEntry[]>([])
-const UNDO_TIMEOUT = 10000
+// ===== 撤销历史（state managed by useBoardDrag, business logic below） =====
 
 function getColumnIssues(statusId: string): BoardIssue[] {
   let columnIssues: BoardIssue[]
@@ -2224,108 +2145,7 @@ function onCardKeydown(event: KeyboardEvent, issue: BoardIssue) {
   }
 }
 
-// ===== 拖拽逻辑 =====
-
-function isCardDraggable(issue: BoardIssue): boolean {
-  // Priority mode: always draggable (no workflow constraint, just needs edit permission)
-  if (boardColumnField.value === 'priority') return true
-  if (!canChangeStatus.value) return false
-  if (transitionableSourceStatuses.value.size === 0) return true
-  return transitionableSourceStatuses.value.has(issue.statusId)
-}
-
-function onDragStart(event: DragEvent, issue: BoardIssue) {
-  if (!isCardDraggable(issue)) {
-    event.preventDefault()
-    Message.warning('该工单当前状态不允许变更')
-    return
-  }
-
-  draggingIssue.value = issue
-
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', issue.id)
-  }
-
-  // Priority mode: all columns are valid targets (no workflow constraint)
-  if (boardColumnField.value === 'priority') {
-    allowedTargetStatuses.value = new Set(visibleStatuses.value.map(s => s.id))
-    return
-  }
-
-  // Optimistic: allow all statuses immediately so drag feedback works instantly.
-  // The actual workflow validation happens server-side during the drop (transitStatus API).
-  // We still fetch transitions async to show correct drop-forbidden indicators once loaded.
-  allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
-  requireCommentStatuses.value = new Set()
-
-  // Fetch actual allowed transitions asynchronously (non-blocking).
-  // This refines the visual feedback (green/red indicators) once the API responds,
-  // but does NOT block the drag initiation — fixing Playwright/browser timing issues.
-  issueApi.getAvailableTransitions(issue.id).then(res => {
-    // Only update if this issue is still being dragged (user hasn't dropped yet)
-    if (draggingIssue.value?.id === issue.id) {
-      const allowed = res.data || []
-      allowedTargetStatuses.value = new Set(allowed.map(s => s.id))
-      requireCommentStatuses.value = new Set(allowed.filter(s => s.requireComment).map(s => s.id))
-    }
-  }).catch(() => {
-    // On failure, keep all statuses allowed — backend will reject invalid transitions
-    if (draggingIssue.value?.id === issue.id) {
-      allowedTargetStatuses.value = new Set(statuses.value.map(s => s.id))
-      requireCommentStatuses.value = new Set()
-    }
-  })
-}
-
-function onDragEnd() {
-  draggingIssue.value = null
-  dragOverColumnId.value = null
-  dragOverSwimlaneKey.value = null
-  allowedTargetStatuses.value.clear()
-  requireCommentStatuses.value.clear()
-}
-
-function onDragOver(event: DragEvent, statusId: string) {
-  event.preventDefault()
-  dragOverColumnId.value = statusId
-  dragOverSwimlaneKey.value = null
-
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = isDropAllowed(statusId) ? 'move' : 'none'
-  }
-}
-
-function onDragLeave(event: DragEvent) {
-  const relatedTarget = event.relatedTarget as HTMLElement | null
-  const currentTarget = event.currentTarget as HTMLElement
-  if (relatedTarget && currentTarget.contains(relatedTarget)) return
-  dragOverColumnId.value = null
-  dragOverSwimlaneKey.value = null
-}
-
-function isDropAllowed(targetStatusId: string): boolean {
-  // Priority mode: always allow (no workflow restriction, just check not same column)
-  if (boardColumnField.value === 'priority') {
-    if (!draggingIssue.value) return false
-    // Allow within-column drop for reordering (when manual sort enabled)
-    if ((draggingIssue.value.priority || 'Normal') === targetStatusId) {
-      return !isManualSortDisabled.value
-    }
-    return true
-  }
-  // Allow drop from backlog panel
-  if (backlogDraggingIssue.value) {
-    return allowedTargetStatuses.value.has(targetStatusId)
-  }
-  if (!draggingIssue.value) return false
-  // Allow within-column drop for reordering (when manual sort is not disabled)
-  if (draggingIssue.value.statusId === targetStatusId) {
-    return !isManualSortDisabled.value
-  }
-  return allowedTargetStatuses.value.has(targetStatusId)
-}
+// ===== 拖拽业务逻辑（基础事件处理在 useBoardDrag composable，此处只保留 onDrop 业务逻辑） =====
 
 async function onDrop(event: DragEvent, targetStatusId: string) {
   event.preventDefault()
@@ -3154,25 +2974,16 @@ async function undoTransition(entry: UndoEntry) {
   }
 }
 
-function handleKeydown(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-    const now = Date.now()
-    const validEntries = undoStack.value.filter(entry => now - entry.timestamp < UNDO_TIMEOUT)
-    if (validEntries.length > 0) {
-      e.preventDefault()
-      const lastEntry = validEntries[validEntries.length - 1]
-      undoTransition(lastEntry)
-    }
-  }
-  // Escape: 优先关闭预览面板 → 然后清空选择
-  if (e.key === 'Escape') {
-    if (previewVisible.value) {
-      closePreview()
-    } else if (selectedCount.value > 0) {
-      clearSelection()
-    }
-  }
-}
+// ===== 键盘快捷键（委托到 useBoardKeyboard composable） =====
+const { handleKeydown } = useBoardKeyboard({
+  undoStack,
+  undoTimeout: UNDO_TIMEOUT,
+  undoTransition,
+  previewVisible,
+  closePreview,
+  selectedCount,
+  clearSelection
+})
 
 // ===== 批量操作处理 =====
 
@@ -3832,7 +3643,7 @@ async function submitNewSprintModal() {
 
 onMounted(async () => {
   await Promise.all([loadProjects(), loadStatuses()])
-  document.addEventListener('keydown', handleKeydown)
+  // Note: keyboard listener registration is handled by useBoardKeyboard composable
 
   // URL 状态恢复优先级：URL params > projectStore (localStorage) > 首个项目
   restoreFromUrl()
@@ -3923,10 +3734,8 @@ watch(() => route.query, (newQuery, oldQuery) => {
   }
 })
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-})
+// Note: keyboard listener cleanup is handled by useBoardKeyboard composable
+// Note: debounce timer cleanup is handled by useBoardFilter composable
 
   // Return all state and methods needed by the template
   return {
