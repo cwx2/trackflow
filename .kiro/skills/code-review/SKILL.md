@@ -192,18 +192,109 @@ git diff --cached -- <file>
 | 复制粘贴 | 同一逻辑出现 3 次以上未提取 | 出现 2 次且 >10 行 |
 | 巨型方法 | 单方法超过 80 行无拆分 | 单方法 50-80 行可改进 |
 | 巨型类 | 单类超过 800 行无拆分 | 单类 500-800 行可改进 |
-| 硬编码策略 | switch/if-else >4 分支处理不同逻辑，未用策略模式 | 3 分支可考虑 |
+| 硬编码策略 | switch/if-else >4 分支处理不同类型逻辑，新增类型需改核心类 | 3 分支可考虑 |
 | 抽象层级错误 | 通用逻辑放在具体 View/Controller 里 | Helper 可升级为 Service |
 | 跨模块直接引用 | 模块 A 直接 import 模块 B 的 Mapper/Entity | 应通过 Service 调用 |
 | 前端逻辑散落 | 同一交互逻辑在 3+ 组件各自实现 | 2 个组件重复 |
 | 缺少可扩展设计 | 新增一种类型需要改 3+ 个文件 | 需改 2 个文件 |
 
-**审核决策流程**：
-1. 扫描 diff 中的新增代码 → 是否有上表中的问题？
-2. 对比项目中已有的类似代码 → 新代码是否与已有代码重复？是否遵循已有的抽象模式？
-3. 评估可扩展性 → 如果明天再加一个同类功能，需要改几个地方？
+---
 
-发现复用问题时，不只说"这里重复了"，必须给出**具体的重构建议**（抽成什么？放在哪里？接口签名是什么？）。
+#### 设计模式诊断（核心评估维度）
+
+> **原则：问题优先，不强行套模式。** 先问"这段代码有没有让新增功能变痛苦"，有痛苦再找对应模式。
+
+##### 快速识别触发条件
+
+| 看到这些信号... | 问这个问题 | 对应模式 |
+|----------------|-----------|---------|
+| `if/else if` 链或 `switch` 按类型分发逻辑，且分支 ≥4 个 | 新增一种类型需要改几个文件？ | **策略模式 / 工厂模式** |
+| 多个 Service 对同一个 `type` 字段各自写 switch | 各处行为是否应该内聚到一处？ | **策略模式** |
+| 一个大类包含多个不相关的职责（CRUD + 导出 + 统计 + 通知） | 按职责拆分后，哪些部分可复用？ | **SRP 拆分 + Facade** |
+| 方法需要先做 A，再做 B，再做 C，每步可替换但顺序固定 | 流程骨架是否稳定，只有步骤实现不同？ | **模板方法模式** |
+| 分步处理，每步可能终止后续步骤（如多级校验/过滤） | 步骤之间是否独立？能否按需组合？ | **责任链模式** |
+| 给已有对象叠加重试、缓存、日志、超时等横切行为 | 是否需要运行时动态组合？ | **装饰器模式** |
+| 多个模块都依赖外部 SDK 的具体类型 | 外部变化时需要改几处？ | **适配器模式** |
+| 对象创建逻辑散落在多处 if-else，构建步骤复杂 | 是否有条件逻辑、派生字段、必填校验？ | **Builder / 工厂方法** |
+| 某个操作需要排队、审计、回放或异步执行 | 是否需要把"意图"序列化保存？ | **命令模式** |
+| 一个状态变化需要通知多个模块，且不应该硬编码依赖 | 是否通过事件/回调解耦？ | **观察者模式 / 事件发布** |
+
+##### Spring Boot 中策略模式的标准写法（项目中最常用）
+
+当看到 `if-else` 按类型分发时，优先考虑以下 Spring 惯用写法：
+
+```java
+// 1. 定义接口（每种类型一个实现）
+public interface ActionExecutor {
+    String actionType();   // 注册 key
+    void execute(JsonNode config, Issue issue);
+}
+
+// 2. 各实现类用 @Component 自动注册
+@Component
+public class SetFieldActionExecutor implements ActionExecutor {
+    public String actionType() { return "set_field"; }
+    public void execute(...) { ... }
+}
+
+// 3. Spring 自动注入 List，构建注册表
+@Component
+public class ActionExecutorRegistry {
+    private final Map<String, ActionExecutor> executors;
+    public ActionExecutorRegistry(List<ActionExecutor> list) {
+        this.executors = list.stream()
+            .collect(Collectors.toMap(ActionExecutor::actionType, e -> e));
+    }
+    public ActionExecutor get(String type) {
+        return executors.getOrDefault(type, noopExecutor);
+    }
+}
+
+// 4. 调用方极简
+actionExecutorRegistry.get(type).execute(config, issue);
+```
+
+**效果**：新增动作类型只需新建一个 `@Component`，调用方（引擎核心）完全不需要修改。
+
+##### 责任链模式的标准写法（校验/前置检查场景）
+
+```java
+// 每个 Handler 只做一件事，返回 pass 或 failure
+public interface IssueCloseCheckHandler {
+    CloseCheckResult check(Issue issue, CloseContext ctx);
+}
+
+@Component @Order(1)
+public class WipLimitCheckHandler implements IssueCloseCheckHandler { ... }
+
+@Component @Order(2)
+public class BlockerCheckHandler implements IssueCloseCheckHandler { ... }
+
+@Component @Order(3)
+public class DescriptionCheckHandler implements IssueCloseCheckHandler { ... }
+
+// 链执行器
+@Component
+public class IssueClosePreCheckChain {
+    private final List<IssueCloseCheckHandler> handlers; // Spring 按 @Order 注入
+    public CloseCheckResult check(Issue issue, CloseContext ctx) {
+        for (var handler : handlers) {
+            var result = handler.check(issue, ctx);
+            if (!result.passed()) return result; // 短路
+        }
+        return CloseCheckResult.passed();
+    }
+}
+```
+
+##### 审核决策流程
+
+1. **扫描 diff 中的新增代码** → 对照上表触发条件，是否有命中的信号？
+2. **问"扩展成本"** → 如果下个月加同类功能，需要改几个文件？答案 >2 就值得重构
+3. **对比项目已有模式** → 项目中 `TransitionActionEngine` 已用 `AssignmentStrategy` 列表注入——新代码是否遵循同样的模式？
+4. **给出具体方案** → 不只说"用策略模式"，要说清楚：接口名、方法签名、注册方式、调用方怎么简化
+
+发现模式问题时，**必须给出可落地的重构建议**（接口签名、放哪个包、调用方改成什么）。
 
 ---
 
