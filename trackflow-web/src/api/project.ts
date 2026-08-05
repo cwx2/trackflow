@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectActivityVO, ProjectStatisticsVO, ProjectModulesVO, MemberOperationResultVO, FavoriteToggleVO, ProjectCopySummaryVO, ProjectTrashSettingsVO, AssignedIssueCountVO } from './types'
+import type { R, PageResult, ProjectVO, ProjectDetailVO, ProjectMemberVO, ProjectMembersViewVO, ProjectActivityVO, ProjectStatisticsVO, ProjectModulesVO, MemberOperationResultVO, FavoriteToggleVO, ProjectCopySummaryVO, ProjectTrashSettingsVO, AssignedIssueCountVO } from './types'
 import type { AxiosRequestConfig } from 'axios'
 
 /** 可选请求配置（支持 _silent403 静默 403） */

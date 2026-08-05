@@ -311,8 +311,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
-import { ruleApi } from '@/api'
-import type { RuleDefinitionVO, RuleExecutionLogVO, RuleStatisticsVO } from '@/api/rule'
+import { scoreRuleApi } from '@/api'
+import type { RuleDefinitionVO, RuleExecutionLogVO, RuleStatisticsVO } from '@/api/scoreRule'
 
 const router = useRouter()
 
@@ -400,7 +400,7 @@ function goToIssue(issueId: string) {
 async function loadRules() {
   loadingRules.value = true
   try {
-    const res = await ruleApi.listRules()
+    const res = await scoreRuleApi.listRules()
     if (res.code === 0) {
       rules.value = res.data
     }
@@ -423,7 +423,7 @@ async function loadLogs() {
       params.startDate = logFilter.dateRange[0]
       params.endDate = logFilter.dateRange[1]
     }
-    const res = await ruleApi.listLogs(params)
+    const res = await scoreRuleApi.listLogs(params)
     if (res.code === 0) {
       logs.value = res.data.list
       logPagination.total = res.data.pagination.total
@@ -443,7 +443,7 @@ async function loadStatistics() {
       params.startDate = statsFilter.dateRange[0]
       params.endDate = statsFilter.dateRange[1]
     }
-    const res = await ruleApi.getStatistics(params)
+    const res = await scoreRuleApi.getStatistics(params)
     if (res.code === 0) {
       statistics.value = res.data
     }
@@ -512,10 +512,10 @@ async function handleFormSubmit() {
   try {
     const dto = { ...formData }
     if (editingRule.value) {
-      await ruleApi.updateRule(editingRule.value.id, dto)
+      await scoreRuleApi.updateRule(editingRule.value.id, dto)
       Message.success('规则已更新')
     } else {
-      await ruleApi.createRule(dto)
+      await scoreRuleApi.createRule(dto)
       Message.success('规则已创建')
     }
     formVisible.value = false
@@ -529,7 +529,7 @@ async function handleFormSubmit() {
 
 async function handleToggle(rule: RuleDefinitionVO) {
   try {
-    await ruleApi.toggleRule(rule.id)
+    await scoreRuleApi.toggleRule(rule.id)
     await loadRules()
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
@@ -538,7 +538,7 @@ async function handleToggle(rule: RuleDefinitionVO) {
 
 async function handleDelete(rule: RuleDefinitionVO) {
   try {
-    await ruleApi.deleteRule(rule.id)
+    await scoreRuleApi.deleteRule(rule.id)
     Message.success('规则已删除')
     await loadRules()
   } catch (e: any) {
@@ -548,7 +548,7 @@ async function handleDelete(rule: RuleDefinitionVO) {
 
 async function handleExecuteNow(rule: RuleDefinitionVO) {
   try {
-    const res = await ruleApi.executeNow(rule.id)
+    const res = await scoreRuleApi.executeNow(rule.id)
     if (res.code === 0) {
       Message.success(`执行完成，新增 ${res.data.executedCount} 条记录`)
       await loadRules()
@@ -560,7 +560,7 @@ async function handleExecuteNow(rule: RuleDefinitionVO) {
 
 async function handleDeleteLog(log: RuleExecutionLogVO) {
   try {
-    await ruleApi.deleteLog(log.id)
+    await scoreRuleApi.deleteLog(log.id)
     Message.success('记录已删除')
     await loadLogs()
   } catch (e: any) {

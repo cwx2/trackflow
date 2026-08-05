@@ -86,7 +86,7 @@ export interface RuleStatisticsVO {
 
 // ==================== API ====================
 
-export const ruleApi = {
+export const scoreRuleApi = {
   // 规则定义管理
   listRules(params?: { projectId?: number }) {
     return request.get<any, R<RuleDefinitionVO[]>>('/rules', { params })
