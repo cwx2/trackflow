@@ -27,10 +27,13 @@ TrackFlow 并行迭代脚本（永不停止）
   python scripts/auto_iterate_parallel.py                               # 2 worker（1+1）
   python scripts/auto_iterate_parallel.py --workers 4                   # 1 生产者 + 3 消费者
   python scripts/auto_iterate_parallel.py --producers 1 --consumers 3  # 手动指定
-  python scripts/auto_iterate_parallel.py --skip-produce                # 只跑消费者
+  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce  # 只消费，3 个并行
+  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce --mode pipeline  # 并行模式
+  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce --mode safe      # 串行模式
 """
 
 import argparse
+import _config
 
 from _config import (
     KIRO_MODEL, KIRO_MODEL_FIX, REVIEW_DIR, IMPLEMENT_DIR, log,
@@ -50,7 +53,18 @@ def main() -> None:
                         help="手动指定消费者数量（覆盖自动分配）")
     parser.add_argument("--skip-produce", action="store_true",
                         help="跳过生产阶段，只消费 develop/ 中的现有需求")
+    parser.add_argument("--mode", choices=["safe", "pipeline", "full"], default=None,
+                        help=(
+                            "并行模式（覆盖 _config.py 中的 PARALLEL_MODE）：\n"
+                            "  safe     — 整个流水线串行，绝对无冲突（调试用）\n"
+                            "  pipeline — fix/test/review 并行，push 时排队（默认推荐）\n"
+                            "  full     — 全并行含 push，push 冲突自动重试（积压多时用）"
+                        ))
     args = parser.parse_args()
+
+    # 命令行 --mode 覆盖配置文件
+    if args.mode is not None:
+        _config.PARALLEL_MODE = args.mode
 
     # 计算生产者/消费者数量
     if args.producers is not None or args.consumers is not None:
@@ -63,10 +77,10 @@ def main() -> None:
 
     if args.skip_produce:
         num_producers = 0
-        num_consumers = args.workers
+        num_consumers = args.consumers if args.consumers is not None else args.workers
 
     log.info("=" * 60)
-    log.info(f"TrackFlow 并行迭代 | 生产者={num_producers} 消费者={num_consumers}")
+    log.info(f"TrackFlow 并行迭代 | 生产者={num_producers} 消费者={num_consumers} 模式={_config.PARALLEL_MODE}")
     log.info(f"模型: fix={KIRO_MODEL_FIX or '默认'} | test/review/produce={KIRO_MODEL or '默认'}")
     log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
              f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
