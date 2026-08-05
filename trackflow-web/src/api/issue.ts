@@ -121,6 +121,22 @@ export const issueApi = {
     return request.get<any, R<IssueStatusVO[]>>('/issues/statuses')
   },
 
+  /** 更新单个状态节点的画布坐标 */
+  updateStatusPosition(statusId: string, canvasX: number, canvasY: number) {
+    return request.patch<any, R<void>>(`/issues/statuses/${statusId}/position`, { canvasX, canvasY })
+  },
+
+  /** 批量更新状态节点的画布坐标（自动布局等场景） */
+  batchUpdateStatusPositions(positions: { statusId: string; canvasX: number; canvasY: number }[]) {
+    return request.put<any, R<void>>('/issues/statuses/positions', {
+      positions: positions.map(p => ({
+        statusId: Number(p.statusId),
+        canvasX: p.canvasX,
+        canvasY: p.canvasY
+      }))
+    })
+  },
+
   // ========== 分配 ==========
 
   /** 分配 */

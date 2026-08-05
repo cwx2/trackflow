@@ -535,6 +535,27 @@ public class IssueController {
         return R.ok(issueConverter.toStatusVOList(issueService.listStatuses()));
     }
 
+    /**
+     * 更新单个状态节点在工作流画布中的坐标位置
+     */
+    @PatchMapping("/statuses/{statusId}/position")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<Void> updateStatusPosition(@PathVariable("statusId") Long statusId,
+                                        @RequestBody com.trackflow.issue.dto.UpdateStatusPositionDTO dto) {
+        issueService.updateStatusPosition(statusId, dto.getCanvasX(), dto.getCanvasY());
+        return R.ok();
+    }
+
+    /**
+     * 批量更新状态节点在工作流画布中的坐标位置（自动布局等场景）
+     */
+    @PutMapping("/statuses/positions")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<Void> batchUpdateStatusPositions(@Valid @RequestBody com.trackflow.issue.dto.BatchUpdateStatusPositionDTO dto) {
+        issueService.batchUpdateStatusPositions(dto.getPositions());
+        return R.ok();
+    }
+
     // ========== 移动工单 ==========
 
     @PostMapping("/{id}/move")

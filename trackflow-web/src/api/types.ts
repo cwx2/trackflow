@@ -367,6 +367,8 @@ export interface IssueStatusVO {
   isDefault: boolean
   isClosed: boolean
   sortOrder: number
+  canvasX?: number | null
+  canvasY?: number | null
   /** 是否被阻塞（当前 issue 有未解决的 blocker 且此状态为关闭状态时为 true） */
   blocked?: boolean
   /** 阻塞方的 issueKey 列表 */

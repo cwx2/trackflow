@@ -22,6 +22,8 @@ public class IssueStatus implements Serializable {
     private Boolean isDefault;
     private Boolean isClosed;
     private Integer sortOrder;
+    private Double canvasX;
+    private Double canvasY;
     private LocalDateTime createdAt;
 
     /**

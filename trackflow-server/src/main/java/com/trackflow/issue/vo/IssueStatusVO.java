@@ -15,6 +15,8 @@ public class IssueStatusVO {
     private Boolean isDefault;
     private Boolean isClosed;
     private Integer sortOrder;
+    private Double canvasX;
+    private Double canvasY;
 
     /**
      * 是否被阻塞（当前 issue 有未解决的 blocker 且此状态为关闭状态时为 true）

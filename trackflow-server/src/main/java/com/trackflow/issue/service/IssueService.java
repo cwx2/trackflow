@@ -2735,6 +2735,34 @@ public class IssueService {
         );
     }
 
+    /**
+     * 更新单个状态节点在工作流画布中的坐标位置
+     */
+    public void updateStatusPosition(Long statusId, Double canvasX, Double canvasY) {
+        IssueStatus status = statusMapper.selectById(statusId);
+        if (status == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "状态不存在: " + statusId);
+        }
+        IssueStatus update = new IssueStatus();
+        update.setId(statusId);
+        update.setCanvasX(canvasX);
+        update.setCanvasY(canvasY);
+        statusMapper.updateById(update);
+    }
+
+    /**
+     * 批量更新状态节点在工作流画布中的坐标位置
+     */
+    public void batchUpdateStatusPositions(List<com.trackflow.issue.dto.BatchUpdateStatusPositionDTO.StatusPositionItem> positions) {
+        for (var item : positions) {
+            IssueStatus update = new IssueStatus();
+            update.setId(item.getStatusId());
+            update.setCanvasX(item.getCanvasX());
+            update.setCanvasY(item.getCanvasY());
+            statusMapper.updateById(update);
+        }
+    }
+
     // ========== 增强详情（性能优化：单次 JOIN 查询） ==========
 
     /**

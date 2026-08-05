@@ -34,6 +34,7 @@
       <div class="header-center">
         <a-tabs v-model:active-key="activeMainTab" class="workflow-main-tabs" type="rounded">
           <a-tab-pane key="matrix" title="状态转换矩阵" />
+          <a-tab-pane key="canvas" title="状态机画布" />
           <a-tab-pane key="rules" title="自动化规则" />
         </a-tabs>
       </div>
@@ -353,6 +354,87 @@
     </div>
     </div>
 
+    <!-- 状态机画布视图 -->
+    <div v-show="activeMainTab === 'canvas'" class="canvas-tab-container">
+      <!-- 画布视图也复用筛选器 -->
+      <div class="content-filters">
+        <a-select
+          v-model="selectedProject"
+          placeholder="选择项目"
+          style="width: 180px"
+          @change="onFilterChange"
+        >
+          <a-option value="0">全局（默认）</a-option>
+          <a-option
+            v-for="p in projects"
+            :key="p.id"
+            :value="p.id"
+          >{{ p.name }}</a-option>
+        </a-select>
+
+        <a-select
+          v-model="selectedType"
+          placeholder="工单类型"
+          style="width: 140px"
+          @change="onFilterChange"
+        >
+          <a-option value="*">所有类型</a-option>
+          <a-option
+            v-for="t in issueTypes"
+            :key="t"
+            :value="t"
+          >{{ t }}</a-option>
+        </a-select>
+
+        <a-select
+          v-model="selectedRole"
+          placeholder="请选择角色（必填）"
+          style="width: 160px"
+          @change="onFilterChange"
+        >
+          <a-option
+            v-for="role in roles"
+            :key="role.id"
+            :value="role.id"
+          >{{ role.name }}</a-option>
+        </a-select>
+      </div>
+
+      <!-- 未保存变更提示条 -->
+      <div v-if="isDirty" class="dirty-banner">
+        <icon-info-circle />
+        <span>已修改 {{ pendingChangesCount }} 条转换规则，尚未保存</span>
+      </div>
+
+      <WorkflowCanvasView
+        v-if="statuses.length > 0 && selectedRole"
+        ref="canvasViewRef"
+        :statuses="statuses"
+        :allowed-transitions="allowedTransitions"
+        :initial-status-id="initialStatusId"
+        :selected-project="selectedProject"
+        :selected-type="selectedType"
+        :selected-role="selectedRole"
+        :selected-mode="selectedMode"
+        @toggle-transition="onCanvasToggleTransition"
+        @open-action-panel="openActionPanel"
+        @open-guard-panel="openGuardPanel"
+        @click-node="onCanvasNodeClick"
+      />
+
+      <!-- 空状态 -->
+      <div v-else-if="!loading && statuses.length === 0" class="empty-state">
+        <icon-settings :size="48" />
+        <h3>暂无状态数据</h3>
+        <p>系统中未定义任何工单状态，请先配置状态列表。</p>
+      </div>
+      <div v-else-if="!loading && !selectedRole" class="empty-state empty-state-info">
+        <icon-user :size="48" />
+        <h3>请选择角色</h3>
+        <p>在上方筛选区域选择一个角色，以查看该角色的状态转换图。</p>
+      </div>
+    </div>
+
     <!-- 自动化规则面板 -->
     <div v-show="activeMainTab === 'rules'" class="rules-tab-container">
       <a-radio-group v-model="activeRuleSubTab" type="button" class="rule-sub-tabs">
@@ -414,6 +496,7 @@ import WorkflowActivityDrawer from './WorkflowActivityDrawer.vue'
 import WorkflowRulePanel from './WorkflowRulePanel.vue'
 import ScheduledRulePanel from './ScheduledRulePanel.vue'
 import TransitionGuardPanel from './TransitionGuardPanel.vue'
+import WorkflowCanvasView from './WorkflowCanvasView.vue'
 import { localizeStatusName, localizeCategoryName } from '@/utils/fieldLabels'
 
 const route = useRoute()
@@ -776,6 +859,18 @@ function getTransitionConditions(key: string): string | undefined {
 function onGuardSaved() {
   // 重新加载矩阵以获取最新守卫条件
   loadMatrix()
+}
+
+// ========== 画布视图 ==========
+const canvasViewRef = ref<InstanceType<typeof WorkflowCanvasView> | null>(null)
+
+function onCanvasToggleTransition(fromId: string, toId: string) {
+  toggleTransition(fromId, toId)
+}
+
+function onCanvasNodeClick(status: IssueStatusVO) {
+  // 点击节点时切换初始状态
+  toggleInitialStatus(status.id)
 }
 
 async function loadActionPaths() {
@@ -1731,5 +1826,27 @@ onBeforeRouteLeave(() => {
 
 .rule-sub-tabs {
   margin-bottom: 16px;
+}
+
+.canvas-tab-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas-tab-container .content-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.canvas-tab-container .workflow-canvas-view {
+  flex: 1;
+  min-height: 500px;
 }
 </style>
