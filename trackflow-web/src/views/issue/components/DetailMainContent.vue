@@ -600,14 +600,15 @@ function commitDesc(content: string) {
 .link-title-text { color: var(--tf-text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-status { font-size: 11px; font-weight: 500; flex-shrink: 0; margin-left: auto; }
 .link-delete-btn {
-  display: none; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; border: none; background: none;
   color: var(--tf-text-tertiary); cursor: pointer; border-radius: 3px;
   flex-shrink: 0; padding: 0; margin-left: 4px;
-  transition: color 150ms, background 150ms;
+  opacity: 0; pointer-events: none;
+  transition: opacity 150ms, color 150ms, background 150ms;
 }
 .link-delete-btn:hover { color: var(--color-danger-light-4, #f76965); background: rgba(248, 81, 73, 0.08); }
-.link-item:hover .link-delete-btn { display: flex; }
+.link-item:hover .link-delete-btn { opacity: 1; pointer-events: auto; }
 
 /* Attachments: now in AttachmentSection.vue */
 
