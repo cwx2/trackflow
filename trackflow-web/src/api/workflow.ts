@@ -3,9 +3,13 @@ import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, Wor
 
 /** 守卫条件项类型 */
 export interface TransitionConditionItem {
-  field: string
-  operator: string
+  field?: string
+  operator?: string
   value?: string
+  /** 高级条件类型（links_resolved, children_resolved） */
+  conditionType?: string
+  /** links_resolved 条件的关联类型 */
+  linkType?: string
 }
 
 /** 更新守卫条件 DTO */

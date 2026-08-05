@@ -36,27 +36,56 @@
         >
           <!-- 条件行 -->
           <div class="condition-row">
+            <!-- 条件类型选择（简单字段 vs 高级条件） -->
             <a-select
-              v-model="cond.field"
-              placeholder="选择字段"
-              style="width: 140px; flex-shrink: 0"
-              :options="fieldOptions"
-              @change="() => { if (!needsValue(cond.operator)) cond.value = '' }"
+              v-model="cond.conditionMode"
+              placeholder="条件模式"
+              style="width: 120px; flex-shrink: 0"
+              :options="conditionModeOptions"
+              @change="() => handleConditionModeChange(cond)"
             />
-            <a-select
-              v-model="cond.operator"
-              placeholder="操作符"
-              style="width: 140px; flex-shrink: 0"
-              :options="getOperatorOptions(cond.field)"
-              @change="() => { if (!needsValue(cond.operator)) cond.value = '' }"
-            />
-            <a-input
-              v-if="needsValue(cond.operator)"
-              v-model="cond.value"
-              placeholder="期望值"
-              style="flex: 1"
-            />
-            <span v-else style="flex: 1; color: var(--text-muted); font-size: 12px; padding: 0 4px;">（无需值）</span>
+            <!-- 简单字段条件 -->
+            <template v-if="cond.conditionMode === 'field'">
+              <a-select
+                v-model="cond.field"
+                placeholder="选择字段"
+                style="width: 130px; flex-shrink: 0"
+                :options="fieldOptions"
+                @change="() => { if (!needsValue(cond.operator)) cond.value = '' }"
+              />
+              <a-select
+                v-model="cond.operator"
+                placeholder="操作符"
+                style="width: 130px; flex-shrink: 0"
+                :options="getOperatorOptions(cond.field)"
+                @change="() => { if (!needsValue(cond.operator)) cond.value = '' }"
+              />
+              <a-input
+                v-if="needsValue(cond.operator)"
+                v-model="cond.value"
+                placeholder="期望值"
+                style="flex: 1"
+              />
+              <span v-else style="flex: 1; color: var(--text-muted); font-size: 12px; padding: 0 4px;">（无需值）</span>
+            </template>
+            <!-- 高级条件：links_resolved -->
+            <template v-else-if="cond.conditionMode === 'links_resolved'">
+              <a-select
+                v-model="cond.linkType"
+                placeholder="关联类型"
+                style="width: 160px; flex-shrink: 0"
+                :options="linkTypeOptions"
+              />
+              <span style="flex: 1; color: var(--text-muted); font-size: 12px; padding: 0 4px;">
+                所有该类型关联工单必须已关闭
+              </span>
+            </template>
+            <!-- 高级条件：children_resolved -->
+            <template v-else-if="cond.conditionMode === 'children_resolved'">
+              <span style="flex: 1; color: var(--text-muted); font-size: 12px; padding: 0 4px;">
+                所有直接子工单必须已关闭
+              </span>
+            </template>
             <a-button
               type="text"
               size="mini"
@@ -88,13 +117,11 @@
 
       <!-- 字段说明 -->
       <div class="field-hint" v-if="conditions.length > 0">
-        <span class="field-hint-title">支持的字段说明：</span>
+        <span class="field-hint-title">支持的条件说明：</span>
         <ul class="field-hint-list">
-          <li>assignee_id — 工单负责人 ID（is_not_empty 检查是否已分配）</li>
-          <li>priority — 优先级（equals "High"/"Critical"/"Normal"/"Low"）</li>
-          <li>issue_type — 工单类型（equals "Bug"/"Task"/"Feature"）</li>
-          <li>sprint_id — 所属 Sprint ID（is_not_empty 检查是否在 Sprint 中）</li>
-          <li>due_date — 截止日期（is_not_empty 检查是否已设置）</li>
+          <li><strong>字段条件</strong> — 检查工单字段值（如 assignee_id 不为空、priority 等于 High）</li>
+          <li><strong>关联工单已关闭</strong> — 指定关联类型的所有关联工单必须处于已关闭状态</li>
+          <li><strong>子工单已关闭</strong> — 所有直接子工单必须处于已关闭状态</li>
         </ul>
       </div>
     </a-spin>
@@ -125,6 +152,17 @@ import { IconPlus, IconDelete, IconCheckCircle } from '@arco-design/web-vue/es/i
 import { workflowApi } from '@/api'
 import type { TransitionConditionItem } from '@/api/workflow'
 
+/** 内部扩展类型，包含 conditionMode 用于 UI 分支 */
+interface ConditionRow {
+  conditionMode: 'field' | 'links_resolved' | 'children_resolved'
+  field: string
+  operator: string
+  value: string
+  // 高级条件参数
+  conditionType?: string
+  linkType?: string
+}
+
 const props = defineProps<{
   visible: boolean
   transitionId: string
@@ -141,7 +179,7 @@ const emit = defineEmits<{
 
 const loading = ref(false)
 const saving = ref(false)
-const conditions = ref<TransitionConditionItem[]>([])
+const conditions = ref<ConditionRow[]>([])
 
 // 当面板打开时解析当前条件
 watch(() => props.visible, (val) => {
@@ -157,18 +195,41 @@ function parseCurrentConditions() {
   }
   try {
     const parsed = JSON.parse(props.currentConditions)
-    conditions.value = (parsed.conditions || []).map((c: any) => ({
-      field: c.field || '',
-      operator: c.operator || 'is_not_empty',
-      value: c.value || ''
-    }))
+    conditions.value = (parsed.conditions || []).map((c: any) => {
+      if (c.conditionType === 'links_resolved') {
+        return {
+          conditionMode: 'links_resolved' as const,
+          field: '', operator: '', value: '',
+          conditionType: 'links_resolved',
+          linkType: c.linkType || 'subtask_of'
+        }
+      } else if (c.conditionType === 'children_resolved') {
+        return {
+          conditionMode: 'children_resolved' as const,
+          field: '', operator: '', value: '',
+          conditionType: 'children_resolved'
+        }
+      }
+      // 普通字段条件
+      return {
+        conditionMode: 'field' as const,
+        field: c.field || '',
+        operator: c.operator || 'is_not_empty',
+        value: c.value || ''
+      }
+    })
   } catch {
     conditions.value = []
   }
 }
 
 function addCondition() {
-  conditions.value.push({ field: 'assignee_id', operator: 'is_not_empty', value: '' })
+  conditions.value.push({
+    conditionMode: 'field',
+    field: 'assignee_id',
+    operator: 'is_not_empty',
+    value: ''
+  })
 }
 
 function removeCondition(index: number) {
@@ -179,6 +240,28 @@ function clearConditions() {
   conditions.value = []
 }
 
+function handleConditionModeChange(cond: ConditionRow) {
+  if (cond.conditionMode === 'field') {
+    cond.field = 'assignee_id'
+    cond.operator = 'is_not_empty'
+    cond.value = ''
+    cond.conditionType = undefined
+    cond.linkType = undefined
+  } else if (cond.conditionMode === 'links_resolved') {
+    cond.field = ''
+    cond.operator = ''
+    cond.value = ''
+    cond.conditionType = 'links_resolved'
+    cond.linkType = 'subtask_of'
+  } else if (cond.conditionMode === 'children_resolved') {
+    cond.field = ''
+    cond.operator = ''
+    cond.value = ''
+    cond.conditionType = 'children_resolved'
+    cond.linkType = undefined
+  }
+}
+
 function handleClose() {
   emit('update:visible', false)
 }
@@ -186,20 +269,34 @@ function handleClose() {
 async function handleSave() {
   // 验证条件完整性
   for (const cond of conditions.value) {
-    if (!cond.field || !cond.operator) {
-      Message.error('请完整填写所有条件的字段和操作符')
-      return
+    if (cond.conditionMode === 'field') {
+      if (!cond.field || !cond.operator) {
+        Message.error('请完整填写所有字段条件的字段和操作符')
+        return
+      }
+      if (needsValue(cond.operator) && !cond.value) {
+        Message.error(`操作符 "${cond.operator}" 需要填写期望值`)
+        return
+      }
+    } else if (cond.conditionMode === 'links_resolved') {
+      if (!cond.linkType) {
+        Message.error('关联工单已关闭条件需要选择关联类型')
+        return
+      }
     }
-    if (needsValue(cond.operator) && !cond.value) {
-      Message.error(`操作符 "${cond.operator}" 需要填写期望值`)
-      return
-    }
+    // children_resolved 无需额外参数
   }
 
   saving.value = true
   try {
-    // 过滤掉 value 为空的字段（is_empty/is_not_empty 不需要 value）
-    const cleanConditions = conditions.value.map(c => {
+    // 序列化为后端格式
+    const cleanConditions: TransitionConditionItem[] = conditions.value.map(c => {
+      if (c.conditionMode === 'links_resolved') {
+        return { conditionType: 'links_resolved', linkType: c.linkType } as any
+      } else if (c.conditionMode === 'children_resolved') {
+        return { conditionType: 'children_resolved' } as any
+      }
+      // 普通字段条件
       const item: TransitionConditionItem = { field: c.field, operator: c.operator }
       if (needsValue(c.operator) && c.value) {
         item.value = c.value
@@ -216,6 +313,20 @@ async function handleSave() {
     saving.value = false
   }
 }
+
+// === 条件模式选项 ===
+
+const conditionModeOptions = [
+  { label: '字段条件', value: 'field' },
+  { label: '关联工单已关闭', value: 'links_resolved' },
+  { label: '子工单已关闭', value: 'children_resolved' },
+]
+
+const linkTypeOptions = [
+  { label: '子任务 (subtask_of)', value: 'subtask_of' },
+  { label: '子级 (parent_of)', value: 'parent_of' },
+  { label: '阻塞方 (blocks)', value: 'blocks' },
+]
 
 // === 字段/操作符配置 ===
 

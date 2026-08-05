@@ -36,6 +36,7 @@ public enum ErrorCode {
     PROJECT_ACCESS_DENIED(40300, 403, "无权访问该项目"), // 与 ACCESS_DENIED 共用 code，前端无需区分
     OWNERSHIP_REQUIRED(40301, 403, "只能操作分配给自己或由自己创建的资源"),
     WORKFLOW_TRANSITION_DENIED(40302, 403, "当前角色不允许执行此状态转换"),
+    WORKFLOW_GUARD_FAILED(40306, 403, "守卫条件未满足，无法执行此状态转换"),
     USER_DISABLED(40303, 403, "用户账号已被禁用"),
     BUILTIN_ROLE_PROTECTED(40304, 403, "内置角色不允许修改"),
     PRIVILEGE_ESCALATION_DENIED(40305, 403, "您不能授予自己不持有的权限"),

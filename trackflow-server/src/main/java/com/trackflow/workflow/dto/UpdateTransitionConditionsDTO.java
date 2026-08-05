@@ -1,6 +1,5 @@
 package com.trackflow.workflow.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
@@ -20,22 +19,38 @@ public class UpdateTransitionConditionsDTO {
     /**
      * 单个守卫条件项。
      * 多个条件之间是 AND 关系。
+     * <p>
+     * 两种模式：
+     * <ul>
+     *   <li>字段条件：设置 field + operator [+ value]</li>
+     *   <li>高级条件：设置 conditionType [+ linkType 等参数]</li>
+     * </ul>
      */
     @Data
     public static class ConditionItem {
 
         /**
-         * 评估的字段名。
+         * 高级条件类型。设置此字段时 field/operator 可为空。
+         * 支持：links_resolved, children_resolved
+         */
+        private String conditionType;
+
+        /**
+         * links_resolved 条件的关联类型。
+         * 支持：subtask_of, parent_of, blocks
+         */
+        private String linkType;
+
+        /**
+         * 评估的字段名（字段条件模式）。
          * 支持：assignee_id, status_id, priority, issue_type, reporter_id, sprint_id, due_date, title
          */
-        @NotNull(message = "字段名不能为空")
         private String field;
 
         /**
-         * 操作符。
+         * 操作符（字段条件模式）。
          * 支持：equals, not_equals, contains, in, is_empty, is_not_empty
          */
-        @NotNull(message = "操作符不能为空")
         private String operator;
 
         /**
