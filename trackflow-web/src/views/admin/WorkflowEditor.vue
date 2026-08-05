@@ -16,6 +16,18 @@
         正在编辑 <strong>{{ sourceProjectName }}</strong> 的工作流规则
       </div>
     </div>
+    <!-- 面包屑导航（从工作流列表页跳转过来时显示） -->
+    <div v-else class="breadcrumb-nav">
+      <a-breadcrumb>
+        <a-breadcrumb-item>
+          <router-link to="/workflow">
+            <icon-left class="breadcrumb-back-icon" />
+            工作流列表
+          </router-link>
+        </a-breadcrumb-item>
+        <a-breadcrumb-item>编辑器</a-breadcrumb-item>
+      </a-breadcrumb>
+    </div>
     
     <div class="page-header">
       <h2 class="page-title">工作流编辑器</h2>

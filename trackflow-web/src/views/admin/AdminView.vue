@@ -100,17 +100,10 @@ const menuItems: AdminMenuItem[] = [
     permission: 'system:manage_groups'
   },
   {
-    path: '/admin/workflow',
+    path: '/workflow',
     icon: '🔄',
     title: '工作流',
-    description: '配置 Issue 状态转换规则和工作流程',
-    permission: 'system:manage_roles'
-  },
-  {
-    path: '/admin/workflow-definitions',
-    icon: '📋',
-    title: '工作流定义',
-    description: '管理命名工作流定义，支持克隆、项目绑定/解绑',
+    description: '管理工作流定义，配置状态转换规则，绑定到项目',
     permission: 'system:manage_roles'
   },
   {

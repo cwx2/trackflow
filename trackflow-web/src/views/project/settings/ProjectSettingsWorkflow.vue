@@ -647,7 +647,7 @@ async function handleDetachWorkflow(workflowDefinitionId: string) {
 // ==================== Actions ====================
 function goToWorkflowEditor() {
   // Navigate to the workflow editor page with project pre-selected
-  router.push(`/workflow?project=${props.project.id}`)
+  router.push(`/admin/workflow?project=${props.project.id}`)
 }
 
 function showCreateRuleModal() {

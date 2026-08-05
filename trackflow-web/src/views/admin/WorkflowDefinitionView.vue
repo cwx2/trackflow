@@ -1,89 +1,186 @@
 <template>
-  <div class="workflow-def-page">
+  <div class="workflow-list-page">
+    <!-- 页面顶栏 -->
     <div class="page-header">
       <div class="header-left">
-        <router-link to="/admin" class="back-link">← 系统管理</router-link>
-        <h1 class="page-title">工作流定义</h1>
-        <p class="page-desc">管理命名工作流定义，支持创建、克隆、附加到项目</p>
+        <h1 class="page-title">工作流</h1>
       </div>
       <div class="header-actions">
         <a-button type="primary" @click="showCreateModal = true">
+          <template #icon><icon-plus /></template>
           创建工作流
         </a-button>
       </div>
     </div>
 
-    <!-- 工作流列表 -->
-    <div v-if="loading" class="loading-state">
-      <a-spin />
-    </div>
-
-    <div v-else-if="definitions.length === 0" class="empty-state">
-      <div class="empty-icon">📋</div>
-      <h3 class="empty-title">暂无工作流定义</h3>
-      <p class="empty-desc">创建第一个工作流定义来开始管理状态转换规则</p>
-      <a-button type="primary" @click="showCreateModal = true">创建工作流</a-button>
-    </div>
-
-    <div v-else class="def-list">
-      <div
-        v-for="def in definitions"
-        :key="def.id"
-        class="def-card"
+    <!-- 筛选工具栏 -->
+    <div class="filter-bar">
+      <a-input
+        v-model="searchKeyword"
+        placeholder="搜索工作流名称..."
+        allow-clear
+        style="width: 240px"
       >
-        <div class="def-card-header">
-          <div class="def-name-row">
-            <h3 class="def-name">{{ def.name }}</h3>
-            <a-tag v-if="def.isDefault" color="blue" size="small">默认</a-tag>
+        <template #prefix><icon-search /></template>
+      </a-input>
+    </div>
+
+    <!-- 主体：列表 + 侧边栏 -->
+    <div class="main-content">
+      <!-- 左侧列表 -->
+      <div class="list-panel">
+        <div v-if="loading" class="loading-state">
+          <a-spin />
+        </div>
+
+        <div v-else-if="filteredDefinitions.length === 0" class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h3 class="empty-title">暂无工作流</h3>
+          <p class="empty-desc">
+            {{ searchKeyword ? '没有匹配的工作流' : '创建第一个工作流来管理状态转换规则' }}
+          </p>
+          <a-button v-if="!searchKeyword" type="primary" @click="showCreateModal = true">
+            创建工作流
+          </a-button>
+        </div>
+
+        <div v-else class="def-list">
+          <div
+            v-for="def in filteredDefinitions"
+            :key="def.id"
+            class="def-row"
+            :class="{ selected: selectedDef?.id === def.id }"
+            @click="selectDef(def)"
+          >
+            <div class="def-row-main">
+              <div class="def-name-cell">
+                <span class="def-icon">🔄</span>
+                <span class="def-name">{{ def.name }}</span>
+                <a-tag v-if="def.isDefault" color="arcoblue" size="small">默认</a-tag>
+              </div>
+            </div>
+            <div class="def-row-meta">
+              <span class="meta-item" :title="`关联 ${def.projectCount} 个项目`">
+                <icon-apps class="meta-icon" />
+                {{ def.projectCount > 0 ? def.projectCount + ' 个项目' : '未绑定' }}
+              </span>
+              <span class="meta-item" :title="'更新于 ' + formatDate(def.updatedAt)">
+                {{ formatRelativeDate(def.updatedAt) }}
+              </span>
+            </div>
           </div>
-          <div class="def-actions">
+        </div>
+      </div>
+
+      <!-- 右侧详情侧边栏 -->
+      <div v-if="selectedDef" class="detail-panel">
+        <div class="detail-header">
+          <div class="detail-title-row">
+            <h2 class="detail-title">{{ selectedDef.name }}</h2>
             <a-dropdown trigger="click">
-              <a-button type="text" size="small">
-                <template #icon><span>⋯</span></template>
+              <a-button type="text" size="small" class="more-btn">
+                <template #icon><icon-more /></template>
               </a-button>
               <template #content>
-                <a-doption @click="handleEdit(def)">编辑</a-doption>
-                <a-doption @click="handleClone(def)">克隆</a-doption>
-                <a-doption @click="handleAttach(def)">附加到项目</a-doption>
+                <a-doption @click="handleClone(selectedDef)">
+                  <template #icon><icon-copy /></template>
+                  克隆
+                </a-doption>
                 <a-doption
-                  v-if="!def.isDefault"
+                  v-if="!selectedDef.isDefault"
                   class="danger-option"
-                  @click="handleDelete(def)"
-                >删除</a-doption>
+                  @click="handleDelete(selectedDef)"
+                >
+                  <template #icon><icon-delete /></template>
+                  删除
+                </a-doption>
               </template>
             </a-dropdown>
           </div>
+          <p v-if="selectedDef.description" class="detail-desc">{{ selectedDef.description }}</p>
+          <div class="detail-meta">
+            <span v-if="selectedDef.createdByName">创建者：{{ selectedDef.createdByName }}</span>
+            <span>更新于 {{ formatDate(selectedDef.updatedAt) }}</span>
+          </div>
+          <div class="detail-actions">
+            <a-button type="primary" size="small" @click="handleEditWorkflow(selectedDef)">
+              <template #icon><icon-edit /></template>
+              编辑工作流
+            </a-button>
+            <a-button size="small" @click="handleEditInfo(selectedDef)">
+              <template #icon><icon-settings /></template>
+              修改信息
+            </a-button>
+          </div>
         </div>
 
-        <p v-if="def.description" class="def-desc">{{ def.description }}</p>
+        <!-- Tabs: 规则 / 项目 -->
+        <a-tabs v-model:active-key="detailTab" class="detail-tabs" size="small">
+          <a-tab-pane key="rules" :title="`规则 ${selectedDef.transitionCount}`">
+            <div class="tab-content">
+              <div class="rules-summary">
+                <div class="summary-stat">
+                  <span class="stat-number">{{ selectedDef.transitionCount }}</span>
+                  <span class="stat-label">条转换规则</span>
+                </div>
+              </div>
+              <p class="tab-hint">
+                点击"编辑工作流"按钮进入状态转换矩阵编辑器，查看和修改规则详情。
+              </p>
+            </div>
+          </a-tab-pane>
 
-        <div class="def-stats">
-          <span class="stat-item">
-            <span class="stat-label">转换规则</span>
-            <span class="stat-value">{{ def.transitionCount }}</span>
-          </span>
-          <span class="stat-item">
-            <span class="stat-label">绑定项目</span>
-            <span class="stat-value">{{ def.projectCount }}</span>
-          </span>
-        </div>
+          <a-tab-pane key="projects" :title="`项目 ${selectedDef.projectCount}`">
+            <div class="tab-content">
+              <!-- 项目列表 -->
+              <div v-if="selectedDef.projects && selectedDef.projects.length > 0" class="project-list">
+                <div
+                  v-for="proj in selectedDef.projects"
+                  :key="proj.id"
+                  class="project-item"
+                >
+                  <span class="project-name">{{ proj.key }} - {{ proj.name }}</span>
+                  <a-button
+                    type="text"
+                    size="mini"
+                    class="detach-btn"
+                    @click="handleDetach(selectedDef, proj)"
+                  >
+                    <template #icon><icon-close /></template>
+                  </a-button>
+                </div>
+              </div>
+              <div v-else class="no-projects">
+                <span class="no-projects-text">未绑定到任何项目</span>
+              </div>
 
-        <div v-if="def.projects && def.projects.length > 0" class="def-projects">
-          <a-tag
-            v-for="proj in def.projects"
-            :key="proj.id"
-            size="small"
-            class="project-tag"
-            closable
-            @close="handleDetach(def, proj)"
-          >
-            {{ proj.key }} - {{ proj.name }}
-          </a-tag>
-        </div>
+              <!-- 管理项目按钮 -->
+              <div class="project-actions">
+                <a-button size="small" @click="handleAttach(selectedDef)">
+                  <template #icon><icon-plus /></template>
+                  附加到项目
+                </a-button>
+              </div>
 
-        <div class="def-meta">
-          <span v-if="def.createdByName">创建者: {{ def.createdByName }}</span>
-          <span>更新于 {{ formatDate(def.updatedAt) }}</span>
+              <!-- 自动附加开关 -->
+              <div class="auto-attach-row">
+                <span class="auto-attach-label">自动附加到新项目</span>
+                <a-switch
+                  :model-value="selectedDef.isDefault"
+                  size="small"
+                  @change="handleToggleDefault(selectedDef)"
+                />
+              </div>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
+      </div>
+
+      <!-- 未选中时的占位 -->
+      <div v-else class="detail-placeholder">
+        <div class="placeholder-content">
+          <icon-share-alt class="placeholder-icon" />
+          <p class="placeholder-text">选择一个工作流查看详情</p>
         </div>
       </div>
     </div>
@@ -91,17 +188,23 @@
     <!-- 创建/编辑弹窗 -->
     <a-modal
       v-model:visible="showCreateModal"
-      :title="editingDef ? '编辑工作流' : '创建工作流'"
+      :title="editingDef ? '修改工作流信息' : '创建工作流'"
       @ok="handleCreateOrUpdate"
       @cancel="resetForm"
       :ok-loading="saving"
+      :ok-text="editingDef ? '保存' : '创建'"
     >
       <a-form :model="form" layout="vertical">
         <a-form-item label="名称" required>
           <a-input v-model="form.name" placeholder="输入工作流名称" :max-length="100" />
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model="form.description" placeholder="描述该工作流的用途" :max-length="500" :auto-size="{ minRows: 2, maxRows: 4 }" />
+          <a-textarea
+            v-model="form.description"
+            placeholder="描述该工作流的用途"
+            :max-length="500"
+            :auto-size="{ minRows: 2, maxRows: 4 }"
+          />
         </a-form-item>
         <a-form-item label="设为默认">
           <a-switch v-model="form.isDefault" />
@@ -116,6 +219,7 @@
       title="克隆工作流"
       @ok="handleCloneConfirm"
       :ok-loading="saving"
+      ok-text="克隆"
     >
       <a-form layout="vertical">
         <a-form-item label="源工作流">
@@ -133,6 +237,7 @@
       title="附加到项目"
       @ok="handleAttachConfirm"
       :ok-loading="saving"
+      ok-text="绑定"
     >
       <p class="attach-desc">选择要绑定「{{ attachSource?.name }}」工作流的项目：</p>
       <a-select
@@ -149,14 +254,19 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { workflowDefinitionApi } from '@/api/workflowDefinition'
 import type { WorkflowDefinitionVO, BoundProject } from '@/api/workflowDefinition'
 import { projectApi } from '@/api'
 
+const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
 const definitions = ref<WorkflowDefinitionVO[]>([])
+const searchKeyword = ref('')
+const selectedDef = ref<WorkflowDefinitionVO | null>(null)
+const detailTab = ref('rules')
 
 // 创建/编辑
 const showCreateModal = ref(false)
@@ -173,6 +283,12 @@ const showAttachModal = ref(false)
 const attachSource = ref<WorkflowDefinitionVO | null>(null)
 const selectedProjectId = ref('')
 const allProjects = ref<{ id: string; name: string; key: string }[]>([])
+
+const filteredDefinitions = computed(() => {
+  if (!searchKeyword.value.trim()) return definitions.value
+  const kw = searchKeyword.value.toLowerCase()
+  return definitions.value.filter(d => d.name.toLowerCase().includes(kw))
+})
 
 const availableProjects = computed(() => {
   if (!attachSource.value) return []
@@ -193,9 +309,14 @@ async function loadDefinitions() {
     const res = await workflowDefinitionApi.list()
     if (res.code === 0 && res.data) {
       definitions.value = res.data
+      // 如果之前有选中的项，更新引用
+      if (selectedDef.value) {
+        const updated = definitions.value.find(d => d.id === selectedDef.value!.id)
+        selectedDef.value = updated || null
+      }
     }
-  } catch (e: any) {
-    Message.error('加载工作流定义失败')
+  } catch {
+    Message.error('加载工作流列表失败')
   } finally {
     loading.value = false
   }
@@ -216,7 +337,16 @@ async function loadProjects() {
   }
 }
 
-function handleEdit(def: WorkflowDefinitionVO) {
+function selectDef(def: WorkflowDefinitionVO) {
+  selectedDef.value = def
+  detailTab.value = 'rules'
+}
+
+function handleEditWorkflow(def: WorkflowDefinitionVO) {
+  router.push({ path: '/admin/workflow', query: { definitionId: def.id } })
+}
+
+function handleEditInfo(def: WorkflowDefinitionVO) {
   editingDef.value = def
   form.value = {
     name: def.name,
@@ -330,6 +460,9 @@ function handleDelete(def: WorkflowDefinitionVO) {
       try {
         await workflowDefinitionApi.delete(def.id)
         Message.success('删除成功')
+        if (selectedDef.value?.id === def.id) {
+          selectedDef.value = null
+        }
         await loadDefinitions()
       } catch (e: any) {
         Message.error(e.response?.data?.message || '删除失败')
@@ -338,35 +471,53 @@ function handleDelete(def: WorkflowDefinitionVO) {
   })
 }
 
+async function handleToggleDefault(def: WorkflowDefinitionVO) {
+  try {
+    await workflowDefinitionApi.update(def.id, { isDefault: !def.isDefault })
+    Message.success(def.isDefault ? '已取消默认' : '已设为默认')
+    await loadDefinitions()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '操作失败')
+  }
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
+
+function formatRelativeDate(dateStr: string | null): string {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (diffDays < 7) return `${diffDays} 天前`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} 周前`
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} 个月前`
+  return formatDate(dateStr)
+}
 </script>
 
 <style scoped>
-.workflow-def-page {
-  padding: 24px 32px;
-  max-width: 1200px;
+.workflow-list-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 32px 0;
+  overflow: hidden;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.back-link {
-  color: var(--tf-text-tertiary);
-  font-size: 12px;
-  text-decoration: none;
-  margin-bottom: 4px;
-  display: inline-block;
-}
-.back-link:hover {
-  color: var(--tf-text-primary);
+  align-items: center;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .page-title {
@@ -376,10 +527,31 @@ function formatDate(dateStr: string | null): string {
   margin: 0;
 }
 
-.page-desc {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin-top: 4px;
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  border: 1px solid var(--tf-border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+/* 左侧列表 */
+.list-panel {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--tf-border-light);
 }
 
 .loading-state {
@@ -393,11 +565,11 @@ function formatDate(dateStr: string | null): string {
   padding: 64px 32px;
 }
 .empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  font-size: 40px;
+  margin-bottom: 12px;
 }
 .empty-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--tf-text-primary);
   margin: 0 0 8px;
@@ -409,90 +581,258 @@ function formatDate(dateStr: string | null): string {
 }
 
 .def-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
-}
-
-.def-card {
-  background: var(--tf-bg-elevated);
-  border: 1px solid var(--tf-border-primary);
-  border-radius: 8px;
-  padding: 16px;
-  transition: border-color 150ms;
-}
-.def-card:hover {
-  border-color: var(--tf-accent);
-}
-
-.def-card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
+  flex-direction: column;
 }
 
-.def-name-row {
+.def-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--tf-border-light);
+  transition: background 150ms;
+}
+.def-row:hover {
+  background: var(--tf-bg-hover);
+}
+.def-row.selected {
+  background: var(--tf-bg-active);
+  border-left: 3px solid var(--tf-accent);
+  padding-left: 13px;
+}
+
+.def-row-main {
+  display: flex;
+  align-items: center;
+}
+
+.def-name-cell {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.def-icon {
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .def-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0;
-}
-
-.def-desc {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-  margin: 0 0 12px;
-  line-height: 1.4;
-}
-
-.def-stats {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-}
-
-.stat-value {
   font-size: 13px;
   font-weight: 500;
   color: var(--tf-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.def-projects {
+.def-row-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.project-tag {
-  font-size: 11px;
-}
-
-.def-meta {
-  display: flex;
+  align-items: center;
   gap: 12px;
+  padding-left: 22px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--tf-text-tertiary);
 }
 
+.meta-icon {
+  font-size: 12px;
+}
+
+/* 右侧详情面板 */
+.detail-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--tf-bg-surface);
+}
+
+.detail-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--tf-border-light);
+}
+
+.detail-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+  margin: 0;
+  word-break: break-word;
+}
+
+.more-btn {
+  flex-shrink: 0;
+}
+
+.detail-desc {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  margin: 4px 0 8px;
+  line-height: 1.4;
+}
+
+.detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  margin-bottom: 12px;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.detail-tabs {
+  flex: 1;
+  overflow: hidden;
+}
+
+.detail-tabs :deep(.arco-tabs-content) {
+  padding: 0;
+  overflow-y: auto;
+}
+
+.detail-tabs :deep(.arco-tabs-nav) {
+  padding: 0 16px;
+}
+
+.tab-content {
+  padding: 16px;
+}
+
+.rules-summary {
+  margin-bottom: 12px;
+}
+
+.summary-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--tf-text-primary);
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.tab-hint {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  line-height: 1.5;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 150ms;
+}
+.project-item:hover {
+  background: var(--tf-bg-hover);
+}
+
+.project-name {
+  font-size: 12px;
+  color: var(--tf-text-primary);
+}
+
+.detach-btn {
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.project-item:hover .detach-btn {
+  opacity: 1;
+}
+
+.no-projects {
+  padding: 12px 0;
+}
+.no-projects-text {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+}
+
+.project-actions {
+  margin: 12px 0;
+}
+
+.auto-attach-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--tf-border-light);
+  margin-top: 12px;
+}
+
+.auto-attach-label {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+}
+
+/* 未选中时的占位 */
+.detail-placeholder {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tf-bg-surface);
+}
+
+.placeholder-content {
+  text-align: center;
+}
+
+.placeholder-icon {
+  font-size: 32px;
+  color: var(--tf-text-muted);
+  margin-bottom: 8px;
+}
+
+.placeholder-text {
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
+}
+
+/* 弹窗辅助 */
 .form-helper {
   font-size: 12px;
   color: var(--tf-text-tertiary);

@@ -114,11 +114,11 @@
 
         <template v-if="canManageWorkflow">
           <a-tooltip v-if="sidebarCollapsed" content="工作流" position="right" :mini="true">
-            <router-link to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
+            <router-link to="/workflow" class="nav-item" :class="{ active: isWorkflowRoute }">
               <icon-share-alt class="nav-icon" /><span class="nav-label">工作流</span>
             </router-link>
           </a-tooltip>
-          <router-link v-else to="/workflow" class="nav-item" :class="{ active: $route.path.startsWith('/workflow') }">
+          <router-link v-else to="/workflow" class="nav-item" :class="{ active: isWorkflowRoute }">
             <icon-share-alt class="nav-icon" /><span class="nav-label">工作流</span>
           </router-link>
         </template>
@@ -385,7 +385,9 @@ const canCreateIssue = computed(() => {
   return true
 })
 
-const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+const isAdminRoute = computed(() => route.path.startsWith('/admin') && !route.path.startsWith('/admin/workflow'))
+
+const isWorkflowRoute = computed(() => route.path.startsWith('/workflow') || route.path.startsWith('/admin/workflow'))
 
 const themeIconComponent = computed(() => {
   return theme.value === 'dark' ? IconMoon : theme.value === 'light' ? IconSun : IconCommon

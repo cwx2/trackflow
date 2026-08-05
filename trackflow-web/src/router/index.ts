@@ -95,8 +95,8 @@ const routes = [
       },
       {
         path: 'workflow',
-        name: 'Workflow',
-        component: () => import('@/views/admin/WorkflowEditor.vue'),
+        name: 'WorkflowList',
+        component: () => import('@/views/admin/WorkflowDefinitionView.vue'),
         meta: { requiresWorkflow: true }
       },
       {
@@ -178,9 +178,7 @@ const routes = [
       },
       {
         path: 'admin/workflow-definitions',
-        name: 'WorkflowDefinitions',
-        component: () => import('@/views/admin/WorkflowDefinitionView.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        redirect: '/workflow'
       },
       {
         path: 'admin/users',
