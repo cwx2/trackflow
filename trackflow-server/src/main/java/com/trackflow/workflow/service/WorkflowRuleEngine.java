@@ -29,6 +29,8 @@ import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
+import com.trackflow.workflow.entity.WorkflowInitialStatus;
+import com.trackflow.workflow.mapper.WorkflowInitialStatusMapper;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,6 +70,7 @@ public class WorkflowRuleEngine {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final StringRedisTemplate redisTemplate;
+    private final WorkflowInitialStatusMapper initialStatusMapper;
 
     /** Valid priority values recognized by the system. */
     private static final Set<String> VALID_PRIORITIES = Set.of(
@@ -1469,7 +1472,7 @@ public class WorkflowRuleEngine {
         newIssue.setCreatedBy(rule.getCreatedBy());
 
         // Resolve initial status for this issue type in this project
-        Long initialStatusId = resolveInitialStatus(projectId);
+        Long initialStatusId = resolveInitialStatus(projectId, issueType);
         newIssue.setStatusId(initialStatusId);
 
         // Copy sprint from trigger if in same project
@@ -1565,9 +1568,47 @@ public class WorkflowRuleEngine {
     }
 
     /**
-     * 解析初始状态 ID（取 issue_status 表中第一个非关闭状态）。
+     * 解析初始状态 ID：优先从 workflow_initial_status 配置查询，fallback 到第一个非关闭状态。
      */
-    private Long resolveInitialStatus(Long projectId) {
+    private Long resolveInitialStatus(Long projectId, String issueType) {
+        // 优先从工作流初始状态配置中查找（按 project+issueType 优先级）
+        String effectiveIssueType = (issueType == null || issueType.isBlank()) ? "*" : issueType;
+
+        // 1. 精确项目 + 精确类型
+        if (projectId != null && !"*".equals(effectiveIssueType)) {
+            WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowInitialStatus>()
+                            .eq(WorkflowInitialStatus::getProjectId, projectId)
+                            .eq(WorkflowInitialStatus::getIssueType, effectiveIssueType));
+            if (config != null) return config.getStatusId();
+        }
+
+        // 2. 精确项目 + 通配类型
+        if (projectId != null) {
+            WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowInitialStatus>()
+                            .eq(WorkflowInitialStatus::getProjectId, projectId)
+                            .eq(WorkflowInitialStatus::getIssueType, "*"));
+            if (config != null) return config.getStatusId();
+        }
+
+        // 3. 全局 + 精确类型
+        if (!"*".equals(effectiveIssueType)) {
+            WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowInitialStatus>()
+                            .isNull(WorkflowInitialStatus::getProjectId)
+                            .eq(WorkflowInitialStatus::getIssueType, effectiveIssueType));
+            if (config != null) return config.getStatusId();
+        }
+
+        // 4. 全局 + 通配类型
+        WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                new LambdaQueryWrapper<WorkflowInitialStatus>()
+                        .isNull(WorkflowInitialStatus::getProjectId)
+                        .eq(WorkflowInitialStatus::getIssueType, "*"));
+        if (config != null) return config.getStatusId();
+
+        // 5. Fallback：取第一个非关闭状态
         IssueStatus status = statusMapper.selectOne(new LambdaQueryWrapper<IssueStatus>()
                 .eq(IssueStatus::getIsClosed, false)
                 .orderByAsc(IssueStatus::getSortOrder)

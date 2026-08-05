@@ -120,13 +120,27 @@ public class IssueService {
         var project = projectService.getById(dto.getProjectId());
         String issueKey = project.getKey() + "-" + seq;
 
-        // 获取默认状态
-        IssueStatus defaultStatus = statusMapper.selectOne(
-                new LambdaQueryWrapper<IssueStatus>().eq(IssueStatus::getIsDefault, true)
-        );
+        // 获取默认状态：优先从工作流初始状态配置中查找，再 fallback 到系统默认
+        Long resolvedStatusId = null;
 
-        // 确定初始状态：优先使用用户指定的 statusId，否则使用默认状态
-        Long resolvedStatusId = defaultStatus != null ? defaultStatus.getId() : 1L;
+        // Step 1: 查询工作流初始状态配置（按 project+issueType 优先级匹配）
+        Long workflowInitialStatusId = workflowService.getInitialStatusId(dto.getProjectId(), dto.getIssueType());
+        if (workflowInitialStatusId != null) {
+            IssueStatus workflowStatus = statusMapper.selectById(workflowInitialStatusId);
+            if (workflowStatus != null) {
+                resolvedStatusId = workflowStatus.getId();
+            }
+        }
+
+        // Step 2: 如果工作流未配置，使用 issue_status 表的系统默认
+        if (resolvedStatusId == null) {
+            IssueStatus defaultStatus = statusMapper.selectOne(
+                    new LambdaQueryWrapper<IssueStatus>().eq(IssueStatus::getIsDefault, true)
+            );
+            resolvedStatusId = defaultStatus != null ? defaultStatus.getId() : 1L;
+        }
+
+        // Step 3: 用户显式指定的 statusId 最高优先
         if (dto.getStatusId() != null) {
             IssueStatus specifiedStatus = statusMapper.selectById(dto.getStatusId());
             if (specifiedStatus != null) {

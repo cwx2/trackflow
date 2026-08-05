@@ -904,6 +904,14 @@ export interface WorkflowMatrixVO {
   version: number | null
 }
 
+/** 工作流初始状态配置 VO */
+export interface WorkflowInitialStatusVO {
+  id: string
+  projectId: string | null
+  issueType: string
+  statusId: string
+}
+
 /** 工作流变更历史审计日志 VO */
 export interface WorkflowActivityVO {
   id: string

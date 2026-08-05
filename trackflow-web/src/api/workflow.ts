@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO, WorkflowImpactAnalysisVO } from './types'
+import type { R, PageResult, RoleVO, WorkflowTransitionVO, WorkflowMatrixVO, WorkflowActivityVO, UpdateWorkflowDTO, WorkflowImpactAnalysisVO, WorkflowInitialStatusVO } from './types'
 
 /** 守卫条件项类型 */
 export interface TransitionConditionItem {
@@ -80,5 +80,24 @@ export const workflowApi = {
    */
   updateTransitionConditions(transitionId: string, data: UpdateTransitionConditionsDTO) {
     return request.patch<any, R<void>>(`/workflows/transitions/${transitionId}/conditions`, data)
+  },
+
+  /** 获取指定项目的初始状态配置列表 */
+  listInitialStatuses(projectId: string) {
+    return request.get<any, R<WorkflowInitialStatusVO[]>>(`/projects/${projectId}/workflows/initial-statuses`)
+  },
+
+  /** 设置指定（项目, 工单类型）的初始状态 */
+  setInitialStatus(projectId: string, statusId: string, issueType?: string) {
+    return request.put<any, R<void>>(`/projects/${projectId}/workflows/initial-status`, null, {
+      params: { statusId, issueType: issueType || '*' }
+    })
+  },
+
+  /** 清除指定（项目, 工单类型）的初始状态配置 */
+  clearInitialStatus(projectId: string, issueType?: string) {
+    return request.delete<any, R<void>>(`/projects/${projectId}/workflows/initial-status`, {
+      params: { issueType: issueType || '*' }
+    })
   }
 }

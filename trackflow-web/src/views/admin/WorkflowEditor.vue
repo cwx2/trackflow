@@ -233,7 +233,13 @@
                     :class="{ highlighted: highlightRow === getRowIndex(fromStatus) }"
                   >
                     <span class="status-dot" :style="{ background: fromStatus.color }"></span>
-                    {{ localizeStatusName(fromStatus.name) }}
+                    <span class="row-header-name">{{ localizeStatusName(fromStatus.name) }}</span>
+                    <span
+                      class="initial-status-star"
+                      :class="{ active: isInitialStatus(fromStatus.id) }"
+                      :title="isInitialStatus(fromStatus.id) ? '当前为初始状态（点击取消）' : '设为初始状态'"
+                      @click.stop="toggleInitialStatus(fromStatus.id)"
+                    >★</span>
                   </td>
                   <td
                     v-for="(toStatus, colIdx) in filteredStatuses"
@@ -342,6 +348,7 @@
       </template>
       <span style="color: rgb(var(--arcoblue-6))">■</span> 蓝点=已配置动作（左键）；
       <span style="color: #d29922">■</span> 橙点=已配置守卫条件（右键）。
+      <span style="color: #d29922">★</span> 星标=初始状态（新建工单默认进入的状态）。
       hover 单元格高亮对应行列。
     </div>
     </div>
@@ -512,6 +519,9 @@ const guardPaths = reactive(new Map<string, string>())
 const transitionIdMap = reactive(new Map<string, string>())
 // 每个转换路径对应的当前守卫条件 JSON（用于编辑面板回填）
 const transitionConditionsMap = reactive(new Map<string, string>())
+
+// 初始状态配置：当前项目+issueType 的初始状态 ID
+const initialStatusId = ref<string | null>(null)
 
 // --- 分类顺序 ---
 const categoryOrder = ['open', 'in_progress', 'done', 'cancelled']
@@ -802,6 +812,7 @@ function doFilterChange() {
   snapshotFilters()
   loadMatrix()
   loadActionPaths()
+  loadInitialStatuses()
 }
 
 function onFilterChange() {
@@ -951,6 +962,55 @@ async function loadMatrix() {
     Message.error('加载工作流数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * 加载当前项目+issueType 的初始状态配置
+ */
+async function loadInitialStatuses() {
+  const projectId = selectedProject.value || '0'
+  try {
+    const res = await workflowApi.listInitialStatuses(projectId)
+    const configs = res.data || []
+    // 找到匹配当前 issueType 的配置（精确类型优先，再通配）
+    const currentType = selectedType.value || '*'
+    const exactMatch = configs.find(c => c.issueType === currentType)
+    const wildcardMatch = configs.find(c => c.issueType === '*')
+    const match = exactMatch || wildcardMatch
+    initialStatusId.value = match ? match.statusId : null
+  } catch {
+    initialStatusId.value = null
+  }
+}
+
+/**
+ * 判断指定状态是否为当前筛选条件下的初始状态
+ */
+function isInitialStatus(statusId: string): boolean {
+  return initialStatusId.value === statusId
+}
+
+/**
+ * 切换指定状态的初始状态标记
+ */
+async function toggleInitialStatus(statusId: string) {
+  const projectId = selectedProject.value || '0'
+  const issueType = selectedType.value || '*'
+  try {
+    if (isInitialStatus(statusId)) {
+      // 取消初始状态
+      await workflowApi.clearInitialStatus(projectId, issueType)
+      initialStatusId.value = null
+      Message.success('已清除初始状态设置')
+    } else {
+      // 设为初始状态
+      await workflowApi.setInitialStatus(projectId, statusId, issueType)
+      initialStatusId.value = statusId
+      Message.success('已设为初始状态')
+    }
+  } catch {
+    Message.error('设置初始状态失败')
   }
 }
 
@@ -1158,7 +1218,7 @@ onMounted(async () => {
     snapshotFilters()
   }
   
-  await Promise.all([loadMatrix(), loadActionPaths()])
+  await Promise.all([loadMatrix(), loadActionPaths(), loadInitialStatuses()])
   snapshotFilters()
 
   // 浏览器关闭/刷新时提示
@@ -1439,6 +1499,34 @@ onBeforeRouteLeave(() => {
   left: 0;
   z-index: 1;
   transition: background-color 100ms ease;
+}
+
+.row-header-name {
+  flex: 1;
+}
+
+.initial-status-star {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--color-text-4, #8b949e);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease, color 150ms ease;
+}
+
+.row-header:hover .initial-status-star {
+  opacity: 1;
+}
+
+.initial-status-star.active {
+  opacity: 1;
+  color: #d29922;
+}
+
+.initial-status-star:hover {
+  color: #d29922;
+  opacity: 1;
 }
 
 .row-header.highlighted {

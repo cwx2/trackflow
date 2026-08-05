@@ -10,10 +10,12 @@ import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.dto.WorkflowImpactAnalysisDTO;
 import com.trackflow.workflow.entity.WorkflowActivity;
+import com.trackflow.workflow.entity.WorkflowInitialStatus;
 import com.trackflow.workflow.WorkflowScope;
 import com.trackflow.workflow.service.WorkflowService;
 import com.trackflow.workflow.vo.WorkflowActivityVO;
 import com.trackflow.workflow.vo.WorkflowImpactAnalysisVO;
+import com.trackflow.workflow.vo.WorkflowInitialStatusVO;
 import com.trackflow.workflow.vo.WorkflowMatrixVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -163,6 +165,60 @@ public class WorkflowController {
             @PathVariable("transitionId") Long transitionId,
             @Valid @RequestBody com.trackflow.workflow.dto.UpdateTransitionConditionsDTO dto) {
         workflowService.updateTransitionConditions(transitionId, dto);
+        return R.ok();
+    }
+
+    // ========== 初始状态管理 ==========
+
+    /**
+     * 获取指定项目的初始状态配置列表。
+     * 用于工作流编辑器展示哪些状态被标记为初始状态。
+     */
+    @GetMapping("/projects/{projectId}/workflows/initial-statuses")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    public R<List<WorkflowInitialStatusVO>> listInitialStatuses(@PathVariable("projectId") Long projectId) {
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
+        List<WorkflowInitialStatus> configs = workflowService.listInitialStatuses(effectiveProjectId);
+        List<WorkflowInitialStatusVO> voList = configs.stream().map(config -> {
+            WorkflowInitialStatusVO vo = new WorkflowInitialStatusVO();
+            vo.setId(String.valueOf(config.getId()));
+            vo.setProjectId(config.getProjectId() != null ? String.valueOf(config.getProjectId()) : null);
+            vo.setIssueType(config.getIssueType());
+            vo.setStatusId(String.valueOf(config.getStatusId()));
+            return vo;
+        }).toList();
+        return R.ok(voList);
+    }
+
+    /**
+     * 设置指定（项目, 工单类型）的初始状态。
+     * 同一组合只能有一个初始状态，设置新的会替换旧的。
+     *
+     * @param projectId  项目 ID（0 表示全局）
+     * @param statusId   目标状态 ID
+     * @param issueType  工单类型（默认 *）
+     */
+    @PutMapping("/projects/{projectId}/workflows/initial-status")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    public R<Void> setInitialStatus(
+            @PathVariable("projectId") Long projectId,
+            @RequestParam("statusId") Long statusId,
+            @RequestParam(value = "issueType", defaultValue = "*") String issueType) {
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
+        workflowService.setInitialStatus(effectiveProjectId, issueType, statusId);
+        return R.ok();
+    }
+
+    /**
+     * 清除指定（项目, 工单类型）的初始状态配置，恢复为系统默认逻辑。
+     */
+    @DeleteMapping("/projects/{projectId}/workflows/initial-status")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    public R<Void> clearInitialStatus(
+            @PathVariable("projectId") Long projectId,
+            @RequestParam(value = "issueType", defaultValue = "*") String issueType) {
+        Long effectiveProjectId = WorkflowScope.fromApi(projectId);
+        workflowService.clearInitialStatus(effectiveProjectId, issueType);
         return R.ok();
     }
 }

@@ -22,11 +22,13 @@ import com.trackflow.workflow.converter.WorkflowConverter;
 import com.trackflow.workflow.dto.UpdateWorkflowDTO;
 import com.trackflow.workflow.dto.WorkflowActivityQuery;
 import com.trackflow.workflow.entity.WorkflowActivity;
+import com.trackflow.workflow.entity.WorkflowInitialStatus;
 import com.trackflow.workflow.entity.WorkflowTransition;
 import com.trackflow.workflow.entity.WorkflowVersion;
 import com.trackflow.workflow.entity.WorkflowDefinition;
 import com.trackflow.workflow.entity.ProjectWorkflow;
 import com.trackflow.workflow.mapper.WorkflowActivityMapper;
+import com.trackflow.workflow.mapper.WorkflowInitialStatusMapper;
 import com.trackflow.workflow.mapper.WorkflowTransitionMapper;
 import com.trackflow.workflow.mapper.WorkflowVersionMapper;
 import com.trackflow.workflow.mapper.WorkflowDefinitionMapper;
@@ -57,6 +59,7 @@ public class WorkflowService {
     private final WorkflowTransitionMapper transitionMapper;
     private final WorkflowActivityMapper activityMapper;
     private final WorkflowVersionMapper versionMapper;
+    private final WorkflowInitialStatusMapper initialStatusMapper;
     private final WorkflowConverter workflowConverter;
     private final IssueStatusMapper statusMapper;
     private final IssueMapper issueMapper;
@@ -1006,5 +1009,113 @@ public class WorkflowService {
             }
         }
         return sb.toString();
+    }
+
+    // ========== 初始状态管理 ==========
+
+    /**
+     * 设置指定（项目, 工单类型）组合的初始状态。
+     * 同一组合只能有一个初始状态，设置新的会替换旧的。
+     *
+     * @param projectId   项目 ID（null 表示全局默认）
+     * @param issueType   工单类型（null 或 * 表示所有类型）
+     * @param statusId    目标状态 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void setInitialStatus(Long projectId, String issueType, Long statusId) {
+        // 校验状态存在
+        IssueStatus status = statusMapper.selectById(statusId);
+        if (status == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "指定的状态不存在: " + statusId);
+        }
+
+        String effectiveIssueType = (issueType == null || issueType.isBlank()) ? "*" : issueType;
+
+        // 删除已有配置
+        initialStatusMapper.delete(new LambdaQueryWrapper<WorkflowInitialStatus>()
+                .eq(projectId != null, WorkflowInitialStatus::getProjectId, projectId)
+                .isNull(projectId == null, WorkflowInitialStatus::getProjectId)
+                .eq(WorkflowInitialStatus::getIssueType, effectiveIssueType));
+
+        // 插入新配置
+        WorkflowInitialStatus config = new WorkflowInitialStatus();
+        config.setProjectId(projectId);
+        config.setIssueType(effectiveIssueType);
+        config.setStatusId(statusId);
+        config.setCreatedBy(SecurityUtils.getCurrentUserId());
+        initialStatusMapper.insert(config);
+
+        log.info("设置初始状态: projectId={}, issueType={}, statusId={}", projectId, effectiveIssueType, statusId);
+    }
+
+    /**
+     * 清除指定（项目, 工单类型）组合的初始状态配置。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void clearInitialStatus(Long projectId, String issueType) {
+        String effectiveIssueType = (issueType == null || issueType.isBlank()) ? "*" : issueType;
+        initialStatusMapper.delete(new LambdaQueryWrapper<WorkflowInitialStatus>()
+                .eq(projectId != null, WorkflowInitialStatus::getProjectId, projectId)
+                .isNull(projectId == null, WorkflowInitialStatus::getProjectId)
+                .eq(WorkflowInitialStatus::getIssueType, effectiveIssueType));
+        log.info("清除初始状态: projectId={}, issueType={}", projectId, effectiveIssueType);
+    }
+
+    /**
+     * 获取指定（项目, 工单类型）的初始状态 ID。
+     * 优先级查找顺序：
+     * 1. 精确匹配 projectId + 精确 issueType
+     * 2. 精确匹配 projectId + 通配 issueType(*)
+     * 3. 全局默认（projectId IS NULL） + 精确 issueType
+     * 4. 全局默认（projectId IS NULL） + 通配 issueType(*)
+     * 5. 返回 null（由调用方做 fallback）
+     */
+    public Long getInitialStatusId(Long projectId, String issueType) {
+        String effectiveIssueType = (issueType == null || issueType.isBlank()) ? "*" : issueType;
+
+        // 1. 精确项目 + 精确类型
+        if (projectId != null && !"*".equals(effectiveIssueType)) {
+            WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowInitialStatus>()
+                            .eq(WorkflowInitialStatus::getProjectId, projectId)
+                            .eq(WorkflowInitialStatus::getIssueType, effectiveIssueType));
+            if (config != null) return config.getStatusId();
+        }
+
+        // 2. 精确项目 + 通配类型
+        if (projectId != null) {
+            WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowInitialStatus>()
+                            .eq(WorkflowInitialStatus::getProjectId, projectId)
+                            .eq(WorkflowInitialStatus::getIssueType, "*"));
+            if (config != null) return config.getStatusId();
+        }
+
+        // 3. 全局 + 精确类型
+        if (!"*".equals(effectiveIssueType)) {
+            WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                    new LambdaQueryWrapper<WorkflowInitialStatus>()
+                            .isNull(WorkflowInitialStatus::getProjectId)
+                            .eq(WorkflowInitialStatus::getIssueType, effectiveIssueType));
+            if (config != null) return config.getStatusId();
+        }
+
+        // 4. 全局 + 通配类型
+        WorkflowInitialStatus config = initialStatusMapper.selectOne(
+                new LambdaQueryWrapper<WorkflowInitialStatus>()
+                        .isNull(WorkflowInitialStatus::getProjectId)
+                        .eq(WorkflowInitialStatus::getIssueType, "*"));
+        return config != null ? config.getStatusId() : null;
+    }
+
+    /**
+     * 获取指定项目的所有初始状态配置。
+     * 用于前端工作流编辑器展示哪些状态被标记为初始状态。
+     */
+    public List<WorkflowInitialStatus> listInitialStatuses(Long projectId) {
+        return initialStatusMapper.selectList(
+                new LambdaQueryWrapper<WorkflowInitialStatus>()
+                        .eq(projectId != null, WorkflowInitialStatus::getProjectId, projectId)
+                        .isNull(projectId == null, WorkflowInitialStatus::getProjectId));
     }
 }
