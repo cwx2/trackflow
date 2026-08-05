@@ -16,6 +16,7 @@ public interface NotificationConverter extends BaseConverter {
     @Mapping(target = "actorName", ignore = true)
     @Mapping(target = "actorAvatar", ignore = true)
     @Mapping(target = "reasonLabel", ignore = true)
+    @Mapping(target = "resourceMuted", ignore = true)
     // updatedAt + aggregationCount auto-mapped by name
     NotificationVO toVO(Notification entity);
     List<NotificationVO> toVOList(List<Notification> entities);
