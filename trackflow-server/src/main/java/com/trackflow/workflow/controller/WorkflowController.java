@@ -177,8 +177,8 @@ public class WorkflowController {
     @PreAuthorize("@perm.checkGlobal('system:admin')")
     public R<Void> updateTransitionName(
             @PathVariable("transitionId") Long transitionId,
-            @RequestBody Map<String, String> body) {
-        String name = body.get("transitionName");
+            @Valid @RequestBody com.trackflow.workflow.dto.UpdateTransitionNameDTO dto) {
+        String name = dto.getTransitionName();
         if (name != null && name.isBlank()) {
             name = null;
         }

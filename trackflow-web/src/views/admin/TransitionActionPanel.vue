@@ -29,6 +29,7 @@
             type="primary"
             size="small"
             :loading="nameSaving"
+            :disabled="nameSaving"
             @click="saveTransitionName"
           >保存</a-button>
         </div>

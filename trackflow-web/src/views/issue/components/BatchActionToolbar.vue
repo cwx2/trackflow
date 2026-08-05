@@ -29,7 +29,7 @@
                 @click="handleBatchState(status)"
               >
                 <span class="status-dot" :style="{ background: status.color }"></span>
-                <span class="status-name">{{ localizeStatusName(status.name) }}</span>
+                <span class="status-name">{{ status.transitionName || localizeStatusName(status.name) }}</span>
                 <span
                   v-if="status.totalCount > 1 && status.reachableCount < status.totalCount"
                   class="reachable-hint"
@@ -390,7 +390,8 @@ watch(showStatusDropdown, async (visible) => {
         const res = await issueApi.getAvailableTransitions(issueIds[0])
         allStatuses.value = (res.data || []).map(s => ({
           id: s.id,
-          name: s.transitionName || s.name,
+          name: s.name,
+          transitionName: s.transitionName || undefined,
           color: s.color,
           category: s.category,
           isClosed: s.isClosed,

@@ -385,6 +385,8 @@ export interface BatchAvailableStatusVO {
   category: string
   isClosed: boolean
   sortOrder: number
+  /** 转换显示名称（优先于 name 展示） */
+  transitionName?: string
   /** 可以转换到此状态的工单数量 */
   reachableCount: number
   /** 选中的工单总数 */
