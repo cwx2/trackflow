@@ -356,16 +356,21 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     elapsed = time.time() - start
     stdout = stdout_bytes.decode("utf-8", errors="replace")
 
+    # 打印非 JSON 调试输出
+    for line in stdout.split("\n"):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("{"):
+            log.info(f"[{label}] {strip_ansi(stripped)}")
+
     # 解析 JSON 输出
     parsed = _parse_claude_output(stdout)
     if parsed is None:
         log.warning(f"[{label}] 无法解析 Claude Code 输出为 JSON")
-        # 检查是否是瞬时错误
         if _is_transient_cli_output(stdout):
             log.warning(f"[{label}] 检测到瞬时故障标记")
             _open_circuit(label)
             return False, "STARTUP_FAIL"
-        return False, stdout[-500:]  # 返回最后部分供排查
+        return False, stdout[-500:]
 
     is_error = parsed.get("is_error", False)
     result_text = parsed.get("result", "")
@@ -374,15 +379,16 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     cost = parsed.get("total_cost_usd", 0)
     turns = parsed.get("num_turns", 0)
 
+    # 成本 + session + 首行摘要（一行可见便于监控）
     log.info(
-        f"[{label}] Claude {'✅' if not is_error else '❌'} "
-        f"({elapsed:.0f}s, {turns}轮, ${cost:.4f}, session={session_id[:8] if session_id else '?'}...)"
+        f"[{label}] {'✅' if not is_error else '❌'} "
+        f"${cost:.4f} | {turns}轮 | {elapsed:.0f}s | "
+        f"session={session_id[:8] if session_id else '?'}"
     )
 
-    # 简短信息直接打出来方便监控
-    first_line = result_text.split("\n")[0].strip() if result_text else ""
-    if first_line and len(first_line) < 120:
-        log.info(f"[{label}] → {first_line}")
+    first_line = result_text.strip().split("\n")[0] if result_text else ""
+    if first_line:
+        log.info(f"[{label}] → {first_line[:150]}")
 
     if is_error:
         error_detail = parsed.get("api_error_status", "") or result_text[:200]
