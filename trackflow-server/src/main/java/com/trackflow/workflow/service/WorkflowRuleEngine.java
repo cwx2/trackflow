@@ -334,6 +334,12 @@ public class WorkflowRuleEngine {
     }
 
     private boolean evalConditionWithComment(JsonNode cond, Issue issue, String commentContent) {
+        // 新格式：conditionType = "keyword_contains" — 关键词检测
+        String conditionType = textOf(cond, "conditionType");
+        if ("keyword_contains".equals(conditionType)) {
+            return evaluateKeywordContains(cond, issue, commentContent);
+        }
+
         String field = textOf(cond, "field");
         String op = textOf(cond, "operator");
         String expected = textOf(cond, "value");
@@ -429,6 +435,12 @@ public class WorkflowRuleEngine {
     }
 
     private boolean evalCondition(JsonNode cond, Issue issue, String changedField, String oldValue) {
+        // 新格式：conditionType = "keyword_contains" — 关键词检测（标题/描述/关联工单标题）
+        String conditionType = textOf(cond, "conditionType");
+        if ("keyword_contains".equals(conditionType)) {
+            return evaluateKeywordContains(cond, issue, null);
+        }
+
         String field = textOf(cond, "field");
         String op = textOf(cond, "operator");
         String expected = textOf(cond, "value");
@@ -517,6 +529,122 @@ public class WorkflowRuleEngine {
         if ("title".equals(field)) return issue.getTitle();
         if ("description".equals(field)) return issue.getDescription();
         return null;
+    }
+
+    /**
+     * 评估 keyword_contains 条件：根据 attribute 字段决定检测来源。
+     * <p>
+     * 条件 JSON 格式：
+     * <pre>
+     * {
+     *   "type": "condition",
+     *   "conditionType": "keyword_contains",
+     *   "attribute": "summary",          // summary / description / comments / linked_summaries
+     *   "keywords": ["紧急", "[URGENT]"]  // 多关键词 OR 关系
+     * }
+     * </pre>
+     *
+     * @param cond           条件节点
+     * @param issue          当前工单
+     * @param commentContent 评论内容（仅 comment_added 触发器提供，其他场景为 null）
+     * @return 是否满足条件
+     */
+    private boolean evaluateKeywordContains(JsonNode cond, Issue issue, String commentContent) {
+        String attribute = textOf(cond, "attribute");
+        if (attribute == null || attribute.isBlank()) {
+            log.warn("[RuleEngine] keyword_contains 条件缺少 attribute 字段");
+            return false;
+        }
+
+        List<String> keywords = parseKeywordList(cond.get("keywords"));
+        if (keywords.isEmpty()) {
+            log.warn("[RuleEngine] keyword_contains 条件缺少有效 keywords");
+            return false;
+        }
+
+        return switch (attribute) {
+            case "summary" -> containsAnyKeyword(issue.getTitle(), keywords);
+            case "description" -> containsAnyKeyword(issue.getDescription(), keywords);
+            case "comments" -> containsAnyKeyword(commentContent, keywords);
+            case "linked_summaries" -> checkLinkedIssueSummaries(issue.getId(), keywords);
+            default -> {
+                log.warn("[RuleEngine] keyword_contains 不支持的 attribute: {}", attribute);
+                yield false;
+            }
+        };
+    }
+
+    /**
+     * 解析 keywords JSON 节点为字符串列表。
+     * 支持数组格式 ["kw1","kw2"] 和逗号分隔字符串 "kw1,kw2"。
+     */
+    private List<String> parseKeywordList(JsonNode keywordsNode) {
+        if (keywordsNode == null || keywordsNode.isNull()) return List.of();
+        if (keywordsNode.isArray()) {
+            List<String> result = new java.util.ArrayList<>();
+            for (JsonNode kw : keywordsNode) {
+                String text = kw.asText().trim();
+                if (!text.isEmpty()) result.add(text);
+            }
+            return result;
+        }
+        // Fallback：逗号分隔字符串
+        String text = keywordsNode.asText();
+        if (text == null || text.isBlank()) return List.of();
+        return Arrays.stream(text.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    /**
+     * 检查文本是否包含任意一个关键词（大小写不敏感，OR 关系）。
+     */
+    private boolean containsAnyKeyword(String text, List<String> keywords) {
+        if (text == null || text.isBlank()) return false;
+        String lowerText = text.toLowerCase();
+        for (String keyword : keywords) {
+            if (lowerText.contains(keyword.toLowerCase())) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 检查当前工单的所有关联工单标题是否包含任意关键词。
+     * 查询 issue_link 表中 source 或 target 包含当前 issueId 的关联。
+     */
+    private boolean checkLinkedIssueSummaries(Long issueId, List<String> keywords) {
+        if (issueId == null) return false;
+        // 查找所有关联的工单 ID（双向）
+        List<IssueLink> links = issueLinkMapper.selectList(
+                new LambdaQueryWrapper<IssueLink>()
+                        .eq(IssueLink::getSourceIssueId, issueId)
+                        .or()
+                        .eq(IssueLink::getTargetIssueId, issueId)
+        );
+        if (links.isEmpty()) return false;
+
+        Set<Long> linkedIssueIds = new HashSet<>();
+        for (IssueLink link : links) {
+            if (link.getSourceIssueId().equals(issueId)) {
+                linkedIssueIds.add(link.getTargetIssueId());
+            } else {
+                linkedIssueIds.add(link.getSourceIssueId());
+            }
+        }
+
+        // 批量查询关联工单的标题
+        List<Issue> linkedIssues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .in(Issue::getId, linkedIssueIds)
+                        .isNull(Issue::getDeletedAt)
+                        .select(Issue::getId, Issue::getTitle)
+        );
+
+        for (Issue linked : linkedIssues) {
+            if (containsAnyKeyword(linked.getTitle(), keywords)) return true;
+        }
+        return false;
     }
 
     private void executeActions(WorkflowRule rule, Issue issue) {

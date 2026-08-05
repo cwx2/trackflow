@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.entity.IssueLink;
+import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.entity.WorkflowRuleExecutionLog;
@@ -37,6 +39,7 @@ public class ScheduledRuleService {
     private final WorkflowRuleMapper ruleMapper;
     private final WorkflowRuleExecutionLogMapper logMapper;
     private final IssueMapper issueMapper;
+    private final IssueLinkMapper issueLinkMapper;
     private final WorkflowRuleEngine ruleEngine;
     private final ObjectMapper objectMapper;
     private final DistributedLockService distributedLockService;
@@ -408,6 +411,12 @@ public class ScheduledRuleService {
     }
 
     private boolean evalSingleCondition(JsonNode cond, Issue issue) {
+        // 新格式：conditionType = "keyword_contains" — 关键词检测
+        String conditionType = textOf(cond, "conditionType");
+        if ("keyword_contains".equals(conditionType)) {
+            return evaluateKeywordContains(cond, issue);
+        }
+
         String field = textOf(cond, "field");
         String operator = textOf(cond, "operator");
         String expected = textOf(cond, "value");
@@ -537,6 +546,93 @@ public class ScheduledRuleService {
     }
 
     // ============ 工具方法 ============
+
+    /**
+     * 评估 keyword_contains 条件（计划任务场景，无 commentContent）。
+     */
+    private boolean evaluateKeywordContains(JsonNode cond, Issue issue) {
+        String attribute = textOf(cond, "attribute");
+        if (attribute == null || attribute.isBlank()) {
+            log.warn("[ScheduledRule] keyword_contains 条件缺少 attribute 字段");
+            return false;
+        }
+
+        List<String> keywords = parseKeywordList(cond.get("keywords"));
+        if (keywords.isEmpty()) {
+            log.warn("[ScheduledRule] keyword_contains 条件缺少有效 keywords");
+            return false;
+        }
+
+        return switch (attribute) {
+            case "summary" -> containsAnyKeyword(issue.getTitle(), keywords);
+            case "description" -> containsAnyKeyword(issue.getDescription(), keywords);
+            case "comments" -> false; // 计划任务无 commentContent 上下文
+            case "linked_summaries" -> checkLinkedIssueSummaries(issue.getId(), keywords);
+            default -> {
+                log.warn("[ScheduledRule] keyword_contains 不支持的 attribute: {}", attribute);
+                yield false;
+            }
+        };
+    }
+
+    private List<String> parseKeywordList(JsonNode keywordsNode) {
+        if (keywordsNode == null || keywordsNode.isNull()) return List.of();
+        if (keywordsNode.isArray()) {
+            List<String> result = new ArrayList<>();
+            for (JsonNode kw : keywordsNode) {
+                String text = kw.asText().trim();
+                if (!text.isEmpty()) result.add(text);
+            }
+            return result;
+        }
+        String text = keywordsNode.asText();
+        if (text == null || text.isBlank()) return List.of();
+        return Arrays.stream(text.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    private boolean containsAnyKeyword(String text, List<String> keywords) {
+        if (text == null || text.isBlank()) return false;
+        String lowerText = text.toLowerCase();
+        for (String keyword : keywords) {
+            if (lowerText.contains(keyword.toLowerCase())) return true;
+        }
+        return false;
+    }
+
+    private boolean checkLinkedIssueSummaries(Long issueId, List<String> keywords) {
+        if (issueId == null) return false;
+        List<IssueLink> links = issueLinkMapper.selectList(
+                new LambdaQueryWrapper<IssueLink>()
+                        .eq(IssueLink::getSourceIssueId, issueId)
+                        .or()
+                        .eq(IssueLink::getTargetIssueId, issueId)
+        );
+        if (links.isEmpty()) return false;
+
+        Set<Long> linkedIssueIds = new HashSet<>();
+        for (IssueLink link : links) {
+            if (link.getSourceIssueId().equals(issueId)) {
+                linkedIssueIds.add(link.getTargetIssueId());
+            } else {
+                linkedIssueIds.add(link.getSourceIssueId());
+            }
+        }
+
+        List<Issue> linkedIssues = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .in(Issue::getId, linkedIssueIds)
+                        .isNull(Issue::getDeletedAt)
+                        .select(Issue::getId, Issue::getTitle)
+        );
+
+        for (Issue linked : linkedIssues) {
+            if (containsAnyKeyword(linked.getTitle(), keywords)) return true;
+        }
+        return false;
+    }
 
     private String textOf(JsonNode node, String key) {
         JsonNode child = node.get(key);
