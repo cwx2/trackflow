@@ -51,6 +51,7 @@ public class QuickActionService {
     private final QuickActionLogMapper logMapper;
     private final QuickActionConverter converter;
     private final IssueService issueService;
+    private final com.trackflow.issue.service.IssueCommentService commentService;
     private final IssueStatusMapper issueStatusMapper;
     private final EmailSendService emailSendService;
     private final SysUserMapper sysUserMapper;
@@ -86,7 +87,7 @@ public class QuickActionService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "不允许执行此动作");
 
         String comment = buildComment(def, dto);
-        var created = issueService.addComment(issueId, comment);
+        var created = commentService.addComment(issueId, comment);
         String stBefore = curSt != null ? curSt.getName() : null;
         String stAfter = null;
         if (def.getStatusTransitionTo() != null && !def.getStatusTransitionTo().isBlank())

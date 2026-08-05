@@ -104,6 +104,9 @@ public class IssueService {
     private final PriorityFieldService priorityFieldService;
     private final IssueTypeFieldService issueTypeFieldService;
     private final DueDateFieldService dueDateFieldService;
+    private final IssueActivityService activityService;
+    private final IssueCommentService commentService;
+    private final IssueAttachmentService attachmentService;
 
     /**
      * 创建 Issue
@@ -2458,7 +2461,7 @@ public class IssueService {
 
         // 如果带了评论，同时添加评论
         if (comment != null && !comment.isBlank()) {
-            addComment(id, comment);
+            commentService.addComment(id, comment);
         }
 
         // 调用 TransitionActionEngine 执行自动化动作（auto-assign 等）
@@ -3625,31 +3628,13 @@ public class IssueService {
 
     private void recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue) {
-        recordActivity(issueId, userId, action, fieldName, oldValue, newValue, null, null);
+        activityService.recordActivity(issueId, userId, action, fieldName, oldValue, newValue);
     }
 
     private void recordActivity(Long issueId, Long userId, String action,
                                 String fieldName, String oldValue, String newValue,
                                 String oldDisplayValue, String newDisplayValue) {
-        // Skip no-op changes: if both old and new values are present and identical, don't record
-        if (oldValue != null && newValue != null && oldValue.equals(newValue)
-                && "updated".equals(action)) {
-            return;
-        }
-        IssueActivity activity = new IssueActivity();
-        activity.setIssueId(issueId);
-        activity.setUserId(userId);
-        activity.setAction(action);
-        activity.setFieldName(fieldName);
-        activity.setOldValue(oldValue);
-        activity.setNewValue(newValue);
-        activity.setOldDisplayValue(oldDisplayValue);
-        activity.setNewDisplayValue(newDisplayValue);
-        if (AutomationActorRunner.isAutomationExecution()) {
-            activity.setSource("automation");
-        }
-        activity.setCreatedAt(LocalDateTime.now());
-        activityMapper.insert(activity);
+        activityService.recordActivity(issueId, userId, action, fieldName, oldValue, newValue, oldDisplayValue, newDisplayValue);
     }
 
     /**

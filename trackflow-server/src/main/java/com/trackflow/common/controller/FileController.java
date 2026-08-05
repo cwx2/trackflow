@@ -2,7 +2,7 @@ package com.trackflow.common.controller;
 
 import com.trackflow.common.service.MinioService;
 import com.trackflow.issue.entity.IssueAttachment;
-import com.trackflow.issue.service.IssueService;
+import com.trackflow.issue.service.IssueAttachmentService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +24,7 @@ import java.nio.charset.StandardCharsets;
 public class FileController {
 
     private final MinioService minioService;
-    private final IssueService issueService;
+    private final IssueAttachmentService attachmentService;
 
     /**
      * 文件下载/预览（支持任意深度路径）
@@ -42,12 +42,12 @@ public class FileController {
 
         // 附件可见性校验：通过文件路径查找附件记录
         if (objectName.startsWith("issues/") && objectName.contains("/attachments/")) {
-            IssueAttachment attachment = issueService.findByFilePath(objectName);
+            IssueAttachment attachment = attachmentService.findByFilePath(objectName);
             if (attachment != null
                     && attachment.getVisibleToGroupIds() != null
                     && !attachment.getVisibleToGroupIds().isEmpty()) {
                 // 私有附件——检查当前用户是否有权访问
-                if (!issueService.canAccessAttachment(attachment.getId())) {
+                if (!attachmentService.canAccessAttachment(attachment.getId())) {
                     response.setStatus(403);
                     return;
                 }
@@ -98,7 +98,7 @@ public class FileController {
      */
     private String resolveOriginalFileName(String objectName) {
         if (objectName.startsWith("issues/") && objectName.contains("/attachments/")) {
-            IssueAttachment attachment = issueService.findByFilePath(objectName);
+            IssueAttachment attachment = attachmentService.findByFilePath(objectName);
             if (attachment != null && attachment.getFileName() != null && !attachment.getFileName().isBlank()) {
                 return attachment.getFileName();
             }

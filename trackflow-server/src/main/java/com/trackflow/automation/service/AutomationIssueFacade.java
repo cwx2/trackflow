@@ -22,6 +22,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AutomationIssueFacade {
     private final IssueService issueService;
+    private final com.trackflow.issue.service.IssueCommentService commentService;
     private final WorkflowService workflowService;
     private final PermissionService permissionService;
 
@@ -86,7 +87,7 @@ public class AutomationIssueFacade {
         }
         Issue issue = issueService.getByIdWithAccessCheck(issueId);
         requirePermission(actorUserId, issue, "issue:comment");
-        IssueComment comment = issueService.addComment(issueId, content);
+        IssueComment comment = commentService.addComment(issueId, content);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", comment.getId());
         result.put("issueId", issueId);

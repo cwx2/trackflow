@@ -49,6 +49,9 @@ public class IssueController {
     private final CustomFieldService customFieldService;
     private final PriorityFieldService priorityFieldService;
     private final IssueTypeFieldService issueTypeFieldService;
+    private final com.trackflow.issue.service.IssueCommentService commentService;
+    private final com.trackflow.issue.service.IssueAttachmentService attachmentService;
+    private final com.trackflow.issue.service.IssueActivityService activityService;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
 
     @PostMapping
@@ -364,14 +367,14 @@ public class IssueController {
     @GetMapping("/{id}/comments")
     public R<List<IssueCommentVO>> listComments(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
-        return R.ok(issueService.listCommentsWithUser(id));
+        return R.ok(commentService.listCommentsWithUser(id));
     }
 
     @PostMapping("/{id}/comments")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<IssueCommentVO> addComment(@PathVariable("id") Long id, @Valid @RequestBody AddCommentDTO dto) {
-        IssueComment comment = issueService.addComment(id, dto.getContent(), dto.getVisibleToGroupIds());
-        return R.ok(issueService.toCommentVOWithUser(comment));
+        IssueComment comment = commentService.addComment(id, dto.getContent(), dto.getVisibleToGroupIds());
+        return R.ok(commentService.toCommentVOWithUser(comment));
     }
 
     @PutMapping("/{id}/comments/{commentId}")
@@ -379,29 +382,29 @@ public class IssueController {
     public R<IssueCommentVO> updateComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId,
                                             @Valid @RequestBody UpdateCommentDTO dto) {
         boolean updateVisibility = dto.getVisibleToGroupIds() != null;
-        IssueComment comment = issueService.updateComment(id, commentId, dto.getContent(),
+        IssueComment comment = commentService.updateComment(id, commentId, dto.getContent(),
                 dto.getVisibleToGroupIds(), updateVisibility);
-        return R.ok(issueService.toCommentVOWithUser(comment));
+        return R.ok(commentService.toCommentVOWithUser(comment));
     }
 
     @DeleteMapping("/{id}/comments/{commentId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<Void> deleteComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
-        issueService.deleteComment(id, commentId);
+        commentService.deleteComment(id, commentId);
         return R.ok();
     }
 
     @PostMapping("/{id}/comments/{commentId}/restore")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:comment')")
     public R<Void> restoreComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
-        issueService.restoreComment(id, commentId);
+        commentService.restoreComment(id, commentId);
         return R.ok();
     }
 
     @DeleteMapping("/{id}/comments/{commentId}/permanent")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:manage_comments')")
     public R<Void> permanentlyDeleteComment(@PathVariable("id") Long id, @PathVariable("commentId") Long commentId) {
-        issueService.permanentlyDeleteComment(id, commentId);
+        commentService.permanentlyDeleteComment(id, commentId);
         return R.ok();
     }
 
@@ -410,7 +413,7 @@ public class IssueController {
     @GetMapping("/{id}/attachments")
     public R<List<IssueAttachmentVO>> listAttachments(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
-        List<IssueAttachment> attachments = issueService.listAttachments(id);
+        List<IssueAttachment> attachments = attachmentService.listAttachments(id);
         return R.ok(buildAttachmentVOList(attachments));
     }
 
@@ -420,7 +423,7 @@ public class IssueController {
             @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "visibleToGroupIds", required = false) List<Long> visibleToGroupIds) {
-        IssueAttachment attachment = issueService.uploadAttachment(id, file, visibleToGroupIds);
+        IssueAttachment attachment = attachmentService.uploadAttachment(id, file, visibleToGroupIds);
         return R.ok(buildAttachmentVO(attachment));
     }
 
@@ -430,14 +433,14 @@ public class IssueController {
             @PathVariable("id") Long id,
             @PathVariable("attachmentId") Long attachmentId,
             @RequestBody com.trackflow.issue.dto.UpdateAttachmentVisibilityDTO dto) {
-        IssueAttachment attachment = issueService.updateAttachmentVisibility(id, attachmentId, dto.getVisibleToGroupIds());
+        IssueAttachment attachment = attachmentService.updateAttachmentVisibility(id, attachmentId, dto.getVisibleToGroupIds());
         return R.ok(buildAttachmentVO(attachment));
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<Void> deleteAttachment(@PathVariable("id") Long id, @PathVariable("attachmentId") Long attachmentId) {
-        issueService.deleteAttachment(id, attachmentId);
+        attachmentService.deleteAttachment(id, attachmentId);
         return R.ok();
     }
 
@@ -475,7 +478,7 @@ public class IssueController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         issueService.getByIdWithAccessCheck(id);
-        return R.ok(issueService.listActivitiesWithUserPaged(id, page, pageSize));
+        return R.ok(activityService.listActivitiesWithUserPaged(id, page, pageSize));
     }
 
     // ========== 标签 ==========

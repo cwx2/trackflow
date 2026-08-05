@@ -51,6 +51,7 @@ public class ActionRuleExecutor {
     private final IssueTagMapper issueTagMapper;
     private final IssueTagRelationMapper issueTagRelationMapper;
     private final IssueService issueService;
+    private final com.trackflow.issue.service.IssueCommentService commentService;
     private final NotificationService notificationService;
     private final SysUserMapper sysUserMapper;
     private final ProjectMapper projectMapper;
@@ -238,7 +239,7 @@ public class ActionRuleExecutor {
         }
         // Replace template variables
         content = replaceVariables(content, issue, operatorId);
-        issueService.addComment(issue.getId(), content);
+        commentService.addComment(issue.getId(), content);
     }
 
     private void executeSendNotification(Issue issue, Map<String, Object> action,
