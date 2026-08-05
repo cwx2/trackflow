@@ -16,8 +16,11 @@ import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.workflow.converter.WorkflowRuleConverter;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
+import com.trackflow.workflow.dto.WorkflowRuleExportDTO;
+import com.trackflow.workflow.dto.WorkflowRuleImportDTO;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowRuleMapper;
+import com.trackflow.workflow.vo.WorkflowRuleImportResultVO;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
 import com.trackflow.workflow.vo.WorkflowRuleValidationVO;
 import com.trackflow.workflow.vo.WorkflowRuleValidationVO.ValidationError;
@@ -658,6 +661,163 @@ public class WorkflowRuleService {
         JsonNode child = node.get(field);
         if (child == null || child.isNull() || !child.isTextual()) return null;
         return child.asText();
+    }
+
+    // ============ 导出/导入 ============
+
+    /**
+     * 导出单条规则为可移植 JSON 格式（不含 projectId、id 等绑定信息）。
+     */
+    public WorkflowRuleExportDTO exportRule(Long ruleId) {
+        WorkflowRule rule = ruleMapper.selectById(ruleId);
+        if (rule == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "规则不存在: " + ruleId);
+        }
+        checkRuleViewPermission(rule);
+
+        WorkflowRuleExportDTO export = new WorkflowRuleExportDTO();
+        export.setExportedAt(LocalDateTime.now());
+        export.setRules(List.of(toExportItem(rule)));
+        return export;
+    }
+
+    /**
+     * 批量导出项目下的所有规则。
+     */
+    public WorkflowRuleExportDTO exportRules(Long projectId) {
+        List<WorkflowRule> rules;
+        if (projectId != null && projectId > 0) {
+            rules = ruleMapper.selectList(
+                    new LambdaQueryWrapper<WorkflowRule>()
+                            .eq(WorkflowRule::getProjectId, projectId)
+                            .orderByAsc(WorkflowRule::getSortOrder)
+                            .orderByAsc(WorkflowRule::getId)
+            );
+        } else {
+            rules = ruleMapper.selectList(
+                    new LambdaQueryWrapper<WorkflowRule>()
+                            .isNull(WorkflowRule::getProjectId)
+                            .orderByAsc(WorkflowRule::getSortOrder)
+                            .orderByAsc(WorkflowRule::getId)
+            );
+        }
+
+        WorkflowRuleExportDTO export = new WorkflowRuleExportDTO();
+        export.setExportedAt(LocalDateTime.now());
+        export.setRules(rules.stream().map(this::toExportItem).toList());
+        return export;
+    }
+
+    /**
+     * 导入规则到指定项目。
+     *
+     * @param projectId        目标项目 ID（null 表示全局）
+     * @param importDTO        导入请求（含冲突策略和规则列表）
+     * @return 导入结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public WorkflowRuleImportResultVO importRules(Long projectId, WorkflowRuleImportDTO importDTO) {
+        WorkflowRuleImportResultVO result = new WorkflowRuleImportResultVO();
+
+        if (importDTO.getRules() == null || importDTO.getRules().isEmpty()) {
+            result.getErrors().add("导入文件中没有规则数据");
+            return result;
+        }
+
+        String strategy = importDTO.getConflictStrategy() != null
+                ? importDTO.getConflictStrategy() : "skip";
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        Long effectiveProjectId = (projectId != null && projectId > 0) ? projectId : null;
+
+        // 查询目标项目已有的规则名称
+        LambdaQueryWrapper<WorkflowRule> existingWrapper = new LambdaQueryWrapper<WorkflowRule>();
+        if (effectiveProjectId != null) {
+            existingWrapper.eq(WorkflowRule::getProjectId, effectiveProjectId);
+        } else {
+            existingWrapper.isNull(WorkflowRule::getProjectId);
+        }
+        List<WorkflowRule> existingRules = ruleMapper.selectList(existingWrapper);
+        java.util.Map<String, WorkflowRule> existingNameMap = existingRules.stream()
+                .collect(java.util.stream.Collectors.toMap(WorkflowRule::getName, r -> r, (a, b) -> a));
+
+        for (WorkflowRuleExportDTO.RuleItem item : importDTO.getRules()) {
+            if (item.getName() == null || item.getName().isBlank()) {
+                result.getErrors().add("规则名称不能为空");
+                continue;
+            }
+
+            // 检查 ruleType 有效性
+            String ruleType = item.getRuleType() != null ? item.getRuleType() : "on_change";
+            if (!VALID_RULE_TYPES.contains(ruleType)) {
+                result.getErrors().add("规则 '" + item.getName() + "' 的类型不合法: " + ruleType);
+                continue;
+            }
+
+            WorkflowRule existing = existingNameMap.get(item.getName().trim());
+            if (existing != null) {
+                if ("overwrite".equals(strategy)) {
+                    // 覆盖已有规则
+                    applyImportItem(existing, item, ruleType);
+                    existing.setUpdatedAt(LocalDateTime.now());
+                    ruleMapper.updateById(existing);
+                    result.setOverwrittenCount(result.getOverwrittenCount() + 1);
+                    result.getImportedRules().add(item.getName());
+                } else {
+                    // skip
+                    result.setSkippedCount(result.getSkippedCount() + 1);
+                    result.getSkippedRules().add(item.getName());
+                }
+            } else {
+                // 新建规则
+                WorkflowRule newRule = new WorkflowRule();
+                newRule.setProjectId(effectiveProjectId);
+                newRule.setName(item.getName().trim());
+                applyImportItem(newRule, item, ruleType);
+                newRule.setEnabled(false); // 导入后默认禁用，需用户手动启用
+                newRule.setCreatedBy(currentUserId);
+                newRule.setCreatedAt(LocalDateTime.now());
+                newRule.setUpdatedAt(LocalDateTime.now());
+                ruleMapper.insert(newRule);
+                result.setImportedCount(result.getImportedCount() + 1);
+                result.getImportedRules().add(item.getName());
+            }
+        }
+
+        log.info("[WorkflowRule] Import completed for project={}: imported={}, skipped={}, overwritten={}, errors={}",
+                effectiveProjectId, result.getImportedCount(), result.getSkippedCount(),
+                result.getOverwrittenCount(), result.getErrors().size());
+        return result;
+    }
+
+    private WorkflowRuleExportDTO.RuleItem toExportItem(WorkflowRule rule) {
+        WorkflowRuleExportDTO.RuleItem item = new WorkflowRuleExportDTO.RuleItem();
+        item.setName(rule.getName());
+        item.setDescription(rule.getDescription());
+        item.setRuleType(rule.getRuleType());
+        item.setTriggerEvent(rule.getTriggerEvent());
+        item.setTriggerField(rule.getTriggerField());
+        item.setConditionJson(rule.getConditionJson());
+        item.setActionJson(rule.getActionJson());
+        item.setSortOrder(rule.getSortOrder());
+        item.setCronExpression(rule.getCronExpression());
+        item.setActionCommand(rule.getActionCommand());
+        return item;
+    }
+
+    private void applyImportItem(WorkflowRule target, WorkflowRuleExportDTO.RuleItem item, String ruleType) {
+        target.setDescription(item.getDescription());
+        target.setRuleType(ruleType);
+        target.setTriggerEvent("on_change".equals(ruleType) ? item.getTriggerEvent() : null);
+        target.setTriggerField("on_change".equals(ruleType) ? item.getTriggerField() : null);
+        target.setConditionJson(item.getConditionJson());
+        target.setActionJson(item.getActionJson());
+        target.setSortOrder(item.getSortOrder() != null ? item.getSortOrder() : 0);
+        target.setCronExpression(item.getCronExpression());
+        if ("action".equals(ruleType)) {
+            target.setActionCommand(item.getActionCommand());
+        } else {
+            target.setActionCommand(null);
+        }
     }
 }
 

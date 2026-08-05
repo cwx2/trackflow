@@ -75,6 +75,48 @@ export interface WorkflowRuleValidationVO {
 }
 
 /**
+ * 规则导出 DTO
+ */
+export interface WorkflowRuleExportDTO {
+  version: string
+  exportedAt: string
+  rules: WorkflowRuleExportItem[]
+}
+
+export interface WorkflowRuleExportItem {
+  name: string
+  description: string | null
+  ruleType: string
+  triggerEvent: string | null
+  triggerField: string | null
+  conditionJson: string
+  actionJson: string
+  sortOrder: number
+  cronExpression: string | null
+  actionCommand: string | null
+}
+
+/**
+ * 规则导入请求 DTO
+ */
+export interface WorkflowRuleImportDTO {
+  conflictStrategy: 'skip' | 'overwrite'
+  rules: WorkflowRuleExportItem[]
+}
+
+/**
+ * 规则导入结果 VO
+ */
+export interface WorkflowRuleImportResultVO {
+  importedCount: number
+  skippedCount: number
+  overwrittenCount: number
+  importedRules: string[]
+  skippedRules: string[]
+  errors: string[]
+}
+
+/**
  * 工作流规则 API
  */
 export const workflowRuleApi = {
@@ -138,5 +180,20 @@ export const workflowRuleApi = {
   /** 执行 Action Rule */
   executeActionRule(issueId: string, command: string) {
     return request.post<any, R<void>>(`/issues/${issueId}/action-rules/${command}/execute`)
+  },
+
+  /** 导出单条规则 */
+  exportRule(id: string) {
+    return request.get<any, R<WorkflowRuleExportDTO>>(`/workflow-rules/${id}/export`)
+  },
+
+  /** 批量导出项目规则 */
+  exportProjectRules(projectId: string) {
+    return request.get<any, R<WorkflowRuleExportDTO>>(`/projects/${projectId}/workflow-rules/export`)
+  },
+
+  /** 导入规则到项目 */
+  importRules(projectId: string, data: WorkflowRuleImportDTO) {
+    return request.post<any, R<WorkflowRuleImportResultVO>>(`/projects/${projectId}/workflow-rules/import`, data)
   }
 }

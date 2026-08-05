@@ -21,10 +21,32 @@
           <a-option value="field_changed">字段变更时</a-option>
         </a-select>
       </a-space>
-      <a-button type="primary" @click="showCreateModal">
-        <template #icon><icon-plus /></template>
-        创建规则
-      </a-button>
+      <a-space>
+        <a-tooltip content="导入规则 JSON 文件">
+          <a-button @click="triggerImportFileInput">
+            <template #icon><icon-upload /></template>
+            导入
+          </a-button>
+        </a-tooltip>
+        <a-tooltip content="导出所有规则为 JSON 文件">
+          <a-button @click="handleExportAll">
+            <template #icon><icon-download /></template>
+            导出
+          </a-button>
+        </a-tooltip>
+        <a-button type="primary" @click="showCreateModal">
+          <template #icon><icon-plus /></template>
+          创建规则
+        </a-button>
+      </a-space>
+      <!-- 隐藏的文件上传 input -->
+      <input
+        ref="importFileInput"
+        type="file"
+        accept=".json"
+        style="display: none"
+        @change="handleImportFileChange"
+      />
     </div>
 
     <!-- 规则列表 -->
@@ -64,6 +86,11 @@
             </div>
           </div>
           <div class="rule-actions">
+            <a-tooltip content="导出规则">
+              <a-button size="mini" @click="handleExportSingle(rule)">
+                <template #icon><icon-download /></template>
+              </a-button>
+            </a-tooltip>
             <a-tooltip content="校验规则引用资源有效性">
               <a-button
                 size="mini"
@@ -581,6 +608,57 @@
         </div>
       </a-spin>
     </a-modal>
+
+    <!-- 导入预览弹窗 -->
+    <a-modal
+      v-model:visible="importModalVisible"
+      title="导入规则预览"
+      :width="600"
+      @ok="handleConfirmImport"
+      @cancel="importModalVisible = false"
+      :ok-loading="importing"
+      ok-text="确认导入"
+      cancel-text="取消"
+      unmount-on-close
+    >
+      <div class="import-preview">
+        <a-alert v-if="importPreviewConflicts.length > 0" type="warning" style="margin-bottom: 16px">
+          <template #title>存在名称冲突</template>
+          以下规则与当前项目已有规则同名，请选择处理方式。
+        </a-alert>
+
+        <div class="import-conflict-strategy" v-if="importPreviewConflicts.length > 0">
+          <span style="margin-right: 8px">冲突策略：</span>
+          <a-radio-group v-model="importConflictStrategy">
+            <a-radio value="skip">跳过同名规则</a-radio>
+            <a-radio value="overwrite">覆盖同名规则</a-radio>
+          </a-radio-group>
+        </div>
+
+        <div class="import-rules-list">
+          <div
+            v-for="item in importPreviewRules"
+            :key="item.name"
+            class="import-rule-item"
+            :class="{ 'import-conflict': importPreviewConflicts.includes(item.name) }"
+          >
+            <div class="import-rule-name">
+              <icon-thunderbolt style="color: var(--color-primary-6)" />
+              {{ item.name }}
+              <a-tag v-if="importPreviewConflicts.includes(item.name)" color="orangered" size="small">冲突</a-tag>
+            </div>
+            <div class="import-rule-meta">
+              <span>类型: {{ item.ruleType === 'on_schedule' ? '定时' : item.ruleType === 'action' ? '命令' : '事件触发' }}</span>
+              <span v-if="item.description" style="margin-left: 12px; color: var(--color-text-3)">{{ item.description }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="importPreviewRules.length === 0" class="import-empty">
+          文件中没有规则数据
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -588,7 +666,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { workflowRuleApi, issueApi, sprintApi } from '@/api'
-import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
+import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO, WorkflowRuleExportDTO, WorkflowRuleExportItem } from '@/api/workflowRule'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
 import VariableInput from './components/VariableInput.vue'
 
@@ -1222,6 +1300,108 @@ function parseJson(str: string, fallback: any[]): any[] {
   }
 }
 
+// ==================== Export / Import ====================
+const importFileInput = ref<HTMLInputElement | null>(null)
+const importModalVisible = ref(false)
+const importing = ref(false)
+const importPreviewRules = ref<WorkflowRuleExportItem[]>([])
+const importPreviewConflicts = ref<string[]>([])
+const importConflictStrategy = ref<'skip' | 'overwrite'>('skip')
+
+function triggerImportFileInput() {
+  importFileInput.value?.click()
+}
+
+function handleImportFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const content = JSON.parse(e.target?.result as string) as WorkflowRuleExportDTO
+      if (!content.rules || !Array.isArray(content.rules) || content.rules.length === 0) {
+        Message.error('JSON 文件中没有规则数据')
+        return
+      }
+      importPreviewRules.value = content.rules
+      // 检查名称冲突
+      const existingNames = new Set(rules.value.map(r => r.name))
+      importPreviewConflicts.value = content.rules
+        .map(r => r.name)
+        .filter(name => existingNames.has(name))
+      importConflictStrategy.value = 'skip'
+      importModalVisible.value = true
+    } catch {
+      Message.error('无法解析 JSON 文件，请检查文件格式')
+    }
+  }
+  reader.readAsText(file)
+  // 重置 input 以便重复选择同一文件
+  input.value = ''
+}
+
+async function handleConfirmImport() {
+  importing.value = true
+  try {
+    const res = await workflowRuleApi.importRules(props.projectId, {
+      conflictStrategy: importConflictStrategy.value,
+      rules: importPreviewRules.value
+    })
+    if (res.code === 0) {
+      const r = res.data
+      const parts: string[] = []
+      if (r.importedCount > 0) parts.push(`导入 ${r.importedCount} 条`)
+      if (r.overwrittenCount > 0) parts.push(`覆盖 ${r.overwrittenCount} 条`)
+      if (r.skippedCount > 0) parts.push(`跳过 ${r.skippedCount} 条`)
+      Message.success(parts.join('，') || '导入完成')
+      importModalVisible.value = false
+      await loadRules()
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '导入失败')
+  } finally {
+    importing.value = false
+  }
+}
+
+async function handleExportSingle(rule: WorkflowRuleVO) {
+  try {
+    const res = await workflowRuleApi.exportRule(rule.id)
+    if (res.code === 0) {
+      downloadJson(res.data, `rule-${rule.name}.json`)
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '导出失败')
+  }
+}
+
+async function handleExportAll() {
+  try {
+    const res = await workflowRuleApi.exportProjectRules(props.projectId)
+    if (res.code === 0) {
+      downloadJson(res.data, `workflow-rules-export.json`)
+      Message.success(`已导出 ${res.data.rules.length} 条规则`)
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '导出失败')
+  }
+}
+
+function downloadJson(data: any, filename: string) {
+  const json = JSON.stringify(data, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 // ==================== Lifecycle ====================
 onMounted(loadRules)
 
@@ -1528,5 +1708,58 @@ watch(() => props.projectId, () => {
 
 .validation-error-list ul li {
   margin-bottom: 2px;
+}
+
+/* Import preview modal */
+.import-preview {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.import-conflict-strategy {
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--color-fill-2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.import-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-rule-item {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 6px;
+  transition: border-color 0.15s;
+}
+
+.import-rule-item.import-conflict {
+  border-color: var(--color-warning-4);
+  background: var(--color-warning-1);
+}
+
+.import-rule-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.import-rule-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+
+.import-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--color-text-3);
 }
 </style>

@@ -2,9 +2,12 @@ package com.trackflow.workflow.controller;
 
 import com.trackflow.common.model.R;
 import com.trackflow.workflow.dto.WorkflowRuleDTO;
+import com.trackflow.workflow.dto.WorkflowRuleExportDTO;
+import com.trackflow.workflow.dto.WorkflowRuleImportDTO;
 import com.trackflow.workflow.service.ScheduledRuleService;
 import com.trackflow.workflow.service.WorkflowRuleService;
 import com.trackflow.workflow.vo.WorkflowRuleExecutionLogVO;
+import com.trackflow.workflow.vo.WorkflowRuleImportResultVO;
 import com.trackflow.workflow.vo.WorkflowRuleValidationVO;
 import com.trackflow.workflow.vo.WorkflowRuleVO;
 import jakarta.validation.Valid;
@@ -152,5 +155,38 @@ public class WorkflowRuleController {
             @PathVariable("command") String command) {
         ruleService.executeActionRule(issueId, command);
         return R.ok();
+    }
+
+    // ============ 导出/导入 ============
+
+    /**
+     * 导出单条规则为 JSON（可移植格式，不含项目绑定信息）
+     */
+    @GetMapping("/workflow-rules/{id}/export")
+    @PreAuthorize("isAuthenticated()")
+    public R<WorkflowRuleExportDTO> exportRule(@PathVariable("id") Long id) {
+        return R.ok(ruleService.exportRule(id));
+    }
+
+    /**
+     * 批量导出项目下的所有规则
+     */
+    @GetMapping("/projects/{projectId}/workflow-rules/export")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    public R<WorkflowRuleExportDTO> exportProjectRules(@PathVariable("projectId") Long projectId) {
+        Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
+        return R.ok(ruleService.exportRules(effectiveProjectId));
+    }
+
+    /**
+     * 导入规则到指定项目（JSON body 方式）
+     */
+    @PostMapping("/projects/{projectId}/workflow-rules/import")
+    @PreAuthorize("T(com.trackflow.workflow.WorkflowScope).isGlobal(#projectId) ? @perm.checkGlobal('system:admin') : @perm.check(#projectId, 'project:manage_workflow')")
+    public R<WorkflowRuleImportResultVO> importRules(
+            @PathVariable("projectId") Long projectId,
+            @RequestBody WorkflowRuleImportDTO importDTO) {
+        Long effectiveProjectId = com.trackflow.workflow.WorkflowScope.fromApi(projectId);
+        return R.ok(ruleService.importRules(effectiveProjectId, importDTO));
     }
 }
