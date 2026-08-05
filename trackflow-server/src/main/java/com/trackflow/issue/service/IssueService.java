@@ -1761,6 +1761,135 @@ public class IssueService {
         return issue;
     }
 
+    /**
+     * 自动化规则使用的内部移动方法——跳过权限检查，使用指定的 operatorId 作为操作者。
+     * 用于 WorkflowRuleEngine 的 move_to_project 动作。
+     *
+     * @param issueId         要移动的工单 ID
+     * @param targetProjectId 目标项目 ID
+     * @param operatorId      操作者 ID（规则创建者）
+     * @return 移动后的 Issue 实体
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Issue moveToProjectByAutomation(Long issueId, Long targetProjectId, Long operatorId) {
+        Issue issue = getById(issueId);
+        Long sourceProjectId = issue.getProjectId();
+
+        if (sourceProjectId.equals(targetProjectId)) {
+            log.warn("[Automation] moveToProject: issue {} already in target project {}", issueId, targetProjectId);
+            return issue;
+        }
+
+        var sourceProject = projectService.getById(sourceProjectId);
+        var targetProject = projectService.getById(targetProjectId);
+        if (targetProject == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标项目不存在: " + targetProjectId);
+        }
+
+        // 生成新的 issue_key
+        String oldIssueKey = issue.getIssueKey();
+        int newSeq = projectService.nextIssueSequence(targetProjectId);
+        String newIssueKey = targetProject.getKey() + "-" + newSeq;
+
+        // Sprint 置空
+        Long oldSprintId = issue.getSprintId();
+        issue.setSprintId(null);
+
+        // Assignee 清理：如果不在目标项目
+        Long oldAssigneeId = issue.getAssigneeId();
+        if (oldAssigneeId != null && !projectService.isProjectMember(oldAssigneeId, targetProjectId)) {
+            issue.setAssigneeId(null);
+        }
+
+        // 更新核心字段
+        issue.setProjectId(targetProjectId);
+        issue.setIssueKey(newIssueKey);
+
+        // 子工单处理
+        if (issue.getParentId() != null) {
+            Issue parent = issueMapper.selectById(issue.getParentId());
+            if (parent == null || !parent.getProjectId().equals(targetProjectId)) {
+                issue.setParentId(null);
+            }
+        }
+
+        // 保存旧 Key 到历史表
+        IssueKeyHistory keyHistory = new IssueKeyHistory();
+        keyHistory.setIssueId(issueId);
+        keyHistory.setOldKey(oldIssueKey);
+        keyHistory.setNewKey(newIssueKey);
+        keyHistory.setChangedBy(operatorId);
+        issueKeyHistoryMapper.insert(keyHistory);
+
+        // 状态兼容性检查
+        boolean statusValid = workflowService.isStatusInWorkflow(
+                targetProjectId, issue.getIssueType(), issue.getStatusId());
+        if (!statusValid) {
+            var defaultStatus = workflowService.getDefaultStatus();
+            if (defaultStatus != null) {
+                Long oldStatusId = issue.getStatusId();
+                issue.setStatusId(defaultStatus.getId());
+                String oldStatusName = statusCacheHelper.getStatusName(oldStatusId);
+                String newStatusName = defaultStatus.getLocalizedName();
+                recordActivity(issueId, operatorId, "status_reset", "status",
+                        oldStatusName, newStatusName);
+            }
+        }
+
+        issueMapper.updateById(issue);
+
+        // 自定义字段清理
+        customFieldService.removeOrphanValues(issueId, issue.getIssueType(), targetProjectId);
+
+        // 子工单反向清理
+        List<Issue> orphanChildren = issueMapper.selectList(
+                new LambdaQueryWrapper<Issue>()
+                        .eq(Issue::getParentId, issueId)
+                        .isNull(Issue::getDeletedAt));
+        if (!orphanChildren.isEmpty()) {
+            issueMapper.clearParentId(issueId);
+            for (Issue child : orphanChildren) {
+                recordActivity(child.getId(), operatorId, "updated", "parent",
+                        oldIssueKey, null, oldIssueKey, null);
+            }
+            ancestorRefreshService.refreshAncestorChain(issueId);
+        }
+
+        // 更新 time_entry 的 project_id
+        timeEntryMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.trackflow.timeentry.entity.TimeEntry>()
+                        .eq(com.trackflow.timeentry.entity.TimeEntry::getIssueId, issueId)
+                        .set(com.trackflow.timeentry.entity.TimeEntry::getProjectId, targetProjectId));
+
+        // 活动记录
+        String sourceProjectName = sourceProject != null ? sourceProject.getName() : String.valueOf(sourceProjectId);
+        String targetProjectName = targetProject.getName();
+        recordActivity(issueId, operatorId, "moved_to_project", "project",
+                sourceProjectName, targetProjectName);
+
+        if (oldSprintId != null) {
+            var oldSprint = sprintMapper.selectById(oldSprintId);
+            String oldSprintName = oldSprint != null ? oldSprint.getName() : null;
+            recordActivity(issueId, operatorId, "updated", "sprint",
+                    String.valueOf(oldSprintId), null, oldSprintName, null);
+        }
+
+        if (oldAssigneeId != null && issue.getAssigneeId() == null) {
+            String oldAssigneeName = getUserDisplayName(oldAssigneeId);
+            recordActivity(issueId, operatorId, "assigned", "assignee", oldAssigneeName, null);
+        }
+
+        recordActivity(issueId, operatorId, "updated", "issue_key", oldIssueKey, newIssueKey);
+
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(sourceProjectId, "issue_moved"));
+        eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(targetProjectId, "issue_moved"));
+
+        log.info("[Automation] Issue {} moved from project {} to project {}. Key: {} → {}",
+                issueId, sourceProjectId, targetProjectId, oldIssueKey, newIssueKey);
+
+        return issue;
+    }
+
     // ========== 父子关系逻辑 ==========
 
     /**

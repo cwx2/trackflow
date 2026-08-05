@@ -386,6 +386,11 @@
                 <a-option value="set_field">设置字段</a-option>
                 <a-option value="add_tag">添加标签</a-option>
                 <a-option value="add_comment">添加评论</a-option>
+                <a-option value="copy_issue">克隆工单</a-option>
+                <a-option value="move_to_project">移动到项目</a-option>
+                <a-option value="add_work_item">添加工时</a-option>
+                <a-option value="add_vote">添加投票</a-option>
+                <a-option value="remove_vote">移除投票</a-option>
               </a-select>
 
               <template v-if="act.type === 'set_field'">

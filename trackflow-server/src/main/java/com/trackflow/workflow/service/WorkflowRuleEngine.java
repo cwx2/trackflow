@@ -15,6 +15,7 @@ import com.trackflow.issue.entity.IssueComment;
 import com.trackflow.issue.entity.IssueLink;
 import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.entity.IssueTagRelation;
+import com.trackflow.issue.entity.IssueVote;
 import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueAttachmentMapper;
 import com.trackflow.issue.mapper.IssueCommentMapper;
@@ -22,6 +23,10 @@ import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.issue.mapper.IssueTagRelationMapper;
+import com.trackflow.issue.mapper.IssueVoteMapper;
+import com.trackflow.issue.service.IssueService;
+import com.trackflow.timeentry.entity.TimeEntry;
+import com.trackflow.timeentry.mapper.TimeEntryMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.sprint.entity.Sprint;
@@ -63,17 +68,20 @@ public class WorkflowRuleEngine {
     private final IssueLinkMapper issueLinkMapper;
     private final IssueStatusMapper statusMapper;
     private final IssueAttachmentMapper attachmentMapper;
+    private final IssueVoteMapper voteMapper;
     private final SysUserMapper sysUserMapper;
     private final SprintMapper sprintMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final NotificationMapper notificationMapper;
     private final ProjectService projectService;
+    private final IssueService issueService;
     private final EmailSendService emailSendService;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final StringRedisTemplate redisTemplate;
     private final WorkflowInitialStatusMapper initialStatusMapper;
     private final WorkflowRuleExecutionLogMapper executionLogMapper;
+    private final TimeEntryMapper timeEntryMapper;
 
     /** Valid priority values recognized by the system. */
     private static final Set<String> VALID_PRIORITIES = Set.of(
@@ -875,6 +883,14 @@ public class WorkflowRuleEngine {
                 else if ("show_alert".equals(type)) doShowAlert(act, issue, rule);
                 else if ("update_summary".equals(type)) modified |= doUpdateSummary(act, issue, rule);
                 else if ("update_description".equals(type)) modified |= doUpdateDescription(act, issue, rule);
+                else if ("copy_issue".equals(type)) {
+                    Issue copied = doCopyIssue(act, issue, rule);
+                    if (copied != null) createdIssues.add(copied);
+                }
+                else if ("move_to_project".equals(type)) doMoveToProject(act, issue, rule);
+                else if ("add_work_item".equals(type)) doAddWorkItem(act, issue, rule);
+                else if ("add_vote".equals(type)) doAddVote(act, issue, rule);
+                else if ("remove_vote".equals(type)) doRemoveVote(act, issue, rule);
             }
             if (modified) issueMapper.updateById(issue);
         } catch (Exception e) {
@@ -1726,5 +1742,262 @@ public class WorkflowRuleEngine {
         }
         if (child == null || child.isNull()) return null;
         return child.asText();
+    }
+
+    // ========== 高级动作：copy_issue / move_to_project / add_work_item / add_vote / remove_vote ==========
+
+    /**
+     * 克隆工单到同项目或其他项目。
+     * 复制字段：标题（可加前缀）、描述、类型、优先级。
+     * 状态重置为目标项目初始状态；附件可选复制。
+     */
+    private Issue doCopyIssue(JsonNode act, Issue source, WorkflowRule rule) {
+        // 解析目标项目
+        Long targetProjectId = resolveProjectId(textOf(act, "targetProjectId"), source);
+        if (targetProjectId == null) {
+            log.warn("[RuleEngine] copy_issue: targetProjectId could not be resolved in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return null;
+        }
+
+        com.trackflow.project.entity.Project targetProject = projectService.getById(targetProjectId);
+        if (targetProject == null) {
+            log.warn("[RuleEngine] copy_issue: target project {} not found in rule '{}' (id={})",
+                    targetProjectId, rule.getName(), rule.getId());
+            return null;
+        }
+
+        // 构建标题
+        String summaryPrefix = textOf(act, "summaryPrefix");
+        if (summaryPrefix == null) summaryPrefix = "";
+        summaryPrefix = interpolateVariables(summaryPrefix, source, rule);
+        String title = summaryPrefix + (source.getTitle() != null ? source.getTitle() : "");
+
+        // 生成 issue key
+        int seq = projectService.nextIssueSequence(targetProjectId);
+        String issueKey = targetProject.getKey() + "-" + seq;
+
+        Issue copy = new Issue();
+        copy.setProjectId(targetProjectId);
+        copy.setIssueKey(issueKey);
+        copy.setTitle(title);
+        copy.setDescription(source.getDescription());
+        copy.setIssueType(source.getIssueType());
+        copy.setPriority(source.getPriority());
+        copy.setReporterId(rule.getCreatedBy());
+        copy.setCreatedBy(rule.getCreatedBy());
+
+        // 状态重置为目标项目初始状态
+        Long initialStatusId = resolveInitialStatus(targetProjectId, source.getIssueType());
+        copy.setStatusId(initialStatusId);
+
+        // Sprint 可选复制（仅同项目有效）
+        boolean copySprint = boolOf(act, "copySprint") != null && Boolean.TRUE.equals(boolOf(act, "copySprint"));
+        if (copySprint && Objects.equals(targetProjectId, source.getProjectId()) && source.getSprintId() != null) {
+            copy.setSprintId(source.getSprintId());
+        }
+
+        issueMapper.insert(copy);
+
+        // 附件复制
+        boolean copyAttachments = boolOf(act, "copyAttachments") != null && Boolean.TRUE.equals(boolOf(act, "copyAttachments"));
+        if (copyAttachments) {
+            List<IssueAttachment> attachments = attachmentMapper.selectList(
+                    new LambdaQueryWrapper<IssueAttachment>()
+                            .eq(IssueAttachment::getIssueId, source.getId()));
+            for (IssueAttachment att : attachments) {
+                IssueAttachment newAtt = new IssueAttachment();
+                newAtt.setIssueId(copy.getId());
+                newAtt.setFileName(att.getFileName());
+                newAtt.setFilePath(att.getFilePath()); // 共享同一存储路径
+                newAtt.setFileSize(att.getFileSize());
+                newAtt.setContentType(att.getContentType());
+                newAtt.setUploadedBy(rule.getCreatedBy());
+                newAtt.setCreatedAt(LocalDateTime.now());
+                attachmentMapper.insert(newAtt);
+            }
+        }
+
+        logActivity(copy.getId(), rule, "created", null, null, null);
+        log.info("[RuleEngine] copy_issue: cloned {} → {} (project={}) by rule '{}' (id={})",
+                source.getIssueKey(), issueKey, targetProjectId, rule.getName(), rule.getId());
+
+        // 触发 on-create 规则
+        eventPublisher.publishEvent(new WorkflowRuleEvent.IssueCreated(copy.getId(), copy.getProjectId()));
+
+        return copy;
+    }
+
+    /**
+     * 将工单移动到另一个项目。
+     * 委托给 IssueService 的自动化移动方法（跳过权限检查）。
+     */
+    private void doMoveToProject(JsonNode act, Issue issue, WorkflowRule rule) {
+        String targetProjectIdStr = textOf(act, "targetProjectId");
+        if (targetProjectIdStr == null || targetProjectIdStr.isBlank()) {
+            log.warn("[RuleEngine] move_to_project: targetProjectId is empty in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return;
+        }
+
+        Long targetProjectId;
+        try {
+            targetProjectId = Long.parseLong(targetProjectIdStr);
+        } catch (NumberFormatException e) {
+            log.warn("[RuleEngine] move_to_project: invalid targetProjectId '{}' in rule '{}' (id={})",
+                    targetProjectIdStr, rule.getName(), rule.getId());
+            return;
+        }
+
+        try {
+            issueService.moveToProjectByAutomation(issue.getId(), targetProjectId, rule.getCreatedBy());
+            log.info("[RuleEngine] move_to_project: moved issue {} to project {} by rule '{}' (id={})",
+                    issue.getIssueKey(), targetProjectId, rule.getName(), rule.getId());
+        } catch (Exception e) {
+            log.warn("[RuleEngine] move_to_project: failed for issue {} in rule '{}': {}",
+                    issue.getIssueKey(), rule.getName(), e.getMessage());
+        }
+    }
+
+    /**
+     * 为工单自动添加工时记录。
+     */
+    private void doAddWorkItem(JsonNode act, Issue issue, WorkflowRule rule) {
+        String durationStr = textOf(act, "duration");
+        if (durationStr == null || durationStr.isBlank()) {
+            log.warn("[RuleEngine] add_work_item: duration is empty in rule '{}' (id={})",
+                    rule.getName(), rule.getId());
+            return;
+        }
+
+        int durationMinutes;
+        try {
+            durationMinutes = Integer.parseInt(durationStr);
+        } catch (NumberFormatException e) {
+            log.warn("[RuleEngine] add_work_item: invalid duration '{}' in rule '{}' (id={})",
+                    durationStr, rule.getName(), rule.getId());
+            return;
+        }
+        if (durationMinutes <= 0 || durationMinutes > 1440) {
+            log.warn("[RuleEngine] add_work_item: duration {} out of range [1,1440] in rule '{}' (id={})",
+                    durationMinutes, rule.getName(), rule.getId());
+            return;
+        }
+
+        String description = textOf(act, "description");
+        if (description != null) {
+            description = interpolateVariables(description, issue, rule);
+        }
+
+        // 解析工作日期
+        String dateStr = textOf(act, "date");
+        LocalDate workDate;
+        if ("today".equals(dateStr) || dateStr == null || dateStr.isBlank()) {
+            workDate = LocalDate.now();
+        } else {
+            try {
+                workDate = LocalDate.parse(dateStr);
+            } catch (Exception e) {
+                workDate = LocalDate.now();
+            }
+        }
+
+        TimeEntry entry = new TimeEntry();
+        entry.setIssueId(issue.getId());
+        entry.setProjectId(issue.getProjectId());
+        entry.setUserId(rule.getCreatedBy());
+        entry.setLoggedBy(rule.getCreatedBy());
+        entry.setWorkDate(workDate);
+        entry.setDuration(durationMinutes);
+        entry.setDescription(description != null ? description : "自动规则：" + rule.getName());
+        entry.setOngoing(false);
+        entry.setCreatedAt(LocalDateTime.now());
+        entry.setUpdatedAt(LocalDateTime.now());
+
+        timeEntryMapper.insert(entry);
+
+        logActivity(issue.getId(), rule, "time_logged", "duration", null, durationMinutes + "m");
+        log.info("[RuleEngine] add_work_item: logged {}m on issue {} by rule '{}' (id={})",
+                durationMinutes, issue.getIssueKey(), rule.getName(), rule.getId());
+    }
+
+    /**
+     * 为工单添加投票（以规则创建者身份）。
+     */
+    private void doAddVote(JsonNode act, Issue issue, WorkflowRule rule) {
+        Long userId = rule.getCreatedBy();
+        // 幂等：已投票则跳过
+        if (voteMapper.isVoted(issue.getId(), userId)) {
+            log.debug("[RuleEngine] add_vote: user {} already voted on issue {}, skipping",
+                    userId, issue.getIssueKey());
+            return;
+        }
+
+        IssueVote vote = new IssueVote();
+        vote.setIssueId(issue.getId());
+        vote.setUserId(userId);
+        vote.setCreatedAt(LocalDateTime.now());
+        voteMapper.insert(vote);
+        voteMapper.refreshVoteCount(issue.getId());
+
+        logActivity(issue.getId(), rule, "voted", null, null, null);
+        log.info("[RuleEngine] add_vote: user {} voted on issue {} by rule '{}' (id={})",
+                userId, issue.getIssueKey(), rule.getName(), rule.getId());
+    }
+
+    /**
+     * 移除工单投票（以规则创建者身份）。
+     */
+    private void doRemoveVote(JsonNode act, Issue issue, WorkflowRule rule) {
+        Long userId = rule.getCreatedBy();
+        // 幂等：未投票则跳过
+        if (!voteMapper.isVoted(issue.getId(), userId)) {
+            log.debug("[RuleEngine] remove_vote: user {} has no vote on issue {}, skipping",
+                    userId, issue.getIssueKey());
+            return;
+        }
+
+        voteMapper.delete(new LambdaQueryWrapper<IssueVote>()
+                .eq(IssueVote::getIssueId, issue.getId())
+                .eq(IssueVote::getUserId, userId));
+        voteMapper.refreshVoteCount(issue.getId());
+
+        logActivity(issue.getId(), rule, "unvoted", null, null, null);
+        log.info("[RuleEngine] remove_vote: user {} unvoted on issue {} by rule '{}' (id={})",
+                userId, issue.getIssueKey(), rule.getName(), rule.getId());
+    }
+
+    /**
+     * 解析 JSON 节点中的布尔值字段。
+     */
+    private Boolean boolOf(JsonNode node, String key) {
+        JsonNode child = node.get(key);
+        if (child == null || child.isNull()) {
+            JsonNode params = node.get("params");
+            if (params != null && params.isObject()) {
+                child = params.get(key);
+            }
+        }
+        if (child == null || child.isNull()) return null;
+        if (child.isBoolean()) return child.asBoolean();
+        // 支持字符串 "true"/"false"
+        String text = child.asText();
+        if ("true".equalsIgnoreCase(text)) return true;
+        if ("false".equalsIgnoreCase(text)) return false;
+        return null;
+    }
+
+    /**
+     * 解析项目 ID：支持 "same"（同项目）或数字 ID 字符串。
+     */
+    private Long resolveProjectId(String projectIdStr, Issue source) {
+        if (projectIdStr == null || "same".equals(projectIdStr) || projectIdStr.isBlank()) {
+            return source.getProjectId();
+        }
+        try {
+            return Long.parseLong(projectIdStr);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

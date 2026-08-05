@@ -367,6 +367,11 @@
                 <a-option value="show_alert">显示提示消息</a-option>
                 <a-option value="update_summary">修改工单标题</a-option>
                 <a-option value="update_description">修改工单描述</a-option>
+                <a-option value="copy_issue">克隆工单</a-option>
+                <a-option value="move_to_project">移动到项目</a-option>
+                <a-option value="add_work_item">添加工时</a-option>
+                <a-option value="add_vote">添加投票</a-option>
+                <a-option value="remove_vote">移除投票</a-option>
               </a-select>
 
               <!-- set_field -->
@@ -522,6 +527,49 @@
                 />
               </template>
 
+              <!-- copy_issue -->
+              <template v-else-if="act.type === 'copy_issue'">
+                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
+                  <a-select v-model="act.targetProjectId" style="width: 100%" placeholder="目标项目（same=同项目）" allow-search>
+                    <a-option value="same">同项目</a-option>
+                    <a-option
+                      v-for="p in allProjects"
+                      :key="p.id"
+                      :value="p.id"
+                    >{{ p.name }} ({{ p.key }})</a-option>
+                  </a-select>
+                  <a-input v-model="act.summaryPrefix" placeholder="标题前缀（如 [COPY] ，支持变量）" />
+                  <a-space>
+                    <a-checkbox v-model="act.copyAttachments">复制附件</a-checkbox>
+                    <a-checkbox v-model="act.copySprint">复制 Sprint</a-checkbox>
+                  </a-space>
+                </div>
+              </template>
+
+              <!-- move_to_project -->
+              <template v-else-if="act.type === 'move_to_project'">
+                <a-select v-model="act.targetProjectId" style="flex: 1" placeholder="目标项目" allow-search>
+                  <a-option
+                    v-for="p in allProjects"
+                    :key="p.id"
+                    :value="p.id"
+                  >{{ p.name }} ({{ p.key }})</a-option>
+                </a-select>
+              </template>
+
+              <!-- add_work_item -->
+              <template v-else-if="act.type === 'add_work_item'">
+                <div style="display: flex; gap: 8px; flex: 1">
+                  <a-input-number v-model="act.duration" :min="1" :max="1440" style="width: 120px" placeholder="分钟" />
+                  <a-input v-model="act.description" style="flex: 1" placeholder="工时描述（支持变量）" />
+                </div>
+              </template>
+
+              <!-- add_vote / remove_vote 无需额外参数 -->
+              <template v-else-if="act.type === 'add_vote' || act.type === 'remove_vote'">
+                <span class="action-hint">以规则创建者身份{{ act.type === 'add_vote' ? '投票' : '取消投票' }}</span>
+              </template>
+
               <a-button type="text" status="danger" size="mini" @click="removeAction(idx)">
                 <icon-delete />
               </a-button>
@@ -665,7 +713,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
-import { workflowRuleApi, issueApi, sprintApi } from '@/api'
+import { workflowRuleApi, issueApi, sprintApi, projectApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO, WorkflowRuleExportDTO, WorkflowRuleExportItem } from '@/api/workflowRule'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
 import VariableInput from './components/VariableInput.vue'
@@ -719,6 +767,14 @@ interface ActionItem {
   body?: string
   style?: string
   message?: string
+  // copy_issue / move_to_project
+  targetProjectId?: string
+  summaryPrefix?: string
+  copyAttachments?: boolean
+  copySprint?: boolean
+  // add_work_item
+  duration?: number
+  description?: string
 }
 
 const formData = reactive({
@@ -767,6 +823,25 @@ async function loadSprints() {
   }
 }
 
+// ==================== Project Data (for copy_issue / move_to_project) ====================
+const allProjects = ref<Array<{ id: string; name: string; key: string }>>([])
+
+async function loadProjects() {
+  if (allProjects.value.length > 0) return
+  try {
+    const res = await projectApi.list({ page: 1, pageSize: 200 })
+    if (res.code === 0) {
+      allProjects.value = (res.data?.list || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        key: p.key
+      }))
+    }
+  } catch {
+    // silent
+  }
+}
+
 // ==================== Computed ====================
 const filteredRules = computed(() => {
   let list = rules.value.filter(r => r.ruleType !== 'on_schedule')
@@ -811,6 +886,7 @@ function showCreateModal() {
   // 预加载状态和迭代数据
   loadStatuses()
   loadSprints()
+  loadProjects()
 }
 
 function handleEdit(rule: WorkflowRuleVO) {
@@ -830,6 +906,7 @@ function handleEdit(rule: WorkflowRuleVO) {
   // 预加载状态和迭代数据
   loadStatuses()
   loadSprints()
+  loadProjects()
 }
 
 /**
@@ -1547,6 +1624,12 @@ watch(() => props.projectId, () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.action-hint {
+  color: var(--color-text-3);
+  font-size: 12px;
+  font-style: italic;
 }
 
 .condition-row.condition-negated {
