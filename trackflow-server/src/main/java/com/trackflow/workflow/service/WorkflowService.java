@@ -1,6 +1,7 @@
 package com.trackflow.workflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
@@ -339,8 +340,11 @@ public class WorkflowService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                     "工作流转换规则不存在: " + transitionId);
         }
-        transition.setTransitionName(transitionName);
-        transitionMapper.updateById(transition);
+        // 使用 LambdaUpdateWrapper 显式 set，支持将 transitionName 设为 null（清除名称）
+        // updateById 默认忽略 null 字段，无法清除已有值
+        transitionMapper.update(new LambdaUpdateWrapper<WorkflowTransition>()
+                .eq(WorkflowTransition::getId, transitionId)
+                .set(WorkflowTransition::getTransitionName, transitionName));
         log.info("[Workflow] 更新转换显示名: transitionId={}, transitionName={}",
                 transitionId, transitionName);
     }
