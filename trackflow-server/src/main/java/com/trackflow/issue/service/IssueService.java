@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.config.AttachmentConfig;
+import com.trackflow.common.constant.IssueStatusCategory;
 import com.trackflow.common.context.NotificationContext;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
@@ -428,7 +429,7 @@ public class IssueService {
         if (needClosedExclusion) {
             List<IssueStatus> allStatuses = statusMapper.selectList(null);
             List<Long> closedIds = allStatuses.stream()
-                    .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
+                    .filter(s -> IssueStatusCategory.isClosed(s.getCategory()))
                     .map(IssueStatus::getId).toList();
             if (!closedIds.isEmpty()) {
                 wrapper.notIn("status_id", closedIds);
@@ -1752,7 +1753,7 @@ public class IssueService {
         int closed = 0;
         for (ChildIssueVO child : children) {
             String cat = child.getStatusCategory();
-            if ("done".equals(cat) || "cancelled".equals(cat)) {
+            if (IssueStatusCategory.isClosed(cat)) {
                 closed++;
             }
         }
@@ -2246,7 +2247,7 @@ public class IssueService {
         }
 
         // 如果是转换到 cancelled 类别，额外发布取消事件（供外部集成模块监听）
-        if ("cancelled".equals(newStatus.getCategory())) {
+        if (IssueStatusCategory.CANCELLED.getValue().equals(newStatus.getCategory())) {
             eventPublisher.publishEvent(new IssueNotificationEvent.Cancelled(issue, currentUserId));
         }
 

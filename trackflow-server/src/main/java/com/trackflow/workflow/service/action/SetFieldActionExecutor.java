@@ -2,6 +2,7 @@ package com.trackflow.workflow.service.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
@@ -32,7 +33,7 @@ import java.util.Set;
 @Component
 public class SetFieldActionExecutor extends WorkflowActionSupport {
 
-    private static final Set<String> VALID_PRIORITIES = Set.of("Critical", "High", "Normal", "Low");
+    private static final Set<String> VALID_PRIORITIES = Set.copyOf(IssuePriority.ALL_VALUES);
 
     @Autowired
     private IssueStatusMapper statusMapper;

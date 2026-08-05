@@ -1,5 +1,7 @@
 package com.trackflow.report.service;
 
+import com.trackflow.common.constant.IssuePriority;
+import com.trackflow.common.constant.IssueStatusCategory;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
@@ -410,7 +412,7 @@ public class ReportStatisticsService {
         switch (reportType) {
             case FIXED_VS_REPORTED -> {
                 // Line A: Fixed (转换到 done 类状态)
-                List<String> doneNames = collectStatusNames(allStatuses, "done");
+                List<String> doneNames = collectStatusNames(allStatuses, IssueStatusCategory.DONE.getValue());
                 List<RateComparisonRow> fixedRows = reportStatisticsMapper.selectFixedTrend(
                         projectIds, start, end, doneNames, issueIds);
                 lineAByDay = rowsToMap(fixedRows);
@@ -427,7 +429,7 @@ public class ReportStatisticsService {
             case VERIFIED_VS_REOPENED -> {
                 // Line A: Verified (从测试状态转换到 done 状态)
                 List<String> testingNames = collectStatusNamesByCode(allStatuses, Set.of("testing", "no_test"));
-                List<String> doneNames = collectStatusNames(allStatuses, "done");
+                List<String> doneNames = collectStatusNames(allStatuses, IssueStatusCategory.DONE.getValue());
                 List<RateComparisonRow> verifiedRows = reportStatisticsMapper.selectVerifiedTrend(
                         projectIds, start, end, testingNames, doneNames, issueIds);
                 lineAByDay = rowsToMap(verifiedRows);
@@ -614,13 +616,8 @@ public class ReportStatisticsService {
             total += cnt;
         }
 
-        List<String> priorityOrder = List.of("Critical", "High", "Normal", "Low");
-        Map<String, String> priorityColors = Map.of(
-                "Critical", "#f85149",
-                "High", "#d29922",
-                "Normal", "#58a6ff",
-                "Low", "#6b7280"
-        );
+        List<String> priorityOrder = IssuePriority.ALL_VALUES;
+        Map<String, String> priorityColors = IssuePriority.COLOR_MAP;
 
         List<String> labels = new ArrayList<>();
         List<Long> data = new ArrayList<>();

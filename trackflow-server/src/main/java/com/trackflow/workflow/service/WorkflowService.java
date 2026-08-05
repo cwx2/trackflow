@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -90,7 +91,7 @@ public class WorkflowService {
      * project_admin 的角色 ID（来自 V2__seed_roles.sql 种子数据，ID 固定为 2）。
      * 系统管理员无项目角色时，使用此角色的工作流规则。
      */
-    private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
+    private static final Long PROJECT_ADMIN_ROLE_ID = SystemRoleIds.PROJECT_ADMIN;
 
     /**
      * 获取当前用户对指定 Issue 可以转换到的目标状态列表。

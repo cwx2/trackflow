@@ -1,6 +1,8 @@
 package com.trackflow.dashboard.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.trackflow.common.constant.IssueStatusCategory;
+import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.dashboard.vo.DashboardActivityVO;
 import com.trackflow.dashboard.vo.DashboardSummaryVO;
 import com.trackflow.issue.converter.IssueConverter;
@@ -68,10 +70,10 @@ public class DashboardService {
         // 细分：从开放状态中区分 open / in_progress（个人视角需要）
         List<IssueStatus> statuses = statusMapper.selectList(null);
         Set<Long> pureOpenStatusIds = statuses.stream()
-                .filter(s -> "open".equals(s.getCategory()))
+                .filter(s -> IssueStatusCategory.OPEN.getValue().equals(s.getCategory()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
         Set<Long> inProgressStatusIds = statuses.stream()
-                .filter(s -> "in_progress".equals(s.getCategory()))
+                .filter(s -> IssueStatusCategory.IN_PROGRESS.getValue().equals(s.getCategory()))
                 .map(IssueStatus::getId).collect(Collectors.toSet());
         Set<Long> testingStatusIds = statuses.stream()
                 .filter(s -> "testing".equals(s.getCode()))
@@ -351,13 +353,13 @@ public class DashboardService {
 
         // 角色优先级映射（role_id → code based on sys_role table）
         // 4=tester, 3=developer, 7=tech_lead, 6=product_manager, 2=project_admin, 5=observer, 1=system_admin
-        if (roleIds.contains(4L)) return "tester";
-        if (roleIds.contains(3L)) return "developer";
-        if (roleIds.contains(7L)) return "tech_lead";
-        if (roleIds.contains(6L)) return "product_manager";
-        if (roleIds.contains(2L)) return "project_admin";
-        if (roleIds.contains(1L)) return "system_admin";
-        if (roleIds.contains(5L)) return "observer";
+        if (roleIds.contains(SystemRoleIds.TESTER)) return "tester";
+        if (roleIds.contains(SystemRoleIds.DEVELOPER)) return "developer";
+        if (roleIds.contains(SystemRoleIds.TECH_LEAD)) return "tech_lead";
+        if (roleIds.contains(SystemRoleIds.PRODUCT_MANAGER)) return "product_manager";
+        if (roleIds.contains(SystemRoleIds.PROJECT_ADMIN)) return "project_admin";
+        if (roleIds.contains(SystemRoleIds.SYSTEM_ADMIN)) return "system_admin";
+        if (roleIds.contains(SystemRoleIds.OBSERVER)) return "observer";
         return null;
     }
 

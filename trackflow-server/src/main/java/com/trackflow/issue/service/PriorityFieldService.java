@@ -1,6 +1,7 @@
 package com.trackflow.issue.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.customfield.entity.CustomFieldDefinition;
@@ -87,7 +88,7 @@ public class PriorityFieldService {
     public String normalizePriority(String priority) {
         if (priority == null) return null;
         if ("medium".equalsIgnoreCase(priority)) {
-            return "Normal";
+            return IssuePriority.NORMAL.getValue();
         }
         return priority;
     }
@@ -104,6 +105,6 @@ public class PriorityFieldService {
                 .filter(opt -> Boolean.TRUE.equals(opt.getIsDefault()))
                 .map(CustomFieldOption::getValue)
                 .findFirst()
-                .orElse("Normal");
+                .orElse(IssuePriority.DEFAULT.getValue());
     }
 }

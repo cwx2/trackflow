@@ -7,6 +7,7 @@ import com.trackflow.board.vo.BoardColumnVO;
 import com.trackflow.board.vo.BoardDataVO;
 import com.trackflow.board.vo.BoardGeneralConfigVO;
 import com.trackflow.board.vo.BoardCardConfigVO;
+import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.customfield.vo.CustomFieldValueVO;
 import com.trackflow.issue.entity.IssueTag;
@@ -487,7 +488,7 @@ public class BoardDataService {
     private Map<String, List<BoardCardVO>> groupCardsByColumn(List<BoardCardVO> cards, String columnField) {
         if ("priority".equals(columnField)) {
             return cards.stream().collect(Collectors.groupingBy(
-                    card -> card.getPriority() != null ? card.getPriority() : "Normal"
+                    card -> card.getPriority() != null ? card.getPriority() : IssuePriority.DEFAULT.getValue()
             ));
         }
         return cards.stream().collect(Collectors.groupingBy(

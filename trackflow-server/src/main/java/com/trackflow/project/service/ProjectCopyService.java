@@ -7,6 +7,7 @@ import com.trackflow.board.mapper.BoardColumnConfigMapper;
 import com.trackflow.board.mapper.BoardColumnMergeMapper;
 import com.trackflow.board.mapper.BoardGeneralConfigMapper;
 import com.trackflow.board.mapper.BoardSwimlaneConfigMapper;
+import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -65,7 +66,7 @@ public class ProjectCopyService {
     );
 
     /** project_admin 角色 ID */
-    private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
+    private static final Long PROJECT_ADMIN_ROLE_ID = SystemRoleIds.PROJECT_ADMIN;
 
     /**
      * 从源项目复制创建新项目。

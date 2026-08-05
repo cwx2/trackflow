@@ -9,6 +9,7 @@ import com.trackflow.board.dto.UpdateBoardColumnsDTO;
 import com.trackflow.board.entity.BoardColumnConfig;
 import com.trackflow.board.mapper.BoardColumnConfigMapper;
 import com.trackflow.board.vo.BoardColumnVO;
+import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.IssueStatus;
@@ -484,7 +485,7 @@ public class BoardColumnService {
      */
     public List<BoardColumnVO> getPriorityColumns(Long projectId) {
         // Priority 固定值集合
-        String[] priorities = {"Critical", "High", "Normal", "Low"};
+        String[] priorities = IssuePriority.ALL_VALUES.toArray(new String[0]);
         String[] priorityColors = {"#ef4444", "#f59e0b", "#3b82f6", "#9ca3af"};
 
         // 查询项目中各 priority 的工单数量

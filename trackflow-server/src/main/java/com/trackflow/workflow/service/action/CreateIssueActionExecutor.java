@@ -2,6 +2,7 @@ package com.trackflow.workflow.service.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
@@ -62,7 +63,7 @@ public class CreateIssueActionExecutor extends WorkflowActionSupport {
         String issueType = textOf(actionConfig, "issueType");
         if (issueType == null || issueType.isBlank()) issueType = "Task";
         String priority = textOf(actionConfig, "priority");
-        if (priority == null || priority.isBlank()) priority = "Normal";
+        if (priority == null || priority.isBlank()) priority = IssuePriority.DEFAULT.getValue();
 
         Long projectId = issue.getProjectId();
         String projectIdStr = textOf(actionConfig, "projectId");

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.auth.service.PermissionService;
+import com.trackflow.common.constant.IssueStatusCategory;
+import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -73,7 +75,7 @@ import java.util.Set;
 
 public class ProjectService {
 
-    private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
+    private static final Long PROJECT_ADMIN_ROLE_ID = SystemRoleIds.PROJECT_ADMIN;
     private static final String ACCESSIBLE_PROJECTS_CACHE_PREFIX = "accessible_projects:";
 
     private final ProjectMapper projectMapper;
@@ -1769,7 +1771,7 @@ public class ProjectService {
         // 未关闭工单数
         List<IssueStatus> statuses = issueStatusMapper.selectList(null);
         Set<Long> doneStatusIds = statuses.stream()
-                .filter(s -> "done".equals(s.getCategory()) || "cancelled".equals(s.getCategory()))
+                .filter(s -> IssueStatusCategory.isClosed(s.getCategory()))
                 .map(IssueStatus::getId)
                 .collect(java.util.stream.Collectors.toSet());
         long openIssueCount = issueMapper.selectCount(

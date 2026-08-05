@@ -1,6 +1,7 @@
 package com.trackflow.issue.util;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.issue.entity.Issue;
 
 /**
@@ -26,9 +27,11 @@ public final class IssuePriorityHelper {
      *
      * <p>使用 LOWER() 确保不受数据库存储大小写差异影响。
      * 数值越小代表优先级越高：Critical=1, High=2, Normal=3, Low=4, 其他=5。</p>
+     *
+     * <p>表达式由 {@link IssuePriority#sortCaseExpression()} 统一生成，
+     * 避免排序逻辑重复定义。</p>
      */
-    public static final String PRIORITY_ORDER_EXPR =
-            "CASE LOWER(priority) WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END";
+    public static final String PRIORITY_ORDER_EXPR = IssuePriority.sortCaseExpression();
 
     /**
      * 对 QueryWrapper 应用优先级排序（作为唯一排序条件，附带 updated_at 作为次级排序）。

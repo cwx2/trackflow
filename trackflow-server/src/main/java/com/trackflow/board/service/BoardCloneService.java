@@ -5,6 +5,7 @@ import com.trackflow.board.dto.CloneBoardDTO;
 import com.trackflow.board.entity.*;
 import com.trackflow.board.mapper.*;
 import com.trackflow.board.vo.CloneBoardResultVO;
+import com.trackflow.common.constant.SystemRoleIds;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.util.SecurityUtils;
@@ -56,7 +57,7 @@ public class BoardCloneService {
     private final SystemAuditService systemAuditService;
 
     /** project_admin 角色 ID */
-    private static final Long PROJECT_ADMIN_ROLE_ID = 2L;
+    private static final Long PROJECT_ADMIN_ROLE_ID = SystemRoleIds.PROJECT_ADMIN;
 
     /**
      * 克隆看板（创建新项目并复制所有看板配置）。
