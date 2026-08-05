@@ -16,6 +16,7 @@ from _config import (
     MIN_DEVELOP_QUEUE, MAX_RETRIES, MAX_TEST_RETRIES, MAX_REVIEW_RETRIES,
     REVIEW_BATCH_SIZE, KIRO_MODEL_FIX, COOLDOWN_SECONDS,
     _claim_lock, _review_lock, _consumer_lock, _retry_lock, _retry_counts,
+    PARALLEL_MODE,
     log,
 )
 from _kiro import run_kiro, run_kiro_resume, get_current_commit, get_latest_session_id
@@ -24,6 +25,29 @@ from _parsers import (
     read_req_status, reset_req_status, write_req_status, is_test_environment_failure,
     extract_arch_issues, extract_arch_issues_from_text,
 )
+
+import contextlib
+
+@contextlib.contextmanager
+def _pipeline_lock(stage: str):
+    """
+    根据 PARALLEL_MODE 决定是否加 _consumer_lock。
+
+    stage:
+        "pipeline" — 只在 PARALLEL_MODE="safe" 时加锁（fix/test/review 并行）
+        "push"     — 在 PARALLEL_MODE="safe" 或 "pipeline" 时加锁（push 顺序执行）
+        "always"   — 始终加锁（生产者写文件等必须串行的操作）
+    """
+    need_lock = (
+        stage == "always" or
+        (stage == "pipeline" and PARALLEL_MODE == "safe") or
+        (stage == "push"     and PARALLEL_MODE in ("safe", "pipeline"))
+    )
+    if need_lock:
+        with _consumer_lock:
+            yield
+    else:
+        yield
 
 
 @dataclass(frozen=True)
@@ -349,7 +373,7 @@ def produce_one(worker_id: str) -> bool:
     )
     log.info(f"[{worker_id}] 生产: {workflow_file}")
     # 生产者同样可能被 Kiro 改动工作区；与消费者共用互斥锁，避免并行写 Git。
-    with _consumer_lock:
+    with _pipeline_lock("always"):
         success, _ = run_kiro(prompt, worker_id)
     return success
 
@@ -376,7 +400,7 @@ def run_review_phase(batch: list[Path] | None = None) -> bool:
     )
     log.info(f"[审核] 审核 {len(batch)} 个需求：{req_list}")
     # 审核会话可能会改写需求文件，必须与其它 Kiro 会话串行访问共享工作区。
-    with _consumer_lock:
+    with _pipeline_lock("always"):
         success, output = run_kiro(prompt, "reviewer", worker_id="reviewer")
     if _is_transient_cli_output(output):
         log.warning("[审核] Kiro 启动/超时故障，需求保留在 review/，稍后重试")
@@ -737,10 +761,19 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             log.warning(f"[{label}] 获取文件清单失败: {e}")
 
         try:
-            push_result = subprocess.run(
-                ["git", "push"], capture_output=True, text=True,
-                cwd=str(WORKSPACE), timeout=60
-            )
+            with _pipeline_lock("push"):
+                # pipeline/full 模式下多个 consumer 可能同时到达 push 点，
+                # 先 pull --rebase 确保本地领先于远端，再 push。
+                pull_result = subprocess.run(
+                    ["git", "pull", "--rebase", "--autostash"],
+                    capture_output=True, text=True, cwd=str(WORKSPACE), timeout=60
+                )
+                if pull_result.returncode != 0:
+                    log.warning(f"[{label}] ⚠️ git pull --rebase 失败: {pull_result.stderr.strip()}")
+                push_result = subprocess.run(
+                    ["git", "push"], capture_output=True, text=True,
+                    cwd=str(WORKSPACE), timeout=60
+                )
             if push_result.returncode == 0:
                 log.info(f"[{label}] ✅ git push 成功")
             else:
@@ -887,7 +920,7 @@ def consumer_loop(worker_id: str) -> None:
                     _retry_counts.pop(first.name, None)
                 continue
 
-            with _consumer_lock:
+            with _pipeline_lock("pipeline"):
                 outcome = consume_one(worker_id)
 
             if outcome.requirement_name is None:

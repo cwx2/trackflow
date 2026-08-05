@@ -41,6 +41,25 @@ REVIEW_BATCH_SIZE  = 5      # 每批审核需求数
 KIRO_MODEL     = "auto"               # 测试/审核/生产
 KIRO_MODEL_FIX = "auto"               # 修需求
 
+# ============ 并行模式 ============
+#
+# PARALLEL_MODE 控制消费者流水线的并行粒度：
+#
+#   "safe"（默认）— 整个消费流水线串行（原有行为）
+#       所有 consumer 顺序执行，绝对不会有 Git 冲突。
+#       适合：需要精确控制、调试、单任务跑
+#
+#   "pipeline"（推荐日常） — 只对 git push 加锁，其余并行
+#       多个 consumer 同时 fix / test / review，只在最终 push 时排队。
+#       冲突风险极低：AI 只 stage 各自的文件，commit 互不影响，push 前自动 pull --rebase。
+#       适合：日常长跑，追求吞吐量
+#
+#   "full"（激进） — 完全不加锁，包括 push 也并行
+#       push 失败时自动放回 develop/ 重试，不会丢失需求，但日志会有 push 冲突警告。
+#       适合：需求积压大、容忍偶发 push 失败重试
+#
+PARALLEL_MODE = "pipeline"   # "safe" | "pipeline" | "full"
+
 # ============ Playwright ============
 
 # worker 端口映射：producer-1→9101, consumer-1→9111, reviewer→9121
