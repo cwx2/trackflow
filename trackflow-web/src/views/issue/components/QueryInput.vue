@@ -479,7 +479,9 @@ async function loadUsers() {
       id: m.displayName || m.username,
       label: m.displayName || m.username
     }))
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[QueryInput] 加载用户列表失败:', e)
+  }
 }
 
 async function loadCustomFields() {
@@ -509,7 +511,9 @@ async function loadCustomFields() {
         return []
       }
     }))
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[QueryInput] 加载自定义字段失败:', e)
+  }
 }
 
 function mapFieldFormat(format: string): FieldDef['valueType'] {
@@ -529,7 +533,9 @@ async function loadIssueTypes() {
     if (!pid) return
     const opts = await loadIssueTypeOptions(pid)
     issueTypeCache.value = opts.map(o => ({ id: o.value, label: o.label }))
-  } catch { /* ignore — fallback to static map */ }
+  } catch (e) {
+    console.error('[QueryInput] 加载工单类型失败:', e)
+  }
 }
 
 // Watch projectId changes to reload custom fields and users

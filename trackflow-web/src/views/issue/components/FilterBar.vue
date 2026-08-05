@@ -732,7 +732,9 @@ async function loadValueOptions(fieldKey: string) {
               sprints.forEach((s: SprintVO) => {
                 allSprints.push({ id: s.id, label: `${p.key} / ${s.name}` })
               })
-            } catch { /* ignore */ }
+            } catch (e) {
+              console.error(`[FilterBar] 加载项目 ${p.key} 的 Sprint 列表失败:`, e)
+            }
           }
           valueOptions.value = allSprints
         }
@@ -765,7 +767,9 @@ async function loadValueOptions(fieldKey: string) {
                   allTags.push({ id: t.id, label: `${t.name}`, color: t.color })
                 }
               })
-            } catch { /* ignore */ }
+            } catch (e) {
+              console.error(`[FilterBar] 加载项目标签失败:`, e)
+            }
           }
           valueOptions.value = allTags
         }

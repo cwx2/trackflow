@@ -441,7 +441,7 @@ function getFilteredOptions(
           }
         }
       }
-    } catch { /* ignore */ }
+    } catch { /* 条件规则解析容错，显示所有选项 */ }
   }
   return activeOptions.map(o => {
     let label = o.value

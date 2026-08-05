@@ -618,7 +618,7 @@ function onSwimlaneChange() {
       showUncategorized: true,
       uncategorizedPosition: 'bottom',
       swimlaneIssueType: swimlaneGroupBy.value === 'parent' ? swimlaneIssueType.value : null
-    }).catch(() => { /* 静默失败 */ })
+    }).catch((e) => { console.error('[KanbanBoard] 保存泳道配置失败:', e) })
   }
 }
 
@@ -3838,7 +3838,8 @@ watch(() => route.query, (newQuery, oldQuery) => {
     // Undo
     undoStack,
     // Progress
-    progressColumns, closedIssueCount, getClosedProgressBarHeight,
+    activeStatuses, closedIssueCount, closedIssueDetail,
+    progressIndicatorAriaLabel, getProgressBarHeight, getClosedProgressBarHeight,
     scrollToColumn,
     // Hidden columns
     onHiddenStatusTagClick,
@@ -3851,7 +3852,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
     getInitials, getSprintName,
     priorityIcon, typeLabel, typeInitial, getActiveSprintId,
     // onBatch handlers
-    onBatchTransit, onBatchAssign, onBatchSprint, onBatchPriority,
+    onBatchTransit: onBatchState, onBatchAssign, onBatchSprint, onBatchPriority,
     onBatchTagAdd, onBatchTagRemove, onBatchLink, onBatchDelete,
     // Keyboard
     handleKeydown,

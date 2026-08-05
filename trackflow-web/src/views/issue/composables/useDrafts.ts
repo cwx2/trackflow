@@ -75,7 +75,7 @@ function getUserStorageKey(): string {
     try {
       const user = JSON.parse(userStr)
       return `${STORAGE_KEY}_${user.id || user.username || 'default'}`
-    } catch { /* ignore */ }
+    } catch { /* JSON 解析容错，降级为默认 key */ }
   }
   return `${STORAGE_KEY}_default`
 }
@@ -84,7 +84,7 @@ function loadDrafts(): IssueDraft[] {
   try {
     const raw = localStorage.getItem(getUserStorageKey())
     if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
+  } catch { /* JSON 解析容错，降级为空列表 */ }
   return []
 }
 

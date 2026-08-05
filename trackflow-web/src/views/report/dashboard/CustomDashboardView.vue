@@ -973,7 +973,7 @@ function editWidget(widget: DashboardWidgetVO) {
   let config: Record<string, any> = {}
   try {
     config = widget.config ? JSON.parse(widget.config) : {}
-  } catch { /* empty */ }
+  } catch { /* JSON 解析容错，使用空配置 */ }
 
   widgetConfigForm.value = {
     title: widget.title || '',
@@ -1039,7 +1039,9 @@ async function loadAvailableSprintsAndProjects() {
         if (sprintRes.data?.list) {
           allSprints.push(...sprintRes.data.list)
         }
-      } catch { /* skip projects without sprint access */ }
+      } catch (e) {
+        console.error(`[Dashboard] 加载项目 Sprint 失败 (projectId=${project.id}):`, e)
+      }
     }
     availableSprints.value = allSprints
   } catch {

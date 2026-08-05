@@ -696,7 +696,9 @@ async function loadCanViewOthers() {
     if (res.code === 0) {
       canViewOthers.value = res.data === true
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载 canViewOthers 权限失败:', e)
+  }
 }
 
 async function loadCanEditOthers() {
@@ -705,7 +707,9 @@ async function loadCanEditOthers() {
     if (res.code === 0) {
       canEditOthers.value = res.data === true
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载 canEditOthers 权限失败:', e)
+  }
 }
 
 async function loadCanLogForOthers() {
@@ -714,7 +718,9 @@ async function loadCanLogForOthers() {
     if (res.code === 0) {
       canLogForOthers.value = res.data === true
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载 canLogForOthers 权限失败:', e)
+  }
 }
 
 async function loadSelectableUsers(keyword?: string) {
@@ -724,7 +730,9 @@ async function loadSelectableUsers(keyword?: string) {
     if (res.code === 0 && res.data) {
       selectableUsers.value = res.data
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载可选用户列表失败:', e)
+  }
 }
 
 function searchUsers(keyword: string) {
@@ -738,7 +746,9 @@ async function searchUsersForDialog(keyword: string) {
     if (res.code === 0 && res.data) {
       dialogSelectableUsers.value = res.data
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 搜索用户失败:', e)
+  }
 }
 
 function onUserChange(val: string | undefined) {
@@ -782,7 +792,9 @@ async function loadFilterProjects() {
         key: p.key
       }))
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载筛选项目列表失败:', e)
+  }
 }
 
 async function loadFilterWorkTypes() {
@@ -799,7 +811,9 @@ async function loadFilterWorkTypes() {
         }))
       }
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载工作类型失败:', e)
+  }
 }
 
 function getDateRange(): { startDate: string; endDate: string } {
@@ -827,7 +841,9 @@ async function searchIssues(keyword: string) {
         label: `${i.issueKey} - ${i.title}`
       }))
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 搜索工单失败:', e)
+  }
 }
 
 /**
@@ -846,7 +862,9 @@ async function loadAttributesForIssue(issueId: string) {
         projectAttributes.value = attrRes.data
       }
     }
-  } catch { /* silent */ }
+  } catch (e) {
+    console.error('[Timesheet] 加载工单项目属性失败:', e)
+  }
 }
 
 // People view helpers — kept for future use if needed

@@ -186,6 +186,6 @@ function loadFromStorage(): string[] {
       const merged = [...new Set([...FIXED_KEYS, ...keys])]
       return merged
     }
-  } catch { /* ignore */ }
+  } catch { /* JSON 解析容错，降级为默认列配置 */ }
   return [...DEFAULT_VISIBLE_KEYS]
 }

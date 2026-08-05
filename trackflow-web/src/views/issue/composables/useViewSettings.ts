@@ -102,6 +102,6 @@ function loadFromStorage(): ViewSettingsState {
         structure: parsed.structure || DEFAULT_SETTINGS.structure
       }
     }
-  } catch { /* ignore */ }
+  } catch { /* JSON 解析容错，降级为默认视图设置 */ }
   return { ...DEFAULT_SETTINGS }
 }

@@ -121,7 +121,9 @@ onMounted(async () => {
     if (res.code === 0 && res.data) {
       groups.value = res.data
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[CommentInput] 加载用户组列表失败:', e)
+  }
 })
 
 // 追踪 IME 组合输入状态，防止在中文输入法未提交时误触发提交

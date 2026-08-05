@@ -225,7 +225,9 @@ export function useIssueDetailData() {
     try {
       const res = await issueApi.getAvailableTransitions(issue.value.id)
       if (res.code === 0) transitions.value = res.data || []
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载可用状态转换失败:', e)
+    }
   }
 
   async function loadCommentsAndActivities() {
@@ -243,7 +245,9 @@ export function useIssueDetailData() {
         activityTotal.value = pageData.pagination.total
         activityHasMore.value = pageData.pagination.page < pageData.pagination.totalPages
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载评论和活动记录失败:', e)
+    }
   }
 
   async function loadMoreActivities() {
@@ -258,7 +262,9 @@ export function useIssueDetailData() {
         activityPage.value = nextPage
         activityHasMore.value = pageData.pagination.page < pageData.pagination.totalPages
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载更多活动记录失败:', e)
+    }
     finally { activityLoadingMore.value = false }
   }
 
@@ -267,7 +273,9 @@ export function useIssueDetailData() {
     try {
       const res = await issueApi.listAttachments(issue.value.id)
       if (res.code === 0) attachments.value = res.data || []
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载附件列表失败:', e)
+    }
   }
 
   async function loadLinks() {
@@ -275,7 +283,9 @@ export function useIssueDetailData() {
     try {
       const res = await issueApi.listLinks(issue.value.id)
       if (res.code === 0) links.value = res.data || []
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载关联列表失败:', e)
+    }
   }
 
   async function loadAll() {
@@ -387,14 +397,18 @@ export function useIssueDetailData() {
         idx++
       }
       if (results[idx].status === 'fulfilled') allProjectMembers.value = (results[idx] as any).value.data || []
-    } catch { /* ignore partial failures */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载选项数据部分失败:', e)
+    }
   }
 
   async function loadIssueProjectAttributes(projectId: string) {
     try {
       const res = await workItemAttributeApi.listByProject(projectId)
       if (res.code === 0 && res.data) { issueProjectAttributes.value = res.data }
-    } catch { /* silent */ }
+    } catch (e) {
+      console.error('[IssueDetail] 加载项目工作项属性失败:', e)
+    }
   }
 
   async function loadTimeFormPermissions(projectId: string) {
@@ -412,7 +426,9 @@ export function useIssueDetailData() {
             displayName: m.displayName || m.username || ''
           }))
         }
-      } catch { /* silent */ }
+      } catch (e) {
+        console.error('[IssueDetail] 加载工时表单项目成员失败:', e)
+      }
     }
   }
 

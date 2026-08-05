@@ -147,7 +147,9 @@ async function loadWorkflowName() {
   try {
     const res = await automationApi.getById(workflowId.value)
     if (res.code === 0) workflowName.value = res.data?.name || ''
-  } catch {}
+  } catch (e) {
+    console.error('[ExecutionHistory] 加载工作流名称失败:', e)
+  }
 }
 
 function openDetail(execution: ExecutionVO) {

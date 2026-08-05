@@ -1188,7 +1188,7 @@ function formatActivityText(act: ProjectActivityVO): string {
   const operator = act.userName || '未知用户'
   const target = act.targetUserName || '未知用户'
   let detail: any = {}
-  try { detail = act.detail ? JSON.parse(act.detail) : {} } catch { /* ignore */ }
+  try { detail = act.detail ? JSON.parse(act.detail) : {} } catch { /* JSON 解析容错，降级为空对象 */ }
 
   switch (act.action) {
     case 'add_member':

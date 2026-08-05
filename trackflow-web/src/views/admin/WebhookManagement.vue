@@ -272,7 +272,9 @@ async function loadProjects() {
     if (res.code === 0 && res.data) {
       projects.value = res.data.list
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[Webhook] 加载项目列表失败:', e)
+  }
 }
 
 async function loadWebhooks() {
@@ -403,7 +405,9 @@ async function loadLogs(page: number) {
         totalPages: res.data.pagination.totalPages
       }
     }
-  } catch { /* ignore */ } finally {
+  } catch (e) {
+    console.error('[Webhook] 加载投递日志失败:', e)
+  } finally {
     logsLoading.value = false
   }
 }

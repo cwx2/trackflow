@@ -236,7 +236,7 @@ function openAssigneeEdit(issue: IssueVO) {
     membersLoading.value = true
     projectApi.listAssignableMembers(issue.projectId)
       .then(res => { members.value = res.data || [] })
-      .catch(() => {})
+      .catch((e) => { console.error('[SprintDrawer] 加载可分配成员失败:', e) })
       .finally(() => { membersLoading.value = false })
   }
 }

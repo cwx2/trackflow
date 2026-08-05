@@ -184,8 +184,8 @@ async function loadSubscriptions() {
     if (res.code === 0 && res.data) {
       subscriptions.value = res.data
     }
-  } catch {
-    // silently fail
+  } catch (e) {
+    console.error('[NotificationSub] 加载订阅列表失败:', e)
   } finally {
     loading.value = false
   }
@@ -212,12 +212,14 @@ async function loadSourceOptions() {
               }
             }
           }
-        } catch { /* skip this project */ }
+        } catch (e) {
+          console.error(`[NotificationSub] 加载项目标签失败:`, e)
+        }
       }
       tags.value = allTags
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[NotificationSub] 加载来源选项失败:', e)
   }
   try {
     // Load saved queries from panel
@@ -239,8 +241,8 @@ async function loadSourceOptions() {
       }
       savedQueries.value = allQueries
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[NotificationSub] 加载保存查询失败:', e)
   }
 }
 

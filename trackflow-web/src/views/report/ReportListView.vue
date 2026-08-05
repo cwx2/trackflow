@@ -663,7 +663,7 @@ function parseIssueFilterToJson(text: string): string {
     try {
       JSON.parse(trimmed)
       return trimmed
-    } catch { /* not valid JSON, parse as text */ }
+    } catch { /* JSON 解析容错，降级为文本格式解析 */ }
   }
   // 解析 "field: value" 文本格式
   const filters: object[] = []

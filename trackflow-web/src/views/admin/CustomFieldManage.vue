@@ -1357,7 +1357,9 @@ async function loadOwnerUsers() {
   try {
     const res = await userApi.list({ pageSize: 500 })
     ownerUserList.value = res.data?.list || []
-  } catch { /* ignore */ }
+  } catch (e) {
+    console.error('[CustomField] 加载用户列表失败:', e)
+  }
 }
 
 onMounted(() => {

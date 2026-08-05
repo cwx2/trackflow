@@ -1830,7 +1830,7 @@ function loadPanelWidth(): number {
   try {
     const stored = localStorage.getItem(PANEL_WIDTH_KEY)
     if (stored) return Math.max(200, Math.min(500, Number(stored)))
-  } catch { /* ignore */ }
+  } catch { /* localStorage 读取容错 */ }
   return 280
 }
 
@@ -2243,7 +2243,7 @@ function loadPreviewMode(): PreviewMode {
   try {
     const stored = localStorage.getItem(PREVIEW_MODE_KEY)
     if (stored === 'sidebar' || stored === 'off') return stored
-  } catch { /* ignore */ }
+  } catch { /* localStorage 读取容错 */ }
   return 'off'
 }
 
@@ -2510,7 +2510,7 @@ function loadColumnWidths(): Record<string, number> {
   try {
     const stored = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
     if (stored) return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(stored) }
-  } catch { /* ignore */ }
+  } catch { /* JSON 解析容错，失败降级为默认列宽 */ }
   return { ...DEFAULT_COLUMN_WIDTHS }
 }
 
@@ -2655,7 +2655,9 @@ async function loadCtxTransitions(issue: IssueVO) {
     if (res.code === 0) {
       ctxTransitions.value = (res.data || []).filter((t: IssueStatusVO) => t.id !== issue.statusId)
     }
-  } catch { /* ignore */ } finally {
+  } catch (e) {
+    console.error('[IssueList] 加载右键菜单可用转换失败:', e)
+  } finally {
     ctxTransitionsLoading.value = false
   }
 }
@@ -2742,7 +2744,9 @@ async function ctxLoadSprints() {
     if (active.length) groups.push({ label: '进行中', items: active })
     if (planned.length) groups.push({ label: '计划中', items: planned })
     ctxSprintGroupsData.value = groups
-  } catch { /* ignore */ } finally {
+  } catch (e) {
+    console.error('[IssueList] 加载右键菜单 Sprint 列表失败:', e)
+  } finally {
     ctxSprintsLoading.value = false
   }
 }

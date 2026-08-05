@@ -809,7 +809,9 @@ async function refreshProjectRoles() {
   try {
     const res = await userApi.getProfile(userId)
     userProjectRoles.value = res.data?.projectRoles || []
-  } catch (e) { /* keep current */ }
+  } catch (e) {
+    console.error('[UserManagement] 刷新项目角色失败:', e)
+  }
 }
 
 async function loadGlobalRoles() {

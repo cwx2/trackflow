@@ -588,7 +588,7 @@ async function loadWorkflow() {
         triggerFields.value = Array.isArray(trigger.fields) ? trigger.fields.join(',') : ''
         allowAutomationEvents.value = Boolean(trigger.allowAutomationEvents)
         triggerWebhookTokenSha256.value = trigger.tokenSha256 || ''
-      } catch { /* 服务端发布时会再次校验 */ }
+      } catch { /* JSON 解析容错，使用默认触发器配置 */ }
       const raw = JSON.parse(res.data.definition || '{}')
 
       // ── 兼容旧格式（variables/nodes[].data/edges[].source）和新格式（globalVariables/nodes[].inputs/edges[].sourceNodeId）
@@ -902,7 +902,9 @@ async function handleRun() {
           evtSource.close()
           isRunning.value = false
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error('[WorkflowEditor] SSE 事件解析失败:', e)
+      }
     })
 
     evtSource.onerror = () => {
