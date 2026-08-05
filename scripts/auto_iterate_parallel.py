@@ -15,28 +15,59 @@ TrackFlow 并行迭代脚本（永不停止）
   - 重试计数：全局 _retry_counts + _retry_lock，超过 MAX_RETRIES 次移到 rejected/
   - 浏览器隔离：Playwright MCP 以 --isolated 模式运行，每个连接独立 browser context
 
+AI 后端：
+　支持两种 AI 提供者，通过环境变量 TRACKFLOW_AI 或 _config.py 中的 AI_PROVIDER 切换。
+
+　　Claude Code（默认）：
+　　　　claude --print --dangerously-skip-permissions --output-format json
+　　　　- 模型：通过 _config.py 中 CLAUDE_MODEL / CLAUDE_MODEL_FIX 设置
+　　　　  可选 opus / sonnet / haiku / fable，空字符串 = 使用默认
+　　　　- MCP：从 .claude/mcp.json 加载（5 个 Server、51 个工具）
+　　　　- 权限：.claude/settings.json 全放行
+　　　　- 预算：CLAUDE_MAX_BUDGET_USD / CLAUDE_MAX_BUDGET_USD_FIX
+　　　　- 上下文：CLAUDE.md 自动加载项目规范（整合自 .kiro/steering/）
+
+　　Kiro CLI（兼容模式）：
+　　　　set TRACKFLOW_AI=kiro 切回
+
 模块结构：
-  _config.py     — 常量、路径、锁、SKILLS、日志
-  _playwright.py — Playwright 残留进程清理
-  _kiro.py       — run_kiro / run_kiro_resume / session 管理
+  _config.py     — 常量、路径、锁、SKILLS、AI_PROVIDER、日志
+  _claude.py     — Claude Code CLI 封装（run_claude / run_claude_resume）
+  _kiro.py       — Kiro CLI 封装（run_kiro / run_kiro_resume）
   _parsers.py    — 解析各阶段输出、读取需求状态、提取架构问题
+  _workers.py    — producer/reviewer/consumer 三类线程循环（自动切换 AI 后端）
   _utils.py      — 需求文件操作、工作流加载、清理函数
-  _workers.py    — producer/reviewer/consumer 三类线程循环
+  _playwright.py — Playwright 残留进程清理
 
 用法：
-  python scripts/auto_iterate_parallel.py                               # 2 worker（1+1）
-  python scripts/auto_iterate_parallel.py --workers 4                   # 1 生产者 + 3 消费者
-  python scripts/auto_iterate_parallel.py --producers 1 --consumers 3  # 手动指定
-  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce  # 只消费，3 个并行
-  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce --mode pipeline  # 并行模式
-  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce --mode safe      # 串行模式
+  # 默认启动（Kiro CLI，1 生产者 + 1 消费者）
+  python scripts/auto_iterate_parallel.py
+
+  # 使用 Claude Code（通过 --claude 切换）
+  python scripts/auto_iterate_parallel.py --claude
+
+  # 4 worker（1p + 3c）
+  python scripts/auto_iterate_parallel.py --workers 4
+
+  # 手动指定比例
+  python scripts/auto_iterate_parallel.py --producers 1 --consumers 3
+
+  # 只消费存量需求（跳过生产+审核）
+  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce
+
+  # 并行模式
+  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce --mode pipeline  # 并行（推荐）
+  python scripts/auto_iterate_parallel.py --consumers 3 --skip-produce --mode safe      # 串行（调试）
+
+  # Claude + 高吞吐（6 worker，2p + 4c）
+  python scripts/auto_iterate_parallel.py --claude --workers 6 --mode pipeline
 """
 
 import argparse
 import _config
 
 from _config import (
-    KIRO_MODEL, KIRO_MODEL_FIX, REVIEW_DIR, IMPLEMENT_DIR, log,
+    KIRO_MODEL, KIRO_MODEL_FIX, AI_PROVIDER, REVIEW_DIR, IMPLEMENT_DIR, log,
 )
 from _utils import count_develop, cleanup_screenshots, cleanup_working, AutomationInstanceLock
 from _playwright import kill_stale_playwright_processes, stop_all_playwright, cleanup_worker_envs
@@ -53,6 +84,8 @@ def main() -> None:
                         help="手动指定消费者数量（覆盖自动分配）")
     parser.add_argument("--skip-produce", action="store_true",
                         help="跳过生产阶段，只消费 develop/ 中的现有需求")
+    parser.add_argument("--claude", action="store_true",
+                        help="使用 Claude Code CLI 替代默认的 Kiro CLI")
     parser.add_argument("--mode", choices=["safe", "pipeline", "full"], default=None,
                         help=(
                             "并行模式（覆盖 _config.py 中的 PARALLEL_MODE）：\n"
@@ -61,6 +94,10 @@ def main() -> None:
                             "  full     — 全并行含 push，push 冲突自动重试（积压多时用）"
                         ))
     args = parser.parse_args()
+
+    # --claude 切换 AI 提供者
+    if args.claude:
+        _config.AI_PROVIDER = "claude"
 
     # 命令行 --mode 覆盖配置文件
     if args.mode is not None:
@@ -81,7 +118,7 @@ def main() -> None:
 
     log.info("=" * 60)
     log.info(f"TrackFlow 并行迭代 | 生产者={num_producers} 消费者={num_consumers} 模式={_config.PARALLEL_MODE}")
-    log.info(f"模型: fix={KIRO_MODEL_FIX or '默认'} | test/review/produce={KIRO_MODEL or '默认'}")
+    log.info(f"AI 提供者: {AI_PROVIDER} | 模型: fix={KIRO_MODEL_FIX or '默认'} | test/review/produce={KIRO_MODEL or '默认'}")
     log.info(f"状态: review={len(list(REVIEW_DIR.glob('*.md')))} "
              f"develop={count_develop()} implement={len(list(IMPLEMENT_DIR.glob('*.md')))}")
     log.info("永不停止，Ctrl+C 手动终止")

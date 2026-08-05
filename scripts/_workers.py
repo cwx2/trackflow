@@ -15,11 +15,53 @@ from _config import (
     REVIEW_DIR, SKILLS, PRODUCER_CONFIGS,
     MIN_DEVELOP_QUEUE, MAX_RETRIES, MAX_TEST_RETRIES, MAX_REVIEW_RETRIES,
     REVIEW_BATCH_SIZE, KIRO_MODEL_FIX, COOLDOWN_SECONDS,
+    CLAUDE_MODEL, CLAUDE_MODEL_FIX, AI_PROVIDER,
     _claim_lock, _review_lock, _consumer_lock, _retry_lock, _retry_counts,
     PARALLEL_MODE,
     log,
 )
-from _kiro import run_kiro, run_kiro_resume, get_current_commit, get_latest_session_id
+
+# 根据 AI_PROVIDER 选择底层调用模块
+if AI_PROVIDER == "claude":
+    from _claude import run_claude, run_claude_resume, get_current_commit, get_latest_session_id
+    _ai_run = run_claude
+    _ai_run_resume = run_claude_resume
+    _ai_model = CLAUDE_MODEL or None   # 空字符串 → None，使用 claude 默认
+    _ai_model_fix = CLAUDE_MODEL_FIX or None
+else:
+    from _kiro import run_kiro, run_kiro_resume, get_current_commit, get_latest_session_id
+    _ai_run = run_kiro
+    _ai_run_resume = run_kiro_resume
+    _ai_model = KIRO_MODEL_FIX
+    _ai_model_fix = KIRO_MODEL_FIX
+
+_AI_LABEL = AI_PROVIDER.upper()  # "CLAUDE" 或 "KIRO"
+
+
+def _call_ai(prompt: str, label: str, model: str | None = None,
+             req_stem: str | None = None, *, is_fix: bool = False,
+             worker_id: str | None = None) -> tuple[bool, str]:
+    """统一的 AI 调用包装，自动处理 provider 差异。"""
+    kwargs: dict = {}
+    if AI_PROVIDER == "claude":
+        if req_stem:
+            kwargs["req_stem"] = req_stem
+        if is_fix:
+            kwargs["is_fix"] = True
+    return _ai_run(prompt, label, model=model, worker_id=worker_id, **kwargs)  # type: ignore[call-arg]
+
+
+def _call_ai_resume(session_id: str, prompt: str, label: str,
+                    model: str | None = None,
+                    req_stem: str | None = None,
+                    worker_id: str | None = None) -> tuple[bool, str]:
+    """统一的 AI resume 调用包装。"""
+    kwargs: dict = {}
+    if AI_PROVIDER == "claude":
+        if req_stem:
+            kwargs["req_stem"] = req_stem
+    return _ai_run_resume(session_id, prompt, label, model=model, worker_id=worker_id, **kwargs)  # type: ignore[call-arg]
+
 from _parsers import (
     parse_fix_result, parse_test_result, parse_review_result,
     read_req_status, reset_req_status, write_req_status, is_test_environment_failure,
@@ -139,11 +181,13 @@ def _git_has_unrelated_changes() -> bool:
         return True
 
     ignored_prefixes = (
-        "requirements/", "test/", "scripts/log/", "scripts/.auto_iterate_parallel.lock"
+        "requirements/", "test/", "scripts/log/", "scripts/.auto_iterate_parallel.lock",
+        ".claude/", ".kiro/",
     )
     automation_files = {
         "scripts/_config.py",
         "scripts/_kiro.py",
+        "scripts/_claude.py",
         "scripts/_parsers.py",
         "scripts/_playwright.py",
         "scripts/_utils.py",
@@ -372,9 +416,9 @@ def produce_one(worker_id: str) -> bool:
         f"---\n\n{section_content}"
     )
     log.info(f"[{worker_id}] 生产: {workflow_file}")
-    # 生产者同样可能被 Kiro 改动工作区；与消费者共用互斥锁，避免并行写 Git。
+    # 生产者同样可能被 AI 改动工作区；与消费者共用互斥锁，避免并行写 Git。
     with _pipeline_lock("always"):
-        success, _ = run_kiro(prompt, worker_id)
+        success, _ = _call_ai(prompt, worker_id)
     return success
 
 
@@ -382,7 +426,7 @@ def produce_one(worker_id: str) -> bool:
 
 def run_review_phase(batch: list[Path] | None = None) -> bool:
     """
-    审核一批需求文件（每批一个新 kiro-cli 会话，避免 context 过长）。
+    审核一批需求文件（每批一个 AI 会话，避免 context 过长）。
     batch 为 None 时自动取 review/ 前 REVIEW_BATCH_SIZE 个。
     """
     if batch is None:
@@ -399,11 +443,11 @@ def run_review_phase(batch: list[Path] | None = None) -> bool:
         f"文件路径格式为 requirements/review/requirement-XX.md。"
     )
     log.info(f"[审核] 审核 {len(batch)} 个需求：{req_list}")
-    # 审核会话可能会改写需求文件，必须与其它 Kiro 会话串行访问共享工作区。
+    # 审核会话可能会改写需求文件，必须与其它 AI 会话串行访问共享工作区。
     with _pipeline_lock("always"):
-        success, output = run_kiro(prompt, "reviewer", worker_id="reviewer")
+        success, output = _call_ai(prompt, "reviewer", worker_id="reviewer")
     if _is_transient_cli_output(output):
-        log.warning("[审核] Kiro 启动/超时故障，需求保留在 review/，稍后重试")
+        log.warning(f"[审核] AI 启动/超时故障，需求保留在 review/，稍后重试")
         return False
 
     remaining = [path.name for path in batch if path.exists()]
@@ -453,7 +497,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
 
     # ── 步骤 1：修需求（新会话）──
     # 需求可能在上次进程中已经提交成功，但随后在测试/审核阶段中断；
-    # 这时必须复用 fix_commit，不能强迫 Kiro 再制造一个空提交。
+    # 这时必须复用 fix_commit，不能强迫 AI 再制造一个空提交。
     req_status = read_req_status(req_file)
     existing_diff_range, existing_changed_files = _existing_fix_diff(
         req_status.get("fix_commit", "")
@@ -479,14 +523,15 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             f"修需求 {req_file.stem}，需求文件位于 {actual_path}\n"
             "本轮只做分析、修复、精确提交和状态更新；不要自行跑完整 e2e、代码审核或 git push。"
         )
-        success, fix_output = run_kiro(
-            fix_prompt, label, model=KIRO_MODEL_FIX, worker_id=worker_id
+        success, fix_output = _call_ai(
+            fix_prompt, label, model=_ai_model_fix, req_stem=req_file.stem, is_fix=True,
+            worker_id=worker_id
         )
 
     # 启动失败（<30s 退出）→ 放回 develop/，等待环境恢复，不累积重试次数
     if fix_output == "STARTUP_FAIL":
         _move_back_to_develop(req_file)
-        log.warning(f"[{label}] kiro-cli 启动失败，{req_file.name} 放回 develop/，等待 60s")
+        log.warning(f"[{label}] {_AI_LABEL} CLI 启动失败，{req_file.name} 放回 develop/，等待 60s")
         time.sleep(60)
         return ConsumeOutcome(None, transient=True)
 
@@ -540,7 +585,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
         existing_diff_range and req_status.get("test_status") == "PASS"
     )
     if not reuse_test_result:
-        time.sleep(5)  # 等待上一个 kiro-cli 进程完全退出
+        time.sleep(5)  # 等待上一个 CLI 进程完全退出
 
     for test_round in range(1, MAX_TEST_RETRIES + 1):
         if reuse_test_result:
@@ -573,7 +618,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 f"TEST_ENVIRONMENT_FAILURE。"
             )
 
-        _, test_output = run_kiro(test_prompt, f"{label}-test{test_round}", worker_id=worker_id)
+        _, test_output = _call_ai(test_prompt, f"{label}-test{test_round}", req_stem=req_file.stem, worker_id=worker_id)
         if _is_transient_cli_output(test_output):
             _move_back_to_develop(req_file)
             log.warning(f"[{label}] 测试环境故障（{test_output}），不消耗需求重试次数")
@@ -607,8 +652,8 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 f"{prev_test_summary}\n\n只修复这些失败，不重新分析无关模块；修复并提交后输出 FIX_DONE。"
             )
             if get_session_id_lazy():
-                _, fb_out = run_kiro_resume(get_session_id_lazy(), feedback_prompt,
-                                            f"{label}-fix{test_round}", worker_id=worker_id)
+                _, fb_out = _call_ai_resume(get_session_id_lazy(), feedback_prompt,
+                                            f"{label}-fix{test_round}", req_stem=req_file.stem, worker_id=worker_id)
             else:
                 fallback = (
                     f"[使用 skill: fix-requirement-auto] "
@@ -616,8 +661,8 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                     f"{_AUTOMATION_PROMPT_RULES}\n\n"
                     f"继续处理 {req_file.stem}（{actual_path}），测试失败，请修复：\n\n{prev_test_summary}"
                 )
-                _, fb_out = run_kiro(fallback, f"{label}-fix{test_round}",
-                                     model=KIRO_MODEL_FIX, worker_id=worker_id)
+                _, fb_out = _call_ai(fallback, f"{label}-fix{test_round}",
+                                     model=_ai_model_fix, req_stem=req_file.stem, is_fix=True, worker_id=worker_id)
             if _is_transient_cli_output(fb_out):
                 _move_back_to_develop(req_file)
                 log.warning(f"[{label}] 测试修复环境故障（{fb_out}），不消耗需求重试次数")
@@ -644,7 +689,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
         existing_diff_range and read_req_status(req_file).get("review_status") == "PASS"
     )
     if not reuse_review_result:
-        time.sleep(5)  # 等待上一个 kiro-cli 进程完全退出
+        time.sleep(5)  # 等待上一个 CLI 进程完全退出
     review_skill = SKILLS["code-review"]
     prev_review_summary = ""
     review_passed = False
@@ -679,7 +724,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 f"请只验证这些 MUST 问题是否已修复，无需重新做完整审核；确认后输出 REVIEW_RESULT。"
             )
 
-        _, review_output = run_kiro(review_prompt, f"{label}-review{review_round}", worker_id=worker_id)
+        _, review_output = _call_ai(review_prompt, f"{label}-review{review_round}", req_stem=req_file.stem, worker_id=worker_id)
         if _is_transient_cli_output(review_output):
             _move_back_to_develop(req_file)
             log.warning(f"[{label}] 审核环境故障（{review_output}），不消耗需求重试次数")
@@ -720,8 +765,8 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                 f"```\n{prev_review_summary}\n```\n\n只修复这些 MUST，不扩展范围；修复并提交后输出 FIX_DONE。"
             )
             if get_session_id_lazy():
-                _, rv_out = run_kiro_resume(get_session_id_lazy(), feedback_prompt,
-                                            f"{label}-fixr{review_round}", worker_id=worker_id)
+                _, rv_out = _call_ai_resume(get_session_id_lazy(), feedback_prompt,
+                                            f"{label}-fixr{review_round}", req_stem=req_file.stem, worker_id=worker_id)
             else:
                 fallback = (
                     f"[使用 skill: fix-requirement-auto] "
@@ -729,8 +774,8 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
                     f"{_AUTOMATION_PROMPT_RULES}\n\n"
                     f"继续处理 {req_file.stem}（{actual_path}），审核发现 MUST 问题：\n\n{prev_review_summary}"
                 )
-                _, rv_out = run_kiro(fallback, f"{label}-fixr{review_round}",
-                                     model=KIRO_MODEL_FIX, worker_id=worker_id)
+                _, rv_out = _call_ai(fallback, f"{label}-fixr{review_round}",
+                                     model=_ai_model_fix, req_stem=req_file.stem, is_fix=True, worker_id=worker_id)
             if _is_transient_cli_output(rv_out):
                 _move_back_to_develop(req_file)
                 log.warning(f"[{label}] 审核修复环境故障（{rv_out}），不消耗需求重试次数")
@@ -812,7 +857,7 @@ def consume_one(worker_id: str) -> ConsumeOutcome:
             )
             before_review_files = {p.name for p in REVIEW_DIR.glob("requirement-*.md")}
             with _review_lock:
-                _, arch_output = run_kiro(tech_prompt, f"{label}-arch", worker_id=worker_id)
+                _, arch_output = _call_ai(tech_prompt, f"{label}-arch", worker_id=worker_id)
                 after_review_files = {p.name for p in REVIEW_DIR.glob("requirement-*.md")}
                 new_review_files = sorted(after_review_files - before_review_files)
                 if _is_transient_cli_output(arch_output):

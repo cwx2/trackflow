@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Grep(*)",
+      "Glob(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__playwright__*",
+      "mcp__trackflow-test__*",
+      "mcp__postgres__*",
+      "mcp__postmancer__*",
+      "mcp__requirement-manager__*"
+    ],
+    "deny": []
+  }
+}

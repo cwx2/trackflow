@@ -4,6 +4,7 @@
 """
 
 import logging
+import os
 import threading
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -35,11 +36,25 @@ MAX_TEST_RETRIES   = 3      # 测试最多重试轮数
 MAX_REVIEW_RETRIES = 2      # 审核最多重试轮数
 REVIEW_BATCH_SIZE  = 5      # 每批审核需求数
 
-# 模型（None = kiro-cli 默认）
+# 模型（None = 使用 CLI 默认）
 # 当前 Kiro CLI 账户只暴露 auto；显式写入 auto，避免传入不存在的模型名导致
 # 测试/审核阶段在启动后立即失败并反复重试。
 KIRO_MODEL     = "auto"               # 测试/审核/生产
 KIRO_MODEL_FIX = "auto"               # 修需求
+
+# Claude Code 专用模型（仅当 AI_PROVIDER="claude" 时生效）
+# 可选: opus / sonnet / haiku / fable，空字符串 = 使用 claude 默认（当前为 opus）
+CLAUDE_MODEL     = ""                 # 测试/审核/生产（空=默认）
+CLAUDE_MODEL_FIX = ""                 # 修需求（空=默认）
+
+# Claude Code 单次调用预算上限（美元）
+CLAUDE_MAX_BUDGET_USD     = 0.75      # 测试/审核/生产
+CLAUDE_MAX_BUDGET_USD_FIX = 1.0       # 修需求
+
+# AI 提供者选择
+# "kiro" — 使用 kiro-cli（默认，原有行为）
+# "claude" — 使用 Claude Code CLI（通过 --claude 命令行参数切换）
+AI_PROVIDER = os.environ.get("TRACKFLOW_AI", "kiro")
 
 # ============ 并行模式 ============
 #
