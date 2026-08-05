@@ -14,6 +14,27 @@
     </template>
 
     <a-spin :loading="loading" style="width: 100%">
+      <!-- 转换显示名称配置 -->
+      <div class="transition-name-section">
+        <div class="section-label">转换名称</div>
+        <div class="name-input-row">
+          <a-input
+            v-model="editTransitionName"
+            :max-length="100"
+            placeholder="留空则显示目标状态名"
+            allow-clear
+            @press-enter="saveTransitionName"
+          />
+          <a-button
+            type="primary"
+            size="small"
+            :loading="nameSaving"
+            @click="saveTransitionName"
+          >保存</a-button>
+        </div>
+        <div class="name-hint">配置后，工单状态下拉将显示此名称而非目标状态名（如"开始处理"）</div>
+      </div>
+
       <!-- 动作列表 -->
       <div v-if="actions.length > 0" class="action-list">
         <div
@@ -96,7 +117,7 @@
 import { ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconPlus, IconThunderbolt, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
-import { transitionActionApi } from '@/api'
+import { transitionActionApi, workflowApi } from '@/api'
 import type { TransitionActionVO } from '@/api/transitionAction'
 import TransitionActionForm from './TransitionActionForm.vue'
 
@@ -108,11 +129,14 @@ const props = defineProps<{
   oldStatusName: string
   newStatusName: string
   issueType?: string
+  transitionId?: string
+  transitionName?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
   (e: 'refresh'): void
+  (e: 'name-updated', transitionId: string, newName: string | null): void
 }>()
 
 const loading = ref(false)
@@ -120,11 +144,31 @@ const actions = ref<TransitionActionVO[]>([])
 const formVisible = ref(false)
 const editingAction = ref<TransitionActionVO | null>(null)
 
+// 转换名称编辑
+const editTransitionName = ref('')
+const nameSaving = ref(false)
+
 watch(() => props.visible, (val) => {
   if (val) {
+    editTransitionName.value = props.transitionName || ''
     loadActions()
   }
 })
+
+async function saveTransitionName() {
+  if (!props.transitionId) return
+  const newName = editTransitionName.value.trim() || null
+  nameSaving.value = true
+  try {
+    await workflowApi.updateTransitionName(props.transitionId, newName)
+    Message.success(newName ? '转换名称已保存' : '转换名称已清除')
+    emit('name-updated', props.transitionId, newName)
+  } catch {
+    Message.error('保存转换名称失败')
+  } finally {
+    nameSaving.value = false
+  }
+}
 
 async function loadActions() {
   loading.value = true
@@ -263,6 +307,31 @@ function strategyDescription(config: TransitionActionVO['actionConfig'], actionT
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.transition-name-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-2, rgba(255,255,255,0.08));
+}
+
+.transition-name-section .section-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, var(--color-text-2));
+  margin-bottom: 6px;
+}
+
+.transition-name-section .name-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.transition-name-section .name-hint {
+  font-size: 11px;
+  color: var(--text-tertiary, var(--color-text-4));
+  margin-top: 4px;
 }
 
 .action-item {

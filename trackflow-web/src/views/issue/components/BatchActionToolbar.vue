@@ -390,7 +390,7 @@ watch(showStatusDropdown, async (visible) => {
         const res = await issueApi.getAvailableTransitions(issueIds[0])
         allStatuses.value = (res.data || []).map(s => ({
           id: s.id,
-          name: s.name,
+          name: s.transitionName || s.name,
           color: s.color,
           category: s.category,
           isClosed: s.isClosed,

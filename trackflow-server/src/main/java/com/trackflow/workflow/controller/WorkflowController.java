@@ -168,6 +168,24 @@ public class WorkflowController {
         return R.ok();
     }
 
+    /**
+     * 更新转换显示名称。
+     * 管理员可以为每个转换配置操作性名称（如"开始处理"），展示时优先于目标状态名。
+     * 传空字符串或 null 表示清除名称（回退到目标状态名）。
+     */
+    @PatchMapping("/workflows/transitions/{transitionId}/name")
+    @PreAuthorize("@perm.checkGlobal('system:admin')")
+    public R<Void> updateTransitionName(
+            @PathVariable("transitionId") Long transitionId,
+            @RequestBody Map<String, String> body) {
+        String name = body.get("transitionName");
+        if (name != null && name.isBlank()) {
+            name = null;
+        }
+        workflowService.updateTransitionName(transitionId, name);
+        return R.ok();
+    }
+
     // ========== 初始状态管理 ==========
 
     /**

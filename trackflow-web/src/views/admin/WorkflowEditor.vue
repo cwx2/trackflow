@@ -378,7 +378,10 @@
       :old-status-name="actionPanelFromName"
       :new-status-name="actionPanelToName"
       :issue-type="selectedType"
+      :transition-id="actionPanelTransitionId"
+      :transition-name="actionPanelTransitionName"
       @refresh="onActionRefresh"
+      @name-updated="onTransitionNameUpdated"
     />
 
     <!-- 守卫条件面板 -->
@@ -505,6 +508,8 @@ const actionPanelFrom = ref('')
 const actionPanelTo = ref('')
 const actionPanelFromName = ref('')
 const actionPanelToName = ref('')
+const actionPanelTransitionId = ref('')
+const actionPanelTransitionName = ref('')
 
 // 守卫条件面板状态
 const guardPanelVisible = ref(false)
@@ -519,6 +524,8 @@ const guardPaths = reactive(new Map<string, string>())
 const transitionIdMap = reactive(new Map<string, string>())
 // 每个转换路径对应的当前守卫条件 JSON（用于编辑面板回填）
 const transitionConditionsMap = reactive(new Map<string, string>())
+// 每个转换路径对应的转换显示名（用于面板展示和编辑）
+const transitionNameMap = reactive(new Map<string, string>())
 
 // 初始状态配置：当前项目+issueType 的初始状态 ID
 const initialStatusId = ref<string | null>(null)
@@ -651,6 +658,9 @@ function openActionPanel(fromStatus: IssueStatusVO, toStatus: IssueStatusVO) {
   actionPanelTo.value = toStatus.id
   actionPanelFromName.value = localizeStatusName(fromStatus.name)
   actionPanelToName.value = localizeStatusName(toStatus.name)
+  const key = `${fromStatus.id}-${toStatus.id}`
+  actionPanelTransitionId.value = transitionIdMap.get(key) || ''
+  actionPanelTransitionName.value = transitionNameMap.get(key) || ''
   actionPanelVisible.value = true
 }
 
@@ -784,6 +794,16 @@ async function loadActionPaths() {
 
 function onActionRefresh() {
   loadActionPaths()
+}
+
+function onTransitionNameUpdated(transitionId: string, newName: string | null) {
+  // 更新本地缓存
+  const key = `${actionPanelFrom.value}-${actionPanelTo.value}`
+  if (newName) {
+    transitionNameMap.set(key, newName)
+  } else {
+    transitionNameMap.delete(key)
+  }
 }
 
 // 记录上一次成功加载的筛选条件（用于取消时恢复）
@@ -930,6 +950,7 @@ async function loadMatrix() {
     transitionIdMap.clear()
     guardPaths.clear()
     transitionConditionsMap.clear()
+    transitionNameMap.clear()
     for (const t of transitions) {
       const key = `${t.oldStatusId}-${t.newStatusId}`
       allowedTransitions.add(key)
@@ -939,6 +960,10 @@ async function loadMatrix() {
       // 存储 conditions JSON（用于编辑面板回填）
       if (t.conditions) {
         transitionConditionsMap.set(key, t.conditions)
+      }
+      // 存储转换显示名
+      if (t.transitionName) {
+        transitionNameMap.set(key, t.transitionName)
       }
       // 记录有守卫条件的路径
       if (t.conditions && t.conditions !== '{}' && t.conditions !== 'null') {

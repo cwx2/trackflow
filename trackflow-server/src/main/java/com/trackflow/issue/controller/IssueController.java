@@ -258,8 +258,20 @@ public class IssueController {
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable("id") Long id) {
         Issue issue = issueService.getByIdWithAccessCheck(id);
         Long userId = SecurityUtils.getCurrentUserId();
-        List<IssueStatus> statuses = workflowService.getAvailableTransitions(issue, userId);
+
+        // 单次查询获取状态列表和转换显示名
+        WorkflowService.TransitionResult result = workflowService.getAvailableTransitionsWithNames(issue, userId);
+        List<IssueStatus> statuses = result.statuses();
+        Map<Long, String> transitionNames = result.transitionNames();
         List<IssueStatusVO> voList = issueConverter.toStatusVOList(statuses);
+
+        // 附加转换显示名（优先显示转换名而非目标状态名）
+        for (IssueStatusVO vo : voList) {
+            String tName = transitionNames.get(Long.valueOf(vo.getId()));
+            if (tName != null) {
+                vo.setTransitionName(tName);
+            }
+        }
 
         // 查询哪些目标状态的转换需要强制评论
         List<Long> targetStatusIds = statuses.stream().map(IssueStatus::getId).toList();

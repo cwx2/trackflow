@@ -965,7 +965,8 @@ const availableTransitions = computed<StatusInfo[]>(() => {
     color: s.color,
     blocked: s.blocked || false,
     blockedBy: s.blockedBy || [],
-    requireComment: s.requireComment || false
+    requireComment: s.requireComment || false,
+    transitionName: s.transitionName || undefined
   }))
 })
 
@@ -985,7 +986,7 @@ const sidebarFields = computed<SidebarField[]>(() => {
     { value: currentStatus.value.id, label: `${currentStatus.value.name}（当前）`, dot: currentStatus.value.color },
     ...availableTransitions.value.map(s => ({
       value: s.id,
-      label: s.blocked ? `⚠ ${s.name}` : s.name,
+      label: s.blocked ? `⚠ ${s.transitionName || s.name}` : (s.transitionName || s.name),
       dot: s.color,
       badge: s.blocked ? '被阻塞' : undefined,
       badgeColor: s.blocked ? '#d29922' : undefined

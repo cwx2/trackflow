@@ -63,7 +63,7 @@
                   @click="selectStatus(t)"
                 >
                   <span class="status-dot" :style="{ background: t.color || 'var(--color-fill-4)' }"></span>
-                  <span class="item-label">{{ localizeStatusName(t.name) }}</span>
+                  <span class="item-label">{{ t.transitionName || localizeStatusName(t.name) }}</span>
                 </div>
               </div>
             </div>

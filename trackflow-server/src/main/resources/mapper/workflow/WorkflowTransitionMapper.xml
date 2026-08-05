@@ -54,7 +54,8 @@
                  WHEN project_id IS NULL AND issue_type = '*' THEN 4
                END AS priority_level,
                conditions,
-               id AS transition_id
+               id AS transition_id,
+               transition_name
         FROM workflow_transition
         WHERE (project_id = #{projectId} OR project_id IS NULL)
           AND (issue_type = #{issueType} OR issue_type = '*')

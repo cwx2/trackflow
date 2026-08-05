@@ -106,23 +106,57 @@ public class WorkflowService {
      */
     @Transactional(readOnly = true)
     public List<IssueStatus> getAvailableTransitions(Issue issue, Long userId) {
+        return getAvailableTransitionsWithNames(issue, userId).statuses();
+    }
+
+    /**
+     * 获取可用转换的目标状态列表 + 转换显示名映射（单次 DB 查询）。
+     * Controller 使用此方法避免重复查询。
+     */
+    @Transactional(readOnly = true)
+    public TransitionResult getAvailableTransitionsWithNames(Issue issue, Long userId) {
         boolean isAuthor = userId.equals(issue.getCreatedBy());
         boolean isAssignee = userId.equals(issue.getAssigneeId());
 
-        // 系统管理员直接跳过所有权检查（由全局权限保障）
+        Map<Long, String> statusMap;
         if (permissionService.isSystemAdmin(userId)) {
-            // 系统管理员使用 project_admin 的工作流规则
-            // 系统管理员同时视为 author + assignee（获取最大权限集）
-            return getTransitionsForRoles(issue, List.of(PROJECT_ADMIN_ROLE_ID), true, true);
+            statusMap = resolveAllowedStatusMap(
+                    issue.getProjectId(), issue.getIssueType(), List.of(PROJECT_ADMIN_ROLE_ID),
+                    issue.getStatusId(), true, true, issue);
+        } else {
+            List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(userId, issue.getProjectId());
+            if (roleIds.isEmpty()) {
+                return new TransitionResult(List.of(), Map.of());
+            }
+            statusMap = resolveAllowedStatusMap(
+                    issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId(),
+                    isAuthor, isAssignee, issue);
         }
 
-        // 获取用户在项目中的角色
-        List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(userId, issue.getProjectId());
-        if (roleIds.isEmpty()) {
-            return List.of();
+        if (statusMap.isEmpty()) {
+            return new TransitionResult(List.of(), Map.of());
         }
 
-        return getTransitionsForRoles(issue, roleIds, isAuthor, isAssignee);
+        List<IssueStatus> statuses = statusMapper.selectList(
+                new LambdaQueryWrapper<IssueStatus>().in(IssueStatus::getId, statusMap.keySet())
+                        .orderByAsc(IssueStatus::getSortOrder)
+        );
+        return new TransitionResult(statuses, statusMap);
+    }
+
+    /**
+     * 可用转换结果：包含状态列表和状态ID→转换显示名映射。
+     */
+    public record TransitionResult(List<IssueStatus> statuses, Map<Long, String> transitionNames) {}
+
+    /**
+     * 获取可用转换的目标状态 ID → 转换显示名映射。
+     * <p>
+     * 用于 Controller 层将 transitionName 附加到 IssueStatusVO。
+     * transitionName 为 null 表示该转换未配置显示名，前端应 fallback 到状态名。
+     */
+    public Map<Long, String> getAvailableTransitionNames(Issue issue, Long userId) {
+        return getAvailableTransitionsWithNames(issue, userId).transitionNames();
     }
 
     /**
@@ -152,16 +186,16 @@ public class WorkflowService {
      */
     private List<IssueStatus> getTransitionsForRoles(Issue issue, List<Long> roleIds,
                                                      boolean isAuthor, boolean isAssignee) {
-        List<Long> allowedStatusIds = resolveAllowedStatusIds(
+        Map<Long, String> allowedStatusMap = resolveAllowedStatusMap(
                 issue.getProjectId(), issue.getIssueType(), roleIds, issue.getStatusId(),
                 isAuthor, isAssignee, issue);
 
-        if (allowedStatusIds.isEmpty()) {
+        if (allowedStatusMap.isEmpty()) {
             return List.of();
         }
 
         return statusMapper.selectList(
-                new LambdaQueryWrapper<IssueStatus>().in(IssueStatus::getId, allowedStatusIds)
+                new LambdaQueryWrapper<IssueStatus>().in(IssueStatus::getId, allowedStatusMap.keySet())
                         .orderByAsc(IssueStatus::getSortOrder)
         );
     }
@@ -178,11 +212,25 @@ public class WorkflowService {
                                                List<Long> roleIds, Long oldStatusId,
                                                boolean isAuthor, boolean isAssignee,
                                                Issue issue) {
+        return new java.util.ArrayList<>(resolveAllowedStatusMap(
+                projectId, issueType, roleIds, oldStatusId, isAuthor, isAssignee, issue).keySet());
+    }
+
+    /**
+     * 4 级优先级解析允许的目标状态 ID → transitionName 映射（含守卫条件评估）。
+     * <p>
+     * 返回 Map：key = 目标状态 ID，value = 转换显示名（可能为 null，表示未配置）。
+     * 同一 new_status_id 有多条通过守卫条件的规则时，取第一个非空 transitionName。
+     */
+    private Map<Long, String> resolveAllowedStatusMap(Long projectId, String issueType,
+                                                      List<Long> roleIds, Long oldStatusId,
+                                                      boolean isAuthor, boolean isAssignee,
+                                                      Issue issue) {
         List<Map<String, Object>> results = transitionMapper.findAllowedNewStatusIdsWithPriority(
                 projectId, issueType, roleIds, oldStatusId, isAuthor, isAssignee);
 
         if (results == null || results.isEmpty()) {
-            return List.of();
+            return Map.of();
         }
 
         // 找到最高优先级（最小 priority_level 值）
@@ -197,24 +245,38 @@ public class WorkflowService {
                 .filter(row -> ((Number) row.get("priority_level")).intValue() == minPriority)
                 .collect(Collectors.groupingBy(row -> ((Number) row.get("new_status_id")).longValue()));
 
-        List<Long> allowedStatusIds = grouped.entrySet().stream()
-                .filter(entry -> entry.getValue().stream().anyMatch(row -> {
-                    Object conditionsObj = row.get("conditions");
-                    String conditions = conditionsObj != null ? conditionsObj.toString() : null;
-                    boolean guardPassed = transitionGuardService.evaluate(conditions, issue);
-                    if (!guardPassed) {
-                        log.debug("Workflow guard blocked transition to statusId={}, conditions={}",
-                                entry.getKey(), conditions);
+        // 返回 Map<statusId, transitionName>，取第一个通过守卫且有非空 transitionName 的规则
+        java.util.LinkedHashMap<Long, String> allowedStatusMap = new java.util.LinkedHashMap<>();
+        grouped.entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    String resolvedName = null;
+                    boolean anyPassed = false;
+                    for (Map<String, Object> row : entry.getValue()) {
+                        Object conditionsObj = row.get("conditions");
+                        String conditions = conditionsObj != null ? conditionsObj.toString() : null;
+                        boolean guardPassed = transitionGuardService.evaluate(conditions, issue);
+                        if (guardPassed) {
+                            anyPassed = true;
+                            if (resolvedName == null) {
+                                Object nameObj = row.get("transition_name");
+                                if (nameObj != null && !nameObj.toString().isBlank()) {
+                                    resolvedName = nameObj.toString();
+                                }
+                            }
+                        } else {
+                            log.debug("Workflow guard blocked transition to statusId={}, conditions={}",
+                                    entry.getKey(), conditions);
+                        }
                     }
-                    return guardPassed;
-                }))
-                .map(java.util.Map.Entry::getKey)
-                .sorted()
-                .toList();
+                    if (anyPassed) {
+                        allowedStatusMap.put(entry.getKey(), resolvedName);
+                    }
+                });
 
         log.debug("Workflow resolved at Level {} (with guard): {} allowed out of {} candidates",
-                minPriority, allowedStatusIds.size(), grouped.size());
-        return allowedStatusIds;
+                minPriority, allowedStatusMap.size(), grouped.size());
+        return allowedStatusMap;
     }
 
     /**
@@ -262,6 +324,25 @@ public class WorkflowService {
         transition.setConditions(conditionsJson);
         transitionMapper.updateById(transition);
         log.info("[Workflow] 更新转换守卫条件: transitionId={}, conditions={}", transitionId, conditionsJson);
+    }
+
+    /**
+     * 更新转换显示名称。
+     *
+     * @param transitionId   转换规则 ID
+     * @param transitionName 显示名（null 表示清除）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateTransitionName(Long transitionId, String transitionName) {
+        WorkflowTransition transition = transitionMapper.selectById(transitionId);
+        if (transition == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                    "工作流转换规则不存在: " + transitionId);
+        }
+        transition.setTransitionName(transitionName);
+        transitionMapper.updateById(transition);
+        log.info("[Workflow] 更新转换显示名: transitionId={}, transitionName={}",
+                transitionId, transitionName);
     }
 
     /**

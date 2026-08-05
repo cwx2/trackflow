@@ -312,6 +312,8 @@ export interface StatusInfo {
   blocked?: boolean
   blockedBy?: string[]
   requireComment?: boolean
+  /** 转换显示名（如"开始处理"），有值时优先展示 */
+  transitionName?: string
 }
 
 const props = defineProps<{

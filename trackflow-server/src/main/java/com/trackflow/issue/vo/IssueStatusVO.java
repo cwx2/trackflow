@@ -30,4 +30,9 @@ public class IssueStatusVO {
      * 此转换是否要求必须填写评论/理由（来自 workflow_transition.require_comment 配置）
      */
     private Boolean requireComment;
+
+    /**
+     * 转换显示名（如"开始处理"），为空时前端使用目标状态名 fallback
+     */
+    private String transitionName;
 }

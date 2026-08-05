@@ -82,6 +82,14 @@ export const workflowApi = {
     return request.patch<any, R<void>>(`/workflows/transitions/${transitionId}/conditions`, data)
   },
 
+  /**
+   * 更新转换显示名称。
+   * 传空字符串或 null 表示清除名称（回退到目标状态名）。
+   */
+  updateTransitionName(transitionId: string, transitionName: string | null) {
+    return request.patch<any, R<void>>(`/workflows/transitions/${transitionId}/name`, { transitionName })
+  },
+
   /** 获取指定项目的初始状态配置列表 */
   listInitialStatuses(projectId: string) {
     return request.get<any, R<WorkflowInitialStatusVO[]>>(`/projects/${projectId}/workflows/initial-statuses`)
