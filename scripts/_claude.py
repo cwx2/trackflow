@@ -55,6 +55,10 @@ if not CLAUDE_CLI:
 log.debug(f"Claude CLI: {CLAUDE_CLI}")
 MCP_CONFIG_PATH = ".claude/mcp.json"
 
+# Steering 文件目录（项目规范上下文）
+STEERING_DIR = WORKSPACE / ".kiro" / "steering"
+_steering_cache: list[str] = []
+
 # 单次调用最大预算（美元）。修复阶段可用更高预算。
 DEFAULT_MAX_BUDGET_USD = 0.75
 FIX_MAX_BUDGET_USD = 1.0
@@ -84,6 +88,54 @@ _SKILL_FILES: dict[str, str] = {
     "frontend-enterprise": ".kiro/skills/frontend-enterprise/SKILL.md",
     "java-enterprise": ".kiro/skills/java-enterprise/SKILL.md",
 }
+_skill_cache: dict[str, str] = {}
+
+
+def _load_steering() -> list[str]:
+    """从 STEERING 目录读取所有 .md 文件内容（缓存）。"""
+    if _steering_cache:
+        return _steering_cache
+
+    seen_names: set[str] = set()
+    # 按文件名排序确保稳定
+    files = sorted(STEERING_DIR.glob("*.md"), key=lambda p: p.name)
+
+    for path in files:
+        name = path.name
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        try:
+            content = path.read_text(encoding="utf-8")
+            if content.strip():
+                _steering_cache.append(content)
+        except Exception as e:
+            log.warning(f"[steering] 无法读取 {path}: {e}")
+
+    return _steering_cache
+
+
+def _inject_steering() -> str:
+    """返回包含所有 steering 文件的上下文提示词，注入到每次会话中。"""
+    docs = _load_steering()
+    if not docs:
+        return ""
+
+    parts: list[str] = []
+    parts.append("以下是项目的关键规范文档（来自 .kiro/steering/），请在处理任务时严格遵循：\n")
+
+    for i, doc in enumerate(docs):
+        # 提取文档标题（第一个 # 行）
+        first_line = doc.strip().split("\n")[0].strip()
+        title = first_line.lstrip("#").strip() if first_line.startswith("#") else f"文档{i+1}"
+        # 每个文档最多保留 3000 字符（平衡上下文长度）
+        truncated = doc if len(doc) <= 3000 else doc[:3000] + "\n\n... (已截断)"
+
+        parts.append(f"---\n{title}\n---\n{truncated}")
+
+    return "\n\n".join(parts)
+
+
 _skill_cache: dict[str, str] = {}
 
 
@@ -450,6 +502,9 @@ def run_claude(prompt: str, label: str,
 
     # 自动注入 SKILL 内容（替代 Kiro CLI 的 skill 加载机制）
     prompt = _inject_skills(prompt)
+
+    # 注入项目上下文和运行约束
+    prompt = _inject_steering() + "\n\n" + prompt
 
     effective_model = model or KIRO_MODEL
     if effective_model and effective_model != "auto":
