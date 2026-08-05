@@ -5,6 +5,7 @@ import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.util.SecurityUtils;
+import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.dto.CreateIssueLinkDTO;
 import com.trackflow.issue.entity.Issue;
@@ -41,6 +42,7 @@ public class IssueLinkService {
     private final StatusCacheHelper statusCacheHelper;
     private final ApplicationEventPublisher eventPublisher;
     private final IssueLinkTypeService linkTypeService;
+    private final PriorityFieldService priorityFieldService;
 
     /**
      * 获取 Issue 的所有关联（包括作为 source 和 target 的）。
@@ -81,12 +83,15 @@ public class IssueLinkService {
         Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
                 .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
 
+        // 构建优先级选项 Map（value → option），用于填充颜色和序号
+        Map<String, CustomFieldOption> priorityOptionMap = buildPriorityOptionMap();
+
         List<IssueLinkVO> result = new ArrayList<>();
 
         // source 关联：展示 target issue 信息
         for (IssueLink link : asSource) {
             IssueLinkVO vo = buildLinkVOFromMaps(link.getId(), link.getLinkType(),
-                    link.getTargetIssueId(), issueMap, statusMap);
+                    link.getTargetIssueId(), issueMap, statusMap, priorityOptionMap);
             if (vo != null) result.add(vo);
         }
 
@@ -94,7 +99,7 @@ public class IssueLinkService {
         for (IssueLink link : asTarget) {
             String reverseType = getReverseLinkType(link.getLinkType());
             IssueLinkVO vo = buildLinkVOFromMaps(link.getId(), reverseType,
-                    link.getSourceIssueId(), issueMap, statusMap);
+                    link.getSourceIssueId(), issueMap, statusMap, priorityOptionMap);
             if (vo != null) result.add(vo);
         }
 
@@ -316,7 +321,8 @@ public class IssueLinkService {
      * 从预加载的 Map 中构建 IssueLinkVO（批量模式，避免 N+1）
      */
     private IssueLinkVO buildLinkVOFromMaps(Long linkId, String linkType, Long linkedIssueId,
-                                            Map<Long, Issue> issueMap, Map<Long, IssueStatus> statusMap) {
+                                            Map<Long, Issue> issueMap, Map<Long, IssueStatus> statusMap,
+                                            Map<String, CustomFieldOption> priorityOptionMap) {
         Issue issue = issueMap.get(linkedIssueId);
         if (issue == null || issue.getDeletedAt() != null) {
             return null;
@@ -334,7 +340,31 @@ public class IssueLinkService {
                 vo.setIssueStatus(issueConverter.toStatusVO(status));
             }
         }
+        // 填充优先级信息
+        if (issue.getPriority() != null && !issue.getPriority().isBlank()) {
+            vo.setPriority(issue.getPriority());
+            CustomFieldOption opt = priorityOptionMap.get(issue.getPriority());
+            if (opt != null) {
+                vo.setPriorityColor(opt.getColor());
+                // position 从 0 开始，展示数字从 1 开始
+                vo.setPriorityOrder(opt.getPosition() != null ? opt.getPosition() + 1 : null);
+            }
+        }
         return vo;
+    }
+
+    /**
+     * 构建优先级选项查找 Map（value → CustomFieldOption）
+     */
+    private Map<String, CustomFieldOption> buildPriorityOptionMap() {
+        try {
+            List<CustomFieldOption> options = priorityFieldService.getGlobalPriorityOptions();
+            return options.stream()
+                    .collect(Collectors.toMap(CustomFieldOption::getValue, opt -> opt, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("加载全局优先级选项失败，关联工单将不显示优先级信息", e);
+            return Map.of();
+        }
     }
 
     /**

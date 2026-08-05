@@ -896,7 +896,10 @@ const issueLinks = computed(() => {
     typeLabel: localizeLinkType(l.linkType),
     statusName: localizeStatusName(l.issueStatus?.name),
     statusColor: l.issueStatus?.color || '',
-    isUnresolvedBlocker: l.linkType === 'blocked_by' && l.issueStatus && !l.issueStatus.isClosed
+    isUnresolvedBlocker: l.linkType === 'blocked_by' && l.issueStatus && !l.issueStatus.isClosed,
+    priority: l.priority,
+    priorityColor: l.priorityColor,
+    priorityOrder: l.priorityOrder,
   }))
 })
 

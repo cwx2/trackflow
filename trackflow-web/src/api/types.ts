@@ -470,6 +470,12 @@ export interface IssueLinkVO {
   issueKey: string
   issueTitle: string
   issueStatus?: IssueStatusVO
+  /** 优先级值（如 "Normal", "Critical"） */
+  priority?: string
+  /** 优先级对应颜色（HEX 格式） */
+  priorityColor?: string
+  /** 优先级排序序号（方块中显示的数字，从 1 开始） */
+  priorityOrder?: number
 }
 
 export interface IssueLinkTypeVO {
