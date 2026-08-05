@@ -5,18 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.common.service.DistributedLockService;
 import com.trackflow.issue.entity.Issue;
-import com.trackflow.issue.entity.IssueAttachment;
-import com.trackflow.issue.entity.IssueComment;
-import com.trackflow.issue.entity.IssueLink;
-import com.trackflow.issue.entity.IssueStatus;
-import com.trackflow.issue.entity.IssueTagRelation;
-import com.trackflow.issue.mapper.IssueAttachmentMapper;
-import com.trackflow.issue.mapper.IssueCommentMapper;
-import com.trackflow.issue.mapper.IssueLinkMapper;
 import com.trackflow.issue.mapper.IssueMapper;
-import com.trackflow.issue.mapper.IssueStatusMapper;
-import com.trackflow.issue.mapper.IssueTagRelationMapper;
-import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.entity.WorkflowRuleExecutionLog;
 import com.trackflow.workflow.mapper.WorkflowRuleExecutionLogMapper;
@@ -48,15 +37,10 @@ public class ScheduledRuleService {
     private final WorkflowRuleMapper ruleMapper;
     private final WorkflowRuleExecutionLogMapper logMapper;
     private final IssueMapper issueMapper;
-    private final IssueLinkMapper issueLinkMapper;
-    private final IssueCommentMapper commentMapper;
-    private final IssueTagRelationMapper tagRelationMapper;
-    private final IssueAttachmentMapper attachmentMapper;
-    private final IssueStatusMapper statusMapper;
-    private final ProjectMemberMapper projectMemberMapper;
     private final WorkflowRuleEngine ruleEngine;
     private final ObjectMapper objectMapper;
     private final DistributedLockService distributedLockService;
+    private final com.trackflow.common.rule.RuleConditionEvaluator ruleConditionEvaluator;
 
     /**
      * 每分钟执行一次调度检查。
@@ -229,8 +213,9 @@ public class ScheduledRuleService {
             if (isRecursiveFormat) {
                 // 新格式：整个递归条件树在 Java 层评估
                 JsonNode recursiveRoot = condRoot;
+                var scheduledContext = com.trackflow.common.rule.EvaluationContext.SCHEDULED;
                 for (Issue issue : batch) {
-                    if (evalConditionNode(recursiveRoot, issue)) {
+                    if (ruleConditionEvaluator.evaluate(recursiveRoot, issue, scheduledContext)) {
                         result.add(issue);
                     }
                 }
@@ -425,238 +410,13 @@ public class ScheduledRuleService {
      * Java 层评估无法下推到 SQL 的条件（如 contains 操作符）。
      */
     private boolean evaluateJavaConditions(List<JsonNode> conditions, Issue issue) {
+        var scheduledContext = com.trackflow.common.rule.EvaluationContext.SCHEDULED;
         for (JsonNode cond : conditions) {
-            if (!evalSingleCondition(cond, issue)) {
+            if (!ruleConditionEvaluator.evaluate(cond, issue, scheduledContext)) {
                 return false;
             }
         }
         return true;
-    }
-
-    private boolean evalSingleCondition(JsonNode cond, Issue issue) {
-        // 新格式：conditionType 字段区分高级条件类型
-        String conditionType = textOf(cond, "conditionType");
-        if (conditionType != null) {
-            return evaluateTypedCondition(conditionType, cond, issue);
-        }
-
-        String field = textOf(cond, "field");
-        String operator = textOf(cond, "operator");
-        String expected = textOf(cond, "value");
-        if (field == null || operator == null) return true;
-
-        String actual = getFieldValue(issue, field);
-
-        return switch (operator) {
-            case "equals" -> Objects.equals(actual, expected);
-            case "not_equals" -> !Objects.equals(actual, expected);
-            case "contains" -> actual != null && expected != null
-                    && actual.toLowerCase().contains(expected.toLowerCase());
-            case "in" -> actual != null && expected != null
-                    && new HashSet<>(Arrays.asList(expected.split(","))).contains(actual);
-            case "is_empty" -> actual == null || actual.isBlank();
-            case "is_not_empty" -> actual != null && !actual.isBlank();
-            case "overdue" -> isOverdue(issue);
-            case "due_within_days" -> isDueWithinDays(issue, expected);
-            default -> true;
-        };
-    }
-
-    /**
-     * 处理 conditionType 分发的高级条件（On-schedule 场景）。
-     */
-    private boolean evaluateTypedCondition(String conditionType, JsonNode cond, Issue issue) {
-        return switch (conditionType) {
-            case "keyword_contains" -> evaluateKeywordContains(cond, issue);
-            case "issue_resolved" -> {
-                if (issue.getStatusId() == null) yield false;
-                IssueStatus status = statusMapper.selectById(issue.getStatusId());
-                yield status != null && Boolean.TRUE.equals(status.getIsClosed());
-            }
-            case "issue_has_tag" -> {
-                String tagId = textOf(cond, "tagId");
-                if (tagId == null || tagId.isBlank()) yield false;
-                try {
-                    long tid = Long.parseLong(tagId);
-                    long count = tagRelationMapper.selectCount(
-                            new LambdaQueryWrapper<IssueTagRelation>()
-                                    .eq(IssueTagRelation::getIssueId, issue.getId())
-                                    .eq(IssueTagRelation::getTagId, tid));
-                    yield count > 0;
-                } catch (NumberFormatException e) {
-                    log.warn("[ScheduledRule] issue_has_tag: tagId 非法: {}", tagId);
-                    yield false;
-                }
-            }
-            case "issue_attribute_count" -> evaluateAttributeCount(cond, issue);
-            case "issue_created_within" -> {
-                String days = textOf(cond, "days");
-                if (days == null || issue.getCreatedAt() == null) yield false;
-                try {
-                    int d = Integer.parseInt(days);
-                    yield issue.getCreatedAt().isAfter(LocalDateTime.now().minusDays(d));
-                } catch (NumberFormatException e) {
-                    yield false;
-                }
-            }
-            case "issue_updated_within" -> {
-                String days = textOf(cond, "days");
-                if (days == null || issue.getUpdatedAt() == null) yield false;
-                try {
-                    int d = Integer.parseInt(days);
-                    yield issue.getUpdatedAt().isAfter(LocalDateTime.now().minusDays(d));
-                } catch (NumberFormatException e) {
-                    yield false;
-                }
-            }
-            case "created_by" -> {
-                String userId = textOf(cond, "userId");
-                if (userId == null || issue.getCreatedBy() == null) yield false;
-                try {
-                    yield Long.parseLong(userId) == issue.getCreatedBy();
-                } catch (NumberFormatException e) {
-                    yield false;
-                }
-            }
-            case "updated_by" -> {
-                String userId = textOf(cond, "userId");
-                if (userId == null || issue.getUpdatedBy() == null) yield false;
-                try {
-                    yield Long.parseLong(userId) == issue.getUpdatedBy();
-                } catch (NumberFormatException e) {
-                    yield false;
-                }
-            }
-            case "user_has_role" -> {
-                // On-schedule 场景没有"当前用户"上下文，条件不适用
-                log.debug("[ScheduledRule] user_has_role 条件在 On-schedule 场景不适用，跳过");
-                yield true;
-            }
-            case "issue_in_project" -> {
-                String projectId = textOf(cond, "projectId");
-                if (projectId == null || issue.getProjectId() == null) yield false;
-                try {
-                    yield Long.parseLong(projectId) == issue.getProjectId();
-                } catch (NumberFormatException e) {
-                    yield false;
-                }
-            }
-            default -> {
-                log.warn("[ScheduledRule] 未知 conditionType: {}", conditionType);
-                yield true;
-            }
-        };
-    }
-
-    /**
-     * 评估 issue_attribute_count 条件（On-schedule 场景）。
-     */
-    private boolean evaluateAttributeCount(JsonNode cond, Issue issue) {
-        String attribute = textOf(cond, "attribute");
-        String operator = textOf(cond, "operator");
-        String valueStr = textOf(cond, "value");
-        if (attribute == null || operator == null || valueStr == null) return false;
-
-        int threshold;
-        try {
-            threshold = Integer.parseInt(valueStr);
-        } catch (NumberFormatException e) {
-            return false;
-        }
-
-        long actualCount = switch (attribute) {
-            case "comments" -> commentMapper.selectCount(
-                    new LambdaQueryWrapper<IssueComment>().eq(IssueComment::getIssueId, issue.getId()));
-            case "links" -> issueLinkMapper.selectCount(
-                    new LambdaQueryWrapper<IssueLink>()
-                            .eq(IssueLink::getSourceIssueId, issue.getId())
-                            .or()
-                            .eq(IssueLink::getTargetIssueId, issue.getId()));
-            case "attachments" -> attachmentMapper.selectCount(
-                    new LambdaQueryWrapper<IssueAttachment>()
-                            .eq(IssueAttachment::getIssueId, issue.getId()));
-            default -> -1L;
-        };
-
-        if (actualCount < 0) return false;
-
-        return switch (operator) {
-            case "greater_than" -> actualCount > threshold;
-            case "less_than" -> actualCount < threshold;
-            case "equals" -> actualCount == threshold;
-            case "greater_than_or_equals" -> actualCount >= threshold;
-            case "less_than_or_equals" -> actualCount <= threshold;
-            default -> false;
-        };
-    }
-
-    /**
-     * 递归求值条件节点，支持 AND/OR/NOT 逻辑组合（计划任务场景）。
-     */
-    private boolean evalConditionNode(JsonNode node, Issue issue) {
-        String type = textOf(node, "type");
-        if (type == null) {
-            return evalSingleCondition(node, issue);
-        }
-        return switch (type) {
-            case "and" -> {
-                JsonNode conditions = node.get("conditions");
-                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
-                for (JsonNode child : conditions) {
-                    if (!evalConditionNode(child, issue)) yield false;
-                }
-                yield true;
-            }
-            case "or" -> {
-                JsonNode conditions = node.get("conditions");
-                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
-                for (JsonNode child : conditions) {
-                    if (evalConditionNode(child, issue)) yield true;
-                }
-                yield false;
-            }
-            case "not" -> {
-                JsonNode condition = node.get("condition");
-                if (condition == null) yield true;
-                yield !evalConditionNode(condition, issue);
-            }
-            case "condition" -> evalSingleCondition(node, issue);
-            default -> evalSingleCondition(node, issue);
-        };
-    }
-
-    private String getFieldValue(Issue issue, String field) {
-        return switch (field) {
-            case "type", "issue_type" -> issue.getIssueType();
-            case "priority" -> issue.getPriority();
-            case "status", "status_id" ->
-                    issue.getStatusId() != null ? String.valueOf(issue.getStatusId()) : null;
-            case "assignee", "assignee_id" ->
-                    issue.getAssigneeId() != null ? String.valueOf(issue.getAssigneeId()) : null;
-            case "reporter", "reporter_id" ->
-                    issue.getReporterId() != null ? String.valueOf(issue.getReporterId()) : null;
-            case "sprint", "sprint_id" ->
-                    issue.getSprintId() != null ? String.valueOf(issue.getSprintId()) : null;
-            case "title" -> issue.getTitle();
-            default -> null;
-        };
-    }
-
-    private boolean isOverdue(Issue issue) {
-        if (issue.getDueDate() == null) return false;
-        return issue.getDueDate().isBefore(LocalDate.now());
-    }
-
-    private boolean isDueWithinDays(Issue issue, String daysStr) {
-        if (issue.getDueDate() == null || daysStr == null) return false;
-        try {
-            int days = Integer.parseInt(daysStr);
-            LocalDate today = LocalDate.now();
-            LocalDate due = issue.getDueDate();
-            return !due.isBefore(today) && due.isBefore(today.plusDays(days + 1));
-        } catch (NumberFormatException e) {
-            return false;
-        }
     }
 
     // ============ 调度时间判断 ============
@@ -697,93 +457,6 @@ public class ScheduledRuleService {
     }
 
     // ============ 工具方法 ============
-
-    /**
-     * 评估 keyword_contains 条件（计划任务场景，无 commentContent）。
-     */
-    private boolean evaluateKeywordContains(JsonNode cond, Issue issue) {
-        String attribute = textOf(cond, "attribute");
-        if (attribute == null || attribute.isBlank()) {
-            log.warn("[ScheduledRule] keyword_contains 条件缺少 attribute 字段");
-            return false;
-        }
-
-        List<String> keywords = parseKeywordList(cond.get("keywords"));
-        if (keywords.isEmpty()) {
-            log.warn("[ScheduledRule] keyword_contains 条件缺少有效 keywords");
-            return false;
-        }
-
-        return switch (attribute) {
-            case "summary" -> containsAnyKeyword(issue.getTitle(), keywords);
-            case "description" -> containsAnyKeyword(issue.getDescription(), keywords);
-            case "comments" -> false; // 计划任务无 commentContent 上下文
-            case "linked_summaries" -> checkLinkedIssueSummaries(issue.getId(), keywords);
-            default -> {
-                log.warn("[ScheduledRule] keyword_contains 不支持的 attribute: {}", attribute);
-                yield false;
-            }
-        };
-    }
-
-    private List<String> parseKeywordList(JsonNode keywordsNode) {
-        if (keywordsNode == null || keywordsNode.isNull()) return List.of();
-        if (keywordsNode.isArray()) {
-            List<String> result = new ArrayList<>();
-            for (JsonNode kw : keywordsNode) {
-                String text = kw.asText().trim();
-                if (!text.isEmpty()) result.add(text);
-            }
-            return result;
-        }
-        String text = keywordsNode.asText();
-        if (text == null || text.isBlank()) return List.of();
-        return Arrays.stream(text.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
-    }
-
-    private boolean containsAnyKeyword(String text, List<String> keywords) {
-        if (text == null || text.isBlank()) return false;
-        String lowerText = text.toLowerCase();
-        for (String keyword : keywords) {
-            if (lowerText.contains(keyword.toLowerCase())) return true;
-        }
-        return false;
-    }
-
-    private boolean checkLinkedIssueSummaries(Long issueId, List<String> keywords) {
-        if (issueId == null) return false;
-        List<IssueLink> links = issueLinkMapper.selectList(
-                new LambdaQueryWrapper<IssueLink>()
-                        .eq(IssueLink::getSourceIssueId, issueId)
-                        .or()
-                        .eq(IssueLink::getTargetIssueId, issueId)
-        );
-        if (links.isEmpty()) return false;
-
-        Set<Long> linkedIssueIds = new HashSet<>();
-        for (IssueLink link : links) {
-            if (link.getSourceIssueId().equals(issueId)) {
-                linkedIssueIds.add(link.getTargetIssueId());
-            } else {
-                linkedIssueIds.add(link.getSourceIssueId());
-            }
-        }
-
-        List<Issue> linkedIssues = issueMapper.selectList(
-                new LambdaQueryWrapper<Issue>()
-                        .in(Issue::getId, linkedIssueIds)
-                        .isNull(Issue::getDeletedAt)
-                        .select(Issue::getId, Issue::getTitle)
-        );
-
-        for (Issue linked : linkedIssues) {
-            if (containsAnyKeyword(linked.getTitle(), keywords)) return true;
-        }
-        return false;
-    }
 
     private String textOf(JsonNode node, String key) {
         JsonNode child = node.get(key);
