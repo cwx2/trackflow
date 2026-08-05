@@ -411,13 +411,30 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     # 打印非 JSON 调试输出
     for line in stdout.split("\n"):
         stripped = line.strip()
-        if stripped and not stripped.startswith("{"):
+        if stripped and not stripped.startswith("{") and len(stripped) < 200:
             log.info(f"[{label}] {strip_ansi(stripped)}")
 
     # 解析 JSON 输出
+    # 注意：stdout 中 JSON 可能不完整（多行 JSON 被 stdout.split 打断）
+    # 尝试从整个 stdout 提取 JSON 片段
     parsed = _parse_claude_output(stdout)
     if parsed is None:
-        log.warning(f"[{label}] 无法解析 Claude Code 输出为 JSON")
+        # 部分 Claude 输出中 JSON 可能混在其他行中
+        # 尝试用正则找 JSON 对象
+        import re as _re
+        json_matches = _re.findall(r'\{[^{}]*"is_error"[^{}]*\}', stdout)
+        for m in reversed(json_matches):
+            try:
+                parsed = json.loads(m)
+                break
+            except json.JSONDecodeError:
+                continue
+
+    if parsed is None:
+        log.warning(f"[{label}] 无法解析 Claude Code 输出为 JSON (共{len(stdout_bytes)}字节)")
+        # 显示最后500字符便于调试
+        tail = stdout.strip()[-500:] if stdout.strip() else "(empty)"
+        log.warning(f"[{label}] 输出尾部: {tail}")
         if _is_transient_cli_output(stdout):
             log.warning(f"[{label}] 检测到瞬时故障标记")
             _open_circuit(label)
