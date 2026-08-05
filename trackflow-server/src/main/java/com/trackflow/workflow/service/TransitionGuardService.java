@@ -56,23 +56,70 @@ public class TransitionGuardService {
 
         try {
             JsonNode root = objectMapper.readTree(conditionsJson);
+
+            // 格式1：{ "conditions": [...] } — 顶层 AND 数组（旧格式）
             JsonNode conditionsArray = root.get("conditions");
-            if (conditionsArray == null || !conditionsArray.isArray() || conditionsArray.isEmpty()) {
+            if (conditionsArray != null && conditionsArray.isArray()) {
+                for (JsonNode cond : conditionsArray) {
+                    if (!evalConditionNode(cond, issue)) return false;
+                }
                 return true;
             }
 
-            // AND 语义：所有条件都必须满足
-            for (JsonNode cond : conditionsArray) {
-                if (!evalCondition(cond, issue)) {
-                    return false;
+            // 格式2：直接数组 [...]（旧格式）
+            if (root.isArray()) {
+                for (JsonNode cond : root) {
+                    if (!evalConditionNode(cond, issue)) return false;
                 }
+                return true;
             }
+
+            // 格式3：单个逻辑对象 { "type": "and"/"or"/"not", ... }（新格式）
+            if (root.isObject() && root.has("type")) {
+                return evalConditionNode(root, issue);
+            }
+
             return true;
         } catch (Exception e) {
             log.warn("[TransitionGuard] 条件解析失败，默认允许转换: conditionsJson={}, error={}",
                     conditionsJson, e.getMessage());
             return true; // 解析失败降级为允许，避免因配置错误阻塞所有用户
         }
+    }
+
+    /**
+     * 递归求值条件节点，支持 AND/OR/NOT 逻辑组合。
+     */
+    private boolean evalConditionNode(JsonNode node, Issue issue) {
+        String type = textOf(node, "type");
+        if (type == null) {
+            return evalCondition(node, issue);
+        }
+        return switch (type) {
+            case "and" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (!evalConditionNode(child, issue)) yield false;
+                }
+                yield true;
+            }
+            case "or" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (evalConditionNode(child, issue)) yield true;
+                }
+                yield false;
+            }
+            case "not" -> {
+                JsonNode condition = node.get("condition");
+                if (condition == null) yield true;
+                yield !evalConditionNode(condition, issue);
+            }
+            case "condition" -> evalCondition(node, issue);
+            default -> evalCondition(node, issue);
+        };
     }
 
     private boolean evalCondition(JsonNode cond, Issue issue) {

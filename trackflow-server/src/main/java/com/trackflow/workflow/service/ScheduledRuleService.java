@@ -156,24 +156,30 @@ public class ScheduledRuleService {
     private List<Issue> findMatchingIssues(WorkflowRule rule) {
         // 解析条件 JSON
         String condJson = rule.getConditionJson();
-        JsonNode conditions = null;
+        JsonNode condRoot = null;
         if (condJson != null && !condJson.isBlank() && !"[]".equals(condJson.trim())) {
             try {
-                conditions = objectMapper.readTree(condJson);
-                if (!conditions.isArray() || conditions.isEmpty()) {
-                    conditions = null;
-                }
+                condRoot = objectMapper.readTree(condJson);
             } catch (Exception e) {
                 log.warn("[ScheduledRule] 条件解析失败: {}", e.getMessage());
                 return List.of();
             }
         }
 
+        // 判断是否为新格式（含 AND/OR/NOT 逻辑节点）
+        boolean isRecursiveFormat = condRoot != null && condRoot.isObject() && condRoot.has("type");
+
+        // 旧格式：平铺数组，可进行 SQL 下推优化
+        JsonNode flatConditions = null;
+        if (condRoot != null && condRoot.isArray() && !condRoot.isEmpty()) {
+            flatConditions = condRoot;
+        }
+
         // 分类条件：可下推到 SQL 的 vs 只能 Java 层处理的
         List<JsonNode> javaOnlyConditions = new ArrayList<>();
-        if (conditions != null) {
+        if (flatConditions != null && !isRecursiveFormat) {
             LambdaQueryWrapper<Issue> probe = new LambdaQueryWrapper<>();
-            for (JsonNode cond : conditions) {
+            for (JsonNode cond : flatConditions) {
                 if (!pushConditionToSql(cond, probe)) {
                     javaOnlyConditions.add(cond);
                 }
@@ -185,7 +191,7 @@ public class ScheduledRuleService {
         Long lastId = null;
 
         while (true) {
-            LambdaQueryWrapper<Issue> batchWrapper = buildBatchWrapper(rule, conditions, javaOnlyConditions, lastId);
+            LambdaQueryWrapper<Issue> batchWrapper = buildBatchWrapper(rule, flatConditions, javaOnlyConditions, lastId);
             batchWrapper.last("LIMIT " + BATCH_SIZE);
 
             List<Issue> batch = issueMapper.selectList(batchWrapper);
@@ -193,8 +199,16 @@ public class ScheduledRuleService {
                 break;
             }
 
-            // Java 层过滤无法下推的条件
-            if (!javaOnlyConditions.isEmpty()) {
+            // Java 层过滤
+            if (isRecursiveFormat) {
+                // 新格式：整个递归条件树在 Java 层评估
+                JsonNode recursiveRoot = condRoot;
+                for (Issue issue : batch) {
+                    if (evalConditionNode(recursiveRoot, issue)) {
+                        result.add(issue);
+                    }
+                }
+            } else if (!javaOnlyConditions.isEmpty()) {
                 for (Issue issue : batch) {
                     if (evaluateJavaConditions(javaOnlyConditions, issue)) {
                         result.add(issue);
@@ -413,6 +427,41 @@ public class ScheduledRuleService {
             case "overdue" -> isOverdue(issue);
             case "due_within_days" -> isDueWithinDays(issue, expected);
             default -> true;
+        };
+    }
+
+    /**
+     * 递归求值条件节点，支持 AND/OR/NOT 逻辑组合（计划任务场景）。
+     */
+    private boolean evalConditionNode(JsonNode node, Issue issue) {
+        String type = textOf(node, "type");
+        if (type == null) {
+            return evalSingleCondition(node, issue);
+        }
+        return switch (type) {
+            case "and" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (!evalConditionNode(child, issue)) yield false;
+                }
+                yield true;
+            }
+            case "or" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (evalConditionNode(child, issue)) yield true;
+                }
+                yield false;
+            }
+            case "not" -> {
+                JsonNode condition = node.get("condition");
+                if (condition == null) yield true;
+                yield !evalConditionNode(condition, issue);
+            }
+            case "condition" -> evalSingleCondition(node, issue);
+            default -> evalSingleCondition(node, issue);
         };
     }
 

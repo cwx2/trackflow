@@ -250,16 +250,58 @@ public class WorkflowRuleEngine {
         String json = rule.getConditionJson();
         if (json == null || json.isBlank() || "[]".equals(json.trim())) return true;
         try {
-            JsonNode arr = objectMapper.readTree(json);
-            if (!arr.isArray()) return true;
-            for (JsonNode cond : arr) {
-                if (!evalConditionWithComment(cond, issue, commentContent)) return false;
+            JsonNode root = objectMapper.readTree(json);
+            // 向后兼容：如果是数组，则隐式 AND
+            if (root.isArray()) {
+                for (JsonNode cond : root) {
+                    if (!evalConditionNodeWithComment(cond, issue, commentContent)) return false;
+                }
+                return true;
+            }
+            // 新格式：对象节点，递归求值
+            if (root.isObject()) {
+                return evalConditionNodeWithComment(root, issue, commentContent);
             }
             return true;
         } catch (Exception e) {
             log.warn("[RuleEngine] Condition parse error for rule '{}': {}", rule.getName(), e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 递归求值条件节点（评论触发场景）。
+     */
+    private boolean evalConditionNodeWithComment(JsonNode node, Issue issue, String commentContent) {
+        String type = textOf(node, "type");
+        if (type == null) {
+            return evalConditionWithComment(node, issue, commentContent);
+        }
+        return switch (type) {
+            case "and" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (!evalConditionNodeWithComment(child, issue, commentContent)) yield false;
+                }
+                yield true;
+            }
+            case "or" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (evalConditionNodeWithComment(child, issue, commentContent)) yield true;
+                }
+                yield false;
+            }
+            case "not" -> {
+                JsonNode condition = node.get("condition");
+                if (condition == null) yield true;
+                yield !evalConditionNodeWithComment(condition, issue, commentContent);
+            }
+            case "condition" -> evalConditionWithComment(node, issue, commentContent);
+            default -> evalConditionWithComment(node, issue, commentContent);
+        };
     }
 
     private boolean evalConditionWithComment(JsonNode cond, Issue issue, String commentContent) {
@@ -301,16 +343,60 @@ public class WorkflowRuleEngine {
         String json = rule.getConditionJson();
         if (json == null || json.isBlank() || "[]".equals(json.trim())) return true;
         try {
-            JsonNode arr = objectMapper.readTree(json);
-            if (!arr.isArray()) return true;
-            for (JsonNode cond : arr) {
-                if (!evalCondition(cond, issue, changedField, oldValue)) return false;
+            JsonNode root = objectMapper.readTree(json);
+            // 向后兼容：如果是数组，则隐式 AND
+            if (root.isArray()) {
+                for (JsonNode cond : root) {
+                    if (!evalConditionNode(cond, issue, changedField, oldValue)) return false;
+                }
+                return true;
+            }
+            // 新格式：对象节点，递归求值
+            if (root.isObject()) {
+                return evalConditionNode(root, issue, changedField, oldValue);
             }
             return true;
         } catch (Exception e) {
             log.warn("[RuleEngine] Condition parse error for rule '{}': {}", rule.getName(), e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 递归求值条件节点。
+     * 支持逻辑节点（type=and/or/not）和叶子节点（type=condition 或无 type 的旧格式）。
+     */
+    private boolean evalConditionNode(JsonNode node, Issue issue, String changedField, String oldValue) {
+        String type = textOf(node, "type");
+        if (type == null) {
+            // 旧格式叶子节点（无 type 字段，直接含 field/operator/value）
+            return evalCondition(node, issue, changedField, oldValue);
+        }
+        return switch (type) {
+            case "and" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (!evalConditionNode(child, issue, changedField, oldValue)) yield false;
+                }
+                yield true;
+            }
+            case "or" -> {
+                JsonNode conditions = node.get("conditions");
+                if (conditions == null || !conditions.isArray() || conditions.isEmpty()) yield true;
+                for (JsonNode child : conditions) {
+                    if (evalConditionNode(child, issue, changedField, oldValue)) yield true;
+                }
+                yield false;
+            }
+            case "not" -> {
+                JsonNode condition = node.get("condition");
+                if (condition == null) yield true;
+                yield !evalConditionNode(condition, issue, changedField, oldValue);
+            }
+            case "condition" -> evalCondition(node, issue, changedField, oldValue);
+            default -> evalCondition(node, issue, changedField, oldValue);
+        };
     }
 
     private boolean evalCondition(JsonNode cond, Issue issue, String changedField, String oldValue) {

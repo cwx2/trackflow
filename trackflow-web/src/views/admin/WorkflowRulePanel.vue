@@ -144,9 +144,28 @@
 
         <!-- 前置条件 -->
         <a-form-item label="前置条件" field="conditions">
-          <template #extra>所有条件为 AND 关系（全部满足才触发）</template>
+          <template #extra>条件组内为 {{ formData.conditionLogic === 'or' ? 'OR（任一满足即触发）' : 'AND（全部满足才触发）' }} 关系</template>
           <div class="condition-list">
-            <div v-for="(cond, idx) in formData.conditions" :key="idx" class="condition-row">
+            <!-- 顶层逻辑切换 -->
+            <div class="condition-logic-toggle">
+              <a-radio-group v-model="formData.conditionLogic" type="button" size="small">
+                <a-radio value="and">AND（全部满足）</a-radio>
+                <a-radio value="or">OR（任一满足）</a-radio>
+              </a-radio-group>
+            </div>
+
+            <div v-for="(cond, idx) in formData.conditions" :key="idx" class="condition-row" :class="{ 'condition-negated': cond.negated }">
+              <!-- NOT 切换 -->
+              <a-tooltip content="取反（NOT）">
+                <a-button
+                  :type="cond.negated ? 'primary' : 'text'"
+                  size="mini"
+                  :class="{ 'not-active': cond.negated }"
+                  @click="cond.negated = !cond.negated"
+                >
+                  NOT
+                </a-button>
+              </a-tooltip>
               <a-select v-model="cond.field" style="width: 140px" placeholder="字段">
                 <a-option value="type">工单类型</a-option>
                 <a-option value="priority">优先级</a-option>
@@ -322,6 +341,7 @@ interface ConditionItem {
   field: string
   operator: string
   value: string
+  negated: boolean
 }
 
 interface ActionItem {
@@ -337,6 +357,7 @@ const formData = reactive({
   description: '',
   triggerEvent: 'issue_created',
   triggerField: null as string | null,
+  conditionLogic: 'and' as 'and' | 'or',
   conditions: [] as ConditionItem[],
   actions: [] as ActionItem[]
 })
@@ -413,6 +434,7 @@ function showCreateModal() {
     description: '',
     triggerEvent: 'issue_created',
     triggerField: null,
+    conditionLogic: 'and',
     conditions: [],
     actions: []
   })
@@ -424,13 +446,14 @@ function showCreateModal() {
 
 function handleEdit(rule: WorkflowRuleVO) {
   editingRule.value = rule
-  const conditions = parseJson(rule.conditionJson, [])
+  const { conditions, logic } = parseConditionJson(rule.conditionJson)
   const actions = parseJson(rule.actionJson, [])
   Object.assign(formData, {
     name: rule.name,
     description: rule.description || '',
     triggerEvent: rule.triggerEvent,
     triggerField: rule.triggerField,
+    conditionLogic: logic,
     conditions,
     actions
   })
@@ -440,8 +463,59 @@ function handleEdit(rule: WorkflowRuleVO) {
   loadSprints()
 }
 
+/**
+ * 解析条件 JSON 为表单可编辑结构。
+ * 支持旧格式（平铺数组）和新格式（递归逻辑节点）。
+ */
+function parseConditionJson(json: string): { conditions: ConditionItem[]; logic: 'and' | 'or' } {
+  if (!json || json === '[]' || json === '{}') {
+    return { conditions: [], logic: 'and' }
+  }
+  try {
+    const parsed = JSON.parse(json)
+    // 旧格式：直接是数组
+    if (Array.isArray(parsed)) {
+      return {
+        conditions: parsed.map((c: any) => ({
+          field: c.field || '',
+          operator: c.operator || 'equals',
+          value: c.value || '',
+          negated: false
+        })),
+        logic: 'and'
+      }
+    }
+    // 新格式：对象 { type: "and"/"or", conditions: [...] }
+    if (parsed && typeof parsed === 'object' && parsed.type) {
+      const logic = (parsed.type === 'or' ? 'or' : 'and') as 'and' | 'or'
+      const childNodes: any[] = parsed.conditions || []
+      const conditions: ConditionItem[] = childNodes.map((node: any) => {
+        if (node.type === 'not' && node.condition) {
+          const leaf = node.condition
+          return {
+            field: leaf.field || '',
+            operator: leaf.operator || 'equals',
+            value: leaf.value || '',
+            negated: true
+          }
+        }
+        return {
+          field: node.field || '',
+          operator: node.operator || 'equals',
+          value: node.value || '',
+          negated: false
+        }
+      })
+      return { conditions, logic }
+    }
+    return { conditions: [], logic: 'and' }
+  } catch {
+    return { conditions: [], logic: 'and' }
+  }
+}
+
 function addCondition() {
-  formData.conditions.push({ field: '', operator: 'equals', value: '' })
+  formData.conditions.push({ field: '', operator: 'equals', value: '', negated: false })
 }
 
 function removeCondition(idx: number) {
@@ -476,7 +550,7 @@ async function handleSubmit() {
       ruleType: 'on_change',
       triggerEvent: formData.triggerEvent,
       triggerField: formData.triggerField || undefined,
-      conditionJson: JSON.stringify(formData.conditions.filter(c => c.field)),
+      conditionJson: buildConditionJson(),
       actionJson: JSON.stringify(formData.actions.filter(a => a.type)),
       enabled: true
     }
@@ -495,6 +569,42 @@ async function handleSubmit() {
   } finally {
     submitting.value = false
   }
+}
+
+/**
+ * 构建条件 JSON。
+ * - 如果所有条件都是简单 AND 且无 NOT，则使用旧格式（平铺数组）以保持兼容
+ * - 否则使用新格式（递归逻辑节点）
+ */
+function buildConditionJson(): string {
+  const validConditions = formData.conditions.filter(c => c.field)
+  if (validConditions.length === 0) return '[]'
+
+  const hasNegated = validConditions.some(c => c.negated)
+  const isOr = formData.conditionLogic === 'or'
+
+  // 简单 AND + 无 NOT = 旧格式（向后兼容）
+  if (!isOr && !hasNegated) {
+    return JSON.stringify(validConditions.map(c => ({
+      field: c.field,
+      operator: c.operator,
+      value: c.value
+    })))
+  }
+
+  // 新格式：构建逻辑节点树
+  const leafNodes = validConditions.map(c => {
+    const leaf: any = { type: 'condition', field: c.field, operator: c.operator, value: c.value }
+    if (c.negated) {
+      return { type: 'not', condition: leaf }
+    }
+    return leaf
+  })
+
+  return JSON.stringify({
+    type: formData.conditionLogic,
+    conditions: leafNodes
+  })
 }
 
 // ==================== Actions ====================
@@ -551,17 +661,49 @@ function operatorLabel(op: string) {
 }
 
 function conditionSummary(json: string): string {
-  const conditions = parseJson(json, [])
-  if (conditions.length === 0) return '无条件（始终触发）'
-  return conditions.map((c: any) => {
-    if (c.operator === 'overdue') return `${fieldLabel(c.field)} 已逾期`
-    if (c.operator === 'due_within_days') return `${fieldLabel(c.field)} ${c.value || '?'}天内到期`
-    const isEmptyOp = ['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(c.operator)
-    if (isEmptyOp) {
-      return `${fieldLabel(c.field)} ${operatorLabel(c.operator)}`
+  if (!json || json === '[]' || json === '{}') return '无条件（始终触发）'
+  try {
+    const parsed = JSON.parse(json)
+    // 旧格式：平铺数组
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) return '无条件（始终触发）'
+      return parsed.map((c: any) => formatLeafCondition(c)).join(' AND ')
     }
-    return `${fieldLabel(c.field)} ${operatorLabel(c.operator)} "${c.value}"`
-  }).join(' AND ')
+    // 新格式：递归逻辑节点
+    if (parsed && typeof parsed === 'object' && parsed.type) {
+      return formatLogicNode(parsed)
+    }
+    return '无条件（始终触发）'
+  } catch {
+    return '无条件（始终触发）'
+  }
+}
+
+function formatLogicNode(node: any): string {
+  if (!node) return ''
+  const type = node.type
+  if (type === 'not') {
+    return `NOT(${formatLogicNode(node.condition)})`
+  }
+  if (type === 'and' || type === 'or') {
+    const children: any[] = node.conditions || []
+    if (children.length === 0) return '无条件'
+    const separator = type === 'and' ? ' AND ' : ' OR '
+    const parts = children.map((child: any) => formatLogicNode(child))
+    return parts.length > 1 ? `(${parts.join(separator)})` : parts[0]
+  }
+  // 叶子节点（type=condition 或其他）
+  return formatLeafCondition(node)
+}
+
+function formatLeafCondition(c: any): string {
+  if (c.operator === 'overdue') return `${fieldLabel(c.field)} 已逾期`
+  if (c.operator === 'due_within_days') return `${fieldLabel(c.field)} ${c.value || '?'}天内到期`
+  const isEmptyOp = ['is_empty', 'is_not_empty', 'old_value_is_empty', 'old_value_is_not_empty'].includes(c.operator)
+  if (isEmptyOp) {
+    return `${fieldLabel(c.field)} ${operatorLabel(c.operator)}`
+  }
+  return `${fieldLabel(c.field)} ${operatorLabel(c.operator)} "${c.value}"`
 }
 
 function actionSummary(json: string): string {
@@ -713,11 +855,26 @@ watch(() => props.projectId, () => {
   gap: 8px;
 }
 
+.condition-logic-toggle {
+  margin-bottom: 4px;
+}
+
 .condition-row,
 .action-row {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.condition-row.condition-negated {
+  border-left: 2px solid rgb(var(--red-6));
+  padding-left: 8px;
+  border-radius: 2px;
+}
+
+.not-active {
+  font-weight: 600;
+  font-size: 11px;
 }
 
 /* Status option in dropdown */
