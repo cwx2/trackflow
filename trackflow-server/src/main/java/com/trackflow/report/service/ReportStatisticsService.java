@@ -11,7 +11,7 @@ import com.trackflow.query.engine.QueryExecutor;
 import com.trackflow.report.mapper.ReportStatisticsMapper;
 import com.trackflow.report.mapper.result.*;
 import com.trackflow.report.vo.*;
-import com.trackflow.sprint.service.SprintService;
+import com.trackflow.sprint.service.SprintStatsService;
 import com.trackflow.workitemattr.service.WorkItemAttributeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 public class ReportStatisticsService {
 
     private final ReportStatisticsMapper reportStatisticsMapper;
-    private final SprintService sprintService;
+    private final SprintStatsService sprintStatsService;
     private final StatusCacheHelper statusCacheHelper;
     private final IssueStatusMapper issueStatusMapper;
     private final ProjectService projectService;
@@ -791,8 +791,8 @@ public class ReportStatisticsService {
      * REQ-486：燃尽图核心计算，支持自定义 estimationFieldId。
      */
     private BurndownVO buildBurndown(Long projectId, Long sprintId, String calculation, Long estimationFieldId) {
-        // 委托给 SprintService 的 scope-aware 算法（已优化）
-        com.trackflow.sprint.vo.BurndownVO sprintBurndown = sprintService.getBurndownData(sprintId, calculation, estimationFieldId);
+        // 委托给 SprintStatsService 的 scope-aware 算法（已优化）
+        com.trackflow.sprint.vo.BurndownVO sprintBurndown = sprintStatsService.getBurndownData(sprintId, calculation, estimationFieldId);
 
         BurndownVO vo = new BurndownVO();
         vo.setDates(sprintBurndown.getDates());

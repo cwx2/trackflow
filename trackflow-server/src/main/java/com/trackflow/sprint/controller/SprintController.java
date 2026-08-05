@@ -8,6 +8,7 @@ import com.trackflow.sprint.dto.CreateSprintDTO;
 import com.trackflow.sprint.dto.DeleteSprintDTO;
 import com.trackflow.sprint.dto.UpdateSprintDTO;
 import com.trackflow.sprint.service.SprintService;
+import com.trackflow.sprint.service.SprintStatsService;
 import com.trackflow.sprint.vo.BurndownVO;
 import com.trackflow.sprint.vo.CompletionPreviewVO;
 import com.trackflow.sprint.vo.CreationPreviewVO;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class SprintController {
 
     private final SprintService sprintService;
+    private final SprintStatsService sprintStatsService;
     private final SprintConverter sprintConverter;
 
 
@@ -110,7 +112,7 @@ public class SprintController {
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<BurndownVO> burndown(@PathVariable("id") Long id,
                                   @RequestParam(value = "mode", defaultValue = "issue_count") String mode) {
-        return R.ok(sprintService.getBurndownData(id, mode));
+        return R.ok(sprintStatsService.getBurndownData(id, mode));
     }
 
     @PutMapping("/api/v1/sprints/{id}/archive")
@@ -134,7 +136,7 @@ public class SprintController {
     @GetMapping("/api/v1/sprints/{id}/assignee-distribution")
     @PreAuthorize("@perm.checkSprint(#id, 'sprint:view')")
     public R<SprintAssigneeDistributionVO> assigneeDistribution(@PathVariable("id") Long id) {
-        return R.ok(sprintService.getAssigneeDistribution(id));
+        return R.ok(sprintStatsService.getAssigneeDistribution(id));
     }
 
     /**
@@ -151,6 +153,6 @@ public class SprintController {
             @RequestParam(value = "limit", defaultValue = "5") int limit) {
         // 安全限制：最多查询 10 个 Sprint，防止超大查询
         int safeLimit = Math.min(Math.max(limit, 1), 10);
-        return R.ok(sprintService.getSprintVelocity(projectId, safeLimit));
+        return R.ok(sprintStatsService.getSprintVelocity(projectId, safeLimit));
     }
 }
