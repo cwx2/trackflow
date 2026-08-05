@@ -258,14 +258,22 @@ public class WorkflowRuleService {
         }
     }
 
+    private static final java.util.Set<String> VALID_TRIGGER_EVENTS = java.util.Set.of(
+            "issue_created", "field_changed", "comment_added",
+            "attachment_added", "attachment_removed",
+            "link_added", "link_removed",
+            "work_item_added", "work_item_deleted",
+            "issue_resolved", "issue_unresolved"
+    );
+
     private void validateTriggerEvent(String event) {
         if (event == null || event.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "on_change 规则的触发事件不能为空，支持 issue_created / field_changed / comment_added");
+                    "on_change 规则的触发事件不能为空");
         }
-        if (!"issue_created".equals(event) && !"field_changed".equals(event) && !"comment_added".equals(event)) {
+        if (!VALID_TRIGGER_EVENTS.contains(event)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "不支持的触发事件: " + event + "，支持 issue_created / field_changed / comment_added");
+                    "不支持的触发事件: " + event + "，支持: " + String.join(" / ", VALID_TRIGGER_EVENTS));
         }
     }
 
