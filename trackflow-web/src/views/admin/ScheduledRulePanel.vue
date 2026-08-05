@@ -193,7 +193,12 @@
               </template>
 
               <template v-else-if="act.type === 'add_comment'">
-                <a-input v-model="act.content" style="flex: 1" placeholder="评论内容（支持 {{rule_name}}、{{issue_key}}）" />
+                <VariableInput
+                  v-model="act.content"
+                  placeholder="评论内容（支持变量插值，如 {issue.summary}）"
+                  type="input"
+                  style="flex: 1"
+                />
               </template>
 
               <a-button type="text" status="danger" size="mini" @click="removeAction(idx)">
@@ -247,6 +252,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { workflowRuleApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
+import VariableInput from './components/VariableInput.vue'
 
 const props = defineProps<{
   projectId: string

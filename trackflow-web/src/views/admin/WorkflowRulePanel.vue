@@ -413,7 +413,12 @@
 
               <!-- add_comment -->
               <template v-else-if="act.type === 'add_comment'">
-                <a-input v-model="act.content" style="flex: 1" placeholder="评论内容（支持 {{rule_name}}、{{issue_key}}）" />
+                <VariableInput
+                  v-model="act.content"
+                  placeholder="评论内容（支持变量插值，如 {issue.summary}）"
+                  type="input"
+                  style="flex: 1"
+                />
               </template>
 
               <!-- remove_tag -->
@@ -441,8 +446,17 @@
                     <a-option value="assignee">负责人</a-option>
                     <a-option value="creator">规则创建者</a-option>
                   </a-select>
-                  <a-input v-model="act.subject" placeholder="邮件主题（支持 {issue.key}、{issue.summary} 等变量）" />
-                  <a-textarea v-model="act.body" :auto-size="{ minRows: 2, maxRows: 4 }" placeholder="邮件正文（支持变量插值）" />
+                  <VariableInput
+                    v-model="act.subject"
+                    placeholder="邮件主题（支持变量插值，如 {issue.summary}）"
+                    type="input"
+                  />
+                  <VariableInput
+                    v-model="act.body"
+                    placeholder="邮件正文（支持变量插值）"
+                    type="textarea"
+                    :auto-size="{ minRows: 2, maxRows: 4 }"
+                  />
                 </div>
               </template>
 
@@ -452,17 +466,33 @@
                   <a-option value="acknowledgment">普通提示</a-option>
                   <a-option value="error">错误提示</a-option>
                 </a-select>
-                <a-input v-model="act.message" style="flex: 1" placeholder="提示消息（支持变量插值）" />
+                <VariableInput
+                  v-model="act.message"
+                  placeholder="提示消息（支持变量插值）"
+                  type="input"
+                  style="flex: 1"
+                />
               </template>
 
               <!-- update_summary -->
               <template v-else-if="act.type === 'update_summary'">
-                <a-input v-model="act.value" style="flex: 1" placeholder="新标题模板（支持 {issue.summary}、{issue.type} 等变量）" />
+                <VariableInput
+                  v-model="act.value"
+                  placeholder="新标题模板（支持变量插值，如 [{issue.type}] {issue.summary}）"
+                  type="input"
+                  style="flex: 1"
+                />
               </template>
 
               <!-- update_description -->
               <template v-else-if="act.type === 'update_description'">
-                <a-textarea v-model="act.value" :auto-size="{ minRows: 2, maxRows: 4 }" style="flex: 1" placeholder="新描述模板（支持变量插值）" />
+                <VariableInput
+                  v-model="act.value"
+                  placeholder="新描述模板（支持变量插值）"
+                  type="textarea"
+                  :auto-size="{ minRows: 2, maxRows: 4 }"
+                  style="flex: 1"
+                />
               </template>
 
               <a-button type="text" status="danger" size="mini" @click="removeAction(idx)">
@@ -560,6 +590,7 @@ import { Message } from '@arco-design/web-vue'
 import { workflowRuleApi, issueApi, sprintApi } from '@/api'
 import type { WorkflowRuleVO, WorkflowRuleDTO, WorkflowRuleExecutionLogVO } from '@/api/workflowRule'
 import type { IssueStatusVO, SprintVO } from '@/api/types'
+import VariableInput from './components/VariableInput.vue'
 
 const props = defineProps<{
   projectId: string
