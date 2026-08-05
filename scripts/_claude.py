@@ -313,29 +313,18 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
              worker_id: str | None = None, stdin_data: bytes | None = None) -> tuple[bool, str]:
     """运行 Claude Code CLI，管理超时、熔断、输出解析。
 
-    如果 stdin_data 不为 None，通过 stdin 传入 prompt（避免 Windows 命令行长度限制）。
+    通过 communicate() 与子进程交互，兼容 Windows stdin pipe。
     返回 (success, output_text)。
-    output_text 可能是:
-      - 正常 AI 输出文本
-      - "STARTUP_FAIL" — Claude Code 在 30s 内异常退出
-      - "TIMEOUT" — 超过总超时
-      - "IDLE_TIMEOUT" — 长时间无输出
-      - "PROCESS_ERROR" — 进程异常
-      - "POLICY_BLOCKED" — 检测到敏感/交互式行为
-      - "BUDGET_EXCEEDED" — 超过预算上限
     """
     _wait_for_circuit(label)
     start = time.time()
-    output_lines: list[str] = []
-    last_output_at = [start]
-    policy_blocked = [False]
 
     try:
         process = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE if stdin_data else None,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=False, cwd=str(WORKSPACE),
+            cwd=str(WORKSPACE),
             env=_build_env(worker_id),
         )
     except Exception as e:
@@ -343,97 +332,29 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         _open_circuit(label)
         return False, "STARTUP_FAIL"
 
-    # 写入 stdin 数据（prompt 通过管道传入）
-    if stdin_data and process.stdin:
-        try:
-            process.stdin.write(stdin_data)
-            process.stdin.flush()
-            process.stdin.close()
-        except Exception as e:
-            log.warning(f"[{label}] stdin 写入异常: {e}")
-            try:
-                process.kill()
-            except Exception:
-                pass
-            return False, "STARTUP_FAIL"
-
-    def read_output() -> None:
-        try:
-            if process.stdout is None:
-                return
-            for raw_line in process.stdout:
-                try:
-                    line_stripped = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                except Exception:
-                    line_stripped = str(raw_line, errors="replace").rstrip("\r\n")
-                safe_line = _redact_sensitive_output(line_stripped)
-                # JSON 行提取关键状态信息，非 JSON 行完整输出
-                if not line_stripped.startswith("{"):
-                    print(f"  [{label}] {safe_line}")
-                    log.info(f"[{label}] {strip_ansi(safe_line)}")
-                output_lines.append(safe_line)
-                last_output_at[0] = time.time()
-                if _is_forbidden_output(line_stripped):
-                    policy_blocked[0] = True
-                    log.error(f"[{label}] 检测到敏感/交互式行为，立即终止 Claude Code")
-                    try:
-                        process.kill()
-                    except Exception:
-                        pass
-                    break
-        except Exception as e:
-            log.warning(f"[{label}] 读取输出异常: {e}")
-
-    reader = threading.Thread(target=read_output, name=f"{label}-stdout", daemon=True)
-    reader.start()
-
+    # communicate() 处理 stdin/stdout，支持超时，Windows 兼容
     try:
-        deadline = start + TIMEOUT_SECONDS
-        while reader.is_alive() and time.time() < deadline:
-            reader.join(5)
-            if not reader.is_alive():
-                break
-            if time.time() - last_output_at[0] > IDLE_TIMEOUT_SECONDS:
-                log.error(
-                    f"[{label}] 无输出超时（{IDLE_TIMEOUT_SECONDS}s），"
-                    "疑似工具卡死，终止 Claude Code"
-                )
-                process.kill()
-                reader.join(10)
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    log.error(f"[{label}] Claude Code 进程未能及时退出")
-                return False, "IDLE_TIMEOUT"
-
-        if reader.is_alive():
-            log.error(f"[{label}] 超时（{TIMEOUT_SECONDS}s），终止 Claude Code")
-            process.kill()
-            reader.join(10)
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                log.error(f"[{label}] Claude Code 进程未能及时退出")
-            _open_circuit(label)
-            return False, "TIMEOUT"
-
-        process.wait(timeout=10)
+        stdout_bytes, _ = process.communicate(input=stdin_data, timeout=TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        log.error(f"[{label}] 超时（{TIMEOUT_SECONDS}s），终止 Claude Code")
+        process.kill()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            log.error(f"[{label}] Claude Code 进程未能及时退出")
+        _open_circuit(label)
+        return False, "TIMEOUT"
     except Exception as e:
-        log.error(f"[{label}] 进程等待异常: {e}")
+        log.error(f"[{label}] 进程通信异常: {e}")
         try:
             process.kill()
-            process.wait(timeout=5)
         except Exception:
             pass
         _open_circuit(label)
         return False, "PROCESS_ERROR"
 
     elapsed = time.time() - start
-    stdout = "\n".join(output_lines)
-
-    if policy_blocked[0]:
-        log.warning(f"[{label}] 已按策略阻断敏感/交互式命令")
-        return False, "POLICY_BLOCKED"
+    stdout = stdout_bytes.decode("utf-8", errors="replace")
 
     # 解析 JSON 输出
     parsed = _parse_claude_output(stdout)
