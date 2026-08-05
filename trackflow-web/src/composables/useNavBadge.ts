@@ -1,5 +1,6 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, type WatchStopHandle } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { usePermissionStore } from '@/stores/permission'
 import { dashboardApi } from '@/api'
 
 /**
@@ -10,6 +11,8 @@ import { dashboardApi } from '@/api'
  * - 所有用户：根据权限判断是否显示 Sprint 只读标识
  * 
  * 数据通过 Dashboard Summary API 获取，定时轮询刷新。
+ * 
+ * 模块级单例模式：多个组件共享同一份状态，init() 仅执行一次。
  */
 
 const REFRESH_INTERVAL = 3 * 60 * 1000 // 3 分钟轮询
@@ -20,17 +23,20 @@ const primaryRoleCode = ref<string | null>(null)
 const loaded = ref(false)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let isLoading = false
+let initialized = false
+let stopAuthWatch: WatchStopHandle | null = null
 
 export function useNavBadge() {
   const authStore = useAuthStore()
+  const permissionStore = usePermissionStore()
 
   const isTester = computed(() => primaryRoleCode.value === 'tester')
 
   /** 是否有 Sprint 管理权限（创建/编辑） */
   const canManageSprint = computed(() => {
-    if (authStore.hasGlobalPermission('system:admin')) return true
-    if (authStore.permissionsLoaded) {
-      return authStore.hasGlobalPermission('nav:sprint_manage')
+    if (permissionStore.hasGlobalPermission('system:admin')) return true
+    if (permissionStore.permissionsLoaded) {
+      return permissionStore.hasGlobalPermission('nav:sprint_manage')
     }
     // 权限未加载时乐观显示
     return true
@@ -74,15 +80,21 @@ export function useNavBadge() {
     }
   }
 
-  /** 初始化（在 AppLayout onMounted 中调用一次） */
+  /**
+   * 初始化（在 AppLayout onMounted 中调用一次）。
+   * 多次调用安全：内部通过 initialized 标志防止重复注册 watch 和轮询。
+   */
   function init() {
+    if (initialized) return
+    initialized = true
+
     if (authStore.isAuthenticated) {
       loadBadgeData()
       startPolling()
     }
 
-    // 认证状态变化时切换
-    watch(() => authStore.isAuthenticated, (authenticated) => {
+    // 认证状态变化时切换轮询
+    stopAuthWatch = watch(() => authStore.isAuthenticated, (authenticated) => {
       if (authenticated) {
         loadBadgeData()
         startPolling()
@@ -93,6 +105,22 @@ export function useNavBadge() {
         loaded.value = false
       }
     })
+  }
+
+  /**
+   * 销毁单例（用于测试或应用级卸载）。
+   * 正常使用中不需要调用——模块级单例生命周期与应用一致。
+   */
+  function destroy() {
+    if (stopAuthWatch) {
+      stopAuthWatch()
+      stopAuthWatch = null
+    }
+    stopPolling()
+    initialized = false
+    testingCount.value = 0
+    primaryRoleCode.value = null
+    loaded.value = false
   }
 
   /** 外部手动触发刷新（如从 Testing 状态变更后） */
@@ -108,6 +136,7 @@ export function useNavBadge() {
     issueBadgeCount,
     loaded,
     init,
+    destroy,
     refresh
   }
 }
