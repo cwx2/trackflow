@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.event.IssueNotificationEvent;
+import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.customfield.entity.CustomFieldOption;
 import com.trackflow.issue.converter.IssueConverter;
@@ -176,6 +177,12 @@ public class IssueLinkService {
                 sourceIssue, targetIssue.getIssueKey(), linkType, true, currentUserId));
         eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
                 targetIssue, sourceIssue.getIssueKey(), reverseType, true, currentUserId));
+
+        // 触发 link_added 工作流规则（双向：source 和 target 都触发）
+        eventPublisher.publishEvent(new WorkflowRuleEvent.LinkAdded(
+                issueId, sourceIssue.getProjectId(), linkType, targetIssueId));
+        eventPublisher.publishEvent(new WorkflowRuleEvent.LinkAdded(
+                targetIssueId, targetIssue.getProjectId(), reverseType, issueId));
     }
 
     /**
@@ -215,6 +222,12 @@ public class IssueLinkService {
                     sourceIssue, targetKey, linkType, false, currentUserId));
             eventPublisher.publishEvent(new IssueNotificationEvent.LinkChanged(
                     targetIssue, sourceKey, reverseType, false, currentUserId));
+
+            // 触发 link_removed 工作流规则（双向）
+            eventPublisher.publishEvent(new WorkflowRuleEvent.LinkRemoved(
+                    link.getSourceIssueId(), sourceIssue.getProjectId(), linkType, link.getTargetIssueId()));
+            eventPublisher.publishEvent(new WorkflowRuleEvent.LinkRemoved(
+                    link.getTargetIssueId(), targetIssue.getProjectId(), reverseType, link.getSourceIssueId()));
         }
     }
 

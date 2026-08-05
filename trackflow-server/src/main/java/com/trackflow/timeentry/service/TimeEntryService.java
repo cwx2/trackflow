@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.event.IssueNotificationEvent;
 import com.trackflow.common.event.ReportCacheInvalidationEvent;
+import com.trackflow.common.event.WorkflowRuleEvent;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.issue.entity.Issue;
@@ -151,6 +152,9 @@ public class TimeEntryService {
 
         // 发布工时通知事件（通知负责人和关注者）
         eventPublisher.publishEvent(new IssueNotificationEvent.TimeLogged(issue, dto.getDuration(), currentUserId));
+
+        // 触发 work_item_added 工作流规则
+        eventPublisher.publishEvent(new WorkflowRuleEvent.WorkItemAdded(dto.getIssueId(), issue.getProjectId(), entry.getId()));
 
         return entry;
     }
@@ -354,6 +358,9 @@ public class TimeEntryService {
 
         // 发布报表缓存失效事件（工时变更影响 TimeReport/EstimationReport 等统计）
         eventPublisher.publishEvent(ReportCacheInvalidationEvent.of(entryProjectId, "time_entry_deleted"));
+
+        // 触发 work_item_deleted 工作流规则
+        eventPublisher.publishEvent(new WorkflowRuleEvent.WorkItemDeleted(issueId, entryProjectId, id));
     }
 
     /**

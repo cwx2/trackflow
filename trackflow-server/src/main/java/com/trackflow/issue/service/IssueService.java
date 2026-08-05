@@ -2296,6 +2296,15 @@ public class IssueService {
         eventPublisher.publishEvent(new WorkflowRuleEvent.FieldChanged(
                 issue.getId(), issue.getProjectId(), "status_id", String.valueOf(oldStatusId)));
 
+        // 触发 issue_resolved / issue_unresolved 规则 — 对标 YouTrack "Issue Becomes Resolved/Unresolved"
+        boolean oldIsClosed = oldStatus != null && Boolean.TRUE.equals(oldStatus.getIsClosed());
+        boolean newIsClosed = Boolean.TRUE.equals(newStatus.getIsClosed());
+        if (!oldIsClosed && newIsClosed) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.IssueResolved(issue.getId(), issue.getProjectId()));
+        } else if (oldIsClosed && !newIsClosed) {
+            eventPublisher.publishEvent(new WorkflowRuleEvent.IssueUnresolved(issue.getId(), issue.getProjectId()));
+        }
+
         // 如果是转换到 cancelled 类别，额外发布取消事件（供外部集成模块监听）
         if ("cancelled".equals(newStatus.getCategory())) {
             eventPublisher.publishEvent(new IssueNotificationEvent.Cancelled(issue, currentUserId));
@@ -3120,6 +3129,9 @@ public class IssueService {
         // 发布通知事件
         eventPublisher.publishEvent(new IssueNotificationEvent.AttachmentAdded(issue, safeFileName, currentUserId));
 
+        // 触发 attachment_added 工作流规则
+        eventPublisher.publishEvent(new WorkflowRuleEvent.AttachmentAdded(issueId, issue.getProjectId(), attachment.getId()));
+
         return attachment;
     }
 
@@ -3219,6 +3231,9 @@ public class IssueService {
         attachmentMapper.deleteById(attachmentId);
 
         recordActivity(issueId, currentUserId, "attachment_removed", "attachment", attachment.getFileName(), null);
+
+        // 触发 attachment_removed 工作流规则
+        eventPublisher.publishEvent(new WorkflowRuleEvent.AttachmentRemoved(issueId, issue.getProjectId(), attachmentId));
     }
 
     /**

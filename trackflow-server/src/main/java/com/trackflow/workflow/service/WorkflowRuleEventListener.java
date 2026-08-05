@@ -56,4 +56,92 @@ public class WorkflowRuleEventListener {
                     event.issueId(), e.getMessage(), e);
         }
     }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAttachmentAdded(WorkflowRuleEvent.AttachmentAdded event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "attachment_added");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] attachment_added 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAttachmentRemoved(WorkflowRuleEvent.AttachmentRemoved event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "attachment_removed");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] attachment_removed 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onLinkAdded(WorkflowRuleEvent.LinkAdded event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "link_added");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] link_added 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onLinkRemoved(WorkflowRuleEvent.LinkRemoved event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "link_removed");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] link_removed 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onWorkItemAdded(WorkflowRuleEvent.WorkItemAdded event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "work_item_added");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] work_item_added 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onWorkItemDeleted(WorkflowRuleEvent.WorkItemDeleted event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "work_item_deleted");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] work_item_deleted 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onIssueResolved(WorkflowRuleEvent.IssueResolved event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "issue_resolved");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] issue_resolved 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("ruleEngineExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onIssueUnresolved(WorkflowRuleEvent.IssueUnresolved event) {
+        try {
+            ruleEngine.fireOnEvent(event.issueId(), event.projectId(), "issue_unresolved");
+        } catch (Exception e) {
+            log.error("[WorkflowRuleEvent] issue_unresolved 规则执行失败: issueId={}, error={}",
+                    event.issueId(), e.getMessage(), e);
+        }
+    }
 }

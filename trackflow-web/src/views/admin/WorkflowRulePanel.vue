@@ -119,6 +119,15 @@
               <a-select v-model="formData.triggerEvent">
                 <a-option value="issue_created">工单创建时</a-option>
                 <a-option value="field_changed">字段变更时</a-option>
+                <a-option value="comment_added">评论添加时</a-option>
+                <a-option value="attachment_added">附件被添加时</a-option>
+                <a-option value="attachment_removed">附件被移除时</a-option>
+                <a-option value="link_added">关联工单被添加时</a-option>
+                <a-option value="link_removed">关联工单被移除时</a-option>
+                <a-option value="work_item_added">工时被记录时</a-option>
+                <a-option value="work_item_deleted">工时被删除时</a-option>
+                <a-option value="issue_resolved">工单变为已解决时</a-option>
+                <a-option value="issue_unresolved">工单变为未解决时</a-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -631,13 +640,35 @@ async function handleDelete(rule: WorkflowRuleVO) {
 function eventLabel(event: string) {
   const map: Record<string, string> = {
     issue_created: '创建时',
-    field_changed: '变更时'
+    field_changed: '变更时',
+    comment_added: '评论时',
+    attachment_added: '附件添加',
+    attachment_removed: '附件移除',
+    link_added: '关联添加',
+    link_removed: '关联移除',
+    work_item_added: '工时记录',
+    work_item_deleted: '工时删除',
+    issue_resolved: '已解决',
+    issue_unresolved: '未解决'
   }
   return map[event] || event
 }
 
 function eventColor(event: string) {
-  return event === 'issue_created' ? 'green' : 'blue'
+  const map: Record<string, string> = {
+    issue_created: 'green',
+    field_changed: 'blue',
+    comment_added: 'cyan',
+    attachment_added: 'orange',
+    attachment_removed: 'orange',
+    link_added: 'purple',
+    link_removed: 'purple',
+    work_item_added: 'gold',
+    work_item_deleted: 'gold',
+    issue_resolved: 'green',
+    issue_unresolved: 'red'
+  }
+  return map[event] || 'gray'
 }
 
 function fieldLabel(field: string) {

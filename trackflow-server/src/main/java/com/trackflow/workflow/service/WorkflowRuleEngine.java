@@ -196,6 +196,30 @@ public class WorkflowRuleEngine {
     }
 
     /**
+     * 通用事件触发方法 — 用于附件、链接、工时、解决/未解决等简单事件。
+     * <p>
+     * 这些事件不需要额外上下文参数（如 changedField、commentContent），
+     * 仅通过 triggerEvent 字符串匹配规则并执行。
+     *
+     * @param issueId      工单 ID
+     * @param projectId    项目 ID
+     * @param triggerEvent 触发事件标识（如 attachment_added, link_added, issue_resolved 等）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void fireOnEvent(Long issueId, Long projectId, String triggerEvent) {
+        List<WorkflowRule> rules = ruleMapper.findEnabledRules(projectId, triggerEvent);
+        if (rules.isEmpty()) return;
+
+        Issue issue = issueMapper.selectById(issueId);
+        if (issue == null || issue.getDeletedAt() != null) {
+            log.warn("[RuleEngine] on-{}: issue {} 不存在或已删除，跳过规则执行", triggerEvent, issueId);
+            return;
+        }
+
+        evaluateAndExecute(rules, issue);
+    }
+
+    /**
      * 执行 Action Rule（用户触发的命令规则）。
      * <p>
      * 用户在 Apply Command 弹窗中输入命令名，系统通过 actionCommand 字段匹配对应的规则执行。

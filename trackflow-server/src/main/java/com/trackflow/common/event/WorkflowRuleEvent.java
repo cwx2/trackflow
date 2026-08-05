@@ -22,4 +22,44 @@ public sealed interface WorkflowRuleEvent {
      * 评论添加事件 — 触发 comment_added 规则
      */
     record CommentAdded(Long issueId, Long projectId, Long commentId, String commentContent) implements WorkflowRuleEvent {}
+
+    /**
+     * 附件添加事件 — 触发 attachment_added 规则
+     */
+    record AttachmentAdded(Long issueId, Long projectId, Long attachmentId) implements WorkflowRuleEvent {}
+
+    /**
+     * 附件移除事件 — 触发 attachment_removed 规则
+     */
+    record AttachmentRemoved(Long issueId, Long projectId, Long attachmentId) implements WorkflowRuleEvent {}
+
+    /**
+     * 工单关联添加事件 — 触发 link_added 规则
+     */
+    record LinkAdded(Long issueId, Long projectId, String linkType, Long targetIssueId) implements WorkflowRuleEvent {}
+
+    /**
+     * 工单关联移除事件 — 触发 link_removed 规则
+     */
+    record LinkRemoved(Long issueId, Long projectId, String linkType, Long targetIssueId) implements WorkflowRuleEvent {}
+
+    /**
+     * 工时记录添加事件 — 触发 work_item_added 规则
+     */
+    record WorkItemAdded(Long issueId, Long projectId, Long timeEntryId) implements WorkflowRuleEvent {}
+
+    /**
+     * 工时记录删除事件 — 触发 work_item_deleted 规则
+     */
+    record WorkItemDeleted(Long issueId, Long projectId, Long timeEntryId) implements WorkflowRuleEvent {}
+
+    /**
+     * 工单变为已解决事件 — 状态转换到 isClosed=true 时触发
+     */
+    record IssueResolved(Long issueId, Long projectId) implements WorkflowRuleEvent {}
+
+    /**
+     * 工单变为未解决事件 — 状态从 isClosed=true 转回 isClosed=false 时触发
+     */
+    record IssueUnresolved(Long issueId, Long projectId) implements WorkflowRuleEvent {}
 }
