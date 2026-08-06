@@ -317,7 +317,7 @@ def _build_env(worker_id: str | None = None) -> dict:
 # ============ 核心：运行 Claude Code ============
 
 def _build_base_cmd(budget_usd: float | None = None, *, use_stdin: bool = False) -> list[str]:
-    """构建基础命令行参数。use_stdin=True 时不传 prompt 参数，改为通过 stdin 传入。"""
+    """构建基础命令行参数。项目级 .claude/ 会自动加载 MCP + settings。"""
     budget = budget_usd or DEFAULT_MAX_BUDGET_USD
     cmd = [
         CLAUDE_CLI,
@@ -326,7 +326,6 @@ def _build_base_cmd(budget_usd: float | None = None, *, use_stdin: bool = False)
         "--permission-mode", "bypassPermissions",
         "--output-format", "json",
         "--max-budget-usd", str(budget),
-        f"--mcp-config={MCP_CONFIG_PATH}",
     ]
     return cmd
 
