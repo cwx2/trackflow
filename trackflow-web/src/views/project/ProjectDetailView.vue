@@ -1,48 +1,48 @@
 <template>
   <div class="project-detail-page">
-    <!-- 加载状态 -->
+    <!-- 鍔犺浇鐘舵€?-->
     <div v-if="loading" class="loading-state">
       <a-spin :size="28" />
     </div>
 
-    <!-- 项目详情 -->
+    <!-- 椤圭洰璇︽儏 -->
     <template v-else-if="project">
-      <!-- 归档状态提示 -->
+      <!-- 褰掓。鐘舵€佹彁绀?-->
       <div v-if="isArchived" class="archived-banner">
         <icon-lock class="archived-icon" />
         <div class="archived-info">
-          <span class="archived-title">此项目已归档</span>
-          <span class="archived-desc">归档项目为只读状态，无法创建或修改工单、迭代和成员</span>
+          <span class="archived-title">姝ら」鐩凡褰掓。</span>
+          <span class="archived-desc">褰掓。椤圭洰涓哄彧璇荤姸鎬侊紝鏃犳硶鍒涘缓鎴栦慨鏀瑰伐鍗曘€佽凯浠ｅ拰鎴愬憳</span>
         </div>
         <a-button v-if="canEditProject" size="small" type="outline" @click="handleRestore">
-          恢复项目
+          鎭㈠椤圭洰
         </a-button>
       </div>
 
-      <!-- 顶部面包屑 + 操作 -->
+      <!-- 椤堕儴闈㈠寘灞?+ 鎿嶄綔 -->
       <div class="page-header">
         <div class="breadcrumb">
-          <a class="breadcrumb-link" @click="$router.push('/projects')">项目</a>
+          <a class="breadcrumb-link" @click="$router.push('/projects')">椤圭洰</a>
           <span class="breadcrumb-sep">/</span>
           <span class="breadcrumb-current">{{ project.name }}</span>
         </div>
         <div class="header-actions">
           <a-button v-if="canEditProject && !isArchived" size="small" @click="goToSettings">
             <template #icon><icon-settings /></template>
-            项目设置
+            椤圭洰璁剧疆
           </a-button>
           <a-dropdown v-if="canDeleteProject" trigger="click">
             <a-button type="text" size="small">
               <icon-more />
             </a-button>
             <template #content>
-              <a-doption class="danger-option" @click="confirmDeleteProject">删除项目</a-doption>
+              <a-doption class="danger-option" @click="confirmDeleteProject">鍒犻櫎椤圭洰</a-doption>
             </template>
           </a-dropdown>
         </div>
       </div>
 
-      <!-- 项目信息区域 -->
+      <!-- 椤圭洰淇℃伅鍖哄煙 -->
       <div class="project-hero">
         <div class="project-icon" :style="{ background: getProjectColor() }">
           <span class="icon-text">{{ project.key?.substring(0, 3) }}</span>
@@ -69,113 +69,34 @@
             </span>
             <span v-if="project.memberCount" class="meta-item">
               <icon-user-group class="meta-icon" />
-              {{ project.memberCount }} 名成员
+              {{ project.memberCount }} 鍚嶆垚鍛?
             </span>
             <span v-if="project.leadName" class="meta-item lead-item" :class="{ editable: canEditProject && !isArchived, 'lead-disabled': project.leadStatus === 'disabled' }" @click="canEditProject && !isArchived && goToSettings()">
               <icon-star class="meta-icon" />
-              负责人：{{ project.leadName }}
-              <span v-if="project.leadStatus === 'disabled'" class="lead-disabled-badge">已禁用</span>
+              璐熻矗浜猴細{{ project.leadName }}
+              <span v-if="project.leadStatus === 'disabled'" class="lead-disabled-badge">宸茬鐢?/span>
               <icon-edit v-if="canEditProject && !isArchived" class="edit-hint-icon" />
             </span>
             <span v-else-if="canEditProject && !isArchived" class="meta-item lead-item editable" @click="goToSettings()">
               <icon-star class="meta-icon" />
-              设置负责人
+              璁剧疆璐熻矗浜?
               <icon-edit class="edit-hint-icon" />
             </span>
           </div>
         </div>
       </div>
 
-      <!-- 项目说明 -->
+      <!-- 椤圭洰璇存槑 -->
       <div class="section description-section">
-        <h2 class="section-title">项目说明</h2>
+        <h2 class="section-title">椤圭洰璇存槑</h2>
         <div v-if="project.description" v-html="projectDescriptionHtml" class="description-rendered"></div>
-        <p v-else class="description-empty">暂无项目说明</p>
+        <p v-else class="description-empty">鏆傛棤椤圭洰璇存槑</p>
       </div>
 
-      <!-- 项目统计卡片 -->
-      <div v-if="statistics" class="section statistics-section">
-        <h2 class="section-title">项目统计</h2>
-        <div class="stats-cards">
-          <div class="stat-card">
-            <span class="stat-value">{{ statistics.totalIssues }}</span>
-            <span class="stat-label">工单总数</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value stat-open">{{ statistics.openIssues }}</span>
-            <span class="stat-label">未解决</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value stat-done">{{ statistics.closedIssues }}</span>
-            <span class="stat-label">已关闭</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value stat-rate">{{ statistics.completionRate }}%</span>
-            <span class="stat-label">完成率</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value stat-new">+{{ statistics.createdThisWeek }}</span>
-            <span class="stat-label">本周新建</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value stat-closed-week">+{{ statistics.closedThisWeek }}</span>
-            <span class="stat-label">本周关闭</span>
-          </div>
-        </div>
-      </div>
+      <!-- 椤圭洰缁熻 + 鐘舵€佸垎甯?+ Sprint 杩涘害 -->
+      <ProjectStatistics :statistics="statistics" />
 
-      <!-- 工单状态分布 -->
-      <div v-if="statistics && statistics.statusDistribution.length > 0" class="section">
-        <h2 class="section-title">状态分布</h2>
-        <!-- 堆叠条形图 -->
-        <div class="status-bar-container">
-          <div class="status-bar">
-            <div
-              v-for="item in statistics.statusDistribution"
-              :key="item.statusId"
-              class="status-bar-segment"
-              :style="{ width: getStatusPercent(item.count) + '%', background: item.statusColor || '#6b7280' }"
-              :title="`${localizeStatusName(item.statusName)}: ${item.count} (${getStatusPercent(item.count).toFixed(1)}%)`"
-            ></div>
-          </div>
-          <div class="status-legend">
-            <div v-for="item in statistics.statusDistribution" :key="item.statusId" class="legend-item">
-              <span class="legend-dot" :style="{ background: item.statusColor || '#6b7280' }"></span>
-              <span class="legend-name">{{ localizeStatusName(item.statusName) }}</span>
-              <span class="legend-count">{{ item.count }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 当前 Sprint 进度 -->
-      <div v-if="statistics?.activeSprint" class="section">
-        <h2 class="section-title">当前 Sprint</h2>
-        <div class="sprint-card">
-          <div class="sprint-header">
-            <span class="sprint-name">{{ statistics.activeSprint.name }}</span>
-            <span class="sprint-remaining">
-              {{ statistics.activeSprint.remainingDays > 0 ? `剩余 ${statistics.activeSprint.remainingDays} 天` : '已到期' }}
-            </span>
-          </div>
-          <div class="sprint-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: sprintProgressPercent + '%' }"></div>
-            </div>
-            <span class="progress-text">
-              {{ statistics.activeSprint.completedIssues }}/{{ statistics.activeSprint.totalIssues }} 已完成
-              ({{ sprintProgressPercent.toFixed(0) }}%)
-            </span>
-          </div>
-          <div class="sprint-dates">
-            <span>{{ formatSprintDate(statistics.activeSprint.startDate) }}</span>
-            <span>→</span>
-            <span>{{ formatSprintDate(statistics.activeSprint.endDate) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Widget 区域（项目概览仪表盘） -->
+      <!-- Widget 鍖哄煙锛堥」鐩瑙堜华琛ㄧ洏锛?-->
       <ProjectWidgetPanel
         v-if="project"
         :project-id="project.key || project.id"
@@ -183,23 +104,23 @@
         :is-archived="isArchived"
       />
 
-      <!-- 近期活动 -->
+      <!-- 杩戞湡娲诲姩 -->
       <ProjectActivityFeed
         v-if="project"
         :project-id="project.key || project.id"
       />
 
-      <!-- 功能入口 -->
+      <!-- 鍔熻兘鍏ュ彛 -->
       <div class="section">
-        <h2 class="section-title">功能入口</h2>
+        <h2 class="section-title">鍔熻兘鍏ュ彛</h2>
         <div class="nav-grid">
           <div class="nav-card" @click="goToIssues">
             <div class="nav-card-icon issues-icon">
               <icon-list />
             </div>
             <div class="nav-card-info">
-              <span class="nav-card-title">问题列表</span>
-              <span class="nav-card-desc">查看和管理项目工单</span>
+              <span class="nav-card-title">闂鍒楄〃</span>
+              <span class="nav-card-desc">鏌ョ湅鍜岀鐞嗛」鐩伐鍗?/span>
             </div>
             <icon-right class="nav-card-arrow" />
           </div>
@@ -209,8 +130,8 @@
               <icon-apps />
             </div>
             <div class="nav-card-info">
-              <span class="nav-card-title">看板</span>
-              <span class="nav-card-desc">可视化任务流转状态</span>
+              <span class="nav-card-title">鐪嬫澘</span>
+              <span class="nav-card-desc">鍙鍖栦换鍔℃祦杞姸鎬?/span>
             </div>
             <icon-right class="nav-card-arrow" />
           </div>
@@ -220,8 +141,8 @@
               <icon-thunderbolt />
             </div>
             <div class="nav-card-info">
-              <span class="nav-card-title">迭代</span>
-              <span class="nav-card-desc">查看 Sprint 计划和进度</span>
+              <span class="nav-card-title">杩唬</span>
+              <span class="nav-card-desc">鏌ョ湅 Sprint 璁″垝鍜岃繘搴?/span>
             </div>
             <icon-right class="nav-card-arrow" />
           </div>
@@ -231,45 +152,25 @@
               <icon-user-group />
             </div>
             <div class="nav-card-info">
-              <span class="nav-card-title">成员管理</span>
-              <span class="nav-card-desc">管理项目成员和角色</span>
+              <span class="nav-card-title">鎴愬憳绠＄悊</span>
+              <span class="nav-card-desc">绠＄悊椤圭洰鎴愬憳鍜岃鑹?/span>
             </div>
             <icon-right class="nav-card-arrow" />
           </div>
         </div>
       </div>
 
-      <!-- 项目成员列表 -->
-      <div class="section">
-        <h2 class="section-title">项目成员</h2>
-        <div v-if="membersLoading" class="members-loading">
-          <a-spin :size="20" />
-        </div>
-        <div v-else-if="members.length > 0" class="members-list">
-          <div v-for="member in members" :key="member.id" class="member-row">
-            <a-avatar :size="28" :style="{ backgroundColor: getMemberColor(member.userId) }">
-              {{ (member.displayName || member.username || '?').charAt(0) }}
-            </a-avatar>
-            <div class="member-info">
-              <span class="member-name">{{ member.displayName || member.username }}</span>
-              <span class="member-email">{{ member.email }}</span>
-            </div>
-            <span class="member-role">{{ getMemberRoleNames(member) }}</span>
-          </div>
-        </div>
-        <div v-else class="members-empty">
-          <p>暂无成员信息</p>
-        </div>
-      </div>
+      <!-- 椤圭洰鎴愬憳鍒楄〃 -->
+      <ProjectMemberList v-if="project" :project-id="project.key || project.id" />
 
     </template>
 
-    <!-- 错误状态 -->
+    <!-- 閿欒鐘舵€?-->
     <div v-else-if="error" class="error-state">
       <icon-close-circle class="error-icon" />
-      <h3 class="error-title">加载失败</h3>
+      <h3 class="error-title">鍔犺浇澶辫触</h3>
       <p class="error-desc">{{ error }}</p>
-      <a-button type="primary" @click="loadProject">重试</a-button>
+      <a-button type="primary" @click="loadProject">閲嶈瘯</a-button>
     </div>
   </div>
 </template>
@@ -292,33 +193,31 @@ import {
   IconLock,
   IconMore,
   IconEye,
-  IconEyeInvisible,
-  IconPlus
+  IconEyeInvisible
 } from '@arco-design/web-vue/es/icon'
-import { projectApi, workflowApi } from '@/api'
+import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
-import { localizeStatusName } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
-import type { ProjectDetailVO, ProjectMemberVO, ProjectStatisticsVO } from '@/api/types'
+import type { ProjectDetailVO, ProjectStatisticsVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
 import ProjectWidgetPanel from './ProjectWidgetPanel.vue'
 import ProjectActivityFeed from './ProjectActivityFeed.vue'
+import ProjectStatistics from './ProjectStatistics.vue'
+import ProjectMemberList from './ProjectMemberList.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
 const project = ref<ProjectDetailVO | null>(null)
-const members = ref<ProjectMemberVO[]>([])
 const loading = ref(true)
-const membersLoading = ref(false)
 const error = ref('')
 
-// 统计数据
+// 缁熻鏁版嵁
 const statistics = ref<ProjectStatisticsVO | null>(null)
 
-// 权限
+// 鏉冮檺
 const projectPerms = ref<Set<string>>(new Set())
 
 const canEditProject = computed(() => {
@@ -343,50 +242,16 @@ const canViewSprints = computed(() => {
 
 const isArchived = computed(() => project.value?.status === 'archived')
 
-// 项目描述 Markdown 渲染
+// 椤圭洰鎻忚堪 Markdown 娓叉煋
 const projectDescriptionHtml = computed(() => renderMarkdown(project.value?.description || ''))
 
-// 可见性
+// 鍙鎬?
 const visibilityLabel = computed(() => {
-  const map: Record<string, string> = { private: '私有项目', internal: '内部项目', public: '公开项目' }
-  return map[project.value?.visibility || 'private'] || '私有项目'
+  const map: Record<string, string> = { private: '绉佹湁椤圭洰', internal: '鍐呴儴椤圭洰', public: '鍏紑椤圭洰' }
+  return map[project.value?.visibility || 'private'] || '绉佹湁椤圭洰'
 })
 
-// 角色映射（动态加载）
-const roleMap = ref<Record<string, string>>({})
-
-async function loadRoles() {
-  try {
-    const res = await workflowApi.listProjectRoles()
-    const roles = res.data || []
-    const map: Record<string, string> = {}
-    roles.forEach((r) => {
-      map[String(r.id)] = r.name
-    })
-    roleMap.value = map
-  } catch {
-    roleMap.value = {}
-  }
-}
-
-function getRoleName(roleId: string): string {
-  return roleMap.value[roleId] || `角色 ${roleId}`
-}
-
-function getMemberRoleNames(member: any): string {
-  // 优先使用后端返回的 roleNames
-  if (member.roleNames && member.roleNames.length > 0) {
-    return member.roleNames.join(', ')
-  }
-  // 兼容：使用 roleIds + roleMap
-  if (member.roleIds && member.roleIds.length > 0) {
-    return member.roleIds.map((rid: string) => getRoleName(rid)).join(', ')
-  }
-  // 最终 fallback
-  return getRoleName(member.roleId)
-}
-
-// 颜色
+// 棰滆壊
 const colorPool = [
   '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
   '#00bcd4', '#009688', '#4caf50', '#ff9800', '#ff5722',
@@ -398,16 +263,11 @@ function getProjectColor() {
   return colorPool[id % colorPool.length]
 }
 
-function getMemberColor(userId: string) {
-  const id = parseInt(userId || '0', 10)
-  return colorPool[id % colorPool.length]
-}
-
-// 加载数据
+// 鍔犺浇鏁版嵁
 async function loadProject() {
   const projectKey = route.params.projectKey as string
   if (!projectKey) {
-    error.value = '无效的项目标识'
+    error.value = '鏃犳晥鐨勯」鐩爣璇?
     loading.value = false
     return
   }
@@ -419,27 +279,24 @@ async function loadProject() {
     const res = await projectApi.getDetail(projectKey)
     project.value = res.data
 
-    // 如果 URL 使用的是数字 ID，重定向到 key 格式（更可读）
+    // 濡傛灉 URL 浣跨敤鐨勬槸鏁板瓧 ID锛岄噸瀹氬悜鍒?key 鏍煎紡锛堟洿鍙锛?
     if (project.value!.key && projectKey !== project.value!.key) {
       router.replace({ path: `/projects/${project.value!.key}` })
     }
 
-    // 使用项目 Key 调用后续 API（后端统一支持 Key/ID 标识符）
+    // 浣跨敤椤圭洰 Key 璋冪敤鍚庣画 API
     const projectIdentifier = project.value!.key || project.value!.id
-    // 并行加载权限、成员和角色
     await Promise.all([
       loadPerms(projectIdentifier),
-      loadMembers(projectIdentifier),
-      loadRoles(),
       loadStatistics(projectIdentifier)
     ])
   } catch (e: any) {
     if (e.response?.status === 403) {
-      error.value = '您没有权限查看此项目'
+      error.value = '鎮ㄦ病鏈夋潈闄愭煡鐪嬫椤圭洰'
     } else if (e.response?.status === 404) {
-      error.value = '项目不存在'
+      error.value = '椤圭洰涓嶅瓨鍦?
     } else {
-      error.value = e.response?.data?.message || '加载项目信息失败'
+      error.value = e.response?.data?.message || '鍔犺浇椤圭洰淇℃伅澶辫触'
     }
   } finally {
     loading.value = false
@@ -454,18 +311,6 @@ async function loadPerms(projectId: string) {
   }
 }
 
-async function loadMembers(projectId: string) {
-  membersLoading.value = true
-  try {
-    const res = await projectApi.listMembers(projectId)
-    members.value = res.data || []
-  } catch {
-    members.value = []
-  } finally {
-    membersLoading.value = false
-  }
-}
-
 async function loadStatistics(projectId: string) {
   try {
     const res = await projectApi.getStatistics(projectId)
@@ -475,26 +320,7 @@ async function loadStatistics(projectId: string) {
   }
 }
 
-// 统计相关计算属性
-const sprintProgressPercent = computed(() => {
-  if (!statistics.value?.activeSprint) return 0
-  const { totalIssues, completedIssues } = statistics.value.activeSprint
-  if (totalIssues === 0) return 0
-  return (completedIssues / totalIssues) * 100
-})
-
-function getStatusPercent(count: number): number {
-  if (!statistics.value || statistics.value.totalIssues === 0) return 0
-  return (count / statistics.value.totalIssues) * 100
-}
-
-function formatSprintDate(dateStr?: string): string {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return `${d.getMonth() + 1}/${d.getDate()}`
-}
-
-// 导航
+// 瀵艰埅
 function goToIssues() {
   router.push({ path: '/issues', query: { project: project.value?.key } })
 }
@@ -520,17 +346,17 @@ async function handleRestore() {
   if (!project.value) return
 
   Modal.warning({
-    title: '恢复项目',
-    content: `确定要将项目「${project.value.name}」恢复为活跃状态？恢复后项目将重新允许创建和修改工单。`,
-    okText: '确认恢复',
-    cancelText: '取消',
+    title: '鎭㈠椤圭洰',
+    content: `纭畾瑕佸皢椤圭洰銆?{project.value.name}銆嶆仮澶嶄负娲昏穬鐘舵€侊紵鎭㈠鍚庨」鐩皢閲嶆柊鍏佽鍒涘缓鍜屼慨鏀瑰伐鍗曘€俙,
+    okText: '纭鎭㈠',
+    cancelText: '鍙栨秷',
     onOk: async () => {
       try {
         await projectApi.restore(project.value!.key)
-        Message.success('项目已恢复为活跃状态')
+        Message.success('椤圭洰宸叉仮澶嶄负娲昏穬鐘舵€?)
         await loadProject()
       } catch (e: any) {
-        Message.error(e.response?.data?.message || '恢复项目失败')
+        Message.error(e.response?.data?.message || '鎭㈠椤圭洰澶辫触')
       }
     }
   })
@@ -556,7 +382,7 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-/* 加载状态 */
+/* 鍔犺浇鐘舵€?*/
 .loading-state {
   display: flex;
   align-items: center;
@@ -564,7 +390,7 @@ onMounted(() => {
   height: 200px;
 }
 
-/* 面包屑 + 头部 */
+/* 闈㈠寘灞?+ 澶撮儴 */
 .page-header {
   display: flex;
   align-items: center;
@@ -597,7 +423,7 @@ onMounted(() => {
   color: var(--tf-text-secondary);
 }
 
-/* 项目英雄区 */
+/* 椤圭洰鑻遍泟鍖?*/
 .project-hero {
   display: flex;
   align-items: flex-start;
@@ -709,20 +535,6 @@ onMounted(() => {
   opacity: 1;
 }
 
-/* Lead change modal */
-.lead-change-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.lead-change-hint {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-  line-height: 1.5;
-}
-
 /* Section */
 .section {
   margin-bottom: 32px;
@@ -735,7 +547,7 @@ onMounted(() => {
   margin: 0 0 12px;
 }
 
-/* 描述 */
+/* 鎻忚堪 */
 .description-rendered {
   font-size: 13px;
   color: var(--tf-text-secondary);
@@ -811,14 +623,6 @@ onMounted(() => {
   margin-bottom: 2px;
 }
 
-.description-text {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-  line-height: 1.6;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
 .description-empty {
   font-size: 13px;
   color: var(--tf-text-tertiary);
@@ -826,7 +630,7 @@ onMounted(() => {
   font-style: italic;
 }
 
-/* 功能入口网格 */
+/* 鍔熻兘鍏ュ彛缃戞牸 */
 .nav-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -892,71 +696,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* 成员列表 */
-.members-loading {
-  padding: 16px;
-  text-align: center;
-}
-
-.members-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.member-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  transition: background 0.15s;
-}
-.member-row:hover {
-  background: var(--tf-bg-hover);
-}
-
-.member-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.member-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-}
-
-.member-email {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.member-role {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  background: var(--tf-bg-surface);
-  padding: 2px 8px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-
-.members-empty {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  padding: 16px 0;
-}
-.members-empty p {
-  margin: 0;
-}
-
-/* 错误状态 */
+/* 閿欒鐘舵€?*/
 .error-state {
   display: flex;
   flex-direction: column;
@@ -985,13 +725,13 @@ onMounted(() => {
   margin: 0 0 24px;
 }
 
-/* 操作按钮 */
+/* 鎿嶄綔鎸夐挳 */
 .header-actions {
   display: flex;
   gap: 8px;
 }
 
-/* 归档状态横幅 */
+/* 褰掓。鐘舵€佹í骞?*/
 .archived-banner {
   display: flex;
   align-items: center;
@@ -1026,543 +766,13 @@ onMounted(() => {
   font-size: 12px;
   color: var(--tf-text-tertiary);
 }
-
-/* 删除项目确认弹窗 */
-.delete-confirm-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.delete-warning {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: rgba(248, 81, 73, 0.08);
-  border: 1px solid rgba(248, 81, 73, 0.2);
-  border-radius: var(--tf-radius-md);
-  font-size: 13px;
-  color: var(--tf-danger);
-}
-
-.delete-warning .warning-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.delete-impact {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-}
-
-.impact-title {
-  margin: 0 0 8px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-}
-
-.impact-list {
-  margin: 0;
-  padding-left: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.impact-list li {
-  font-size: 13px;
-}
-
-.impact-warn {
-  color: var(--tf-danger);
-  font-weight: 500;
-}
-
-.delete-confirm-input {
-  font-size: 13px;
-  color: var(--tf-text-secondary);
-}
-
-.delete-confirm-input p {
-  margin: 0 0 8px;
-}
-
-.delete-confirm-input strong {
-  color: var(--tf-text-primary);
-  font-weight: 600;
-}
-
 :deep(.arco-dropdown-option.danger-option) {
   color: var(--tf-danger);
 }
 
-/* 可见性设置 */
-.visibility-section {
-  margin-bottom: 32px;
-}
-
-.visibility-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.visibility-option {
-  padding: 14px 16px;
-  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.visibility-option:hover {
-  background: var(--tf-bg-hover);
-  border-color: var(--tf-text-tertiary);
-}
-
-.visibility-option.active {
-  border-color: var(--tf-accent);
-  background: rgba(88, 166, 255, 0.06);
-}
-
-.visibility-option-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.visibility-option-icon {
-  font-size: 16px;
-  color: var(--tf-text-tertiary);
-}
-
-.visibility-option.active .visibility-option-icon {
-  color: var(--tf-accent);
-}
-
-.visibility-option-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-}
-
-.visibility-option-desc {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* 可见性 Badge */
-.visibility-badge {
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-weight: 500;
-}
-
-.visibility-private {
-  background: var(--tf-bg-surface);
-  color: var(--tf-text-tertiary);
-}
-
-.visibility-internal {
-  background: rgba(88, 166, 255, 0.1);
-  color: var(--tf-accent);
-}
-
-.visibility-public {
-  background: rgba(63, 185, 80, 0.1);
-  color: #3fb950;
-}
-
-/* ========== 统计卡片 ========== */
-.statistics-section {
-  margin-bottom: 32px;
-}
-
-.stats-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
-}
-
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 16px 12px;
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
-  border-radius: 8px;
-  transition: background 0.15s;
-}
-
-.stat-card:hover {
-  background: var(--tf-bg-hover);
-}
-
-.stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--tf-text-primary);
-  line-height: 1.2;
-  letter-spacing: -0.3px;
-}
-
-.stat-value.stat-open { color: var(--tf-accent, #58a6ff); }
-.stat-value.stat-done { color: #3fb950; }
-.stat-value.stat-rate { color: #d29922; }
-.stat-value.stat-new { color: var(--tf-accent, #58a6ff); }
-.stat-value.stat-closed-week { color: #3fb950; }
-
-.stat-label {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  font-weight: 500;
-}
-
-/* ========== 状态分布 ========== */
-.status-bar-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.status-bar {
-  display: flex;
-  height: 10px;
-  border-radius: 5px;
-  overflow: hidden;
-  background: var(--tf-bg-surface);
-}
-
-.status-bar-segment {
-  transition: width 0.3s ease;
-  min-width: 3px;
-}
-
-.status-bar-segment:first-child {
-  border-radius: 5px 0 0 5px;
-}
-
-.status-bar-segment:last-child {
-  border-radius: 0 5px 5px 0;
-}
-
-.status-bar-segment:only-child {
-  border-radius: 5px;
-}
-
-.status-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.legend-name {
-  color: var(--tf-text-secondary);
-}
-
-.legend-count {
-  color: var(--tf-text-tertiary);
-  font-weight: 500;
-}
-
-/* ========== Sprint 进度 ========== */
-.sprint-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
-  border-radius: 8px;
-}
-
-.sprint-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.sprint-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-}
-
-.sprint-remaining {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  background: var(--tf-bg-hover);
-  padding: 2px 8px;
-  border-radius: 3px;
-}
-
-.sprint-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.progress-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--tf-bg-hover);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: #3fb950;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: var(--tf-text-secondary);
-}
-
-.sprint-dates {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-}
-
-/* ========== 近期活动 ========== */
-.activities-loading {
-  padding: 16px;
-  text-align: center;
-}
-
-.activities-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.activity-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 0;
-  position: relative;
-}
-
-.activity-item:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 24px;
-  bottom: -4px;
-  width: 1px;
-  background: var(--tf-border, rgba(255, 255, 255, 0.06));
-}
-
-.activity-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--tf-accent, #58a6ff);
-  flex-shrink: 0;
-  margin-top: 5px;
-  opacity: 0.7;
-}
-
-.activity-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.activity-main {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  font-size: 13px;
-  min-width: 0;
-}
-
-.activity-user {
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  white-space: nowrap;
-}
-
-.activity-action {
-  color: var(--tf-text-secondary);
-}
-
-.activity-time {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.activities-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px 16px;
-  text-align: center;
-}
-
-.activities-empty .empty-icon {
-  font-size: 32px;
-  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.activities-empty .empty-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-secondary);
-  margin: 0 0 4px;
-}
-
-.activities-empty .empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
-}
-
-/* ========== Widget 概览区域 ========== */
-.widget-overview-section {
-  margin-bottom: 32px;
-}
-
-.section-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.section-header-row .section-title {
-  margin-bottom: 0;
-}
-
-.widget-loading-state {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 24px 0;
-  color: var(--tf-text-tertiary);
-  font-size: 13px;
-}
-
-.widget-loading-text {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-}
-
-.widget-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px 16px;
-  text-align: center;
-  background: var(--tf-bg-surface);
-  border: 1px dashed var(--tf-border, rgba(255, 255, 255, 0.1));
-  border-radius: 8px;
-}
-
-.widget-empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-
-.widget-empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tf-text-primary);
-  margin: 0 0 8px;
-}
-
-.widget-empty-desc {
-  font-size: 12px;
-  color: var(--tf-text-tertiary);
-  margin: 0 0 16px;
-  max-width: 360px;
-  line-height: 1.6;
-}
-
-.overview-widget-grid-item {
-  /* grid-layout-plus sets position/size; we just ensure card fills the cell */
-}
-
-/* Add Widget Type Picker */
-.widget-type-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 4px 0;
-}
-
-.widget-type-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  background: var(--tf-bg-surface);
-  border: 1px solid var(--tf-border, rgba(255, 255, 255, 0.06));
-  border-radius: 6px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.widget-type-card:hover {
-  border-color: var(--tf-accent);
-  background: var(--tf-bg-hover);
-}
-
-.wt-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-  line-height: 1;
-  margin-top: 1px;
-}
-
-.wt-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.wt-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--tf-text-primary);
-  margin-bottom: 2px;
-}
-
-.wt-desc {
-  font-size: 11px;
-  color: var(--tf-text-tertiary);
-  line-height: 1.4;
-}
+/* Visibility Badge */
+.visibility-badge { padding: 2px 8px; border-radius: 3px; font-weight: 500; }
+.visibility-private { background: var(--tf-bg-surface); color: var(--tf-text-tertiary); }
+.visibility-internal { background: rgba(88, 166, 255, 0.1); color: var(--tf-accent); }
+.visibility-public { background: rgba(63, 185, 80, 0.1); color: #3fb950; }
 </style>

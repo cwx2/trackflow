@@ -167,8 +167,6 @@
       <a-spin :size="32" />
       <p class="empty-desc" style="margin-top: 16px;">正在加载迭代列表…</p>
     </div>
-
-    <!-- 错误状态：区分"未选项目加载失败"和"已选项目加载失败" -->
     <div v-else-if="loadingState === 'error' && !selectedProject" class="empty-state">
       <div class="empty-icon">🏃</div>
       <h3 class="empty-title">请选择一个项目</h3>
@@ -180,339 +178,52 @@
       <p class="empty-desc">无法获取迭代列表，请稍后重试</p>
       <a-button type="primary" size="small" @click="loadSprints">重试</a-button>
     </div>
-
-    <!-- 权限不足状态 -->
     <div v-else-if="loadingState === 'forbidden'" class="empty-state">
       <div class="empty-icon">🔒</div>
       <h3 class="empty-title">暂无可查看的迭代</h3>
       <p class="empty-desc">当前项目尚未创建迭代，或您没有查看权限。请联系项目管理员。</p>
     </div>
-
-    <!-- 项目加载失败 -->
     <div v-else-if="projectLoadState === 'error'" class="empty-state">
       <div class="empty-icon">⚠️</div>
       <h3 class="empty-title">项目列表加载失败</h3>
       <p class="empty-desc">无法获取可用项目，请检查网络后重试</p>
       <a-button type="primary" size="small" @click="loadProjects">重试</a-button>
     </div>
-
-    <!-- 正常空状态 -->
     <div v-else class="empty-state">
       <div class="empty-icon">🏃</div>
       <h3 class="empty-title">{{ selectedProject ? '暂无迭代' : '请选择一个项目' }}</h3>
-      <p class="empty-desc">
-        <template v-if="!selectedProject">选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表</template>
-        <template v-else-if="canCreateSprint">创建第一个 Sprint 来规划团队工作</template>
-        <template v-else>当前项目尚未创建迭代，请联系项目管理员。</template>
-      </p>
-      <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="openCreateModal">
-        + 新建迭代
-      </a-button>
+      <p class="empty-desc">{{ !selectedProject ? '选择上方的项目后，即可查看和管理该项目的迭代（Sprint）列表' : canCreateSprint ? '创建第一个 Sprint 来规划团队工作' : '当前项目尚未创建迭代，请联系项目管理员。' }}</p>
+      <a-button v-if="selectedProject && canCreateSprint" type="primary" size="small" @click="openCreateModal">+ 新建迭代</a-button>
     </div>
 
-    <!-- 创建 Sprint 弹窗 -->
-    <a-modal v-model:visible="showCreate" title="新建迭代" :width="480" @ok="handleCreate" :ok-loading="creating">
-      <a-form :model="createForm" layout="vertical">
-        <a-form-item label="名称" required>
-          <a-input v-model="createForm.name" placeholder="如：Sprint 25" />
-        </a-form-item>
-        <a-form-item label="目标">
-          <a-textarea v-model="createForm.goal" placeholder="本迭代目标（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
-        </a-form-item>
-        <a-form-item label="开始日期">
-          <a-date-picker v-model="createForm.startDate" style="width: 100%" />
-        </a-form-item>
-        <a-form-item label="结束日期">
-          <a-date-picker v-model="createForm.endDate" style="width: 100%" />
-        </a-form-item>
-
-        <!-- 可选操作区域 -->
-        <div class="create-options-section" v-if="creationPreview">
-          <!-- 添加当前 Sprint 未完成工单 -->
-          <div
-            class="create-option-item"
-            v-if="creationPreview.activeSprintId && creationPreview.unresolvedIssueCount > 0"
-          >
-            <a-checkbox v-model="createForm.moveUnresolvedIssues">
-              <span class="option-label">添加当前 Sprint 未完成工单</span>
-            </a-checkbox>
-            <span class="option-desc">
-              将 <strong>{{ creationPreview.activeSprintName }}</strong> 中的
-              {{ creationPreview.unresolvedIssueCount }} 个未完成工单移入新迭代
-            </span>
-          </div>
-
-          <!-- 设为默认 Sprint -->
-          <div class="create-option-item">
-            <a-checkbox v-model="createForm.setAsDefault">
-              <span class="option-label">设为默认 Sprint</span>
-            </a-checkbox>
-            <span class="option-desc">
-              <template v-if="creationPreview.hasDefaultSprint">
-                当前默认为 <strong>{{ creationPreview.defaultSprintName }}</strong>，替换后新建工单将自动归属此迭代
-              </template>
-              <template v-else>
-                启用后，该项目新创建的工单将自动分配到此迭代
-              </template>
-            </span>
-          </div>
-        </div>
-      </a-form>
-    </a-modal>
-
-    <!-- 编辑 Sprint 弹窗 -->
-    <a-modal v-model:visible="showEdit" title="编辑迭代" :width="480" @ok="handleUpdate" :ok-loading="updating" ok-text="保存修改">
-      <a-form :model="editForm" layout="vertical">
-        <a-form-item label="名称" required>
-          <a-input v-model="editForm.name" placeholder="迭代名称" />
-        </a-form-item>
-        <a-form-item label="目标">
-          <a-textarea v-model="editForm.goal" placeholder="迭代目标（可选）" :auto-size="{ minRows: 2, maxRows: 4 }" />
-        </a-form-item>
-        <a-form-item label="开始日期">
-          <a-date-picker v-model="editForm.startDate" style="width: 100%" />
-        </a-form-item>
-        <a-form-item label="结束日期">
-          <a-date-picker v-model="editForm.endDate" style="width: 100%" />
-        </a-form-item>
-      </a-form>
-      <template #footer>
-        <div class="edit-modal-footer">
-          <!-- 左侧：归档/恢复 + 删除 -->
-          <div class="edit-modal-footer-left">
-            <a-button
-              v-if="editingSprint && canEditSprintItem(editingSprint) && editingSprint.status !== 'archived'"
-              size="small"
-              type="secondary"
-              @click="handleEditModalArchive"
-            >归档</a-button>
-            <a-button
-              v-if="editingSprint && canEditSprintItem(editingSprint) && editingSprint.status === 'archived'"
-              size="small"
-              type="secondary"
-              @click="handleEditModalRestore"
-            >恢复</a-button>
-            <a-button
-              v-if="editingSprint && canDeleteSprintItem(editingSprint)"
-              size="small"
-              status="danger"
-              type="secondary"
-              @click="handleEditModalDelete"
-            >删除</a-button>
-          </div>
-          <!-- 右侧：保存修改 + 取消 -->
-          <div class="edit-modal-footer-right">
-            <a-button size="small" @click="showEdit = false">取消</a-button>
-            <a-button size="small" type="primary" :loading="updating" @click="handleUpdate">保存修改</a-button>
-          </div>
-        </div>
-      </template>
-    </a-modal>
+    <!-- 创建/编辑/重叠 Sprint 弹窗 -->
+    <SprintFormModal
+      v-model:show-create="showCreate"
+      v-model:show-edit="showEdit"
+      :editing-sprint="editingSprint"
+      :project-id="selectedProject"
+      :can-edit-fn="canEditSprintItem"
+      :can-delete-fn="canDeleteSprintItem"
+      @created="loadSprints"
+      @updated="loadSprints"
+      @archive="handleEditModalArchive"
+      @restore="handleEditModalRestore"
+      @delete="handleEditModalDelete"
+    />
 
     <!-- 完成 Sprint 确认弹窗 -->
-    <a-modal
+    <SprintCompleteModal
       v-model:visible="showCompleteModal"
-      :title="`完成迭代：${completingSprintName}`"
-      :width="560"
-      :ok-loading="completing"
-      :ok-text="'确认完成'"
-      @ok="confirmCompleteSprint"
-      @cancel="showCompleteModal = false"
-    >
-      <!-- 无未完成工单 -->
-      <div v-if="completionPreview && completionPreview.openIssues.length === 0" class="complete-no-issues">
-        <div class="complete-icon">✅</div>
-        <p class="complete-desc">该迭代中所有工单已完成，确认关闭迭代？</p>
-      </div>
-
-      <!-- 有未完成工单 -->
-      <div v-else-if="completionPreview" class="complete-with-issues">
-        <div class="complete-warning">
-          <span class="warning-icon">⚠️</span>
-          <span>该迭代中仍有 <strong>{{ completionPreview.openIssues.length }}</strong> 个未完成工单</span>
-        </div>
-
-        <!-- 未完成工单列表 -->
-        <div class="open-issues-list">
-          <div
-            v-for="issue in completionPreview.openIssues"
-            :key="issue.id"
-            class="open-issue-item"
-          >
-            <span class="issue-key">{{ issue.issueKey }}</span>
-            <span class="issue-title">{{ issue.title }}</span>
-            <span 
-              class="issue-status-tag" 
-              :style="{ 
-                background: (issue.statusColor || '#6b7280') + '20',
-                color: issue.statusColor || '#6b7280'
-              }"
-            >{{ localizeStatusName(issue.statusName) }}</span>
-            <span class="issue-assignee" v-if="issue.assigneeName">{{ issue.assigneeName }}</span>
-          </div>
-        </div>
-
-        <!-- 处理方式选择 -->
-        <div class="move-option-section">
-          <p class="move-option-label">请选择未完成工单的处理方式：</p>
-          <a-radio-group v-model="moveOption" direction="vertical">
-            <a-radio value="backlog">
-              <span class="radio-label">移回 Backlog</span>
-              <span class="radio-desc">清空工单的迭代归属，回到待规划状态</span>
-            </a-radio>
-            <a-radio value="next_sprint" :disabled="completionPreview.targetSprints.length === 0">
-              <span class="radio-label">移入其他迭代</span>
-              <span class="radio-desc" v-if="completionPreview.targetSprints.length > 0">
-                将未完成工单转移到指定的迭代中
-              </span>
-              <span class="radio-desc disabled" v-else>
-                当前项目没有其他可用迭代
-              </span>
-            </a-radio>
-          </a-radio-group>
-
-          <!-- 目标 Sprint 选择 -->
-          <div v-if="moveOption === 'next_sprint' && completionPreview.targetSprints.length > 0" class="target-sprint-select">
-            <a-select v-model="targetSprintId" placeholder="选择目标迭代" style="width: 100%">
-              <a-option
-                v-for="target in completionPreview.targetSprints"
-                :key="target.id"
-                :value="target.id"
-              >
-                {{ target.name }}
-                <span class="target-status-tag">{{ target.status === 'active' ? '进行中' : '计划中' }}</span>
-              </a-option>
-            </a-select>
-          </div>
-        </div>
-      </div>
-
-      <!-- 加载中 -->
-      <div v-else class="complete-loading">
-        <a-spin :size="24" />
-        <p style="margin-top: 12px; color: var(--color-text-3);">正在获取工单信息…</p>
-      </div>
-    </a-modal>
+      :sprint="completingSprint"
+      @completed="onSprintCompleted"
+    />
 
     <!-- 删除 Sprint 确认弹窗 -->
-    <a-modal
+    <SprintDeleteModal
       v-model:visible="showDeleteModal"
-      :title="`删除迭代：${deletingSprintName}`"
-      :width="520"
-      :ok-loading="deleting"
-      ok-text="确认删除"
-      :ok-button-props="{ status: 'danger' }"
-      @ok="confirmDeleteSprint"
-      @cancel="showDeleteModal = false"
-    >
-      <!-- 无关联工单 -->
-      <div v-if="deletionPreview && deletionPreview.totalIssues === 0" class="delete-no-issues">
-        <div class="delete-warning-banner">
-          <span class="warning-icon">⚠️</span>
-          <span class="warning-text">此操作不可撤销</span>
-        </div>
-        <p class="delete-desc">
-          确定删除迭代 <strong>{{ deletionPreview.sprintName }}</strong>
-          <template v-if="deletionPreview.dateRange"> ({{ deletionPreview.dateRange }})</template>？
-        </p>
-        <p class="delete-hint">该迭代中没有工单，删除后不会影响任何工单。</p>
-      </div>
-
-      <!-- 有关联工单 -->
-      <div v-else-if="deletionPreview" class="delete-with-issues">
-        <div class="delete-warning-banner danger">
-          <span class="warning-icon">🚨</span>
-          <span class="warning-text">此操作不可撤销</span>
-        </div>
-
-        <p class="delete-desc">
-          确定删除迭代 <strong>{{ deletionPreview.sprintName }}</strong>
-          <template v-if="deletionPreview.dateRange"> ({{ deletionPreview.dateRange }})</template>？
-        </p>
-
-        <div class="delete-impact-info">
-          <span class="impact-icon">📋</span>
-          <span>该迭代包含 <strong>{{ deletionPreview.totalIssues }}</strong> 个工单，删除后这些工单的迭代归属将被清空。</span>
-        </div>
-
-        <!-- 处理方式选择 -->
-        <div class="delete-move-section">
-          <p class="move-option-label">请选择工单处理方式：</p>
-          <a-radio-group v-model="deleteMoveOption" direction="vertical">
-            <a-radio value="backlog">
-              <span class="radio-label">移回 Backlog</span>
-              <span class="radio-desc">清空工单的迭代归属，回到待规划状态</span>
-            </a-radio>
-            <a-radio value="next_sprint" :disabled="deletionPreview.targetSprints.length === 0">
-              <span class="radio-label">移入其他迭代</span>
-              <span class="radio-desc" v-if="deletionPreview.targetSprints.length > 0">
-                将工单转移到指定的迭代中
-              </span>
-              <span class="radio-desc disabled" v-else>
-                当前项目没有其他可用迭代
-              </span>
-            </a-radio>
-          </a-radio-group>
-
-          <!-- 目标 Sprint 选择 -->
-          <div v-if="deleteMoveOption === 'next_sprint' && deletionPreview.targetSprints.length > 0" class="target-sprint-select">
-            <a-select v-model="deleteTargetSprintId" placeholder="选择目标迭代" style="width: 100%">
-              <a-option
-                v-for="target in deletionPreview.targetSprints"
-                :key="target.id"
-                :value="target.id"
-              >
-                {{ target.name }}
-                <span class="target-status-tag">{{ target.status === 'active' ? '进行中' : '计划中' }}</span>
-              </a-option>
-            </a-select>
-          </div>
-        </div>
-      </div>
-
-      <!-- 加载中 -->
-      <div v-else class="complete-loading">
-        <a-spin :size="24" />
-        <p style="margin-top: 12px; color: var(--color-text-3);">正在获取迭代信息…</p>
-      </div>
-    </a-modal>
-
-    <!-- 日期重叠确认弹窗 -->
-    <a-modal
-      v-model:visible="showOverlapConfirm"
-      title="日期重叠警告"
-      :width="520"
-      ok-text="确认继续"
-      cancel-text="取消"
-      @ok="confirmOverlapAndProceed"
-      @cancel="showOverlapConfirm = false"
-    >
-      <div class="overlap-warning-content">
-        <div class="overlap-warning-header">
-          <span class="overlap-warning-icon">⚠️</span>
-          <span class="overlap-warning-title">
-            {{ overlapContext === 'create' ? '新建迭代' : '修改后的迭代' }}日期与以下已有迭代存在重叠：
-          </span>
-        </div>
-        <div class="overlap-sprint-list" v-if="overlapWarning">
-          <div
-            v-for="(sprint, index) in overlapWarning.overlappingSprints"
-            :key="index"
-            class="overlap-sprint-item"
-          >
-            <span class="overlap-sprint-name">{{ sprint.name }}</span>
-            <span class="overlap-sprint-dates">{{ sprint.startDate }} ~ {{ sprint.endDate }}</span>
-            <span class="overlap-sprint-status" :class="sprint.status">
-              {{ sprint.status === 'active' ? '进行中' : '计划中' }}
-            </span>
-          </div>
-        </div>
-        <div class="overlap-warning-hint">
-          <p>重叠的迭代可能影响"当前 Sprint"的自动检测和工单归属。</p>
-          <p>如果确定要继续，请点击"确认继续"。</p>
-        </div>
-      </div>
-    </a-modal>
+      :sprint="deletingSprint"
+      @deleted="onSprintDeleted"
+    />
 
     <!-- Sprint 内工单快速分配抽屉 -->
     <SprintIssueDrawer
@@ -527,20 +238,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Message, Modal } from '@arco-design/web-vue'
-import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
-import { usePermission, canEditSprintSync, canDeleteSprintSync, preloadPermissions } from '@/composables/usePermission'
+import { usePermission, canEditSprintSync, canDeleteSprintSync } from '@/composables/usePermission'
 import { useProjectList } from '@/composables/useProjectList'
-import type { SprintVO, CompletionPreviewVO, DeletionPreviewVO, CreationPreviewVO, SprintOverlapWarning } from '@/api/types'
-import { ERROR_CODES } from '@/api/error-codes'
-import SprintBurndownChart from './SprintBurndownChart.vue'
-import SprintAssigneeDistribution from './SprintAssigneeDistribution.vue'
+import type { SprintVO } from '@/api/types'
 import SprintIssueDrawer from './SprintIssueDrawer.vue'
 import SprintCard from './SprintCard.vue'
-import { localizeStatusName } from '@/utils/fieldLabels'
+import SprintCompleteModal from './SprintCompleteModal.vue'
+import SprintDeleteModal from './SprintDeleteModal.vue'
+import SprintFormModal from './SprintFormModal.vue'
+import { useSprintNavigation, formatDate, isSprintNotStartable } from '@/composables/useSprintNavigation'
+import { useSprintData } from '@/composables/useSprintData'
 
 const router = useRouter()
 const route = useRoute()
@@ -571,73 +281,34 @@ function canDeleteSprintItem(sprint: SprintVO): boolean {
 }
 
 const { projects, projectLoadState, loadProjects } = useProjectList()
-const sprints = ref<SprintVO[]>([])
+const { viewSprintIssues, viewSprintOnBoard, viewIssuesByCategory, viewOverdueIssues } = useSprintNavigation(selectedProject, projects)
+const {
+  sprints, loadingState, activeSprints, plannedSprints, completedSprints, archivedSprints,
+  hasActiveSprint, nextStartableSprint, loadSprints,
+  handleActivateSprint, handleRevertToPlanned, archiveSprint, handleArchiveActiveSprint,
+  restoreSprint, inlineRenameSprint
+} = useSprintData(selectedProject)
+
 const showCreate = ref(false)
-const creating = ref(false)
-const creationPreview = ref<CreationPreviewVO | null>(null)
 const expandedCompletedSprints = ref<Set<string>>(new Set())
 const showCompletedSprints = ref(false)
 const showArchivedSprints = ref(false)
 
 // ===== 编辑迭代相关 =====
 const showEdit = ref(false)
-const updating = ref(false)
-const editingSprintId = ref<string>('')
-const editingCompleted = ref(false)
 const editingSprint = ref<SprintVO | null>(null)
-const editForm = reactive({
-  name: '',
-  goal: '',
-  startDate: '',
-  endDate: ''
-})
 
 // ===== 完成迭代相关 =====
 const showCompleteModal = ref(false)
-const completing = ref(false)
-const completingSprintId = ref<string>('')
-const completingSprintName = ref<string>('')
-const completionPreview = ref<CompletionPreviewVO | null>(null)
-const moveOption = ref<string>('backlog')
-const targetSprintId = ref<string>('')
+const completingSprint = ref<SprintVO | null>(null)
 /** 刚完成的 Sprint ID，用于高亮动画 */
 const justCompletedSprintId = ref<string | null>(null)
 
 // ===== 删除迭代相关 =====
 const showDeleteModal = ref(false)
-const deleting = ref(false)
-const deletingSprintId = ref<string>('')
-const deletingSprintName = ref<string>('')
-const deletionPreview = ref<DeletionPreviewVO | null>(null)
-const deleteMoveOption = ref<string>('backlog')
-const deleteTargetSprintId = ref<string>('')
+const deletingSprint = ref<SprintVO | null>(null)
 
-/**
- * 加载状态机：
- * - idle: 未加载（未选择项目）
- * - loading: 加载中
- * - success: 加载成功（可能数据为空）
- * - error: 网络/服务端错误
- * - forbidden: 权限不足（403）
- */
-type LoadingState = 'idle' | 'loading' | 'success' | 'error' | 'forbidden'
-const loadingState = ref<LoadingState>('idle')
-
-const createForm = reactive({
-  name: '',
-  goal: '',
-  startDate: '',
-  endDate: '',
-  moveUnresolvedIssues: false,
-  setAsDefault: false
-})
-
-// ===== 日期重叠确认 =====
-const showOverlapConfirm = ref(false)
-const overlapWarning = ref<SprintOverlapWarning | null>(null)
-const overlapContext = ref<'create' | 'edit'>('create')
-
-// ===== Sprint Issue Drawer（Sprint 内工单快速分配） =====
+// ===== Sprint Issue Drawer =====
 const showIssueDrawer = ref(false)
 const drawerSprintId = ref('')
 const drawerSprintName = ref('')
@@ -653,40 +324,22 @@ const nextStartableSprint = computed(() => {
   return plannedSprints.value.find(s => !isSprintNotStartable(s)) || null
 })
 
-/**
- * Sprint 导引横幅文本——根据是否有活跃 Sprint 提供不同引导
- */
 const sprintGuidanceMessage = computed(() => {
   if (hasActiveSprint.value) {
-    const active = activeSprints.value[0]
-    const plannedCount = plannedSprints.value.length
-    return `当前活跃迭代「${active.name}」进行中。还有 ${plannedCount} 个计划中的迭代等待启动。`
+    return `当前活跃迭代「${activeSprints.value[0].name}」进行中。还有 ${plannedSprints.value.length} 个计划中的迭代等待启动。`
   }
   const next = plannedSprints.value[0]
-  if (next?.startDate) {
-    return `当前没有活跃的迭代。下一个迭代「${next.name}」计划于 ${formatDate(next.startDate)} 开始。`
-  }
+  if (next?.startDate) return `当前没有活跃的迭代。下一个迭代「${next.name}」计划于 ${formatDate(next.startDate)} 开始。`
   return '当前没有活跃的迭代。请开始一个已计划的迭代以跟踪团队工作进度。'
 })
 
-/**
- * 警告栏中「开始迭代」按钮的 tooltip
- */
 const warningBarActivateTooltip = computed<string | undefined>(() => {
   const nextSprint = nextStartableSprint.value
-  // 权限检查改为基于 Sprint 自身的 projectId
-  if (nextSprint && !canEditSprintItem(nextSprint)) {
-    return '您的角色不具有迭代管理权限，请联系项目管理员'
-  }
+  if (nextSprint && !canEditSprintItem(nextSprint)) return '您的角色不具有迭代管理权限，请联系项目管理员'
   if (!nextSprint) {
-    // 所有 planned sprint 都不能启动——告知原因
     const next = plannedSprints.value[0]
-    if (next?.startDate) {
-      return `开始日期（${formatDate(next.startDate)}）尚未到达`
-    }
-    if (next?.endDate) {
-      return `结束日期（${formatDate(next.endDate)}）已过期，无法激活`
-    }
+    if (next?.startDate) return `开始日期（${formatDate(next.startDate)}）尚未到达`
+    if (next?.endDate) return `结束日期（${formatDate(next.endDate)}）已过期，无法激活`
     return '当前没有可启动的迭代'
   }
   return `启动迭代「${nextSprint.name}」`
@@ -713,114 +366,18 @@ const nextPlannedSprintId = computed<string | null>(() => {
 
 // ===== 工具函数 =====
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function isSprintNotStartable(sprint: SprintVO): boolean {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  // 开始日期还没到
-  if (sprint.startDate) {
-    const start = new Date(sprint.startDate)
-    start.setHours(0, 0, 0, 0)
-    if (start.getTime() > today.getTime()) return true
-  }
-  // 结束日期已过期
-  if (sprint.endDate) {
-    const end = new Date(sprint.endDate)
-    end.setHours(0, 0, 0, 0)
-    if (end.getTime() < today.getTime()) return true
-  }
-  return false
-}
-
 function getActivateTooltip(sprint: SprintVO): string | undefined {
-  // 权限检查改为基于 Sprint 自身的 projectId
   if (!canEditSprintItem(sprint)) return '您的角色不具有迭代管理权限，请联系项目管理员'
-  if (hasActiveSprint.value) {
-    const active = activeSprints.value[0]
-    return `需要先完成当前活跃迭代「${active.name}」才能激活此迭代`
-  }
-  // Check end date expired first (more specific)
+  if (hasActiveSprint.value) return `需要先完成当前活跃迭代「${activeSprints.value[0].name}」才能激活此迭代`
   if (sprint.endDate) {
-    const end = new Date(sprint.endDate)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    end.setHours(0, 0, 0, 0)
+    const end = new Date(sprint.endDate); const today = new Date(); today.setHours(0,0,0,0); end.setHours(0,0,0,0)
     if (end.getTime() < today.getTime()) return `结束日期（${formatDate(sprint.endDate)}）已过期，无法激活`
   }
-  // Check start date not reached
   if (sprint.startDate) {
-    const start = new Date(sprint.startDate)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    start.setHours(0, 0, 0, 0)
+    const start = new Date(sprint.startDate); const today = new Date(); today.setHours(0,0,0,0); start.setHours(0,0,0,0)
     if (start.getTime() > today.getTime()) return `开始日期（${formatDate(sprint.startDate)}）尚未到达`
   }
   return undefined
-}
-
-function viewSprintIssues(sprint: SprintVO) {
-  // 跳转到 Issue 列表，按 Sprint + 项目筛选
-  const currentProject = projects.value.find(p => p.id === selectedProject.value)
-  const projectKey = currentProject?.key || sprint.projectKey
-  const query: Record<string, string> = { sprint: sprint.id, label: sprint.name }
-  if (projectKey) {
-    query.project = projectKey
-  }
-  router.push({ path: '/issues', query })
-}
-
-function viewSprintOnBoard(sprint: SprintVO) {
-  // 跳转到看板，自动选中该 Sprint 和当前项目
-  const currentProject = projects.value.find(p => p.id === selectedProject.value)
-  const projectKey = currentProject?.key || sprint.projectKey
-  const query: Record<string, string> = { sprint: sprint.id }
-  if (projectKey) {
-    query.project = projectKey
-  }
-  router.push({ path: '/boards', query })
-}
-
-function viewUnassignedIssues(sprint: SprintVO) {
-  // 在 Sprint 视图内打开 Drawer，支持就地分配
-  openIssueDrawer(sprint, 'unassigned')
-}
-
-function viewIssuesByCategory(sprint: SprintVO, category: 'done' | 'in_progress' | 'open') {
-  const currentProject = projects.value.find(p => p.id === selectedProject.value)
-  const projectKey = currentProject?.key || sprint.projectKey
-  const categoryLabels: Record<string, string> = {
-    done: '已完成',
-    in_progress: '进行中',
-    open: '待办'
-  }
-  const query: Record<string, string> = {
-    sprint: sprint.id,
-    statusCategory: category,
-    label: `${sprint.name} - ${categoryLabels[category]}工单`
-  }
-  if (projectKey) {
-    query.project = projectKey
-  }
-  router.push({ path: '/issues', query })
-}
-
-function viewOverdueIssues(sprint: SprintVO) {
-  const currentProject = projects.value.find(p => p.id === selectedProject.value)
-  const projectKey = currentProject?.key || sprint.projectKey
-  const query: Record<string, string> = {
-    sprint: sprint.id,
-    overdue: 'true',
-    label: `${sprint.name} - 逾期工单`
-  }
-  if (projectKey) {
-    query.project = projectKey
-  }
-  router.push({ path: '/issues', query })
 }
 
 function toggleCompletedBurndown(sprintId: string) {
@@ -831,6 +388,10 @@ function toggleCompletedBurndown(sprintId: string) {
     set.add(sprintId)
   }
   expandedCompletedSprints.value = set
+}
+
+function viewUnassignedIssues(sprint: SprintVO) {
+  openIssueDrawer(sprint, 'unassigned')
 }
 
 // ===== Sprint Issue Drawer =====
@@ -851,462 +412,49 @@ function handleDrawerAssigned() {
 
 // ===== API 调用 =====
 
-// ===== 内联编辑迭代名称（由 SprintCard 组件触发） =====
-
-async function inlineRenameSprint(sprintId: string, newName: string) {
-  try {
-    await sprintApi.update(sprintId, { name: newName })
-    const idx = sprints.value.findIndex(s => s.id === sprintId)
-    if (idx !== -1) {
-      sprints.value[idx] = { ...sprints.value[idx], name: newName }
-    }
-    Message.success('迭代名称已更新')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '更新失败')
-  }
-}
-
-async function loadSprints() {
-  loadingState.value = 'loading'
-  try {
-    if (selectedProject.value) {
-      // 特定项目模式
-      const res = await sprintApi.listByProject(selectedProject.value, { pageSize: 200, _silent403: true })
-      sprints.value = res.data?.list || []
-    } else {
-      // 跨项目模式 — 显示所有可访问项目的 Sprint
-      const res = await sprintApi.listAll({ pageSize: 200 })
-      sprints.value = res.data?.list || []
-    }
-    loadingState.value = 'success'
-    
-    // 预加载所有涉及项目的权限，确保 Sprint 卡片能正确显示操作按钮
-    const projectIds = [...new Set(sprints.value.map(s => s.projectId).filter(Boolean))]
-    if (projectIds.length > 0) {
-      await preloadPermissions(projectIds)
-      // 触发响应式更新，让依赖 canEditSprintItem 的模板重新渲染
-      // 通过浅拷贝 sprints 数组强制 Vue 检测到变化
-      sprints.value = [...sprints.value]
-    }
-  } catch (e: any) {
-    sprints.value = []
-    if (e?.response?.status === 403) {
-      loadingState.value = 'forbidden'
-    } else {
-      loadingState.value = 'error'
-    }
-  }
-}
-
-function handleProjectChange() {
-  loadSprints()
-}
-
-/**
- * 处理"开始迭代"点击——如果已有活跃 Sprint，弹出提示引导用户先完成当前迭代；
- * 否则直接激活。
- */
-function handleActivateSprint(id: string) {
-  if (hasActiveSprint.value) {
-    const active = activeSprints.value[0]
-    Modal.warning({
-      title: '无法激活迭代',
-      content: `当前项目已有一个活跃的迭代「${active.name}」正在进行中。请先完成该迭代后再激活新的迭代。`,
-      okText: '我知道了',
-      hideCancel: true,
-    })
-    return
-  }
-  activateSprint(id)
-}
-
-async function activateSprint(id: string) {
-  try {
-    await sprintApi.activate(id)
-    Message.success('迭代已开始')
-    loadSprints()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  }
-}
-
-/**
- * 处理"回退为计划中"操作——将异常状态的进行中 Sprint 回退为计划中
- */
-async function handleRevertToPlanned(sprint: SprintVO) {
-  Modal.confirm({
-    title: '回退迭代状态',
-    content: `确定将迭代「${sprint.name}」回退为"计划中"状态？\n\n回退后可以修改日期，并在合适的时间重新激活。`,
-    okText: '确认回退',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        await sprintApi.revertToPlanned(sprint.id)
-        Message.success('迭代已回退为计划中')
-        loadSprints()
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '操作失败')
-      }
-    }
-  })
-}
+function handleProjectChange() { loadSprints() }
 
 async function handleCompleteSprint(sprint: SprintVO) {
-  completingSprintId.value = sprint.id
-  completingSprintName.value = sprint.name
-  completionPreview.value = null
-  moveOption.value = 'backlog'
-  targetSprintId.value = ''
+  completingSprint.value = sprint
   showCompleteModal.value = true
-
-  try {
-    const res = await sprintApi.completionPreview(sprint.id)
-    completionPreview.value = res.data
-
-    // 如果有未完成工单且有可迁移目标，默认选中第一个
-    if (res.data.openIssues.length > 0 && res.data.targetSprints.length > 0) {
-      targetSprintId.value = res.data.targetSprints[0].id
-    }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取预览信息失败')
-    showCompleteModal.value = false
-  }
 }
 
-async function confirmCompleteSprint() {
-  if (!completionPreview.value) return
-
-  const hasOpenIssues = completionPreview.value.openIssues.length > 0
-
-  // 有未完成工单时需要验证选项
-  if (hasOpenIssues) {
-    if (moveOption.value === 'next_sprint' && !targetSprintId.value) {
-      Message.warning('请选择目标迭代')
-      return
-    }
-  }
-
-  completing.value = true
-  try {
-    const body = hasOpenIssues
-      ? { moveOption: moveOption.value, targetSprintId: moveOption.value === 'next_sprint' ? targetSprintId.value : undefined }
-      : undefined
-
-    const res = await sprintApi.complete(completingSprintId.value, body)
-    const result = res.data
-
-    // 构建包含统计信息的 toast 消息
-    // 兼容两种响应格式：
-    // - 新格式 SprintCompleteResultVO: { sprint: SprintVO, totalIssues, completedIssues, ... }
-    // - 旧格式 SprintVO（向后兼容）: { id, name, status, ... }
-    const sprintName = result.sprint?.name ?? result.name ?? completingSprintName.value
-    const totalIssueCount = result.totalIssues ?? 0
-    const completedCount = result.completedIssues ?? 0
-    
-    let toastMessage = `迭代「${sprintName}」已完成`
-    if (totalIssueCount > 0) {
-      toastMessage += `：完成 ${completedCount}/${totalIssueCount} 工单`
-    }
-    if (result.unresolvedIssues > 0) {
-      if (result.moveOption === 'backlog') {
-        toastMessage += `，${result.unresolvedIssues} 个工单已移回 Backlog`
-      } else if (result.moveOption === 'next_sprint' && result.targetSprintName) {
-        toastMessage += `，${result.unresolvedIssues} 个工单已移入「${result.targetSprintName}」`
-      }
-    }
-    Message.success(toastMessage)
-
-    showCompleteModal.value = false
-
-    // 自动展开「已完成 Sprint」区域
-    showCompletedSprints.value = true
-
-    // 记录刚完成的 Sprint ID，用于高亮动画
-    justCompletedSprintId.value = completingSprintId.value
-
-    // 刷新列表
-    await loadSprints()
-
-    // 3 秒后清除高亮状态
-    setTimeout(() => {
-      justCompletedSprintId.value = null
-    }, 3000)
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '操作失败')
-  } finally {
-    completing.value = false
-  }
+async function onSprintCompleted() {
+  showCompletedSprints.value = true
+  justCompletedSprintId.value = completingSprint.value?.id || null
+  await loadSprints()
+  setTimeout(() => { justCompletedSprintId.value = null }, 3000)
 }
 
 async function handleDeleteSprint(sprint: SprintVO) {
-  deletingSprintId.value = sprint.id
-  deletingSprintName.value = sprint.name
-  deletionPreview.value = null
-  deleteMoveOption.value = 'backlog'
-  deleteTargetSprintId.value = ''
+  deletingSprint.value = sprint
   showDeleteModal.value = true
-
-  try {
-    const res = await sprintApi.deletionPreview(sprint.id)
-    deletionPreview.value = res.data
-
-    // 如果有工单且有可迁移目标，默认选中第一个
-    if (res.data.totalIssues > 0 && res.data.targetSprints.length > 0) {
-      deleteTargetSprintId.value = res.data.targetSprints[0].id
-    }
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '获取预览信息失败')
-    showDeleteModal.value = false
-  }
 }
 
-async function confirmDeleteSprint() {
-  if (!deletionPreview.value) return
+function onSprintDeleted() { loadSprints() }
 
-  const hasIssues = deletionPreview.value.totalIssues > 0
-
-  // 有工单时需要验证选项
-  if (hasIssues) {
-    if (deleteMoveOption.value === 'next_sprint' && !deleteTargetSprintId.value) {
-      Message.warning('请选择目标迭代')
-      return
-    }
-  }
-
-  deleting.value = true
-  try {
-    const body = hasIssues
-      ? { moveOption: deleteMoveOption.value, targetSprintId: deleteMoveOption.value === 'next_sprint' ? deleteTargetSprintId.value : undefined }
-      : undefined
-
-    await sprintApi.delete(deletingSprintId.value, body)
-    Message.success('迭代已删除')
-    showDeleteModal.value = false
-    loadSprints()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '删除失败')
-  } finally {
-    deleting.value = false
-  }
-}
-
-async function archiveSprint(sprint: SprintVO) {
-  try {
-    await sprintApi.archive(sprint.id)
-    Message.success('迭代已归档')
-    loadSprints()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '归档失败')
-  }
-}
-
-async function handleArchiveActiveSprint(sprint: SprintVO) {
-  // active Sprint 归档时给出确认提示
-  const confirmed = await new Promise<boolean>((resolve) => {
-    Modal.confirm({
-      title: '确认归档进行中的迭代',
-      content: `迭代「${sprint.name}」当前仍在进行中，确认要归档吗？归档后工单将保留原迭代关联。`,
-      okText: '确认归档',
-      cancelText: '取消',
-      onOk: () => resolve(true),
-      onCancel: () => resolve(false),
-    })
-  })
-  if (confirmed) {
-    await archiveSprint(sprint)
-  }
-}
-
-async function restoreSprint(sprint: SprintVO) {
-  try {
-    await sprintApi.restore(sprint.id)
-    Message.success('迭代已恢复')
-    loadSprints()
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '恢复失败')
-  }
-}
-
-async function openCreateModal() {
-  // 重置表单
-  createForm.name = ''
-  createForm.goal = ''
-  createForm.startDate = ''
-  createForm.endDate = ''
-  createForm.moveUnresolvedIssues = false
-  createForm.setAsDefault = false
-  creationPreview.value = null
+function openCreateModal() {
   showCreate.value = true
-
-  // 加载创建预览信息（判断是否显示可选项）
-  if (selectedProject.value) {
-    try {
-      const res = await sprintApi.creationPreview(selectedProject.value)
-      creationPreview.value = res.data
-    } catch (e) {
-      // 预览加载失败不阻塞创建流程
-      creationPreview.value = null
-    }
-  }
-}
-
-async function handleCreate() {
-  if (!createForm.name.trim()) {
-    Message.warning('请输入迭代名称')
-    return
-  }
-  // 前端日期顺序校验
-  if (createForm.startDate && createForm.endDate && createForm.startDate >= createForm.endDate) {
-    Message.warning('开始日期必须早于结束日期')
-    return
-  }
-  await doCreate(false)
-}
-
-async function doCreate(confirmOverlap: boolean) {
-  creating.value = true
-  try {
-    await sprintApi.create(selectedProject.value!, {
-      name: createForm.name.trim(),
-      goal: createForm.goal || undefined,
-      startDate: createForm.startDate || undefined,
-      endDate: createForm.endDate || undefined,
-      moveUnresolvedIssues: createForm.moveUnresolvedIssues || undefined,
-      setAsDefault: createForm.setAsDefault || undefined,
-      confirmOverlap: confirmOverlap || undefined
-    })
-    Message.success('迭代创建成功')
-    showCreate.value = false
-    createForm.name = ''
-    createForm.goal = ''
-    createForm.startDate = ''
-    createForm.endDate = ''
-    createForm.moveUnresolvedIssues = false
-    createForm.setAsDefault = false
-    loadSprints()
-  } catch (e: any) {
-    const code = e.response?.data?.code
-    if (code === ERROR_CODES.SPRINT_DATE_OVERLAP) {
-      // 检测到日期重叠，显示确认弹窗
-      overlapWarning.value = e.response.data.data as SprintOverlapWarning
-      overlapContext.value = 'create'
-      showOverlapConfirm.value = true
-    } else {
-      Message.error(e.response?.data?.message || '创建失败')
-    }
-  } finally {
-    creating.value = false
-  }
-}
-
-function confirmOverlapAndProceed() {
-  showOverlapConfirm.value = false
-  if (overlapContext.value === 'create') {
-    doCreate(true)
-  } else {
-    doUpdate(true)
-  }
 }
 
 function openEditModal(sprint: SprintVO) {
-  editingSprintId.value = sprint.id
-  editingCompleted.value = false  // 所有状态均允许修改日期（YouTrack 标准）
   editingSprint.value = sprint
-  editForm.name = sprint.name
-  editForm.goal = sprint.goal || ''
-  editForm.startDate = sprint.startDate || ''
-  editForm.endDate = sprint.endDate || ''
   showEdit.value = true
 }
 
-async function handleEditModalArchive() {
-  if (!editingSprint.value) return
-  const sprint = editingSprint.value
+async function handleEditModalArchive(sprint: SprintVO) {
   showEdit.value = false
   await archiveSprint(sprint)
 }
 
-async function handleEditModalRestore() {
-  if (!editingSprint.value) return
-  const sprint = editingSprint.value
+async function handleEditModalRestore(sprint: SprintVO) {
   showEdit.value = false
   await restoreSprint(sprint)
 }
 
-async function handleEditModalDelete() {
-  if (!editingSprint.value) return
-  const sprint = editingSprint.value
+async function handleEditModalDelete(sprint: SprintVO) {
   showEdit.value = false
   await handleDeleteSprint(sprint)
-}
-
-async function handleUpdate() {
-  if (!editForm.name.trim()) {
-    Message.warning('请输入迭代名称')
-    return
-  }
-  // 前端日期顺序校验
-  if (editForm.startDate && editForm.endDate) {
-    if (editForm.startDate >= editForm.endDate) {
-      Message.warning('开始日期必须早于结束日期')
-      return
-    }
-  }
-  await doUpdate(false)
-}
-
-async function doUpdate(confirmOverlap: boolean) {
-  updating.value = true
-  try {
-    const data: Record<string, any> = {
-      name: editForm.name.trim(),
-      goal: editForm.goal || ''
-    }
-
-    // 日期处理：区分"清空"和"设置"语义
-    // 若用户清空了日期（原来有值，现在为空），需发送 clearXxxDate=true
-    // 若用户设置了日期，直接发送日期值
-    if (!editForm.startDate) {
-      // 用户清空了开始日期
-      if (editingSprint.value?.startDate) {
-        // 原来有日期，现在清空——发送清空信号
-        data.clearStartDate = true
-      }
-      // 原来就没有日期，无需操作
-    } else {
-      data.startDate = editForm.startDate
-    }
-
-    if (!editForm.endDate) {
-      // 用户清空了结束日期
-      if (editingSprint.value?.endDate) {
-        // 原来有日期，现在清空——发送清空信号
-        data.clearEndDate = true
-      }
-      // 原来就没有日期，无需操作
-    } else {
-      data.endDate = editForm.endDate
-    }
-
-    if (confirmOverlap) {
-      data.confirmOverlap = true
-    }
-    await sprintApi.update(editingSprintId.value, data)
-    Message.success('迭代更新成功')
-    showEdit.value = false
-    loadSprints()
-  } catch (e: any) {
-    const code = e.response?.data?.code
-    if (code === ERROR_CODES.SPRINT_DATE_OVERLAP) {
-      overlapWarning.value = e.response.data.data as SprintOverlapWarning
-      overlapContext.value = 'edit'
-      showOverlapConfirm.value = true
-    } else {
-      Message.error(e.response?.data?.message || '更新失败')
-    }
-  } finally {
-    updating.value = false
-  }
 }
 
 onMounted(async () => {
@@ -1392,317 +540,9 @@ function syncUrlProjectParam() {
   gap: 12px;
 }
 
-.sprint-card {
-  background: var(--color-bg-2);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 16px 20px;
-  transition: border-color 0.15s;
-}
-.sprint-card:hover {
-  border-color: rgb(var(--primary-6));
-}
-.sprint-card.active {
-  border-left: 3px solid rgb(var(--primary-6));
-}
-.sprint-card.sprint-next {
-  border-left: 3px solid rgb(var(--primary-6));
-}
-.sprint-card.completed {
-  opacity: 0.7;
-}
-.sprint-card.archived {
-  opacity: 0.5;
-}
-
-.sprint-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.sprint-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sprint-status-badge {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 3px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  flex-shrink: 0;
-}
-.sprint-status-badge.active { background: rgba(var(--primary-6), 0.1); color: rgb(var(--primary-6)); }
-.sprint-status-badge.planned { background: var(--color-fill-2); color: var(--color-text-3); }
-.sprint-status-badge.next { background: rgba(var(--primary-6), 0.1); color: rgb(var(--primary-6)); font-weight: 600; }
-.sprint-status-badge.completed { background: var(--color-fill-2); color: var(--color-text-3); }
-.sprint-status-badge.archived { background: var(--color-fill-2); color: var(--color-text-4); }
-
-.sprint-name {
-  font-size: 14px;
-  color: var(--color-text-1);
-  font-weight: 500;
-}
-
-/* 项目标识 badge（跨项目视图时显示） */
-.sprint-project-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: var(--color-fill-2);
-  color: var(--color-text-2);
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
-}
-
-/* 活跃 Sprint 名称加粗 */
-.sprint-name.active-name {
-  font-weight: 700;
-}
-
-/* Sprint 名称区域：hover 时显示编辑图标 */
-.sprint-name-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sprint-name-edit-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
-  color: var(--color-text-3);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: color 0.15s, background 0.15s;
-}
-.sprint-name-edit-icon:hover {
-  color: var(--color-text-1);
-  background: var(--color-fill-2);
-}
-
-/* 内联编辑输入框 */
-.sprint-name-input {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-1);
-  background: var(--color-bg-2);
-  border: 1px solid rgb(var(--primary-6));
-  border-radius: 4px;
-  padding: 2px 8px;
-  outline: none;
-  min-width: 120px;
-  max-width: 320px;
-  width: auto;
-  box-shadow: 0 0 0 2px rgba(var(--primary-6), 0.15);
-  transition: box-shadow 0.15s;
-}
-
-.sprint-remaining {
-  font-size: 12px;
-  color: var(--color-text-2);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: var(--color-fill-1);
-  border-radius: 3px;
-}
-.sprint-remaining .remaining-icon.warning {
-  color: rgb(var(--warning-6));
-}
-.sprint-remaining .remaining-icon.overdue {
-  color: rgb(var(--danger-6));
-}
-.sprint-remaining .remaining-icon.not-started {
-  color: var(--color-text-3);
-}
-
-.sprint-dates {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-/* ===== 进度区域 ===== */
-.sprint-progress-section {
-  margin-top: 12px;
-  padding: 12px 0;
-}
-
-.progress-bar-container {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: var(--color-fill-2);
-  border-radius: 3px;
-  overflow: hidden;
-  display: flex;
-}
-
-.progress-segment {
-  height: 100%;
-  transition: width 0.3s ease;
-}
-.progress-segment.done {
-  background: #3fb950;
-}
-.progress-segment.in-progress {
-  background: #58a6ff;
-}
-.progress-segment.todo {
-  background: var(--color-fill-3);
-}
-
-.progress-percent {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-1);
-  min-width: 36px;
-  text-align: right;
-}
-
-.progress-stats {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  font-size: 12px;
-  color: var(--color-text-2);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.stat-item.total {
-  color: var(--color-text-3);
-  margin-left: auto;
-}
-.stat-item.overdue {
-  color: rgb(var(--danger-6));
-  font-weight: 500;
-}
-.stat-clickable {
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 3px;
-  transition: background 0.15s;
-}
-.stat-clickable:hover {
-  background: var(--color-fill-2);
-}
-.stat-item.unassigned {
-  color: rgb(var(--warning-6));
-  font-weight: 500;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 3px;
-  transition: background 0.15s;
-}
-.stat-item.unassigned:hover {
-  background: rgba(var(--warning-6), 0.08);
-}
-
-.stat-item.estimation {
-  color: var(--color-text-2);
-  font-weight: 500;
-  padding: 2px 6px;
-  background: var(--color-fill-1);
-  border-radius: 3px;
-}
-.stat-item.estimation .stat-icon {
-  font-size: 11px;
-}
-
-.stat-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.stat-item.done .stat-dot { background: #3fb950; }
-.stat-item.in-progress .stat-dot { background: #58a6ff; }
-.stat-item.todo .stat-dot { background: var(--color-fill-3); }
-.stat-item.overdue .stat-dot { background: rgb(var(--danger-6)); }
-.stat-item.unassigned .stat-dot { background: rgb(var(--warning-6)); }
-
-/* ===== 其他 ===== */
-.sprint-no-issues {
-  margin-top: 12px;
-  padding: 8px 0;
-}
-.no-issues-text {
-  font-size: 12px;
-  color: var(--color-text-3);
-  font-style: italic;
-}
-
-.sprint-goal-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 8px 12px;
-  background: rgba(var(--primary-6), 0.05);
-  border-left: 2px solid rgba(var(--primary-6), 0.4);
-  border-radius: 0 4px 4px 0;
-  font-size: 13px;
-  color: var(--color-text-2);
-  line-height: 1.5;
-}
-
-.sprint-goal-banner-icon {
-  font-size: 13px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.sprint-goal-banner-text {
-  flex: 1;
-  min-width: 0;
-  word-break: break-word;
-  white-space: pre-wrap;
-}
-
-.sprint-actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-}
-
 /* Tooltip wrapper：确保禁用按钮也能显示 tooltip */
 .tooltip-wrapper {
   display: inline-block;
-}
-
-.edit-modal-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.edit-modal-footer-left {
-  display: flex;
-  gap: 8px;
-}
-
-.edit-modal-footer-right {
-  display: flex;
-  gap: 8px;
 }
 
 .empty-state {
@@ -1730,303 +570,6 @@ function syncUrlProjectParam() {
   font-size: 13px;
   color: var(--color-text-3);
   margin-bottom: 16px;
-}
-
-/* ===== 完成迭代弹窗 ===== */
-.complete-no-issues {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 0;
-  text-align: center;
-}
-.complete-icon {
-  font-size: 36px;
-  margin-bottom: 12px;
-}
-.complete-desc {
-  font-size: 14px;
-  color: var(--color-text-2);
-}
-
-.complete-with-issues {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.complete-warning {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: rgba(var(--warning-6), 0.08);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--color-text-1);
-}
-.warning-icon {
-  font-size: 16px;
-}
-
-.open-issues-list {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-}
-.open-issue-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-.open-issue-item:last-child {
-  border-bottom: none;
-}
-.issue-status-tag {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 500;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-.issue-key {
-  color: var(--color-text-3);
-  font-family: monospace;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-.issue-title {
-  color: var(--color-text-1);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.issue-assignee {
-  color: var(--color-text-3);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.move-option-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.move-option-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-1);
-  margin: 0;
-}
-.radio-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-1);
-}
-.radio-desc {
-  display: block;
-  font-size: 12px;
-  color: var(--color-text-3);
-  margin-top: 2px;
-}
-.radio-desc.disabled {
-  color: var(--color-text-4);
-  font-style: italic;
-}
-.target-sprint-select {
-  margin-top: 8px;
-  margin-left: 24px;
-}
-.target-status-tag {
-  font-size: 11px;
-  color: var(--color-text-3);
-  margin-left: 8px;
-}
-
-.complete-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 32px 0;
-}
-
-/* ===== 编辑弹窗提示 ===== */
-.edit-completed-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--color-fill-1);
-  border-radius: 6px;
-  margin-top: 4px;
-}
-.hint-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-.hint-text {
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-/* ===== Sprint 状态警告/提示 ===== */
-.sprint-card.sprint-overdue {
-  border-left-color: rgb(var(--danger-6));
-}
-.sprint-status-badge.active.overdue {
-  background: rgba(var(--danger-6), 0.1);
-  color: rgb(var(--danger-6));
-}
-
-.sprint-status-warning {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-top: 8px;
-  background: rgba(var(--danger-6), 0.06);
-  border: 1px solid rgba(var(--danger-6), 0.15);
-  border-radius: 4px;
-  font-size: 12px;
-  color: rgb(var(--danger-6));
-}
-.sprint-status-warning .warning-icon {
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.sprint-status-warning .warning-text {
-  flex: 1;
-}
-.sprint-status-warning .warning-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.sprint-status-warning .warning-actions .arco-btn-text {
-  color: rgb(var(--danger-6));
-  padding: 2px 8px;
-  height: 24px;
-  font-size: 12px;
-}
-.sprint-status-warning .warning-actions .arco-btn-text:hover {
-  background: rgba(var(--danger-6), 0.1);
-}
-
-.sprint-status-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-top: 8px;
-  background: rgba(var(--primary-6), 0.06);
-  border: 1px solid rgba(var(--primary-6), 0.15);
-  border-radius: 4px;
-  font-size: 12px;
-  color: rgb(var(--primary-6));
-}
-.sprint-status-hint .hint-icon {
-  font-size: 13px;
-}
-.sprint-status-hint .hint-text {
-  flex: 1;
-  color: rgb(var(--primary-6));
-}
-
-/* ===== 删除迭代弹窗 ===== */
-.delete-no-issues,
-.delete-with-issues {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.delete-warning-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: rgba(var(--warning-6), 0.08);
-  border: 1px solid rgba(var(--warning-6), 0.2);
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: rgb(var(--warning-6));
-}
-.delete-warning-banner.danger {
-  background: rgba(var(--danger-6), 0.08);
-  border-color: rgba(var(--danger-6), 0.2);
-  color: rgb(var(--danger-6));
-}
-
-.delete-desc {
-  font-size: 14px;
-  color: var(--color-text-1);
-  margin: 0;
-  line-height: 1.6;
-}
-
-.delete-hint {
-  font-size: 12px;
-  color: var(--color-text-3);
-  margin: 0;
-}
-
-.delete-impact-info {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--color-fill-1);
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--color-text-1);
-  line-height: 1.5;
-}
-.impact-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.delete-move-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* ===== 创建迭代可选项 ===== */
-.create-options-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 4px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border);
-}
-
-.create-option-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.create-option-item .option-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-1);
-}
-
-.create-option-item .option-desc {
-  font-size: 12px;
-  color: var(--color-text-3);
-  margin-left: 24px;
-  line-height: 1.5;
 }
 
 /* ===== 无活跃 Sprint 警告条 ===== */
@@ -2098,101 +641,4 @@ function syncUrlProjectParam() {
   border-radius: 8px;
 }
 
-/* ===== 日期重叠确认弹窗 ===== */
-.overlap-warning-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.overlap-warning-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.overlap-warning-icon {
-  font-size: 18px;
-  line-height: 1.4;
-}
-.overlap-warning-title {
-  font-size: 13px;
-  color: var(--color-text-1);
-  line-height: 1.5;
-}
-.overlap-sprint-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  background: var(--color-fill-1);
-  border-radius: 6px;
-}
-.overlap-sprint-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 8px;
-  background: var(--color-bg-2);
-  border-radius: 4px;
-}
-.overlap-sprint-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-1);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.overlap-sprint-dates {
-  font-size: 12px;
-  color: var(--color-text-3);
-  white-space: nowrap;
-}
-.overlap-sprint-status {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.overlap-sprint-status.active {
-  color: var(--color-success-6);
-  background: var(--color-success-1);
-}
-.overlap-sprint-status.planned {
-  color: var(--color-primary-6);
-  background: var(--color-primary-1);
-}
-.overlap-warning-hint {
-  font-size: 12px;
-  color: var(--color-text-3);
-  line-height: 1.6;
-}
-.overlap-warning-hint p {
-  margin: 0;
-}
-
-/* ===== 刚完成 Sprint 高亮动画 ===== */
-.sprint-card.just-completed {
-  animation: just-completed-highlight 3s ease-out;
-  position: relative;
-}
-
-@keyframes just-completed-highlight {
-  0% {
-    border-color: rgb(var(--success-6));
-    box-shadow: 0 0 0 3px rgba(var(--success-6), 0.25);
-    background: rgba(var(--success-6), 0.06);
-  }
-  50% {
-    border-color: rgb(var(--success-6));
-    box-shadow: 0 0 0 2px rgba(var(--success-6), 0.15);
-    background: rgba(var(--success-6), 0.04);
-  }
-  100% {
-    border-color: var(--color-border);
-    box-shadow: none;
-    background: var(--color-bg-2);
-  }
-}
 </style>
