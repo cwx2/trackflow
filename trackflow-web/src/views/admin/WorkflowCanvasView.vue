@@ -512,6 +512,26 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
+/* 覆盖 LogicFlow 内置样式，使画布跟随主题 */
+.lf-graph {
+  background: transparent !important;
+}
+
+.lf-canvas-overlay {
+  background: transparent !important;
+}
+
+/* 网格点（dot 类型）适配主题 */
+.lf-grid svg circle {
+  fill: var(--color-text-4, #4b5563) !important;
+  opacity: 0.4;
+}
+
+.lf-grid svg path {
+  stroke: var(--color-text-4, #4b5563) !important;
+  opacity: 0.4;
+}
+
 /* 自定义节点全局样式（LogicFlow 要求非 scoped） */
 .status-canvas-node {
   display: flex;
