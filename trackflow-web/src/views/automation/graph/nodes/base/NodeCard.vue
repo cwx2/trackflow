@@ -32,16 +32,12 @@
         <div class="hover-actions">
           <!-- 运行 -->
           <button class="hover-btn" title="运行此节点" @click.stop="emit('run-node')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
+            <icon-play-arrow-fill :size="12" />
           </button>
           <!-- 更多菜单 -->
           <div class="hover-more-wrap" ref="moreMenuRef">
             <button class="hover-btn" title="更多操作" @click.stop="moreMenuOpen = !moreMenuOpen">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
-              </svg>
+              <icon-more :size="14" />
             </button>
             <!-- 下拉菜单 -->
             <div v-if="moreMenuOpen" class="more-menu" @click.stop>
@@ -63,10 +59,8 @@
           :title="expanded ? '收起' : '展开'"
           @click.stop="onToggleExpand"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline v-if="!expanded" points="6 9 12 15 18 9" />
-            <polyline v-else           points="18 15 12 9 6 15" />
-          </svg>
+          <icon-up v-if="expanded" :size="14" />
+          <icon-down v-else :size="14" />
         </button>
       </div>
     </div>

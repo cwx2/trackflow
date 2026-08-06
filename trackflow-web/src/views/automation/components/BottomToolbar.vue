@@ -94,40 +94,28 @@
       <!-- 2. 注释 -->
       <a-tooltip content="注释" position="top" mini>
         <button class="toolbar-icon-btn" @click="emit('add-comment')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
+          <icon-message :size="16" />
         </button>
       </a-tooltip>
 
       <!-- 3. 优化布局 -->
       <a-tooltip content="优化布局" position="top" mini>
         <button class="toolbar-icon-btn" @click="emit('auto-layout')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-          </svg>
+          <icon-apps :size="16" />
         </button>
       </a-tooltip>
 
       <!-- 4. 导出为图片 -->
       <a-tooltip content="导出为图片" position="top" mini>
         <button class="toolbar-icon-btn" @click="emit('export-image')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
+          <icon-image :size="16" />
         </button>
       </a-tooltip>
 
       <!-- 5. 缩略图 -->
       <a-tooltip content="缩略图" position="top" mini>
         <button class="toolbar-icon-btn" :class="{ active: minimapOpen }" @click="emit('toggle-minimap')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="7" width="20" height="15" rx="2"/>
-            <path d="M16 2l4 5H4l4-5z" fill="currentColor" stroke="none" opacity="0.4"/>
-            <rect x="5" y="10" width="6" height="5" rx="1" opacity="0.6"/>
-          </svg>
+          <icon-mind-mapping :size="16" />
         </button>
       </a-tooltip>
 
@@ -150,10 +138,7 @@
       <!-- 7. 调试 -->
       <a-tooltip content="调试" position="top" mini>
         <button class="toolbar-icon-btn" :class="{ active: debugMode }" @click="emit('toggle-debug')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
-            <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
+          <icon-bug :size="16" />
         </button>
       </a-tooltip>
 

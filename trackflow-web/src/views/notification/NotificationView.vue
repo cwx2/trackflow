@@ -101,9 +101,7 @@
             <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
             <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
             <span v-else class="actor-system" title="系统操作">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 1.363 4.177c.255.426.542.832.857 1.215A7.002 7.002 0 0 1 1 8c0-3.526 2.621-6.435 6.02-6.91a9.586 9.586 0 0 0-1.24 7.66Zm4.44-1.5a9.64 9.64 0 0 0-1.363-4.177c-.255-.426-.542-.832-.857-1.215A7.002 7.002 0 0 1 15 8c0 3.526-2.621 6.435-6.02 6.91a9.586 9.586 0 0 0 1.24-7.66Z"/>
-              </svg>
+              <icon-common :size="14" />
             </span>
           </div>
           <div class="item-content">
@@ -129,9 +127,7 @@
               title="标记已读"
               @click.stop="handleMarkRead(item.id)"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
-              </svg>
+              <icon-check :size="14" />
             </button>
             <button
               v-else
@@ -139,9 +135,7 @@
               title="标记未读"
               @click.stop="handleMarkUnread(item.id)"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <circle cx="8" cy="8" r="4"/>
-              </svg>
+              <icon-record :size="14" />
             </button>
             <button
               v-if="canReply(item)"
@@ -149,18 +143,14 @@
               title="回复"
               @click.stop="toggleReply(item.id)"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M6.78 1.97a.75.75 0 0 1 0 1.06L3.81 6h6.44A4.75 4.75 0 0 1 15 10.75v2.5a.75.75 0 0 1-1.5 0v-2.5a3.25 3.25 0 0 0-3.25-3.25H3.81l2.97 2.97a.75.75 0 1 1-1.06 1.06L1.47 7.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"/>
-              </svg>
+              <icon-reply :size="14" />
             </button>
             <button
               class="item-action-btn item-delete-btn"
               title="删除通知"
               @click.stop="handleDelete(item.id)"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
-              </svg>
+              <icon-close :size="14" />
             </button>
           </div>
         </div>

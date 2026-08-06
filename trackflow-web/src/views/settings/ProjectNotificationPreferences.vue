@@ -10,9 +10,7 @@
         class="add-project-btn"
         @click="showAddPanel = true"
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/>
-        </svg>
+        <icon-plus :size="14" />
         添加项目
       </button>
     </div>
@@ -76,17 +74,13 @@
               title="重置为全局设置"
               @click.stop="handleDeleteProjectPref(item.pref.projectId!)"
             >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
-              </svg>
+              <icon-close :size="12" />
             </button>
-            <svg
+            <icon-down
               class="expand-icon"
               :class="{ rotated: expandedProjectId === item.pref.projectId }"
-              width="14" height="14" viewBox="0 0 16 16" fill="currentColor"
-            >
-              <path d="M12.78 5.22a.749.749 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.06 0L3.22 6.28a.749.749 0 1 1 1.06-1.06L8 8.94l3.72-3.72a.749.749 0 0 1 1.06 0Z"/>
-            </svg>
+              :size="14"
+            />
           </div>
         </div>
 

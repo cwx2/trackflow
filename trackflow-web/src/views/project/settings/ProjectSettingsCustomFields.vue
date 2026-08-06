@@ -60,14 +60,7 @@
             :style="{ cursor: field.isForAll ? 'not-allowed' : 'grab', opacity: field.isForAll ? 0.3 : 1 }"
             @click.stop
           >
-            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
-              <circle cx="3" cy="3" r="1.5"/>
-              <circle cx="9" cy="3" r="1.5"/>
-              <circle cx="3" cy="8" r="1.5"/>
-              <circle cx="9" cy="8" r="1.5"/>
-              <circle cx="3" cy="13" r="1.5"/>
-              <circle cx="9" cy="13" r="1.5"/>
-            </svg>
+            <icon-drag-dot-vertical :size="14" />
           </div>
           <div class="field-main">
             <div class="field-info">

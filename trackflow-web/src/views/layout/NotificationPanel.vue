@@ -12,10 +12,7 @@
                 title="展开为全页面"
                 @click="openFullPage"
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h4.5a.75.75 0 0 1 0 1.5H3a.001.001 0 0 0 0 0v9.5a.001.001 0 0 0 0 0h9.5V8.75a.75.75 0 0 1 1.5 0V13a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 13V3.5Z"/>
-                  <path d="M10 1.75a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V3.56L9.28 7.78a.75.75 0 0 1-1.06-1.06l4.22-4.22h-1.69a.75.75 0 0 1-.75-.75Z"/>
-                </svg>
+                <icon-expand :size="14" />
               </button>
               <button
                 class="panel-action-btn"
@@ -23,9 +20,7 @@
                 title="仅显示未读"
                 @click="toggleUnreadOnly"
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zm3.78-9.72a.75.75 0 0 0-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l4.5-4.5z" />
-                </svg>
+                <icon-check-circle :size="14" />
               </button>
               <button
                 class="panel-action-btn"
@@ -33,6 +28,7 @@
                 :disabled="unreadCount === 0"
                 @click="handleMarkAllRead"
               >
+                <!-- 保留：Arco 无等效的双勾/全部已读图标 -->
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/>
                 </svg>
@@ -43,14 +39,10 @@
                 :disabled="!hasRead"
                 @click="handleDeleteAllRead"
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/>
-                </svg>
+                <icon-delete :size="14" />
               </button>
               <button class="panel-action-btn panel-close-btn" title="关闭" @click="closePanel">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
-                </svg>
+                <icon-close :size="14" />
               </button>
             </div>
           </div>
@@ -130,9 +122,7 @@
                     <img v-if="item.actorAvatar" :src="item.actorAvatar" :alt="item.actorName" class="actor-avatar" />
                     <span v-else-if="item.actorName" class="actor-initial">{{ item.actorName.charAt(0) }}</span>
                     <span v-else class="actor-system" title="系统操作">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 1.363 4.177c.255.426.542.832.857 1.215A7.002 7.002 0 0 1 1 8c0-3.526 2.621-6.435 6.02-6.91a9.586 9.586 0 0 0-1.24 7.66Zm4.44-1.5a9.64 9.64 0 0 0-1.363-4.177c-.255-.426-.542-.832-.857-1.215A7.002 7.002 0 0 1 15 8c0 3.526-2.621 6.435-6.02 6.91a9.586 9.586 0 0 0 1.24-7.66Z"/>
-                      </svg>
+                      <icon-common :size="14" />
                     </span>
                   </div>
                   <div class="item-content">
@@ -155,9 +145,7 @@
                       title="标记已读"
                       @click.stop="handleMarkRead(item.id)"
                     >
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/>
-                      </svg>
+                      <icon-check :size="12" />
                     </button>
                     <!-- 单条通知的静音按钮（仅单条分组时显示） -->
                     <button
@@ -167,21 +155,15 @@
                       :title="item.resourceMuted ? '取消静音此工单' : '静音此工单'"
                       @click.stop="handleMuteToggle(group)"
                     >
-                      <svg v-if="!item.resourceMuted" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 2a1.5 1.5 0 0 0-1.5 1.5v5a1.5 1.5 0 0 0 3 0v-5A1.5 1.5 0 0 0 8 2zM6.5 12.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0z"/>
-                      </svg>
-                      <svg v-else width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M1.5 1.5l13 13M8 2a1.5 1.5 0 0 0-1.5 1.5v3l3 3v-6A1.5 1.5 0 0 0 8 2z"/>
-                      </svg>
+                      <icon-mute v-if="item.resourceMuted" :size="12" />
+                      <icon-notification v-else :size="12" />
                     </button>
                     <button
                       class="item-action-btn item-delete-btn"
                       title="删除通知"
                       @click.stop="handleDelete(item.id)"
                     >
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
-                      </svg>
+                      <icon-close :size="12" />
                     </button>
                   </div>
                 </div>

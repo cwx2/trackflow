@@ -15,9 +15,7 @@
         :title="currentBoardName || '选择看板'"
       >
         <span class="board-selector-btn__name">{{ currentBoardName || '选择看板' }}</span>
-        <svg class="board-selector-btn__arrow" :class="{ 'board-selector-btn__arrow--open': popupVisible }" width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <icon-down class="board-selector-btn__arrow" :class="{ 'board-selector-btn__arrow--open': popupVisible }" :size="12" />
       </button>
     </span>
 

@@ -6,9 +6,7 @@
         <p class="section-desc">基于标签或保存搜索创建订阅，匹配的工单有变更时自动通知你。</p>
       </div>
       <button class="add-btn" @click="showAddDialog = true">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/>
-        </svg>
+        <icon-plus :size="14" />
         新建订阅
       </button>
     </div>
@@ -53,9 +51,7 @@
             title="删除订阅"
             @click="handleDelete(sub)"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/>
-            </svg>
+            <icon-close :size="12" />
           </button>
         </div>
       </div>

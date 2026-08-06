@@ -24,9 +24,7 @@
           </select>
         </div>
         <button class="btn-primary" @click="showCreateDialog = true">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
-            <path d="M8 1a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 018 1z"/>
-          </svg>
+          <icon-plus :size="14" style="margin-right: 4px" />
           新建用户
         </button>
       </div>
@@ -38,7 +36,7 @@
         <div class="col" style="width:240px">
           <span class="col-sortable" :class="{ active: sortField === 'displayName' }" @click="toggleSort('displayName')">
             用户
-            <svg v-if="sortField === 'displayName'" class="sort-icon" :class="{ desc: sortDesc }" width="10" height="10" viewBox="0 0 10 10"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
+            <icon-caret-up v-if="sortField === 'displayName'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
           </span>
         </div>
         <div class="col" style="flex:1">邮箱</div>
@@ -47,7 +45,7 @@
         <div class="col" style="width:150px">
           <span class="col-sortable" :class="{ active: sortField === 'lastLoginAt' }" @click="toggleSort('lastLoginAt')">
             最近登录
-            <svg v-if="sortField === 'lastLoginAt'" class="sort-icon" :class="{ desc: sortDesc }" width="10" height="10" viewBox="0 0 10 10"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
+            <icon-caret-up v-if="sortField === 'lastLoginAt'" class="sort-icon" :class="{ desc: sortDesc }" :size="10" />
           </span>
         </div>
         <div class="col" style="width:120px">操作</div>
@@ -83,14 +81,11 @@
           </div>
         </div>
         <div v-if="users.length === 0 && !loading" class="empty-state">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M22 21v-2a4 4 0 00-3-3.87"/>
-            <path d="M16 3.13a4 4 0 010 7.75"/>
-          </svg>
-          <h3>暂无用户</h3>
-          <p>点击"新建用户"按钮添加第一个用户</p>
+          <a-empty description="暂无用户">
+            <template #extra>
+              <p class="empty-state-hint">点击"新建用户"按钮添加第一个用户</p>
+            </template>
+          </a-empty>
         </div>
       </div>
     </div>
@@ -156,9 +151,7 @@
               <span class="form-hint">用户首次登录时将被要求修改密码</span>
             </div>
             <div v-if="createError" class="form-error">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm9-3a1 1 0 11-2 0 1 1 0 012 0zM7 7.75a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5z"/>
-              </svg>
+              <icon-info-circle :size="14" />
               {{ createError }}
             </div>
             <div class="modal-footer">
@@ -231,9 +224,7 @@
                     <span class="global-project-role-code">{{ gm.roleCode }}</span>
                   </div>
                   <button class="btn-icon-sm danger" title="撤销自动分配" @click="revokeGlobalMember(gm)">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
-                    </svg>
+                    <icon-close :size="14" />
                   </button>
                 </div>
                 <div v-if="userGlobalMembers.length === 0" class="role-empty-inline">
@@ -244,9 +235,7 @@
               <!-- 添加自动分配的项目角色 -->
               <div class="add-global-member-section">
                 <button v-if="!showAddGlobalMember" class="btn-text-sm" @click="showAddGlobalMember = true">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
-                    <path d="M8 1a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 018 1z"/>
-                  </svg>
+                  <icon-plus :size="12" style="margin-right: 4px" />
                   添加自动分配角色
                 </button>
                 <div v-else class="add-global-member-form">
@@ -298,14 +287,11 @@
                       title="移除成员"
                       @click="removeFromProject(pr)"
                     >
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/>
-                      </svg>
+                      <icon-close :size="14" />
                     </button>
                     <span v-else class="btn-icon-sm disabled" title="通过用户组继承的角色不可直接移除">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="opacity: 0.3">
-                        <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13z"/>
-                      </svg>
+                      <!-- 保留：Arco 无等效的禁用圆圈图标，使用 icon-close-circle 代替 -->
+                      <icon-close-circle :size="14" style="opacity: 0.3" />
                     </span>
                   </div>
                 </div>
@@ -314,9 +300,7 @@
               <!-- 添加到项目 -->
               <div class="add-project-section">
                 <button v-if="!showAddProject" class="btn-text-sm" @click="showAddProject = true">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px">
-                    <path d="M8 1a.75.75 0 01.75.75v5.5h5.5a.75.75 0 010 1.5h-5.5v5.5a.75.75 0 01-1.5 0v-5.5h-5.5a.75.75 0 010-1.5h5.5v-5.5A.75.75 0 018 1z"/>
-                  </svg>
+                  <icon-plus :size="12" style="margin-right: 4px" />
                   添加到项目
                 </button>
                 <div v-else class="add-project-form">
@@ -930,9 +914,7 @@ onMounted(() => {
 .btn-sm.danger { color: var(--accent-red); border-color: var(--accent-red); }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: var(--text-muted); }
-.empty-state svg { opacity: 0.4; margin-bottom: 12px; }
-.empty-state h3 { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin: 0 0 6px; }
-.empty-state p { font-size: 13px; color: var(--text-muted); margin: 0; }
+.empty-state-hint { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 
 .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; font-size: var(--font-size-sm); color: var(--text-secondary); }
 .page-btns { display: flex; align-items: center; gap: 8px; }

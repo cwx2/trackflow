@@ -19,16 +19,11 @@
       :title="collapsed ? '展开字段面板' : '折叠字段面板'"
       @click="$emit('toggle-collapse')"
     >
-      <svg
-        viewBox="0 0 16 16"
-        width="14"
-        height="14"
-        fill="currentColor"
+      <icon-right
         class="toggle-icon"
         :class="{ flipped: collapsed }"
-      >
-        <path d="M9.78 12.78a.75.75 0 0 1-1.06 0L4.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 1.06L6.06 8l3.72 3.72a.75.75 0 0 1 0 1.06z" />
-      </svg>
+        :size="14"
+      />
     </button>
 
     <!-- 折叠状态下的占位提示 -->
@@ -214,7 +209,7 @@
             />
             <span v-if="field.dot" class="val-dot" :style="{ background: field.dot }"></span>
             <span class="val-text" :class="field.class">{{ field.value }}</span>
-            <!-- 设计上只读（累计/汇总）：显示计算器图标 -->
+            <!-- 设计上只读（累计/汇总）：显示计算器图标 —— 保留 SVG：Arco 无 icon-calculator 等效图标 -->
             <span v-if="field.readonlyReason === 'computed' || field.readonlyReason === 'derived'" class="readonly-info-icon" aria-hidden="true">
               <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                 <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm2-.5a.5.5 0 0 0-.5.5v2.5h9V2a.5.5 0 0 0-.5-.5H4zm8.5 4h-9v2h9v-2zm0 3h-4v5.5H12a.5.5 0 0 0 .5-.5v-5zm-5 5.5v-5.5h-4V14a.5.5 0 0 0 .5.5h3.5z"/>
@@ -222,9 +217,7 @@
             </span>
             <!-- 权限不足：显示锁图标 -->
             <span v-else class="readonly-lock-icon" aria-hidden="true">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-                <path d="M4 4v2h-.25A1.75 1.75 0 002 7.75v5.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0014 13.25v-5.5A1.75 1.75 0 0012.25 6H12V4a4 4 0 10-8 0zm6.5 2V4a2.5 2.5 0 00-5 0v2h5zM12.25 7.5a.25.25 0 01.25.25v5.5a.25.25 0 01-.25.25h-8.5a.25.25 0 01-.25-.25v-5.5a.25.25 0 01.25-.25h8.5z"/>
-              </svg>
+              <icon-lock :size="12" />
             </span>
           </div>
         </a-tooltip>
