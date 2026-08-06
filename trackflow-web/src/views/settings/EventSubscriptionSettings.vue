@@ -87,7 +87,6 @@ interface NotificationForm {
   autoWatchOnComment: boolean
   autoWatchOnUpdate: boolean
   autoWatchOnAssign: boolean
-  [key: string]: any
 }
 
 defineProps<{

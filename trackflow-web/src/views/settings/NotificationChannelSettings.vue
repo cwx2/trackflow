@@ -84,7 +84,7 @@
     <div class="quiet-hours">
       <div class="quiet-hours-toggle">
         <span class="quiet-label">启用静音时段</span>
-        <a-switch v-model="quietHoursEnabled" size="small" @change="handleQuietToggle" />
+        <a-switch :model-value="quietHoursEnabled" size="small" @change="handleQuietToggle" />
       </div>
       <div v-if="quietHoursEnabled" class="quiet-hours-range">
         <a-time-picker
@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
 import EmailEventItem from './EmailEventItem.vue'
 import type { EmailAvailabilityVO } from '@/api/notificationPreference'
 
@@ -133,7 +133,6 @@ interface NotificationForm {
   emailOnIssueSpentTime: boolean
   quietHoursStart: string | null
   quietHoursEnd: string | null
-  [key: string]: any
 }
 
 const props = defineProps<{
@@ -148,14 +147,23 @@ const emit = defineEmits<{
   save: []
 }>()
 
-const quietHoursEnabled = ref(!!(props.form.quietHoursStart && props.form.quietHoursEnd))
+const quietHoursEnabled = computed(() => !!(props.form.quietHoursStart && props.form.quietHoursEnd))
 
 function onSave() {
   emit('save')
 }
 
 function handleQuietToggle(enabled: boolean | string | number) {
-  if (!enabled) {
+  if (enabled) {
+    // Set default quiet hours when user enables
+    if (!props.form.quietHoursStart) {
+      props.form.quietHoursStart = '22:00'
+    }
+    if (!props.form.quietHoursEnd) {
+      props.form.quietHoursEnd = '08:00'
+    }
+    onSave()
+  } else {
     props.form.quietHoursStart = null
     props.form.quietHoursEnd = null
     onSave()
