@@ -462,6 +462,18 @@
             <span class="form-hint">1-50 条，默认显示最近 10 条</span>
           </a-form-item>
         </template>
+
+        <!-- calendar 配置 -->
+        <template v-if="editingWidgetType === 'calendar'">
+          <a-form-item label="项目" :rules="[{ required: true, message: '请选择项目' }]">
+            <a-select v-model="widgetConfigForm.projectId" placeholder="选择项目（必填）">
+              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </a-option>
+            </a-select>
+            <span class="form-hint">选择要显示到期日历的项目</span>
+          </a-form-item>
+        </template>
       </a-form>
     </a-modal>
 
@@ -1008,6 +1020,11 @@ function editWidget(widget: DashboardWidgetVO) {
     loadAvailableProjectsForIssueList()
   }
 
+  // Load projects for calendar widget
+  if (widget.widgetType === 'calendar') {
+    loadAvailableProjectsForIssueList()
+  }
+
   // Load projects and users for activity feed widget
   if (widget.widgetType === 'activity_feed') {
     loadAvailableProjectsAndUsers()
@@ -1110,6 +1127,8 @@ async function handleWidgetConfigSave() {
       if (form.queryType) config.queryType = form.queryType
       if (form.projectId) config.projectId = form.projectId
       config.pageSize = form.issueListPageSize ?? 10
+    } else if (widget.widgetType === 'calendar') {
+      if (form.projectId) config.projectId = form.projectId
     }
     // report_distribution / report: reportId is saved separately
 
