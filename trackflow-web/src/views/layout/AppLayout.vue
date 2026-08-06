@@ -249,7 +249,7 @@
           <div class="user-menu-divider"></div>
           <div class="user-menu-item" @click="goProfile">
             <icon-user class="menu-item-icon" />
-            <span>个人设置</span>
+            <span>个人资料</span>
           </div>
           <div class="user-menu-item" @click="goNotifications">
             <icon-notification class="menu-item-icon" />

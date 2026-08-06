@@ -13,6 +13,8 @@ import com.trackflow.project.service.ProjectService;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.system.service.SystemAuditService;
+import com.trackflow.system.service.UserService;
+import com.trackflow.system.vo.UserProfileVO;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,7 @@ public class AuthController {
     private final ProjectService projectService;
     private final SysUserMapper sysUserMapper;
     private final SystemAuditService systemAuditService;
+    private final UserService userService;
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -82,6 +85,21 @@ public class AuthController {
                 .authMethod("jwt")
                 .build();
         return R.ok(userInfo);
+    }
+
+    /**
+     * 获取当前登录用户的个人资料（包含注册日期等详细信息）
+     * 任何已认证用户都可访问自己的资料，无需管理员权限。
+     */
+    @GetMapping("/me/profile")
+    @PreAuthorize("isAuthenticated()")
+    public R<UserProfileVO> getMyProfile() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.AUTH_MISSING);
+        }
+        UserProfileVO profile = userService.getUserProfile(userId);
+        return R.ok(profile);
     }
 
     /**

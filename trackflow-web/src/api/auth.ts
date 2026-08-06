@@ -1,5 +1,6 @@
 import request from './request'
 import type { R, UserInfoVO } from './types'
+import type { UserProfileVO } from './user'
 
 /**
  * Auth 模块 API
@@ -8,6 +9,11 @@ export const authApi = {
   /** 获取当前用户信息 */
   me() {
     return request.get<any, R<UserInfoVO>>('/auth/me')
+  },
+
+  /** 获取当前登录用户的个人资料（含注册日期等） */
+  getMyProfile() {
+    return request.get<any, R<UserProfileVO>>('/auth/me/profile')
   },
 
   /** 获取当前用户在指定项目中的权限列表 */

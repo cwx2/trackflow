@@ -295,6 +295,10 @@ const routes = [
         meta: { title: '通知' }
       },
       {
+        path: 'profile',
+        redirect: '/settings/profile'
+      },
+      {
         path: 'settings/profile',
         name: 'Profile',
         component: () => import('@/views/settings/ProfileView.vue'),
