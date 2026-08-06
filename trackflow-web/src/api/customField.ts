@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO, OptionSetStatusVO, AvailableConversionsVO, ConversionResultVO } from './types'
+import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO, OptionSetStatusVO, AvailableConversionsVO, ConversionResultVO, ReplaceableFieldsVO, ReplaceResultVO } from './types'
 
 /**
  * 自定义字段模块 API
@@ -273,6 +273,21 @@ export const customFieldApi = {
     return request.put<any, R<CustomFieldOptionVO[]>>(
       `/projects/${projectId}/settings/custom-fields/${fieldId}/options`,
       { options }
+    )
+  },
+
+  /** 获取可替换字段列表（Transfer Data to New Field） */
+  getAvailableReplacements(projectId: string, fieldId: string) {
+    return request.get<any, R<ReplaceableFieldsVO>>(
+      `/projects/${projectId}/settings/custom-fields/${fieldId}/replacements`
+    )
+  },
+
+  /** 用目标字段替换当前字段（Transfer Data） */
+  replaceField(projectId: string, fieldId: string, targetFieldId: string) {
+    return request.post<any, R<ReplaceResultVO>>(
+      `/projects/${projectId}/settings/custom-fields/${fieldId}/replace`,
+      { targetFieldId }
     )
   }
 }

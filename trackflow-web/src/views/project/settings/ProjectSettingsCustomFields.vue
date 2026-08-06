@@ -365,6 +365,41 @@
                   清除限制
                 </a-button>
               </div>
+
+              <!-- 高级操作：独立副本 + 转移数据 -->
+              <a-divider :margin="16" />
+              <h5 class="condition-title">高级操作</h5>
+
+              <!-- 创建独立副本 -->
+              <div class="advanced-action-row">
+                <a-button
+                  type="outline"
+                  size="small"
+                  :loading="checkingOptionSetStatus"
+                  :disabled="!isEnumField(selectedField)"
+                  @click="handleMakeIndependentCopy"
+                >
+                  创建独立副本
+                </a-button>
+                <span v-if="!isEnumField(selectedField)" class="advanced-action-hint">
+                  仅枚举类字段可用
+                </span>
+              </div>
+
+              <!-- 转移到新字段 -->
+              <div class="advanced-action-row">
+                <a-button
+                  type="outline"
+                  size="small"
+                  :loading="loadingReplacements"
+                  @click="handleTransferData"
+                >
+                  转移到新字段
+                </a-button>
+                <span class="advanced-action-hint">
+                  替换为其他同类型字段
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -454,6 +489,90 @@
         </p>
       </div>
     </a-modal>
+
+    <!-- 创建独立副本确认弹窗 -->
+    <a-modal
+      v-model:visible="showIndependentCopyDialog"
+      title="创建独立副本"
+      ok-text="创建独立副本"
+      cancel-text="取消"
+      :ok-loading="makingIndependent"
+      @ok="submitMakeIndependentCopy"
+    >
+      <div class="independent-copy-confirm">
+        <p class="independent-copy-desc">
+          将把「<strong>{{ selectedField?.name }}</strong>」字段的选项集复制为本项目专属副本。
+        </p>
+        <p class="independent-copy-desc">
+          之后，您对此项目中选项的修改不会影响其他项目<span v-if="optionSetStatus && optionSetStatus.sharedProjectCount > 1">（共 {{ optionSetStatus.sharedProjectCount }} 个项目使用此值集）</span>。
+        </p>
+        <div class="independent-copy-option">
+          <a-checkbox v-model="independentCopyEmpty">创建空的选项集（不复制现有选项）</a-checkbox>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 转移到新字段抽屉 -->
+    <a-drawer
+      v-model:visible="showTransferDrawer"
+      title="转移到新字段"
+      :width="420"
+      :footer="false"
+    >
+      <div class="transfer-drawer-body">
+        <div v-if="loadingReplacements" class="transfer-loading">
+          <a-spin :size="20" />
+          <span>加载可替换字段...</span>
+        </div>
+
+        <template v-else-if="replaceableFields">
+          <div class="transfer-info">
+            <p class="transfer-desc">
+              选择一个同类型字段来替换当前字段「<strong>{{ replaceableFields.currentFieldName }}</strong>」。
+            </p>
+            <p class="transfer-hint">
+              替换后，当前字段在本项目 Issue 中的值将迁移到目标字段，当前字段从本项目移除。其他项目不受影响。
+            </p>
+          </div>
+
+          <div v-if="replaceableFields.availableFields.length > 0" class="replacement-list">
+            <div
+              v-for="field in replaceableFields.availableFields"
+              :key="field.id"
+              class="replacement-item"
+              :class="{ 'is-selected': selectedReplacementId === field.id }"
+              @click="selectedReplacementId = field.id"
+            >
+              <div class="replacement-info">
+                <span class="replacement-name">{{ field.name }}</span>
+                <span class="field-type-badge">{{ formatFieldType(field.fieldFormat) }}</span>
+              </div>
+              <div class="replacement-meta">
+                <span v-if="field.projectCount > 0">{{ field.projectCount }} 个项目使用</span>
+                <span v-if="field.optionCount > 0">· {{ field.optionCount }} 个选项</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="transfer-empty">
+            <icon-info-circle class="transfer-empty-icon" />
+            <p>没有可用于替换的同类型字段。请先在全局管理中创建一个新的同类型字段。</p>
+          </div>
+
+          <div v-if="replaceableFields.availableFields.length > 0" class="transfer-actions">
+            <a-button
+              type="primary"
+              :loading="replacing"
+              :disabled="!selectedReplacementId"
+              @click="submitReplaceField"
+            >
+              确认转移
+            </a-button>
+            <a-button @click="showTransferDrawer = false">取消</a-button>
+          </div>
+        </template>
+      </div>
+    </a-drawer>
   </div>
 </template>
 
@@ -466,12 +585,13 @@ import {
   IconCheckCircle,
   IconExclamationCircleFill,
   IconEyeInvisible,
-  IconClose
+  IconClose,
+  IconInfoCircle
 } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi } from '@/api'
 import { workflowApi } from '@/api'
-import type { ProjectDetailVO, CustomFieldDefinitionVO, CustomFieldOptionVO, RoleVO } from '@/api/types'
+import type { ProjectDetailVO, CustomFieldDefinitionVO, CustomFieldOptionVO, RoleVO, OptionSetStatusVO, ReplaceableFieldsVO } from '@/api/types'
 
 const props = defineProps<{
   project: ProjectDetailVO
@@ -854,6 +974,104 @@ async function loadProjectRoles() {
     projectRoles.value = res.data || []
   } catch {
     projectRoles.value = []
+  }
+}
+
+// ===== Make Independent Copy =====
+
+const showIndependentCopyDialog = ref(false)
+const checkingOptionSetStatus = ref(false)
+const makingIndependent = ref(false)
+const optionSetStatus = ref<OptionSetStatusVO | null>(null)
+const independentCopyEmpty = ref(false)
+
+/** 枚举类字段类型列表 */
+const ENUM_FIELD_TYPES = ['list', 'state', 'version', 'ownedField', 'build']
+
+function isEnumField(field: CustomFieldDefinitionVO | null): boolean {
+  if (!field) return false
+  return ENUM_FIELD_TYPES.includes(field.fieldFormat)
+}
+
+async function handleMakeIndependentCopy() {
+  if (!selectedField.value) return
+  checkingOptionSetStatus.value = true
+  try {
+    const res = await customFieldApi.getOptionSetStatus(props.project.id, selectedField.value.id)
+    optionSetStatus.value = res.data
+    if (!res.data.canMakeIndependent) {
+      Message.warning(res.data.cannotMakeIndependentReason || '当前字段无法创建独立副本')
+      return
+    }
+    independentCopyEmpty.value = false
+    showIndependentCopyDialog.value = true
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '查询选项集状态失败')
+  } finally {
+    checkingOptionSetStatus.value = false
+  }
+}
+
+async function submitMakeIndependentCopy() {
+  if (!selectedField.value) return
+  makingIndependent.value = true
+  try {
+    await customFieldApi.makeIndependentCopy(props.project.id, selectedField.value.id, independentCopyEmpty.value)
+    Message.success('独立副本已创建，此字段的选项现在是本项目专属的')
+    showIndependentCopyDialog.value = false
+    await loadFields()
+    const updated = fieldList.value.find(f => f.id === selectedField.value?.id)
+    if (updated) selectField(updated)
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '创建独立副本失败')
+  } finally {
+    makingIndependent.value = false
+  }
+}
+
+// ===== Transfer Data (Replace Field) =====
+
+const showTransferDrawer = ref(false)
+const loadingReplacements = ref(false)
+const replaceableFields = ref<ReplaceableFieldsVO | null>(null)
+const selectedReplacementId = ref<string | null>(null)
+const replacing = ref(false)
+
+async function handleTransferData() {
+  if (!selectedField.value) return
+  loadingReplacements.value = true
+  selectedReplacementId.value = null
+  replaceableFields.value = null
+  showTransferDrawer.value = true
+  try {
+    const res = await customFieldApi.getAvailableReplacements(props.project.id, selectedField.value.id)
+    replaceableFields.value = res.data
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '加载可替换字段失败')
+    showTransferDrawer.value = false
+  } finally {
+    loadingReplacements.value = false
+  }
+}
+
+async function submitReplaceField() {
+  if (!selectedField.value || !selectedReplacementId.value) return
+  replacing.value = true
+  try {
+    const res = await customFieldApi.replaceField(
+      props.project.id,
+      selectedField.value.id,
+      selectedReplacementId.value
+    )
+    const result = res.data
+    Message.success(result.message || `已成功将数据转移至「${result.targetFieldName}」，迁移了 ${result.migratedIssueCount} 条工单数据`)
+    showTransferDrawer.value = false
+    selectedField.value = null
+    await loadFields()
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '转移数据失败')
+  } finally {
+    replacing.value = false
   }
 }
 
@@ -1489,5 +1707,146 @@ onMounted(() => {
 
 .effective-default {
   color: var(--tf-text-tertiary);
+}
+
+/* Advanced actions */
+.advanced-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.advanced-action-hint {
+  font-size: 11px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  margin-top: 2px;
+}
+
+/* Independent copy dialog */
+.independent-copy-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.independent-copy-desc {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.independent-copy-option {
+  margin-top: 8px;
+}
+
+/* Transfer drawer */
+.transfer-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.transfer-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  font-size: 13px;
+  color: var(--tf-text-tertiary);
+}
+
+.transfer-info {
+  margin-bottom: 8px;
+}
+
+.transfer-desc {
+  font-size: 13px;
+  color: var(--tf-text-primary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.transfer-hint {
+  font-size: 12px;
+  color: var(--tf-text-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.replacement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--tf-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.replacement-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--tf-border-light, var(--tf-border));
+}
+
+.replacement-item:last-child {
+  border-bottom: none;
+}
+
+.replacement-item:hover {
+  background: var(--tf-bg-hover);
+}
+
+.replacement-item.is-selected {
+  background: var(--tf-bg-active, var(--tf-bg-hover));
+  border-left: 3px solid var(--tf-accent);
+  padding-left: 13px;
+}
+
+.replacement-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.replacement-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.replacement-meta {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+}
+
+.transfer-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--tf-text-secondary);
+}
+
+.transfer-empty-icon {
+  font-size: 24px;
+  color: var(--tf-text-quaternary, var(--tf-text-tertiary));
+  margin-bottom: 8px;
+}
+
+.transfer-empty p {
+  font-size: 13px;
+  margin: 0;
+}
+
+.transfer-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tf-border-light, var(--tf-border));
 }
 </style>

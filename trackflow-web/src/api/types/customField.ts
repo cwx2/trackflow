@@ -228,6 +228,53 @@ export interface AvailableConversionsVO {
   blockedReason?: string
 }
 
+/** 可替换字段列表 VO */
+export interface ReplaceableFieldsVO {
+  /** 当前字段 ID */
+  currentFieldId: string
+  /** 当前字段名称 */
+  currentFieldName: string
+  /** 当前字段类型 */
+  currentFieldFormat: string
+  /** 可用于替换的目标字段列表（相同类型） */
+  availableFields: ReplaceableField[]
+}
+
+export interface ReplaceableField {
+  /** 字段 ID */
+  id: string
+  /** 字段名称 */
+  name: string
+  /** 字段类型 */
+  fieldFormat: string
+  /** 字段使用的项目数量 */
+  projectCount: number
+  /** 选项数量（仅 list 类型） */
+  optionCount: number
+}
+
+/** 字段替换结果 VO */
+export interface ReplaceResultVO {
+  /** 项目 ID */
+  projectId: string
+  /** 项目名称 */
+  projectName: string
+  /** 原字段 ID */
+  sourceFieldId: string
+  /** 原字段名称 */
+  sourceFieldName: string
+  /** 目标字段 ID */
+  targetFieldId: string
+  /** 目标字段名称 */
+  targetFieldName: string
+  /** 迁移的 issue 数量 */
+  migratedIssueCount: number
+  /** 合并的选项数量（仅 list 类型） */
+  mergedOptionCount: number
+  /** 成功消息 */
+  message: string
+}
+
 /** 类型转换结果 VO */
 export interface ConversionResultVO {
   /** 字段 ID */
