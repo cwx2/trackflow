@@ -326,7 +326,11 @@
     >
       <div class="move-widget-body">
         <p class="move-hint">将「{{ movingWidgetTitle }}」移动到：</p>
-        <a-select v-model="moveTargetDashboardId" placeholder="选择目标仪表盘">
+        <a-select
+          :model-value="moveTargetDashboardId ?? undefined"
+          @update:model-value="(v: string | undefined) => { moveTargetDashboardId = v ?? null }"
+          placeholder="选择目标仪表盘"
+        >
           <a-option
             v-for="d in moveTargetDashboards"
             :key="d.id"
