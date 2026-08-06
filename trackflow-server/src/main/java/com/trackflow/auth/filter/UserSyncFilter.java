@@ -1,6 +1,6 @@
 package com.trackflow.auth.filter;
 
-import com.trackflow.auth.controller.BackChannelLogoutController;
+import com.trackflow.auth.service.BackChannelLogoutService;
 import com.trackflow.auth.service.UserSyncService;
 import com.trackflow.common.util.WebUtils;
 import com.trackflow.system.entity.SysUser;
@@ -258,7 +258,7 @@ public class UserSyncFilter extends OncePerRequestFilter {
             String sessionId = jwt.getClaimAsString("sid");
             if (sessionId != null && !sessionId.isBlank()) {
                 return Boolean.TRUE.equals(redisTemplate.hasKey(
-                        BackChannelLogoutController.LOGOUT_SESSION_KEY_PREFIX + sessionId));
+                        BackChannelLogoutService.LOGOUT_SESSION_KEY_PREFIX + sessionId));
             }
 
             // 兜底：按 keycloak_id (sub) 检查 user-level 黑名单

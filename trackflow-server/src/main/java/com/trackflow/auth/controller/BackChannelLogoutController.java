@@ -35,9 +35,6 @@ public class BackChannelLogoutController {
 
     private final BackChannelLogoutService backChannelLogoutService;
 
-    /** Redis key 前缀：已注销的 session ID 黑名单（供外部引用） */
-    public static final String LOGOUT_SESSION_KEY_PREFIX = BackChannelLogoutService.LOGOUT_SESSION_KEY_PREFIX;
-
     /**
      * Keycloak Back-Channel Logout 回调端点。
      * <p>

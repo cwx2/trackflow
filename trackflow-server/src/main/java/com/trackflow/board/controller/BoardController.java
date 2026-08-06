@@ -362,8 +362,13 @@ public class BoardController {
 
     // ========== Private helpers ==========
 
+    /** Long.MAX_VALUE 的十进制位数（19 位） */
+    private static final int MAX_LONG_DIGITS = 18;
+
     /**
-     * 解析逗号分隔的折叠列状态 ID 字符串为 Set<Long>
+     * 解析逗号分隔的折叠列状态 ID 字符串为 Set<Long>。
+     * <p>
+     * 安全处理：过滤非数字字符、空字符串、以及超出 Long 范围的数值。
      */
     private Set<Long> parseCollapsedStatusIds(String collapsedStatusIds) {
         if (collapsedStatusIds == null || collapsedStatusIds.isBlank()) {
@@ -371,7 +376,9 @@ public class BoardController {
         }
         return Arrays.stream(collapsedStatusIds.split(","))
                 .map(String::trim)
-                .filter(s -> !s.isEmpty() && s.chars().allMatch(Character::isDigit))
+                .filter(s -> !s.isEmpty()
+                        && s.length() <= MAX_LONG_DIGITS
+                        && s.chars().allMatch(Character::isDigit))
                 .map(Long::parseLong)
                 .collect(java.util.stream.Collectors.toSet());
     }

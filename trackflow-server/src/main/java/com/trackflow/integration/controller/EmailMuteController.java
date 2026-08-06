@@ -59,9 +59,15 @@ public class EmailMuteController {
         EmailMuteTokenService.MuteOutcome outcome = emailMuteTokenService.muteViaTokenSafe(token);
         String redirectUrl;
         if (outcome.success()) {
-            redirectUrl = base + "/settings/notifications?muted=1&resourceType="
-                    + URLEncoder.encode(outcome.resourceType(), StandardCharsets.UTF_8)
-                    + "&resourceId=" + outcome.resourceId();
+            StringBuilder sb = new StringBuilder(base)
+                    .append("/settings/notifications?muted=1");
+            if (outcome.resourceType() != null) {
+                sb.append("&resourceType=").append(URLEncoder.encode(outcome.resourceType(), StandardCharsets.UTF_8));
+            }
+            if (outcome.resourceId() != null) {
+                sb.append("&resourceId=").append(outcome.resourceId());
+            }
+            redirectUrl = sb.toString();
         } else {
             redirectUrl = base + "/settings/notifications?error=" + outcome.errorCode();
         }
