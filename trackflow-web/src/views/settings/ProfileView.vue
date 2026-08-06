@@ -43,12 +43,11 @@
                         :max-length="100"
                         style="width: 200px"
                         @press-enter="saveProfile"
-                        @blur="cancelEditName"
                       />
-                      <a-button type="primary" size="mini" :loading="saving" @click="saveProfile" style="margin-left: 8px">
+                      <a-button type="primary" size="mini" :loading="saving" @mousedown.prevent @click="saveProfile" style="margin-left: 8px">
                         保存
                       </a-button>
-                      <a-button type="text" size="mini" @mousedown.prevent="cancelEditName" style="margin-left: 4px">
+                      <a-button type="text" size="mini" @mousedown.prevent @click="cancelEditName" style="margin-left: 4px">
                         取消
                       </a-button>
                     </template>
