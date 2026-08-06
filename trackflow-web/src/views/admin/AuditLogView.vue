@@ -371,6 +371,8 @@ onMounted(() => {
 .admin-page {
   padding: 24px;
   height: 100%;
+  width: 100%;
+  min-width: 0;
   overflow-y: auto;
 }
 
@@ -431,6 +433,7 @@ onMounted(() => {
 }
 
 .data-table {
+  width: 100%;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
@@ -473,6 +476,8 @@ onMounted(() => {
 .detail-col {
   white-space: normal;
   word-break: break-all;
+  min-width: 0;
+  flex: 1;
 }
 
 .time-text {
