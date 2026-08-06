@@ -19,7 +19,8 @@ public enum WidgetType {
     SPRINT_PROGRESS("sprint_progress", "Sprint 进度"),
     CALENDAR("calendar", "到期日历"),
     AGILE_CHART("agile_chart", "敏捷图表"),
-    AGILE_BOARD_STATUS("agile_board_status", "看板状态");
+    AGILE_BOARD_STATUS("agile_board_status", "看板状态"),
+    PROJECT_TEAM("project_team", "项目成员");
 
     private final String value;
     private final String label;
