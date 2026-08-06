@@ -100,6 +100,29 @@
       </div>
     </div>
 
+    <!-- Change Password Section -->
+    <div class="settings-section">
+      <div class="section-header">
+        <div>
+          <h3 class="section-title">修改密码</h3>
+          <p class="section-desc">
+            密码由公司统一身份系统 (Keycloak) 管理。如需修改密码，请前往 Keycloak 账户中心操作。
+          </p>
+        </div>
+      </div>
+      <div class="password-action">
+        <a
+          :href="keycloakPasswordUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="keycloak-link"
+        >
+          <icon-export class="link-icon" />
+          前往 Keycloak 账户中心修改密码
+        </a>
+      </div>
+    </div>
+
     <!-- Security Tips -->
     <div class="settings-section">
       <h3 class="section-title">安全提示</h3>
@@ -230,14 +253,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { apiKeyApi } from '@/api'
+import { KEYCLOAK_CONFIG } from '@/utils/keycloak'
 import type { ApiKeyVO, ApiKeyCreatedVO } from '@/api/types'
 
 // State
 const loading = ref(false)
 const tokens = ref<ApiKeyVO[]>([])
+
+// Keycloak password change URL
+const keycloakPasswordUrl = computed(
+  () => `${KEYCLOAK_CONFIG.authority}/account/#/security/signingin`
+)
 
 // Create dialog
 const showCreateDialog = ref(false)
@@ -546,6 +575,33 @@ onMounted(() => {
   position: absolute;
   left: 0;
   color: var(--tf-text-tertiary);
+}
+
+/* Password Section */
+.password-action {
+  padding: 16px;
+  background: var(--tf-bg-surface);
+  border: 1px solid var(--tf-border-light);
+  border-radius: 6px;
+}
+
+.keycloak-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--tf-text-accent);
+  text-decoration: none;
+  transition: opacity 150ms;
+}
+
+.keycloak-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.link-icon {
+  font-size: 14px;
 }
 
 /* Settings Footer */
