@@ -43,13 +43,13 @@
 
     <!-- Widget 内容区 -->
     <div class="widget-body">
-      <!-- 加载状态 -->
-      <div v-if="loading" class="widget-loading">
+      <!-- 加载中遮罩层（overlay，不卸载子组件） -->
+      <div v-if="loading" class="widget-loading-overlay">
         <a-spin dot />
       </div>
 
       <!-- 错误状态 -->
-      <div v-else-if="error" class="widget-error">
+      <div v-if="error && !loading" class="widget-error">
         <icon-exclamation-circle-fill :size="24" class="error-icon" />
         <span class="error-text">{{ error }}</span>
         <a-button size="mini" type="text" @click="refreshData">
@@ -58,9 +58,10 @@
         </a-button>
       </div>
 
-      <!-- 动态 Widget 内容 -->
+      <!-- 动态 Widget 内容（始终保持挂载，用 v-show 控制可见性） -->
       <component
-        v-else-if="widgetComponent"
+        v-if="widgetComponent"
+        v-show="!loading && !error"
         :is="widgetComponent"
         ref="widgetRef"
         v-bind="widgetProps"
@@ -77,7 +78,7 @@
       </template>
 
       <!-- 未知类型 -->
-      <template v-else>
+      <template v-else-if="!widgetComponent">
         <div class="widget-configure-hint">
           <icon-question-circle :size="32" class="hint-icon" />
           <span class="hint-text">未知微件类型: {{ widget.widgetType }}</span>
@@ -221,6 +222,7 @@ const widgetProps = computed(() => {
 function onWidgetLoaded() {
   clearLoadingTimeout()
   loading.value = false
+  error.value = null
   dataLoaded.value = true
 }
 
@@ -404,13 +406,20 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
-.widget-loading {
+.widget-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  background: var(--tf-bg-elevated);
+  z-index: 1;
 }
 
 .widget-error {
