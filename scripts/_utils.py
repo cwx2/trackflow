@@ -187,7 +187,11 @@ class AutomationInstanceLock:
         # 兼容旧版本实例：旧版本没有 lock 文件，先通过进程命令行阻止重复启动。
         try:
             import psutil
-            for process in psutil.process_iter(["pid", "name", "cmdline"]):
+            for process in psutil.process_iter(["pid", "name", "cmdline", "status"]):
+                # 跳过 zombie/dead 进程，避免误判残留进程为活跃实例
+                status = (process.info.get("status") or "").lower()
+                if status in {"zombie", "dead"}:
+                    continue
                 if process.info["pid"] == os.getpid():
                     continue
                 process_name = (process.info.get("name") or "").lower()
@@ -199,6 +203,9 @@ class AutomationInstanceLock:
                     for argument in command_args
                 )
                 if is_automation_script:
+                    # 二次确认进程确实存活，避免竞态或 psutil 缓存导致误判
+                    if not psutil.pid_exists(process.info["pid"]):
+                        continue
                     raise RuntimeError(
                         f"自动化脚本已经运行（PID={process.info['pid']}），请先停止已有实例"
                     )
