@@ -1023,6 +1023,15 @@ function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; 
     }
   }
 
+  // version 类型：未发布版本排在前（Fix versions 语义）
+  if (cf.fieldFormat === 'version') {
+    activeOptions = [...activeOptions].sort((a, b) => {
+      const aReleased = a.isReleased ? 1 : 0
+      const bReleased = b.isReleased ? 1 : 0
+      return aReleased - bReleased
+    })
+  }
+
   return activeOptions.map(o => ({ id: o.id, value: o.value, description: o.description }))
 }
 

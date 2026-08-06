@@ -444,6 +444,14 @@
                 <template #icon><icon-sort-descending /></template>
                 按名称降序
               </a-button>
+              <a-button v-if="form.fieldFormat === 'version'" size="mini" type="text" @click="sortOptionsByReleaseDate">
+                <template #icon><icon-sort-descending /></template>
+                按发布日期
+              </a-button>
+              <div v-if="form.fieldFormat === 'version'" class="options-archive-toggle">
+                <a-switch v-model="showReleasedInDrawer" size="small" />
+                <span class="archive-toggle-label">显示已发布</span>
+              </div>
               <div v-if="editingId && archivedOptionCount > 0" class="options-archive-toggle">
                 <a-switch v-model="showArchivedInDrawer" size="small" />
                 <span class="archive-toggle-label">显示已归档 ({{ archivedOptionCount }})</span>
@@ -523,6 +531,16 @@
                   >
                     <a-option v-for="u in ownerUserList" :key="u.id" :value="u.id">{{ u.displayName }}</a-option>
                   </a-select>
+                  <!-- version 类型显示已发布开关 -->
+                  <a-date-picker
+                    v-if="!opt.isArchived && form.fieldFormat === 'version'"
+                    v-model="opt.releaseDate"
+                    placeholder="发布日期"
+                    size="mini"
+                    style="width: 130px"
+                    allow-clear
+                  />
+                  <a-checkbox v-if="!opt.isArchived && form.fieldFormat === 'version'" v-model="opt.isReleased" size="small">已发布</a-checkbox>
                   <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
                   <span
                     v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
@@ -685,10 +703,19 @@ const detailFilteredOptions = computed(() => {
   return selectedField.value.options.filter(o => !o.isArchived)
 })
 
-/** 编辑抽屉中可见的选项（归档的根据开关显示/隐藏） */
+/** 版本类型"显示已发布"开关，默认显示 */
+const showReleasedInDrawer = ref(true)
+
+/** 编辑抽屉中可见的选项（归档的根据开关显示/隐藏，版本已发布的根据开关显示/隐藏） */
 const visibleFormOptions = computed(() => {
-  if (showArchivedInDrawer.value) return form.options
-  return form.options.filter(o => !o.isArchived)
+  let opts = form.options
+  if (!showArchivedInDrawer.value) {
+    opts = opts.filter(o => !o.isArchived)
+  }
+  if (form.fieldFormat === 'version' && !showReleasedInDrawer.value) {
+    opts = opts.filter(o => !o.isReleased)
+  }
+  return opts
 })
 
 /** 编辑抽屉中归档选项数量（用于显示提示） */
@@ -725,7 +752,7 @@ const form = reactive({
   minLength: 0,
   maxLength: 0,
   regexp: '',
-  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; isResolved?: boolean; description?: string; ownerUserId?: string }>,
+  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; isResolved?: boolean; description?: string; ownerUserId?: string; releaseDate?: string; isReleased?: boolean }>,
   projectIds: [] as string[],
   issueTypes: [] as string[],
   copyOptionsFromFieldId: undefined as string | undefined
@@ -859,6 +886,7 @@ function resetForm() {
   mergeFromFieldId.value = null
   optionUsageMap.value = {}
   showArchivedInDrawer.value = false
+  showReleasedInDrawer.value = true
   expandedDescriptionIdx.value = -1
 }
 
@@ -983,7 +1011,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   form.maxLength = record.maxLength
   form.regexp = record.regexp || ''
   form.options = (record.options || [])
-    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false, isResolved: o.isResolved || false, description: o.description || undefined, ownerUserId: o.ownerUserId || undefined }))
+    .map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isArchived: o.isArchived || false, isResolved: o.isResolved || false, description: o.description || undefined, ownerUserId: o.ownerUserId || undefined, releaseDate: o.releaseDate || undefined, isReleased: o.isReleased || false }))
   form.projectIds = record.projectIds || []
   form.issueTypes = record.issueTypes || []
   form.copyOptionsFromFieldId = undefined
@@ -991,7 +1019,7 @@ function openEdit(record: CustomFieldDefinitionVO) {
   mergeFromFieldId.value = null
   // 检查字段是否有数据——有则禁止切换 isMulti
   isMultiDisabled.value = false
-  if (record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField') {
+  if (record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version') {
     loadEnumFields()
     customFieldApi.getUsage(record.id).then(res => {
       if (res.data && res.data.valueCount > 0) {
@@ -1157,6 +1185,26 @@ function sortOptionsByName(direction: 'asc' | 'desc') {
   }
 }
 
+// ========== 版本选项按发布日期排序 ==========
+
+function sortOptionsByReleaseDate() {
+  const sorted = [...form.options].sort((a, b) => {
+    // 无日期排最后
+    if (!a.releaseDate && !b.releaseDate) return 0
+    if (!a.releaseDate) return 1
+    if (!b.releaseDate) return -1
+    return a.releaseDate.localeCompare(b.releaseDate)
+  })
+  form.options = sorted
+
+  // 编辑模式下即时保存排序
+  if (editingId.value && sorted.every(o => o.id)) {
+    customFieldApi.reorderOptions(editingId.value, sorted.map(o => o.id!)).catch(() => {
+      // 静默失败
+    })
+  }
+}
+
 async function handleSave() {
   if (!form.name.trim()) {
     Message.warning('请输入字段名称')
@@ -1183,9 +1231,9 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
-        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField') ? form.isMulti : undefined,
-        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField')
-          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined }))
+        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version') ? form.isMulti : undefined,
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version')
+          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined, releaseDate: form.fieldFormat === 'version' ? o.releaseDate || undefined : undefined, isReleased: form.fieldFormat === 'version' ? o.isReleased : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes
@@ -1203,9 +1251,9 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
-        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField') ? form.isMulti : undefined,
-        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField')
-          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined }))
+        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version') ? form.isMulti : undefined,
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version')
+          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined, releaseDate: form.fieldFormat === 'version' ? o.releaseDate || undefined : undefined, isReleased: form.fieldFormat === 'version' ? o.isReleased : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes

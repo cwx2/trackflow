@@ -512,6 +512,14 @@ function getFilteredOptions(
       }
     } catch { /* 条件规则解析容错，显示所有选项 */ }
   }
+  // version 类型：未发布版本排在前（Fix versions 语义）
+  if (cf.fieldFormat === 'version') {
+    activeOptions = [...activeOptions].sort((a, b) => {
+      const aReleased = a.isReleased ? 1 : 0
+      const bReleased = b.isReleased ? 1 : 0
+      return aReleased - bReleased
+    })
+  }
   return activeOptions.map(o => {
     let label = o.value
     if (cf.fieldFormat === 'ownedField' && o.ownerDisplayName) { label = `${o.value} → ${o.ownerDisplayName}` }
