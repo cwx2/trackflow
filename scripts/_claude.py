@@ -449,32 +449,20 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         if stripped and not stripped.startswith("{") and len(stripped) < 200:
             log.info(f"[{label}] {strip_ansi(stripped)}")
 
-    # 解析 JSON 输出
-    # 注意：stdout 中 JSON 可能不完整（多行 JSON 被 stdout.split 打断）
-    # 尝试从整个 stdout 提取 JSON 片段
+    # 解析 JSON 输出 — communicate() 保证 stdout 是完整的一行 JSON
     parsed = _parse_claude_output(stdout)
     if parsed is None:
-        # 部分 Claude 输出中 JSON 可能混在其他行中
-        # 尝试用正则找 JSON 对象
-        import re as _re
-        json_matches = _re.findall(r'\{[^{}]*"is_error"[^{}]*\}', stdout)
-        for m in reversed(json_matches):
-            try:
-                parsed = json.loads(m)
-                break
-            except json.JSONDecodeError:
-                continue
-
-    if parsed is None:
-        log.warning(f"[{label}] 无法解析 Claude Code 输出为 JSON (共{len(stdout_bytes)}字节)")
-        # 显示最后500字符便于调试
-        tail = stdout.strip()[-500:] if stdout.strip() else "(empty)"
-        log.warning(f"[{label}] 输出尾部: {tail}")
+        # stdout 可能有多行（如 stderr 混合），解析失败时打印原始输出
+        log.warning(f"[{label}] 无法解析 JSON (共{len(stdout_bytes)}字节)")
+        # 显示原始输出
+        for line in stdout.strip().split("\n"):
+            if line.strip():
+                log.warning(f"[{label}] RAW: {line[:300]}")
         if _is_transient_cli_output(stdout):
-            log.warning(f"[{label}] 检测到瞬时故障标记")
             _open_circuit(label)
             return False, "STARTUP_FAIL"
-        return False, stdout[-500:]
+        # 如果 stdout 为空但进程正常退出，说明 prompt 不对
+        return False, stdout[-500:] if stdout.strip() else ""
 
     is_error = parsed.get("is_error", False)
     result_text = parsed.get("result", "")
