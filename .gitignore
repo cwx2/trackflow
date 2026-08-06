@@ -41,3 +41,7 @@ __pycache__/
 .env.local
 *.log
 openproject/
+
+
+# 自动化脚本运行时锁文件
+scripts/.auto_iterate_parallel.lock
