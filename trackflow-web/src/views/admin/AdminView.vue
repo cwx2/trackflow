@@ -100,13 +100,6 @@ const menuItems: AdminMenuItem[] = [
     permission: 'system:manage_groups'
   },
   {
-    path: '/workflow',
-    icon: '🔄',
-    title: '工作流',
-    description: '管理工作流定义，配置状态转换规则，绑定到项目',
-    permission: 'system:manage_roles'
-  },
-  {
     path: '/admin/custom-fields',
     icon: '📝',
     title: '自定义字段',
