@@ -55,267 +55,58 @@
       </div>
 
       <!-- Active Sprints -->
-      <div v-for="sprint in activeSprints" :key="sprint.id" class="sprint-card active" :class="{ 'sprint-overdue': sprint.overdue }">
-        <div class="sprint-header">
-          <div class="sprint-info">
-            <span class="sprint-status-badge active" :class="{ overdue: sprint.overdue }">
-              {{ sprint.overdue ? '已超期' : '进行中' }}
-            </span>
-            <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
-            <div class="sprint-name-wrapper" @mouseenter="hoveredSprintId = sprint.id" @mouseleave="hoveredSprintId = null">
-              <template v-if="inlineEditingSprintId === sprint.id">
-                <input
-                  ref="inlineEditInputRef"
-                  v-model="inlineEditName"
-                  class="sprint-name-input"
-                  @keydown.enter="confirmInlineEdit"
-                  @keydown.esc="cancelInlineEdit"
-                  @blur="cancelInlineEdit"
-                  @click.stop
-                />
-              </template>
-              <template v-else>
-                <h3 class="sprint-name active-name">{{ sprint.name }}</h3>
-                <a-tooltip content="编辑迭代名称" v-if="canEditSprintItem(sprint) && hoveredSprintId === sprint.id">
-                  <span class="sprint-name-edit-icon" @click.stop="startInlineEdit(sprint)">
-                    <icon-edit />
-                  </span>
-                </a-tooltip>
-              </template>
-            </div>
-            <span class="sprint-remaining" v-if="getSprintTimeInfo(sprint)">
-              <template v-if="getSprintTimeInfo(sprint)!.type === 'not-started'">
-                <span class="remaining-icon not-started">📅</span> {{ getSprintTimeInfo(sprint)!.days }} 天后开始
-              </template>
-              <template v-else-if="getSprintTimeInfo(sprint)!.type === 'remaining'">
-                <span class="remaining-icon">⏳</span> 还剩 {{ getSprintTimeInfo(sprint)!.days }} 天
-              </template>
-              <template v-else-if="getSprintTimeInfo(sprint)!.type === 'today'">
-                <span class="remaining-icon warning">⚠️</span> 今天截止
-              </template>
-              <template v-else>
-                <span class="remaining-icon overdue">🚨</span> 已超期 {{ getSprintTimeInfo(sprint)!.days }} 天
-              </template>
-            </span>
-          </div>
-          <div class="sprint-dates">
-            {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
-          </div>
-        </div>
-
-        <!-- 状态警告 -->
-        <div class="sprint-status-warning" v-if="sprint.statusHint">
-          <span class="warning-icon">⚠️</span>
-          <span class="warning-text">{{ sprint.statusHint }}</span>
-          <!-- 针对"开始日期尚未到达"的异常情况，提供快捷修复操作 -->
-          <div class="warning-actions" v-if="isStartDateNotReachedWarning(sprint.statusHint) && canEditSprintItem(sprint)">
-            <a-button size="mini" type="text" @click="openEditModal(sprint)">修改日期</a-button>
-            <a-button size="mini" type="text" @click="handleRevertToPlanned(sprint)">回退为计划中</a-button>
-          </div>
-        </div>
-
-        <!-- Sprint 目标 -->
-        <div class="sprint-goal-banner" v-if="sprint.goal">
-          <span class="sprint-goal-banner-icon">🎯</span>
-          <span class="sprint-goal-banner-text">{{ sprint.goal }}</span>
-        </div>
-
-        <!-- 进度区域 -->
-        <div class="sprint-progress-section">
-          <div class="progress-bar-container">
-            <div class="progress-bar">
-              <div
-                class="progress-segment done"
-                :style="{ width: getProgressPercent(sprint, 'done') + '%' }"
-                :title="`已完成: ${sprint.doneIssues}`"
-              ></div>
-              <div
-                class="progress-segment in-progress"
-                :style="{ width: getProgressPercent(sprint, 'inProgress') + '%' }"
-                :title="`进行中: ${sprint.inProgressIssues}`"
-              ></div>
-              <div
-                class="progress-segment todo"
-                :style="{ width: getProgressPercent(sprint, 'todo') + '%' }"
-                :title="`待办: ${sprint.todoIssues}`"
-              ></div>
-            </div>
-            <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
-          </div>
-          <div class="progress-stats">
-            <span class="stat-item done stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'done')">
-              <span class="stat-dot"></span>
-              完成 {{ sprint.doneIssues }}
-            </span>
-            <span class="stat-item in-progress stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'in_progress')">
-              <span class="stat-dot"></span>
-              进行中 {{ sprint.inProgressIssues }}
-            </span>
-            <span class="stat-item todo stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'open')">
-              <span class="stat-dot"></span>
-              待办 {{ sprint.todoIssues }}
-            </span>
-            <span class="stat-item total stat-clickable" @click.stop="openIssueDrawer(sprint)">
-              共 {{ sprint.totalIssues }} 个工单
-            </span>
-            <span class="stat-item overdue stat-clickable" v-if="sprint.overdueIssues > 0" @click.stop="viewOverdueIssues(sprint)">
-              <span class="stat-dot"></span>
-              逾期 {{ sprint.overdueIssues }}
-            </span>
-            <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
-              <span class="stat-dot"></span>
-              未分配 {{ sprint.unassignedIssues }}
-            </span>
-            <span class="stat-item estimation" v-if="sprint.totalEstimatedHours > 0">
-              <span class="stat-icon">⏱</span>
-              已完成 {{ formatHours(sprint.completedEstimatedHours) }} / 共 {{ formatHours(sprint.totalEstimatedHours) }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 燃尽图 -->
-        <SprintBurndownChart
-          v-if="sprint.startDate && sprint.endDate && sprint.totalIssues > 0"
-          :sprint-id="sprint.id"
-          :sprint-end-date="sprint.endDate"
-          :is-completed="false"
-        />
-
-        <!-- 负责人分布 -->
-        <SprintAssigneeDistribution
-          v-if="sprint.totalIssues > 0"
-          :sprint-id="sprint.id"
-          :sprint-name="sprint.name"
-          :project-key="selectedProjectKey || sprint.projectKey"
-          @view-issues="(filter: string) => openIssueDrawer(sprint, filter)"
-        />
-
-        <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)">查看工单</a-button>
-          <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)">在看板中查看</a-button>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="handleArchiveActiveSprint(sprint)">归档</a-button>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" @click="handleCompleteSprint(sprint)">完成迭代</a-button>
-        </div>
-      </div>
+      <SprintCard
+        v-for="sprint in activeSprints"
+        :key="sprint.id"
+        :sprint="sprint"
+        :show-project-badge="!selectedProject"
+        :project-key="selectedProjectKey"
+        :can-edit="canEditSprintItem(sprint)"
+        :can-delete="false"
+        :has-active-sprint="hasActiveSprint"
+        :inline-editable="true"
+        @view-issues="viewSprintIssues"
+        @view-on-board="viewSprintOnBoard"
+        @view-category="viewIssuesByCategory"
+        @view-total="openIssueDrawer"
+        @view-overdue="viewOverdueIssues"
+        @view-unassigned="viewUnassignedIssues"
+        @view-issues-filtered="(s, f) => openIssueDrawer(s, f)"
+        @edit="openEditModal"
+        @edit-dates="openEditModal"
+        @complete="handleCompleteSprint"
+        @archive="handleArchiveActiveSprint"
+        @revert-to-planned="handleRevertToPlanned"
+        @inline-rename="inlineRenameSprint"
+      />
 
       <!-- Planned Sprints -->
-      <div v-for="sprint in plannedSprints" :key="sprint.id" class="sprint-card planned" :class="{ 'sprint-next': !hasActiveSprint && sprint.id === nextPlannedSprintId }">
-        <div class="sprint-header">
-          <div class="sprint-info">
-            <span class="sprint-status-badge next" v-if="!hasActiveSprint && sprint.id === nextPlannedSprintId">下一个</span>
-            <span class="sprint-status-badge planned" v-else>计划中</span>
-            <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
-            <div class="sprint-name-wrapper" @mouseenter="hoveredSprintId = sprint.id" @mouseleave="hoveredSprintId = null">
-              <template v-if="inlineEditingSprintId === sprint.id">
-                <input
-                  ref="inlineEditInputRef"
-                  v-model="inlineEditName"
-                  class="sprint-name-input"
-                  @keydown.enter="confirmInlineEdit"
-                  @keydown.esc="cancelInlineEdit"
-                  @blur="cancelInlineEdit"
-                  @click.stop
-                />
-              </template>
-              <template v-else>
-                <h3 class="sprint-name">{{ sprint.name }}</h3>
-                <a-tooltip content="编辑迭代名称" v-if="canEditSprintItem(sprint) && hoveredSprintId === sprint.id">
-                  <span class="sprint-name-edit-icon" @click.stop="startInlineEdit(sprint)">
-                    <icon-edit />
-                  </span>
-                </a-tooltip>
-              </template>
-            </div>
-          </div>
-          <div class="sprint-dates" v-if="sprint.startDate">
-            {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
-          </div>
-        </div>
-
-        <!-- 状态提示 -->
-        <div class="sprint-status-hint" v-if="sprint.statusHint">
-          <span class="hint-icon">💡</span>
-          <span class="hint-text">{{ sprint.statusHint }}</span>
-        </div>
-
-        <!-- Sprint 目标 -->
-        <div class="sprint-goal-banner" v-if="sprint.goal">
-          <span class="sprint-goal-banner-icon">🎯</span>
-          <span class="sprint-goal-banner-text">{{ sprint.goal }}</span>
-        </div>
-
-        <!-- 进度区域 -->
-        <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
-          <div class="progress-bar-container">
-            <div class="progress-bar">
-              <div
-                class="progress-segment done"
-                :style="{ width: getProgressPercent(sprint, 'done') + '%' }"
-              ></div>
-              <div
-                class="progress-segment in-progress"
-                :style="{ width: getProgressPercent(sprint, 'inProgress') + '%' }"
-              ></div>
-              <div
-                class="progress-segment todo"
-                :style="{ width: getProgressPercent(sprint, 'todo') + '%' }"
-              ></div>
-            </div>
-            <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
-          </div>
-          <div class="progress-stats">
-            <span class="stat-item done stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'done')">
-              <span class="stat-dot"></span>
-              完成 {{ sprint.doneIssues }}
-            </span>
-            <span class="stat-item in-progress stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'in_progress')">
-              <span class="stat-dot"></span>
-              进行中 {{ sprint.inProgressIssues }}
-            </span>
-            <span class="stat-item todo stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'open')">
-              <span class="stat-dot"></span>
-              待办 {{ sprint.todoIssues }}
-            </span>
-            <span class="stat-item total stat-clickable" @click.stop="openIssueDrawer(sprint)">
-              共 {{ sprint.totalIssues }} 个工单
-            </span>
-            <span class="stat-item unassigned" v-if="sprint.unassignedIssues > 0" @click.stop="viewUnassignedIssues(sprint)">
-              <span class="stat-dot"></span>
-              未分配 {{ sprint.unassignedIssues }}
-            </span>
-            <span class="stat-item estimation" v-if="sprint.totalEstimatedHours > 0">
-              <span class="stat-icon">⏱</span>
-              共 {{ formatHours(sprint.totalEstimatedHours) }}
-            </span>
-          </div>
-        </div>
-        <div class="sprint-no-issues" v-else>
-          <span class="no-issues-text">暂无工单</span>
-        </div>
-
-        <!-- 负责人分布 -->
-        <SprintAssigneeDistribution
-          v-if="sprint.totalIssues > 0"
-          :sprint-id="sprint.id"
-          :sprint-name="sprint.name"
-          :project-key="selectedProjectKey || sprint.projectKey"
-          @view-issues="(filter: string) => openIssueDrawer(sprint, filter)"
-        />
-
-        <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
-          <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
-          <a-tooltip :content="getActivateTooltip(sprint)">
-            <span class="tooltip-wrapper">
-              <a-button type="primary" size="mini" :disabled="!canEditSprintItem(sprint) || isSprintNotStartable(sprint) || hasActiveSprint" @click="handleActivateSprint(sprint.id)">开始迭代</a-button>
-            </span>
-          </a-tooltip>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
-          <a-button v-if="canDeleteSprintItem(sprint)" size="mini" status="danger" @click="handleDeleteSprint(sprint)">删除</a-button>
-        </div>
-      </div>
+      <SprintCard
+        v-for="sprint in plannedSprints"
+        :key="sprint.id"
+        :sprint="sprint"
+        :show-project-badge="!selectedProject"
+        :project-key="selectedProjectKey"
+        :can-edit="canEditSprintItem(sprint)"
+        :can-delete="canDeleteSprintItem(sprint)"
+        :is-next="!hasActiveSprint && sprint.id === nextPlannedSprintId"
+        :has-active-sprint="hasActiveSprint"
+        :is-startable="!isSprintNotStartable(sprint)"
+        :activate-tooltip="getActivateTooltip(sprint)"
+        :inline-editable="true"
+        @view-issues="viewSprintIssues"
+        @view-on-board="viewSprintOnBoard"
+        @view-category="viewIssuesByCategory"
+        @view-total="openIssueDrawer"
+        @view-overdue="viewOverdueIssues"
+        @view-unassigned="viewUnassignedIssues"
+        @view-issues-filtered="(s, f) => openIssueDrawer(s, f)"
+        @edit="openEditModal"
+        @activate="handleActivateSprint"
+        @archive-planned="archiveSprint"
+        @delete="handleDeleteSprint"
+        @inline-rename="inlineRenameSprint"
+      />
 
       <!-- Completed Sprints Section (collapsible) -->
       <div v-if="completedSprints.length > 0" class="completed-section">
@@ -325,79 +116,25 @@
           <span class="completed-section-count">{{ completedSprints.length }}</span>
         </div>
         <template v-if="showCompletedSprints">
-      <div v-for="sprint in completedSprints" :key="sprint.id" class="sprint-card completed" :class="{ 'just-completed': sprint.id === justCompletedSprintId }">
-        <div class="sprint-header">
-          <div class="sprint-info">
-            <span class="sprint-status-badge completed">已完成</span>
-            <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
-            <h3 class="sprint-name">{{ sprint.name }}</h3>
-          </div>
-          <div class="sprint-dates">
-            {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
-          </div>
-        </div>
-
-        <!-- 完成统计 -->
-        <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
-          <div class="progress-bar-container">
-            <div class="progress-bar">
-              <div
-                class="progress-segment done"
-                :style="{ width: getProgressPercent(sprint, 'done') + '%' }"
-              ></div>
-              <div
-                class="progress-segment in-progress"
-                :style="{ width: getProgressPercent(sprint, 'inProgress') + '%' }"
-              ></div>
-              <div
-                class="progress-segment todo"
-                :style="{ width: getProgressPercent(sprint, 'todo') + '%' }"
-              ></div>
-            </div>
-            <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
-          </div>
-          <div class="progress-stats">
-            <span class="stat-item done stat-clickable" @click.stop="viewIssuesByCategory(sprint, 'done')">
-              <span class="stat-dot"></span>
-              完成 {{ sprint.doneIssues }}
-            </span>
-            <span class="stat-item in-progress stat-clickable" v-if="sprint.inProgressIssues > 0" @click.stop="viewIssuesByCategory(sprint, 'in_progress')">
-              <span class="stat-dot"></span>
-              进行中 {{ sprint.inProgressIssues }}
-            </span>
-            <span class="stat-item todo stat-clickable" v-if="sprint.todoIssues > 0" @click.stop="viewIssuesByCategory(sprint, 'open')">
-              <span class="stat-dot"></span>
-              待办 {{ sprint.todoIssues }}
-            </span>
-            <span class="stat-item total stat-clickable" @click.stop="viewSprintIssues(sprint)">
-              共 {{ sprint.totalIssues }} 个工单
-            </span>
-          </div>
-        </div>
-
-        <div class="sprint-actions">
-          <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
-          <a-button size="mini" type="text" @click="viewSprintOnBoard(sprint)" v-if="sprint.totalIssues > 0">在看板中查看</a-button>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="openEditModal(sprint)">编辑</a-button>
-          <a-button
-            size="mini"
-            type="text"
-            @click="toggleCompletedBurndown(sprint.id)"
-            v-if="sprint.startDate && sprint.endDate && sprint.totalIssues > 0"
-          >
-            {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
-          </a-button>
-          <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="archiveSprint(sprint)">归档</a-button>
-        </div>
-
-        <!-- 已完成 Sprint 的燃尽图（展开时显示） -->
-        <SprintBurndownChart
-          v-if="expandedCompletedSprints.has(sprint.id)"
-          :sprint-id="sprint.id"
-          :sprint-end-date="sprint.endDate"
-          :is-completed="true"
-        />
-      </div>
+          <SprintCard
+            v-for="sprint in completedSprints"
+            :key="sprint.id"
+            :sprint="sprint"
+            :show-project-badge="!selectedProject"
+            :project-key="selectedProjectKey"
+            :can-edit="canEditSprintItem(sprint)"
+            :can-delete="false"
+            :is-just-completed="sprint.id === justCompletedSprintId"
+            :show-burndown="expandedCompletedSprints.has(sprint.id)"
+            :inline-editable="false"
+            @view-issues="viewSprintIssues"
+            @view-on-board="viewSprintOnBoard"
+            @view-category="viewIssuesByCategory"
+            @view-total="(s) => viewSprintIssues(s)"
+            @edit="openEditModal"
+            @archive-planned="archiveSprint"
+            @toggle-burndown="toggleCompletedBurndown"
+          />
         </template>
       </div>
 
@@ -409,69 +146,20 @@
           <span class="completed-section-count">{{ archivedSprints.length }}</span>
         </div>
         <template v-if="showArchivedSprints">
-          <div v-for="sprint in archivedSprints" :key="sprint.id" class="sprint-card archived">
-            <div class="sprint-header">
-              <div class="sprint-info">
-                <span class="sprint-status-badge archived">已归档</span>
-                <span v-if="!selectedProject && sprint.projectKey" class="sprint-project-badge">{{ sprint.projectKey }}</span>
-                <h3 class="sprint-name">{{ sprint.name }}</h3>
-              </div>
-              <div class="sprint-dates">
-                {{ formatDate(sprint.startDate) }} — {{ formatDate(sprint.endDate) }}
-              </div>
-            </div>
-
-            <!-- 统计 -->
-            <div class="sprint-progress-section" v-if="sprint.totalIssues > 0">
-              <div class="progress-bar-container">
-                <div class="progress-bar">
-                  <div
-                    class="progress-segment done"
-                    :style="{ width: getProgressPercent(sprint, 'done') + '%' }"
-                  ></div>
-                  <div
-                    class="progress-segment in-progress"
-                    :style="{ width: getProgressPercent(sprint, 'inProgress') + '%' }"
-                  ></div>
-                  <div
-                    class="progress-segment todo"
-                    :style="{ width: getProgressPercent(sprint, 'todo') + '%' }"
-                  ></div>
-                </div>
-                <span class="progress-percent">{{ getCompletionPercent(sprint) }}%</span>
-              </div>
-              <div class="progress-stats">
-                <span class="stat-item done">
-                  <span class="stat-dot"></span>
-                  完成 {{ sprint.doneIssues }}
-                </span>
-                <span class="stat-item total">
-                  共 {{ sprint.totalIssues }} 个工单
-                </span>
-              </div>
-            </div>
-
-            <div class="sprint-actions">
-              <a-button size="mini" type="text" @click="viewSprintIssues(sprint)" v-if="sprint.totalIssues > 0">查看工单</a-button>
-              <a-button
-                size="mini"
-                type="text"
-                @click="toggleCompletedBurndown(sprint.id)"
-                v-if="sprint.startDate && sprint.endDate && sprint.totalIssues > 0"
-              >
-                {{ expandedCompletedSprints.has(sprint.id) ? '收起燃尽图' : '查看燃尽图' }}
-              </a-button>
-              <a-button v-if="canEditSprintItem(sprint)" size="mini" type="text" @click="restoreSprint(sprint)">恢复</a-button>
-            </div>
-
-            <!-- 已归档 Sprint 的燃尽图（展开时显示） -->
-            <SprintBurndownChart
-              v-if="expandedCompletedSprints.has(sprint.id)"
-              :sprint-id="sprint.id"
-              :sprint-end-date="sprint.endDate"
-              :is-completed="true"
-            />
-          </div>
+          <SprintCard
+            v-for="sprint in archivedSprints"
+            :key="sprint.id"
+            :sprint="sprint"
+            :show-project-badge="!selectedProject"
+            :project-key="selectedProjectKey"
+            :can-edit="canEditSprintItem(sprint)"
+            :can-delete="false"
+            :show-burndown="expandedCompletedSprints.has(sprint.id)"
+            :inline-editable="false"
+            @view-issues="viewSprintIssues"
+            @restore="restoreSprint"
+            @toggle-burndown="toggleCompletedBurndown"
+          />
         </template>
       </div>
     </div>
@@ -839,10 +527,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconEdit } from '@arco-design/web-vue/es/icon'
 import { sprintApi } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { usePermission, canEditSprintSync, canDeleteSprintSync, preloadPermissions } from '@/composables/usePermission'
@@ -852,6 +539,7 @@ import { ERROR_CODES } from '@/api/error-codes'
 import SprintBurndownChart from './SprintBurndownChart.vue'
 import SprintAssigneeDistribution from './SprintAssigneeDistribution.vue'
 import SprintIssueDrawer from './SprintIssueDrawer.vue'
+import SprintCard from './SprintCard.vue'
 import { localizeStatusName } from '@/utils/fieldLabels'
 
 const router = useRouter()
@@ -903,12 +591,6 @@ const editForm = reactive({
   startDate: '',
   endDate: ''
 })
-
-// ===== 内联编辑迭代名称 =====
-const hoveredSprintId = ref<string | null>(null)
-const inlineEditingSprintId = ref<string | null>(null)
-const inlineEditName = ref<string>('')
-const inlineEditInputRef = ref<HTMLInputElement[]>([])
 
 // ===== 完成迭代相关 =====
 const showCompleteModal = ref(false)
@@ -1035,60 +717,6 @@ function formatDate(dateStr?: string): string {
   if (!dateStr) return ''
   const d = new Date(dateStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function formatHours(hours: number): string {
-  if (hours === 0) return '0h'
-  if (hours >= 1) return `${Math.round(hours * 10) / 10}h`
-  return `${Math.round(hours * 60)}m`
-}
-
-interface SprintTimeInfo {
-  type: 'not-started' | 'remaining' | 'today' | 'overdue'
-  days: number
-}
-
-function getSprintTimeInfo(sprint: SprintVO): SprintTimeInfo | null {
-  if (!sprint.endDate) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const end = new Date(sprint.endDate)
-  end.setHours(0, 0, 0, 0)
-
-  // 如果有开始日期且今天还没到开始日期，显示"X 天后开始"
-  if (sprint.startDate) {
-    const start = new Date(sprint.startDate)
-    start.setHours(0, 0, 0, 0)
-    if (today.getTime() < start.getTime()) {
-      const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      return { type: 'not-started', days: daysUntilStart }
-    }
-  }
-
-  // Sprint 已进入工作期（today >= startDate），正常计算剩余天数
-  const remainingDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (remainingDays > 0) {
-    return { type: 'remaining', days: remainingDays }
-  } else if (remainingDays === 0) {
-    return { type: 'today', days: 0 }
-  } else {
-    return { type: 'overdue', days: Math.abs(remainingDays) }
-  }
-}
-
-function getProgressPercent(sprint: SprintVO, type: 'done' | 'inProgress' | 'todo'): number {
-  if (sprint.totalIssues === 0) return 0
-  const map = {
-    done: sprint.doneIssues,
-    inProgress: sprint.inProgressIssues,
-    todo: sprint.todoIssues
-  }
-  return (map[type] / sprint.totalIssues) * 100
-}
-
-function getCompletionPercent(sprint: SprintVO): number {
-  if (sprint.totalIssues === 0) return 0
-  return Math.round((sprint.doneIssues / sprint.totalIssues) * 100)
 }
 
 function isSprintNotStartable(sprint: SprintVO): boolean {
@@ -1223,35 +851,11 @@ function handleDrawerAssigned() {
 
 // ===== API 调用 =====
 
-// ===== 内联编辑迭代名称 =====
+// ===== 内联编辑迭代名称（由 SprintCard 组件触发） =====
 
-function startInlineEdit(sprint: SprintVO) {
-  inlineEditingSprintId.value = sprint.id
-  inlineEditName.value = sprint.name
-  nextTick(() => {
-    const input = inlineEditInputRef.value[0]
-    if (input) {
-      input.focus()
-      input.select()
-    }
-  })
-}
-
-async function confirmInlineEdit() {
-  const sprintId = inlineEditingSprintId.value
-  const newName = inlineEditName.value.trim()
-  if (!sprintId) return
-  if (!newName) {
-    Message.warning('迭代名称不能为空')
-    return
-  }
-  // 找原始 sprint 对比是否有改动
-  const original = sprints.value.find(s => s.id === sprintId)
-  inlineEditingSprintId.value = null
-  if (!original || original.name === newName) return
+async function inlineRenameSprint(sprintId: string, newName: string) {
   try {
     await sprintApi.update(sprintId, { name: newName })
-    // 本地更新，无需全量刷新
     const idx = sprints.value.findIndex(s => s.id === sprintId)
     if (idx !== -1) {
       sprints.value[idx] = { ...sprints.value[idx], name: newName }
@@ -1260,11 +864,6 @@ async function confirmInlineEdit() {
   } catch (e: any) {
     Message.error(e.response?.data?.message || '更新失败')
   }
-}
-
-function cancelInlineEdit() {
-  inlineEditingSprintId.value = null
-  inlineEditName.value = ''
 }
 
 async function loadSprints() {
@@ -1329,13 +928,6 @@ async function activateSprint(id: string) {
   } catch (e: any) {
     Message.error(e.response?.data?.message || '操作失败')
   }
-}
-
-/**
- * 判断是否为"开始日期尚未到达"的警告
- */
-function isStartDateNotReachedWarning(hint: string | undefined): boolean {
-  return hint?.includes('开始日期尚未到达') ?? false
 }
 
 /**

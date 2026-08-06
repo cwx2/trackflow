@@ -176,100 +176,18 @@
       </div>
 
       <!-- Widget 区域（项目概览仪表盘） -->
-      <div class="section widget-overview-section">
-        <div class="section-header-row">
-          <h2 class="section-title">监控视图</h2>
-          <a-button
-            v-if="canEditProject && !isArchived"
-            size="small"
-            type="outline"
-            @click="showAddWidgetModal = true"
-          >
-            <template #icon><icon-plus /></template>
-            添加 Widget
-          </a-button>
-        </div>
-
-        <!-- Widget 加载中 -->
-        <div v-if="widgetLoading" class="widget-loading-state">
-          <a-spin :size="20" />
-          <span class="widget-loading-text">加载 Widget...</span>
-        </div>
-
-        <!-- Widget Grid -->
-        <template v-else-if="overviewDashboard && overviewDashboard.widgets && overviewDashboard.widgets.length > 0">
-          <GridLayout
-            v-model:layout="widgetGridLayout"
-            :col-num="12"
-            :row-height="80"
-            :margin="[12, 12]"
-            :is-draggable="canEditProject && !isArchived"
-            :is-resizable="canEditProject && !isArchived"
-            @layout-updated="onWidgetLayoutUpdated"
-          >
-            <GridItem
-              v-for="item in widgetGridLayout"
-              :key="item.i"
-              :x="item.x"
-              :y="item.y"
-              :w="item.w"
-              :h="item.h"
-              :i="item.i"
-              class="overview-widget-grid-item"
-            >
-              <WidgetCard
-                :widget="getOverviewWidgetById(item.i)"
-                :is-owner="canEditProject && !isArchived"
-                @edit="editOverviewWidget"
-                @delete="deleteOverviewWidget"
-                @move="() => {}"
-              />
-            </GridItem>
-          </GridLayout>
-        </template>
-
-        <!-- 空状态 -->
-        <div v-else-if="!widgetLoading" class="widget-empty-state">
-          <template v-if="canEditProject && !isArchived">
-            <div class="widget-empty-icon">📊</div>
-            <p class="widget-empty-title">尚未配置监控视图</p>
-            <p class="widget-empty-desc">点击「添加 Widget」开始配置项目监控视图，跟踪工单进度、Sprint 状态等数据</p>
-            <a-button type="primary" size="small" @click="showAddWidgetModal = true">
-              <template #icon><icon-plus /></template>
-              添加 Widget
-            </a-button>
-          </template>
-          <template v-else>
-            <div class="widget-empty-icon">📊</div>
-            <p class="widget-empty-title">暂无监控视图</p>
-          </template>
-        </div>
-      </div>
+      <ProjectWidgetPanel
+        v-if="project"
+        :project-id="project.key || project.id"
+        :can-edit="canEditProject"
+        :is-archived="isArchived"
+      />
 
       <!-- 近期活动 -->
-      <div class="section">
-        <h2 class="section-title">近期活动</h2>
-        <div v-if="activitiesLoading" class="activities-loading">
-          <a-spin :size="20" />
-        </div>
-        <div v-else-if="recentActivities.length > 0" class="activities-list">
-          <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
-            <div class="activity-dot"></div>
-            <div class="activity-content">
-              <div class="activity-main">
-                <span class="activity-user">{{ activity.userName }}</span>
-                <span class="activity-action">{{ formatActivityAction(activity) }}</span>
-              </div>
-              <span class="activity-time">{{ formatRelativeTime(activity.createdAt) }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-else class="activities-empty">
-          <icon-history class="empty-icon" />
-          <p class="empty-title">暂无活动记录</p>
-          <p class="empty-desc">项目成员的操作记录将在此展示</p>
-        </div>
-      </div>
+      <ProjectActivityFeed
+        v-if="project"
+        :project-id="project.key || project.id"
+      />
 
       <!-- 功能入口 -->
       <div class="section">
@@ -344,73 +262,6 @@
         </div>
       </div>
 
-      <!-- 添加 Widget 弹窗 -->
-      <a-modal
-        v-model:visible="showAddWidgetModal"
-        title="添加 Widget"
-        :width="640"
-        :footer="false"
-      >
-        <div class="widget-type-grid">
-          <div
-            v-for="wt in widgetTypeList"
-            :key="wt.type"
-            class="widget-type-card"
-            @click="addOverviewWidget(wt.type, wt.defaultTitle)"
-          >
-            <div class="wt-icon">{{ wt.icon }}</div>
-            <div class="wt-info">
-              <div class="wt-name">{{ wt.label }}</div>
-              <div class="wt-desc">{{ wt.description }}</div>
-            </div>
-          </div>
-        </div>
-      </a-modal>
-
-      <!-- Widget 配置弹窗 -->
-      <a-modal
-        v-model:visible="showWidgetConfigModal"
-        title="编辑 Widget 配置"
-        :width="520"
-        @ok="handleWidgetConfigSave"
-        :ok-loading="savingWidgetConfig"
-        ok-text="保存"
-        cancel-text="取消"
-      >
-        <a-form :model="widgetConfigForm" layout="vertical">
-          <a-form-item label="标题">
-            <a-input v-model="widgetConfigForm.title" placeholder="Widget 标题" :max-length="100" />
-          </a-form-item>
-          <!-- number_card 配置 -->
-          <template v-if="editingWidgetType === 'number_card'">
-            <a-form-item label="数据来源">
-              <a-select v-model="widgetConfigForm.queryType" placeholder="选择统计指标" allow-clear>
-                <a-option value="total">工单总数</a-option>
-                <a-option value="open">待处理工单数</a-option>
-                <a-option value="closed">已完成工单数</a-option>
-                <a-option value="unassigned">未分配工单数</a-option>
-                <a-option value="overdue">已逾期工单数</a-option>
-                <a-option value="completion_rate">完成率 (%)</a-option>
-              </a-select>
-            </a-form-item>
-          </template>
-          <!-- note 配置 -->
-          <template v-if="editingWidgetType === 'note'">
-            <a-form-item label="内容">
-              <a-textarea v-model="widgetConfigForm.noteContent" placeholder="笔记内容" :auto-size="{ minRows: 3, maxRows: 8 }" />
-            </a-form-item>
-          </template>
-          <!-- agile_chart 配置 -->
-          <template v-if="editingWidgetType === 'agile_chart'">
-            <a-form-item label="图表类型">
-              <a-select v-model="widgetConfigForm.chartType" placeholder="选择图表类型">
-                <a-option value="burndown">燃尽图</a-option>
-                <a-option value="cumulative_flow">累积流图</a-option>
-              </a-select>
-            </a-form-item>
-          </template>
-        </a-form>
-      </a-modal>
     </template>
 
     <!-- 错误状态 -->
@@ -442,20 +293,17 @@ import {
   IconMore,
   IconEye,
   IconEyeInvisible,
-  IconHistory,
   IconPlus
 } from '@arco-design/web-vue/es/icon'
-import { GridLayout, GridItem } from 'grid-layout-plus'
 import { projectApi, workflowApi } from '@/api'
-import { customDashboardApi } from '@/api/customDashboard'
 import { useAuthStore } from '@/stores/auth'
 import { loadProjectPermissions } from '@/composables/usePermission'
 import { localizeStatusName } from '@/utils/fieldLabels'
 import { renderMarkdown } from '@/utils/markdown'
-import type { ProjectDetailVO, ProjectMemberVO, ProjectStatisticsVO, ProjectActivityVO } from '@/api/types'
-import type { DashboardDetailVO, DashboardWidgetVO } from '@/api/customDashboard'
+import type { ProjectDetailVO, ProjectMemberVO, ProjectStatisticsVO } from '@/api/types'
 import { Message, Modal } from '@arco-design/web-vue'
-import WidgetCard from '@/views/report/dashboard/WidgetCard.vue'
+import ProjectWidgetPanel from './ProjectWidgetPanel.vue'
+import ProjectActivityFeed from './ProjectActivityFeed.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -467,10 +315,8 @@ const loading = ref(true)
 const membersLoading = ref(false)
 const error = ref('')
 
-// 统计和活动数据
+// 统计数据
 const statistics = ref<ProjectStatisticsVO | null>(null)
-const recentActivities = ref<ProjectActivityVO[]>([])
-const activitiesLoading = ref(false)
 
 // 权限
 const projectPerms = ref<Set<string>>(new Set())
@@ -496,183 +342,6 @@ const canViewSprints = computed(() => {
 })
 
 const isArchived = computed(() => project.value?.status === 'archived')
-
-// ─── Widget 区域（项目概览仪表盘） ─────────────────────────────────────
-
-const overviewDashboard = ref<DashboardDetailVO | null>(null)
-const widgetLoading = ref(false)
-const showAddWidgetModal = ref(false)
-const showWidgetConfigModal = ref(false)
-const editingWidget = ref<DashboardWidgetVO | null>(null)
-const editingWidgetType = ref<string>('')
-const savingWidgetConfig = ref(false)
-const widgetGridLayout = ref<Array<{ i: string; x: number; y: number; w: number; h: number }>>([])
-
-const widgetConfigForm = ref<{
-  title: string
-  queryType?: string
-  noteContent?: string
-  chartType?: string
-}>({
-  title: '',
-  queryType: undefined,
-  noteContent: '',
-  chartType: 'burndown'
-})
-
-const widgetTypeList = [
-  { type: 'note', label: '快捷笔记', icon: '📝', description: '自由编辑内容', defaultTitle: '笔记' },
-  { type: 'number_card', label: '数字卡片', icon: '🔢', description: '单数字大卡片统计', defaultTitle: '统计' },
-  { type: 'report_distribution', label: '分布图表', icon: '📊', description: '按字段分组的图表', defaultTitle: '分布报表' },
-  { type: 'issue_list', label: 'Issue 列表', icon: '📋', description: '按条件展示工单列表', defaultTitle: 'Issue 列表' },
-  { type: 'activity_feed', label: '活动流', icon: '🔔', description: '最近的工单活动', defaultTitle: '最近活动' },
-  { type: 'sprint_progress', label: 'Sprint 进度', icon: '🏃', description: 'Sprint 完成进度', defaultTitle: 'Sprint 进度' },
-  { type: 'agile_chart', label: '敏捷图表', icon: '📉', description: '燃尽图或累积流图', defaultTitle: '敏捷图表' },
-  { type: 'agile_board_status', label: '看板状态', icon: '📊', description: 'Sprint 工单状态分布', defaultTitle: '看板状态' },
-  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日历视图', defaultTitle: '到期日历' }
-]
-
-function buildWidgetGridLayout(widgets: DashboardWidgetVO[]) {
-  widgetGridLayout.value = widgets.map(w => ({
-    i: w.id,
-    x: w.positionX,
-    y: w.positionY,
-    w: w.width,
-    h: w.height
-  }))
-}
-
-function getOverviewWidgetById(id: string): DashboardWidgetVO | undefined {
-  return overviewDashboard.value?.widgets.find(w => w.id === id)
-}
-
-let widgetLayoutSaveTimer: ReturnType<typeof setTimeout> | null = null
-
-function onWidgetLayoutUpdated(layout: Array<{ i: string; x: number; y: number; w: number; h: number }>) {
-  if (widgetLayoutSaveTimer) clearTimeout(widgetLayoutSaveTimer)
-  widgetLayoutSaveTimer = setTimeout(() => saveWidgetLayout(layout), 1000)
-}
-
-async function saveWidgetLayout(layout: Array<{ i: string; x: number; y: number; w: number; h: number }>) {
-  if (!overviewDashboard.value || !canEditProject.value) return
-  try {
-    const items = layout.map(item => ({
-      widgetId: item.i,
-      positionX: item.x,
-      positionY: item.y,
-      width: item.w,
-      height: item.h
-    }))
-    const version = overviewDashboard.value.layoutVersion ?? 0
-    await customDashboardApi.updateLayout(overviewDashboard.value.id, items, version)
-    overviewDashboard.value.layoutVersion = version + 1
-  } catch {
-    // 布局保存失败静默处理
-  }
-}
-
-async function loadOverviewDashboard(projectId: string) {
-  widgetLoading.value = true
-  try {
-    const res = await projectApi.getOverviewDashboard(projectId)
-    overviewDashboard.value = res.data || null
-    if (overviewDashboard.value?.widgets) {
-      buildWidgetGridLayout(overviewDashboard.value.widgets)
-    }
-  } catch {
-    overviewDashboard.value = null
-  } finally {
-    widgetLoading.value = false
-  }
-}
-
-async function addOverviewWidget(widgetType: string, defaultTitle: string) {
-  if (!overviewDashboard.value) return
-  showAddWidgetModal.value = false
-  try {
-    const res = await customDashboardApi.addWidget(overviewDashboard.value.id, {
-      widgetType,
-      title: defaultTitle,
-      config: '{}'
-    })
-    if (res.data && overviewDashboard.value) {
-      overviewDashboard.value.widgets = [...(overviewDashboard.value.widgets || []), res.data]
-      buildWidgetGridLayout(overviewDashboard.value.widgets)
-    }
-    Message.success('Widget 已添加')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '添加 Widget 失败')
-  }
-}
-
-function editOverviewWidget(widget: DashboardWidgetVO) {
-  editingWidget.value = widget
-  editingWidgetType.value = widget.widgetType
-  const config = widget.config ? JSON.parse(widget.config) : {}
-  widgetConfigForm.value = {
-    title: widget.title || '',
-    queryType: config.queryType,
-    noteContent: config.content || '',
-    chartType: config.chartType || 'burndown'
-  }
-  showWidgetConfigModal.value = true
-}
-
-async function handleWidgetConfigSave() {
-  if (!editingWidget.value || !overviewDashboard.value) return
-  savingWidgetConfig.value = true
-  try {
-    const config: Record<string, any> = {}
-    if (editingWidgetType.value === 'number_card' && widgetConfigForm.value.queryType) {
-      config.queryType = widgetConfigForm.value.queryType
-    }
-    if (editingWidgetType.value === 'note') {
-      config.content = widgetConfigForm.value.noteContent
-    }
-    if (editingWidgetType.value === 'agile_chart') {
-      config.chartType = widgetConfigForm.value.chartType
-    }
-    await customDashboardApi.updateWidget(
-      overviewDashboard.value.id,
-      editingWidget.value.id,
-      {
-        title: widgetConfigForm.value.title || undefined,
-        config: JSON.stringify(config)
-      }
-    )
-    showWidgetConfigModal.value = false
-    // Reload dashboard to get fresh widget data
-    const projectKey = project.value?.key || project.value?.id
-    if (projectKey) await loadOverviewDashboard(projectKey)
-    Message.success('Widget 配置已保存')
-  } catch (e: any) {
-    Message.error(e.response?.data?.message || '保存失败')
-  } finally {
-    savingWidgetConfig.value = false
-  }
-}
-
-async function deleteOverviewWidget(widget: DashboardWidgetVO) {
-  if (!overviewDashboard.value) return
-  Modal.warning({
-    title: '删除 Widget',
-    content: `确定要删除「${widget.title || widget.widgetType}」Widget？`,
-    okText: '删除',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        await customDashboardApi.deleteWidget(overviewDashboard.value!.id, widget.id)
-        if (overviewDashboard.value) {
-          overviewDashboard.value.widgets = overviewDashboard.value.widgets.filter(w => w.id !== widget.id)
-          buildWidgetGridLayout(overviewDashboard.value.widgets)
-        }
-        Message.success('Widget 已删除')
-      } catch (e: any) {
-        Message.error(e.response?.data?.message || '删除失败')
-      }
-    }
-  })
-}
 
 // 项目描述 Markdown 渲染
 const projectDescriptionHtml = computed(() => renderMarkdown(project.value?.description || ''))
@@ -762,9 +431,7 @@ async function loadProject() {
       loadPerms(projectIdentifier),
       loadMembers(projectIdentifier),
       loadRoles(),
-      loadStatistics(projectIdentifier),
-      loadActivities(projectIdentifier),
-      loadOverviewDashboard(projectIdentifier)
+      loadStatistics(projectIdentifier)
     ])
   } catch (e: any) {
     if (e.response?.status === 403) {
@@ -808,18 +475,6 @@ async function loadStatistics(projectId: string) {
   }
 }
 
-async function loadActivities(projectId: string) {
-  activitiesLoading.value = true
-  try {
-    const res = await projectApi.listActivities(projectId, { page: 1, pageSize: 10 })
-    recentActivities.value = res.data?.list || []
-  } catch {
-    recentActivities.value = []
-  } finally {
-    activitiesLoading.value = false
-  }
-}
-
 // 统计相关计算属性
 const sprintProgressPercent = computed(() => {
   if (!statistics.value?.activeSprint) return 0
@@ -837,103 +492,6 @@ function formatSprintDate(dateStr?: string): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
   return `${d.getMonth() + 1}/${d.getDate()}`
-}
-
-function formatActivityAction(activity: ProjectActivityVO): string {
-  const action = activity.action
-  const detail = activity.detail ? (() => { try { return JSON.parse(activity.detail!) } catch { return {} } })() : {}
-
-  switch (action) {
-    case 'member_added':
-    case 'add_member': {
-      const roleName = detail.role_names || detail.role_name || ''
-      return roleName
-        ? `添加了成员 ${activity.targetUserName || ''}（角色：${roleName}）`
-        : `添加了成员 ${activity.targetUserName || ''}`
-    }
-    case 'member_removed':
-    case 'remove_member':
-      return `移除了成员 ${activity.targetUserName || ''}`
-    case 'member_role_changed':
-    case 'change_role': {
-      const oldRole = detail.old_role_names || detail.old_role_name || ''
-      const newRole = detail.new_role_names || detail.new_role_name || ''
-      if (oldRole && newRole) {
-        return `将 ${activity.targetUserName || ''} 的角色从「${oldRole}」变更为「${newRole}」`
-      }
-      return `变更了 ${activity.targetUserName || ''} 的角色`
-    }
-    case 'project_created':
-    case 'create_project':
-      return '创建了项目'
-    case 'project_updated':
-    case 'update_project': {
-      const field = detail.field
-      if (field === 'name') {
-        return `将项目名称从「${detail.old_value || ''}」变更为「${detail.new_value || ''}」`
-      } else if (field === 'description') {
-        return '更新了项目描述'
-      }
-      return `更新了项目${detail.fields ? '（' + detail.fields + '）' : '设置'}`
-    }
-    case 'project_archived':
-    case 'archive_project':
-      return '归档了项目'
-    case 'project_restored':
-    case 'restore_project':
-      return '恢复了项目'
-    case 'lead_changed':
-    case 'change_lead':
-      return `将负责人变更为 ${activity.targetUserName || ''}`
-    case 'visibility_changed':
-    case 'change_visibility': {
-      const visibilityMap: Record<string, string> = { private: '私有', internal: '内部', public: '公开' }
-      const newVis = visibilityMap[detail.new_value] || detail.visibility || detail.new_value || ''
-      return `将项目可见性变更为「${newVis}」`
-    }
-    // Sprint 相关操作
-    case 'create_sprint': {
-      const sprintName = detail.sprint_name || detail.name || ''
-      return sprintName ? `创建了迭代「${sprintName}」` : '创建了迭代'
-    }
-    case 'activate_sprint': {
-      const sprintName = detail.sprint_name || detail.name || ''
-      return sprintName ? `激活了迭代「${sprintName}」` : '激活了迭代'
-    }
-    case 'complete_sprint': {
-      const sprintName = detail.sprint_name || detail.name || ''
-      return sprintName ? `完成了迭代「${sprintName}」` : '完成了迭代'
-    }
-    case 'update_sprint': {
-      const sprintName = detail.sprint_name || detail.name || ''
-      return sprintName ? `更新了迭代「${sprintName}」` : '更新了迭代'
-    }
-    case 'archive_sprint': {
-      const sprintName = detail.sprint_name || detail.name || ''
-      return sprintName ? `归档了迭代「${sprintName}」` : '归档了迭代'
-    }
-    case 'auto_complete_sprint': {
-      const sprintName = detail.sprint_name || detail.name || ''
-      return sprintName ? `自动完成了迭代「${sprintName}」` : '自动完成了迭代'
-    }
-    default:
-      return action.replace(/_/g, ' ')
-  }
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = new Date()
-  const date = new Date(dateStr)
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  const diffHour = Math.floor(diffMs / 3600000)
-  const diffDay = Math.floor(diffMs / 86400000)
-
-  if (diffMin < 1) return '刚刚'
-  if (diffMin < 60) return `${diffMin}分钟前`
-  if (diffHour < 24) return `${diffHour}小时前`
-  if (diffDay < 7) return `${diffDay}天前`
-  return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
 // 导航
