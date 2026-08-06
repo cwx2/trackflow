@@ -4,7 +4,12 @@
     <div class="widget-header">
       <div class="widget-header-left">
         <span class="widget-type-icon">{{ widgetIcon }}</span>
-        <span class="widget-title">{{ widget.title || widgetTypeLabel }}</span>
+        <span
+          class="widget-title"
+          :class="{ 'widget-title-clickable': isIssueListWidget }"
+          :title="isIssueListWidget ? '点击查看完整工单列表' : undefined"
+          @click="handleTitleClick"
+        >{{ widget.title || widgetTypeLabel }}</span>
       </div>
       <div class="widget-header-right">
         <button
@@ -124,7 +129,7 @@ const loading = ref(false)
 const refreshing = ref(false)
 const error = ref<string | null>(null)
 const dataLoaded = ref(false)
-const widgetRef = ref<{ loadData?: (force?: boolean) => Promise<void> } | null>(null)
+const widgetRef = ref<{ loadData?: (force?: boolean) => Promise<void>; navigateToFilteredList?: () => void } | null>(null)
 
 // ─── 加载超时兜底 ──────────────────────────────────────
 
@@ -173,6 +178,18 @@ const widgetTypeLabel = computed(() => {
   if (!props.widget) return ''
   return widgetTypeMap[props.widget.widgetType]?.label || props.widget.widgetType
 })
+
+const isIssueListWidget = computed(() => {
+  return props.widget?.widgetType === 'issue_list'
+})
+
+function handleTitleClick() {
+  if (!isIssueListWidget.value) return
+  // Delegate to IssueListWidget's navigateToFilteredList
+  if (widgetRef.value && 'navigateToFilteredList' in widgetRef.value) {
+    ;(widgetRef.value as any).navigateToFilteredList()
+  }
+}
 
 // ─── 动态组件路由 ──────────────────────────────────────
 
@@ -373,6 +390,15 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.widget-title-clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.widget-title-clickable:hover {
+  color: var(--tf-accent);
 }
 
 .widget-header-right {

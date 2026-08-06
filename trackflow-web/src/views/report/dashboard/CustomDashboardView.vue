@@ -334,6 +334,34 @@
             </a-select>
             <span class="form-hint">限定只展示特定项目的工单，留空表示全部</span>
           </a-form-item>
+          <a-form-item label="高级过滤（可选）">
+            <a-input
+              v-model="widgetConfigForm.filterQuery"
+              placeholder="如 priority:Critical state:Blocked created:today"
+              allow-clear
+            />
+            <div class="form-hint-block">
+              <span class="form-hint">支持搜索语法，与下拉筛选取 AND 逻辑。</span>
+              <a-popover title="搜索语法参考" position="bottom" :content-style="{ maxWidth: '360px' }">
+                <a class="filter-help-link">查看语法说明</a>
+                <template #content>
+                  <div class="filter-syntax-help">
+                    <div class="syntax-row"><code>priority:Critical</code> 优先级筛选</div>
+                    <div class="syntax-row"><code>priority:Critical,High</code> 多值（OR）</div>
+                    <div class="syntax-row"><code>state:Blocked</code> 状态筛选</div>
+                    <div class="syntax-row"><code>assignee:me</code> 分配给我</div>
+                    <div class="syntax-row"><code>type:Bug</code> 工单类型</div>
+                    <div class="syntax-row"><code>created:today</code> 今天创建</div>
+                    <div class="syntax-row"><code>created:week</code> 本周创建</div>
+                    <div class="syntax-row"><code>overdue:true</code> 已逾期</div>
+                    <div class="syntax-row"><code>dueSoon:true</code> 即将到期</div>
+                    <div class="syntax-row"><code>keyword:搜索词</code> 全文搜索</div>
+                    <div class="syntax-note">多个条件用空格分隔（AND 逻辑）</div>
+                  </div>
+                </template>
+              </a-popover>
+            </div>
+          </a-form-item>
           <a-form-item label="显示条数">
             <a-input-number
               v-model="widgetConfigForm.issueListPageSize"
@@ -606,6 +634,7 @@ const widgetConfigForm = ref<{
   chartType?: string
   // Issue List Widget config
   issueListPageSize?: number
+  filterQuery?: string
   // Activity Feed Widget config
   activityProjectIds?: string[]
   activityActions?: string[]
@@ -625,6 +654,7 @@ const widgetConfigForm = ref<{
   projectId: undefined,
   chartType: 'burndown',
   issueListPageSize: 10,
+  filterQuery: '',
   activityProjectIds: [],
   activityActions: [],
   activityUserIds: [],
@@ -1026,6 +1056,7 @@ function editWidget(widget: DashboardWidgetVO) {
     projectId: config.projectId || undefined,
     chartType: config.chartType || 'burndown',
     issueListPageSize: config.pageSize ?? 10,
+    filterQuery: config.filterQuery || '',
     activityProjectIds: config.projectIds || [],
     activityActions: config.actions || [],
     activityUserIds: config.userIds || [],
@@ -1160,6 +1191,7 @@ async function handleWidgetConfigSave() {
       if (form.queryType) config.queryType = form.queryType
       if (form.projectId) config.projectId = form.projectId
       config.pageSize = form.issueListPageSize ?? 10
+      if (form.filterQuery && form.filterQuery.trim()) config.filterQuery = form.filterQuery.trim()
     } else if (widget.widgetType === 'calendar') {
       if (form.projectId) config.projectId = form.projectId
     } else if (widget.widgetType === 'project_team') {
@@ -1566,6 +1598,53 @@ watch(showEditModal, (val) => {
   font-size: 12px;
   color: var(--tf-text-tertiary);
   margin-left: 8px;
+}
+
+.form-hint-block {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.filter-help-link {
+  font-size: 12px;
+  color: var(--tf-accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.filter-help-link:hover {
+  text-decoration: underline;
+}
+
+.filter-syntax-help {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--tf-text-secondary);
+}
+
+.filter-syntax-help .syntax-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.filter-syntax-help .syntax-row code {
+  font-family: monospace;
+  font-size: 11px;
+  background: var(--tf-bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  color: var(--tf-accent);
+}
+
+.filter-syntax-help .syntax-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  font-style: italic;
 }
 
 .danger-option {

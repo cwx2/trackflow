@@ -5,11 +5,11 @@
       <span class="issue-title">{{ issue.title }}</span>
     </div>
   </div>
-  <div v-else-if="config.queryType && dataLoaded" class="widget-configure-hint">
+  <div v-else-if="(config.queryType || config.filterQuery) && dataLoaded" class="widget-configure-hint">
     <icon-check-circle :size="32" class="hint-icon" style="color: var(--tf-text-quaternary)" />
     <span class="hint-text" style="color: var(--tf-text-tertiary)">暂无匹配的工单</span>
   </div>
-  <div v-else-if="!config.queryType" class="widget-configure-hint">
+  <div v-else-if="!config.queryType && !config.filterQuery" class="widget-configure-hint">
     <icon-list :size="32" class="hint-icon" />
     <span class="hint-text">点击「编辑配置」设置查询条件</span>
   </div>
@@ -20,6 +20,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { IconList, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi } from '@/api/issue'
+import { parseWidgetFilterQuery, buildIssueListRoute } from '../utils/widgetFilterParser'
 
 const props = defineProps<{
   config: Record<string, any>
@@ -28,6 +29,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   loaded: []
   error: [message: string]
+  titleClick: []
 }>()
 
 const router = useRouter()
@@ -36,6 +38,12 @@ const dataLoaded = ref(false)
 
 function navigateToIssue(issueId: string) {
   router.push(`/issues/${issueId}`)
+}
+
+/** Navigate to issue list with current filter conditions applied */
+function navigateToFilteredList() {
+  const routeQuery = buildIssueListRoute(props.config)
+  router.push({ path: '/issues', query: routeQuery })
 }
 
 async function loadData(_force = false) {
@@ -53,6 +61,12 @@ async function loadData(_force = false) {
     }
     if (config.projectId) params.projectId = config.projectId
     params.sort = config.sort || '-updatedAt'
+
+    // Parse advanced filter query and merge into params
+    if (config.filterQuery) {
+      const filterParams = parseWidgetFilterQuery(config.filterQuery)
+      Object.assign(params, filterParams)
+    }
 
     const res = await issueApi.list(params)
     const issues = res.data?.list || []
@@ -72,7 +86,7 @@ onMounted(() => {
   loadData()
 })
 
-defineExpose({ loadData })
+defineExpose({ loadData, navigateToFilteredList })
 </script>
 
 <style scoped>
