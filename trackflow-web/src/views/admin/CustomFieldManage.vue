@@ -68,17 +68,18 @@
                 </a-button>
               </div>
             </div>
-            <a-table
-              :data="filteredFieldList"
-              :loading="loading"
-              :pagination="pagination"
-              row-key="id"
-              size="small"
-              :row-selection="rowSelection"
-              v-model:selected-keys="selectedKeys"
-              @page-change="onPageChange"
-              @row-click="onRowClick"
-            >
+            <div class="cf-table-scroll">
+              <a-table
+                :data="filteredFieldList"
+                :loading="loading"
+                :pagination="pagination"
+                row-key="id"
+                size="small"
+                :row-selection="rowSelection"
+                v-model:selected-keys="selectedKeys"
+                @page-change="onPageChange"
+                @row-click="onRowClick"
+              >
               <template #columns>
                 <a-table-column title="字段名称" data-index="name">
                   <template #cell="{ record }">
@@ -174,6 +175,7 @@
                 </a-table-column>
               </template>
             </a-table>
+            </div>
           </div>
 
           <!-- 字段详情侧边栏 -->
@@ -1374,7 +1376,9 @@ onMounted(() => {
 .cf-manage {
   padding: 24px;
   height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .cf-header {
@@ -1382,6 +1386,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .page-title {
@@ -1393,11 +1398,38 @@ onMounted(() => {
 
 .cf-tabs {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cf-tabs :deep(.arco-tabs-nav) {
+  flex-shrink: 0;
+}
+
+.cf-tabs :deep(.arco-tabs-content) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cf-tabs :deep(.arco-tabs-content-list) {
+  height: 100%;
+}
+
+.cf-tabs :deep(.arco-tabs-pane) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .cf-body {
   display: flex;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cf-table {
@@ -1406,6 +1438,10 @@ onMounted(() => {
   border: 1px solid var(--tf-border);
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .cf-table.has-detail {
   flex: 1;
@@ -1418,6 +1454,21 @@ onMounted(() => {
   padding: 10px 12px;
   border-bottom: 1px solid var(--tf-border);
   flex-wrap: wrap;
+  flex-shrink: 0;
+  background: var(--tf-bg-surface);
+}
+
+.cf-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cf-table-scroll :deep(.arco-table-th) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--tf-bg-surface);
 }
 
 .batch-toolbar {
@@ -1493,8 +1544,7 @@ onMounted(() => {
   border-radius: 6px;
   display: flex;
   flex-direction: column;
-  max-height: 600px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .detail-header {
@@ -1517,6 +1567,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .detail-row {

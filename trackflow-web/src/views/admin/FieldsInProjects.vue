@@ -898,6 +898,9 @@ defineExpose({ refresh: loadData })
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .fip-toolbar {
@@ -905,6 +908,7 @@ defineExpose({ refresh: loadData })
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .fip-summary {
@@ -958,6 +962,9 @@ defineExpose({ refresh: loadData })
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .project-group,
