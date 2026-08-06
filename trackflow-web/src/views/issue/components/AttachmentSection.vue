@@ -117,19 +117,6 @@
         </div>
       </div>
 
-      <!-- Image Lightbox: Arco ImagePreviewGroup with srcList for multi-image navigation -->
-      <a-image-preview-group
-        v-model:visible="imagePreviewVisible"
-        v-model:current="imagePreviewCurrent"
-        infinite
-        :src-list="imagePreviewSrcList"
-        :actions-layout="['fullScreen', 'zoomIn', 'zoomOut', 'originalSize', 'rotateLeft', 'rotateRight']"
-        esc-to-close
-        keyboard
-        wheel-zoom
-        closable
-      />
-
       <!-- List View -->
       <div v-else-if="viewMode === 'list' && sortedAttachments.length > 0" class="att-list">
         <div
@@ -157,6 +144,19 @@
           </div>
         </div>
       </div>
+
+      <!-- Image Lightbox: Arco ImagePreviewGroup with srcList for multi-image navigation -->
+      <a-image-preview-group
+        v-model:visible="imagePreviewVisible"
+        v-model:current="imagePreviewCurrent"
+        infinite
+        :src-list="imagePreviewSrcList"
+        :actions-layout="['fullScreen', 'zoomIn', 'zoomOut', 'originalSize', 'rotateLeft', 'rotateRight']"
+        esc-to-close
+        keyboard
+        wheel-zoom
+        closable
+      />
 
       <!-- Drop zone -->
       <div
