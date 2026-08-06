@@ -534,18 +534,12 @@ public class IssueService {
     }
 
     /**
-     * 工单列表查询（带关联数据填充）。
-     * 在 listByQuery 基础上批量填充用户名/头像、状态名/颜色、Sprint名、子任务进度、自定义字段值。
+     * 工单列表查询（返回分页结果）。
+     * Controller 负责通过 Converter + Assembler 将结果转为 VO。
      */
     @Transactional(readOnly = true)
-    public PageResult<IssueVO> listWithDetails(IssueQuery query) {
-        Page<Issue> result = listByQuery(query);
-        List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
-
-        issueVOAssembler.assemble(result.getRecords(), voList);
-
-        return new PageResult<>(voList, result.getTotal(),
-                (int) result.getCurrent(), (int) result.getSize());
+    public Page<Issue> listIssuesPage(IssueQuery query) {
+        return listByQuery(query);
     }
 
     /**
@@ -557,7 +551,7 @@ public class IssueService {
      * @param limit     最大返回数量
      * @return 相似工单列表
      */
-    public List<SimilarIssueVO> findSimilar(String keyword, Long projectId, int limit) {
+    public List<Issue> findSimilarIssues(String keyword, Long projectId, int limit) {
         if (keyword == null || keyword.isBlank() || keyword.length() < 3) {
             return Collections.emptyList();
         }
@@ -591,43 +585,7 @@ public class IssueService {
         page.setSearchCount(false); // 不需要 count 查询，提高性能
         Page<Issue> result = issueMapper.selectPage(page, wrapper);
 
-        if (result.getRecords().isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // 填充状态和负责人信息
-        List<Issue> issues = result.getRecords();
-        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
-                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
-
-        Set<Long> userIds = issues.stream()
-                .map(Issue::getAssigneeId)
-                .filter(id -> id != null)
-                .collect(Collectors.toSet());
-        Map<Long, SysUser> userMap = userIds.isEmpty() ? Collections.emptyMap()
-                : sysUserMapper.selectBatchIds(userIds).stream()
-                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
-
-        return issues.stream().map(issue -> {
-            SimilarIssueVO vo = new SimilarIssueVO();
-            vo.setId(String.valueOf(issue.getId()));
-            vo.setIssueKey(issue.getIssueKey());
-            vo.setTitle(issue.getTitle());
-            if (issue.getStatusId() != null) {
-                IssueStatus status = statusMap.get(issue.getStatusId());
-                if (status != null) {
-                    vo.setStatusName(status.getName());
-                    vo.setStatusColor(status.getColor());
-                }
-            }
-            if (issue.getAssigneeId() != null) {
-                SysUser user = userMap.get(issue.getAssigneeId());
-                if (user != null) {
-                    vo.setAssigneeName(user.getDisplayName());
-                }
-            }
-            return vo;
-        }).collect(Collectors.toList());
+        return result.getRecords();
     }
 
     /**
@@ -799,7 +757,7 @@ public class IssueService {
      * @return 已标注完整信息的可用状态 VO 列表
      */
     @Transactional(readOnly = true)
-    public List<IssueStatusVO> getAvailableTransitionsForIssue(Long issueId) {
+    public AvailableTransitionsResult getAvailableTransitionsData(Long issueId) {
         Issue issue = getByIdWithAccessCheck(issueId);
         Long userId = SecurityUtils.getCurrentUserId();
 
@@ -807,39 +765,27 @@ public class IssueService {
         WorkflowService.TransitionResult result = workflowService.getAvailableTransitionsWithNames(issue, userId);
         List<IssueStatus> statuses = result.statuses();
         Map<Long, String> transitionNames = result.transitionNames();
-        List<IssueStatusVO> voList = issueConverter.toStatusVOList(statuses);
 
-        // 附加转换显示名
-        for (IssueStatusVO vo : voList) {
-            String tName = transitionNames.get(Long.valueOf(vo.getId()));
-            if (tName != null) {
-                vo.setTransitionName(tName);
-            }
-        }
-
-        // 附加强制评论标记
+        // 查询需要强制评论的状态 ID 集合
         List<Long> targetStatusIds = statuses.stream().map(IssueStatus::getId).toList();
         Set<Long> requireCommentIds = workflowService.getRequireCommentStatusIds(
                 issue.getStatusId(), targetStatusIds);
-        for (IssueStatusVO vo : voList) {
-            if (requireCommentIds.contains(Long.valueOf(vo.getId()))) {
-                vo.setRequireComment(true);
-            }
-        }
 
-        // 附加阻塞信息：有未解决 blocker 时标注关闭状态
+        // 查询未解决 blocker
         List<String> blockerKeys = issueLinkService.getUnresolvedBlockerKeys(issueId);
-        if (!blockerKeys.isEmpty()) {
-            for (IssueStatusVO vo : voList) {
-                if (Boolean.TRUE.equals(vo.getIsClosed())) {
-                    vo.setBlocked(true);
-                    vo.setBlockedBy(blockerKeys);
-                }
-            }
-        }
 
-        return voList;
+        return new AvailableTransitionsResult(statuses, transitionNames, requireCommentIds, blockerKeys);
     }
+
+    /**
+     * 可用状态转换查询结果（不含 VO）
+     */
+    public record AvailableTransitionsResult(
+            List<IssueStatus> statuses,
+            Map<Long, String> transitionNames,
+            Set<Long> requireCommentStatusIds,
+            List<String> blockerKeys
+    ) {}
 
     /**
      * 执行状态转换完整业务流程（含所有前置校验）。
@@ -1832,67 +1778,8 @@ public class IssueService {
     /**
      * 查询子任务列表（VO）
      */
-    public List<ChildIssueVO> listChildren(Long parentId) {
-        List<ChildIssueRow> rows = issueMapper.selectChildrenByParentId(parentId);
-        return rows.stream().map(row -> {
-            ChildIssueVO vo = new ChildIssueVO();
-            vo.setId(String.valueOf(row.getId()));
-            vo.setIssueKey(row.getIssueKey());
-            vo.setTitle(row.getTitle());
-            vo.setIssueType(row.getIssueType());
-            vo.setPriority(row.getPriority());
-            vo.setStatusName(row.getStatusName());
-            vo.setStatusColor(row.getStatusColor());
-            vo.setStatusCategory(row.getStatusCategory());
-            vo.setAssigneeName(row.getAssigneeName());
-            return vo;
-        }).toList();
-    }
-
-    /**
-     * 计算子任务进度汇总
-     */
-    public ChildProgressVO calculateChildProgress(List<ChildIssueVO> children) {
-        if (children == null || children.isEmpty()) return null;
-
-        ChildProgressVO progress = new ChildProgressVO();
-        progress.setTotal(children.size());
-
-        int closed = 0;
-        for (ChildIssueVO child : children) {
-            String cat = child.getStatusCategory();
-            if (IssueStatusCategory.isClosed(cat)) {
-                closed++;
-            }
-        }
-        progress.setClosed(closed);
-        progress.setPercent(children.isEmpty() ? 0 : Math.round((float) closed * 100 / children.size()));
-
-        // 汇总工时：需要查询子任务的 estimated_hours 和 spent_hours
-        List<Long> childIds = children.stream()
-                .map(c -> Long.parseLong(c.getId()))
-                .toList();
-        if (!childIds.isEmpty()) {
-            java.math.BigDecimal totalEstimate = java.math.BigDecimal.ZERO;
-            java.math.BigDecimal totalSpent = java.math.BigDecimal.ZERO;
-            List<Issue> childIssues = issueMapper.selectList(
-                    new LambdaQueryWrapper<Issue>()
-                            .select(Issue::getEstimatedHours, Issue::getSpentHours)
-                            .in(Issue::getId, childIds)
-            );
-            for (Issue child : childIssues) {
-                if (child.getEstimatedHours() != null) {
-                    totalEstimate = totalEstimate.add(child.getEstimatedHours());
-                }
-                if (child.getSpentHours() != null) {
-                    totalSpent = totalSpent.add(child.getSpentHours());
-                }
-            }
-            progress.setAggregatedEstimate(totalEstimate);
-            progress.setAggregatedSpent(totalSpent);
-        }
-
-        return progress;
+    public List<ChildIssueRow> listChildrenRows(Long parentId) {
+        return issueMapper.selectChildrenByParentId(parentId);
     }
 
     /**
@@ -2807,31 +2694,31 @@ public class IssueService {
      * 与 YouTrack API 行为一致：单个端点同时接受 entity ID 和 human-readable ID。
      */
     @Transactional(readOnly = true)
-    public IssueDetailVO getDetailByIdOrKey(String idOrKey) {
+    public IssueDetailRow getDetailRowByIdOrKey(String idOrKey) {
         if (idOrKey == null || idOrKey.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_PARAMETER, "ID 或 Issue Key 不能为空");
         }
         // 纯数字 → 按 ID 查询
         if (idOrKey.matches("\\d+")) {
             Long id = Long.parseLong(idOrKey);
-            return getDetailWithAccessCheck(id);
+            return getDetailRowWithAccessCheck(id);
         }
         // 否则按 Issue Key 查询
         Issue issue = getByKeyWithAccessCheck(idOrKey);
-        return getDetailWithAccessCheck(issue.getId());
+        return getDetailRowWithAccessCheck(issue.getId());
     }
 
     /**
-     * 获取 Issue 详情（带项目成员校验 + 可见性校验）—— 避免先查 Issue 再查详情导致两次 DB 查询
+     * 获取 Issue 详情数据行（带项目成员校验 + 可见性校验）
      */
     @Transactional(readOnly = true)
-    public IssueDetailVO getDetailWithAccessCheck(Long id) {
-        IssueDetailVO detail = getDetail(id);
+    public IssueDetailRow getDetailRowWithAccessCheck(Long id) {
+        IssueDetailRow row = getDetailRow(id);
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        projectService.assertProjectAccessible(currentUserId, Long.parseLong(detail.getProjectId()));
+        projectService.assertProjectAccessible(currentUserId, row.getProjectId());
         // 可见性校验：受限工单只有有权限的用户才能访问
-        assertVisibilityAccessible(id, detail, currentUserId);
-        return detail;
+        assertVisibilityAccessible(id, row, currentUserId);
+        return row;
     }
 
     /**
@@ -2841,20 +2728,21 @@ public class IssueService {
      * - visibility = public：所有项目成员均可访问（已由 assertProjectAccessible 保证）
      * - visibility = restricted：仅报告者、负责人、issue_visibility_user 表中列出的用户、项目管理员可访问
      */
-    private void assertVisibilityAccessible(Long issueId, IssueDetailVO detail, Long currentUserId) {
-        if (!"restricted".equals(detail.getVisibility())) {
+    private void assertVisibilityAccessible(Long issueId, IssueDetailRow row, Long currentUserId) {
+        String visibility = row.getVisibility() != null ? row.getVisibility() : "public";
+        if (!"restricted".equals(visibility)) {
             return; // public 工单不做额外校验
         }
         // 报告者始终可访问
-        if (detail.getReporterId() != null && String.valueOf(currentUserId).equals(detail.getReporterId())) {
+        if (row.getReporterId() != null && currentUserId.equals(row.getReporterId())) {
             return;
         }
         // 负责人始终可访问
-        if (detail.getAssigneeId() != null && String.valueOf(currentUserId).equals(detail.getAssigneeId())) {
+        if (row.getAssigneeId() != null && currentUserId.equals(row.getAssigneeId())) {
             return;
         }
         // 项目管理员始终可访问
-        if (permissionService.hasPermission(currentUserId, Long.parseLong(detail.getProjectId()), "project:admin")) {
+        if (permissionService.hasPermission(currentUserId, row.getProjectId(), "project:admin")) {
             return;
         }
         // 检查是否在可见用户列表中
@@ -2865,289 +2753,16 @@ public class IssueService {
     }
 
     /**
-     * 获取增强版 Issue 详情 —— 单次 SQL JOIN 替代 N+1 查询
+     * 获取 Issue 详情数据行（Mapper JOIN 结果） —— 单次 SQL JOIN 替代 N+1 查询。
+     * Controller 通过 IssueDetailVOAssembler 将结果转为 IssueDetailVO。
      */
     @Transactional(readOnly = true)
-    public IssueDetailVO getDetail(Long id) {
+    public IssueDetailRow getDetailRow(Long id) {
         IssueDetailRow row = issueMapper.selectDetailById(id);
         if (row == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found");
         }
-
-        IssueDetailVO vo = new IssueDetailVO();
-        vo.setId(String.valueOf(row.getId()));
-        vo.setProjectId(String.valueOf(row.getProjectId()));
-        vo.setProjectName(row.getProjectName());
-        vo.setProjectStatus(row.getProjectStatus());
-        vo.setIssueKey(row.getIssueKey());
-        vo.setTitle(row.getTitle());
-        vo.setDescription(row.getDescription());
-        vo.setIssueType(row.getIssueType());
-        vo.setStatusId(String.valueOf(row.getStatusId()));
-        vo.setPriority(row.getPriority());
-        vo.setAssigneeId(row.getAssigneeId() != null ? String.valueOf(row.getAssigneeId()) : null);
-        vo.setAssigneeName(row.getAssigneeName());
-        vo.setAssigneeAvatarUrl(row.getAssigneeAvatarUrl());
-        vo.setReporterId(String.valueOf(row.getReporterId()));
-        vo.setReporterName(row.getReporterName());
-        vo.setSprintId(row.getSprintId() != null ? String.valueOf(row.getSprintId()) : null);
-        vo.setSprintName(row.getSprintName());
-        vo.setSprintStatus(row.getSprintStatus());
-        // 多 Sprint 关联信息
-        List<Long> relatedSprintIds = issueSprintMapper.selectSprintIdsByIssueId(id);
-        if (relatedSprintIds.size() > 1) {
-            Map<Long, String> sprintNameMap = sprintMapper.selectBatchIds(relatedSprintIds).stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            com.trackflow.sprint.entity.Sprint::getId,
-                            com.trackflow.sprint.entity.Sprint::getName,
-                            (a, b) -> a));
-            List<String> sIds = new java.util.ArrayList<>();
-            List<String> sNames = new java.util.ArrayList<>();
-            for (Long sid : relatedSprintIds) {
-                sIds.add(String.valueOf(sid));
-                sNames.add(sprintNameMap.getOrDefault(sid, ""));
-            }
-            vo.setSprintIds(sIds);
-            vo.setSprintNames(sNames);
-        }
-        vo.setParentId(row.getParentId() != null ? String.valueOf(row.getParentId()) : null);
-        vo.setParentKey(row.getParentKey());
-
-        vo.setDueDate(row.getDueDate());
-        vo.setEstimatedHours(row.getEstimatedHours());
-        vo.setSpentHours(row.getSpentHours());
-        vo.setDerivedEstimatedHours(row.getDerivedEstimatedHours());
-        vo.setDerivedSpentHours(row.getDerivedSpentHours());
-        vo.setResolvedAt(row.getResolvedAt());
-        vo.setCreatedAt(row.getCreatedAt());
-        vo.setUpdatedAt(row.getUpdatedAt());
-
-        // 创建者/更新者信息
-        vo.setCreatedById(row.getCreatedById() != null ? String.valueOf(row.getCreatedById()) : null);
-        vo.setCreatedByName(row.getCreatedByName());
-        vo.setUpdatedById(row.getUpdatedById() != null ? String.valueOf(row.getUpdatedById()) : null);
-        vo.setUpdatedByName(row.getUpdatedByName());
-
-        // 乐观锁版本号
-        vo.setVersion(row.getVersion());
-
-        // 状态对象
-        if (row.getStatusName() != null) {
-            IssueStatusVO statusVO = new IssueStatusVO();
-            statusVO.setId(String.valueOf(row.getStatusId()));
-            statusVO.setName(row.getStatusName());
-            statusVO.setDisplayName(row.getStatusDisplayName());
-            statusVO.setCode(row.getStatusCode());
-            statusVO.setColor(row.getStatusColor());
-            statusVO.setCategory(row.getStatusCategory());
-            statusVO.setIsDefault(row.getStatusIsDefault());
-            statusVO.setIsClosed(row.getStatusIsClosed());
-            vo.setStatus(statusVO);
-        }
-
-        // 标签（单独查询，因为是多对多关系）
-        List<IssueTag> tags = tagService.listIssueTags(id);
-        vo.setTags(issueConverter.toTagVOList(tags));
-
-        // 可见性字段
-        vo.setVisibility(row.getVisibility() != null ? row.getVisibility() : "public");
-        if ("restricted".equals(vo.getVisibility())) {
-            List<Long> visibleUserIds = visibilityUserMapper.selectUserIdsByIssueId(id);
-            if (!visibleUserIds.isEmpty()) {
-                List<SysUser> visibleUsers = sysUserMapper.selectBatchIds(visibleUserIds);
-                vo.setVisibilityUserIds(visibleUsers.stream().map(u -> String.valueOf(u.getId())).toList());
-                vo.setVisibilityUserNames(visibleUsers.stream().map(SysUser::getDisplayName).toList());
-            } else {
-                vo.setVisibilityUserIds(java.util.List.of());
-                vo.setVisibilityUserNames(java.util.List.of());
-            }
-        }
-
-        // 自定义字段结构化值
-        Long projectIdLong = Long.parseLong(vo.getProjectId());
-        vo.setCustomFieldDetails(customFieldService.getValuesForDisplay(id, projectIdLong, vo.getIssueType()));
-
-        // 子任务列表 + 进度汇总
-        List<ChildIssueVO> children = listChildren(id);
-        if (!children.isEmpty()) {
-            vo.setChildren(children);
-            vo.setChildProgress(calculateChildProgress(children));
-        }
-
-        return vo;
-    }
-
-    /**
-     * 将评论实体转为完整 VO（含 userName、userAvatar、isEdited）。
-     * 用于单条评论创建/更新后返回给前端，保证响应格式与列表一致。
-     */
-    public IssueCommentVO toCommentVOWithUser(IssueComment comment) {
-        IssueCommentVO vo = issueConverter.toCommentVO(comment);
-        // 填充用户信息
-        if (comment.getUserId() != null) {
-            SysUser user = sysUserMapper.selectById(comment.getUserId());
-            if (user != null) {
-                vo.setUserName(user.getDisplayName());
-                vo.setUserAvatar(user.getAvatarUrl());
-            }
-        }
-        // 填充 isEdited：updatedAt 比 createdAt 晚超过 1 秒视为已编辑
-        vo.setIsEdited(comment.getCreatedAt() != null && comment.getUpdatedAt() != null
-                && comment.getUpdatedAt().isAfter(comment.getCreatedAt().plusSeconds(1)));
-        // 填充可见性组名称
-        if (comment.getVisibleToGroupIds() != null && !comment.getVisibleToGroupIds().isEmpty()) {
-            vo.setVisibleToGroupIds(comment.getVisibleToGroupIds().stream()
-                    .map(String::valueOf).toList());
-            Map<Long, String> groupNameMap = userGroupMapper.selectBatchIds(comment.getVisibleToGroupIds()).stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            com.trackflow.system.entity.UserGroup::getId,
-                            com.trackflow.system.entity.UserGroup::getName));
-            vo.setVisibleToGroupNames(comment.getVisibleToGroupIds().stream()
-                    .map(gid -> groupNameMap.getOrDefault(gid, "未知组"))
-                    .toList());
-        }
-        return vo;
-    }
-
-    /**
-     * 获取评论列表 —— 单次 JOIN 查询（消除 N+1）
-     */
-    @Transactional(readOnly = true)
-    public List<IssueCommentVO> listCommentsWithUser(Long issueId) {
-        List<CommentRow> rows = issueMapper.selectCommentsWithUser(issueId);
-
-        // 获取当前用户信息用于可见性过滤
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        List<Long> currentUserGroupIds = userGroupMemberMapper.selectGroupIdsByUserId(currentUserId);
-
-        // 获取工单的 projectId 用于权限检查
-        Issue issue = getById(issueId);
-        boolean canManageComments = permissionService.hasPermission(currentUserId, issue.getProjectId(), "issue:manage_comments");
-
-        // 过滤掉当前用户无权查看的评论
-        List<CommentRow> visibleRows = rows.stream()
-                .filter(row -> isCommentVisibleToUser(row, currentUserId, currentUserGroupIds, canManageComments))
-                .toList();
-
-        // 收集所有需要解析的组 ID，批量查询组名称
-        Set<Long> allGroupIds = visibleRows.stream()
-                .filter(row -> row.getVisibleToGroupIds() != null && !row.getVisibleToGroupIds().isEmpty())
-                .flatMap(row -> row.getVisibleToGroupIds().stream())
-                .collect(Collectors.toSet());
-
-        Map<Long, String> groupNameMap = Collections.emptyMap();
-        if (!allGroupIds.isEmpty()) {
-            groupNameMap = userGroupMapper.selectBatchIds(allGroupIds).stream()
-                    .collect(Collectors.toMap(
-                            com.trackflow.system.entity.UserGroup::getId,
-                            com.trackflow.system.entity.UserGroup::getName));
-        }
-
-        Map<Long, String> finalGroupNameMap = groupNameMap;
-        return visibleRows.stream().map(row -> {
-            IssueCommentVO vo = new IssueCommentVO();
-            vo.setId(String.valueOf(row.getId()));
-            vo.setIssueId(String.valueOf(row.getIssueId()));
-            vo.setUserId(String.valueOf(row.getUserId()));
-            vo.setUserName(row.getUserName());
-            vo.setUserAvatar(row.getUserAvatar());
-            vo.setDeletedAt(row.getDeletedAt());
-            // 软删除评论不暴露内容给前端（隐私保护）
-            vo.setContent(row.getDeletedAt() != null ? null : row.getContent());
-            vo.setSource(row.getSource());
-            vo.setCreatedAt(row.getCreatedAt());
-            vo.setUpdatedAt(row.getUpdatedAt());
-            // 判断是否被编辑过：updated_at 比 created_at 晚超过 1 秒
-            vo.setIsEdited(row.getCreatedAt() != null && row.getUpdatedAt() != null
-                    && row.getUpdatedAt().isAfter(row.getCreatedAt().plusSeconds(1)));
-            // 填充可见性信息
-            if (row.getVisibleToGroupIds() != null && !row.getVisibleToGroupIds().isEmpty()) {
-                vo.setVisibleToGroupIds(row.getVisibleToGroupIds().stream()
-                        .map(String::valueOf).toList());
-                vo.setVisibleToGroupNames(row.getVisibleToGroupIds().stream()
-                        .map(gid -> finalGroupNameMap.getOrDefault(gid, "未知组"))
-                        .toList());
-            }
-            return vo;
-        }).toList();
-    }
-
-    /**
-     * 判断当前用户是否有权查看某条评论。
-     * 规则：
-     * 1. 评论无可见性限制（visibleToGroupIds 为 null/空）→ 全体可见
-     * 2. 评论作者本人 → 始终可见
-     * 3. 用户拥有 issue:manage_comments 权限 → 始终可见
-     * 4. 用户所属的任一组在评论的 visibleToGroupIds 中 → 可见
-     * 5. 否则 → 不可见
-     */
-    private boolean isCommentVisibleToUser(CommentRow row, Long currentUserId,
-                                           List<Long> currentUserGroupIds, boolean canManageComments) {
-        // 无限制：全体可见
-        if (row.getVisibleToGroupIds() == null || row.getVisibleToGroupIds().isEmpty()) {
-            return true;
-        }
-        // 作者本人始终可见
-        if (row.getUserId().equals(currentUserId)) {
-            return true;
-        }
-        // 管理评论权限用户始终可见
-        if (canManageComments) {
-            return true;
-        }
-        // 检查用户组是否有交集
-        if (currentUserGroupIds == null || currentUserGroupIds.isEmpty()) {
-            return false;
-        }
-        for (Long groupId : row.getVisibleToGroupIds()) {
-            if (currentUserGroupIds.contains(groupId)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 获取活动列表 —— 单次 JOIN 查询（消除 N+1）
-     * assignee 字段的 old/new value 在 SQL 层自动解析为用户显示名
-     */
-    @Transactional(readOnly = true)
-    public List<IssueActivityVO> listActivitiesWithUser(Long issueId) {
-        List<ActivityRow> rows = issueMapper.selectActivitiesWithUser(issueId);
-        return rows.stream().map(this::mapActivityRow).toList();
-    }
-
-    /**
-     * 获取活动列表（分页） —— 按时间倒序，支持加载更多
-     */
-    @Transactional(readOnly = true)
-    public PageResult<IssueActivityVO> listActivitiesWithUserPaged(Long issueId, int page, int pageSize) {
-        int offset = (page - 1) * pageSize;
-        List<ActivityRow> rows = issueMapper.selectActivitiesWithUserPaged(issueId, offset, pageSize);
-        long total = issueMapper.countActivities(issueId);
-        List<IssueActivityVO> voList = rows.stream().map(this::mapActivityRow).toList();
-        return new PageResult<>(voList, total, page, pageSize);
-    }
-
-    private IssueActivityVO mapActivityRow(ActivityRow row) {
-        IssueActivityVO vo = new IssueActivityVO();
-        vo.setId(String.valueOf(row.getId()));
-        vo.setIssueId(String.valueOf(row.getIssueId()));
-        vo.setUserId(row.getUserId() != null ? String.valueOf(row.getUserId()) : null);
-        if ("automation".equals(row.getSource())) {
-            vo.setUserName(row.getUserName() != null ? row.getUserName() : "自动化规则");
-        } else {
-            vo.setUserName(row.getUserName());
-        }
-        vo.setUserAvatar(row.getUserAvatar());
-        vo.setAction(row.getAction());
-        vo.setFieldName(row.getFieldName());
-        vo.setOldValue(row.getOldValue());
-        vo.setNewValue(row.getNewValue());
-        vo.setDetail(row.getDetail());
-        vo.setSource(row.getSource());
-        vo.setCreatedAt(row.getCreatedAt());
-        return vo;
+        return row;
     }
 
     // ========== 附件上传 ==========
@@ -3353,27 +2968,11 @@ public class IssueService {
     /**
      * 回收站列表：查询指定项目中已删除的 Issue（分页）
      */
-    public PageResult<IssueTrashVO> listTrash(Long projectId, int page, int pageSize) {
+    public Page<TrashRow> listTrashPage(Long projectId, int page, int pageSize) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         projectService.assertProjectAccessible(currentUserId, projectId);
         Page<TrashRow> p = new Page<>(page, pageSize);
-        Page<TrashRow> result = issueMapper.selectTrashPage(p, projectId);
-
-        List<IssueTrashVO> voList = result.getRecords().stream().map(row -> {
-            IssueTrashVO vo = new IssueTrashVO();
-            vo.setId(String.valueOf(row.getId()));
-            vo.setProjectId(String.valueOf(row.getProjectId()));
-            vo.setIssueKey(row.getIssueKey());
-            vo.setTitle(row.getTitle());
-            vo.setIssueType(row.getIssueType());
-            vo.setPriority(row.getPriority());
-            vo.setAssigneeName(row.getAssigneeName());
-            vo.setDeletedByName(row.getDeletedByName());
-            vo.setDeletedAt(row.getDeletedAt());
-            return vo;
-        }).toList();
-
-        return new PageResult<>(voList, result.getTotal(), (int) result.getCurrent(), (int) result.getSize());
+        return issueMapper.selectTrashPage(p, projectId);
     }
 
     /**

@@ -382,37 +382,7 @@ public class ProjectService {
         vo.setMemberCount(memberCount);
 
         // 查询当前用户在项目中的角色（支持多角色）
-        if (currentUserId != null) {
-            if (permissionService.isSystemAdmin(currentUserId)) {
-                vo.setMyRoleName("系统管理员");
-                vo.setMyRoleCode("system_admin");
-                vo.setMyRoleNames(java.util.List.of("系统管理员"));
-                vo.setMyRoleCodes(java.util.List.of("system_admin"));
-            } else {
-                List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(currentUserId, projectId);
-                if (!roleIds.isEmpty()) {
-                    // 批量查询所有角色，支持多角色展示
-                    List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
-                    if (roles != null && !roles.isEmpty()) {
-                        // 向后兼容：myRoleName/myRoleCode 填充第一个角色
-                        vo.setMyRoleName(roles.get(0).getName());
-                        vo.setMyRoleCode(roles.get(0).getCode());
-                        // 多角色列表
-                        vo.setMyRoleNames(roles.stream().map(SysRole::getName).toList());
-                        vo.setMyRoleCodes(roles.stream().map(SysRole::getCode).toList());
-                    }
-                } else {
-                    // 非成员但项目可见（internal/public）→ 显示 NonMember 角色
-                    ProjectVisibility visibility = project.getVisibility();
-                    if (ProjectVisibility.INTERNAL == visibility || ProjectVisibility.PUBLIC == visibility) {
-                        vo.setMyRoleName("非成员");
-                        vo.setMyRoleCode("non_member");
-                        vo.setMyRoleNames(java.util.List.of("非成员"));
-                        vo.setMyRoleCodes(java.util.List.of("non_member"));
-                    }
-                }
-            }
-        }
+        assembleUserRole(vo, projectId, currentUserId, project);
 
         // 查询负责人名称和状态
         if (project.getLeadId() != null) {
@@ -424,6 +394,39 @@ public class ProjectService {
         }
 
         return vo;
+    }
+
+    /**
+     * 填充当前用户在项目中的角色信息到 VO（VO 组装辅助，由 Controller 调用的 getProjectDetail 使用）
+     */
+    private void assembleUserRole(ProjectDetailVO vo, Long projectId, Long currentUserId, Project project) {
+        if (currentUserId == null) return;
+
+        if (permissionService.isSystemAdmin(currentUserId)) {
+            vo.setMyRoleName("系统管理员");
+            vo.setMyRoleCode("system_admin");
+            vo.setMyRoleNames(java.util.List.of("系统管理员"));
+            vo.setMyRoleCodes(java.util.List.of("system_admin"));
+        } else {
+            List<Long> roleIds = memberMapper.selectRoleIdsByUserAndProject(currentUserId, projectId);
+            if (!roleIds.isEmpty()) {
+                List<SysRole> roles = roleMapper.selectBatchIds(roleIds);
+                if (roles != null && !roles.isEmpty()) {
+                    vo.setMyRoleName(roles.get(0).getName());
+                    vo.setMyRoleCode(roles.get(0).getCode());
+                    vo.setMyRoleNames(roles.stream().map(SysRole::getName).toList());
+                    vo.setMyRoleCodes(roles.stream().map(SysRole::getCode).toList());
+                }
+            } else {
+                ProjectVisibility visibility = project.getVisibility();
+                if (ProjectVisibility.INTERNAL == visibility || ProjectVisibility.PUBLIC == visibility) {
+                    vo.setMyRoleName("非成员");
+                    vo.setMyRoleCode("non_member");
+                    vo.setMyRoleNames(java.util.List.of("非成员"));
+                    vo.setMyRoleCodes(java.util.List.of("non_member"));
+                }
+            }
+        }
     }
 
     /**

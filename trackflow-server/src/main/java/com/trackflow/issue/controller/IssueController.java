@@ -1,5 +1,6 @@
 package com.trackflow.issue.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.PageResult;
@@ -11,14 +12,22 @@ import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueComment;
+import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.result.ChildIssueRow;
+import com.trackflow.issue.mapper.result.IssueDetailRow;
+import com.trackflow.issue.mapper.result.TrashRow;
 import com.trackflow.issue.service.IssueService;
+import com.trackflow.issue.service.IssueDetailVOAssembler;
 import com.trackflow.issue.service.IssueExportService;
 import com.trackflow.issue.service.IssueLinkService;
 import com.trackflow.issue.service.IssueLinkTypeService;
 import com.trackflow.issue.service.IssueTagService;
 import com.trackflow.issue.service.IssueTypeFieldService;
+import com.trackflow.issue.service.IssueVOAssembler;
 import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.issue.vo.*;
+import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/issues")
@@ -37,6 +47,8 @@ public class IssueController {
     private final IssueService issueService;
     private final IssueExportService issueExportService;
     private final IssueConverter issueConverter;
+    private final IssueDetailVOAssembler issueDetailVOAssembler;
+    private final IssueVOAssembler issueVOAssembler;
     private final CustomFieldConverter customFieldConverter;
     private final IssueLinkService linkService;
     private final IssueLinkTypeService linkTypeService;
@@ -48,17 +60,23 @@ public class IssueController {
     private final com.trackflow.issue.service.IssueAttachmentService attachmentService;
     private final com.trackflow.issue.service.IssueActivityService activityService;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
+    private final com.trackflow.issue.mapper.IssueStatusMapper statusMapper;
+    private final SysUserMapper sysUserMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
     public R<IssueDetailVO> create(@P("dto") @Valid @RequestBody CreateIssueDTO dto) {
         Issue issue = issueService.create(dto);
-        return R.ok(issueService.getDetail(issue.getId()));
+        return R.ok(assembleDetail(issue.getId()));
     }
 
     @GetMapping
     public R<PageResult<IssueVO>> list(@Valid IssueQuery query) {
-        return R.ok(issueService.listWithDetails(query));
+        Page<Issue> page = issueService.listIssuesPage(query);
+        List<IssueVO> voList = issueConverter.toVOList(page.getRecords());
+        issueVOAssembler.assemble(page.getRecords(), voList);
+        return R.ok(new PageResult<>(voList, page.getTotal(),
+                (int) page.getCurrent(), (int) page.getSize()));
     }
 
     /**
@@ -67,7 +85,8 @@ public class IssueController {
      */
     @GetMapping("/{idOrKey}")
     public R<IssueDetailVO> getById(@PathVariable("idOrKey") String idOrKey) {
-        return R.ok(issueService.getDetailByIdOrKey(idOrKey));
+        IssueDetailRow row = issueService.getDetailRowByIdOrKey(idOrKey);
+        return R.ok(assembleDetailFromRow(row));
     }
 
     /**
@@ -75,14 +94,15 @@ public class IssueController {
      */
     @GetMapping("/key/{issueKey}")
     public R<IssueDetailVO> getByKey(@PathVariable("issueKey") String issueKey) {
-        return R.ok(issueService.getDetailByIdOrKey(issueKey));
+        IssueDetailRow row = issueService.getDetailRowByIdOrKey(issueKey);
+        return R.ok(assembleDetailFromRow(row));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:edit')")
     public R<IssueDetailVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateIssueDTO dto) {
         IssueService.UpdateResult result = issueService.update(id, dto);
-        IssueDetailVO detail = issueService.getDetail(id);
+        IssueDetailVO detail = assembleDetail(id);
         if (result.statusAutoReset()) {
             detail.setStatusAutoReset(true);
         }
@@ -114,7 +134,7 @@ public class IssueController {
         }
         List<String> cascadeCleared = customFieldService.saveSingleValue(id, fieldId, effectiveValue, issue.getIssueType(), issue.getProjectId());
 
-        IssueDetailVO detail = issueService.getDetail(id);
+        IssueDetailVO detail = assembleDetail(id);
 
         if (!cascadeCleared.isEmpty()) {
             List<String> warnings = cascadeCleared.stream()
@@ -140,7 +160,22 @@ public class IssueController {
             @RequestParam("projectId") Long projectId,
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        return R.ok(issueService.listTrash(projectId, page, pageSize));
+        Page<TrashRow> result = issueService.listTrashPage(projectId, page, pageSize);
+        List<IssueTrashVO> voList = result.getRecords().stream().map(row -> {
+            IssueTrashVO vo = new IssueTrashVO();
+            vo.setId(String.valueOf(row.getId()));
+            vo.setProjectId(String.valueOf(row.getProjectId()));
+            vo.setIssueKey(row.getIssueKey());
+            vo.setTitle(row.getTitle());
+            vo.setIssueType(row.getIssueType());
+            vo.setPriority(row.getPriority());
+            vo.setAssigneeName(row.getAssigneeName());
+            vo.setDeletedByName(row.getDeletedByName());
+            vo.setDeletedAt(row.getDeletedAt());
+            return vo;
+        }).toList();
+        return R.ok(new PageResult<>(voList, result.getTotal(),
+                (int) result.getCurrent(), (int) result.getSize()));
     }
 
     @PostMapping("/{id}/restore")
@@ -254,7 +289,35 @@ public class IssueController {
     @GetMapping("/{id}/available-transitions")
     @PreAuthorize("@perm.checkIssue(#id, 'issue:change_status')")
     public R<List<IssueStatusVO>> getAvailableTransitions(@PathVariable("id") Long id) {
-        return R.ok(issueService.getAvailableTransitionsForIssue(id));
+        IssueService.AvailableTransitionsResult data = issueService.getAvailableTransitionsData(id);
+        List<IssueStatusVO> voList = issueConverter.toStatusVOList(data.statuses());
+
+        // 附加转换显示名
+        for (IssueStatusVO vo : voList) {
+            String tName = data.transitionNames().get(Long.valueOf(vo.getId()));
+            if (tName != null) {
+                vo.setTransitionName(tName);
+            }
+        }
+
+        // 附加强制评论标记
+        for (IssueStatusVO vo : voList) {
+            if (data.requireCommentStatusIds().contains(Long.valueOf(vo.getId()))) {
+                vo.setRequireComment(true);
+            }
+        }
+
+        // 附加阻塞信息
+        if (!data.blockerKeys().isEmpty()) {
+            for (IssueStatusVO vo : voList) {
+                if (Boolean.TRUE.equals(vo.getIsClosed())) {
+                    vo.setBlocked(true);
+                    vo.setBlockedBy(data.blockerKeys());
+                }
+            }
+        }
+
+        return R.ok(voList);
     }
 
     @PostMapping("/{id}/transitions")
@@ -481,7 +544,7 @@ public class IssueController {
     public R<IssueDetailVO> move(@PathVariable("id") Long id,
                                  @Valid @RequestBody com.trackflow.issue.dto.MoveIssueDTO dto) {
         Issue moved = issueService.moveToProject(id, dto);
-        return R.ok(issueService.getDetail(moved.getId()));
+        return R.ok(assembleDetail(moved.getId()));
     }
 
     // ========== 优先级选项 ==========
@@ -508,5 +571,62 @@ public class IssueController {
             @RequestParam("projectId") Long projectId) {
         var options = issueTypeFieldService.getIssueTypeOptions(projectId);
         return R.ok(customFieldConverter.toOptionVOList(options));
+    }
+
+    // ========== 内部辅助方法：VO 组装 ==========
+
+    /**
+     * 根据 Issue ID 组装完整的 IssueDetailVO（getDetailRow + children + assembler）
+     */
+    private IssueDetailVO assembleDetail(Long issueId) {
+        IssueDetailRow row = issueService.getDetailRowWithAccessCheck(issueId);
+        return assembleDetailFromRow(row);
+    }
+
+    /**
+     * 从 IssueDetailRow 组装完整的 IssueDetailVO
+     */
+    private IssueDetailVO assembleDetailFromRow(IssueDetailRow row) {
+        List<ChildIssueRow> children = issueService.listChildrenRows(row.getId());
+        return issueDetailVOAssembler.assemble(row, children);
+    }
+
+    /**
+     * 将 Issue 实体列表转为 SimilarIssueVO 列表（用于相似工单搜索）
+     */
+    private List<SimilarIssueVO> buildSimilarIssueVOs(List<Issue> issues) {
+        if (issues.isEmpty()) return List.of();
+
+        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
+        Set<Long> userIds = issues.stream()
+                .map(Issue::getAssigneeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, SysUser> userMap = userIds.isEmpty() ? Map.of()
+                : sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
+
+        return issues.stream().map(issue -> {
+            SimilarIssueVO vo = new SimilarIssueVO();
+            vo.setId(String.valueOf(issue.getId()));
+            vo.setIssueKey(issue.getIssueKey());
+            vo.setTitle(issue.getTitle());
+            if (issue.getStatusId() != null) {
+                IssueStatus status = statusMap.get(issue.getStatusId());
+                if (status != null) {
+                    vo.setStatusName(status.getName());
+                    vo.setStatusColor(status.getColor());
+                }
+            }
+            if (issue.getAssigneeId() != null) {
+                SysUser user = userMap.get(issue.getAssigneeId());
+                if (user != null) {
+                    vo.setAssigneeName(user.getDisplayName());
+                }
+            }
+            return vo;
+        }).toList();
     }
 }
