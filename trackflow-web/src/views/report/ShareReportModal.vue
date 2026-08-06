@@ -19,12 +19,15 @@
         allow-clear
         :filter-option="false"
         @search="handleSearch"
-        @change="handleAddTarget"
+        @change="(v) => handleAddTarget(v as string | undefined)"
         class="share-search-select"
       >
         <a-option v-for="opt in searchOptions" :key="opt.key" :value="opt.key">
           <div class="search-option">
-            <span class="option-icon">{{ opt.type === 'user' ? '👤' : '👥' }}</span>
+            <span class="option-icon">
+              <icon-user v-if="opt.type === 'user'" />
+              <icon-user-group v-else />
+            </span>
             <span class="option-name">{{ opt.name }}</span>
             <span class="option-type">{{ opt.type === 'user' ? '用户' : '用户组' }}</span>
           </div>
@@ -48,7 +51,10 @@
       <div v-else class="share-items">
         <div v-for="(target, index) in shareTargets" :key="target.key" class="share-item">
           <div class="share-item-info">
-            <span class="share-item-icon">{{ target.type === 'user' ? '👤' : '👥' }}</span>
+            <span class="share-item-icon">
+              <icon-user v-if="target.type === 'user'" />
+              <icon-user-group v-else />
+            </span>
             <span class="share-item-name">{{ target.name }}</span>
           </div>
           <div class="share-item-actions">
