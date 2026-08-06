@@ -135,9 +135,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">状态分布</h3>
             <span class="chart-subtitle">各状态工单占比</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(statusChartRef, '状态分布')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="statusChartOption" autoresize class="chart-instance chart-clickable" @click="handleStatusChartClick" />
+            <v-chart ref="statusChartRef" :option="statusChartOption" autoresize class="chart-instance chart-clickable" @click="handleStatusChartClick" />
           </div>
         </div>
 
@@ -146,9 +155,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">优先级分布</h3>
             <span class="chart-subtitle">各优先级工单数量</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(priorityChartRef, '优先级分布')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="priorityChartOption" autoresize class="chart-instance chart-clickable" @click="handlePriorityChartClick" />
+            <v-chart ref="priorityChartRef" :option="priorityChartOption" autoresize class="chart-instance chart-clickable" @click="handlePriorityChartClick" />
           </div>
         </div>
 
@@ -157,9 +175,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">类型分布</h3>
             <span class="chart-subtitle">Bug / Task / Feature 占比</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(typeChartRef, '类型分布')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="typeChartOption" autoresize class="chart-instance chart-clickable" @click="handleTypeChartClick" />
+            <v-chart ref="typeChartRef" :option="typeChartOption" autoresize class="chart-instance chart-clickable" @click="handleTypeChartClick" />
           </div>
         </div>
 
@@ -168,9 +195,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">团队负载</h3>
             <span class="chart-subtitle">按负责人统计工单数</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(workloadChartRef, '团队负载')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="workloadChartOption" autoresize class="chart-instance chart-clickable" @click="handleWorkloadChartClick" />
+            <v-chart ref="workloadChartRef" :option="workloadChartOption" autoresize class="chart-instance chart-clickable" @click="handleWorkloadChartClick" />
           </div>
         </div>
 
@@ -179,9 +215,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">工单趋势</h3>
             <span class="chart-subtitle">每日新建 / 关闭工单数</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(trendChartRef, '工单趋势')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="trendChartOption" autoresize class="chart-instance" />
+            <v-chart ref="trendChartRef" :option="trendChartOption" autoresize class="chart-instance" />
           </div>
         </div>
 
@@ -190,9 +235,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">Sprint 燃尽图</h3>
             <span class="chart-subtitle">{{ dashboardData.burndown.sprintName }} — 理想 vs 实际进度</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(burndownChartRef, 'Sprint燃尽图')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="burndownChartOption" autoresize class="chart-instance" />
+            <v-chart ref="burndownChartRef" :option="burndownChartOption" autoresize class="chart-instance" />
           </div>
         </div>
 
@@ -201,9 +255,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">项目对比</h3>
             <span class="chart-subtitle">各项目工单数量与完成率对比</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(projectComparisonChartRef, '项目对比')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="projectComparisonChartOption" autoresize class="chart-instance" />
+            <v-chart ref="projectComparisonChartRef" :option="projectComparisonChartOption" autoresize class="chart-instance" />
           </div>
         </div>
 
@@ -212,9 +275,18 @@
           <div class="chart-card-header">
             <h3 class="chart-title">累积流图</h3>
             <span class="chart-subtitle">各状态工单数量随时间变化（面积越宽 = 积压越多）</span>
+            <a-button
+              class="chart-download-btn"
+              type="text"
+              size="mini"
+              title="保存为图片"
+              @click="downloadChart(cumulativeFlowChartRef, '累积流图')"
+            >
+              <template #icon><icon-download /></template>
+            </a-button>
           </div>
           <div class="chart-body">
-            <v-chart :option="cumulativeFlowChartOption" autoresize class="chart-instance" />
+            <v-chart ref="cumulativeFlowChartRef" :option="cumulativeFlowChartOption" autoresize class="chart-instance" />
           </div>
         </div>
 
@@ -238,10 +310,19 @@
                 <a-option value="priority">按优先级</a-option>
                 <a-option value="assignee">按负责人</a-option>
               </a-select>
+              <a-button
+                class="chart-download-btn"
+                type="text"
+                size="mini"
+                title="保存为图片"
+                @click="downloadChart(resolutionTimeChartRef, '解决时间分析')"
+              >
+                <template #icon><icon-download /></template>
+              </a-button>
             </div>
           </div>
           <div class="chart-body">
-            <v-chart :option="resolutionTimeChartOption" autoresize class="chart-instance" />
+            <v-chart ref="resolutionTimeChartRef" :option="resolutionTimeChartOption" autoresize class="chart-instance" />
           </div>
           <!-- 分组明细表格 -->
           <div v-if="resolutionTimeGroupDetails.length > 0" class="resolution-group-details">
@@ -281,8 +362,7 @@ import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
-  GridComponent,
-  ToolboxComponent
+  GridComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { IconDownload, IconFile, IconPrinter, IconInfoCircle } from '@arco-design/web-vue/es/icon'
@@ -293,7 +373,7 @@ import type { ProjectVO } from '@/api/types'
 import { localizeStatusName, priorityLabelMap } from '@/utils/fieldLabels'
 
 // 注册 ECharts 组件
-use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, ToolboxComponent])
+use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
 const router = useRouter()
 
@@ -343,31 +423,35 @@ function readThemeColors() {
 
 const chartBgColor = 'transparent'
 
-// ─── 通用 toolbox 配置（保存为图片） ────────────────────
+// ─── 图表下载（替代 ECharts 内置 toolbox） ────────────────────
 
-function chartToolbox(title: string) {
-  return {
-    show: true,
-    right: 8,
-    top: -4,
-    iconStyle: {
-      borderColor: chartColors.value.textColor,
-      borderWidth: 0.8
-    },
-    emphasis: {
-      iconStyle: {
-        borderColor: chartColors.value.tooltipText
-      }
-    },
-    feature: {
-      saveAsImage: {
-        type: 'png',
-        name: `TrackFlow_${title}_${new Date().toISOString().substring(0, 10)}`,
-        title: '保存为图片',
-        pixelRatio: 2
-      }
-    }
+/** 图表模板引用 */
+const statusChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const priorityChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const typeChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const workloadChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const trendChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const burndownChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const projectComparisonChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const cumulativeFlowChartRef = ref<InstanceType<typeof VChart> | null>(null)
+const resolutionTimeChartRef = ref<InstanceType<typeof VChart> | null>(null)
+
+/** 下载图表为 PNG */
+function downloadChart(chartComp: InstanceType<typeof VChart> | null, title: string) {
+  if (!chartComp) {
+    Message.warning('图表尚未加载完成')
+    return
   }
+  // vue-echarts proxies ECharts methods (getDataURL) directly on the component instance
+  const url = chartComp.getDataURL({
+    type: 'png',
+    pixelRatio: 2,
+    backgroundColor: '#1b1d21'
+  })
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `TrackFlow_${title}_${new Date().toISOString().substring(0, 10)}.png`
+  a.click()
 }
 
 // ─── 图表 Options ─────────────────────────────────────────
@@ -378,7 +462,6 @@ const statusChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('状态分布'),
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
@@ -420,7 +503,6 @@ const priorityChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('优先级分布'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -459,7 +541,6 @@ const typeChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('类型分布'),
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)',
@@ -500,7 +581,6 @@ const workloadChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('团队负载'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -555,7 +635,6 @@ const trendChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('工单趋势'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -626,7 +705,6 @@ const burndownChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('Sprint燃尽图'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -691,7 +769,6 @@ const projectComparisonChartOption = computed(() => {
   const projectNames = items.map(i => `${i.name} (${i.key})`)
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('项目对比'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -867,7 +944,6 @@ const cumulativeFlowChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('累积流图'),
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
@@ -934,7 +1010,6 @@ const resolutionTimeChartOption = computed(() => {
   const c = chartColors.value
   return {
     backgroundColor: chartBgColor,
-    toolbox: chartToolbox('解决时间分析'),
     tooltip: {
       trigger: 'axis',
       backgroundColor: c.tooltipBg,
@@ -1384,6 +1459,22 @@ function printReport() {
   align-items: baseline;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.chart-download-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: auto;
+  color: var(--tf-text-tertiary);
+  flex-shrink: 0;
+}
+
+.chart-download-btn:hover {
+  color: var(--tf-text-primary);
+}
+
+.chart-card:hover .chart-download-btn {
+  opacity: 1;
 }
 
 .chart-header-left {
