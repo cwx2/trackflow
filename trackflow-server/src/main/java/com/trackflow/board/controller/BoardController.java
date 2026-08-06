@@ -37,7 +37,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -370,17 +369,10 @@ public class BoardController {
         if (collapsedStatusIds == null || collapsedStatusIds.isBlank()) {
             return Collections.emptySet();
         }
-        Set<Long> result = new HashSet<>();
-        for (String idStr : collapsedStatusIds.split(",")) {
-            String trimmed = idStr.trim();
-            if (!trimmed.isEmpty()) {
-                try {
-                    result.add(Long.parseLong(trimmed));
-                } catch (NumberFormatException e) {
-                    // 忽略无效的 ID
-                }
-            }
-        }
-        return result;
+        return Arrays.stream(collapsedStatusIds.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty() && s.chars().allMatch(Character::isDigit))
+                .map(Long::parseLong)
+                .collect(java.util.stream.Collectors.toSet());
     }
 }

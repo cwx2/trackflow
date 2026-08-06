@@ -103,4 +103,38 @@ public class EmailMuteTokenService {
      * 静音操作结果，用于构建重定向 URL。
      */
     public record MuteResult(Long userId, String resourceType, Long resourceId) {}
+
+    /**
+     * 通过 token 执行静音操作（安全版本，不抛异常，返回结果对象）。
+     * <p>
+     * 供 EmailMuteController 使用——该端点返回 HTTP 重定向而非 JSON，
+     * 无法依赖 GlobalExceptionHandler，因此需要 Service 层返回成功/失败结果。
+     *
+     * @param token 邮件中的静音 token
+     * @return MuteOutcome 包含成功/失败状态和重定向所需信息
+     */
+    public MuteOutcome muteViaTokenSafe(String token) {
+        try {
+            MuteResult result = muteViaToken(token);
+            return MuteOutcome.success(result.resourceType(), result.resourceId());
+        } catch (BusinessException e) {
+            log.warn("[EmailMuteToken] 通过邮件链接静音失败: token={}, message={}", token, e.getMessage());
+            return MuteOutcome.failure("expired");
+        } catch (Exception e) {
+            log.error("[EmailMuteToken] 处理静音 token 时发生异常: token={}", token, e);
+            return MuteOutcome.failure("unknown");
+        }
+    }
+
+    /**
+     * 邮件静音操作的结果（供重定向端点使用，避免 Controller 层 try-catch）。
+     */
+    public record MuteOutcome(boolean success, String resourceType, Long resourceId, String errorCode) {
+        static MuteOutcome success(String resourceType, Long resourceId) {
+            return new MuteOutcome(true, resourceType, resourceId, null);
+        }
+        static MuteOutcome failure(String errorCode) {
+            return new MuteOutcome(false, null, null, errorCode);
+        }
+    }
 }

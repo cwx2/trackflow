@@ -1,7 +1,5 @@
 package com.trackflow.automation.trigger;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trackflow.automation.entity.AutomationWorkflow;
 import com.trackflow.automation.service.AutomationWorkflowService;
 import com.trackflow.auth.security.NoAuthorizationRequired;
@@ -11,9 +9,6 @@ import com.trackflow.common.model.R;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.Map;
 
 @RestController
@@ -22,7 +17,7 @@ import java.util.Map;
 public class AutomationWebhookController {
     private final AutomationWorkflowService workflowService;
     private final AutomationTriggerService triggerService;
-    private final ObjectMapper objectMapper;
+    private final WebhookTokenVerifier webhookTokenVerifier;
 
     @PostMapping("/{workflowId}")
     @NoAuthorizationRequired(reason = "Webhook 使用工作流专属 Token 和幂等键鉴权")
@@ -36,26 +31,9 @@ public class AutomationWebhookController {
                 || !"webhook".equals(workflow.getTriggerType())) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Webhook 工作流不存在、未发布或未启动");
         }
-        try {
-            Map<String, Object> config = objectMapper.readValue(
-                    workflow.getTriggerConfig(), new TypeReference<>() {});
-            byte[] actual = sha256(token);
-            byte[] expected = HexFormat.of().parseHex(String.valueOf(config.get("tokenSha256")));
-            if (!MessageDigest.isEqual(actual, expected)) {
-                throw new BusinessException(ErrorCode.ACCESS_DENIED, "Webhook token 无效");
-            }
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new BusinessException(ErrorCode.INVALID_STATE, "Webhook 配置损坏");
-        }
+        webhookTokenVerifier.verifyToken(workflow, token);
         triggerService.enqueueWebhook(workflow, "webhook:" + idempotencyKey,
                 payload != null ? payload : Map.of());
         return R.ok();
-    }
-
-    private byte[] sha256(String value) throws Exception {
-        return MessageDigest.getInstance("SHA-256")
-                .digest(value.getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -90,15 +90,8 @@ public class NotificationAdminController {
         if (!Boolean.TRUE.equals(config.getConfigured())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "请先完成邮件服务器配置");
         }
-        try {
-            emailSendService.sendTestEmail(dto.getToAddress());
-            return R.ok();
-        } catch (Exception e) {
-            log.warn("[NotificationAdmin] 测试邮件发送失败: to={}, error={}",
-                    dto.getToAddress(), e.getMessage());
-            String errorMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "邮件发送失败: " + errorMsg);
-        }
+        emailSendService.sendTestEmailSafe(dto.getToAddress());
+        return R.ok();
     }
 
     // ==================== 通知发件箱（Outbox）管理 ====================

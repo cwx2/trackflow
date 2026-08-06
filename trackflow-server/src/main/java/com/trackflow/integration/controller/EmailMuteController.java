@@ -1,7 +1,6 @@
 package com.trackflow.integration.controller;
 
 import com.trackflow.auth.security.NoAuthorizationRequired;
-import com.trackflow.common.exception.BusinessException;
 import com.trackflow.integration.service.EmailMuteTokenService;
 import com.trackflow.integration.service.NotificationUrlBuilder;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +45,9 @@ public class EmailMuteController {
      * 访问后：
      * - token 有效 → 执行静音 → 重定向到 /settings/notifications?muted=1
      * - token 无效/过期 → 重定向到 /settings/notifications?error=expired
+     * <p>
+     * 注意：此端点返回 HTTP 重定向而非 JSON，无法使用 GlobalExceptionHandler 统一处理。
+     * 异常处理逻辑已下沉到 EmailMuteTokenService.muteViaTokenSafe()，Controller 仅负责重定向。
      */
     @NoAuthorizationRequired
     @GetMapping("/mute-via-email")
@@ -54,22 +56,15 @@ public class EmailMuteController {
                 ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
                 : frontendBaseUrl;
 
-        try {
-            EmailMuteTokenService.MuteResult result = emailMuteTokenService.muteViaToken(token);
-            // 静音成功 → 重定向到通知设置页，带成功提示参数
-            String redirectUrl = base + "/settings/notifications?muted=1&resourceType="
-                    + URLEncoder.encode(result.resourceType(), StandardCharsets.UTF_8)
-                    + "&resourceId=" + result.resourceId();
-            response.sendRedirect(redirectUrl);
-        } catch (BusinessException e) {
-            log.warn("[EmailMuteToken] 通过邮件链接静音失败: token={}, message={}", token, e.getMessage());
-            // 失败 → 重定向到通知设置页，带错误提示
-            String redirectUrl = base + "/settings/notifications?error=expired";
-            response.sendRedirect(redirectUrl);
-        } catch (Exception e) {
-            log.error("[EmailMuteToken] 处理静音 token 时发生异常: token={}", token, e);
-            String redirectUrl = base + "/settings/notifications?error=unknown";
-            response.sendRedirect(redirectUrl);
+        EmailMuteTokenService.MuteOutcome outcome = emailMuteTokenService.muteViaTokenSafe(token);
+        String redirectUrl;
+        if (outcome.success()) {
+            redirectUrl = base + "/settings/notifications?muted=1&resourceType="
+                    + URLEncoder.encode(outcome.resourceType(), StandardCharsets.UTF_8)
+                    + "&resourceId=" + outcome.resourceId();
+        } else {
+            redirectUrl = base + "/settings/notifications?error=" + outcome.errorCode();
         }
+        response.sendRedirect(redirectUrl);
     }
 }

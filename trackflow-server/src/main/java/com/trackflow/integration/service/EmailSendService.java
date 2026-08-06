@@ -1,5 +1,7 @@
 package com.trackflow.integration.service;
 
+import com.trackflow.common.exception.BusinessException;
+import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.integration.vo.EmailAvailabilityVO;
 import com.trackflow.integration.vo.EmailConfigVO;
 import com.trackflow.system.service.SystemSettingService;
@@ -66,6 +68,24 @@ public class EmailSendService {
         }
 
         return new EmailAvailabilityVO(available, globalEnabled, smtpConfigured, reason);
+    }
+
+    /**
+     * 发送测试邮件（安全版本，内部捕获异常并转为 BusinessException）。
+     * <p>
+     * Controller 应调用此方法，而非 sendTestEmail()，以避免在 Controller 层 try-catch。
+     *
+     * @param toAddress 目标邮件地址
+     * @throws BusinessException 发送失败时抛出，包含可读的错误消息
+     */
+    public void sendTestEmailSafe(String toAddress) {
+        try {
+            sendTestEmail(toAddress);
+        } catch (Exception e) {
+            log.warn("[EmailSend] 测试邮件发送失败: to={}, error={}", toAddress, e.getMessage());
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "邮件发送失败: " + errorMsg);
+        }
     }
 
     /**
