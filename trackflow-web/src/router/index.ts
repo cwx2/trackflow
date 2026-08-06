@@ -82,17 +82,20 @@ const routes = [
       {
         path: 'boards',
         name: 'Boards',
-        component: () => import('@/views/board/KanbanBoardView.vue')
+        component: () => import('@/views/board/KanbanBoardView.vue'),
+        meta: { title: '看板' }
       },
       {
         path: 'dashboard',
         name: 'Dashboard',
-        component: () => import('@/views/report/dashboard/CustomDashboardView.vue')
+        component: () => import('@/views/report/dashboard/CustomDashboardView.vue'),
+        meta: { title: '仪表盘' }
       },
       {
         path: 'sprints',
         name: 'Sprints',
-        component: () => import('@/views/sprint/SprintView.vue')
+        component: () => import('@/views/sprint/SprintView.vue'),
+        meta: { title: 'Sprint' }
       },
       {
         path: 'sprint-planning',
