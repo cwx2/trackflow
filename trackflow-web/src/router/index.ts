@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTabStore } from '@/stores/tabs'
+import './types'
 
 const routes = [
   {
@@ -21,7 +22,8 @@ const routes = [
       {
         path: '403',
         name: 'Forbidden',
-        component: () => import('@/views/error/ForbiddenView.vue')
+        component: () => import('@/views/error/ForbiddenView.vue'),
+        meta: { title: '无权限' }
       },
       {
         path: '',
@@ -30,39 +32,44 @@ const routes = [
       {
         path: 'issues',
         name: 'Issues',
-        component: () => import('@/views/issue/IssueListView.vue')
+        component: () => import('@/views/issue/IssueListView.vue'),
+        meta: { title: '工单列表' }
       },
       {
         path: 'issues/create',
         name: 'IssueCreate',
         component: () => import('@/views/issue/IssueCreateView.vue'),
-        meta: { requiresCreateIssue: true }
+        meta: { requiresCreateIssue: true, title: '创建工单' }
       },
       {
         path: 'issues/:id',
         name: 'IssueDetail',
-        component: () => import('@/views/issue/IssueDetailView.vue')
+        component: () => import('@/views/issue/IssueDetailView.vue'),
+        meta: { title: '工单详情' }
       },
       {
         path: 'trash',
         name: 'Trash',
-        component: () => import('@/views/issue/IssueTrashView.vue')
+        component: () => import('@/views/issue/IssueTrashView.vue'),
+        meta: { title: '回收站' }
       },
       {
         path: 'projects',
         name: 'Projects',
-        component: () => import('@/views/project/ProjectListView.vue')
+        component: () => import('@/views/project/ProjectListView.vue'),
+        meta: { title: '项目列表' }
       },
       {
         path: 'projects/:projectKey',
         name: 'ProjectDetail',
-        component: () => import('@/views/project/ProjectDetailView.vue')
+        component: () => import('@/views/project/ProjectDetailView.vue'),
+        meta: { title: '项目详情' }
       },
       {
         path: 'projects/:projectKey/settings',
         name: 'ProjectSettings',
         component: () => import('@/views/project/settings/ProjectSettingsView.vue'),
-        meta: { requiresProjectEdit: true }
+        meta: { requiresProjectEdit: true, title: '项目设置' }
       },
       {
         path: 'projects/:projectKey/issues',
