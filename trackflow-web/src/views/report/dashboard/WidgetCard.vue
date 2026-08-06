@@ -124,6 +124,28 @@ const error = ref<string | null>(null)
 const dataLoaded = ref(false)
 const widgetRef = ref<{ loadData?: (force?: boolean) => Promise<void> } | null>(null)
 
+// ─── 加载超时兜底 ──────────────────────────────────────
+
+const LOADING_TIMEOUT_MS = 10000
+let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+function clearLoadingTimeout() {
+  if (loadingTimeoutId) {
+    clearTimeout(loadingTimeoutId)
+    loadingTimeoutId = null
+  }
+}
+
+function startLoadingTimeout() {
+  clearLoadingTimeout()
+  loadingTimeoutId = setTimeout(() => {
+    if (loading.value) {
+      loading.value = false
+      error.value = '加载超时，请点击重试'
+    }
+  }, LOADING_TIMEOUT_MS)
+}
+
 // ─── Widget 类型映射 ──────────────────────────────────────
 
 const widgetTypeMap: Record<string, { icon: string; label: string }> = {
@@ -197,11 +219,13 @@ const widgetProps = computed(() => {
 // ─── 事件处理 ─────────────────────────────────────────
 
 function onWidgetLoaded() {
+  clearLoadingTimeout()
   loading.value = false
   dataLoaded.value = true
 }
 
 function onWidgetError(message: string) {
+  clearLoadingTimeout()
   loading.value = false
   error.value = message
 }
@@ -220,6 +244,8 @@ async function loadData() {
 
   loading.value = true
   error.value = null
+  // 启动超时兜底：子组件 10 秒内未触发 @loaded/@error 则强制终止
+  startLoadingTimeout()
   // 子组件在 onMounted 中自动加载数据，通过 @loaded/@error 回调通知
 }
 
@@ -228,9 +254,14 @@ async function refreshData() {
   error.value = null
   dataLoaded.value = false
   loading.value = true
+  startLoadingTimeout()
 
   if (widgetRef.value?.loadData) {
-    await widgetRef.value.loadData(true)
+    try {
+      await widgetRef.value.loadData(true)
+    } catch {
+      // 子组件内部已通过 emit('error') 处理，这里只做兜底
+    }
   }
   refreshing.value = false
 }
@@ -294,6 +325,7 @@ watch(() => props.widget?.reportId, () => {
 
 onBeforeUnmount(() => {
   clearAutoRefreshTimer()
+  clearLoadingTimeout()
 })
 </script>
 
