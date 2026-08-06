@@ -31,7 +31,7 @@
       <div v-if="conditions.length > 0" class="conditions-list">
         <div
           v-for="(cond, index) in conditions"
-          :key="index"
+          :key="cond._key"
           class="condition-item"
         >
           <!-- 条件行 -->
@@ -154,6 +154,7 @@ import type { TransitionConditionItem } from '@/api/workflow'
 
 /** 内部扩展类型，包含 conditionMode 用于 UI 分支 */
 interface ConditionRow {
+  _key: number
   conditionMode: 'field' | 'links_resolved' | 'children_resolved'
   field: string
   operator: string
@@ -162,6 +163,8 @@ interface ConditionRow {
   conditionType?: string
   linkType?: string
 }
+
+let conditionKeySeq = 0
 
 const props = defineProps<{
   visible: boolean
@@ -198,6 +201,7 @@ function parseCurrentConditions() {
     conditions.value = (parsed.conditions || []).map((c: any) => {
       if (c.conditionType === 'links_resolved') {
         return {
+          _key: ++conditionKeySeq,
           conditionMode: 'links_resolved' as const,
           field: '', operator: '', value: '',
           conditionType: 'links_resolved',
@@ -205,6 +209,7 @@ function parseCurrentConditions() {
         }
       } else if (c.conditionType === 'children_resolved') {
         return {
+          _key: ++conditionKeySeq,
           conditionMode: 'children_resolved' as const,
           field: '', operator: '', value: '',
           conditionType: 'children_resolved'
@@ -212,6 +217,7 @@ function parseCurrentConditions() {
       }
       // 普通字段条件
       return {
+        _key: ++conditionKeySeq,
         conditionMode: 'field' as const,
         field: c.field || '',
         operator: c.operator || 'is_not_empty',
@@ -225,6 +231,7 @@ function parseCurrentConditions() {
 
 function addCondition() {
   conditions.value.push({
+    _key: ++conditionKeySeq,
     conditionMode: 'field',
     field: 'assignee_id',
     operator: 'is_not_empty',

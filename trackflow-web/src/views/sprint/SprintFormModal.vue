@@ -91,7 +91,7 @@
         </span>
       </div>
       <div class="overlap-sprint-list" v-if="overlapWarning">
-        <div v-for="(sprint, index) in overlapWarning.overlappingSprints" :key="index" class="overlap-sprint-item">
+        <div v-for="sprint in overlapWarning.overlappingSprints" :key="sprint.name" class="overlap-sprint-item">
           <span class="overlap-sprint-name">{{ sprint.name }}</span>
           <span class="overlap-sprint-dates">{{ sprint.startDate }} ~ {{ sprint.endDate }}</span>
           <span class="overlap-sprint-status" :class="sprint.status">

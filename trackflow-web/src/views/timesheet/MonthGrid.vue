@@ -5,8 +5,8 @@
     </div>
     <div class="month-body">
       <div
-        v-for="(day, index) in monthDays"
-        :key="index"
+        v-for="day in monthDays"
+        :key="day.date"
         class="month-cell"
         :class="{ today: isToday(day.date), weekend: day.isWeekend, 'other-month': !day.currentMonth }"
         @click="$emit('dayClick', day.date)"

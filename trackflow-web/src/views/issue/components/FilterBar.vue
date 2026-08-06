@@ -65,7 +65,7 @@
         <!-- Active filter chips -->
         <div
           v-for="(chip, index) in activeFilters"
-          :key="index"
+          :key="chip.fieldKey"
           class="filter-chip"
         >
           <span class="chip-field" @click="openFieldSelector(index)">{{ chip.fieldLabel }}</span>

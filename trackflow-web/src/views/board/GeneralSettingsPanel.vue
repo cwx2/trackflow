@@ -116,7 +116,7 @@
           <span>暂无过滤条件，点击"添加条件"开始配置</span>
         </div>
         <div v-else class="query-builder-rows">
-          <div v-for="(row, index) in filterRows" :key="index" class="filter-row">
+          <div v-for="(row, index) in filterRows" :key="row._key" class="filter-row">
             <a-select
               v-model="row.field"
               placeholder="选择字段"
@@ -250,10 +250,13 @@ interface RoleOption {
 }
 
 interface FilterRow {
+  _key: number
   field: string
   operator: string
   value: string
 }
+
+let filterRowKeySeq = 0
 
 interface FieldOption {
   value: string
@@ -388,6 +391,7 @@ function parseFilterQuery(json: string | null): FilterRow[] {
   try {
     const filters = JSON.parse(json) as Array<{ field: string; operator: string; value?: string[] }>
     return filters.map(f => ({
+      _key: ++filterRowKeySeq,
       field: f.field || '',
       operator: f.operator || 'eq',
       value: Array.isArray(f.value) ? f.value.join(', ') : ''
@@ -489,7 +493,7 @@ function emitDoneRetentionDays(val: number | undefined) {
 }
 
 function addFilterRow() {
-  filterRows.value.push({ field: '', operator: 'eq', value: '' })
+  filterRows.value.push({ _key: ++filterRowKeySeq, field: '', operator: 'eq', value: '' })
 }
 
 function removeFilterRow(index: number) {

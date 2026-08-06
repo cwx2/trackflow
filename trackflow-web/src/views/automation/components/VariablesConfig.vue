@@ -1,7 +1,7 @@
 <template>
   <div class="variables-config">
     <div class="var-list">
-      <div v-for="(item, index) in localVars" :key="index" class="var-row">
+      <div v-for="(item, index) in localVars" :key="item._key" class="var-row">
         <a-input v-model="item.key" placeholder="变量名" class="var-key-input" />
         <span class="var-eq">=</span>
         <a-input v-model="item.value" placeholder="值" class="var-value-input" />
@@ -37,26 +37,30 @@ const emit = defineEmits<{
   (e: 'update:data', value: Record<string, any>): void
 }>()
 
-const localVars = ref<Array<{ key: string; value: string }>>([])
+const localVars = ref<Array<{ _key: number; key: string; value: string }>>([])
+
+let varKeySeq = 0
 
 // 初始化
 onMounted(() => {
-  localVars.value = props.data.vars ? [...props.data.vars] : []
+  localVars.value = props.data.vars
+    ? props.data.vars.map((v: any) => ({ _key: ++varKeySeq, ...v }))
+    : []
   if (localVars.value.length === 0) {
-    localVars.value.push({ key: '', value: '' })
+    localVars.value.push({ _key: ++varKeySeq, key: '', value: '' })
   }
 })
 
 // 添加变量
 function addVar() {
-  localVars.value.push({ key: '', value: '' })
+  localVars.value.push({ _key: ++varKeySeq, key: '', value: '' })
 }
 
 // 移除变量
 function removeVar(index: number) {
   localVars.value.splice(index, 1)
   if (localVars.value.length === 0) {
-    localVars.value.push({ key: '', value: '' })
+    localVars.value.push({ _key: ++varKeySeq, key: '', value: '' })
   }
 }
 
@@ -68,9 +72,9 @@ function addPreset(key: string, value: string) {
     // 替换空行或添加新行
     const emptyIndex = localVars.value.findIndex(v => !v.key && !v.value)
     if (emptyIndex >= 0) {
-      localVars.value[emptyIndex] = { key, value }
+      localVars.value[emptyIndex] = { _key: localVars.value[emptyIndex]._key, key, value }
     } else {
-      localVars.value.push({ key, value })
+      localVars.value.push({ _key: ++varKeySeq, key, value })
     }
   }
 }
@@ -79,14 +83,16 @@ function addPreset(key: string, value: string) {
 watch(localVars, (val) => {
   emit('update:data', {
     ...props.data,
-    vars: val.filter(v => v.key) // 过滤掉空行
+    vars: val.filter(v => v.key).map(({ key, value }) => ({ key, value }))
   })
 }, { deep: true })
 
 watch(() => props.data, (val) => {
-  localVars.value = val.vars ? [...val.vars] : []
+  localVars.value = val.vars
+    ? val.vars.map((v: any) => ({ _key: ++varKeySeq, ...v }))
+    : []
   if (localVars.value.length === 0) {
-    localVars.value.push({ key: '', value: '' })
+    localVars.value.push({ _key: ++varKeySeq, key: '', value: '' })
   }
 }, { deep: true })
 </script>

@@ -1,8 +1,8 @@
 <template>
   <div class="week-grid">
     <div
-      v-for="(day, index) in weekDays"
-      :key="index"
+      v-for="day in weekDays"
+      :key="day.date"
       class="day-column"
       :class="{ today: isToday(day.date), weekend: day.isWeekend }"
       @click="$emit('dayClick', day.date)"
