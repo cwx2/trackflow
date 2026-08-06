@@ -18,7 +18,6 @@ import com.trackflow.report.entity.Dashboard;
 import com.trackflow.report.entity.DashboardFavorite;
 import com.trackflow.report.entity.DashboardShare;
 import com.trackflow.report.entity.DashboardWidget;
-import com.trackflow.report.entity.WidgetType;
 import com.trackflow.report.mapper.DashboardMapper;
 import com.trackflow.report.mapper.DashboardFavoriteMapper;
 import com.trackflow.report.mapper.DashboardShareMapper;
@@ -598,10 +597,9 @@ public class CustomDashboardService {
     public DashboardWidgetVO addWidget(Long dashboardId, CreateWidgetDTO dto, Long userId) {
         assertCanEdit(dashboardId, userId);
 
-        // 校验 widgetType 合法性
-        if (!WidgetType.isValid(dto.getWidgetType())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "不支持的微件类型: " + dto.getWidgetType() + "，允许值: " + WidgetType.allowedValues());
+        // 校验 widgetType 合法性（软校验：仅非空检查，不限制枚举值，支持插件化扩展）
+        if (dto.getWidgetType() == null || dto.getWidgetType().isBlank()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "微件类型不能为空");
         }
 
         // 计算 sortOrder（当前最大 + 1）

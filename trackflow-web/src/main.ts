@@ -13,6 +13,9 @@ import { vPermission } from './directives/permission'
 // 初始化主题（必须在 mount 之前）
 import './composables/useTheme'
 
+// 注册内置 Widget 插件（必须在 mount 之前）
+import './widgets/builtin'
+
 const app = createApp(App)
 
 /**

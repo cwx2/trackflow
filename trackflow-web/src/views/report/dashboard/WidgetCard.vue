@@ -74,16 +74,8 @@
         @error="onWidgetError"
       />
 
-      <!-- Sprint 进度（占位） -->
-      <template v-else-if="widget.widgetType === 'sprint_progress'">
-        <div class="widget-configure-hint">
-          <icon-thunderbolt :size="32" class="hint-icon" />
-          <span class="hint-text">点击「编辑配置」选择 Sprint</span>
-        </div>
-      </template>
-
-      <!-- 未知类型 -->
-      <template v-else-if="!widgetComponent">
+      <!-- 未知类型（注册表中无对应 Widget） -->
+      <template v-else>
         <div class="widget-configure-hint">
           <icon-question-circle :size="32" class="hint-icon" />
           <span class="hint-text">未知微件类型: {{ widget.widgetType }}</span>
@@ -94,23 +86,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, type Component } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import {
   IconMore, IconEdit, IconDelete, IconRefresh, IconLink, IconSwap,
-  IconExclamationCircleFill, IconThunderbolt, IconQuestionCircle
+  IconExclamationCircleFill, IconQuestionCircle
 } from '@arco-design/web-vue/es/icon'
 import type { DashboardWidgetVO } from '@/api/customDashboard'
-
-import NoteWidget from './widgets/NoteWidget.vue'
-import NumberCardWidget from './widgets/NumberCardWidget.vue'
-import ReportChartWidget from './widgets/ReportChartWidget.vue'
-import IssueListWidget from './widgets/IssueListWidget.vue'
-import ActivityFeedWidget from './widgets/ActivityFeedWidget.vue'
-import AgileChartWidget from './widgets/AgileChartWidget.vue'
-import BoardStatusWidget from './widgets/BoardStatusWidget.vue'
-import CalendarWidget from './widgets/CalendarWidget.vue'
-import ProjectTeamWidget from './widgets/ProjectTeamWidget.vue'
+import { getWidget } from '@/widgets'
 
 const props = defineProps<{
   widget: DashboardWidgetVO | undefined
@@ -153,30 +136,18 @@ function startLoadingTimeout() {
   }, LOADING_TIMEOUT_MS)
 }
 
-// ─── Widget 类型映射 ──────────────────────────────────────
-
-const widgetTypeMap: Record<string, { icon: string; label: string }> = {
-  note: { icon: '📝', label: '快捷笔记' },
-  number_card: { icon: '🔢', label: '数字卡片' },
-  report_distribution: { icon: '📊', label: '分布图表' },
-  issue_list: { icon: '📋', label: 'Issue 列表' },
-  activity_feed: { icon: '🔔', label: '活动流' },
-  report: { icon: '📈', label: '报表图表' },
-  sprint_progress: { icon: '🏃', label: 'Sprint 进度' },
-  calendar: { icon: '📅', label: '到期日历' },
-  agile_chart: { icon: '📉', label: '敏捷图表' },
-  agile_board_status: { icon: '📊', label: '看板状态' },
-  project_team: { icon: '👥', label: '项目成员' }
-}
+// ─── Widget 类型映射（从注册表动态读取） ──────────────────────────────────────
 
 const widgetIcon = computed(() => {
   if (!props.widget) return '❓'
-  return widgetTypeMap[props.widget.widgetType]?.icon || '❓'
+  const def = getWidget(props.widget.widgetType)
+  return def?.icon || '❓'
 })
 
 const widgetTypeLabel = computed(() => {
   if (!props.widget) return ''
-  return widgetTypeMap[props.widget.widgetType]?.label || props.widget.widgetType
+  const def = getWidget(props.widget.widgetType)
+  return def?.label || props.widget.widgetType
 })
 
 const isIssueListWidget = computed(() => {
@@ -191,24 +162,12 @@ function handleTitleClick() {
   }
 }
 
-// ─── 动态组件路由 ──────────────────────────────────────
-
-const widgetComponentMap: Record<string, Component> = {
-  note: NoteWidget,
-  number_card: NumberCardWidget,
-  report_distribution: ReportChartWidget,
-  report: ReportChartWidget,
-  issue_list: IssueListWidget,
-  activity_feed: ActivityFeedWidget,
-  agile_chart: AgileChartWidget,
-  agile_board_status: BoardStatusWidget,
-  calendar: CalendarWidget,
-  project_team: ProjectTeamWidget
-}
+// ─── 动态组件路由（从注册表读取） ──────────────────────────────────────
 
 const widgetComponent = computed(() => {
   if (!props.widget) return null
-  return widgetComponentMap[props.widget.widgetType] || null
+  const def = getWidget(props.widget.widgetType)
+  return def?.component || null
 })
 
 const parsedConfig = computed(() => {

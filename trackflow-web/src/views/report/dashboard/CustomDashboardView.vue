@@ -295,235 +295,15 @@
           <span class="form-hint">设置微件数据的自动刷新间隔</span>
         </a-form-item>
 
-        <!-- number_card 配置 -->
-        <template v-if="editingWidgetType === 'number_card'">
-          <a-form-item label="数据来源">
-            <a-select v-model="widgetConfigForm.queryType" placeholder="选择统计指标" allow-clear>
-              <a-option value="total">工单总数</a-option>
-              <a-option value="open">待处理工单数</a-option>
-              <a-option value="closed">已完成工单数</a-option>
-              <a-option value="unassigned">未分配工单数</a-option>
-              <a-option value="overdue">已逾期工单数</a-option>
-              <a-option value="completion_rate">完成率 (%)</a-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="自定义数值（留空则自动从后端获取）">
-            <a-input-number v-model="widgetConfigForm.staticValue" placeholder="留空=动态数据" :min="0" style="width: 100%" />
-          </a-form-item>
-          <a-form-item label="副标签">
-            <a-input v-model="widgetConfigForm.label" placeholder="如「Open Bugs」" :max-length="50" />
-          </a-form-item>
-        </template>
-
-        <!-- issue_list 配置 -->
-        <template v-if="editingWidgetType === 'issue_list'">
-          <a-form-item label="查询类型">
-            <a-select v-model="widgetConfigForm.queryType" placeholder="选择查询类型">
-              <a-option value="all">所有工单</a-option>
-              <a-option value="open">未关闭的工单</a-option>
-              <a-option value="closed">已关闭的工单</a-option>
-              <a-option value="my_open">分配给我的未关闭工单</a-option>
-            </a-select>
-            <span class="form-hint">选择工单列表的查询范围</span>
-          </a-form-item>
-          <a-form-item label="项目筛选">
-            <a-select v-model="widgetConfigForm.projectId" placeholder="留空 = 所有项目" allow-clear>
-              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">限定只展示特定项目的工单，留空表示全部</span>
-          </a-form-item>
-          <a-form-item label="高级过滤（可选）">
-            <a-input
-              v-model="widgetConfigForm.filterQuery"
-              placeholder="如 priority:Critical state:Blocked created:today"
-              allow-clear
-            />
-            <div class="form-hint-block">
-              <span class="form-hint">支持搜索语法，与下拉筛选取 AND 逻辑。</span>
-              <a-popover title="搜索语法参考" position="bottom" :content-style="{ maxWidth: '360px' }">
-                <a class="filter-help-link">查看语法说明</a>
-                <template #content>
-                  <div class="filter-syntax-help">
-                    <div class="syntax-row"><code>priority:Critical</code> 优先级筛选</div>
-                    <div class="syntax-row"><code>priority:Critical,High</code> 多值（OR）</div>
-                    <div class="syntax-row"><code>state:Blocked</code> 状态筛选</div>
-                    <div class="syntax-row"><code>assignee:me</code> 分配给我</div>
-                    <div class="syntax-row"><code>type:Bug</code> 工单类型</div>
-                    <div class="syntax-row"><code>created:today</code> 今天创建</div>
-                    <div class="syntax-row"><code>created:week</code> 本周创建</div>
-                    <div class="syntax-row"><code>overdue:true</code> 已逾期</div>
-                    <div class="syntax-row"><code>dueSoon:true</code> 即将到期</div>
-                    <div class="syntax-row"><code>keyword:搜索词</code> 全文搜索</div>
-                    <div class="syntax-note">多个条件用空格分隔（AND 逻辑）</div>
-                  </div>
-                </template>
-              </a-popover>
-            </div>
-          </a-form-item>
-          <a-form-item label="显示条数">
-            <a-input-number
-              v-model="widgetConfigForm.issueListPageSize"
-              :min="5"
-              :max="50"
-              placeholder="默认 10"
-              style="width: 100%"
-            />
-            <span class="form-hint">5-50 条，默认显示 10 条</span>
-          </a-form-item>
-        </template>
-
-        <!-- report_distribution / report 配置 -->
-        <template v-if="editingWidgetType === 'report_distribution' || editingWidgetType === 'report'">
-          <a-form-item label="关联报表">
-            <a-select v-model="widgetConfigForm.reportId" placeholder="选择一个已保存的报表" allow-clear>
-              <a-option v-for="r in availableReports" :key="r.id" :value="r.id">
-                {{ r.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">关联后将自动展示该报表的图表数据</span>
-          </a-form-item>
-        </template>
-
-        <!-- note 配置 -->
-        <template v-if="editingWidgetType === 'note'">
-          <a-form-item label="内容">
-            <a-textarea
-              v-model="widgetConfigForm.noteContent"
-              placeholder="支持简单 HTML 标签"
-              :auto-size="{ minRows: 3, maxRows: 8 }"
-            />
-          </a-form-item>
-        </template>
-
-        <!-- agile_chart 配置 -->
-        <template v-if="editingWidgetType === 'agile_chart'">
-          <a-form-item label="图表类型">
-            <a-select v-model="widgetConfigForm.chartType" placeholder="选择图表类型">
-              <a-option value="burndown">燃尽图 (Burndown)</a-option>
-              <a-option value="cumulative_flow">累积流图 (Cumulative Flow)</a-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item v-if="widgetConfigForm.chartType === 'burndown'" label="Sprint">
-            <a-select v-model="widgetConfigForm.sprintId" placeholder="选择 Sprint" allow-clear>
-              <a-option v-for="s in availableSprints" :key="s.id" :value="s.id">
-                {{ s.name }} ({{ s.status }})
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要显示燃尽图的 Sprint</span>
-          </a-form-item>
-          <a-form-item v-if="widgetConfigForm.chartType === 'cumulative_flow'" label="项目">
-            <a-select v-model="widgetConfigForm.projectId" placeholder="选择项目" allow-clear>
-              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要显示累积流图的项目</span>
-          </a-form-item>
-        </template>
-
-        <!-- agile_board_status 配置 -->
-        <template v-if="editingWidgetType === 'agile_board_status'">
-          <a-form-item label="Sprint">
-            <a-select v-model="widgetConfigForm.sprintId" placeholder="选择 Sprint" allow-clear>
-              <a-option v-for="s in availableSprints" :key="s.id" :value="s.id">
-                {{ s.name }} ({{ s.status }})
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要显示状态分布的 Sprint</span>
-          </a-form-item>
-        </template>
-
-        <!-- activity_feed 配置 -->
-        <template v-if="editingWidgetType === 'activity_feed'">
-          <a-form-item label="项目范围">
-            <a-select
-              v-model="widgetConfigForm.activityProjectIds"
-              placeholder="留空 = 所有可见项目"
-              multiple
-              allow-clear
-              :max-tag-count="3"
-            >
-              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要监控的项目，留空表示所有项目</span>
-          </a-form-item>
-          <a-form-item label="活动类型">
-            <a-select
-              v-model="widgetConfigForm.activityActions"
-              placeholder="留空 = 所有类型"
-              multiple
-              allow-clear
-              :max-tag-count="3"
-            >
-              <a-option v-for="opt in activityTypeOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要显示的活动类型，留空表示全部</span>
-          </a-form-item>
-          <a-form-item label="用户范围">
-            <a-select
-              v-model="widgetConfigForm.activityUserIds"
-              placeholder="留空 = 所有人"
-              multiple
-              allow-clear
-              :max-tag-count="3"
-            >
-              <a-option v-for="u in availableUsers" :key="u.id" :value="u.id">
-                {{ u.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要关注的用户，留空表示所有人</span>
-          </a-form-item>
-          <a-form-item label="显示条数">
-            <a-input-number
-              v-model="widgetConfigForm.activityLimit"
-              :min="1"
-              :max="50"
-              placeholder="默认 10"
-              style="width: 100%"
-            />
-            <span class="form-hint">1-50 条，默认显示最近 10 条</span>
-          </a-form-item>
-        </template>
-
-        <!-- calendar 配置 -->
-        <template v-if="editingWidgetType === 'calendar'">
-          <a-form-item label="项目" :rules="[{ required: true, message: '请选择项目' }]">
-            <a-select v-model="widgetConfigForm.projectId" placeholder="选择项目（必填）">
-              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要显示到期日历的项目</span>
-          </a-form-item>
-        </template>
-
-        <!-- project_team 配置 -->
-        <template v-if="editingWidgetType === 'project_team'">
-          <a-form-item label="项目" :rules="[{ required: true, message: '请选择项目' }]">
-            <a-select v-model="widgetConfigForm.projectId" placeholder="选择项目（必填）">
-              <a-option v-for="p in availableProjects" :key="p.id" :value="p.id">
-                {{ p.name }}
-              </a-option>
-            </a-select>
-            <span class="form-hint">选择要展示团队成员的项目</span>
-          </a-form-item>
-          <a-form-item label="显示条数">
-            <a-input-number
-              v-model="widgetConfigForm.teamLimit"
-              :min="1"
-              :max="50"
-              placeholder="留空 = 显示全部"
-              style="width: 100%"
-            />
-            <span class="form-hint">限制显示的成员数量，留空表示全部</span>
-          </a-form-item>
-        </template>
+        <!-- 类型特定配置（由注册表 Schema 驱动） -->
+        <WidgetConfigForm
+          :schema="getWidget(editingWidgetType)?.configSchema ?? []"
+          v-model="widgetConfigForm"
+          :projects="availableProjects"
+          :reports="availableReports"
+          :sprints="availableSprints"
+          :users="availableUsers"
+        />
       </a-form>
     </a-modal>
 
@@ -576,22 +356,11 @@ import type { ReportDefinitionVO } from '@/api/report'
 import type { SprintVO } from '@/api/types'
 import WidgetCard from './WidgetCard.vue'
 import ShareDashboardModal from './ShareDashboardModal.vue'
+import { getAllWidgets, getWidget, WidgetConfigForm } from '@/widgets'
 
-// ─── 微件类型定义 ─────────────────────────────────────────
+// ─── 微件类型定义（从注册表动态获取） ─────────────────────────────────────────
 
-const widgetTypes = [
-  { type: 'note', label: '快捷笔记', icon: '📝', description: '自由编辑 Markdown 内容', defaultTitle: '笔记', group: '基础' },
-  { type: 'number_card', label: '数字卡片', icon: '🔢', description: '单数字大卡片（如"本月完成: 88"）', defaultTitle: '统计', group: '基础' },
-  { type: 'report_distribution', label: '分布图表', icon: '📊', description: '按字段分组的条形图/饼图', defaultTitle: '分布报表', group: '报表' },
-  { type: 'issue_list', label: 'Issue 列表', icon: '📋', description: '按条件展示工单列表', defaultTitle: 'Issue 列表', group: '基础' },
-  { type: 'activity_feed', label: '活动流', icon: '🔔', description: '最近的 Issue 活动（评论/状态变更）', defaultTitle: '最近活动', group: '基础' },
-  { type: 'report', label: '报表图表', icon: '📈', description: '关联已保存的报表定义', defaultTitle: '报表', group: '报表' },
-  { type: 'sprint_progress', label: 'Sprint 进度', icon: '🏃', description: 'Sprint 完成进度条', defaultTitle: 'Sprint 进度', group: '敏捷' },
-  { type: 'agile_chart', label: '敏捷图表', icon: '📉', description: '燃尽图或累积流图，跟踪 Sprint 进展趋势', defaultTitle: '敏捷图表', group: '敏捷' },
-  { type: 'agile_board_status', label: '看板状态', icon: '📊', description: 'Sprint 工单状态分布（待处理/进行中/已完成）', defaultTitle: '看板状态', group: '敏捷' },
-  { type: 'calendar', label: '到期日历', icon: '📅', description: 'Issue 到期日期日历视图', defaultTitle: '到期日历', group: '基础' },
-  { type: 'project_team', label: '项目成员', icon: '👥', description: '展示项目团队成员及各自未关闭工单数', defaultTitle: '项目成员', group: '基础' }
-]
+const widgetTypes = computed(() => getAllWidgets())
 
 // ─── 状态 ─────────────────────────────────────────────
 
@@ -664,22 +433,6 @@ const widgetConfigForm = ref<{
 
 // Available users for activity feed widget
 const availableUsers = ref<Array<{ id: string; name: string }>>([])
-
-// Activity type options for activity feed widget
-const activityTypeOptions = [
-  { value: 'commented', label: '评论' },
-  { value: 'status_changed', label: '状态变更' },
-  { value: 'status_reverted', label: '撤销状态变更' },
-  { value: 'field_change', label: '字段变更' },
-  { value: 'update', label: '更新' },
-  { value: 'assigned', label: '分配' },
-  { value: 'attachment_added', label: '附件上传' },
-  { value: 'link_added', label: '关联添加' },
-  { value: 'link_removed', label: '关联移除' },
-  { value: 'tag_added', label: '标签变更' },
-  { value: 'created', label: '创建' },
-  { value: 'time_logged', label: '工时记录' }
-]
 
 // Move widget state
 const showMoveWidgetModal = ref(false)
@@ -995,26 +748,26 @@ function confirmDelete() {
 async function addWidget(widgetType: string, defaultTitle: string) {
   if (!currentDashboard.value) return
   try {
-    // Default config based on widget type
-    let defaultConfig = '{}'
-    if (widgetType === 'number_card') {
-      defaultConfig = JSON.stringify({ queryType: 'open', label: '待处理' })
-    } else if (widgetType === 'agile_chart') {
-      defaultConfig = JSON.stringify({ chartType: 'burndown' })
+    const def = getWidget(widgetType)
+
+    // Build default config from schema defaultValues
+    const defaultConfig: Record<string, unknown> = {}
+    if (def?.configSchema) {
+      for (const field of def.configSchema) {
+        if (field.defaultValue !== undefined) {
+          defaultConfig[field.key] = field.defaultValue
+        }
+      }
     }
 
-    // Default size based on widget type
-    let width = 4
-    let height = 3
-    if (widgetType === 'number_card') { width = 3; height = 2 }
-    else if (widgetType === 'agile_chart') { width = 6; height = 4 }
-    else if (widgetType === 'agile_board_status') { width = 4; height = 2 }
-    else if (widgetType === 'project_team') { width = 3; height = 4 }
+    // Use registry-defined default dimensions, with fallback
+    const width = def?.defaultWidth ?? 4
+    const height = def?.defaultHeight ?? 3
 
     await customDashboardApi.addWidget(currentDashboard.value.id, {
       widgetType,
       title: defaultTitle,
-      config: defaultConfig,
+      config: Object.keys(defaultConfig).length > 0 ? JSON.stringify(defaultConfig) : '{}',
       width,
       height
     })
