@@ -43,6 +43,7 @@ public class CustomFieldDisplayService {
     private final CustomFieldOptionMapper optionMapper;
     private final CustomFieldProjectMapper projectMapper;
     private final SysUserMapper userMapper;
+    private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
     private final IssueMapper issueMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final PermissionService permissionService;
@@ -536,12 +537,21 @@ public class CustomFieldDisplayService {
      */
     public String resolveDisplayValue(String rawValue, CustomFieldDefinition fieldDef,
                                        Map<Long, String> optionTextMap, Map<Long, String> userNameMap) {
+        return resolveDisplayValue(rawValue, fieldDef, optionTextMap, userNameMap, Map.of());
+    }
+
+    /**
+     * 将原始值转换为用户可读的展示值（批量版，含用户组映射）。
+     */
+    public String resolveDisplayValue(String rawValue, CustomFieldDefinition fieldDef,
+                                       Map<Long, String> optionTextMap, Map<Long, String> userNameMap,
+                                       Map<Long, String> groupNameMap) {
         if (rawValue == null || rawValue.isBlank()) {
             return null;
         }
         var handler = handlerRegistry.getHandler(fieldDef.getFieldFormat());
         if (handler.isPresent()) {
-            return handler.get().toDisplayValue(rawValue, fieldDef, DisplayContext.of(optionTextMap, userNameMap));
+            return handler.get().toDisplayValue(rawValue, fieldDef, DisplayContext.of(optionTextMap, userNameMap, groupNameMap));
         } else {
             log.warn("Unknown field_format '{}' for field '{}' (id={}), returning raw value",
                     fieldDef.getFieldFormat(), fieldDef.getName(), fieldDef.getId());
@@ -591,6 +601,17 @@ public class CustomFieldDisplayService {
                 var user = userMapper.selectById(userId);
                 if (user != null) {
                     return DisplayContext.of(Map.of(), Map.of(userId, user.getDisplayName()));
+                }
+            } catch (NumberFormatException e) {
+                // fall through
+            }
+            return DisplayContext.EMPTY;
+        } else if ("group".equals(format)) {
+            try {
+                Long groupId = Long.parseLong(rawValue);
+                var group = userGroupMapper.selectById(groupId);
+                if (group != null) {
+                    return DisplayContext.of(Map.of(), Map.of(), Map.of(groupId, group.getName()));
                 }
             } catch (NumberFormatException e) {
                 // fall through

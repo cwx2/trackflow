@@ -70,9 +70,13 @@ public class CustomFieldTypeConversionService {
         // version 可转换为 list（丢弃 releaseDate/released 信息）或 string
         CONVERSION_RULES.put("version", Set.of("list", "string"));
 
-        // bool 和 user 类型没有可用转换
+        // build 可转换为 list（丢弃 assembleDate 信息）或 string
+        CONVERSION_RULES.put("build", Set.of("list", "string"));
+
+        // bool 和 user/group 类型没有可用转换
         CONVERSION_RULES.put("bool", Set.of());
         CONVERSION_RULES.put("user", Set.of());
+        CONVERSION_RULES.put("group", Set.of());
     }
 
     /**

@@ -68,5 +68,7 @@ public class UpdateCustomFieldDTO {
         private java.time.LocalDate releaseDate;
         /** 仅 version 类型使用：是否已正式发布 */
         private Boolean isReleased;
+        /** 仅 build 类型使用：构建生成日期 */
+        private java.time.LocalDate assembleDate;
     }
 }

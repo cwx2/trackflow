@@ -297,6 +297,17 @@ const {
 const SIDEBAR_COLLAPSED_KEY = 'tf_issue_detail_sidebar_collapsed'
 const sidebarCollapsed = ref<boolean>(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
 
+// User groups for 'group' type custom fields
+const allUserGroups = ref<Array<{ id: string; name: string }>>([])
+async function loadUserGroups() {
+  if (allUserGroups.value.length > 0) return // already loaded
+  try {
+    const { groupApi } = await import('@/api/group')
+    const res = await groupApi.listSimple()
+    allUserGroups.value = res.data || []
+  } catch { /* non-critical */ }
+}
+
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed.value))
@@ -336,6 +347,13 @@ onMounted(() => {
   loadAll()
   document.addEventListener('paste', onPasteUpload)
 })
+
+// Load user groups when custom fields include 'group' type
+watch(customFieldDefs, (defs) => {
+  if (defs.some(cf => cf.fieldFormat === 'group')) {
+    loadUserGroups()
+  }
+}, { immediate: true })
 
 onUnmounted(() => {
   document.removeEventListener('paste', onPasteUpload)
@@ -556,13 +574,17 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
     let editType: 'select' | 'multi-select' | 'user-select' | 'date' | 'datetime' | 'number' | 'text' | 'period' | undefined
     let options: { value: string; label: string }[] | undefined
     switch (cf.fieldFormat) {
-      case 'list': case 'ownedField': case 'version':
+      case 'list': case 'ownedField': case 'version': case 'build':
         editType = isMulti ? 'multi-select' : 'select'
         options = getFilteredOptions(cf, valuesMap)
         break
       case 'user':
         editType = 'user-select'
         options = allProjectMembers.value.map(m => ({ value: m.userId, label: m.displayName }))
+        break
+      case 'group':
+        editType = isMulti ? 'multi-select' : 'select'
+        options = allUserGroups.value.map(g => ({ value: g.id, label: g.name }))
         break
       case 'date': editType = 'date'; break
       case 'datetime': editType = 'datetime'; break
@@ -572,7 +594,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       default: editType = 'text'; break
     }
     let fieldColor: string | undefined
-    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && stored) {
+    if ((cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build') && stored) {
       if (isMulti && stored.colors?.length) { fieldColor = stored.colors.find(c => c != null) || undefined }
       else if (stored.color) { fieldColor = stored.color }
     }
@@ -580,7 +602,7 @@ function buildCustomFieldSidebarEntries(i: IssueDetailVO, canEdit: boolean): Sid
       key: `cf_${cf.id}`, label: cf.name, value: displayValue, dot: fieldColor,
       editType: editType as any, rawValue, rawValues: isMulti ? rawValues : undefined,
       readonly: !canEdit || cf.editable === false, options,
-      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && canManageCustomFieldsComputed.value,
+      canAddOption: (cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build') && canManageCustomFieldsComputed.value,
       customFieldId: cf.id, isSetValuePrompt,
       isEmptyCustomField: !isSetValuePrompt && !rawValue && !(isMulti && rawValues.length > 0)
     }

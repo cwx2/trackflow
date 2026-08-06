@@ -106,6 +106,8 @@ export interface CustomFieldOptionVO {
   releaseDate?: string | null
   /** 是否已正式发布（仅 version 类型使用） */
   isReleased?: boolean
+  /** 构建生成日期（仅 build 类型使用） */
+  assembleDate?: string | null
 }
 
 /** 选项集状态 VO */

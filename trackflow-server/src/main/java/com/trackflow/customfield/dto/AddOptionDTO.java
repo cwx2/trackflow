@@ -28,4 +28,7 @@ public class AddOptionDTO {
 
     /** 是否已正式发布（仅 version 类型使用，可选） */
     private Boolean isReleased;
+
+    /** 构建生成日期（仅 build 类型使用，可选） */
+    private LocalDate assembleDate;
 }

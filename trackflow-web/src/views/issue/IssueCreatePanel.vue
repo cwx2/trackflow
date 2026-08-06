@@ -365,9 +365,9 @@
                 size="small"
                 @change="(v: any) => { customFieldValues[cf.id] = String(v); clearFieldError(cf.id) }"
               />
-              <!-- list/ownedField/version (多值模式) -->
+              <!-- list/ownedField/version/build (多值模式) -->
               <a-select
-                v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && cf.isMulti"
+                v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build') && cf.isMulti"
                 :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
                 @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(','); clearFieldError(cf.id) }"
                 size="small"
@@ -392,9 +392,9 @@
                   </div>
                 </template>
               </a-select>
-              <!-- list/ownedField/version (单值模式) -->
+              <!-- list/ownedField/version/build (单值模式) -->
               <a-select
-                v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version'"
+                v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build'"
                 v-model="customFieldValues[cf.id]"
                 size="small"
                 :placeholder="getFieldPlaceholder(cf)"
@@ -430,6 +430,20 @@
                 @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
               >
                 <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
+              </a-select>
+              <!-- group (用户组) -->
+              <a-select
+                v-else-if="cf.fieldFormat === 'group'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
+                allow-clear
+                allow-search
+                :multiple="cf.isMulti"
+                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+              >
+                <a-option v-for="g in allUserGroups" :key="g.id" :value="g.id">{{ g.name }}</a-option>
               </a-select>
               <!-- period (时间周期) -->
               <a-input
@@ -524,9 +538,9 @@
                   size="small"
                   @change="(v: any) => { customFieldValues[cf.id] = String(v) }"
                 />
-                <!-- list/ownedField/version (多值模式) -->
+                <!-- list/ownedField/version/build (多值模式) -->
                 <a-select
-                  v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version') && cf.isMulti"
+                  v-else-if="(cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build') && cf.isMulti"
                   :model-value="customFieldValues[cf.id] ? customFieldValues[cf.id].split(',').filter((s: string) => s) : []"
                   @update:model-value="(v: any) => { customFieldValues[cf.id] = (v as string[]).join(',') }"
                   size="small"
@@ -549,9 +563,9 @@
                     </div>
                   </template>
                 </a-select>
-                <!-- list/ownedField/version (单值模式) -->
+                <!-- list/ownedField/version/build (单值模式) -->
                 <a-select
-                  v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version'"
+                  v-else-if="cf.fieldFormat === 'list' || cf.fieldFormat === 'ownedField' || cf.fieldFormat === 'version' || cf.fieldFormat === 'build'"
                   v-model="customFieldValues[cf.id]"
                   size="small"
                   :placeholder="getFieldPlaceholder(cf)"
@@ -583,6 +597,18 @@
                   allow-search
                 >
                   <a-option v-for="m in allProjectMembers" :key="m.userId" :value="m.userId">{{ m.displayName }}</a-option>
+                </a-select>
+                <!-- group (用户组) -->
+                <a-select
+                  v-else-if="cf.fieldFormat === 'group'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  allow-clear
+                  allow-search
+                  :multiple="cf.isMulti"
+                >
+                  <a-option v-for="g in allUserGroups" :key="g.id" :value="g.id">{{ g.name }}</a-option>
                 </a-select>
                 <!-- period (时间周期) -->
                 <a-input
@@ -896,6 +922,7 @@ function openSimilarIssue(issue: SimilarIssue) {
 const { projects, projectLoadState, loadProjects } = useProjectList()
 const members = ref<any[]>([])
 const allProjectMembers = ref<any[]>([])
+const allUserGroups = ref<Array<{ id: string; name: string }>>([])
 const sprints = ref<any[]>([])
 const statuses = ref<IssueStatusVO[]>([])
 const projectTags = ref<any[]>([])
@@ -947,6 +974,15 @@ const { fields: customFields, values: customFieldValues, loading: cfLoading, val
   projectIdRef,
   issueTypeRef
 )
+
+// Load user groups when custom fields include 'group' type
+watch(customFields, (fields) => {
+  if (fields.some(cf => cf.fieldFormat === 'group') && allUserGroups.value.length === 0) {
+    import('@/api/group').then(({ groupApi }) => {
+      groupApi.listSimple().then(res => { allUserGroups.value = res.data || [] }).catch(() => {})
+    })
+  }
+}, { immediate: true })
 
 // 将自定义字段分为两组：必填字段（始终显示）和可选字段（折叠区域）
 // 参考 YouTrack：必填字段直接在表单主区域可见，显示 "Set value" 提示
@@ -1050,7 +1086,7 @@ function getFieldPlaceholder(cf: CustomFieldDefinitionVO): string {
   const hint = cf.effectiveDefaultValue ?? cf.defaultValue
   if (hint && cf.fieldFormat !== 'bool') {
     // 对于 list 类型，defaultValue 是 option ID，不适合作为 placeholder 文本
-    if (cf.fieldFormat !== 'list' && cf.fieldFormat !== 'ownedField' && cf.fieldFormat !== 'user') {
+    if (cf.fieldFormat !== 'list' && cf.fieldFormat !== 'ownedField' && cf.fieldFormat !== 'user' && cf.fieldFormat !== 'version' && cf.fieldFormat !== 'build' && cf.fieldFormat !== 'group') {
       return hint
     }
   }

@@ -28,4 +28,6 @@ public class CustomFieldOptionVO {
     private LocalDate releaseDate;
     /** 是否已正式发布（仅 version 类型使用） */
     private Boolean isReleased;
+    /** 构建生成日期（仅 build 类型使用） */
+    private LocalDate assembleDate;
 }

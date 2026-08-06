@@ -52,7 +52,7 @@ public class CustomFieldOptionService {
      * 判断字段类型是否支持选项集（list、state 和 ownedField 类型都有选项）。
      */
     public static boolean isEnumLikeFormat(String fieldFormat) {
-        return "list".equals(fieldFormat) || "state".equals(fieldFormat) || "ownedField".equals(fieldFormat) || "version".equals(fieldFormat);
+        return "list".equals(fieldFormat) || "state".equals(fieldFormat) || "ownedField".equals(fieldFormat) || "version".equals(fieldFormat) || "build".equals(fieldFormat);
     }
 
     // ========== 项目级选项集管理（Make Independent Copy）==========
@@ -145,6 +145,7 @@ public class CustomFieldOptionService {
                 copy.setOwnerUserId(src.getOwnerUserId());
                 copy.setReleaseDate(src.getReleaseDate());
                 copy.setIsReleased(src.getIsReleased());
+                copy.setAssembleDate(src.getAssembleDate());
                 copy.setCreatedAt(LocalDateTime.now());
                 copy.setUpdatedAt(LocalDateTime.now());
                 optionMapper.insert(copy);
@@ -439,7 +440,7 @@ public class CustomFieldOptionService {
      * 如果项目有独立选项集，添加到独立选项集；否则添加到全局选项集。
      */
     @Transactional(rollbackFor = Exception.class)
-    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId, java.time.LocalDate releaseDate, Boolean isReleased) {
+    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId, java.time.LocalDate releaseDate, Boolean isReleased, java.time.LocalDate assembleDate) {
         CustomFieldDefinition field = definitionMapper.selectById(fieldId);
         if (field == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "字段不存在");
@@ -527,6 +528,7 @@ public class CustomFieldOptionService {
         option.setOwnerUserId(ownerUserId);
         option.setReleaseDate(releaseDate);
         option.setIsReleased(Boolean.TRUE.equals(isReleased));
+        option.setAssembleDate(assembleDate);
         option.setIsArchived(false);
         option.setCreatedAt(LocalDateTime.now());
         option.setUpdatedAt(LocalDateTime.now());
@@ -650,6 +652,8 @@ public class CustomFieldOptionService {
                 if (opt.getIsReleased() != null) {
                     existing.setIsReleased(opt.getIsReleased());
                 }
+                // 更新 build 类型字段属性
+                existing.setAssembleDate(opt.getAssembleDate());
                 // 如果之前是归档状态，恢复为活跃
                 if (Boolean.TRUE.equals(existing.getIsArchived())) {
                     existing.setIsArchived(false);
@@ -956,6 +960,7 @@ public class CustomFieldOptionService {
             if (opt.getIsReleased() != null) {
                 activeSameName.setIsReleased(opt.getIsReleased());
             }
+            activeSameName.setAssembleDate(opt.getAssembleDate());
             activeSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(activeSameName);
             return activeSameName.getId();
@@ -990,6 +995,7 @@ public class CustomFieldOptionService {
             if (opt.getIsReleased() != null) {
                 archivedSameName.setIsReleased(opt.getIsReleased());
             }
+            archivedSameName.setAssembleDate(opt.getAssembleDate());
             archivedSameName.setUpdatedAt(LocalDateTime.now());
             optionMapper.updateById(archivedSameName);
             return archivedSameName.getId();
@@ -1008,6 +1014,7 @@ public class CustomFieldOptionService {
         newOption.setOwnerUserId(opt.getOwnerUserId());
         newOption.setReleaseDate(opt.getReleaseDate());
         newOption.setIsReleased(Boolean.TRUE.equals(opt.getIsReleased()));
+        newOption.setAssembleDate(opt.getAssembleDate());
         newOption.setIsArchived(false);
         newOption.setCreatedAt(LocalDateTime.now());
         newOption.setUpdatedAt(LocalDateTime.now());

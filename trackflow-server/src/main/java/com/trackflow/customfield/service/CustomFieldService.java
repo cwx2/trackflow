@@ -156,6 +156,7 @@ public class CustomFieldService {
                     option.setOwnerUserId(opt.getOwnerUserId());
                     option.setReleaseDate(opt.getReleaseDate());
                     option.setIsReleased(Boolean.TRUE.equals(opt.getIsReleased()));
+                    option.setAssembleDate(opt.getAssembleDate());
                     option.setCreatedAt(LocalDateTime.now());
                     option.setUpdatedAt(LocalDateTime.now());
                     optionMapper.insert(option);
@@ -543,8 +544,8 @@ public class CustomFieldService {
 
     /** 委托给 {@link CustomFieldOptionService} */
     @Transactional(rollbackFor = Exception.class)
-    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId, java.time.LocalDate releaseDate, Boolean isReleased) {
-        return optionService.addOptionInline(projectId, fieldId, value, color, ownerUserId, releaseDate, isReleased);
+    public CustomFieldOption addOptionInline(Long projectId, Long fieldId, String value, String color, Long ownerUserId, java.time.LocalDate releaseDate, Boolean isReleased, java.time.LocalDate assembleDate) {
+        return optionService.addOptionInline(projectId, fieldId, value, color, ownerUserId, releaseDate, isReleased, assembleDate);
     }
 
     // ========== 项目级独立选项集管理（Make Independent Copy）==========

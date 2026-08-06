@@ -63,6 +63,9 @@ public class CustomFieldOption implements Serializable {
     /** 是否已正式发布（仅 version 类型使用）。影响下拉排序逻辑。 */
     private Boolean isReleased;
 
+    /** 构建生成日期（仅 build 类型使用） */
+    private LocalDate assembleDate;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

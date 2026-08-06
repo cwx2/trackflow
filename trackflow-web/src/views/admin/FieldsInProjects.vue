@@ -538,7 +538,9 @@ const fieldTypeOptions = [
   { value: 'list', label: '列表(枚举)' },
   { value: 'user', label: '用户' },
   { value: 'period', label: '时间周期' },
-  { value: 'version', label: '版本(Version)' }
+  { value: 'version', label: '版本(Version)' },
+  { value: 'build', label: '构建号(Build)' },
+  { value: 'group', label: '用户组(Group)' }
 ]
 
 const fieldTypeLabels: Record<string, string> = {
@@ -552,7 +554,9 @@ const fieldTypeLabels: Record<string, string> = {
   list: '列表(枚举)',
   user: '用户',
   period: '时间周期',
-  version: '版本(Version)'
+  version: '版本(Version)',
+  build: '构建号(Build)',
+  group: '用户组(Group)'
 }
 
 // === 汇总统计 ===

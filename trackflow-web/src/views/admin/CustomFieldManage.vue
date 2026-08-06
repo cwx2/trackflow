@@ -100,7 +100,7 @@
                 </a-table-column>
                 <a-table-column title="选项值" :width="220">
                   <template #cell="{ record }">
-                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version') && record.options && record.options.length > 0">
+                    <template v-if="(record.fieldFormat === 'list' || record.fieldFormat === 'state' || record.fieldFormat === 'ownedField' || record.fieldFormat === 'version' || record.fieldFormat === 'build') && record.options && record.options.length > 0">
                       <div class="options-inline">
                         <template v-for="(opt, idx) in record.options.filter(o => !o.isArchived).slice(0, MAX_INLINE_OPTIONS)" :key="opt.id">
                           <span
@@ -347,9 +347,9 @@
           </a-form-item>
         </template>
 
-        <!-- list/state/version 类型选项管理 -->
-        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version'">
-          <a-form-item v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version'" label="多值选择">
+        <!-- list/state/version/build 类型选项管理 -->
+        <template v-if="form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build'">
+          <a-form-item v-if="form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build'" label="多值选择">
             <a-switch v-model="form.isMulti" :disabled="isMultiDisabled" />
             <div class="form-help">
               <template v-if="isMultiDisabled">
@@ -448,6 +448,10 @@
                 <template #icon><icon-sort-descending /></template>
                 按发布日期
               </a-button>
+              <a-button v-if="form.fieldFormat === 'build'" size="mini" type="text" @click="sortOptionsByAssembleDate">
+                <template #icon><icon-sort-descending /></template>
+                按构建日期
+              </a-button>
               <div v-if="form.fieldFormat === 'version'" class="options-archive-toggle">
                 <a-switch v-model="showReleasedInDrawer" size="small" />
                 <span class="archive-toggle-label">显示已发布</span>
@@ -541,6 +545,15 @@
                     allow-clear
                   />
                   <a-checkbox v-if="!opt.isArchived && form.fieldFormat === 'version'" v-model="opt.isReleased" size="small">已发布</a-checkbox>
+                  <!-- build 类型显示构建日期 -->
+                  <a-date-picker
+                    v-if="!opt.isArchived && form.fieldFormat === 'build'"
+                    v-model="opt.assembleDate"
+                    placeholder="构建日期"
+                    size="mini"
+                    style="width: 130px"
+                    allow-clear
+                  />
                   <!-- 选项使用统计（仅编辑模式且有 optionId 时显示） -->
                   <span
                     v-if="editingId && opt.id && optionUsageMap[opt.id] !== undefined"
@@ -752,7 +765,7 @@ const form = reactive({
   minLength: 0,
   maxLength: 0,
   regexp: '',
-  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; isResolved?: boolean; description?: string; ownerUserId?: string; releaseDate?: string; isReleased?: boolean }>,
+  options: [] as Array<{ id?: string; value: string; isDefault: boolean; color?: string; isArchived?: boolean; isResolved?: boolean; description?: string; ownerUserId?: string; releaseDate?: string; isReleased?: boolean; assembleDate?: string }>,
   projectIds: [] as string[],
   issueTypes: [] as string[],
   copyOptionsFromFieldId: undefined as string | undefined
@@ -779,7 +792,9 @@ const fieldTypeOptions = [
   { value: 'state', label: '状态(State)' },
   { value: 'user', label: '用户' },
   { value: 'period', label: '时间周期' },
-  { value: 'version', label: '版本(Version)' }
+  { value: 'version', label: '版本(Version)' },
+  { value: 'build', label: '构建号(Build)' },
+  { value: 'group', label: '用户组(Group)' }
 ]
 
 function formatTypeLabel(format: string) {
@@ -1205,6 +1220,23 @@ function sortOptionsByReleaseDate() {
   }
 }
 
+function sortOptionsByAssembleDate() {
+  const sorted = [...form.options].sort((a, b) => {
+    if (!a.assembleDate && !b.assembleDate) return 0
+    if (!a.assembleDate) return 1
+    if (!b.assembleDate) return -1
+    return b.assembleDate.localeCompare(a.assembleDate) // 最新构建排前面
+  })
+  form.options = sorted
+
+  // 编辑模式下即时保存排序
+  if (editingId.value && sorted.every(o => o.id)) {
+    customFieldApi.reorderOptions(editingId.value, sorted.map(o => o.id!)).catch(() => {
+      // 静默失败
+    })
+  }
+}
+
 async function handleSave() {
   if (!form.name.trim()) {
     Message.warning('请输入字段名称')
@@ -1231,9 +1263,9 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
-        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version') ? form.isMulti : undefined,
-        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version')
-          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined, releaseDate: form.fieldFormat === 'version' ? o.releaseDate || undefined : undefined, isReleased: form.fieldFormat === 'version' ? o.isReleased : undefined }))
+        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build') ? form.isMulti : undefined,
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build')
+          ? form.options.filter(o => !o.isArchived).map(o => ({ id: o.id, value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined, releaseDate: form.fieldFormat === 'version' ? o.releaseDate || undefined : undefined, isReleased: form.fieldFormat === 'version' ? o.isReleased : undefined, assembleDate: form.fieldFormat === 'build' ? o.assembleDate || undefined : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes
@@ -1251,9 +1283,9 @@ async function handleSave() {
         minLength: form.minLength,
         maxLength: form.maxLength,
         regexp: form.regexp || undefined,
-        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version') ? form.isMulti : undefined,
-        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version')
-          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined, releaseDate: form.fieldFormat === 'version' ? o.releaseDate || undefined : undefined, isReleased: form.fieldFormat === 'version' ? o.isReleased : undefined }))
+        isMulti: (form.fieldFormat === 'list' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build') ? form.isMulti : undefined,
+        options: (form.fieldFormat === 'list' || form.fieldFormat === 'state' || form.fieldFormat === 'ownedField' || form.fieldFormat === 'version' || form.fieldFormat === 'build')
+          ? form.options.map(o => ({ value: o.value, isDefault: o.isDefault, color: o.color || undefined, isResolved: form.fieldFormat === 'state' ? o.isResolved : undefined, ownerUserId: form.fieldFormat === 'ownedField' ? o.ownerUserId || undefined : undefined, releaseDate: form.fieldFormat === 'version' ? o.releaseDate || undefined : undefined, isReleased: form.fieldFormat === 'version' ? o.isReleased : undefined, assembleDate: form.fieldFormat === 'build' ? o.assembleDate || undefined : undefined }))
           : undefined,
         projectIds: form.projectIds,
         issueTypes: form.issueTypes

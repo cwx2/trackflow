@@ -25,7 +25,7 @@ export const customFieldApi = {
     minLength?: number
     maxLength?: number
     regexp?: string
-    options?: Array<{ value: string; isDefault?: boolean; color?: string; isResolved?: boolean; ownerUserId?: string }>
+    options?: Array<{ value: string; isDefault?: boolean; color?: string; isResolved?: boolean; ownerUserId?: string; releaseDate?: string; isReleased?: boolean; assembleDate?: string }>
     copyOptionsFromFieldId?: string
     projectIds?: string[]
     issueTypes?: string[]
@@ -45,7 +45,7 @@ export const customFieldApi = {
     minLength?: number
     maxLength?: number
     regexp?: string
-    options?: Array<{ id?: string; value: string; isDefault?: boolean; color?: string; isResolved?: boolean; ownerUserId?: string }>
+    options?: Array<{ id?: string; value: string; isDefault?: boolean; color?: string; isResolved?: boolean; ownerUserId?: string; releaseDate?: string; isReleased?: boolean; assembleDate?: string }>
     projectIds?: string[]
     issueTypes?: string[]
   }) {
@@ -219,7 +219,7 @@ export const customFieldApi = {
   // ========== 内联添加选项值 ==========
 
   /** 内联添加枚举字段选项值（工单详情页/创建表单快捷入口） */
-  addOption(projectId: string, fieldId: string, data: { value: string; color?: string; ownerUserId?: string }) {
+  addOption(projectId: string, fieldId: string, data: { value: string; color?: string; ownerUserId?: string; releaseDate?: string; isReleased?: boolean; assembleDate?: string }) {
     return request.post<any, R<CustomFieldOptionVO>>(`/projects/${projectId}/custom-fields/${fieldId}/options`, data)
   },
 

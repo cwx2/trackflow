@@ -496,7 +496,7 @@ async function loadCustomFields() {
       queryKey: f.name,
       valueType: mapFieldFormat(f.fieldFormat),
       getValues: () => {
-        if ((f.fieldFormat === 'list' || f.fieldFormat === 'ownedField' || f.fieldFormat === 'version') && f.options) {
+        if ((f.fieldFormat === 'list' || f.fieldFormat === 'ownedField' || f.fieldFormat === 'version' || f.fieldFormat === 'build') && f.options) {
           return f.options.map((o: any) => ({ id: o.value, label: o.value }))
         }
         if (f.fieldFormat === 'user') {
