@@ -435,7 +435,7 @@
               >
                 <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
                   <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
-                    <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ opt.value }}</span>
+                    <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ localizeStatusName(opt.value) }}</span>
                   </a-tooltip>
                 </a-option>
               </a-select>
@@ -618,7 +618,7 @@
                 >
                   <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
                     <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
-                      <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ opt.value }}</span>
+                      <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ localizeStatusName(opt.value) }}</span>
                     </a-tooltip>
                   </a-option>
                 </a-select>
@@ -713,7 +713,7 @@ import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
 import RichEditor from './components/RichEditor.vue'
-import { localizeLinkType } from '@/utils/fieldLabels'
+import { localizeLinkType, localizeStatusName } from '@/utils/fieldLabels'
 import type { CustomFieldDefinitionVO, IssueTemplateVO, FilterRule, IssueStatusVO, IssueVO as SimilarIssue } from '@/api/types'
 
 const props = defineProps<{
