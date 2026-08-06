@@ -22,7 +22,7 @@
 
     <!-- 错误状态 -->
     <div v-else-if="errorMsg" class="detail-error">
-      <div class="error-icon">⚠️</div>
+      <div class="error-icon"><icon-exclamation-circle /></div>
       <h3 class="error-title">加载报表失败</h3>
       <p class="error-desc">{{ errorMsg }}</p>
       <a-button type="primary" size="small" @click="loadReport">重试</a-button>
@@ -47,11 +47,11 @@
           </div>
           <div class="title-meta">
             <span v-if="report.ownerDisplayName" class="meta-item">
-              <span class="meta-icon">👤</span>
+              <span class="meta-icon"><icon-user /></span>
               {{ report.ownerDisplayName }}
             </span>
             <span v-if="report.shared" class="meta-item meta-shared">
-              <span class="meta-icon">🔗</span>
+              <span class="meta-icon"><icon-share-alt /></span>
               已共享{{ report.shareCount ? ` (${report.shareCount} 人)` : '' }}
             </span>
             <span v-if="report.isSystem" class="meta-item meta-system">
@@ -117,13 +117,13 @@
             </a-button>
             <template #content>
               <a-doption @click="handleClone">
-                <span class="menu-item"><span class="menu-icon">📋</span>克隆</span>
+                <span class="menu-item"><icon-copy class="menu-icon" />克隆</span>
               </a-doption>
               <a-doption v-if="canShare" @click="handleShare">
-                <span class="menu-item"><span class="menu-icon">🔗</span>共享设置</span>
+                <span class="menu-item"><icon-share-alt class="menu-icon" />共享设置</span>
               </a-doption>
               <a-doption v-if="canDelete" @click="handleDelete">
-                <span class="menu-item menu-danger"><span class="menu-icon">🗑️</span>删除</span>
+                <span class="menu-item menu-danger"><icon-delete class="menu-icon" />删除</span>
               </a-doption>
             </template>
           </a-dropdown>

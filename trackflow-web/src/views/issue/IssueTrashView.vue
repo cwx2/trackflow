@@ -8,7 +8,8 @@
       </div>
       <div class="header-right">
         <a-select
-          v-model="selectedProjectId"
+          :model-value="selectedProjectId ?? undefined"
+          @update:model-value="(v) => { selectedProjectId = (v as string) ?? null }"
           placeholder="选择项目"
           size="small"
           style="width: 180px"

@@ -416,7 +416,8 @@
       <!-- 选择已有字段模式 -->
       <template v-if="attachMode === 'select'">
         <a-select
-          v-model="selectedFieldToAttach"
+          :model-value="selectedFieldToAttach ?? undefined"
+          @update:model-value="(v) => { selectedFieldToAttach = (v as string) ?? null }"
           placeholder="选择要添加的字段"
           allow-search
           :loading="loadingAvailable"

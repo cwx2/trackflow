@@ -122,25 +122,25 @@
               <span class="card-menu-btn" @click.stop>⋯</span>
               <template #content>
                 <a-doption v-if="canEditReport(report)" @click="startEdit(report)">
-                  <span class="menu-item"><span class="menu-icon">✏️</span>编辑</span>
+                  <span class="menu-item"><icon-edit class="menu-icon" />编辑</span>
                 </a-doption>
                 <a-doption v-if="canShareReport(report)" @click="openShareModal(report)">
-                  <span class="menu-item"><span class="menu-icon">🔗</span>共享设置</span>
+                  <span class="menu-item"><icon-share-alt class="menu-icon" />共享设置</span>
                 </a-doption>
                 <a-doption @click="cloneReport(report)">
-                  <span class="menu-item"><span class="menu-icon">📋</span>克隆</span>
+                  <span class="menu-item"><icon-copy class="menu-icon" />克隆</span>
                 </a-doption>
                 <a-doption @click="exportReport(report, 'csv')">
-                  <span class="menu-item"><span class="menu-icon">📥</span>导出 CSV</span>
+                  <span class="menu-item"><icon-download class="menu-icon" />导出 CSV</span>
                 </a-doption>
                 <a-doption @click="exportReport(report, 'xlsx')">
-                  <span class="menu-item"><span class="menu-icon">📊</span>导出 Excel</span>
+                  <span class="menu-item"><icon-download class="menu-icon" />导出 Excel</span>
                 </a-doption>
                 <a-doption @click="printReportCard(report)">
-                  <span class="menu-item"><span class="menu-icon">🖨️</span>打印</span>
+                  <span class="menu-item"><icon-printer class="menu-icon" />打印</span>
                 </a-doption>
                 <a-doption v-if="canDeleteReport(report)" @click="confirmDelete(report)">
-                  <span class="menu-item menu-danger"><span class="menu-icon">🗑️</span>删除</span>
+                  <span class="menu-item menu-danger"><icon-delete class="menu-icon" />删除</span>
                 </a-doption>
               </template>
             </a-dropdown>
@@ -152,9 +152,9 @@
           </router-link>
         </h3>
         <div class="card-meta">
-          <span v-if="report.shared" class="meta-shared">🔗 已共享</span>
-          <span v-else-if="report.shareCount > 0" class="meta-shared">🔗 {{ report.shareCount }} 人</span>
-          <span v-if="isOtherOwner(report)" class="meta-owner">👤 {{ report.ownerDisplayName }}</span>
+          <span v-if="report.shared" class="meta-shared"><icon-share-alt /> 已共享</span>
+          <span v-else-if="report.shareCount > 0" class="meta-shared"><icon-share-alt /> {{ report.shareCount }} 人</span>
+          <span v-if="isOtherOwner(report)" class="meta-owner"><icon-user /> {{ report.ownerDisplayName }}</span>
           <span v-if="reportData[report.id]?.calculatedAt" class="meta-calculated">
             ⏱ {{ formatRelativeTime(reportData[report.id].calculatedAt) }}
           </span>
