@@ -246,7 +246,7 @@
  * - composables/useIssueDetailActions.ts：所有操作处理函数
  * - 本文件：模板 + 计算属性 + 样式
  */
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { Modal } from '@arco-design/web-vue'
 import { IconLock } from '@arco-design/web-vue/es/icon'
@@ -335,8 +335,6 @@ const {
 onMounted(() => {
   loadAll()
   document.addEventListener('paste', onPasteUpload)
-  // 通知点击跳转：解析 hash 锚点，滚动并闪动高亮目标评论/活动条目
-  scrollToHashAnchor()
 })
 
 onUnmounted(() => {
@@ -344,25 +342,48 @@ onUnmounted(() => {
 })
 
 /**
+ * 监听 route.hash 变化（通知跳转场景：router.push('/issues/DE4-1544#c_xxx')）。
+ * immediate: true 保证首次加载带 hash 的 URL 时也会触发。
+ * 等数据加载完成（loading === false）后才开始查找目标 DOM 元素。
+ */
+watch(
+  () => route.hash,
+  (newHash) => {
+    if (!newHash || newHash.length <= 1) return
+    // 如果数据正在加载，等加载完再执行滚动定位
+    if (loading.value) {
+      const stopWatch = watch(loading, (isLoading) => {
+        if (!isLoading) {
+          stopWatch()
+          nextTick(() => scrollToHashAnchor(newHash))
+        }
+      })
+    } else {
+      nextTick(() => scrollToHashAnchor(newHash))
+    }
+  },
+  { immediate: true }
+)
+
+/**
  * 解析 URL hash，等待对应 DOM 元素出现后滚动定位并闪动高亮两次。
  * 格式：#c_{commentId}（评论）或 #a_{activityId}（活动记录）
+ *
+ * @param hash - 完整 hash 字符串（如 "#c_12345"）
  */
-function scrollToHashAnchor() {
-  const hash = window.location.hash
+function scrollToHashAnchor(hash: string) {
   if (!hash || hash.length <= 1) return
   const targetId = hash.slice(1) // 去掉 '#'
 
-  // 最多等待 5 秒（数据加载 + DOM 渲染）
-  const maxWaitMs = 5000
-  const intervalMs = 200
+  // 数据已加载完，DOM 可能需要渲染一小段时间，最多等 3 秒
+  const maxWaitMs = 3000
+  const intervalMs = 150
   let elapsed = 0
 
   const tryScroll = () => {
     const el = document.getElementById(targetId)
     if (el) {
-      // 滚动到目标
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      // 闪动高亮两次
       flashElement(el)
       return
     }
@@ -371,6 +392,7 @@ function scrollToHashAnchor() {
       setTimeout(tryScroll, intervalMs)
     }
   }
+  // 给 DOM 一个 tick 的时间渲染
   setTimeout(tryScroll, intervalMs)
 }
 
@@ -378,6 +400,10 @@ function scrollToHashAnchor() {
  * 给元素添加闪动高亮动画（高亮 → 正常 → 高亮 → 正常，共两次）
  */
 function flashElement(el: HTMLElement) {
+  // 如果元素已有闪动动画（重复点击通知场景），先移除再重新添加
+  el.classList.remove('stream-item--flash')
+  // 强制 reflow 以重新触发动画
+  void el.offsetWidth
   el.classList.add('stream-item--flash')
   setTimeout(() => {
     el.classList.remove('stream-item--flash')

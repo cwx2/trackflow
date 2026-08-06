@@ -416,13 +416,19 @@ function handleItemClick(item: NotificationVO) {
   if (!item.isRead) {
     markRead(item.id)
   }
+  // 构建跳转 URL：如果 resourceUrl 不含 hash 但有 sourceId，则补全评论锚点
+  let targetUrl = item.resourceUrl || ''
+  if (targetUrl && item.sourceId && !targetUrl.includes('#')) {
+    targetUrl = `${targetUrl}#c_${item.sourceId}`
+  }
   // 优先使用后端返回的 resourceUrl（通用化导航）
-  if (item.resourceUrl) {
+  if (targetUrl) {
     closePanel()
-    router.push(item.resourceUrl)
+    router.push(targetUrl)
   } else if (item.resourceType === 'issue' && item.resourceId) {
     closePanel()
-    router.push(`/issues/${item.resourceId}`)
+    const hash = item.sourceId ? `#c_${item.sourceId}` : ''
+    router.push(`/issues/${item.resourceId}${hash}`)
   } else if (item.resourceType === 'project' && item.resourceId) {
     closePanel()
     router.push(`/projects/${item.resourceId}`)
