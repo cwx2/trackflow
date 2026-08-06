@@ -173,20 +173,6 @@
           <span v-else class="field-value">{{ detail.displayValue }}</span>
         </span>
       </template>
-      <template v-else-if="issue.customFieldValues">
-        <span
-          v-for="(val, key) in limitedCustomFields"
-          :key="key"
-          class="item-field"
-        >
-          <span
-            v-if="issue.customFieldColors?.[key]"
-            class="field-cf-badge"
-            :style="{ background: issue.customFieldColors[key] }"
-          >{{ val }}</span>
-          <span v-else class="field-value">{{ val }}</span>
-        </span>
-      </template>
       <span class="item-field item-reporter" v-if="issue.reporterName">
         <span class="field-label">报告人:</span>
         <span class="field-value">{{ issue.reporterName }}</span>
@@ -318,13 +304,6 @@ const effectiveSpent = computed(() => {
     return props.issue.derivedSpentHours
   }
   return props.issue.spentHours || 0
-})
-
-const limitedCustomFields = computed(() => {
-  const cfv = props.issue.customFieldValues
-  if (!cfv) return {}
-  const entries = Object.entries(cfv).slice(0, 4)
-  return Object.fromEntries(entries)
 })
 
 function formatTime(dt: string) {

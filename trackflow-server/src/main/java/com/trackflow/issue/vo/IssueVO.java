@@ -6,7 +6,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Data
 public class IssueVO {
@@ -64,21 +63,9 @@ public class IssueVO {
 
     /**
      * 自定义字段结构化详情，每个字段独立表达 value/values、displayValue/displayValues、color/colors。
-     * 前端应优先使用此字段渲染多值标签。
+     * 前端应使用此字段渲染自定义字段标签。
      */
     private List<CustomFieldValueVO> customFieldDetails;
-
-    /**
-     * @deprecated 使用 {@link #customFieldDetails} 代替。保留仅做向后兼容，下个版本移除。
-     */
-    @Deprecated
-    private Map<String, String> customFieldValues;
-
-    /**
-     * @deprecated 使用 {@link #customFieldDetails} 代替。保留仅做向后兼容，下个版本移除。
-     */
-    @Deprecated
-    private Map<String, String> customFieldColors;
 
     /**
      * 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户）。

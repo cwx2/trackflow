@@ -198,15 +198,6 @@ function getVisibleTags(issue: BoardIssue): Array<{ id: string; name: string; co
   return tags.slice(0, maxTags)
 }
 
-/** @deprecated 兼容旧数据格式 */
-function getVisibleCustomFields(issue: BoardIssue): Record<string, string> {
-  const cfValues = (issue as any).customFieldValues as Record<string, string> | undefined
-  if (!cfValues) return {}
-  const entries = Object.entries(cfValues)
-  const maxFields = cardSize.value === 'L' ? 4 : 2
-  return Object.fromEntries(entries.slice(0, maxFields))
-}
-
 /** 判断卡片上是否应展示某个字段（基于 cardConfig） */
 function isCardFieldVisible(field: string): boolean {
   return cardConfig.value.visibleFields.includes(field)
@@ -3795,7 +3786,7 @@ watch(() => route.query, (newQuery, oldQuery) => {
     // Card config
     cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
     getCardColorClass, getCardProjectColorStyle, getCardDueDateClass, getCardDueDateTooltip,
-    hasVisibleCustomFields, getVisibleCustomFieldDetails, getVisibleTags, getVisibleCustomFields,
+    hasVisibleCustomFields, getVisibleCustomFieldDetails, getVisibleTags,
     // Card interactions
     onCardClick, onCardDblClick, onCardKeydown, onCardSetAssignee,
     // Drag

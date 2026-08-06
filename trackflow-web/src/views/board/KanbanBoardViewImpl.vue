@@ -1214,7 +1214,7 @@ const {
   // Card config
   cardConfig, isCardFieldVisible, getCardFieldDisplayMode,
   getCardColorClass, getCardProjectColorStyle, getCardDueDateClass, getCardDueDateTooltip,
-  hasVisibleCustomFields, getVisibleCustomFieldDetails, getVisibleTags, getVisibleCustomFields,
+  hasVisibleCustomFields, getVisibleCustomFieldDetails, getVisibleTags,
   // Card interactions
   onCardClick, onCardDblClick, onCardKeydown, onCardSetAssignee,
   // Drag

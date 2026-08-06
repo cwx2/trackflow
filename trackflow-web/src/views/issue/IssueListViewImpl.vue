@@ -820,7 +820,7 @@
             >{{ getCustomFieldDetail(record, column.dataIndex)!.displayValue || '\u2014' }}</span>
             <span v-else class="cf-cell">{{ getCustomFieldDetail(record, column.dataIndex)!.displayValue || '\u2014' }}</span>
           </template>
-          <span v-else class="cf-cell">{{ record.customFieldValues?.[column.dataIndex] || '\u2014' }}</span>
+          <span v-else class="cf-cell">&#x2014;</span>
         </template>
 
         <!-- empty -->

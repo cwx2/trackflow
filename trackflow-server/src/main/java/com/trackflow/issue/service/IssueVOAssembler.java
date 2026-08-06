@@ -211,27 +211,6 @@ public class IssueVOAssembler {
             List<CustomFieldValueVO> details = cfDetailsMap.get(issueId);
             if (details != null && !details.isEmpty()) {
                 voList.get(i).setCustomFieldDetails(details);
-
-                // 兼容：继续填充旧的 Map 字段（前端逐步迁移后移除）
-                Map<String, String> cfValues = new HashMap<>();
-                Map<String, String> cfColors = new HashMap<>();
-                for (CustomFieldValueVO detail : details) {
-                    String cfKey = "cf_" + detail.getCustomFieldId();
-                    cfValues.put(cfKey, detail.getDisplayValue());
-                    if (detail.getColor() != null) {
-                        cfColors.put(cfKey, detail.getColor());
-                    } else if (detail.getColors() != null) {
-                        // 多值字段兼容：取第一个有效颜色
-                        detail.getColors().stream()
-                                .filter(Objects::nonNull)
-                                .findFirst()
-                                .ifPresent(c -> cfColors.put(cfKey, c));
-                    }
-                }
-                voList.get(i).setCustomFieldValues(cfValues);
-                if (!cfColors.isEmpty()) {
-                    voList.get(i).setCustomFieldColors(cfColors);
-                }
             }
         }
     }

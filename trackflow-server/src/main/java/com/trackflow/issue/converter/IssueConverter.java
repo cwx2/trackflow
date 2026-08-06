@@ -28,8 +28,6 @@ public interface IssueConverter extends BaseConverter {
     @Mapping(target = "sprintName", ignore = true)
     @Mapping(target = "sprintIds", ignore = true)
     @Mapping(target = "sprintNames", ignore = true)
-    @Mapping(target = "customFieldValues", ignore = true)
-    @Mapping(target = "customFieldColors", ignore = true)
     @Mapping(target = "estimatedHours", source = "estimatedHours")
     @Mapping(target = "spentHours", source = "spentHours")
     @Mapping(target = "derivedSpentHours", source = "derivedSpentHours")

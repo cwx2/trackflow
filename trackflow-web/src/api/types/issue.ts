@@ -55,16 +55,6 @@ export interface IssueVO {
   derivedEstimatedHours?: number
   /** 自定义字段结构化详情，每个字段独立表达 value/values、displayValue/displayValues、color/colors */
   customFieldDetails?: CustomFieldValueVO[]
-  /**
-   * @deprecated 使用 customFieldDetails 代替
-   * 自定义字段展示值，key 格式 "cf_{fieldId}"，value 为已解析的展示文本
-   */
-  customFieldValues?: Record<string, string>
-  /**
-   * @deprecated 使用 customFieldDetails 代替
-   * 自定义字段颜色值，key 格式 "cf_{fieldId}"，value 为 HEX 颜色（仅有颜色的 list 类型字段）
-   */
-  customFieldColors?: Record<string, string>
   /** 投票数（来自 issue.vote_count 冗余字段） */
   voteCount?: number
   /** 工单可见性：public（项目所有成员可见）或 restricted（仅限指定用户） */
