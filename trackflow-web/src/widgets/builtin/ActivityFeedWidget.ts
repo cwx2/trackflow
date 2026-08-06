@@ -10,9 +10,10 @@ export default defineWidget({
   group: 'basic',
   defaultWidth: 4,
   defaultHeight: 3,
+  dataSources: ['projects', 'users'],
   configSchema: [
     {
-      key: 'activityProjectIds',
+      key: 'projectIds',
       label: '项目范围',
       type: 'multi-project-select',
       placeholder: '留空 = 所有可见项目',
@@ -20,7 +21,7 @@ export default defineWidget({
       maxTagCount: 3
     },
     {
-      key: 'activityActions',
+      key: 'actions',
       label: '活动类型',
       type: 'multi-select',
       placeholder: '留空 = 所有类型',
@@ -39,7 +40,7 @@ export default defineWidget({
       ]
     },
     {
-      key: 'activityUserIds',
+      key: 'userIds',
       label: '用户范围',
       type: 'multi-user-select',
       placeholder: '留空 = 所有人',
@@ -47,7 +48,7 @@ export default defineWidget({
       maxTagCount: 3
     },
     {
-      key: 'activityLimit',
+      key: 'limit',
       label: '显示条数',
       type: 'number',
       defaultValue: 10,

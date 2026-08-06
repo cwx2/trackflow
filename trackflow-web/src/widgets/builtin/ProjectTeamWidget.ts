@@ -10,6 +10,7 @@ export default defineWidget({
   group: 'basic',
   defaultWidth: 4,
   defaultHeight: 3,
+  dataSources: ['projects'],
   configSchema: [
     {
       key: 'projectId',
@@ -20,7 +21,7 @@ export default defineWidget({
       hint: '选择要展示团队成员的项目'
     },
     {
-      key: 'teamLimit',
+      key: 'limit',
       label: '显示条数',
       type: 'number',
       min: 1,

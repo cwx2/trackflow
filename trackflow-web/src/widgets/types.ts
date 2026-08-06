@@ -5,9 +5,11 @@ import type { Component } from 'vue'
  *
  * 每个字段描述一个 Widget 配置项的类型、校验规则和 UI 属性。
  * 由 WidgetConfigForm.vue 通用渲染器消费。
+ *
+ * `key` 直接对应 config JSON 中的属性名，实现通用 load/save 无需逐类型映射。
  */
 export interface WidgetConfigField {
-  /** 字段 key，对应 config JSON 中的属性名 */
+  /** 字段 key，直接对应 config JSON 中的属性名（load/save 通用） */
   key: string
   /** 显示标签 */
   label: string
@@ -44,7 +46,20 @@ export interface WidgetConfigField {
   showWhen?: { field: string; value: unknown }
   /** 多选时最大标签显示数 */
   maxTagCount?: number
+  /**
+   * 标记此字段存储在 Widget 实体的独立列而非 config JSON 中。
+   * 如 reportId 存储在 DashboardWidget.reportId 列。
+   * 设为 true 时，save 逻辑将把值放在 update payload 顶层而非 config 对象内。
+   */
+  topLevelField?: boolean
 }
+
+/**
+ * Widget 需要的动态数据源类型
+ *
+ * 声明后，编辑配置弹窗会自动加载对应数据传递给 WidgetConfigForm。
+ */
+export type WidgetDataSource = 'projects' | 'reports' | 'sprints' | 'users'
 
 /**
  * Widget 完整定义
@@ -73,6 +88,11 @@ export interface WidgetDefinition {
   defaultHeight?: number
   /** 配置表单字段定义 */
   configSchema: WidgetConfigField[]
+  /**
+   * 此 Widget 需要加载的动态数据源列表。
+   * 编辑配置弹窗根据此声明自动加载数据。
+   */
+  dataSources?: WidgetDataSource[]
   /** 渲染组件 */
   component: Component | (() => Promise<{ default: Component }>)
 }

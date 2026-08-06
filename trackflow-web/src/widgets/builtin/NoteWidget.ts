@@ -12,7 +12,7 @@ export default defineWidget({
   defaultHeight: 3,
   configSchema: [
     {
-      key: 'noteContent',
+      key: 'content',
       label: '内容',
       type: 'textarea',
       placeholder: '支持简单 HTML 标签'

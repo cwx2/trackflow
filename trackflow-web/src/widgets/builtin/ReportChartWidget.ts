@@ -11,13 +11,15 @@ defineWidget({
   group: 'report',
   defaultWidth: 4,
   defaultHeight: 3,
+  dataSources: ['reports'],
   configSchema: [
     {
       key: 'reportId',
       label: '关联报表',
       type: 'report-select',
       placeholder: '选择一个已保存的报表',
-      hint: '关联后将自动展示该报表的图表数据'
+      hint: '关联后将自动展示该报表的图表数据',
+      topLevelField: true
     }
   ],
   component: ReportChartWidget
@@ -32,13 +34,15 @@ export default defineWidget({
   group: 'report',
   defaultWidth: 4,
   defaultHeight: 3,
+  dataSources: ['reports'],
   configSchema: [
     {
       key: 'reportId',
       label: '关联报表',
       type: 'report-select',
       placeholder: '选择一个已保存的报表',
-      hint: '关联后将自动展示该报表的图表数据'
+      hint: '关联后将自动展示该报表的图表数据',
+      topLevelField: true
     }
   ],
   component: ReportChartWidget

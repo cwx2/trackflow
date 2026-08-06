@@ -10,6 +10,7 @@ export default defineWidget({
   group: 'agile',
   defaultWidth: 6,
   defaultHeight: 3,
+  dataSources: ['projects', 'sprints'],
   configSchema: [
     {
       key: 'chartType',

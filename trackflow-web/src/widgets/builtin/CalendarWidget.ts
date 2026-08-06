@@ -10,6 +10,7 @@ export default defineWidget({
   group: 'basic',
   defaultWidth: 6,
   defaultHeight: 4,
+  dataSources: ['projects'],
   configSchema: [
     {
       key: 'projectId',

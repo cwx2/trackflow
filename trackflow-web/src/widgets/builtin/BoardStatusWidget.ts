@@ -10,6 +10,7 @@ export default defineWidget({
   group: 'agile',
   defaultWidth: 4,
   defaultHeight: 3,
+  dataSources: ['sprints'],
   configSchema: [
     {
       key: 'sprintId',

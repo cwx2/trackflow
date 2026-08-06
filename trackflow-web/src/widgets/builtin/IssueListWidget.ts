@@ -10,6 +10,7 @@ export default defineWidget({
   group: 'basic',
   defaultWidth: 4,
   defaultHeight: 3,
+  dataSources: ['projects'],
   configSchema: [
     {
       key: 'queryType',
@@ -40,7 +41,7 @@ export default defineWidget({
       hint: '支持搜索语法，与下拉筛选取 AND 逻辑'
     },
     {
-      key: 'issueListPageSize',
+      key: 'pageSize',
       label: '显示条数',
       type: 'number',
       defaultValue: 10,

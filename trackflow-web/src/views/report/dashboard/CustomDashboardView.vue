@@ -383,52 +383,16 @@ const showShareModal = ref(false)
 const createForm = ref({ name: '', description: '', shared: false })
 const editForm = ref({ name: '', description: '' })
 
-// Widget config editing state
+// Widget config editing state — generic form driven by registry schema
 const editingWidget = ref<DashboardWidgetVO | null>(null)
 const editingWidgetType = ref<string>('')
 const savingWidgetConfig = ref(false)
 const availableReports = ref<ReportDefinitionVO[]>([])
 const availableSprints = ref<SprintVO[]>([])
 const availableProjects = ref<Array<{ id: string; name: string }>>([])
-const widgetConfigForm = ref<{
-  title: string
-  refreshInterval?: number
-  queryType?: string
-  staticValue?: number
-  label?: string
-  reportId?: string
-  noteContent?: string
-  sprintId?: string
-  projectId?: string
-  chartType?: string
-  // Issue List Widget config
-  issueListPageSize?: number
-  filterQuery?: string
-  // Activity Feed Widget config
-  activityProjectIds?: string[]
-  activityActions?: string[]
-  activityUserIds?: string[]
-  activityLimit?: number
-  // Project Team Widget config
-  teamLimit?: number
-}>({
+const widgetConfigForm = ref<Record<string, any>>({
   title: '',
-  refreshInterval: 600,
-  queryType: undefined,
-  staticValue: undefined,
-  label: '',
-  reportId: undefined,
-  noteContent: '',
-  sprintId: undefined,
-  projectId: undefined,
-  chartType: 'burndown',
-  issueListPageSize: 10,
-  filterQuery: '',
-  activityProjectIds: [],
-  activityActions: [],
-  activityUserIds: [],
-  activityLimit: 10,
-  teamLimit: undefined
+  refreshInterval: 600
 })
 
 // Available users for activity feed widget
@@ -791,60 +755,39 @@ function editWidget(widget: DashboardWidgetVO) {
   editingWidget.value = widget
   editingWidgetType.value = widget.widgetType
 
-  // Parse current config
+  const def = getWidget(widget.widgetType)
+
+  // Parse stored config JSON
   let config: Record<string, any> = {}
   try {
     config = widget.config ? JSON.parse(widget.config) : {}
   } catch { /* JSON 解析容错，使用空配置 */ }
 
-  widgetConfigForm.value = {
+  // Build form data generically from schema — keys match config JSON keys
+  const formData: Record<string, any> = {
     title: widget.title || '',
-    refreshInterval: config.refreshInterval ?? 600,
-    queryType: config.queryType || undefined,
-    staticValue: config.value ?? undefined,
-    label: config.label || '',
-    reportId: widget.reportId || undefined,
-    noteContent: config.content || '',
-    sprintId: config.sprintId || undefined,
-    projectId: config.projectId || undefined,
-    chartType: config.chartType || 'burndown',
-    issueListPageSize: config.pageSize ?? 10,
-    filterQuery: config.filterQuery || '',
-    activityProjectIds: config.projectIds || [],
-    activityActions: config.actions || [],
-    activityUserIds: config.userIds || [],
-    activityLimit: config.limit ?? 10,
-    teamLimit: config.limit ?? undefined
+    refreshInterval: config.refreshInterval ?? 600
   }
 
-  // Load reports if needed for report widgets
-  if (widget.widgetType === 'report_distribution' || widget.widgetType === 'report') {
-    loadAvailableReports()
+  if (def?.configSchema) {
+    for (const field of def.configSchema) {
+      if (field.topLevelField) {
+        // Top-level fields (like reportId) are read from widget entity directly
+        formData[field.key] = (widget as any)[field.key] ?? field.defaultValue ?? undefined
+      } else {
+        formData[field.key] = config[field.key] ?? field.defaultValue ?? undefined
+      }
+    }
   }
 
-  // Load sprints/projects if needed for agile widgets
-  if (widget.widgetType === 'agile_chart' || widget.widgetType === 'agile_board_status') {
-    loadAvailableSprintsAndProjects()
-  }
+  widgetConfigForm.value = formData
 
-  // Load projects for issue_list widget
-  if (widget.widgetType === 'issue_list') {
-    loadAvailableProjectsForIssueList()
-  }
-
-  // Load projects for calendar widget
-  if (widget.widgetType === 'calendar') {
-    loadAvailableProjectsForIssueList()
-  }
-
-  // Load projects for project_team widget
-  if (widget.widgetType === 'project_team') {
-    loadAvailableProjectsForIssueList()
-  }
-
-  // Load projects and users for activity feed widget
-  if (widget.widgetType === 'activity_feed') {
-    loadAvailableProjectsAndUsers()
+  // Load dynamic data sources declared by the widget
+  if (def?.dataSources) {
+    if (def.dataSources.includes('projects')) loadAvailableProjects()
+    if (def.dataSources.includes('reports')) loadAvailableReports()
+    if (def.dataSources.includes('sprints')) loadAvailableSprintsAndProjects()
+    if (def.dataSources.includes('users')) loadAvailableUsers()
   }
 
   showWidgetConfigModal.value = true
@@ -859,13 +802,30 @@ async function loadAvailableReports() {
   }
 }
 
-async function loadAvailableSprintsAndProjects() {
+async function loadAvailableProjects() {
   try {
     const projectRes = await projectApi.list({ pageSize: 50 })
     const projects = projectRes.data?.list || []
     availableProjects.value = projects.map((p: any) => ({ id: p.id, name: p.name }))
+  } catch {
+    availableProjects.value = []
+  }
+}
 
-    // Load sprints from all projects (max 10 projects)
+async function loadAvailableUsers() {
+  try {
+    const userRes = await userApi.list({ pageSize: 100 })
+    const users = userRes.data?.list || []
+    availableUsers.value = users.map((u: any) => ({ id: u.id, name: u.displayName || u.username }))
+  } catch {
+    availableUsers.value = []
+  }
+}
+
+async function loadAvailableSprintsAndProjects() {
+  // Also load projects since sprints are per-project
+  await loadAvailableProjects()
+  try {
     const allSprints: SprintVO[] = []
     for (const project of availableProjects.value.slice(0, 10)) {
       try {
@@ -880,37 +840,6 @@ async function loadAvailableSprintsAndProjects() {
     availableSprints.value = allSprints
   } catch {
     availableSprints.value = []
-    availableProjects.value = []
-  }
-}
-
-async function loadAvailableProjectsAndUsers() {
-  try {
-    // Load projects
-    const projectRes = await projectApi.list({ pageSize: 50 })
-    const projects = projectRes.data?.list || []
-    availableProjects.value = projects.map((p: any) => ({ id: p.id, name: p.name }))
-  } catch {
-    availableProjects.value = []
-  }
-
-  try {
-    // Load users
-    const userRes = await userApi.list({ pageSize: 100 })
-    const users = userRes.data?.list || []
-    availableUsers.value = users.map((u: any) => ({ id: u.id, name: u.displayName || u.username }))
-  } catch {
-    availableUsers.value = []
-  }
-}
-
-async function loadAvailableProjectsForIssueList() {
-  try {
-    const projectRes = await projectApi.list({ pageSize: 50 })
-    const projects = projectRes.data?.list || []
-    availableProjects.value = projects.map((p: any) => ({ id: p.id, name: p.name }))
-  } catch {
-    availableProjects.value = []
   }
 }
 
@@ -920,57 +849,40 @@ async function handleWidgetConfigSave() {
   try {
     const widget = editingWidget.value
     const form = widgetConfigForm.value
+    const def = getWidget(widget.widgetType)
 
-    // Build config JSON
-    let config: Record<string, any> = {}
-    if (widget.widgetType === 'number_card') {
-      if (form.queryType) config.queryType = form.queryType
-      if (form.staticValue != null) config.value = form.staticValue
-      if (form.label) config.label = form.label
-    } else if (widget.widgetType === 'note') {
-      if (form.noteContent) config.content = form.noteContent
-    } else if (widget.widgetType === 'agile_chart') {
-      config.chartType = form.chartType || 'burndown'
-      if (form.sprintId) config.sprintId = form.sprintId
-      if (form.projectId) config.projectId = form.projectId
-    } else if (widget.widgetType === 'agile_board_status') {
-      if (form.sprintId) config.sprintId = form.sprintId
-    } else if (widget.widgetType === 'activity_feed') {
-      if (form.activityProjectIds && form.activityProjectIds.length > 0) config.projectIds = form.activityProjectIds
-      if (form.activityActions && form.activityActions.length > 0) config.actions = form.activityActions
-      if (form.activityUserIds && form.activityUserIds.length > 0) config.userIds = form.activityUserIds
-      config.limit = form.activityLimit ?? 10
-    } else if (widget.widgetType === 'issue_list') {
-      if (form.queryType) config.queryType = form.queryType
-      if (form.projectId) config.projectId = form.projectId
-      config.pageSize = form.issueListPageSize ?? 10
-      if (form.filterQuery && form.filterQuery.trim()) config.filterQuery = form.filterQuery.trim()
-    } else if (widget.widgetType === 'calendar') {
-      if (form.projectId) config.projectId = form.projectId
-    } else if (widget.widgetType === 'project_team') {
-      if (form.projectId) config.projectId = form.projectId
-      if (form.teamLimit != null && form.teamLimit > 0) config.limit = form.teamLimit
+    // Build config JSON generically from schema — keys match config JSON keys
+    const config: Record<string, any> = {}
+    const updateData: Record<string, any> = {
+      title: form.title || undefined
     }
-    // report_distribution / report: reportId is saved separately
+
+    if (def?.configSchema) {
+      for (const field of def.configSchema) {
+        const value = form[field.key]
+        if (field.topLevelField) {
+          // Top-level fields go directly on the update payload (e.g., reportId)
+          if (value != null && value !== '') {
+            updateData[field.key] = value
+          } else {
+            // Signal clearing of top-level field
+            updateData[`clear${field.key.charAt(0).toUpperCase()}${field.key.slice(1)}`] = true
+          }
+        } else {
+          // Regular config fields — skip empty/null values to keep config clean
+          if (value != null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+            config[field.key] = value
+          }
+        }
+      }
+    }
 
     // Always save refreshInterval if set
     if (form.refreshInterval != null && form.refreshInterval > 0) {
       config.refreshInterval = form.refreshInterval
     }
 
-    const updateData: Record<string, any> = {
-      title: form.title || undefined,
-      config: JSON.stringify(config)
-    }
-
-    // Handle reportId for report widgets
-    if (widget.widgetType === 'report_distribution' || widget.widgetType === 'report') {
-      if (form.reportId) {
-        updateData.reportId = form.reportId
-      } else {
-        updateData.clearReportId = true
-      }
-    }
+    updateData.config = JSON.stringify(config)
 
     await customDashboardApi.updateWidget(currentDashboard.value.id, widget.id, updateData)
     Message.success('微件配置已保存')

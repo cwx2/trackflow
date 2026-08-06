@@ -15,6 +15,8 @@ export default defineWidget({
       key: 'queryType',
       label: '数据来源',
       type: 'select',
+      required: true,
+      defaultValue: 'total',
       placeholder: '选择统计指标',
       options: [
         { label: '工单总数', value: 'total' },
@@ -26,7 +28,7 @@ export default defineWidget({
       ]
     },
     {
-      key: 'staticValue',
+      key: 'value',
       label: '自定义数值（留空则自动从后端获取）',
       type: 'number',
       placeholder: '留空=动态数据',
