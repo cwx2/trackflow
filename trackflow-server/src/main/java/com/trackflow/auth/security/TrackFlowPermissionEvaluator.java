@@ -348,6 +348,21 @@ public class TrackFlowPermissionEvaluator implements PermissionEvaluator {
     }
 
     /**
+     * 检查用户是否有报表编辑权限（用于更新、删除、管理共享等写操作）。
+     * <p>
+     * 规则：系统管理员 或 在任意项目中拥有 report:edit 权限
+     * 用于 @PreAuthorize("@perm.canEditReports()")
+     */
+    public boolean canEditReports() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) return false;
+
+        // Scope 过滤已下沉到 PermissionService 内部
+        return permissionService.isSystemAdmin(userId)
+                || permissionService.hasPermissionInAnyProject(userId, "report:edit");
+    }
+
+    /**
      * 检查用户对指定项目是否有报表查看权限。
      * <p>
      * 用于 @PreAuthorize("@perm.check(#projectId, 'report:view')")

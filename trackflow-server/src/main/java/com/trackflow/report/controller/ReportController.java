@@ -64,14 +64,14 @@ public class ReportController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<ReportDefinitionVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateReportDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(reportConverter.toVO(reportService.updateWithAccessCheck(id, dto, userId)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.deleteWithAccessCheck(id, userId);
@@ -159,7 +159,7 @@ public class ReportController {
      * 设置报表共享（覆盖模式）
      */
     @PutMapping("/{id}/shares")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<List<ReportShareVO>> setShares(@PathVariable("id") Long id,
                                             @Valid @RequestBody ShareReportDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -170,7 +170,7 @@ public class ReportController {
      * 移除单条共享
      */
     @DeleteMapping("/{id}/shares/{shareId}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<Void> removeShare(@PathVariable("id") Long id, @PathVariable("shareId") Long shareId) {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.removeShare(id, shareId, userId);

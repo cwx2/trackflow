@@ -67,7 +67,7 @@ public class CustomDashboardController {
      * 更新仪表盘（名称/描述/共享）
      */
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<DashboardDetailVO> update(@PathVariable("id") Long id, @Valid @RequestBody UpdateDashboardDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.update(id, dto, userId));
@@ -77,7 +77,7 @@ public class CustomDashboardController {
      * 删除仪表盘
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<Void> delete(@PathVariable("id") Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.delete(id, userId);
@@ -156,7 +156,7 @@ public class CustomDashboardController {
      * 设置仪表盘共享（覆盖模式）
      */
     @PutMapping("/{id}/shares")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<List<DashboardShareVO>> setShares(@PathVariable("id") Long id,
                                                 @Valid @RequestBody ShareDashboardDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -167,7 +167,7 @@ public class CustomDashboardController {
      * 移除单条共享
      */
     @DeleteMapping("/{id}/shares/{shareId}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<Void> removeShare(@PathVariable("id") Long id, @PathVariable("shareId") Long shareId) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.removeShare(id, shareId, userId);
@@ -180,7 +180,7 @@ public class CustomDashboardController {
      * 添加 Widget 到仪表盘
      */
     @PostMapping("/{id}/widgets")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<DashboardWidgetVO> addWidget(@PathVariable("id") Long id, @Valid @RequestBody CreateWidgetDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         return R.ok(dashboardService.addWidget(id, dto, userId));
@@ -190,7 +190,7 @@ public class CustomDashboardController {
      * 更新 Widget（配置/位置/大小）
      */
     @PutMapping("/{id}/widgets/{widgetId}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<DashboardWidgetVO> updateWidget(
             @PathVariable("id") Long id,
             @PathVariable("widgetId") Long widgetId,
@@ -203,7 +203,7 @@ public class CustomDashboardController {
      * 删除 Widget
      */
     @DeleteMapping("/{id}/widgets/{widgetId}")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<Void> deleteWidget(@PathVariable("id") Long id, @PathVariable("widgetId") Long widgetId) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.deleteWidget(id, widgetId, userId);
@@ -214,7 +214,7 @@ public class CustomDashboardController {
      * 移动 Widget 到另一个仪表盘
      */
     @PostMapping("/{id}/widgets/{widgetId}/move")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<DashboardWidgetVO> moveWidget(
             @PathVariable("id") Long sourceDashboardId,
             @PathVariable("widgetId") Long widgetId,
@@ -227,7 +227,7 @@ public class CustomDashboardController {
      * 批量更新 Widget 位置（拖拽后保存布局）
      */
     @PutMapping("/{id}/layout")
-    @PreAuthorize("@perm.canViewReports()")
+    @PreAuthorize("@perm.canEditReports()")
     public R<Void> updateLayout(@PathVariable("id") Long id, @Valid @RequestBody UpdateLayoutDTO dto) {
         Long userId = SecurityUtils.getCurrentUserId();
         dashboardService.updateLayout(id, dto, userId);
