@@ -37,7 +37,7 @@
       <div class="issue-list-wrapper">
         <a-spin :loading="searching" style="width: 100%">
           <div v-if="searchResults.length === 0 && !searching" class="empty-hint">
-            {{ keyword ? '未找到匹配的工单' : '输入关键词搜索工单' }}
+            {{ keyword ? '未找到匹配的工单' : '输入工单 ID 或标题关键词搜索（支持跨项目）' }}
           </div>
           <div v-else class="issue-list">
             <div
@@ -47,6 +47,10 @@
               :class="{ selected: selectedIssueId === issue.id, disabled: issue.id === currentIssueId }"
               @click="issue.id !== currentIssueId && (selectedIssueId = issue.id)"
             >
+              <span
+                v-if="issue.projectKey !== currentProjectKey"
+                class="issue-project-badge"
+              >{{ issue.projectKey }}</span>
               <span class="issue-key">{{ issue.issueKey }}</span>
               <span class="issue-title">{{ issue.title }}</span>
               <span class="issue-status" :style="{ color: issue.statusColor || '#666' }">
@@ -90,6 +94,7 @@ interface LinkType {
 interface IssueItem {
   id: string
   issueKey: string
+  projectKey: string
   title: string
   statusName?: string
   statusColor?: string
@@ -98,6 +103,7 @@ interface IssueItem {
 const props = defineProps<{
   issueId: string
   projectId: string
+  projectKey?: string
 }>()
 
 const emit = defineEmits<{
@@ -127,6 +133,9 @@ const submitting = ref(false)
 // 当前工单 ID（排除自身）
 const currentIssueId = computed(() => props.issueId)
 
+// 当前项目 Key（用于判断是否跨项目）
+const currentProjectKey = computed(() => props.projectKey || '')
+
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 function onKeywordInput() {
@@ -142,13 +151,13 @@ async function doSearch() {
   searching.value = true
   try {
     const res = await issueApi.list({
-      projectId: props.projectId,
       keyword: keyword.value.trim(),
       pageSize: 20,
     })
     searchResults.value = (res.data?.list || []).map((item: any) => ({
       id: item.id,
       issueKey: item.issueKey,
+      projectKey: item.issueKey?.split('-')[0] || '',
       title: item.title,
       statusName: item.statusName,
       statusColor: item.statusColor,
@@ -276,6 +285,16 @@ async function handleConfirm() {
   font-weight: 600;
   color: var(--tf-accent);
   min-width: 72px;
+  flex-shrink: 0;
+}
+
+.issue-project-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tf-text-tertiary);
+  background: var(--tf-bg-active);
+  padding: 1px 5px;
+  border-radius: 3px;
   flex-shrink: 0;
 }
 

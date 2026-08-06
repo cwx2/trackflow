@@ -142,6 +142,7 @@
     v-model:visible="showAddLinkModal"
     :issue-id="issue.id"
     :project-id="issue.projectId"
+    :project-key="issue.issueKey?.split('-')[0] || ''"
     @linked="onLinked"
   />
 
