@@ -35,24 +35,15 @@
     <!-- Sprint 列表 -->
     <div class="sprint-list" v-if="loadingState === 'success' && sprints.length > 0">
 
-      <!-- Sprint 导引横幅：无活跃 Sprint 时为警告，有活跃 Sprint 时为信息提示 -->
-      <div v-if="plannedSprints.length > 0" class="sprint-guidance-banner" :class="{ 'is-warning': !hasActiveSprint, 'is-info': hasActiveSprint }">
-        <span class="warning-bar-icon">{{ hasActiveSprint ? 'ℹ️' : '⚠️' }}</span>
-        <span class="warning-bar-text">{{ sprintGuidanceMessage }}</span>
-        <a-tooltip v-if="!hasActiveSprint" :content="warningBarActivateTooltip">
-          <span class="tooltip-wrapper">
-            <a-button
-              size="mini"
-              type="primary"
-              class="warning-bar-action"
-              :disabled="!nextStartableSprint || (nextStartableSprint && !canEditSprintItem(nextStartableSprint))"
-              @click="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
-            >
-              开始迭代
-            </a-button>
-          </span>
-        </a-tooltip>
-      </div>
+      <!-- Sprint 导引横幅 -->
+      <SprintGuidanceBanner
+        :show="plannedSprints.length > 0"
+        :has-active-sprint="hasActiveSprint"
+        :message="sprintGuidanceMessage"
+        :activate-tooltip="warningBarActivateTooltip"
+        :can-activate="!!nextStartableSprint && canEditSprintItem(nextStartableSprint)"
+        @activate="nextStartableSprint && handleActivateSprint(nextStartableSprint.id)"
+      />
 
       <!-- Active Sprints -->
       <SprintCard
@@ -246,6 +237,7 @@ import { useProjectList } from '@/composables/useProjectList'
 import type { SprintVO } from '@/api/types'
 import SprintIssueDrawer from './SprintIssueDrawer.vue'
 import SprintCard from './SprintCard.vue'
+import SprintGuidanceBanner from './SprintGuidanceBanner.vue'
 import SprintCompleteModal from './SprintCompleteModal.vue'
 import SprintDeleteModal from './SprintDeleteModal.vue'
 import SprintFormModal from './SprintFormModal.vue'
@@ -533,11 +525,6 @@ function syncUrlProjectParam() {
   gap: 12px;
 }
 
-/* Tooltip wrapper：确保禁用按钮也能显示 tooltip */
-.tooltip-wrapper {
-  display: inline-block;
-}
-
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -563,37 +550,6 @@ function syncUrlProjectParam() {
   font-size: 13px;
   color: var(--color-text-3);
   margin-bottom: 16px;
-}
-
-/* ===== 无活跃 Sprint 警告条 ===== */
-.sprint-guidance-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 4px;
-}
-.sprint-guidance-banner.is-warning {
-  background: rgba(var(--warning-6), 0.08);
-  border: 1px solid rgba(var(--warning-6), 0.25);
-}
-.sprint-guidance-banner.is-info {
-  background: rgba(var(--primary-6), 0.06);
-  border: 1px solid rgba(var(--primary-6), 0.15);
-}
-.warning-bar-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.warning-bar-text {
-  flex: 1;
-  font-size: 13px;
-  color: var(--color-text-1);
-  line-height: 1.4;
-}
-.warning-bar-action {
-  flex-shrink: 0;
 }
 
 /* ===== 已完成 Sprint 折叠区域 ===== */
