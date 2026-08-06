@@ -256,6 +256,7 @@ const nodeStatusMap = ref<Record<string, CanvasNodeStatus>>({})
 const streamingOutput = ref<Record<string, string>>({})
 const isRunning = ref(false)
 const currentExecutionId = ref<string | null>(null)
+let activeEvtSource: EventSource | null = null
 
 // 底部工具栏
 const executionPanelOpen = ref(false)
@@ -867,6 +868,7 @@ async function handleRun() {
       `/api/v1/executions/${res.data.executionId}/stream`,
       { withCredentials: true }
     )
+    activeEvtSource = evtSource
 
     evtSource.addEventListener('message', (e) => {
       try {
@@ -892,14 +894,17 @@ async function handleRun() {
         } else if (event.type === 'workflow_success') {
           Message.success('工作流执行成功')
           evtSource.close()
+          activeEvtSource = null
           isRunning.value = false
         } else if (event.type === 'workflow_failed') {
           Message.error(`工作流执行失败: ${event.error}`)
           evtSource.close()
+          activeEvtSource = null
           isRunning.value = false
         } else if (event.type === 'workflow_cancelled') {
           Message.info('工作流执行已取消')
           evtSource.close()
+          activeEvtSource = null
           isRunning.value = false
         }
       } catch (e) {
@@ -909,6 +914,7 @@ async function handleRun() {
 
     evtSource.onerror = () => {
       evtSource.close()
+      activeEvtSource = null
       isRunning.value = false
     }
   } catch (e: any) {
@@ -954,6 +960,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  activeEvtSource?.close()
+  activeEvtSource = null
   lf = null
 })
 </script>
