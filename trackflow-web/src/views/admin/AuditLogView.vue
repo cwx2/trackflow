@@ -65,6 +65,14 @@
           <optgroup label="系统设置">
             <option value="time_tracking_settings_update">修改工时设置</option>
           </optgroup>
+          <optgroup label="项目管理">
+            <option value="create_project">创建项目</option>
+            <option value="update_project">修改项目</option>
+            <option value="archive_project">归档项目</option>
+            <option value="delete_project">删除项目</option>
+            <option value="update_project_member_role">修改成员角色</option>
+            <option value="remove_project_member">移除项目成员</option>
+          </optgroup>
         </select>
         <select v-model="filters.targetType" class="filter-select" @change="resetAndLoad">
           <option value="">全部目标</option>
@@ -72,6 +80,7 @@
           <option value="user">用户</option>
           <option value="user_group">用户组</option>
           <option value="role">角色</option>
+          <option value="project">项目</option>
           <option value="api_key">API Key</option>
           <option value="system_setting">系统设置</option>
         </select>
@@ -270,7 +279,14 @@ const ACTION_LABELS: Record<string, string> = {
   revoke_api_key: '吊销 API Key',
   revoke_all_api_keys: '吊销所有 API Key',
   // 系统设置
-  time_tracking_settings_update: '修改工时设置'
+  time_tracking_settings_update: '修改工时设置',
+  // 项目管理
+  create_project: '创建项目',
+  update_project: '修改项目',
+  archive_project: '归档项目',
+  delete_project: '删除项目',
+  update_project_member_role: '修改成员角色',
+  remove_project_member: '移除项目成员'
 }
 
 function getActionLabel(action: string) {
@@ -285,13 +301,16 @@ function getActionClass(action: string): ActionColorType {
   if (['login', 'first_login', 'api_key_used'].includes(action)) return 'action-auth'
   // 创建/分配/启用 → 绿色
   if (['create_user', 'create_group', 'create_api_key', 'assign_global_role',
-       'assign_group_role', 'add_group_members', 'enable_user'].includes(action)) return 'action-success'
+       'assign_group_role', 'add_group_members', 'enable_user',
+       'create_project'].includes(action)) return 'action-success'
   // 修改/编辑/克隆 → 橙色
   if (['update_group', 'update_role_permissions', 'clone_role',
-       'time_tracking_settings_update'].includes(action)) return 'action-warning'
-  // 删除/禁用/吊销/失败 → 红色
+       'time_tracking_settings_update', 'update_project',
+       'update_project_member_role'].includes(action)) return 'action-warning'
+  // 删除/禁用/吊销/失败/归档/移除 → 红色
   if (['delete_group', 'disable_user', 'remove_global_role', 'remove_group_members',
-       'revoke_api_key', 'revoke_all_api_keys', 'login_failed', 'api_key_failed'].includes(action)) return 'action-danger'
+       'revoke_api_key', 'revoke_all_api_keys', 'login_failed', 'api_key_failed',
+       'archive_project', 'delete_project', 'remove_project_member'].includes(action)) return 'action-danger'
   return 'action-auth'
 }
 
@@ -301,6 +320,7 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   user: '用户',
   user_group: '用户组',
   role: '角色',
+  project: '项目',
   api_key: 'API Key',
   system_setting: '系统设置'
 }
@@ -379,6 +399,20 @@ function formatDetailsByAction(action: string, d: Record<string, any>): string {
     // 系统设置
     case 'time_tracking_settings_update':
       return `策略：${d.strategy || '—'}，每日工时：${d.oldHoursPerDay ?? '—'} → ${d.newHoursPerDay ?? '—'}`
+
+    // 项目管理
+    case 'create_project':
+      return `项目：${d.name || '—'}（${d.key || '—'}）`
+    case 'update_project':
+      return `项目：${d.project_name || '—'}，修改字段：${Array.isArray(d.changed_fields) ? d.changed_fields.join(', ') : '—'}`
+    case 'archive_project':
+      return `项目：${d.project_name || '—'}（${d.project_key || '—'}）${d.suspended_sprint_count ? `，暂停 ${d.suspended_sprint_count} 个 Sprint` : ''}`
+    case 'delete_project':
+      return `项目：${d.project_name || '—'}（${d.project_key || '—'}），成员数：${d.member_count ?? '—'}`
+    case 'update_project_member_role':
+      return `用户：${d.user_name || '—'}，角色：${d.old_roles || '—'} → ${d.new_roles || '—'}`
+    case 'remove_project_member':
+      return `用户：${d.user_name || '—'}${d.affected_issue_count ? `，清空 ${d.affected_issue_count} 个工单负责人` : ''}`
 
     default:
       return formatGenericDetails(d)

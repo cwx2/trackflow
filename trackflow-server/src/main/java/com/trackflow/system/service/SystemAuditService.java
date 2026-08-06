@@ -38,6 +38,7 @@ public class SystemAuditService {
     private final SysAuditLogMapper auditLogMapper;
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
+    private final com.trackflow.project.mapper.ProjectMapper projectMapper;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
@@ -170,6 +171,7 @@ public class SystemAuditService {
         // 收集所有涉及的用户 ID 和角色 ID（跳过 null）
         Set<Long> userIds = new HashSet<>();
         Set<Long> roleIds = new HashSet<>();
+        Set<Long> projectIds = new HashSet<>();
 
         for (SysAuditLog record : page.getRecords()) {
             if (record.getOperatorId() != null) {
@@ -181,6 +183,8 @@ public class SystemAuditService {
                 roleIds.add(record.getTargetId());
             } else if ("auth".equals(record.getTargetType()) && record.getTargetId() != null) {
                 userIds.add(record.getTargetId());
+            } else if ("project".equals(record.getTargetType()) && record.getTargetId() != null) {
+                projectIds.add(record.getTargetId());
             }
         }
 
@@ -199,9 +203,19 @@ public class SystemAuditService {
                     .collect(Collectors.toMap(SysRole::getId, SysRole::getName));
         }
 
+        // 批量查询项目名
+        Map<Long, String> projectNameMap = Collections.emptyMap();
+        if (!projectIds.isEmpty()) {
+            projectNameMap = projectMapper.selectBatchIds(projectIds).stream()
+                    .collect(Collectors.toMap(
+                            com.trackflow.project.entity.Project::getId,
+                            p -> p.getName() + " (" + p.getKey() + ")"));
+        }
+
         // 转换为 VO
         Map<Long, String> finalUserNameMap = userNameMap;
         Map<Long, String> finalRoleNameMap = roleNameMap;
+        Map<Long, String> finalProjectNameMap = projectNameMap;
 
         List<AuditLogVO> voList = page.getRecords().stream().map(record -> {
             AuditLogVO vo = new AuditLogVO();
@@ -224,6 +238,8 @@ public class SystemAuditService {
                 vo.setTargetName(finalRoleNameMap.getOrDefault(record.getTargetId(), ""));
             } else if ("auth".equals(record.getTargetType()) && record.getTargetId() != null) {
                 vo.setTargetName(finalUserNameMap.getOrDefault(record.getTargetId(), ""));
+            } else if ("project".equals(record.getTargetType()) && record.getTargetId() != null) {
+                vo.setTargetName(finalProjectNameMap.getOrDefault(record.getTargetId(), ""));
             }
 
             return vo;

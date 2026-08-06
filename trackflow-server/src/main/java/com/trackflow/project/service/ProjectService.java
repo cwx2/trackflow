@@ -61,6 +61,7 @@ import com.trackflow.project.vo.ProjectVO;
 import com.trackflow.project.dto.AddGroupMemberDTO;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -105,6 +106,7 @@ public class ProjectService {
     private final com.trackflow.system.mapper.UserGroupRoleMapper userGroupRoleMapper;
     private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
     private final com.trackflow.system.mapper.UserGroupMemberMapper userGroupMemberMapper;
+    private final com.trackflow.system.service.SystemAuditService systemAuditService;
 
     /**
      * 创建项目
@@ -183,6 +185,15 @@ public class ProjectService {
 
         // 自动附加 isAutoAttach=true 的自定义字段到新项目（YouTrack Auto-attach 行为）
         autoAttachCustomFieldsToProject(project.getId());
+
+        // 审计日志：记录项目创建
+        Map<String, Object> auditDetails = new LinkedHashMap<>();
+        auditDetails.put("name", project.getName());
+        auditDetails.put("key", project.getKey());
+        if (project.getDescription() != null && !project.getDescription().isBlank()) {
+            auditDetails.put("description", project.getDescription());
+        }
+        systemAuditService.log("create_project", "project", project.getId(), auditDetails);
 
         return project;
     }
@@ -556,6 +567,22 @@ public class ProjectService {
         }
 
         projectMapper.updateById(project);
+
+        // 审计日志：记录项目更新
+        Map<String, Object> auditDetails = new LinkedHashMap<>();
+        auditDetails.put("project_name", project.getName());
+        auditDetails.put("project_key", project.getKey());
+        List<String> changedFields = new java.util.ArrayList<>();
+        if (dto.getName() != null) changedFields.add("name");
+        if (dto.getDescription() != null) changedFields.add("description");
+        if (dto.getVisibility() != null) changedFields.add("visibility");
+        if (dto.getOrgId() != null) changedFields.add("orgId");
+        if (dto.getLeadId() != null) changedFields.add("leadId");
+        if (!changedFields.isEmpty()) {
+            auditDetails.put("changed_fields", changedFields);
+        }
+        systemAuditService.log("update_project", "project", id, auditDetails);
+
         return project;
     }
 
@@ -678,6 +705,15 @@ public class ProjectService {
         }
         projectActivityService.log(id, currentUserId, "archive_project", null,
                 detail.isEmpty() ? null : detail);
+
+        // 审计日志：记录项目归档
+        Map<String, Object> auditDetails = new LinkedHashMap<>();
+        auditDetails.put("project_name", project.getName());
+        auditDetails.put("project_key", project.getKey());
+        if (suspendedSprintCount > 0) {
+            auditDetails.put("suspended_sprint_count", suspendedSprintCount);
+        }
+        systemAuditService.log("archive_project", "project", id, auditDetails);
 
         // 4. 通知所有项目成员 — 事务提交后触发
         eventPublisher.publishEvent(new ProjectNotificationEvent.LifecycleEvent(id, currentUserId,
@@ -1360,6 +1396,19 @@ public class ProjectService {
                 Map.of("old_role_ids", oldRoleIds, "old_role_names", String.join(", ", oldRoleNames),
                        "new_role_ids", distinctRoleIds, "new_role_names", String.join(", ", newRoleNames)));
 
+        // 系统审计日志：记录项目成员角色变更
+        Map<String, Object> memberRoleAuditDetails = new LinkedHashMap<>();
+        memberRoleAuditDetails.put("project_name", project.getName());
+        memberRoleAuditDetails.put("project_key", project.getKey());
+        memberRoleAuditDetails.put("user_id", userId);
+        SysUser targetUser = userMapper.selectById(userId);
+        if (targetUser != null) {
+            memberRoleAuditDetails.put("user_name", targetUser.getDisplayName() != null ? targetUser.getDisplayName() : targetUser.getUsername());
+        }
+        memberRoleAuditDetails.put("old_roles", String.join(", ", oldRoleNames));
+        memberRoleAuditDetails.put("new_roles", String.join(", ", newRoleNames));
+        systemAuditService.log("update_project_member_role", "project", projectId, memberRoleAuditDetails);
+
         // 通知角色变更的用户 — 事务提交后触发
         if (!toRemove.isEmpty() || !toAdd.isEmpty()) {
             eventPublisher.publishEvent(new ProjectNotificationEvent.RoleChanged(userId, currentUserId, projectId,
@@ -1521,6 +1570,20 @@ public class ProjectService {
                 ? Map.of("affected_issue_count", affectedCount)
                 : null;
         projectActivityService.log(projectId, operatorId, "remove_member", userId, detailMap);
+
+        // 系统审计日志：记录项目成员移除
+        Map<String, Object> removeMemberAuditDetails = new LinkedHashMap<>();
+        removeMemberAuditDetails.put("project_name", project.getName());
+        removeMemberAuditDetails.put("project_key", project.getKey());
+        removeMemberAuditDetails.put("user_id", userId);
+        SysUser removedUser = userMapper.selectById(userId);
+        if (removedUser != null) {
+            removeMemberAuditDetails.put("user_name", removedUser.getDisplayName() != null ? removedUser.getDisplayName() : removedUser.getUsername());
+        }
+        if (affectedCount > 0) {
+            removeMemberAuditDetails.put("affected_issue_count", affectedCount);
+        }
+        systemAuditService.log("remove_project_member", "project", projectId, removeMemberAuditDetails);
 
         // 通知被移除的用户 — 事务提交后触发
         eventPublisher.publishEvent(new ProjectNotificationEvent.MemberRemoved(userId, operatorId, projectId, project.getName()));
@@ -1884,6 +1947,13 @@ public class ProjectService {
         }
 
         // 5. 物理删除项目（FK CASCADE 自动删除所有关联数据）
+        // 审计日志：记录项目删除（在实际删除前记录，因为 CASCADE 后无法查询项目信息）
+        Map<String, Object> deleteAuditDetails = new LinkedHashMap<>();
+        deleteAuditDetails.put("project_name", project.getName());
+        deleteAuditDetails.put("project_key", project.getKey());
+        deleteAuditDetails.put("member_count", memberUserIds.size());
+        systemAuditService.log("delete_project", "project", projectId, deleteAuditDetails);
+
         projectMapper.deleteById(projectId);
     }
 
