@@ -382,22 +382,24 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     _wait_for_circuit(label)
     start = time.time()
 
-    # Windows 上 stdin pipe 对大 prompt 不可靠，全部用临时文件
     _temp_file = None
-    if stdin_data and os.name == "nt":
-        import tempfile as _tempfile
-        try:
-            _tmp = _tempfile.NamedTemporaryFile(
-                mode="w", suffix=".txt", prefix="claude_prompt_",
-                encoding="utf-8", delete=False,
-            )
-            _temp_file = _tmp.name
-            _tmp.write(stdin_data.decode("utf-8", errors="replace"))
-            _tmp.flush()
-            _tmp.close()
-            stdin_data = f"请严格按照 {_temp_file} 中的指令执行。".encode("utf-8")
-        except Exception as e:
-            log.warning(f"[{label}] 临时文件创建失败: {e}")
+    if stdin_data:
+        # Windows: 全部写入临时文件（subprocess stdin pipe + 大 prompt 不可靠）
+        # Unix: communicate(input=...) 正常可用
+        if os.name == "nt":
+            import tempfile as _tempfile
+            try:
+                _tmp = _tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".txt", prefix="claude_prompt_",
+                    encoding="utf-8", delete=False,
+                )
+                _temp_file = _tmp.name
+                _tmp.write(stdin_data.decode("utf-8", errors="replace"))
+                _tmp.flush()
+                _tmp.close()
+                stdin_data = f"请严格按照 {_temp_file} 中的完整指令执行。".encode("utf-8")
+            except Exception as e:
+                log.warning(f"[{label}] 临时文件创建失败: {e}")
 
     try:
         process = subprocess.Popen(
