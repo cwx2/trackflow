@@ -46,81 +46,89 @@
     <div v-show="!collapsed" class="att-body">
       <!-- Grid View (Thumbnails) -->
       <div v-if="viewMode === 'grid' && sortedAttachments.length > 0" class="att-grid">
-        <a-image-preview-group infinite>
-          <div
-            v-for="att in sortedAttachments"
-            :key="att.id"
-            class="att-card"
-            :class="{ 'att-card--private': att.isPrivate }"
-            @click="handleClick(att)"
-          >
-            <!-- Image thumbnail -->
-            <div v-if="isImage(att)" class="att-thumb">
-              <a-image
-                v-if="getImageSrc(att.filePath)"
-                :src="getImageSrc(att.filePath)"
-                :alt="att.fileName"
-                width="100%"
-                height="100%"
-                fit="cover"
-                :preview-props="{ actionsLayout: ['zoomIn', 'zoomOut', 'originalSize', 'rotateLeft', 'rotateRight'] }"
-              />
-              <div v-else class="att-thumb-loading">
-                <a-spin :size="16" />
-              </div>
-              <!-- Hover overlay -->
-              <div class="att-overlay" @click.stop>
-                <button class="att-ov-btn" @click="download(att)" title="下载">
-                  <icon-download :size="14" />
-                </button>
-                <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click="confirmDelete(att)" title="删除">
-                  <icon-delete :size="14" />
-                </button>
-              </div>
+        <div
+          v-for="att in sortedAttachments"
+          :key="att.id"
+          class="att-card"
+          :class="{ 'att-card--private': att.isPrivate }"
+          @click="handleClick(att)"
+        >
+          <!-- Image thumbnail -->
+          <div v-if="isImage(att)" class="att-thumb">
+            <img
+              v-if="getImageSrc(att.filePath)"
+              :src="getImageSrc(att.filePath)"
+              :alt="att.fileName"
+              class="att-thumb-img"
+            />
+            <div v-else class="att-thumb-loading">
+              <a-spin :size="16" />
             </div>
-            <!-- Non-image file icon -->
-            <div v-else class="att-thumb att-thumb--file">
-              <!-- Video thumbnail with play overlay -->
-              <template v-if="isVideo(att)">
-                <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
-                <div class="att-video-play-overlay">
-                  <svg class="att-play-icon" viewBox="0 0 24 24" width="28" height="28">
-                    <circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" />
-                    <polygon points="10,8 10,16 17,12" fill="rgba(255,255,255,0.9)" />
-                  </svg>
-                </div>
-              </template>
-              <!-- Other file types -->
-              <template v-else>
-                <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
-                <!-- Previewable indicator -->
-                <span v-if="isPreviewable(att)" class="att-preview-badge" title="点击预览">
-                  <svg viewBox="0 0 16 16" width="12" height="12">
-                    <path fill="currentColor" d="M8 3C4.5 3 1.7 5.1 1 8c.7 2.9 3.5 5 7 5s6.3-2.1 7-5c-.7-2.9-3.5-5-7-5zm0 8.5A3.5 3.5 0 1 1 8 4.5 3.5 3.5 0 0 1 8 11.5zm0-5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-                  </svg>
-                </span>
-              </template>
-              <div class="att-overlay" @click.stop>
-                <button class="att-ov-btn" @click="download(att)" title="下载">
-                  <icon-download :size="14" />
-                </button>
-                <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click="confirmDelete(att)" title="删除">
-                  <icon-delete :size="14" />
-                </button>
-              </div>
+            <!-- Hover overlay -->
+            <div class="att-overlay" @click.stop>
+              <button class="att-ov-btn" @click="download(att)" title="下载">
+                <icon-download :size="14" />
+              </button>
+              <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click="confirmDelete(att)" title="删除">
+                <icon-delete :size="14" />
+              </button>
             </div>
-            <!-- File info -->
-            <div class="att-info">
-              <span class="att-fname" :title="att.fileName">{{ att.fileName }}</span>
-              <span class="att-fsize">{{ formatSize(att.fileSize) }}</span>
-            </div>
-            <!-- Private badge -->
-            <span v-if="att.isPrivate" class="att-private-badge" :title="att.visibleToGroupNames?.join(', ') || '私有'">
-              <icon-lock :size="10" />
-            </span>
           </div>
-        </a-image-preview-group>
+          <!-- Non-image file icon -->
+          <div v-else class="att-thumb att-thumb--file">
+            <!-- Video thumbnail with play overlay -->
+            <template v-if="isVideo(att)">
+              <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
+              <div class="att-video-play-overlay">
+                <svg class="att-play-icon" viewBox="0 0 24 24" width="28" height="28">
+                  <circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" />
+                  <polygon points="10,8 10,16 17,12" fill="rgba(255,255,255,0.9)" />
+                </svg>
+              </div>
+            </template>
+            <!-- Other file types -->
+            <template v-else>
+              <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
+              <!-- Previewable indicator -->
+              <span v-if="isPreviewable(att)" class="att-preview-badge" title="点击预览">
+                <svg viewBox="0 0 16 16" width="12" height="12">
+                  <path fill="currentColor" d="M8 3C4.5 3 1.7 5.1 1 8c.7 2.9 3.5 5 7 5s6.3-2.1 7-5c-.7-2.9-3.5-5-7-5zm0 8.5A3.5 3.5 0 1 1 8 4.5 3.5 3.5 0 0 1 8 11.5zm0-5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                </svg>
+              </span>
+            </template>
+            <div class="att-overlay" @click.stop>
+              <button class="att-ov-btn" @click="download(att)" title="下载">
+                <icon-download :size="14" />
+              </button>
+              <button v-if="!readonly" class="att-ov-btn att-ov-btn--danger" @click="confirmDelete(att)" title="删除">
+                <icon-delete :size="14" />
+              </button>
+            </div>
+          </div>
+          <!-- File info -->
+          <div class="att-info">
+            <span class="att-fname" :title="att.fileName">{{ att.fileName }}</span>
+            <span class="att-fsize">{{ formatSize(att.fileSize) }}</span>
+          </div>
+          <!-- Private badge -->
+          <span v-if="att.isPrivate" class="att-private-badge" :title="att.visibleToGroupNames?.join(', ') || '私有'">
+            <icon-lock :size="10" />
+          </span>
+        </div>
       </div>
+
+      <!-- Image Lightbox: Arco ImagePreviewGroup with srcList for multi-image navigation -->
+      <a-image-preview-group
+        v-model:visible="imagePreviewVisible"
+        v-model:current="imagePreviewCurrent"
+        infinite
+        :src-list="imagePreviewSrcList"
+        :actions-layout="['fullScreen', 'zoomIn', 'zoomOut', 'originalSize', 'rotateLeft', 'rotateRight']"
+        esc-to-close
+        keyboard
+        wheel-zoom
+        closable
+      />
 
       <!-- List View -->
       <div v-else-if="viewMode === 'list' && sortedAttachments.length > 0" class="att-list">
@@ -366,12 +374,41 @@ function formatDate(dt: string): string {
   return new Date(dt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
 }
 
+// ========== Image Lightbox (multi-image preview) ==========
+const imagePreviewVisible = ref(false)
+const imagePreviewCurrent = ref(0)
+
+/** All image attachments in current sort order */
+const imageAttachments = computed(() => sortedAttachments.value.filter(a => isImage(a)))
+
+/** Only images with loaded blob URLs (for srcList alignment) */
+const imageAttachmentsLoaded = computed(() =>
+  imageAttachments.value.filter(a => !!getImageSrc(a.filePath))
+)
+
+/** srcList for Arco ImagePreviewGroup — authenticated blob URLs */
+const imagePreviewSrcList = computed(() =>
+  imageAttachmentsLoaded.value.map(a => getImageSrc(a.filePath))
+)
+
+function openImagePreview(att: AttachmentItem) {
+  const src = getImageSrc(att.filePath)
+  if (!src) return
+  const idx = imageAttachmentsLoaded.value.findIndex(a => a.id === att.id)
+  if (idx < 0) return
+  imagePreviewCurrent.value = idx
+  imagePreviewVisible.value = true
+}
+
 // ========== Actions ==========
 const previewVisible = ref(false)
 const previewAttachment = ref<AttachmentItem | null>(null)
 
 function handleClick(att: AttachmentItem) {
-  if (isImage(att)) return // handled by a-image preview
+  if (isImage(att)) {
+    openImagePreview(att)
+    return
+  }
   if (isPreviewable(att)) {
     openPreview(att)
   } else {
@@ -520,6 +557,12 @@ function confirmDeleteAll() {
   object-fit: cover;
   width: 100%;
   height: 100%;
+}
+.att-thumb-img {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .att-thumb--file {
   background: var(--tf-bg-surface);

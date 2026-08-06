@@ -128,7 +128,7 @@ const previewType = computed<'video' | 'pdf' | 'svg' | 'text' | null>(() => {
 
 const modalWidth = computed(() => {
   switch (previewType.value) {
-    case 'video': return 800
+    case 'video': return 'min(900px, 85vw)'
     case 'pdf': return 900
     case 'svg': return 640
     case 'text': return 720
@@ -275,7 +275,7 @@ onUnmounted(() => {
 /* Video */
 .att-preview-video {
   width: 100%;
-  max-height: 70vh;
+  max-height: 80vh;
   background: #000;
   display: block;
 }
