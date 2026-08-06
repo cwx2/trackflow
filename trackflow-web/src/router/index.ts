@@ -7,12 +7,14 @@ const routes = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/login/LoginView.vue')
+    component: () => import('@/views/login/LoginView.vue'),
+    meta: { title: '登录' }
   },
   {
     path: '/auth/callback',
     name: 'AuthCallback',
-    component: () => import('@/views/login/AuthCallback.vue')
+    component: () => import('@/views/login/AuthCallback.vue'),
+    meta: { title: '认证中' }
   },
   {
     path: '/',
@@ -112,31 +114,32 @@ const routes = [
       {
         path: 'timesheets',
         name: 'Timesheets',
-        component: () => import('@/views/timesheet/TimesheetView.vue')
+        component: () => import('@/views/timesheet/TimesheetView.vue'),
+        meta: { title: '工时记录' }
       },
       {
         path: 'automation',
         name: 'Automation',
         component: () => import('@/views/automation/AutomationListView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, title: '自动化' }
       },
       {
         path: 'automation/:id',
         name: 'AutomationEditor',
         component: () => import('@/views/automation/WorkflowEditorView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, title: '自动化编辑' }
       },
       {
         path: 'automation/:id/executions',
         name: 'AutomationExecutionHistory',
         component: () => import('@/views/automation/ExecutionHistoryView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, title: '执行历史' }
       },
       {
         path: 'automation-operations',
         name: 'AutomationOperations',
         component: () => import('@/views/automation/AutomationOperationsView.vue'),
-        meta: { requiresAdmin: true }
+        meta: { requiresAdmin: true, title: '自动化操作' }
       },
       {
         path: 'reports',
@@ -199,111 +202,115 @@ const routes = [
         path: 'admin/users',
         name: 'UserManagement',
         component: () => import('@/views/admin/UserManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users', title: '用户管理' }
       },
       {
         path: 'admin/users/:id',
         name: 'UserDetail',
         component: () => import('@/views/admin/UserDetailView.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users', title: '用户详情' }
       },
       {
         path: 'admin/roles',
         name: 'RoleManagement',
         component: () => import('@/views/admin/RoleManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '角色管理' }
       },
       {
         path: 'admin/organizations',
         name: 'OrgManagement',
         component: () => import('@/views/admin/OrgManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_orgs', title: '组织管理' }
       },
       {
         path: 'admin/groups',
         name: 'GroupManagement',
         component: () => import('@/views/admin/GroupManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_groups' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_groups', title: '群组管理' }
       },
       {
         path: 'admin/custom-fields',
         name: 'CustomFieldManagement',
         component: () => import('@/views/admin/CustomFieldManage.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '自定义字段' }
       },
       {
         path: 'admin/audit-logs',
         name: 'AuditLogs',
         component: () => import('@/views/admin/AuditLogView.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_users', title: '审计日志' }
       },
       {
         path: 'admin/time-tracking',
         name: 'TimeTrackingSettings',
         component: () => import('@/views/admin/TimeTrackingSettings.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '工时设置' }
       },
       {
         path: 'admin/work-item-attributes',
         name: 'WorkItemAttributes',
         component: () => import('@/views/admin/WorkItemAttributesView.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '工作项属性' }
       },
       {
         path: 'admin/notifications',
         name: 'NotificationManagement',
         component: () => import('@/views/admin/NotificationManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '通知管理' }
       },
       {
         path: 'admin/rules',
         name: 'RuleManagement',
         component: () => import('@/views/admin/RuleManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '规则管理' }
       },
       {
         path: 'admin/webhooks',
         name: 'WebhookManagement',
         component: () => import('@/views/admin/WebhookManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: 'Webhook 管理' }
       },
       {
         path: 'admin/action-rules',
         name: 'ActionRuleManagement',
         component: () => import('@/views/admin/ActionRuleManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings', title: '动作规则' }
       },
       {
         path: 'admin/integrations',
         name: 'IntegrationManagement',
         component: () => import('@/views/admin/IntegrationManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_roles', title: '集成管理' }
       },
       {
         path: 'admin/link-types',
         name: 'LinkTypeManagement',
         component: () => import('@/views/admin/LinkTypeManagement.vue'),
-        meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings' }
+        meta: { requiresAdmin: true, requiredPermission: 'system:manage_settings', title: '链接类型' }
       },
       {
         path: 'notifications',
         name: 'Notifications',
-        component: () => import('@/views/notification/NotificationView.vue')
+        component: () => import('@/views/notification/NotificationView.vue'),
+        meta: { title: '通知' }
       },
       {
         path: 'settings/profile',
         name: 'Profile',
-        component: () => import('@/views/settings/ProfileView.vue')
+        component: () => import('@/views/settings/ProfileView.vue'),
+        meta: { title: '个人资料' }
       },
       {
         path: 'settings/notifications',
         name: 'NotificationSettings',
-        component: () => import('@/views/settings/NotificationSettingsView.vue')
+        component: () => import('@/views/settings/NotificationSettingsView.vue'),
+        meta: { title: '通知设置' }
       },
       {
         path: 'settings/security',
         name: 'AccountSecurity',
-        component: () => import('@/views/settings/AccountSecurityView.vue')
+        component: () => import('@/views/settings/AccountSecurityView.vue'),
+        meta: { title: '账号安全' }
       },
       {
         path: ':pathMatch(.*)*',
@@ -414,6 +421,12 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   next()
+})
+
+// 页面标题设置：根据路由 meta.title 动态更新 document.title
+router.afterEach((to) => {
+  const title = to.meta.title
+  document.title = title ? `${title} - TrackFlow` : 'TrackFlow'
 })
 
 export default router
