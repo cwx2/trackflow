@@ -35,6 +35,7 @@ public class AuditLogController {
      * 分页查询审计日志
      * <p>
      * 支持按操作类型、目标类型、操作者、时间范围筛选。
+     * 支持 search 参数进行文本搜索（author:xxx / target:xxx / 纯文本模糊匹配）。
      * 时间范围强制限制：最大 365 天，未指定时默认最近 30 天。
      */
     @GetMapping
@@ -73,5 +74,26 @@ public class AuditLogController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
                 .body(result);
+    }
+
+    /**
+     * 导出审计日志（JSON 格式）
+     * <p>
+     * 按当前查询条件筛选，最多导出 1000 条记录。
+     * 支持所有列表接口的筛选参数（action/targetType/startDate/endDate/search）。
+     */
+    @GetMapping("/export-json")
+    @PreAuthorize("@perm.checkGlobal('system:manage_users')")
+    public ResponseEntity<byte[]> exportJson(AuditLogQuery query) {
+        String jsonContent = systemAuditService.exportAuditLogsJson(query);
+        byte[] jsonBytes = jsonContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        LocalDate today = LocalDate.now();
+        String filename = "audit-logs-" + today.format(DateTimeFormatter.BASIC_ISO_DATE) + ".json";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(jsonBytes);
     }
 }

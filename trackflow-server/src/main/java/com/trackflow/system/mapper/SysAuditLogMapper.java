@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Select;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 系统审计日志 Mapper
@@ -38,4 +39,15 @@ public interface SysAuditLogMapper extends BaseMapper<SysAuditLog> {
             "ORDER BY created_at DESC")
     List<SysAuditLog> selectByTimeRange(@Param("startTime") LocalDateTime startTime,
                                         @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * 根据用户名模糊匹配查找用户 ID 集合
+     *
+     * @param keyword 模糊匹配关键词
+     * @return 匹配的用户 ID 集合
+     */
+    @Select("SELECT id FROM sys_user WHERE " +
+            "LOWER(display_name) LIKE LOWER(CONCAT('%', #{keyword}, '%')) " +
+            "OR LOWER(username) LIKE LOWER(CONCAT('%', #{keyword}, '%'))")
+    Set<Long> findUserIdsByNameLike(@Param("keyword") String keyword);
 }

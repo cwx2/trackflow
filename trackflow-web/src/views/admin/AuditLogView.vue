@@ -2,7 +2,33 @@
   <div class="admin-page">
     <div class="page-header">
       <h2 class="page-title">审计日志</h2>
-      <div class="header-filters">
+      <div class="header-actions">
+        <button class="btn-export" @click="exportJson" :disabled="exporting">
+          <span class="export-icon">⬇</span>
+          {{ exporting ? '导出中...' : '导出 JSON' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 搜索与过滤 -->
+    <div class="filter-bar">
+      <div class="search-box">
+        <input
+          v-model="filters.search"
+          type="text"
+          class="search-input"
+          placeholder="搜索审计日志... (支持 author:xxx / target:xxx)"
+          @keydown.enter="resetAndLoad"
+        />
+        <button class="search-btn" @click="resetAndLoad" title="搜索">🔍</button>
+        <button
+          v-if="filters.search"
+          class="search-clear-btn"
+          @click="clearSearch"
+          title="清除搜索"
+        >✕</button>
+      </div>
+      <div class="filter-controls">
         <select v-model="filters.action" class="filter-select" @change="resetAndLoad">
           <option value="">全部操作</option>
           <optgroup label="认证">
@@ -134,18 +160,25 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 20
 const loading = ref(false)
+const exporting = ref(false)
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
 
 const filters = reactive({
   action: '',
   targetType: '',
   startDate: '',
-  endDate: ''
+  endDate: '',
+  search: ''
 })
 
 function resetAndLoad() {
   page.value = 1
   loadLogs()
+}
+
+function clearSearch() {
+  filters.search = ''
+  resetAndLoad()
 }
 
 async function loadLogs() {
@@ -156,6 +189,7 @@ async function loadLogs() {
     if (filters.targetType) params.targetType = filters.targetType
     if (filters.startDate) params.startDate = filters.startDate
     if (filters.endDate) params.endDate = filters.endDate
+    if (filters.search) params.search = filters.search
 
     const res = await auditLogApi.list(params)
     logs.value = res.data?.list || []
@@ -166,6 +200,36 @@ async function loadLogs() {
     Message.error('加载审计日志失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function exportJson() {
+  exporting.value = true
+  try {
+    const params: any = {}
+    if (filters.action) params.action = filters.action
+    if (filters.targetType) params.targetType = filters.targetType
+    if (filters.startDate) params.startDate = filters.startDate
+    if (filters.endDate) params.endDate = filters.endDate
+    if (filters.search) params.search = filters.search
+
+    const res = await auditLogApi.exportJson(params)
+    // 触发浏览器下载
+    const blob = new Blob([res as any], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const today = new Date().toISOString().slice(0, 10)
+    link.href = url
+    link.download = `audit-logs-${today}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    Message.success('导出成功')
+  } catch (e) {
+    Message.error('导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -380,7 +444,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -391,7 +455,113 @@ onMounted(() => {
   color: var(--text-bright);
 }
 
-.header-filters {
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-export {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-export:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-blue);
+}
+
+.btn-export:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.export-icon {
+  font-size: 12px;
+}
+
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 480px;
+}
+
+.search-input {
+  width: 100%;
+  height: 34px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0 60px 0 12px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.search-btn {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.search-btn:hover {
+  opacity: 1;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px;
+  color: var(--text-tertiary);
+  transition: color 0.15s;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-primary);
+}
+
+.filter-controls {
   display: flex;
   align-items: center;
   gap: 8px;

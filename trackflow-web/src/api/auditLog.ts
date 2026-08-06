@@ -27,6 +27,7 @@ export interface AuditLogQuery {
   targetId?: string
   startDate?: string
   endDate?: string
+  search?: string
   page?: number
   pageSize?: number
 }
@@ -50,6 +51,18 @@ export const auditLogApi = {
   export(startDate: string, endDate: string) {
     return request.get('/admin/audit-logs/export', {
       params: { startDate, endDate },
+      responseType: 'blob'
+    })
+  },
+
+  /**
+   * 导出审计日志（JSON 格式）
+   * 按当前筛选条件导出，最多 1000 条记录。
+   * 返回 Blob 对象，前端触发下载。
+   */
+  exportJson(params?: AuditLogQuery) {
+    return request.get('/admin/audit-logs/export-json', {
+      params,
       responseType: 'blob'
     })
   }

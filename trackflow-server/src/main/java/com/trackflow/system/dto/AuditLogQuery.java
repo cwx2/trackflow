@@ -32,6 +32,17 @@ public class AuditLogQuery extends PageQuery {
     /** 结束日期 */
     private LocalDate endDate;
 
+    /**
+     * 文本搜索关键词。
+     * <p>
+     * 支持两种模式：
+     * <ul>
+     *   <li>键值对语法：<code>author:xxx</code>（按操作者名称）、<code>target:xxx</code>（按目标名称）</li>
+     *   <li>纯文本：对操作者名称和目标名称做模糊匹配</li>
+     * </ul>
+     */
+    private String search;
+
     @Override
     protected Set<String> allowedSortFields() {
         return Set.of(

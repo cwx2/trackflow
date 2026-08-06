@@ -120,6 +120,13 @@ public class SystemAuditService {
      * <p>
      * 强制时间范围限制：查询范围不能超过 365 天。
      * 如果未指定时间范围，默认查询最近 30 天。
+     * <p>
+     * 支持文本搜索：
+     * <ul>
+     *   <li><code>author:xxx</code> — 按操作者名称筛选</li>
+     *   <li><code>target:xxx</code> — 按目标名称筛选</li>
+     *   <li>纯文本 — 模糊匹配操作者名称或目标名称</li>
+     * </ul>
      */
     public PageResult<AuditLogVO> list(AuditLogQuery query) {
         // 强制时间范围限制
@@ -152,6 +159,9 @@ public class SystemAuditService {
         if (query.getEndDate() != null) {
             wrapper.le(SysAuditLog::getCreatedAt, query.getEndDate().atTime(LocalTime.MAX));
         }
+
+        // 文本搜索处理
+        applySearchFilter(wrapper, query.getSearch());
 
         wrapper.orderByDesc(SysAuditLog::getCreatedAt);
 
@@ -301,6 +311,84 @@ public class SystemAuditService {
     }
 
     // --- private helpers ---
+
+    /**
+     * 应用文本搜索过滤。
+     * <p>
+     * 支持键值对语法和纯文本模糊匹配：
+     * <ul>
+     *   <li><code>author:xxx</code> — 按操作者 display_name/username 模糊匹配</li>
+     *   <li><code>target:xxx</code> — 按目标用户 display_name/username 模糊匹配（target_type=user/auth 时）</li>
+     *   <li>纯文本 — 同时模糊匹配操作者名称和目标名称（OR）</li>
+     * </ul>
+     */
+    private void applySearchFilter(LambdaQueryWrapper<SysAuditLog> wrapper, String search) {
+        if (search == null || search.isBlank()) {
+            return;
+        }
+
+        String trimmed = search.trim();
+
+        // 解析键值对语法
+        if (trimmed.toLowerCase().startsWith("author:")) {
+            String keyword = trimmed.substring(7).trim();
+            if (!keyword.isEmpty()) {
+                Set<Long> matchedUserIds = auditLogMapper.findUserIdsByNameLike(keyword);
+                if (matchedUserIds.isEmpty()) {
+                    // 无匹配：返回空结果
+                    wrapper.eq(SysAuditLog::getId, -1L);
+                } else {
+                    wrapper.in(SysAuditLog::getOperatorId, matchedUserIds);
+                }
+            }
+        } else if (trimmed.toLowerCase().startsWith("target:")) {
+            String keyword = trimmed.substring(7).trim();
+            if (!keyword.isEmpty()) {
+                Set<Long> matchedUserIds = auditLogMapper.findUserIdsByNameLike(keyword);
+                if (matchedUserIds.isEmpty()) {
+                    wrapper.eq(SysAuditLog::getId, -1L);
+                } else {
+                    wrapper.in(SysAuditLog::getTargetId, matchedUserIds);
+                }
+            }
+        } else {
+            // 纯文本模式：匹配操作者名称 OR 目标名称
+            Set<Long> matchedUserIds = auditLogMapper.findUserIdsByNameLike(trimmed);
+            if (matchedUserIds.isEmpty()) {
+                // 无用户名匹配：返回空结果
+                wrapper.eq(SysAuditLog::getId, -1L);
+            } else {
+                wrapper.and(w -> w
+                        .in(SysAuditLog::getOperatorId, matchedUserIds)
+                        .or()
+                        .in(SysAuditLog::getTargetId, matchedUserIds));
+            }
+        }
+    }
+
+    /**
+     * 导出审计日志为 JSON 格式（最多 1000 条）
+     * <p>
+     * 按当前查询条件筛选导出。
+     *
+     * @param query 查询条件（复用现有筛选逻辑）
+     * @return JSON 字符串
+     */
+    public String exportAuditLogsJson(AuditLogQuery query) {
+        // 强制时间范围
+        enforceTimeRangeLimit(query);
+        // 限制导出数量
+        query.setPage(1);
+        query.setPageSize(1000);
+
+        PageResult<AuditLogVO> result = list(query);
+        try {
+            return objectMapper.writeValueAsString(result.getList());
+        } catch (Exception e) {
+            log.error("导出审计日志 JSON 序列化失败", e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "导出失败");
+        }
+    }
 
     /**
      * 强制时间范围限制：
