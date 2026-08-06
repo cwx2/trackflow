@@ -5,7 +5,7 @@
     :closable="true"
     :mask-closable="false"
     unmount-on-close
-    :width="960"
+    :width="1100"
     modal-class="issue-create-panel-modal"
     @cancel="close"
   >
@@ -1809,7 +1809,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.create-panel { display: flex; flex-direction: column; height: 70vh; }
+.create-panel { display: flex; flex-direction: column; height: 80vh; min-height: 600px; }
 
 .panel-modal-title {
   display: inline-flex;
@@ -1975,7 +1975,7 @@ onMounted(() => {
   display: inline-block;
 }
 
-.props-panel { width: 250px; flex-shrink: 0; padding: 16px; overflow-y: auto; }
+.props-panel { width: 200px; flex-shrink: 0; padding: 16px; overflow-y: auto; }
 .prop-row { margin-bottom: 14px; }
 .prop-label { display: block; font-size: 12px; color: var(--color-text-3); margin-bottom: 4px; }
 
