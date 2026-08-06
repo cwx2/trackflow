@@ -11,6 +11,36 @@
   >
     <template #title>
       <span class="panel-modal-title">{{ cloneData ? '克隆工单' : parentId ? '创建子工单' : draftId ? '继续编辑草稿' : '创建工单' }}</span>
+      <!-- 草稿数量提示（YouTrack 风格） -->
+      <a-trigger
+        v-if="titleDraftCount > 0"
+        trigger="click"
+        position="bl"
+        :popup-visible="draftDropdownVisible"
+        @popup-visible-change="(v: boolean) => draftDropdownVisible = v"
+      >
+        <span class="draft-count-badge" @click.stop>
+          <icon-file /> {{ titleDraftCount }} 个草稿
+        </span>
+        <template #content>
+          <div class="draft-dropdown-panel">
+            <div class="draft-dropdown-header">
+              <span>草稿列表</span>
+            </div>
+            <div class="draft-dropdown-list">
+              <div
+                v-for="draft in titleDraftList"
+                :key="draft.id"
+                class="draft-dropdown-item"
+                @click="onSelectDraft(draft)"
+              >
+                <span class="draft-item-title">{{ draft.title || '无标题草稿' }}</span>
+                <span class="draft-item-time">{{ formatDraftTime(draft.updatedAt) }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </a-trigger>
       <a-tooltip v-if="!isFullPage" content="在全屏页面中查看" position="bottom" mini>
         <span class="fullscreen-btn" @click.stop="goFullscreen">
           <icon-fullscreen />
@@ -611,12 +641,12 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen } from '@arco-design/web-vue/es/icon'
+import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
 import { projectApi, issueApi, sprintApi, customFieldApi, issueTemplateApi, tagApi } from '@/api'
 import { useProjectList } from '@/composables/useProjectList'
 import { usePermission } from '@/composables/usePermission'
 import { useCustomFieldForm } from './composables/useCustomFieldForm'
-import { useDrafts } from './composables/useDrafts'
+import { useDrafts, type IssueDraft } from './composables/useDrafts'
 import { loadPriorityOptions } from './composables/usePriorityOptions'
 import { loadIssueTypeOptions } from './composables/useIssueTypeOptions'
 import { onSessionEvent, saveSessionRecoveryDraft } from '@/utils/sessionEvents'
@@ -648,6 +678,21 @@ const router = useRouter()
 
 const submitting = ref(false)
 const splitMenuVisible = ref(false)
+
+// ========== 标题栏草稿数量下拉 ==========
+const draftDropdownVisible = ref(false)
+const { draftList: titleDraftList, draftCount: titleDraftCount } = useDrafts()
+
+/** 格式化草稿更新时间为可读字符串 */
+function formatDraftTime(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  const d = new Date(timestamp)
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
 
 // 自定义字段区域折叠状态
 // 当有必填字段时会自动展开（见 watch customFields）
@@ -1354,6 +1399,53 @@ async function onProjectChange(val: any) {
   }
 }
 
+// ========== 草稿下拉交互函数 ==========
+
+/** 从草稿下拉选择一个草稿恢复到当前表单 */
+function onSelectDraft(draft: IssueDraft) {
+  draftDropdownVisible.value = false
+  if (isDirty.value) {
+    Modal.confirm({
+      title: '替换当前内容？',
+      content: '当前表单有未保存的内容，载入草稿将替换这些内容。',
+      okText: '确认载入',
+      cancelText: '取消',
+      simple: false,
+      onOk: () => {
+        applyDraftToForm(draft)
+      }
+    })
+  } else {
+    applyDraftToForm(draft)
+  }
+}
+
+/** 将草稿数据填入当前表单 */
+function applyDraftToForm(draft: IssueDraft) {
+  form.title = draft.title || ''
+  form.description = draft.description || ''
+  form.issueType = draft.issueType || 'Task'
+  form.priority = draft.priority || 'Normal'
+  form.statusId = draft.statusId || undefined
+  form.tagIds = draft.tagIds || []
+  form.dueDate = draft.dueDate || ''
+  form.estimatedHours = draft.estimatedHours ?? undefined
+
+  if (draft.projectId) {
+    form.projectId = draft.projectId
+    onProjectChange(draft.projectId).then(() => {
+      if (draft.assigneeId) form.assigneeId = draft.assigneeId
+      if (draft.sprintId) form.sprintId = draft.sprintId
+      if (draft.customFieldValues) {
+        Object.entries(draft.customFieldValues).forEach(([key, value]) => {
+          if (value) customFieldValues.value[key] = value
+        })
+      }
+    })
+  }
+  Message.success('草稿已载入')
+}
+
 /**
  * 应用模板到表单
  */
@@ -1834,6 +1926,80 @@ onMounted(() => {
 .fullscreen-btn:hover {
   color: var(--color-text-1);
   background: var(--color-fill-2, var(--tf-bg-hover));
+}
+
+/* 草稿数量徽标 */
+.draft-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-3);
+  cursor: pointer;
+  border-radius: 12px;
+  background: var(--color-fill-1, var(--tf-bg-surface));
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+  transition: all 150ms;
+  user-select: none;
+  vertical-align: middle;
+}
+.draft-count-badge:hover {
+  color: var(--tf-accent, rgb(var(--primary-6)));
+  border-color: var(--tf-accent, rgb(var(--primary-6)));
+  background: var(--color-primary-light-1, rgba(var(--primary-6), 0.06));
+}
+
+/* 草稿下拉面板 */
+.draft-dropdown-panel {
+  width: 320px;
+  max-height: 360px;
+  background: var(--color-bg-popup, var(--color-bg-2));
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+}
+.draft-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-1);
+  border-bottom: 1px solid var(--color-border-2, var(--tf-border-light));
+}
+.draft-dropdown-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.draft-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 120ms;
+  border-bottom: 1px solid var(--color-border-1, var(--tf-border-subtle));
+}
+.draft-dropdown-item:last-child { border-bottom: none; }
+.draft-dropdown-item:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
+.draft-item-title {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-item-time {
+  font-size: 11px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
 }
 
 .title-bar { padding: 8px 0; border-bottom: 1px solid var(--color-border); flex-shrink: 0; position: relative; }
