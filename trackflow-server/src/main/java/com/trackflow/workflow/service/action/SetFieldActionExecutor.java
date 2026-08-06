@@ -4,16 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.event.WorkflowRuleEvent;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
+import com.trackflow.project.service.ProjectService;
 import com.trackflow.sprint.entity.Sprint;
 import com.trackflow.sprint.mapper.SprintMapper;
 import com.trackflow.system.entity.SysUser;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
@@ -35,17 +38,25 @@ public class SetFieldActionExecutor extends WorkflowActionSupport {
 
     private static final Set<String> VALID_PRIORITIES = Set.copyOf(IssuePriority.ALL_VALUES);
 
-    @Autowired
-    private IssueStatusMapper statusMapper;
+    private final IssueStatusMapper statusMapper;
+    private final SprintMapper sprintMapper;
+    private final ProjectMemberMapper projectMemberMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
-    @Autowired
-    private SprintMapper sprintMapper;
-
-    @Autowired
-    private ProjectMemberMapper projectMemberMapper;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    public SetFieldActionExecutor(IssueActivityMapper activityMapper,
+                                  SysUserMapper sysUserMapper,
+                                  NotificationMapper notificationMapper,
+                                  ProjectService projectService,
+                                  IssueStatusMapper statusMapper,
+                                  SprintMapper sprintMapper,
+                                  ProjectMemberMapper projectMemberMapper,
+                                  ApplicationEventPublisher eventPublisher) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.statusMapper = statusMapper;
+        this.sprintMapper = sprintMapper;
+        this.projectMemberMapper = projectMemberMapper;
+        this.eventPublisher = eventPublisher;
+    }
 
     @Override
     public String actionType() {

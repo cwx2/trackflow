@@ -2,12 +2,15 @@ package com.trackflow.workflow.service.action;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueLink;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueLinkMapper;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -27,8 +30,16 @@ import java.util.List;
 @Component
 public class LinkIssueActionExecutor extends WorkflowActionSupport {
 
-    @Autowired
-    private IssueLinkMapper issueLinkMapper;
+    private final IssueLinkMapper issueLinkMapper;
+
+    public LinkIssueActionExecutor(IssueActivityMapper activityMapper,
+                                   SysUserMapper sysUserMapper,
+                                   NotificationMapper notificationMapper,
+                                   ProjectService projectService,
+                                   IssueLinkMapper issueLinkMapper) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.issueLinkMapper = issueLinkMapper;
+    }
 
     @Override
     public String actionType() {

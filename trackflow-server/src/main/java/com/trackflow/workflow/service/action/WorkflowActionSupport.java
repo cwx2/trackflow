@@ -12,7 +12,6 @@ import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
 
@@ -28,17 +27,20 @@ import java.time.LocalDateTime;
 @Slf4j
 public abstract class WorkflowActionSupport implements WorkflowActionExecutor {
 
-    @Autowired
-    protected IssueActivityMapper activityMapper;
+    protected final IssueActivityMapper activityMapper;
+    protected final SysUserMapper sysUserMapper;
+    protected final NotificationMapper notificationMapper;
+    protected final ProjectService projectService;
 
-    @Autowired
-    protected SysUserMapper sysUserMapper;
-
-    @Autowired
-    protected NotificationMapper notificationMapper;
-
-    @Autowired
-    protected ProjectService projectService;
+    protected WorkflowActionSupport(IssueActivityMapper activityMapper,
+                                    SysUserMapper sysUserMapper,
+                                    NotificationMapper notificationMapper,
+                                    ProjectService projectService) {
+        this.activityMapper = activityMapper;
+        this.sysUserMapper = sysUserMapper;
+        this.notificationMapper = notificationMapper;
+        this.projectService = projectService;
+    }
 
     // ===== JSON 节点读取辅助 =====
 

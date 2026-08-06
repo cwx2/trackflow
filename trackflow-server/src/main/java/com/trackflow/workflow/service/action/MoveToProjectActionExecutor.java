@@ -1,11 +1,14 @@
 package com.trackflow.workflow.service.action;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.service.IssueService;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,8 +23,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class MoveToProjectActionExecutor extends WorkflowActionSupport {
 
-    @Autowired
-    private IssueService issueService;
+    private final IssueService issueService;
+
+    public MoveToProjectActionExecutor(IssueActivityMapper activityMapper,
+                                       SysUserMapper sysUserMapper,
+                                       NotificationMapper notificationMapper,
+                                       ProjectService projectService,
+                                       IssueService issueService) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.issueService = issueService;
+    }
 
     @Override
     public String actionType() {

@@ -1,13 +1,15 @@
 package com.trackflow.workflow.service.action;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueVote;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueVoteMapper;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -22,8 +24,16 @@ import java.time.LocalDateTime;
 @Component
 public class AddVoteActionExecutor extends WorkflowActionSupport {
 
-    @Autowired
-    private IssueVoteMapper voteMapper;
+    private final IssueVoteMapper voteMapper;
+
+    public AddVoteActionExecutor(IssueActivityMapper activityMapper,
+                                 SysUserMapper sysUserMapper,
+                                 NotificationMapper notificationMapper,
+                                 ProjectService projectService,
+                                 IssueVoteMapper voteMapper) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.voteMapper = voteMapper;
+    }
 
     @Override
     public String actionType() {

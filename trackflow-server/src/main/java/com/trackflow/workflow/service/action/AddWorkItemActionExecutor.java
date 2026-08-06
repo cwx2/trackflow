@@ -1,12 +1,15 @@
 package com.trackflow.workflow.service.action;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.mapper.IssueActivityMapper;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.timeentry.entity.TimeEntry;
 import com.trackflow.timeentry.mapper.TimeEntryMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -22,8 +25,16 @@ import java.time.LocalDateTime;
 @Component
 public class AddWorkItemActionExecutor extends WorkflowActionSupport {
 
-    @Autowired
-    private TimeEntryMapper timeEntryMapper;
+    private final TimeEntryMapper timeEntryMapper;
+
+    public AddWorkItemActionExecutor(IssueActivityMapper activityMapper,
+                                     SysUserMapper sysUserMapper,
+                                     NotificationMapper notificationMapper,
+                                     ProjectService projectService,
+                                     TimeEntryMapper timeEntryMapper) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.timeEntryMapper = timeEntryMapper;
+    }
 
     @Override
     public String actionType() {

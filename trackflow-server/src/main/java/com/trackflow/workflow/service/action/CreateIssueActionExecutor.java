@@ -4,15 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trackflow.common.constant.IssuePriority;
 import com.trackflow.common.event.WorkflowRuleEvent;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueStatus;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.issue.mapper.IssueStatusMapper;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowInitialStatus;
 import com.trackflow.workflow.entity.WorkflowRule;
 import com.trackflow.workflow.mapper.WorkflowInitialStatusMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
@@ -28,17 +31,25 @@ import java.util.Objects;
 @Component
 public class CreateIssueActionExecutor extends WorkflowActionSupport {
 
-    @Autowired
-    private IssueMapper issueMapper;
+    private final IssueMapper issueMapper;
+    private final IssueStatusMapper statusMapper;
+    private final WorkflowInitialStatusMapper initialStatusMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
-    @Autowired
-    private IssueStatusMapper statusMapper;
-
-    @Autowired
-    private WorkflowInitialStatusMapper initialStatusMapper;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    public CreateIssueActionExecutor(IssueActivityMapper activityMapper,
+                                     SysUserMapper sysUserMapper,
+                                     NotificationMapper notificationMapper,
+                                     ProjectService projectService,
+                                     IssueMapper issueMapper,
+                                     IssueStatusMapper statusMapper,
+                                     WorkflowInitialStatusMapper initialStatusMapper,
+                                     ApplicationEventPublisher eventPublisher) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.issueMapper = issueMapper;
+        this.statusMapper = statusMapper;
+        this.initialStatusMapper = initialStatusMapper;
+        this.eventPublisher = eventPublisher;
+    }
 
     @Override
     public String actionType() {

@@ -1,12 +1,15 @@
 package com.trackflow.workflow.service.action;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.trackflow.integration.mapper.NotificationMapper;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueComment;
+import com.trackflow.issue.mapper.IssueActivityMapper;
 import com.trackflow.issue.mapper.IssueCommentMapper;
+import com.trackflow.project.service.ProjectService;
+import com.trackflow.system.mapper.SysUserMapper;
 import com.trackflow.workflow.entity.WorkflowRule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -21,8 +24,16 @@ import java.time.LocalDateTime;
 @Component
 public class AddCommentActionExecutor extends WorkflowActionSupport {
 
-    @Autowired
-    private IssueCommentMapper commentMapper;
+    private final IssueCommentMapper commentMapper;
+
+    public AddCommentActionExecutor(IssueActivityMapper activityMapper,
+                                    SysUserMapper sysUserMapper,
+                                    NotificationMapper notificationMapper,
+                                    ProjectService projectService,
+                                    IssueCommentMapper commentMapper) {
+        super(activityMapper, sysUserMapper, notificationMapper, projectService);
+        this.commentMapper = commentMapper;
+    }
 
     @Override
     public String actionType() {

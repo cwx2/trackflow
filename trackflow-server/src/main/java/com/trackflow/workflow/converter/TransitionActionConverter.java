@@ -15,6 +15,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * TransitionAction 实体到 VO 的转换器。
+ * <p>
+ * 注意：MapStruct 抽象类生成的实现调用无参构造器，
+ * 因此依赖注入只能使用 setter 或字段注入，无法使用构造器注入。
+ * 此处保留 @Autowired 字段注入作为 MapStruct 规范用法。
+ *
+ * @author TrackFlow
+ * @since 1.0
+ */
 @Mapper(componentModel = "spring")
 public abstract class TransitionActionConverter implements BaseConverter {
 
