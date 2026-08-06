@@ -99,7 +99,7 @@
               :show-file-list="false"
               multiple
               :accept="'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.tar,.gz,.7z'"
-              @change="onUploadChange"
+              :before-upload="onBeforeUpload"
             >
               <template #upload-button>
                 <div class="upload-trigger">
@@ -111,7 +111,13 @@
             <!-- 附件文件列表 -->
             <div v-if="attachmentFiles.length > 0" class="attachment-file-list">
               <div v-for="(file, idx) in attachmentFiles" :key="idx" class="attachment-file-item">
-                <span class="attachment-file-icon">{{ getFileIcon(file.name) }}</span>
+                <img
+                  v-if="isImageFile(file.name)"
+                  :src="getObjectURL(file)"
+                  class="attachment-thumb"
+                  :alt="file.name"
+                />
+                <span v-else class="attachment-file-icon">{{ getFileIcon(file.name) }}</span>
                 <span class="attachment-file-name">{{ file.name }}</span>
                 <span class="attachment-file-size">{{ formatFileSize(file.size) }}</span>
                 <icon-close class="attachment-file-remove" @click="removeAttachment(idx)" />
@@ -417,6 +423,22 @@
                   </div>
                 </template>
               </a-select>
+              <!-- state (状态枚举，选项有 isResolved 属性) -->
+              <a-select
+                v-else-if="cf.fieldFormat === 'state'"
+                v-model="customFieldValues[cf.id]"
+                size="small"
+                :placeholder="getFieldPlaceholder(cf)"
+                :class="{ 'field-error': cfValidationErrors[cf.id] }"
+                allow-clear
+                @change="(v: any) => { clearFieldError(cf.id); validateFieldOnBlur(cf) }"
+              >
+                <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
+                  <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                    <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ opt.value }}</span>
+                  </a-tooltip>
+                </a-option>
+              </a-select>
               <!-- user -->
               <a-select
                 v-else-if="cf.fieldFormat === 'user'"
@@ -586,6 +608,20 @@
                     </div>
                   </template>
                 </a-select>
+                <!-- state (状态枚举) -->
+                <a-select
+                  v-else-if="cf.fieldFormat === 'state'"
+                  v-model="customFieldValues[cf.id]"
+                  size="small"
+                  :placeholder="getFieldPlaceholder(cf)"
+                  allow-clear
+                >
+                  <a-option v-for="opt in getFilteredOptionsForField(cf)" :key="opt.id" :value="opt.id">
+                    <a-tooltip :content="opt.description" :disabled="!opt.description" position="left" mini>
+                      <span class="cf-option-label" :style="opt.color ? { color: opt.color } : {}">{{ opt.value }}</span>
+                    </a-tooltip>
+                  </a-option>
+                </a-select>
                 <!-- user -->
                 <a-select
                   v-else-if="cf.fieldFormat === 'user'"
@@ -664,7 +700,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDown, IconAttachment, IconClose, IconPlus, IconUp, IconLink, IconSearch, IconCheck, IconFullscreen, IconFile } from '@arco-design/web-vue/es/icon'
@@ -730,16 +766,21 @@ const attachmentFiles = ref<File[]>([])
 const pasteHint = ref<string>('')
 let pasteHintTimer: any = null
 
-/** 处理 a-upload change 事件（手动选择或拖拽） */
-function onUploadChange(fileList: any, file: any) {
-  // Arco Upload fileList 是 FileItem[]，从 raw 取 File 对象
-  if (file?.raw instanceof File) {
-    attachmentFiles.value.push(file.raw)
-  }
+/** 处理 a-upload before-upload 事件（手动选择或拖拽） */
+function onBeforeUpload(file: File): boolean {
+  attachmentFiles.value.push(file)
+  return false  // 阻止 Arco 内部上传流程
 }
 
 /** 从附件列表删除 */
 function removeAttachment(idx: number) {
+  const file = attachmentFiles.value[idx]
+  // 释放对应 objectURL
+  const url = objectURLCache.get(file)
+  if (url) {
+    URL.revokeObjectURL(url)
+    objectURLCache.delete(file)
+  }
   attachmentFiles.value.splice(idx, 1)
 }
 
@@ -762,6 +803,30 @@ function getFileIcon(name: string): string {
   if (['zip', 'tar', 'gz', '7z'].includes(ext)) return '📦'
   return '📎'
 }
+
+/** 判断是否为图片文件 */
+function isImageFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)
+}
+
+/** 缓存 objectURL，避免重复创建 */
+const objectURLCache = new WeakMap<File, string>()
+
+function getObjectURL(file: File): string {
+  if (!objectURLCache.has(file)) {
+    objectURLCache.set(file, URL.createObjectURL(file))
+  }
+  return objectURLCache.get(file)!
+}
+
+/** 组件销毁时释放所有 objectURL */
+onUnmounted(() => {
+  attachmentFiles.value.forEach(f => {
+    const url = objectURLCache.get(f)
+    if (url) URL.revokeObjectURL(url)
+  })
+})
 
 /** 粘贴事件处理：从剪贴板获取图片文件 */
 function handlePaste(e: ClipboardEvent) {
@@ -1036,7 +1101,7 @@ async function confirmAddOptionInSelect(cf: CustomFieldDefinitionVO) {
  * - 如果字段配置了 filterFieldId 和 filterRules，根据源字段的当前值过滤选项
  * - 如果未配置或源字段无值，则仅过滤归档选项
  */
-function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; value: string; description?: string | null }[] {
+function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; value: string; description?: string | null; color?: string | null }[] {
   // 基础过滤：排除归档选项
   let activeOptions = (cf.options || []).filter(o => !o.isArchived)
 
@@ -1068,7 +1133,7 @@ function getFilteredOptionsForField(cf: CustomFieldDefinitionVO): { id: string; 
     })
   }
 
-  return activeOptions.map(o => ({ id: o.id, value: o.value, description: o.description }))
+  return activeOptions.map(o => ({ id: o.id, value: o.value, description: o.description, color: o.color }))
 }
 
 /**
@@ -2120,6 +2185,9 @@ onMounted(() => {
 .create-body { flex: 1; display: flex; overflow: hidden; }
 
 .editor-area { flex: 1; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid var(--color-border); }
+.editor-area :deep(.rich-editor) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.editor-area :deep(.editor-content) { flex: 1; max-height: none; min-height: 160px; overflow-y: auto; }
+.editor-area :deep(.md-source) { flex: 1; max-height: none; min-height: 160px; }
 
 .attachment-area { padding: 10px 16px; border-top: 1px solid var(--color-border); }
 .upload-trigger { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-3); cursor: pointer; }
@@ -2154,6 +2222,14 @@ onMounted(() => {
 }
 .attachment-file-item:hover { background: var(--color-fill-2, var(--tf-bg-hover)); }
 .attachment-file-icon { font-size: 14px; flex-shrink: 0; }
+.attachment-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-2, var(--tf-border-light));
+}
 .attachment-file-name {
   flex: 1;
   overflow: hidden;

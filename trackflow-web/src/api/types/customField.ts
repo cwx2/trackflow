@@ -5,7 +5,7 @@
 export interface CustomFieldDefinitionVO {
   id: string
   name: string
-  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user' | 'ownedField' | 'version'
+  fieldFormat: 'string' | 'text' | 'int' | 'float' | 'date' | 'datetime' | 'bool' | 'list' | 'user' | 'ownedField' | 'version' | 'group' | 'build' | 'state'
   isRequired: boolean
   isForAll: boolean
   isMulti: boolean

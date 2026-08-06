@@ -194,8 +194,10 @@ public class IssueService {
             }
         }
         issue.setDueDate(dto.getDueDate());
-        // Due Date 项目级校验：必填性检查
-        if (dueDateFieldService.isRequiredForProject(dto.getProjectId()) && issue.getDueDate() == null) {
+        // Due Date 项目级校验：必填性检查（快速创建模式和子工单跳过）
+        boolean skipRequiredChecks = Boolean.TRUE.equals(dto.getQuickCreate())
+                || (dto.getParentId() != null && dto.getParentId() != 0);
+        if (!skipRequiredChecks && dueDateFieldService.isRequiredForProject(dto.getProjectId()) && issue.getDueDate() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "截止日期为必填字段");
         }
         issue.setEstimatedHours(dto.getEstimatedHours());
@@ -227,6 +229,7 @@ public class IssueService {
         }
         // 子工单继承：若创建子工单且用户未提供某个自定义字段值，从父工单继承
         boolean isSubIssue = dto.getParentId() != null && dto.getParentId() != 0;
+        boolean isQuickCreate = Boolean.TRUE.equals(dto.getQuickCreate());
         if (isSubIssue) {
             Map<Long, String> parentFieldValues = customFieldService.getValues(dto.getParentId());
             if (parentFieldValues != null && !parentFieldValues.isEmpty()) {
@@ -236,10 +239,10 @@ public class IssueService {
             }
         }
         // 应用默认值并校验必填字段
-        // 子工单使用 PARTIAL 模式：跳过必填校验（允许快速创建，仅标题必填）
+        // 子工单或快速创建模式使用 PARTIAL 模式：跳过必填校验（允许快速创建，仅标题必填）
         // 顶层工单使用 FULL 模式：所有必填字段必须有值
-        if (isSubIssue) {
-            // 子工单：应用默认值但不强制必填，允许快速创建
+        if (isSubIssue || isQuickCreate) {
+            // 子工单/快速创建：应用默认值但不强制必填，允许快速创建
             Map<Long, String> mergedFieldValues = customFieldService.applyDefaultsOnly(
                     userFieldValues, issue.getIssueType(), issue.getProjectId());
             if (!mergedFieldValues.isEmpty()) {

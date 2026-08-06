@@ -395,6 +395,7 @@ async function handleCreateAndLink() {
       projectId: newIssueProjectId.value,
       title,
       issueType: newIssueType.value || undefined,
+      quickCreate: true,
     })
     const newIssueId = createRes.data?.id
     if (!newIssueId) {

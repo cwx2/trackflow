@@ -306,9 +306,9 @@ async function loadProjects() {
   }
 }
 
-function handleProjectChange(value: string | undefined) {
+function handleProjectChange(value: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
   currentPage.value = 1
-  setProjectFilter(value || null)
+  setProjectFilter((value as string) || null)
 }
 
 function handleProjectClear() {

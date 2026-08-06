@@ -55,11 +55,11 @@
               已共享{{ report.shareCount ? ` (${report.shareCount} 人)` : '' }}
             </span>
             <span v-if="report.isSystem" class="meta-item meta-system">
-              <span class="meta-icon">🏢</span>
+              <span class="meta-icon"><icon-desktop /></span>
               系统报表
             </span>
             <span v-if="reportData?.calculatedAt" class="meta-item meta-time">
-              <span class="meta-icon">⏱</span>
+              <span class="meta-icon"><icon-clock-circle /></span>
               {{ formatRelativeTime(reportData.calculatedAt) }}
             </span>
           </div>
@@ -85,25 +85,25 @@
         </div>
         <div class="toolbar-right">
           <a-button v-if="canEdit" size="small" @click="handleEdit">
-            <template #icon><span class="toolbar-icon">✏️</span></template>
+            <template #icon><icon-edit /></template>
             编辑设置
           </a-button>
           <a-button size="small" :loading="recalculating" @click="handleRecalculate">
-            <template #icon><span class="toolbar-icon">🔄</span></template>
+            <template #icon><icon-refresh /></template>
             重新计算
           </a-button>
           <a-dropdown trigger="click">
             <a-button size="small">
-              <template #icon><span class="toolbar-icon">📥</span></template>
+              <template #icon><icon-download /></template>
               导出
               <span class="dropdown-arrow">▾</span>
             </a-button>
             <template #content>
               <a-doption @click="handleExport('csv')">
-                <span class="menu-item"><span class="menu-icon">📄</span>导出 CSV</span>
+                <span class="menu-item"><icon-file class="menu-icon" />导出 CSV</span>
               </a-doption>
               <a-doption @click="handleExport('xlsx')">
-                <span class="menu-item"><span class="menu-icon">📊</span>导出 Excel</span>
+                <span class="menu-item"><icon-subscribe class="menu-icon" />导出 Excel</span>
               </a-doption>
             </template>
           </a-dropdown>
@@ -235,6 +235,7 @@ import { reportApi } from '@/api/report'
 import { useAuthStore } from '@/stores/auth'
 import ShareReportModal from './ShareReportModal.vue'
 import ReportChart from './ReportChart.vue'
+import { IconExclamationCircle, IconUser, IconShareAlt, IconDesktop, IconClockCircle, IconEdit, IconRefresh, IconDownload, IconFile, IconSubscribe, IconCopy, IconDelete } from '@arco-design/web-vue/es/icon'
 import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 
 const route = useRoute()

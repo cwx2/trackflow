@@ -444,8 +444,8 @@ function onGroupByChange(val: string | number | boolean) {
   }
 }
 
-function onSwimlaneIssueTypeChange(val: string | null) {
-  emit('update:swimlaneIssueType', val || null)
+function onSwimlaneIssueTypeChange(val: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
+  emit('update:swimlaneIssueType', (val as string) || null)
 }
 
 function toggleValue(key: string) {

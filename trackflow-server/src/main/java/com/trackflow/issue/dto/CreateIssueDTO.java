@@ -50,4 +50,11 @@ public class CreateIssueDTO {
      */
     @Valid
     private List<CreateIssueLinkDTO> links;
+
+    /**
+     * 快速创建模式（可选，默认 false）。
+     * 为 true 时跳过自定义字段必填校验，仅应用默认值。
+     * 适用于：从关联弹窗快速创建工单、API 简化创建等场景。
+     */
+    private Boolean quickCreate;
 }

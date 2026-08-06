@@ -2,7 +2,7 @@
   <div class="trash-page">
     <div class="trash-header">
       <div class="header-left">
-        <span class="header-icon">🗑️</span>
+        <span class="header-icon"><icon-delete /></span>
         <h1 class="header-title">回收站</h1>
         <span class="header-hint">{{ retentionHint }}</span>
       </div>
@@ -45,7 +45,7 @@
     <div class="trash-content">
       <!-- 未选项目时的空状态 -->
       <div v-if="!selectedProjectId" class="empty-state">
-        <span class="empty-icon">📁</span>
+        <span class="empty-icon"><icon-folder /></span>
         <h3 class="empty-title">请选择项目</h3>
         <p class="empty-desc">选择一个项目以查看其回收站中的工单</p>
       </div>
@@ -55,7 +55,7 @@
 
       <!-- 空回收站 -->
       <div v-else-if="trashList.length === 0" class="empty-state">
-        <span class="empty-icon">✨</span>
+        <span class="empty-icon"><icon-check-circle /></span>
         <h3 class="empty-title">回收站是空的</h3>
         <p class="empty-desc">该项目中没有已删除的工单</p>
       </div>
@@ -132,7 +132,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { IconUndo, IconDelete, IconSettings } from '@arco-design/web-vue/es/icon'
+import { IconUndo, IconDelete, IconSettings, IconFolder, IconCheckCircle } from '@arco-design/web-vue/es/icon'
 import { issueApi, projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { localizeIssueType, localizePriority } from '@/utils/fieldLabels'

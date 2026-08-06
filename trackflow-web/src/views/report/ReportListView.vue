@@ -3,7 +3,7 @@
     <div class="report-header">
       <div class="header-right" v-if="canCreateReport">
         <a-button type="primary" size="small" @click="openCreateModal">
-          <template #icon><span class="btn-icon">➕</span></template>
+          <template #icon><icon-plus /></template>
           创建报表
         </a-button>
       </div>
@@ -61,7 +61,7 @@
 
     <!-- 空状态 -->
     <div v-else-if="filteredReports.length === 0 && reports.length > 0" class="report-empty">
-      <div class="empty-icon">🔍</div>
+      <div class="empty-icon"><icon-search /></div>
       <h3 class="empty-title">未找到匹配的报表</h3>
       <p class="empty-desc">
         {{ searchKeyword ? `没有名称包含"${searchKeyword}"的报表。` : '' }}
@@ -74,7 +74,7 @@
       </a-button>
     </div>
     <div v-else-if="reports.length === 0" class="report-empty">
-      <div class="empty-icon">📊</div>
+      <div class="empty-icon"><icon-bar-chart /></div>
       <h3 class="empty-title">暂无报表</h3>
       <p class="empty-desc">
         {{ canCreateReport ? '创建第一个报表来跟踪项目进度和工作统计。' : '还没有可查看的报表，请联系项目管理员创建。' }}
@@ -336,6 +336,7 @@ import { projectApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import ShareReportModal from './ShareReportModal.vue'
 import ReportChart from './ReportChart.vue'
+import { IconPlus, IconSearch, IconBarChart, IconEdit, IconShareAlt, IconCopy, IconDownload, IconPrinter, IconDelete, IconUser } from '@arco-design/web-vue/es/icon'
 import type { ReportDefinitionVO, ReportDataVO, UpdateReportParams } from '@/api/report'
 import type { ProjectVO } from '@/api/types'
 

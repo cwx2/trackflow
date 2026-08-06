@@ -423,12 +423,12 @@ function setFieldDisplayMode(fieldKey: string, mode: 'full_name' | 'initial') {
   emit('update:fieldDisplayModes', Object.keys(newModes).length > 0 ? newModes : null)
 }
 
-function onCurrentEstimationFieldChange(val: string | null | undefined) {
-  emit('update:currentEstimationFieldId', val ?? null)
+function onCurrentEstimationFieldChange(val: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
+  emit('update:currentEstimationFieldId', (val as string) ?? null)
 }
 
-function onOriginalEstimationFieldChange(val: string | null | undefined) {
-  emit('update:originalEstimationFieldId', val ?? null)
+function onOriginalEstimationFieldChange(val: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
+  emit('update:originalEstimationFieldId', (val as string) ?? null)
 }
 
 function onShowCustomFieldColorsChange(val: boolean) {

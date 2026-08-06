@@ -679,10 +679,10 @@ async function loadProjectDetail(projectId: string) {
   }
 }
 
-function onProjectChange(val: string | undefined) {
-  selectedProjectId.value = val || undefined
+function onProjectChange(val: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
+  selectedProjectId.value = (val as string) || undefined
   if (val) {
-    loadProjectDetail(val)
+    loadProjectDetail(val as string)
   } else {
     projectEntries.value = []
     loadProjectSummaries()
@@ -751,8 +751,8 @@ async function searchUsersForDialog(keyword: string) {
   }
 }
 
-function onUserChange(val: string | undefined) {
-  selectedUserId.value = val || undefined
+function onUserChange(val: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[] | undefined) {
+  selectedUserId.value = (val as string) || undefined
   loadEntries()
 }
 

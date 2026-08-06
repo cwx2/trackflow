@@ -50,6 +50,7 @@ export const issueApi = {
     customFields?: Record<string, string>
     tagIds?: string[]
     links?: Array<{ targetIssueId: string; linkType: string }>
+    quickCreate?: boolean
   }) {
     return request.post<any, R<IssueDetailVO>>('/issues', data)
   },
