@@ -158,16 +158,14 @@
           <ProfileWorkspaceTab />
         </div>
       </a-tab-pane>
-      <a-tab-pane key="notifications" title="通知" disabled>
-        <div class="tab-content tab-placeholder">
-          <icon-notification class="placeholder-icon" />
-          <p class="placeholder-text">通知设置即将推出</p>
+      <a-tab-pane key="notifications" title="通知">
+        <div class="tab-content tab-embedded-page">
+          <NotificationSettingsView />
         </div>
       </a-tab-pane>
-      <a-tab-pane key="security" title="账户安全" disabled>
-        <div class="tab-content tab-placeholder">
-          <icon-lock class="placeholder-icon" />
-          <p class="placeholder-text">账户安全设置即将推出</p>
+      <a-tab-pane key="security" title="账户安全">
+        <div class="tab-content tab-embedded-page">
+          <AccountSecurityView />
         </div>
       </a-tab-pane>
     </a-tabs>
@@ -182,6 +180,8 @@ import { useTheme } from '@/composables/useTheme'
 import { authApi } from '@/api'
 import type { UserProfileVO } from '@/api/user'
 import ProfileWorkspaceTab from './ProfileWorkspaceTab.vue'
+import NotificationSettingsView from './NotificationSettingsView.vue'
+import AccountSecurityView from './AccountSecurityView.vue'
 
 const authStore = useAuthStore()
 const { theme, setTheme } = useTheme()
@@ -503,24 +503,26 @@ onMounted(() => {
   color: var(--tf-text-tertiary);
 }
 
-/* ===== Placeholder Tabs ===== */
-.tab-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 0;
-  gap: 12px;
+/* ===== Embedded Pages (Notifications, Security) ===== */
+.tab-embedded-page {
+  padding: 0 !important;
 }
 
-.placeholder-icon {
-  font-size: 32px;
-  color: var(--tf-text-quaternary);
+.tab-embedded-page :deep(.notification-settings-page),
+.tab-embedded-page :deep(.settings-page) {
+  padding: 0;
+  max-width: none;
+  height: auto;
+  overflow: visible;
 }
 
-.placeholder-text {
-  font-size: 13px;
-  color: var(--tf-text-tertiary);
-  margin: 0;
+.tab-embedded-page :deep(.page-header),
+.tab-embedded-page :deep(.page-title) {
+  display: none;
 }
+
+.tab-embedded-page :deep(.settings-footer) {
+  display: none;
+}
+
 </style>
