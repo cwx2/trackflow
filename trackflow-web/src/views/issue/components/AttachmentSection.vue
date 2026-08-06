@@ -80,7 +80,26 @@
             </div>
             <!-- Non-image file icon -->
             <div v-else class="att-thumb att-thumb--file">
-              <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
+              <!-- Video thumbnail with play overlay -->
+              <template v-if="isVideo(att)">
+                <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
+                <div class="att-video-play-overlay">
+                  <svg class="att-play-icon" viewBox="0 0 24 24" width="28" height="28">
+                    <circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" />
+                    <polygon points="10,8 10,16 17,12" fill="rgba(255,255,255,0.9)" />
+                  </svg>
+                </div>
+              </template>
+              <!-- Other file types -->
+              <template v-else>
+                <span class="att-file-icon">{{ getFileIcon(att.fileName) }}</span>
+                <!-- Previewable indicator -->
+                <span v-if="isPreviewable(att)" class="att-preview-badge" title="点击预览">
+                  <svg viewBox="0 0 16 16" width="12" height="12">
+                    <path fill="currentColor" d="M8 3C4.5 3 1.7 5.1 1 8c.7 2.9 3.5 5 7 5s6.3-2.1 7-5c-.7-2.9-3.5-5-7-5zm0 8.5A3.5 3.5 0 1 1 8 4.5 3.5 3.5 0 0 1 8 11.5zm0-5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                  </svg>
+                </span>
+              </template>
               <div class="att-overlay" @click.stop>
                 <button class="att-ov-btn" @click="download(att)" title="下载">
                   <icon-download :size="14" />
@@ -151,6 +170,13 @@
       <!-- Empty state (readonly) -->
       <p v-if="attachments.length === 0 && readonly" class="att-empty">暂无附件</p>
     </div>
+
+    <!-- Preview Modal -->
+    <AttachmentPreviewModal
+      v-model:visible="previewVisible"
+      :attachment="previewAttachment"
+      @download="download"
+    />
   </section>
 </template>
 
@@ -162,6 +188,7 @@ import {
   IconApps, IconList, IconFile, IconSortDescending, IconSortAscending
 } from '@arco-design/web-vue/es/icon'
 import { useAttachmentThumbnails, useAuthenticatedFile } from '@/composables/useAuthenticatedFile'
+import AttachmentPreviewModal from './AttachmentPreviewModal.vue'
 
 export interface AttachmentItem {
   id: string
@@ -266,10 +293,43 @@ const sortedAttachments = computed(() => {
 
 // ========== File helpers ==========
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'])
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'avi', 'mkv'])
+const PDF_EXTS = new Set(['pdf'])
+const SVG_EXTS = new Set(['svg'])
+const TEXT_EXTS = new Set([
+  'txt', 'md', 'json', 'xml', 'csv', 'js', 'ts', 'jsx', 'tsx',
+  'java', 'py', 'sql', 'html', 'css', 'scss', 'less', 'yaml', 'yml',
+  'sh', 'bash', 'bat', 'ps1', 'rb', 'go', 'rs', 'c', 'cpp', 'h',
+  'properties', 'ini', 'toml', 'env', 'log', 'conf', 'cfg'
+])
 
 function isImage(att: AttachmentItem): boolean {
   if (att.contentType?.startsWith('image/') && !att.contentType.includes('svg')) return true
   return IMAGE_EXTS.has(getExtension(att.fileName))
+}
+
+function isVideo(att: AttachmentItem): boolean {
+  if (att.contentType?.startsWith('video/')) return true
+  return VIDEO_EXTS.has(getExtension(att.fileName))
+}
+
+function isPdf(att: AttachmentItem): boolean {
+  if (att.contentType === 'application/pdf') return true
+  return PDF_EXTS.has(getExtension(att.fileName))
+}
+
+function isSvg(att: AttachmentItem): boolean {
+  if (att.contentType === 'image/svg+xml') return true
+  return SVG_EXTS.has(getExtension(att.fileName))
+}
+
+function isText(att: AttachmentItem): boolean {
+  if (att.contentType?.startsWith('text/')) return true
+  return TEXT_EXTS.has(getExtension(att.fileName))
+}
+
+function isPreviewable(att: AttachmentItem): boolean {
+  return isVideo(att) || isPdf(att) || isSvg(att) || isText(att)
 }
 
 function getExtension(name: string): string {
@@ -307,9 +367,21 @@ function formatDate(dt: string): string {
 }
 
 // ========== Actions ==========
+const previewVisible = ref(false)
+const previewAttachment = ref<AttachmentItem | null>(null)
+
 function handleClick(att: AttachmentItem) {
   if (isImage(att)) return // handled by a-image preview
-  download(att)
+  if (isPreviewable(att)) {
+    openPreview(att)
+  } else {
+    download(att)
+  }
+}
+
+function openPreview(att: AttachmentItem) {
+  previewAttachment.value = att
+  previewVisible.value = true
 }
 
 function download(att: AttachmentItem) {
@@ -657,4 +729,35 @@ function confirmDeleteAll() {
 /* Danger option in dropdown */
 .danger-opt :deep(.arco-dropdown-option-content) { color: #f85149; }
 .danger-opt :deep(.arco-icon) { color: #f85149; }
+
+/* Video play overlay in grid */
+.att-video-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.att-play-icon {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+  transition: transform 150ms;
+}
+.att-card:hover .att-play-icon {
+  transform: scale(1.1);
+}
+
+/* Previewable badge (eye icon) */
+.att-preview-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  color: var(--tf-text-muted);
+  opacity: 0.6;
+  transition: opacity 150ms;
+}
+.att-card:hover .att-preview-badge {
+  opacity: 1;
+  color: var(--tf-accent);
+}
 </style>
