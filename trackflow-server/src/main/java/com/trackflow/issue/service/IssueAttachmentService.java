@@ -14,7 +14,10 @@ import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.mapper.IssueAttachmentMapper;
 import com.trackflow.issue.mapper.IssueMapper;
 import com.trackflow.project.service.ProjectService;
+import com.trackflow.issue.converter.IssueConverter;
+import com.trackflow.issue.vo.IssueAttachmentVO;
 import com.trackflow.system.mapper.UserGroupMemberMapper;
+import com.trackflow.system.service.UserGroupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,6 +46,8 @@ public class IssueAttachmentService {
     private final ProjectService projectService;
     private final PermissionService permissionService;
     private final UserGroupMemberMapper userGroupMemberMapper;
+    private final UserGroupService userGroupService;
+    private final IssueConverter issueConverter;
     private final IssueActivityService activityService;
     private final AttachmentConfig attachmentConfig;
     private final ApplicationEventPublisher eventPublisher;
@@ -304,5 +309,26 @@ public class IssueAttachmentService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Issue not found: " + issueId);
         }
         return issue;
+    }
+
+    /**
+     * 构建附件 VO（含可见性信息和组名称）
+     */
+    public IssueAttachmentVO buildAttachmentVO(IssueAttachment attachment) {
+        IssueAttachmentVO vo = issueConverter.toAttachmentVO(attachment);
+        vo.setIsPrivate(attachment.getVisibleToGroupIds() != null && !attachment.getVisibleToGroupIds().isEmpty());
+        if (Boolean.TRUE.equals(vo.getIsPrivate())) {
+            vo.setVisibleToGroupIds(attachment.getVisibleToGroupIds().stream()
+                    .map(String::valueOf).toList());
+            vo.setVisibleToGroupNames(userGroupService.getGroupNamesByIds(attachment.getVisibleToGroupIds()));
+        }
+        return vo;
+    }
+
+    /**
+     * 批量构建附件 VO 列表
+     */
+    public List<IssueAttachmentVO> buildAttachmentVOList(List<IssueAttachment> attachments) {
+        return attachments.stream().map(this::buildAttachmentVO).toList();
     }
 }

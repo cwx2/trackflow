@@ -589,6 +589,45 @@ public class IssueService {
     }
 
     /**
+     * 将 Issue 实体列表转为 SimilarIssueVO 列表（包含状态名和负责人名）
+     */
+    public List<SimilarIssueVO> buildSimilarIssueVOs(List<Issue> issues) {
+        if (issues.isEmpty()) return List.of();
+
+        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
+                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
+
+        Set<Long> userIds = issues.stream()
+                .map(Issue::getAssigneeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, SysUser> userMap = userIds.isEmpty() ? Map.of()
+                : sysUserMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
+
+        return issues.stream().map(issue -> {
+            SimilarIssueVO vo = new SimilarIssueVO();
+            vo.setId(String.valueOf(issue.getId()));
+            vo.setIssueKey(issue.getIssueKey());
+            vo.setTitle(issue.getTitle());
+            if (issue.getStatusId() != null) {
+                IssueStatus status = statusMap.get(issue.getStatusId());
+                if (status != null) {
+                    vo.setStatusName(status.getName());
+                    vo.setStatusColor(status.getColor());
+                }
+            }
+            if (issue.getAssigneeId() != null) {
+                SysUser user = userMap.get(issue.getAssigneeId());
+                if (user != null) {
+                    vo.setAssigneeName(user.getDisplayName());
+                }
+            }
+            return vo;
+        }).toList();
+    }
+
+    /**
      * 查询项目看板是否开启了 allowMultipleSprints 配置
      */
     private boolean isAllowMultipleSprints(Long projectId) {

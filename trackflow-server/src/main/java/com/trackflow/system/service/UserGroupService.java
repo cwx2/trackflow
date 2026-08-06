@@ -46,6 +46,16 @@ public class UserGroupService {
     private final StringRedisTemplate redisTemplate;
 
     /**
+     * 根据用户组 ID 列表查询组名称
+     */
+    public List<String> getGroupNamesByIds(List<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) return List.of();
+        return groupMapper.selectBatchIds(groupIds).stream()
+                .map(UserGroup::getName)
+                .toList();
+    }
+
+    /**
      * 分页查询用户组列表
      */
     public Page<UserGroupVO> list(Page<UserGroup> page, String keyword) {

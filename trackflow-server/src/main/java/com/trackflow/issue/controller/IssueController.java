@@ -12,7 +12,6 @@ import com.trackflow.issue.dto.*;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueAttachment;
 import com.trackflow.issue.entity.IssueComment;
-import com.trackflow.issue.entity.IssueStatus;
 import com.trackflow.issue.mapper.result.ChildIssueRow;
 import com.trackflow.issue.mapper.result.IssueDetailRow;
 import com.trackflow.issue.mapper.result.TrashRow;
@@ -26,8 +25,6 @@ import com.trackflow.issue.service.IssueTypeFieldService;
 import com.trackflow.issue.service.IssueVOAssembler;
 import com.trackflow.issue.service.PriorityFieldService;
 import com.trackflow.issue.vo.*;
-import com.trackflow.system.entity.SysUser;
-import com.trackflow.system.mapper.SysUserMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,7 +33,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/issues")
@@ -59,9 +55,6 @@ public class IssueController {
     private final com.trackflow.issue.service.IssueCommentService commentService;
     private final com.trackflow.issue.service.IssueAttachmentService attachmentService;
     private final com.trackflow.issue.service.IssueActivityService activityService;
-    private final com.trackflow.system.mapper.UserGroupMapper userGroupMapper;
-    private final com.trackflow.issue.mapper.IssueStatusMapper statusMapper;
-    private final SysUserMapper sysUserMapper;
 
     @PostMapping
     @PreAuthorize("@perm.check(#dto.projectId, 'issue:create')")
@@ -392,7 +385,7 @@ public class IssueController {
     public R<List<IssueAttachmentVO>> listAttachments(@PathVariable("id") Long id) {
         issueService.getByIdWithAccessCheck(id);
         List<IssueAttachment> attachments = attachmentService.listAttachments(id);
-        return R.ok(buildAttachmentVOList(attachments));
+        return R.ok(attachmentService.buildAttachmentVOList(attachments));
     }
 
     @PostMapping("/{id}/attachments")
@@ -402,7 +395,7 @@ public class IssueController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "visibleToGroupIds", required = false) List<Long> visibleToGroupIds) {
         IssueAttachment attachment = attachmentService.uploadAttachment(id, file, visibleToGroupIds);
-        return R.ok(buildAttachmentVO(attachment));
+        return R.ok(attachmentService.buildAttachmentVO(attachment));
     }
 
     @PutMapping("/{id}/attachments/{attachmentId}/visibility")
@@ -412,7 +405,7 @@ public class IssueController {
             @PathVariable("attachmentId") Long attachmentId,
             @RequestBody com.trackflow.issue.dto.UpdateAttachmentVisibilityDTO dto) {
         IssueAttachment attachment = attachmentService.updateAttachmentVisibility(id, attachmentId, dto.getVisibleToGroupIds());
-        return R.ok(buildAttachmentVO(attachment));
+        return R.ok(attachmentService.buildAttachmentVO(attachment));
     }
 
     @DeleteMapping("/{id}/attachments/{attachmentId}")
@@ -420,32 +413,6 @@ public class IssueController {
     public R<Void> deleteAttachment(@PathVariable("id") Long id, @PathVariable("attachmentId") Long attachmentId) {
         attachmentService.deleteAttachment(id, attachmentId);
         return R.ok();
-    }
-
-    /**
-     * 构建附件 VO（含可见性信息）
-     */
-    private IssueAttachmentVO buildAttachmentVO(IssueAttachment attachment) {
-        IssueAttachmentVO vo = issueConverter.toAttachmentVO(attachment);
-        vo.setIsPrivate(attachment.getVisibleToGroupIds() != null && !attachment.getVisibleToGroupIds().isEmpty());
-        if (Boolean.TRUE.equals(vo.getIsPrivate())) {
-            vo.setVisibleToGroupIds(attachment.getVisibleToGroupIds().stream()
-                    .map(String::valueOf).toList());
-            // 查询组名称
-            vo.setVisibleToGroupNames(resolveGroupNames(attachment.getVisibleToGroupIds()));
-        }
-        return vo;
-    }
-
-    private List<IssueAttachmentVO> buildAttachmentVOList(List<IssueAttachment> attachments) {
-        return attachments.stream().map(this::buildAttachmentVO).toList();
-    }
-
-    private List<String> resolveGroupNames(List<Long> groupIds) {
-        if (groupIds == null || groupIds.isEmpty()) return List.of();
-        return userGroupMapper.selectBatchIds(groupIds).stream()
-                .map(g -> g.getName())
-                .toList();
     }
 
     // ========== 活动记录 ==========
@@ -589,44 +556,5 @@ public class IssueController {
     private IssueDetailVO assembleDetailFromRow(IssueDetailRow row) {
         List<ChildIssueRow> children = issueService.listChildrenRows(row.getId());
         return issueDetailVOAssembler.assemble(row, children);
-    }
-
-    /**
-     * 将 Issue 实体列表转为 SimilarIssueVO 列表（用于相似工单搜索）
-     */
-    private List<SimilarIssueVO> buildSimilarIssueVOs(List<Issue> issues) {
-        if (issues.isEmpty()) return List.of();
-
-        Map<Long, IssueStatus> statusMap = statusMapper.selectList(null).stream()
-                .collect(Collectors.toMap(IssueStatus::getId, s -> s, (a, b) -> a));
-
-        Set<Long> userIds = issues.stream()
-                .map(Issue::getAssigneeId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Map<Long, SysUser> userMap = userIds.isEmpty() ? Map.of()
-                : sysUserMapper.selectBatchIds(userIds).stream()
-                .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
-
-        return issues.stream().map(issue -> {
-            SimilarIssueVO vo = new SimilarIssueVO();
-            vo.setId(String.valueOf(issue.getId()));
-            vo.setIssueKey(issue.getIssueKey());
-            vo.setTitle(issue.getTitle());
-            if (issue.getStatusId() != null) {
-                IssueStatus status = statusMap.get(issue.getStatusId());
-                if (status != null) {
-                    vo.setStatusName(status.getName());
-                    vo.setStatusColor(status.getColor());
-                }
-            }
-            if (issue.getAssigneeId() != null) {
-                SysUser user = userMap.get(issue.getAssigneeId());
-                if (user != null) {
-                    vo.setAssigneeName(user.getDisplayName());
-                }
-            }
-            return vo;
-        }).toList();
     }
 }
