@@ -101,13 +101,13 @@ const routes = [
         path: 'sprint-planning',
         name: 'SprintPlanning',
         component: () => import('@/views/sprint/SprintPlanningView.vue'),
-        meta: { requiresSprintManage: true }
+        meta: { requiresSprintManage: true, title: 'Sprint 规划' }
       },
       {
         path: 'workflow',
         name: 'WorkflowList',
         component: () => import('@/views/admin/WorkflowDefinitionView.vue'),
-        meta: { requiresWorkflow: true }
+        meta: { requiresWorkflow: true, title: '工作流' }
       },
       {
         path: 'timesheets',
