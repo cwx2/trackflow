@@ -405,7 +405,8 @@
           <a-form-item v-if="editingId" label="从其他字段复制值">
             <div class="copy-from-row">
               <a-select
-                v-model="copyFromFieldId"
+                :model-value="copyFromFieldId ?? undefined"
+                @update:model-value="(v: string | undefined) => { copyFromFieldId = v ?? null }"
                 placeholder="选择源字段追加选项"
                 allow-clear
                 style="flex: 1"
@@ -425,7 +426,8 @@
           <a-form-item v-if="editingId" label="合并其他字段值集 (Merge with)">
             <div class="copy-from-row">
               <a-select
-                v-model="mergeFromFieldId"
+                :model-value="mergeFromFieldId ?? undefined"
+                @update:model-value="(v: string | undefined) => { mergeFromFieldId = v ?? null }"
                 placeholder="选择字段合并其选项到当前字段"
                 allow-clear
                 style="flex: 1"
