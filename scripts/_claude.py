@@ -29,20 +29,19 @@ import uuid
 from pathlib import Path
 
 from _config import (
-    WORKSPACE, KIRO_MODEL, KIRO_MODEL_FIX,
+    WORKSPACE, CLAUDE_MODEL, CLAUDE_MODEL_FIX,
     TIMEOUT_SECONDS, IDLE_TIMEOUT_SECONDS, log, strip_ansi,
 )
 
 # ============ Claude Code 专用常量 ============
 
 # Claude Code CLI 可执行文件。优先使用环境变量，然后自动检测。
-# Windows 上直接用 node 调 claude.exe 避免路径和 Shell 兼容性问题。
+# Windows 上直接用 claude.exe 原生可执行文件。
 CLAUDE_CLI = os.environ.get("CLAUDE_CLI", "")
 
 if not CLAUDE_CLI:
     import shutil as _shutil
     if os.name == "nt":
-        # 直接找 claude.exe 原生可执行文件
         _npm = _shutil.which("npm.cmd") or _shutil.which("npm")
         if _npm:
             _prefix = os.path.dirname(_npm) if _npm.endswith(".cmd") else os.path.dirname(_npm)
@@ -130,7 +129,9 @@ def _inject_skills(prompt: str) -> str:
 
         content = _load_skill_content(skill_name)
         if content:
-            injected_parts.append(f"---\n## 以下是 {skill_name} 的 SKILL 指令（必须严格遵守）\n---\n\n{content}")
+            injected_parts.append(
+                f"---\n## 以下是 {skill_name} 的 SKILL 指令（必须严格遵守）\n---\n\n{content}"
+            )
             log.info(f"[skill] 注入 {skill_name} ({len(content)} 字符)")
 
     if injected_parts:
@@ -139,6 +140,9 @@ def _inject_skills(prompt: str) -> str:
         return f"{injected}\n\n---\n\n## 以下是具体的任务指令\n---\n\n{prompt}"
 
     return prompt
+
+
+# ============ 瞬时故障标记 ============
 
 _TRANSIENT_OUTPUT_MARKERS = (
     "dispatch failure",
@@ -159,6 +163,13 @@ _TRANSIENT_STOP_REASONS = (
     "max_tokens",
     "tool_use_blocked",
 )
+
+# _workers.py 中 _is_transient_cli_output 识别的特殊返回值
+# BUDGET_EXCEEDED 也属于瞬时故障：预算不够时不应消耗需求重试次数
+_TRANSIENT_RETURN_VALUES = frozenset({
+    "STARTUP_FAIL", "TIMEOUT", "IDLE_TIMEOUT",
+    "PROCESS_ERROR", "POLICY_BLOCKED", "BUDGET_EXCEEDED",
+})
 
 # ============ 敏感信息脱敏 ============
 
@@ -264,7 +275,7 @@ def _build_env(worker_id: str | None = None) -> dict:
 
 # ============ 核心：运行 Claude Code ============
 
-def _build_base_cmd(budget_usd: float | None = None, *, use_stdin: bool = False) -> list[str]:
+def _build_base_cmd(budget_usd: float | None = None) -> list[str]:
     """构建基础命令行参数。"""
     budget = budget_usd or DEFAULT_MAX_BUDGET_USD
     cmd = [
@@ -283,8 +294,10 @@ def _parse_claude_output(stdout: str) -> dict | None:
     """从 Claude Code 的 stdout 中解析 JSON 结果。
 
     stdout 可能包含多行（启动日志、hook 输出等），JSON 结果在最后。
+    只接受同时包含 result、is_error、session_id 三个顶层字段的对象，
+    避免误匹配 Claude 在 result 文本中输出的业务 JSON。
     """
-    # 从最后一行开始找完整的 JSON 对象
+    _REQUIRED_FIELDS = {"result", "is_error", "session_id"}
     lines = stdout.strip().split("\n")
     for line in reversed(lines):
         line = line.strip()
@@ -292,8 +305,7 @@ def _parse_claude_output(stdout: str) -> dict | None:
             continue
         try:
             parsed = json.loads(line)
-            # 确认是 Claude 的结果对象（包含 result 或 is_error 字段）
-            if "result" in parsed or "is_error" in parsed:
+            if _REQUIRED_FIELDS.issubset(parsed.keys()):
                 return parsed
         except json.JSONDecodeError:
             continue
@@ -311,43 +323,15 @@ def _is_transient_stop_reason(stop_reason: str) -> bool:
     return stop_reason in _TRANSIENT_STOP_REASONS
 
 
-def _cleanup_temp(path: str | None) -> None:
-    """安全删除临时文件。"""
-    if path:
-        try:
-            os.unlink(path)
-        except Exception:
-            pass
-
-
 def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
              worker_id: str | None = None, stdin_data: bytes | None = None) -> tuple[bool, str]:
     """运行 Claude Code CLI，管理超时、熔断、输出解析。
 
-    通过 communicate() 与子进程交互，兼容 Windows stdin pipe。
+    通过 communicate(input=...) 将 prompt 直接写入 stdin pipe。
     返回 (success, output_text)。
     """
     _wait_for_circuit(label)
     start = time.time()
-
-    _temp_file = None
-    if stdin_data:
-        # Windows: 全部写入临时文件（subprocess stdin pipe + 大 prompt 不可靠）
-        # Unix: communicate(input=...) 正常可用
-        if os.name == "nt":
-            import tempfile as _tempfile
-            try:
-                _tmp = _tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".txt", prefix="claude_prompt_",
-                    encoding="utf-8", delete=False,
-                )
-                _temp_file = _tmp.name
-                _tmp.write(stdin_data.decode("utf-8", errors="replace"))
-                _tmp.flush()
-                _tmp.close()
-                stdin_data = f"请严格按照 {_temp_file} 中的完整指令执行。".encode("utf-8")
-            except Exception as e:
-                log.warning(f"[{label}] 临时文件创建失败: {e}")
 
     try:
         process = subprocess.Popen(
@@ -360,7 +344,6 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     except Exception as e:
         log.error(f"[{label}] 启动异常: {e}")
         _open_circuit(label)
-        _cleanup_temp(_temp_file)
         return False, "STARTUP_FAIL"
 
     try:
@@ -373,7 +356,6 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         except subprocess.TimeoutExpired:
             log.error(f"[{label}] Claude Code 进程未能及时退出")
         _open_circuit(label)
-        _cleanup_temp(_temp_file)
         return False, "TIMEOUT"
     except Exception as e:
         log.error(f"[{label}] 进程通信异常: {e}")
@@ -382,11 +364,7 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         except Exception:
             pass
         _open_circuit(label)
-        _cleanup_temp(_temp_file)
         return False, "PROCESS_ERROR"
-
-    # 清理临时文件
-    _cleanup_temp(_temp_file)
 
     elapsed = time.time() - start
     stdout = stdout_bytes.decode("utf-8", errors="replace")
@@ -397,19 +375,16 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         if stripped and not stripped.startswith("{") and len(stripped) < 200:
             log.info(f"[{label}] {strip_ansi(stripped)}")
 
-    # 解析 JSON 输出 — communicate() 保证 stdout 是完整的一行 JSON
+    # 解析 JSON 输出
     parsed = _parse_claude_output(stdout)
     if parsed is None:
-        # stdout 可能有多行（如 stderr 混合），解析失败时打印原始输出
         log.warning(f"[{label}] 无法解析 JSON (共{len(stdout_bytes)}字节)")
-        # 显示原始输出
         for line in stdout.strip().split("\n"):
             if line.strip():
                 log.warning(f"[{label}] RAW: {line[:300]}")
         if _is_transient_cli_output(stdout):
             _open_circuit(label)
             return False, "STARTUP_FAIL"
-        # 如果 stdout 为空但进程正常退出，说明 prompt 不对
         return False, stdout[-500:] if stdout.strip() else ""
 
     is_error = parsed.get("is_error", False)
@@ -419,7 +394,6 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
     cost = parsed.get("total_cost_usd", 0)
     turns = parsed.get("num_turns", 0)
 
-    # 成本 + session + 首行摘要（一行可见便于监控）
     log.info(
         f"[{label}] {'✅' if not is_error else '❌'} "
         f"${cost:.4f} | {turns}轮 | {elapsed:.0f}s | "
@@ -434,13 +408,13 @@ def _run_cli(cmd: list[str], label: str, req_stem: str | None = None,
         error_detail = parsed.get("api_error_status", "") or result_text[:200]
         log.warning(f"[{label}] Claude 返回错误: {error_detail}")
 
-        # 检查预算超限
+        # 预算超限 → 瞬时故障，放回队列，不消耗需求重试次数
         if stop_reason == "max_budget_reached" or "budget" in result_text.lower():
             log.warning(f"[{label}] 预算超限")
             _open_circuit(label)
             return False, "BUDGET_EXCEEDED"
 
-        # 瞬时错误 → 放回队列，不消耗重试
+        # 其他瞬时错误 → 同样放回队列
         if _is_transient_cli_output(result_text):
             _open_circuit(label)
             return False, "STARTUP_FAIL"
@@ -491,12 +465,10 @@ def run_claude(prompt: str, label: str,
     # 只注入 SKILL，不注入 steering（CLAUDE.md 已提供项目上下文）
     prompt = _inject_skills(prompt)
 
-    effective_model = model or KIRO_MODEL
+    effective_model = model or CLAUDE_MODEL
     if effective_model and effective_model != "auto":
-        # Claude Code 接受 opus/sonnet/haiku/fable 作为 --model 参数
         cmd += ["--model", effective_model]
 
-    # Prompt 通过 stdin 传入（避免 Windows 命令行长度限制截断中文）
     prompt_bytes = prompt.encode("utf-8")
     return _run_cli(cmd, label, req_stem=req_stem, worker_id=worker_id, stdin_data=prompt_bytes)
 
@@ -512,7 +484,7 @@ def run_claude_resume(session_id: str, prompt: str, label: str,
         session_id: 要恢复的会话 ID
         prompt:     提示内容
         label:      日志前缀
-        model:      指定模型，None 使用 KIRO_MODEL_FIX
+        model:      指定模型，None 使用 CLAUDE_MODEL_FIX
         worker_id:  工作线程标识
         req_stem:   需求文件名主干
 
@@ -525,12 +497,11 @@ def run_claude_resume(session_id: str, prompt: str, label: str,
     # 自动注入 SKILL 内容（resume 模式也需要）
     prompt = _inject_skills(prompt)
 
-    effective_model = model or KIRO_MODEL_FIX
+    effective_model = model or CLAUDE_MODEL_FIX
     if effective_model and effective_model != "auto":
         cmd += ["--model", effective_model]
 
     cmd += ["--resume", session_id]
-    # Prompt 通过 stdin 传入
     prompt_bytes = prompt.encode("utf-8")
     return _run_cli(cmd, label, req_stem=req_stem, worker_id=worker_id, stdin_data=prompt_bytes)
 
@@ -557,8 +528,8 @@ def get_latest_session_id(req_stem: str | None = None,
     1. 先查内存中的 _session_map（由 run_claude 自动记录）
     2. 未匹配则返回 None（调用方会降级为开新会话）
 
-    注意：Claude Code 没有 --list-sessions 命令，所以依赖内存跟踪。
-    如果进程重启，session 信息会丢失，此时只能开新会话。
+    注意：Claude Code 没有 --list-sessions 命令，依赖内存跟踪。
+    进程重启后 session 信息丢失，此时只能开新会话。
     """
     if req_stem:
         sid = _lookup_session(req_stem)
@@ -571,7 +542,5 @@ def get_latest_session_id(req_stem: str | None = None,
 
 # ============ 兼容性别名（方便从 _kiro 无缝切换）============
 
-# 这些别名使 _claude.py 可以完全替代 _kiro.py 的 import
 run_kiro = run_claude
 run_kiro_resume = run_claude_resume
-# get_current_commit 和 get_latest_session_id 直接使用上面的实现
