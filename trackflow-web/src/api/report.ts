@@ -165,9 +165,10 @@ export const reportApi = {
   },
 
   /** 执行报表（获取数据） */
-  execute(id: string, force?: boolean) {
+  execute(id: string, force?: boolean, signal?: AbortSignal) {
     return request.get<any, R<ReportDataVO>>(`/reports/${id}/data`, {
-      params: force ? { force: true } : undefined
+      params: force ? { force: true } : undefined,
+      signal
     })
   },
 

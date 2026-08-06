@@ -127,7 +127,7 @@ const widgetRef = ref<{ loadData?: (force?: boolean) => Promise<void> } | null>(
 
 // ─── 加载超时兜底 ──────────────────────────────────────
 
-const LOADING_TIMEOUT_MS = 10000
+const LOADING_TIMEOUT_MS = 5000
 let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 function clearLoadingTimeout() {
@@ -142,7 +142,7 @@ function startLoadingTimeout() {
   loadingTimeoutId = setTimeout(() => {
     if (loading.value) {
       loading.value = false
-      error.value = '加载超时，请点击重试'
+      error.value = '数据加载超时，请检查网络或点击重试'
     }
   }, LOADING_TIMEOUT_MS)
 }

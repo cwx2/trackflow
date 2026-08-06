@@ -190,6 +190,9 @@ function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
 
 // ─── Data Loading ──────────────────────────────────────
 
+const REQUEST_TIMEOUT_MS = 8000
+let currentController: AbortController | null = null
+
 async function loadData(force = false) {
   const reportId = props.reportId
   if (!reportId) {
@@ -197,19 +200,33 @@ async function loadData(force = false) {
     return
   }
 
+  // 取消上一次未完成的请求
+  if (currentController) {
+    currentController.abort()
+  }
+  currentController = new AbortController()
+  const timeoutId = setTimeout(() => currentController?.abort(), REQUEST_TIMEOUT_MS)
+
   try {
-    const res = await reportApi.execute(reportId, force || undefined)
+    const res = await reportApi.execute(reportId, force || undefined, currentController.signal)
     reportDataResult.value = res.data || null
     emit('loaded')
   } catch (e: any) {
-    const status = e.response?.status
-    if (status === 404) {
-      emit('error', '关联的报表已被删除')
-    } else if (status === 403) {
-      emit('error', '无权限查看关联报表')
+    if (e.name === 'AbortError' || e.code === 'ERR_CANCELED') {
+      emit('error', '请求超时，请点击重试')
     } else {
-      emit('error', e.response?.data?.message || '加载报表数据失败')
+      const status = e.response?.status
+      if (status === 404) {
+        emit('error', '关联的报表已被删除，请重新编辑配置')
+      } else if (status === 403) {
+        emit('error', '无权限查看此报表')
+      } else {
+        emit('error', e.response?.data?.message || '加载报表数据失败')
+      }
     }
+  } finally {
+    clearTimeout(timeoutId)
+    currentController = null
   }
 }
 
