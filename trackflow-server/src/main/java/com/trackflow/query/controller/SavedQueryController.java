@@ -4,9 +4,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.trackflow.common.model.PageResult;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
-import com.trackflow.customfield.service.CustomFieldService;
 import com.trackflow.issue.converter.IssueConverter;
 import com.trackflow.issue.entity.Issue;
+import com.trackflow.issue.service.IssueVOAssembler;
 import com.trackflow.issue.vo.IssueVO;
 import com.trackflow.project.service.ProjectService;
 import com.trackflow.query.converter.SavedQueryConverter;
@@ -17,8 +17,6 @@ import com.trackflow.query.service.SavedQueryService;
 import com.trackflow.query.vo.QueryPanelItemVO;
 import com.trackflow.query.vo.QueryPanelVO;
 import com.trackflow.query.vo.SavedQueryVO;
-import com.trackflow.system.entity.SysUser;
-import com.trackflow.system.mapper.SysUserMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,8 +24,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * 保存查询接口 — 对应 YouTrack 左侧面板
@@ -41,9 +37,8 @@ public class SavedQueryController {
     private final SavedQueryService savedQueryService;
     private final SavedQueryConverter savedQueryConverter;
     private final IssueConverter issueConverter;
-    private final SysUserMapper sysUserMapper;
+    private final IssueVOAssembler issueVOAssembler;
     private final ProjectService projectService;
-    private final CustomFieldService customFieldService;
 
     /**
      * 获取查询面板（左侧面板数据 + 实时计数）
@@ -136,12 +131,9 @@ public class SavedQueryController {
         Long queryId = Long.parseLong(id);
         Page<Issue> result = savedQueryService.executeByIdWithAccessCheck(queryId, page, pageSize, userId, "true".equals(hideResolved), sort);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
-        fillAssigneeNames(result.getRecords(), voList);
-        fillCustomFieldValues(result.getRecords(), voList);
-        PageResult<IssueVO> pageResult = new PageResult<>(
-                voList, result.getTotal(),
-                (int) result.getCurrent(), (int) result.getSize());
-        return R.ok(pageResult);
+        issueVOAssembler.assemble(result.getRecords(), voList);
+        return R.ok(new PageResult<>(voList, result.getTotal(),
+                (int) result.getCurrent(), (int) result.getSize()));
     }
 
     /**
@@ -153,76 +145,9 @@ public class SavedQueryController {
         Long userId = SecurityUtils.getCurrentUserId();
         Page<Issue> result = savedQueryService.executeAdhocWithAccessCheck(dto, userId);
         List<IssueVO> voList = issueConverter.toVOList(result.getRecords());
-        fillAssigneeNames(result.getRecords(), voList);
-        fillCustomFieldValues(result.getRecords(), voList);
-        PageResult<IssueVO> pageResult = new PageResult<>(
-                voList, result.getTotal(),
-                (int) result.getCurrent(), (int) result.getSize());
-        return R.ok(pageResult);
-    }
-
-    /**
-     * 批量填充 assigneeName + assigneeAvatarUrl（复用逻辑）
-     */
-    private void fillAssigneeNames(List<Issue> records, List<IssueVO> voList) {
-        List<Long> assigneeIds = records.stream()
-                .map(Issue::getAssigneeId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        if (!assigneeIds.isEmpty()) {
-            Map<Long, SysUser> userMap = sysUserMapper.selectBatchIds(assigneeIds).stream()
-                    .collect(Collectors.toMap(SysUser::getId, u -> u, (a, b) -> a));
-            for (int i = 0; i < records.size(); i++) {
-                Issue issue = records.get(i);
-                if (issue.getAssigneeId() != null) {
-                    SysUser user = userMap.get(issue.getAssigneeId());
-                    if (user != null) {
-                        voList.get(i).setAssigneeName(user.getDisplayName());
-                        voList.get(i).setAssigneeAvatarUrl(user.getAvatarUrl());
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * 批量填充自定义字段展示值
-     */
-    private void fillCustomFieldValues(List<Issue> records, List<IssueVO> voList) {
-        List<Long> issueIds = records.stream()
-                .map(Issue::getId)
-                .toList();
-        if (!issueIds.isEmpty()) {
-            Map<Long, List<com.trackflow.customfield.vo.CustomFieldValueVO>> cfDetailsMap =
-                    customFieldService.getBatchCustomFieldDetails(issueIds);
-            for (int i = 0; i < records.size(); i++) {
-                List<com.trackflow.customfield.vo.CustomFieldValueVO> details = cfDetailsMap.get(records.get(i).getId());
-                if (details != null && !details.isEmpty()) {
-                    voList.get(i).setCustomFieldDetails(details);
-
-                    // 兼容：继续填充旧的 Map 字段
-                    Map<String, String> cfValues = new java.util.HashMap<>();
-                    Map<String, String> cfColors = new java.util.HashMap<>();
-                    for (com.trackflow.customfield.vo.CustomFieldValueVO detail : details) {
-                        String cfKey = "cf_" + detail.getCustomFieldId();
-                        cfValues.put(cfKey, detail.getDisplayValue());
-                        if (detail.getColor() != null) {
-                            cfColors.put(cfKey, detail.getColor());
-                        } else if (detail.getColors() != null) {
-                            detail.getColors().stream()
-                                    .filter(java.util.Objects::nonNull)
-                                    .findFirst()
-                                    .ifPresent(c -> cfColors.put(cfKey, c));
-                        }
-                    }
-                    voList.get(i).setCustomFieldValues(cfValues);
-                    if (!cfColors.isEmpty()) {
-                        voList.get(i).setCustomFieldColors(cfColors);
-                    }
-                }
-            }
-        }
+        issueVOAssembler.assemble(result.getRecords(), voList);
+        return R.ok(new PageResult<>(voList, result.getTotal(),
+                (int) result.getCurrent(), (int) result.getSize()));
     }
 
     /**
