@@ -36,6 +36,38 @@ const router = useRouter()
 const issueListData = ref<Array<{ id: string; issueKey: string; title: string }>>([])
 const dataLoaded = ref(false)
 
+// Cache for status name → ID resolution
+let statusCache: Array<{ id: string; name: string }> | null = null
+
+/**
+ * Resolve a status name (e.g. "Blocked", "Open") to its numeric ID.
+ * Supports comma-separated values: "Blocked,Open" → "7,1"
+ * Matching is case-insensitive.
+ */
+async function resolveStatusNameToId(nameInput: string): Promise<string | null> {
+  if (!statusCache) {
+    try {
+      const res = await issueApi.listStatuses()
+      statusCache = (res.data || []).map((s: any) => ({ id: String(s.id), name: s.name }))
+    } catch {
+      return null
+    }
+  }
+
+  const names = nameInput.split(',').map(n => n.trim().toLowerCase())
+  const resolvedIds: string[] = []
+
+  for (const name of names) {
+    const found = statusCache.find(s => s.name.toLowerCase() === name)
+    if (found) {
+      resolvedIds.push(found.id)
+    }
+    // If not found, skip (don't pass invalid names to backend)
+  }
+
+  return resolvedIds.length > 0 ? resolvedIds.join(',') : null
+}
+
 function navigateToIssue(issueId: string) {
   router.push(`/issues/${issueId}`)
 }
@@ -65,6 +97,17 @@ async function loadData(_force = false) {
     // Parse advanced filter query and merge into params
     if (config.filterQuery) {
       const filterParams = parseWidgetFilterQuery(config.filterQuery)
+
+      // Resolve _statusName to numeric statusId via API
+      if (filterParams._statusName) {
+        const resolvedId = await resolveStatusNameToId(filterParams._statusName)
+        if (resolvedId) {
+          filterParams.statusId = resolvedId
+        }
+        // Remove the internal marker regardless
+        delete filterParams._statusName
+      }
+
       Object.assign(params, filterParams)
     }
 

@@ -57,9 +57,9 @@ export function parseWidgetFilterQuery(query: string): Record<string, string> {
         break
       case 'state':
       case 'status':
-        // Status name — pass as keyword-based filter
-        // The backend resolves status names through its own logic
-        params.statusId = value
+        // Status by name — store as _statusName for frontend resolution.
+        // The widget will resolve names to numeric IDs via listStatuses() before calling the API.
+        params._statusName = value
         break
       case 'assignee':
         params.assigneeId = value
@@ -154,7 +154,12 @@ export function buildIssueListRoute(config: Record<string, any>): Record<string,
   // Parse filterQuery into params and merge
   if (config.filterQuery) {
     const filterParams = parseWidgetFilterQuery(config.filterQuery)
+    // _statusName is a frontend-internal marker; for navigation, pass the raw query text
+    // so the issue list page can display it in its search bar.
+    delete filterParams._statusName
     Object.assign(query, filterParams)
+    // Also pass the raw filter query for the issue list page to parse/display
+    query.filterQuery = config.filterQuery
   }
 
   return query
