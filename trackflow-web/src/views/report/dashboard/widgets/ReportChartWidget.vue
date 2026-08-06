@@ -191,6 +191,7 @@ function buildBarVerticalOption(data: ReportDataVO): Record<string, any> {
 // ─── Data Loading ──────────────────────────────────────
 
 const REQUEST_TIMEOUT_MS = 8000
+const ABORT_REASON_TIMEOUT = 'timeout'
 let currentController: AbortController | null = null
 
 async function loadData(force = false) {
@@ -200,33 +201,41 @@ async function loadData(force = false) {
     return
   }
 
-  // 取消上一次未完成的请求
+  // 取消上一次未完成的请求（被新请求取代，非超时）
   if (currentController) {
-    currentController.abort()
+    currentController.abort('superseded')
   }
-  currentController = new AbortController()
-  const timeoutId = setTimeout(() => currentController?.abort(), REQUEST_TIMEOUT_MS)
+  const controller = new AbortController()
+  currentController = controller
+  const timeoutId = setTimeout(() => controller.abort(ABORT_REASON_TIMEOUT), REQUEST_TIMEOUT_MS)
 
   try {
-    const res = await reportApi.execute(reportId, force || undefined, currentController.signal)
+    const res = await reportApi.execute(reportId, force || undefined, controller.signal)
     reportDataResult.value = res.data || null
     emit('loaded')
   } catch (e: any) {
     if (e.name === 'AbortError' || e.code === 'ERR_CANCELED') {
-      emit('error', '请求超时，请点击重试')
-    } else {
-      const status = e.response?.status
-      if (status === 404) {
-        emit('error', '关联的报表已被删除，请重新编辑配置')
-      } else if (status === 403) {
-        emit('error', '无权限查看此报表')
-      } else {
-        emit('error', e.response?.data?.message || '加载报表数据失败')
+      // 区分超时 abort 和被新请求取代的 abort
+      const reason = controller.signal.reason
+      if (reason === ABORT_REASON_TIMEOUT) {
+        emit('error', '请求超时，请点击重试')
       }
+      // 被新请求取代时静默返回，不 emit error
+      return
+    }
+    const status = e.response?.status
+    if (status === 404) {
+      emit('error', '关联的报表已被删除，请重新编辑配置')
+    } else if (status === 403) {
+      emit('error', '无权限查看此报表')
+    } else {
+      emit('error', e.response?.data?.message || '加载报表数据失败')
     }
   } finally {
     clearTimeout(timeoutId)
-    currentController = null
+    if (currentController === controller) {
+      currentController = null
+    }
   }
 }
 
