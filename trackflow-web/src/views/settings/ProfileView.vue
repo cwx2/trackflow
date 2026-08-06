@@ -154,10 +154,9 @@
           </a-spin>
         </div>
       </a-tab-pane>
-      <a-tab-pane key="workspace" title="工作空间" disabled>
-        <div class="tab-content tab-placeholder">
-          <icon-common class="placeholder-icon" />
-          <p class="placeholder-text">工作空间设置即将推出</p>
+      <a-tab-pane key="workspace" title="工作空间">
+        <div class="tab-content">
+          <ProfileWorkspaceTab />
         </div>
       </a-tab-pane>
       <a-tab-pane key="notifications" title="通知" disabled>
@@ -183,6 +182,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import { authApi } from '@/api'
 import type { UserProfileVO } from '@/api/user'
+import ProfileWorkspaceTab from './ProfileWorkspaceTab.vue'
 
 const authStore = useAuthStore()
 const { theme, setTheme } = useTheme()
