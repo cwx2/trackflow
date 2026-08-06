@@ -275,11 +275,14 @@
       <!-- 关联目标工单选择弹窗 -->
       <a-modal
         v-model:visible="showLinkTargetModal"
-        title="选择目标工单"
+        :title="`为 ${selectedCount} 个工单添加关联`"
         :width="480"
         :footer="false"
         unmount-on-close
       >
+        <div class="link-type-hint">
+          关联类型：{{ linkTypeOptions.find(o => o.value === selectedLinkType)?.label || selectedLinkType }}
+        </div>
         <div class="link-target-search">
           <a-input
             v-model="linkTargetSearch"
@@ -1030,6 +1033,15 @@ function confirmBatchDelete() {
 }
 
 /* 关联目标工单选择弹窗 */
+.link-type-hint {
+  font-size: 12px;
+  color: var(--tf-text-secondary);
+  margin-bottom: 12px;
+  padding: 6px 8px;
+  background: var(--tf-bg-hover);
+  border-radius: 4px;
+}
+
 .link-target-search {
   margin-bottom: 12px;
 }
