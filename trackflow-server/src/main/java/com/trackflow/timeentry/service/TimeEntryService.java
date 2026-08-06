@@ -395,8 +395,11 @@ public class TimeEntryService {
                                                      Long projectId, Long activityId) {
         List<Long> allowedProjectIds = null;
 
-        // 查看他人工时时，限制为有 time:view_others 权限的项目
+        // 查看他人工时时，先校验是否拥有任何项目的 view_others 权限
         if (!userId.equals(viewerUserId)) {
+            if (!canViewOthersTime(viewerUserId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
+            }
             if (projectId != null) {
                 // 指定了项目时，校验查看者对该项目有 time:view_others 权限
                 if (!permissionService.hasPermission(viewerUserId, projectId, "time:view_others")) {
@@ -603,6 +606,9 @@ public class TimeEntryService {
         List<Long> allowedProjectIds = null;
 
         if (!targetUserId.equals(viewerUserId)) {
+            if (!canViewOthersTime(viewerUserId)) {
+                throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
+            }
             allowedProjectIds = permissionService.getProjectIdsWithPermission(viewerUserId, "time:view_others");
             if (allowedProjectIds != null && allowedProjectIds.isEmpty()) {
                 return 0;
@@ -686,7 +692,8 @@ public class TimeEntryService {
      * - canViewOthers=false: 仅返回当前用户自身
      */
     @Transactional(readOnly = true)
-    public List<TimeEntryUserVO> listSelectableUsers(Long currentUserId, boolean canViewOthers, String keyword) {
+    public List<TimeEntryUserVO> listSelectableUsers(Long currentUserId, String keyword) {
+        boolean canViewOthers = canViewOthersTime(currentUserId);
         if (!canViewOthers) {
             // 普通用户仅返回自身
             SysUser self = sysUserMapper.selectById(currentUserId);
@@ -715,6 +722,29 @@ public class TimeEntryService {
         vo.setDisplayName(user.getDisplayName());
         vo.setAvatarUrl(user.getAvatarUrl());
         return vo;
+    }
+
+    // ========== 权限查询 ==========
+
+    /**
+     * 检查用户是否有权查看他人工时（在任意项目中拥有 time:view_others 权限）
+     */
+    public boolean canViewOthersTime(Long userId) {
+        return permissionService.hasPermissionInAnyProject(userId, "time:view_others");
+    }
+
+    /**
+     * 检查用户是否有权编辑/删除他人工时（在任意项目中拥有 time:edit_all 权限）
+     */
+    public boolean canEditOthersTime(Long userId) {
+        return permissionService.hasPermissionInAnyProject(userId, PERM_TIME_EDIT_ALL);
+    }
+
+    /**
+     * 检查用户是否有权为他人记录工时（在任意项目中拥有 time:log_for_others 权限）
+     */
+    public boolean canLogForOthers(Long userId) {
+        return permissionService.hasPermissionInAnyProject(userId, PERM_TIME_LOG_FOR_OTHERS);
     }
 
     // ========== 内部方法 ==========

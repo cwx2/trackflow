@@ -1,8 +1,5 @@
 package com.trackflow.timeentry.controller;
 
-import com.trackflow.auth.service.PermissionService;
-import com.trackflow.common.exception.BusinessException;
-import com.trackflow.common.exception.ErrorCode;
 import com.trackflow.common.model.R;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.service.IssueService;
@@ -36,13 +33,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TimeEntryController {
 
-    private static final String PERM_VIEW_OTHERS = "time:view_others";
-    private static final String PERM_EDIT_ALL = "time:edit_all";
-    private static final String PERM_LOG_FOR_OTHERS = "time:log_for_others";
-
     private final TimeEntryService timeEntryService;
     private final IssueService issueService;
-    private final PermissionService permissionService;
 
     // ========== 计时器 API ==========
 
@@ -136,11 +128,6 @@ public class TimeEntryController {
             @RequestParam(value = "workType", required = false) String workType) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
-
-        if (!targetUserId.equals(currentUserId) && !canViewOthersTime(currentUserId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
-        }
-
         Long resolvedActivityId = timeEntryService.resolveActivityId(activityId, workType);
         return R.ok(timeEntryService.listByUserAndDateRange(targetUserId, currentUserId, startDate, endDate, projectId, resolvedActivityId));
     }
@@ -168,10 +155,6 @@ public class TimeEntryController {
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
         Long targetUserId = (userId != null) ? userId : currentUserId;
-
-        if (!targetUserId.equals(currentUserId) && !canViewOthersTime(currentUserId)) {
-            throw new BusinessException(ErrorCode.ACCESS_DENIED, "无权查看他人工时记录");
-        }
         return R.ok(timeEntryService.sumByUserAndDateRange(targetUserId, currentUserId, startDate, endDate));
     }
 
@@ -228,8 +211,7 @@ public class TimeEntryController {
     public R<List<TimeEntryUserVO>> listSelectableUsers(
             @RequestParam(value = "keyword", required = false) String keyword) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        boolean canViewOthers = canViewOthersTime(currentUserId);
-        return R.ok(timeEntryService.listSelectableUsers(currentUserId, canViewOthers, keyword));
+        return R.ok(timeEntryService.listSelectableUsers(currentUserId, keyword));
     }
 
     /**
@@ -239,7 +221,7 @@ public class TimeEntryController {
     @PreAuthorize("isAuthenticated()")
     public R<Boolean> checkCanViewOthers() {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        return R.ok(canViewOthersTime(currentUserId));
+        return R.ok(timeEntryService.canViewOthersTime(currentUserId));
     }
 
     /**
@@ -249,7 +231,7 @@ public class TimeEntryController {
     @PreAuthorize("isAuthenticated()")
     public R<Boolean> checkCanEditOthers() {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        return R.ok(canEditOthersTime(currentUserId));
+        return R.ok(timeEntryService.canEditOthersTime(currentUserId));
     }
 
     /**
@@ -259,16 +241,6 @@ public class TimeEntryController {
     @PreAuthorize("isAuthenticated()")
     public R<Boolean> checkCanLogForOthers() {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-        return R.ok(permissionService.hasPermissionInAnyProject(currentUserId, PERM_LOG_FOR_OTHERS));
-    }
-
-    // ========== 内部方法 ==========
-
-    private boolean canViewOthersTime(Long userId) {
-        return permissionService.hasPermissionInAnyProject(userId, PERM_VIEW_OTHERS);
-    }
-
-    private boolean canEditOthersTime(Long userId) {
-        return permissionService.hasPermissionInAnyProject(userId, PERM_EDIT_ALL);
+        return R.ok(timeEntryService.canLogForOthers(currentUserId));
     }
 }
