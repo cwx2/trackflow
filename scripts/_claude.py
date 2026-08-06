@@ -36,23 +36,25 @@ from _config import (
 # ============ Claude Code 专用常量 ============
 
 # Claude Code CLI 可执行文件。优先使用环境变量，然后自动检测。
-# Windows 上需要 .cmd 扩展名，subprocess.Popen 不会自动添加。
+# Windows 上直接用 node 调 claude.exe 避免路径和 Shell 兼容性问题。
 CLAUDE_CLI = os.environ.get("CLAUDE_CLI", "")
 
 if not CLAUDE_CLI:
-    # 自动检测 claude 可执行文件路径
-    # Windows 上优先使用 .cmd，因为 sh 脚本无法被 subprocess.Popen 直接执行
     import shutil as _shutil
     if os.name == "nt":
-        _detected = _shutil.which("claude.cmd") or _shutil.which("claude")
+        # 直接找 claude.exe 原生可执行文件
+        _npm = _shutil.which("npm.cmd") or _shutil.which("npm")
+        if _npm:
+            _prefix = os.path.dirname(_npm) if _npm.endswith(".cmd") else os.path.dirname(_npm)
+            _exe = os.path.join(_prefix, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe")
+            if os.path.isfile(_exe):
+                CLAUDE_CLI = _exe
+        if not CLAUDE_CLI:
+            CLAUDE_CLI = _shutil.which("claude") or "claude"
     else:
-        _detected = _shutil.which("claude") or _shutil.which("claude.cmd")
-    if _detected:
-        CLAUDE_CLI = _detected
-    else:
-        CLAUDE_CLI = "claude"  # fallback
+        CLAUDE_CLI = _shutil.which("claude") or "claude"
 
-log.debug(f"Claude CLI: {CLAUDE_CLI}")
+log.info(f"Claude CLI: {CLAUDE_CLI}")
 MCP_CONFIG_PATH = ".claude/mcp.json"
 
 # Steering 文件目录（项目规范上下文）
