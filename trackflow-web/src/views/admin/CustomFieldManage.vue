@@ -290,9 +290,26 @@
         </a-form-item>
 
         <a-form-item label="字段类型" required>
-          <a-select v-model="form.fieldFormat" :disabled="!!editingId" placeholder="选择字段类型">
-            <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
-          </a-select>
+          <template v-if="editingId">
+            <!-- 编辑模式：显示当前类型 + 转换按钮 -->
+            <div class="field-type-edit-row">
+              <a-tag size="small">{{ formatTypeLabel(form.fieldFormat) }}</a-tag>
+              <a-button
+                type="text"
+                size="mini"
+                :loading="loadingConversions"
+                @click="openConvertTypeModal"
+              >
+                转换类型
+              </a-button>
+            </div>
+          </template>
+          <template v-else>
+            <!-- 创建模式：正常选择 -->
+            <a-select v-model="form.fieldFormat" placeholder="选择字段类型">
+              <a-option v-for="t in fieldTypeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-option>
+            </a-select>
+          </template>
         </a-form-item>
 
         <a-form-item label="必填">
@@ -639,15 +656,90 @@
         </a-form-item>
       </a-form>
     </a-drawer>
+
+    <!-- 类型转换确认对话框 -->
+    <a-modal
+      :visible="convertModalVisible"
+      title="修改字段类型"
+      :ok-loading="converting"
+      :ok-text="convertTargetFormat ? '确认转换' : '选择目标类型'"
+      :ok-button-props="{ disabled: !convertTargetFormat }"
+      @ok="handleConvertType"
+      @cancel="convertModalVisible = false"
+      :width="520"
+      unmount-on-close
+    >
+      <div class="convert-type-content">
+        <!-- 不允许转换的提示 -->
+        <template v-if="conversionData && !conversionData.conversionAllowed">
+          <a-alert type="warning" :title="conversionData.blockedReason || '当前字段不允许转换类型'" />
+        </template>
+
+        <!-- 允许转换 -->
+        <template v-else-if="conversionData">
+          <div class="convert-info">
+            <span class="convert-info-label">当前类型：</span>
+            <a-tag size="small">{{ formatTypeLabel(conversionData.currentFormat) }}</a-tag>
+          </div>
+
+          <div v-if="conversionData.availableTargets.length === 0" class="convert-no-targets">
+            <a-empty description="当前类型没有可用的转换目标" />
+          </div>
+
+          <template v-else>
+            <div class="convert-info" style="margin-top: 12px; margin-bottom: 8px;">
+              <span class="convert-info-label">选择目标类型：</span>
+            </div>
+            <div class="convert-targets">
+              <div
+                v-for="target in conversionData.availableTargets"
+                :key="target.format"
+                class="convert-target-item"
+                :class="{ 'convert-target-item--selected': convertTargetFormat === target.format }"
+                @click="selectConvertTarget(target)"
+              >
+                <div class="convert-target-name">{{ target.displayName }}</div>
+                <div v-if="target.warning" class="convert-target-warning">
+                  <icon-exclamation-circle-fill style="color: var(--tf-warning); margin-right: 4px; font-size: 12px;" />
+                  {{ target.warning }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 额外选项（如 periodUnit） -->
+            <div v-if="selectedConvertTarget?.requiresOptions && selectedConvertTarget.options?.length" class="convert-options">
+              <div class="convert-info" style="margin-top: 12px; margin-bottom: 8px;">
+                <span class="convert-info-label">转换选项：</span>
+              </div>
+              <a-radio-group v-model="convertPeriodUnit" direction="vertical" size="small">
+                <a-radio v-for="opt in selectedConvertTarget.options" :key="opt" :value="opt">
+                  {{ periodUnitLabel(opt) }}
+                </a-radio>
+              </a-radio-group>
+            </div>
+
+            <!-- 全局影响提示 -->
+            <a-alert
+              v-if="convertTargetFormat"
+              type="warning"
+              style="margin-top: 16px"
+            >
+              <template #title>此操作对所有使用该字段的项目生效</template>
+              字段类型是全局属性，转换将影响所有关联项目中该字段的已有值。请确认后再操作。
+            </a-alert>
+          </template>
+        </template>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle } from '@arco-design/web-vue/es/icon'
+import { IconPlus, IconDelete, IconCheck, IconEye, IconEyeInvisible, IconClose, IconSortAscending, IconSortDescending, IconApps, IconFolder, IconLock, IconUnlock, IconInfoCircle, IconExclamationCircleFill } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { customFieldApi, projectApi, workflowApi, userApi } from '@/api'
-import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, UserVO } from '@/api/types'
+import type { CustomFieldDefinitionVO, CustomFieldUsageVO, OptionUsageItemVO, UserVO, AvailableConversionsVO, ConversionOptionVO } from '@/api/types'
 import { localizeIssueType } from '@/utils/fieldLabels'
 import FieldsInProjects from './FieldsInProjects.vue'
 import DefaultValueInput from './components/DefaultValueInput.vue'
@@ -752,6 +844,15 @@ const previewOptions = ref<Array<{ value: string; color?: string }>>([])
 const copyFromFieldId = ref<string | null>(null)
 const mergeFromFieldId = ref<string | null>(null)
 const merging = ref(false)
+
+// ========== 类型转换状态 ==========
+const convertModalVisible = ref(false)
+const loadingConversions = ref(false)
+const converting = ref(false)
+const conversionData = ref<AvailableConversionsVO | null>(null)
+const convertTargetFormat = ref<string>('')
+const convertPeriodUnit = ref<string>('MINUTES')
+const selectedConvertTarget = ref<ConversionOptionVO | null>(null)
 
 const form = reactive({
   name: '',
@@ -1234,6 +1335,85 @@ function sortOptionsByAssembleDate() {
     customFieldApi.reorderOptions(editingId.value, sorted.map(o => o.id!)).catch(() => {
       // 静默失败
     })
+  }
+}
+
+// ========== 类型转换方法 ==========
+
+async function openConvertTypeModal() {
+  if (!editingId.value) return
+  loadingConversions.value = true
+  convertTargetFormat.value = ''
+  convertPeriodUnit.value = 'MINUTES'
+  selectedConvertTarget.value = null
+  conversionData.value = null
+  try {
+    const res = await customFieldApi.getAvailableConversions(editingId.value)
+    conversionData.value = res.data || null
+    convertModalVisible.value = true
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '获取可用转换选项失败')
+  } finally {
+    loadingConversions.value = false
+  }
+}
+
+function selectConvertTarget(target: ConversionOptionVO) {
+  convertTargetFormat.value = target.format
+  selectedConvertTarget.value = target
+  // 如果需要额外选项，重置为第一个选项
+  if (target.requiresOptions && target.options?.length) {
+    convertPeriodUnit.value = target.options[0]
+  }
+}
+
+function periodUnitLabel(unit: string): string {
+  switch (unit) {
+    case 'MINUTES': return '分钟 — 将数值视为分钟数'
+    case 'HOURS': return '小时 — 将数值视为小时数（×60）'
+    case 'DAYS': return '天 — 将数值视为天数（×480，按8小时/天）'
+    default: return unit
+  }
+}
+
+async function handleConvertType() {
+  if (!editingId.value || !convertTargetFormat.value) return
+  converting.value = true
+  try {
+    const payload: { targetFormat: string; periodUnit?: string } = {
+      targetFormat: convertTargetFormat.value
+    }
+    if (selectedConvertTarget.value?.requiresOptions) {
+      payload.periodUnit = convertPeriodUnit.value
+    }
+    const res = await customFieldApi.convertType(editingId.value, payload)
+    const result = res.data
+    convertModalVisible.value = false
+    drawerVisible.value = false
+
+    if (result) {
+      let successMsg = `类型转换成功：${formatTypeLabel(result.fromFormat)} → ${formatTypeLabel(result.toFormat)}`
+      if (result.affectedIssueCount > 0) {
+        successMsg += `，影响 ${result.affectedIssueCount} 个工单`
+      }
+      if (result.failedValueCount > 0) {
+        Message.warning(`${successMsg}。${result.failedValueCount} 个值转换失败。`)
+      } else {
+        Message.success(successMsg)
+      }
+    } else {
+      Message.success('类型转换成功')
+    }
+    // 刷新字段列表
+    loadList()
+    // 更新侧边栏
+    if (selectedField.value && selectedField.value.id === editingId.value) {
+      selectedField.value = null
+    }
+  } catch (e: any) {
+    Message.error(e.response?.data?.message || '类型转换失败')
+  } finally {
+    converting.value = false
   }
 }
 
@@ -1986,5 +2166,82 @@ onMounted(() => {
 
 .desc-btn-active {
   color: var(--tf-accent) !important;
+}
+
+/* ========== 类型转换相关样式 ========== */
+
+.field-type-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.convert-type-content {
+  min-height: 100px;
+}
+
+.convert-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.convert-info-label {
+  font-size: 13px;
+  color: var(--tf-text-secondary);
+  flex-shrink: 0;
+}
+
+.convert-no-targets {
+  margin-top: 16px;
+}
+
+.convert-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.convert-target-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--tf-border);
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms;
+}
+
+.convert-target-item:hover {
+  background: var(--tf-bg-hover);
+  border-color: var(--tf-text-tertiary);
+}
+
+.convert-target-item--selected {
+  border-color: var(--tf-accent);
+  background: color-mix(in srgb, var(--tf-accent) 8%, transparent);
+}
+
+.convert-target-item--selected:hover {
+  border-color: var(--tf-accent);
+  background: color-mix(in srgb, var(--tf-accent) 12%, transparent);
+}
+
+.convert-target-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tf-text-primary);
+}
+
+.convert-target-warning {
+  font-size: 11px;
+  color: var(--tf-text-tertiary);
+  display: flex;
+  align-items: center;
+}
+
+.convert-options {
+  padding-left: 4px;
 }
 </style>

@@ -199,3 +199,51 @@ export interface AvailableColumnVO {
   sortable: boolean
   removable: boolean
 }
+
+// ========== 字段类型转换相关 ==========
+
+/** 类型转换选项 */
+export interface ConversionOptionVO {
+  /** 目标类型代码 */
+  format: string
+  /** 目标类型显示名称 */
+  displayName: string
+  /** 是否需要额外选项（如数值转 period 需要指定单位） */
+  requiresOptions: boolean
+  /** 可用的转换选项（如 MINUTES/HOURS/DAYS） */
+  options?: string[]
+  /** 转换警告信息（如可能丢失数据） */
+  warning?: string
+}
+
+/** 可用类型转换 VO */
+export interface AvailableConversionsVO {
+  /** 当前字段类型 */
+  currentFormat: string
+  /** 可转换的目标类型列表 */
+  availableTargets: ConversionOptionVO[]
+  /** 是否允许类型转换 */
+  conversionAllowed: boolean
+  /** 不允许转换的原因 */
+  blockedReason?: string
+}
+
+/** 类型转换结果 VO */
+export interface ConversionResultVO {
+  /** 字段 ID */
+  fieldId: string
+  /** 字段名称 */
+  fieldName: string
+  /** 原类型 */
+  fromFormat: string
+  /** 新类型 */
+  toFormat: string
+  /** 受影响的 issue 数量 */
+  affectedIssueCount: number
+  /** 成功转换的值数量 */
+  convertedValueCount: number
+  /** 转换失败的值数量 */
+  failedValueCount: number
+  /** 警告信息 */
+  warning?: string
+}

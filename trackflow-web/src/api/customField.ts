@@ -1,5 +1,5 @@
 import request from './request'
-import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO, OptionSetStatusVO } from './types'
+import type { R, PageResult, CustomFieldDefinitionVO, CustomFieldUsageVO, AvailableColumnVO, CustomFieldOptionVO, ProjectFieldsVO, OptionUsageItemVO, OptionSetStatusVO, AvailableConversionsVO, ConversionResultVO } from './types'
 
 /**
  * 自定义字段模块 API
@@ -70,6 +70,16 @@ export const customFieldApi = {
   /** 获取单个字段详情 */
   getDetail(id: string) {
     return request.get<any, R<CustomFieldDefinitionVO>>(`/admin/custom-fields/${id}`)
+  },
+
+  /** 获取字段可用的类型转换选项 */
+  getAvailableConversions(id: string) {
+    return request.get<any, R<AvailableConversionsVO>>(`/admin/custom-fields/${id}/conversions`)
+  },
+
+  /** 转换字段类型 */
+  convertType(id: string, data: { targetFormat: string; periodUnit?: string }) {
+    return request.post<any, R<ConversionResultVO>>(`/admin/custom-fields/${id}/convert`, data)
   },
 
   /** 获取 Fields in Projects 矩阵数据 */
