@@ -5,10 +5,10 @@
         {{ getInitial(member.displayName || member.username) }}
       </div>
       <div class="member-info">
-        <div class="member-name">{{ member.displayName || member.username }}</div>
+        <div class="member-name clickable" @click="goToMemberIssues(member)">{{ member.displayName || member.username }}</div>
         <div class="member-role">{{ member.roleName || '—' }}</div>
       </div>
-      <div class="member-issue-count" :class="{ 'has-issues': member.openIssueCount > 0 }">
+      <div class="member-issue-count clickable" :class="{ 'has-issues': member.openIssueCount > 0 }" @click="goToMemberIssues(member)">
         <span class="count-number">{{ member.openIssueCount }}</span>
         <span class="count-label">工单</span>
       </div>
@@ -22,6 +22,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { IconUserGroup } from '@arco-design/web-vue/es/icon'
 import { dashboardApi } from '@/api/dashboard'
 import type { ProjectTeamMemberVO } from '@/api/dashboard'
@@ -35,8 +36,23 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
+const router = useRouter()
 const teamMembers = ref<ProjectTeamMemberVO[]>([])
 
+/**
+ * 跳转到工单列表，按成员筛选未关闭工单
+ */
+function goToMemberIssues(member: ProjectTeamMemberVO) {
+  const name = member.displayName || member.username
+  const query: Record<string, string> = {
+    assignee: member.userId,
+    label: `${name} 的未关闭工单`
+  }
+  if (props.config.projectId) {
+    query.projectId = props.config.projectId
+  }
+  router.push({ path: '/issues', query })
+}
 // 根据名字生成确定性的头像颜色
 const avatarColors = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -138,6 +154,15 @@ defineExpose({ loadData })
   white-space: nowrap;
 }
 
+.member-name.clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.member-name.clickable:hover {
+  color: var(--tf-accent);
+}
+
 .member-role {
   font-size: 11px;
   color: var(--tf-text-tertiary);
@@ -152,6 +177,17 @@ defineExpose({ loadData })
   align-items: center;
   flex-shrink: 0;
   min-width: 36px;
+}
+
+.member-issue-count.clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  transition: background 0.15s;
+}
+
+.member-issue-count.clickable:hover {
+  background: var(--tf-bg-hover);
 }
 
 .count-number {

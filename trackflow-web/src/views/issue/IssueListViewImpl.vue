@@ -4151,6 +4151,7 @@ function applyDashboardFilter() {
   }
 
   // assignee=unassigned: 筛选未分配负责人的工单
+  // assignee={userId}: 筛选某个用户负责的工单
   if (route.query.assignee === 'unassigned') {
     filters.assigneeId = 'none'
     chips.push({
@@ -4159,6 +4160,9 @@ function applyDashboardFilter() {
       values: ['none'],
       valueLabels: ['未分配']
     })
+  } else if (route.query.assignee) {
+    const assigneeUserId = String(route.query.assignee)
+    filters.assigneeId = assigneeUserId
   }
 
   // keyword: 关键字搜索（支持 URL 分享和书签）
