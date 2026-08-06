@@ -6,6 +6,7 @@ import com.trackflow.auth.service.KeycloakAdminService;
 import com.trackflow.auth.service.PermissionService;
 import com.trackflow.common.exception.BusinessException;
 import com.trackflow.common.exception.ErrorCode;
+import com.trackflow.common.model.PageResult;
 import com.trackflow.common.util.SecurityUtils;
 import com.trackflow.issue.entity.Issue;
 import com.trackflow.issue.entity.IssueActivity;
@@ -18,6 +19,7 @@ import com.trackflow.project.mapper.ProjectMapper;
 import com.trackflow.project.mapper.ProjectMemberMapper;
 import com.trackflow.system.dto.CreateUserDTO;
 import com.trackflow.system.dto.DisableUserDTO;
+import com.trackflow.system.converter.UserConverter;
 import com.trackflow.system.entity.SysRole;
 import com.trackflow.system.entity.SysUser;
 import com.trackflow.system.entity.UserGroup;
@@ -85,6 +87,7 @@ public class UserService {
     private final UserGroupMemberMapper userGroupMemberMapper;
     private final UserGroupRoleMapper userGroupRoleMapper;
     private final UserGroupMapper userGroupMapper;
+    private final UserConverter userConverter;
 
     /**
      * 创建新用户（同步到 Keycloak + 本地 sys_user）
@@ -178,6 +181,34 @@ public class UserService {
             String firstName = String.join(" ", java.util.Arrays.copyOfRange(parts, 0, parts.length - 1));
             return new String[]{firstName, lastName};
         }
+    }
+
+    /**
+     * 分页查询用户列表（含全局角色信息）
+     * <p>
+     * 封装完整的查询 + VO 转换 + 批量角色填充逻辑，避免 Controller 承担业务编排职责。
+     *
+     * @return 包含全局角色信息的用户分页结果
+     */
+    public PageResult<UserVO> listUsersWithRoles(Page<SysUser> page, String keyword, String username,
+                                                  String displayName, String email, Long orgId,
+                                                  String status, String banStatus, Long roleId) {
+        Page<SysUser> result = list(page, keyword, username, displayName, email, orgId, status, banStatus, roleId);
+
+        List<UserVO> voList = userConverter.toVOList(result.getRecords());
+
+        // 批量填充全局角色信息（避免 N+1）
+        if (!result.getRecords().isEmpty()) {
+            List<Long> userIds = result.getRecords().stream().map(SysUser::getId).toList();
+            Map<Long, List<UserVO.GlobalRoleInfo>> rolesMap = batchGetGlobalRoles(userIds);
+            for (int i = 0; i < voList.size(); i++) {
+                Long userId = result.getRecords().get(i).getId();
+                voList.get(i).setGlobalRoles(rolesMap.getOrDefault(userId, List.of()));
+            }
+        }
+
+        return new PageResult<>(voList, result.getTotal(),
+                (int) result.getCurrent(), (int) result.getSize());
     }
 
     /**
